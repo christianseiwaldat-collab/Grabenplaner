@@ -142,6 +142,9 @@ const {
   inspectSqlitePersonnelLifecycleSchema,
 } = require("./lib/persistence/sqlite/operations/personnel-lifecycle-schema");
 const {
+  eventReceiptSha256: personnelDocumentEventReceiptSha256,
+} = require("./lib/persistence/sqlite/operations/personnel-document-history-schema");
+const {
   runSqliteStartupSchemaMigrations,
 } = require("./lib/persistence/sqlite/operations/startup-schema-migrations");
 const {
@@ -3055,7 +3058,7 @@ function parsePersonnelDocumentMultipart(request, { maxFileBytes = 15 * 1024 * 1
             if (document) throw httpError(413, "Bitte jeweils nur ein Personalakt-Dokument hochladen.", "PERSONNEL_DOCUMENT_TOO_MANY_FILES");
             if (data.length > maxFileBytes) throw httpError(413, "Das Personalakt-Dokument darf höchstens 15 MB groß sein.", "PERSONNEL_DOCUMENT_TOO_LARGE");
             document = { originalName: filename, buffer: Buffer.from(data) };
-          } else if (!filename && ["category", "title", "documentDate", "description"].includes(name)) {
+          } else if (!filename && ["category", "visibility", "title", "documentDate", "description"].includes(name)) {
             if (data.length > 4096) throw httpError(413, "Ein Dokumentfeld ist zu groß.", "PERSONNEL_DOCUMENT_FIELD_TOO_LARGE");
             fields[name] = data.toString("utf8");
           }
@@ -7450,6 +7453,7 @@ function requirePersonnelRecordSession(request, { write = false } = {}) {
 const PERSONNEL_DOCUMENT_CATEGORIES = new Set([
   "contract", "amendment", "certificate", "training", "identity", "payroll", "other",
 ]);
+const PERSONNEL_DOCUMENT_VISIBILITY = "hr_confidential";
 
 function validatePersonnelDocumentFields(value = {}) {
   const category = String(value.category || "other").trim().toLowerCase();
@@ -7463,7 +7467,121 @@ function validatePersonnelDocumentFields(value = {}) {
   const title = normalizePersonnelField(value.title, 160) || labels[category];
   const documentDate = normalizePersonnelDate(value.documentDate, "Das Dokumentdatum");
   const description = normalizePersonnelField(value.description, 1000);
-  return { category, title, documentDate, description };
+  const visibility = String(value.visibility || PERSONNEL_DOCUMENT_VISIBILITY).trim().toLowerCase();
+  if (visibility !== PERSONNEL_DOCUMENT_VISIBILITY) {
+    throw httpError(
+      400,
+      "Diese Dokument-Sichtbarkeit ist in diesem Ausbauschritt nicht verfügbar.",
+      "PERSONNEL_DOCUMENT_VISIBILITY_NOT_AVAILABLE",
+    );
+  }
+  return { category, visibility, title, documentDate, description };
+}
+
+function personnelRecordDocumentPayload(row) {
+  const payload = parseProtectedJson(
+    row.protected_payload,
+    personnelRecordDocumentProtectionContext(row),
+  );
+  const visibility = String(payload.visibility || PERSONNEL_DOCUMENT_VISIBILITY)
+    .trim().toLowerCase();
+  if (visibility !== PERSONNEL_DOCUMENT_VISIBILITY) {
+    throw httpError(
+      403,
+      "Diese Dokument-Sichtbarkeit ist noch nicht freigegeben.",
+      "PERSONNEL_DOCUMENT_VISIBILITY_NOT_AVAILABLE",
+    );
+  }
+  return { ...payload, visibility };
+}
+
+function personnelRecordDocumentProjection(row, payload = personnelRecordDocumentPayload(row)) {
+  return {
+    id: String(row.id),
+    status: String(row.status),
+    category: String(payload.category || "other"),
+    visibility: payload.visibility,
+    title: String(payload.title || "Dokument"),
+    documentDate: String(payload.documentDate || ""),
+    description: String(payload.description || ""),
+    originalFilename: String(payload.originalFilename || "Dokument"),
+    detectedMime: String(payload.detectedMime || "application/octet-stream"),
+    byteSize: Number(payload.byteSize || 0),
+    currentVersion: Number(row.current_version || 0),
+    revision: Number(row.revision || 0),
+    archivedAt: row.archived_at ? String(row.archived_at) : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function personnelRecordDocumentVersionMetadata(document, version) {
+  return {
+    ...document,
+    storage_key: version.storage_key,
+    protected_payload: version.protected_payload,
+  };
+}
+
+function personnelRecordDocumentVersionProjection(document, version) {
+  const payload = personnelRecordDocumentPayload(
+    personnelRecordDocumentVersionMetadata(document, version),
+  );
+  return {
+    versionNumber: Number(version.version_number),
+    current: Number(version.version_number) === Number(document.current_version),
+    category: String(payload.category || "other"),
+    visibility: payload.visibility,
+    title: String(payload.title || "Dokument"),
+    documentDate: String(payload.documentDate || ""),
+    description: String(payload.description || ""),
+    originalFilename: String(payload.originalFilename || "Dokument"),
+    detectedMime: String(payload.detectedMime || "application/octet-stream"),
+    byteSize: Number(payload.byteSize || 0),
+    createdBy: String(version.created_by || ""),
+    createdAt: String(version.created_at || ""),
+  };
+}
+
+function personnelDocumentEvent({
+  documentId,
+  eventType,
+  actorEmployeeNumber,
+  previousEvent = null,
+  createdAt = new Date().toISOString(),
+}) {
+  const event = {
+    id: crypto.randomUUID(),
+    documentId: String(documentId),
+    sequenceNumber: Number(previousEvent?.sequence_number || 0) + 1,
+    eventType: String(eventType),
+    previousReceiptSha256: String(previousEvent?.receipt_sha256 || ""),
+    actorEmployeeNumber: String(actorEmployeeNumber || ""),
+    createdAt: String(createdAt),
+  };
+  return {
+    ...event,
+    receiptSha256: personnelDocumentEventReceiptSha256(event),
+  };
+}
+
+function personnelDocumentEventProjection(event) {
+  return {
+    sequenceNumber: Number(event.sequence_number),
+    eventType: String(event.event_type),
+    actorEmployeeNumber: String(event.actor_employee_number || ""),
+    createdAt: String(event.created_at || ""),
+  };
+}
+
+function personnelDocumentVersionFields(fields, currentPayload) {
+  return validatePersonnelDocumentFields({
+    category: own(fields, "category") ? fields.category : currentPayload.category,
+    visibility: own(fields, "visibility") ? fields.visibility : currentPayload.visibility,
+    title: own(fields, "title") ? fields.title : currentPayload.title,
+    documentDate: own(fields, "documentDate") ? fields.documentDate : currentPayload.documentDate,
+    description: own(fields, "description") ? fields.description : currentPayload.description,
+  });
 }
 
 async function personnelRecordDocumentRows(employeeNumber, { includeDeleted = false } = {}) {
@@ -7471,22 +7589,7 @@ async function personnelRecordDocumentRows(employeeNumber, { includeDeleted = fa
     employeeNumber: String(employeeNumber || ""),
     includeDeleted: includeDeleted ? 1 : 0,
   });
-  return rows.map((row) => {
-    const payload = parseProtectedJson(row.protected_payload, personnelRecordDocumentProtectionContext(row));
-    return {
-      id: row.id,
-      status: row.status,
-      category: String(payload.category || "other"),
-      title: String(payload.title || "Dokument"),
-      documentDate: String(payload.documentDate || ""),
-      description: String(payload.description || ""),
-      originalFilename: String(payload.originalFilename || "Dokument"),
-      detectedMime: String(payload.detectedMime || "application/octet-stream"),
-      byteSize: Number(payload.byteSize || 0),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  });
+  return rows.map((row) => personnelRecordDocumentProjection(row));
 }
 
 async function personnelRecordDocumentMetadata(employeeNumber, documentId, { activeOnly = true } = {}) {
@@ -7498,7 +7601,7 @@ async function personnelRecordDocumentMetadata(employeeNumber, documentId, { act
 }
 
 function readPersonnelRecordDocument(metadata) {
-  const payload = parseProtectedJson(metadata.protected_payload, personnelRecordDocumentProtectionContext(metadata));
+  const payload = personnelRecordDocumentPayload(metadata);
   const originalFilename = String(payload.originalFilename || "Dokument");
   const detectedMime = String(payload.detectedMime || "application/octet-stream");
   const content = requireAmuStorage().readBuffer({
@@ -12220,7 +12323,12 @@ function readAmuDocument(metadata) {
   return { content, detectedMime: payload.detectedMime, originalFilename };
 }
 
-function verifyProtectedDocumentBlobRows(amuDocuments, personnelDocuments, candidateDocuments = []) {
+function verifyProtectedDocumentBlobRows(
+  amuDocuments,
+  personnelDocuments,
+  candidateDocuments = [],
+  personnelDocumentVersions = [],
+) {
   if (!amuStorage) throw new Error("Der geschützte Dokumentenspeicher ist nicht verfügbar.");
   const storageKeys = new Set();
   const loanDocuments = loanProtectedStorageSnapshot.documents;
@@ -12237,7 +12345,16 @@ function verifyProtectedDocumentBlobRows(amuDocuments, personnelDocuments, candi
     verifyUniqueStorageKey(document.storage_key);
     readAmuDocument(document);
   }
-  for (const document of personnelDocuments) {
+  const versionedPersonnelDocumentIds = new Set(
+    personnelDocumentVersions.map((document) => String(document.id || document.document_id || "")),
+  );
+  const personnelBlobRows = [
+    ...personnelDocuments.filter((document) => (
+      !versionedPersonnelDocumentIds.has(String(document.id || ""))
+    )),
+    ...personnelDocumentVersions,
+  ];
+  for (const document of personnelBlobRows) {
     verifyUniqueStorageKey(document.storage_key);
     readPersonnelRecordDocument(document);
   }
@@ -12268,6 +12385,7 @@ function verifyProtectedDocumentBlobRows(amuDocuments, personnelDocuments, candi
   return {
     amuDocuments: amuDocuments.length,
     personnelDocuments: personnelDocuments.length,
+    personnelDocumentVersions: personnelDocumentVersions.length,
     candidateDocuments: candidateDocuments.length,
     loanDocuments: loanDocuments.length,
     loanPhotos: loanPhotos.length,
@@ -12723,16 +12841,16 @@ function serializeCostCenterType(row, positions = []) {
 }
 
 async function verifyActiveProtectedDocumentBlobs() {
+  const protectedSnapshot = protectedSicknessAmuStorageSnapshotFromDatabase(db);
   const [amuDocuments, personnelDocuments] = await Promise.all([
     sicknessAmuManagementRepository.listActiveAmuDocuments({}),
     sicknessAmuManagementRepository.listActivePersonnelDocuments({}),
   ]);
-  const candidateDocuments = protectedSicknessAmuStorageSnapshotFromDatabase(db)
-    .candidateDocuments;
   return verifyProtectedDocumentBlobRows(
     amuDocuments,
     personnelDocuments,
-    candidateDocuments,
+    protectedSnapshot.candidateDocuments,
+    protectedSnapshot.personnelDocumentVersions,
   );
 }
 
@@ -12742,6 +12860,7 @@ function verifyActiveProtectedDocumentBlobsForBackup() {
     snapshot.amuDocuments,
     snapshot.personnelDocuments,
     snapshot.candidateDocuments,
+    snapshot.personnelDocumentVersions,
   );
 }
 
@@ -20261,7 +20380,21 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
     }
     verified += 1;
   }
-  for (const document of protectedRows.personnelDocuments || []) {
+  const importedPersonnelDocumentVersions = protectedRows.personnelDocumentVersions || [];
+  const versionedPersonnelDocumentIds = new Set(importedPersonnelDocumentVersions.map((document) => (
+    String(document.id || document.document_id || "")
+  )));
+  const importedPersonnelDocumentPayloads = [
+    ...(protectedRows.personnelDocuments || []).filter((document) => (
+      !versionedPersonnelDocumentIds.has(String(document.id || ""))
+    )),
+    ...importedPersonnelDocumentVersions,
+  ];
+  for (const documentRow of importedPersonnelDocumentPayloads) {
+    const document = {
+      ...documentRow,
+      id: documentRow.id || documentRow.document_id,
+    };
     if (!document.protected_payload) throw new Error("missing protected personnel document payload");
     const payload = storage.unprotectRecord(
       document.protected_payload,
@@ -20422,9 +20555,11 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     amuDocuments: currentAmuDocuments,
     personnelDocuments: currentPersonnelDocuments,
   } = await runtimeRecoveryRepository.protectedDocumentCounts();
-  const currentCandidateDocuments = protectedSicknessAmuStorageSnapshotFromDatabase(db)
-    .candidateDocuments.length;
-  if (currentAmuDocuments + currentPersonnelDocuments + currentCandidateDocuments > 0) {
+  const currentProtectedSnapshot = protectedSicknessAmuStorageSnapshotFromDatabase(db);
+  const currentCandidateDocuments = currentProtectedSnapshot.candidateDocuments.length;
+  const currentPersonnelDocumentVersions = currentProtectedSnapshot.personnelDocumentVersions.length;
+  if (currentAmuDocuments + currentPersonnelDocuments + currentCandidateDocuments
+    + currentPersonnelDocumentVersions > 0) {
     throw httpError(409, "Diese Datenbank enthält geschützte Personalakt-Dokumente. Bitte Datenbank und private Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   if (serverModeActive) throw httpError(409, "Datenbankimporte sind im laufenden Serverbetrieb gesperrt und müssen in einem Wartungsfenster am Server durchgeführt werden.", "SERVER_MAINTENANCE_REQUIRED");
@@ -20437,6 +20572,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   let importedInspection;
   let importedAmuDocuments = 0;
   let importedPersonnelDocuments = 0;
+  let importedPersonnelDocumentVersions = 0;
   let importedCandidateDocuments = 0;
   let importedProtectedPayloadError = false;
   let importedIntegrationCredentialError = false;
@@ -20449,10 +20585,13 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   if (importedInspection) {
     importedAmuDocuments = importedInspection.amuDocuments;
     importedPersonnelDocuments = importedInspection.personnelDocuments;
+    importedPersonnelDocumentVersions = importedInspection.protected
+      ?.personnelDocumentVersions?.length || 0;
     importedCandidateDocuments = importedInspection.candidateDocuments;
     importedProtectedPayloadError = importedInspection.protectedInspectionError;
     importedIntegrationCredentialError = importedInspection.integrationInspectionError;
-    if (!importedAmuDocuments && !importedPersonnelDocuments && !importedCandidateDocuments) {
+    if (!importedAmuDocuments && !importedPersonnelDocuments
+      && !importedPersonnelDocumentVersions && !importedCandidateDocuments) {
       try {
         verifyImportedProtectedPersonnelPayloads(importedInspection);
         await verifyImportedPersonnelLifecycleState(importPath);
@@ -20477,7 +20616,8 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     fs.rmSync(importPath, { force: true });
     throw httpError(409, "Die geschützten Zugangsdaten direkter Verbindungen gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Serversicherung mit dem zugehörigen Integrationsschlüssel wiederherstellen oder die Verbindungen im Quellsystem entfernen.", "INTEGRATION_FULL_RESTORE_REQUIRED");
   }
-  if (importedAmuDocuments + importedPersonnelDocuments + importedCandidateDocuments > 0) {
+  if (importedAmuDocuments + importedPersonnelDocuments + importedPersonnelDocumentVersions
+    + importedCandidateDocuments > 0) {
     fs.rmSync(importPath, { force: true });
     throw httpError(409, "Das ausgewählte Backup enthält geschützte Personalakt-Dokumente. Bitte die vollständige Datenbank- und private Dateisicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
@@ -32705,6 +32845,65 @@ function requirePersonnelLifecycleAccess(request, { action = "read" } = {}) {
   }
 }
 
+function requirePersonnelProfileOverviewAccess(request) {
+  const session = requirePortalReadOrLocal(request, "personnel:central:read");
+  if (isLocalSystemSession(session)) return session;
+  const personalHrAccess = session?.sessionKind === "employee"
+    && session?.isEmployee === true
+    && String(session?.employeeNumber || "").trim() !== ""
+    && session?.role === "hr"
+    && session?.permissions?.includes("personnel:central:read");
+  if (!personalHrAccess) {
+    auditPersonnelLifecycleAccessDenied(
+      session,
+      request,
+      "PERSONNEL_PROFILE_ACCESS_DENIED",
+      "personnel:central:read",
+    );
+    throw httpError(
+      403,
+      "Das Mitarbeiterprofil ist nur für einen persönlichen Personalleitungszugang verfügbar.",
+      "PERSONNEL_PROFILE_ACCESS_DENIED",
+    );
+  }
+  return session;
+}
+
+function personnelProfileOverviewProjection(row) {
+  return Object.freeze({
+    profile: Object.freeze({
+      employeeNumber: String(row.personnel_number),
+      displayName: String(row.display_name),
+      active: Boolean(row.active),
+      organization: Object.freeze({
+        positionName: row.position_name === null ? null : String(row.position_name),
+        costCenter: Object.freeze({
+          code: row.cost_center_code === null ? null : String(row.cost_center_code),
+          name: row.cost_center_name === null ? null : String(row.cost_center_name),
+        }),
+        location: Object.freeze({
+          id: row.location_id === null ? null : String(row.location_id),
+          name: row.location_name === null ? null : String(row.location_name),
+        }),
+        department: Object.freeze({
+          id: row.department_id === null ? null : Number(row.department_id),
+          name: row.department_name === null ? null : String(row.department_name),
+        }),
+      }),
+    }),
+    tabs: Object.freeze({
+      overview: Object.freeze({ available: true }),
+      masterData: Object.freeze({ available: false }),
+      documents: Object.freeze({ available: false }),
+      onboarding: Object.freeze({ available: false }),
+      training: Object.freeze({ available: false }),
+      offboarding: Object.freeze({ available: false }),
+      history: Object.freeze({ available: false }),
+    }),
+    capabilities: Object.freeze({ canReadOverview: true }),
+  });
+}
+
 const PERSONNEL_WORKFLOW_ROUTE_ACTIONS = Object.freeze({
   read: Object.freeze({
     permission: PERSONNEL_WORKFLOW_PERMISSIONS.READ,
@@ -33269,6 +33468,38 @@ function auditPersonnelLifecycleScopedNotFound(accessContext, request, error) {
     );
   }
 }
+
+app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", async (request, response) => {
+  const session = requirePersonnelProfileOverviewAccess(request);
+  const tab = String(request.query.tab || "overview").trim().toLowerCase();
+  if (tab !== "overview") {
+    throw httpError(
+      400,
+      "In diesem Ausbauschritt ist nur die Profilübersicht verfügbar.",
+      "PERSONNEL_PROFILE_TAB_NOT_AVAILABLE",
+    );
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  if (!employeeNumber || employeeNumber.includes("\0")) {
+    throw httpError(
+      400,
+      "Die Personalnummer ist ungültig.",
+      "PERSONNEL_PROFILE_EMPLOYEE_NUMBER_INVALID",
+    );
+  }
+  const profile = await organizationPersonnelRepository
+    .getEmployeeProfileOverviewProjection(employeeNumber);
+  if (!profile) {
+    throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  }
+  auditPortal(
+    session.employeeNumber || "local",
+    "personnel-profile.overview.view",
+    "employee",
+    employeeNumber,
+  );
+  response.json(personnelProfileOverviewProjection(profile));
+});
 
 app.get("/api/portal/v1/personnel-lifecycle/workflows", async (request, response) => {
   const accessContext = requirePersonnelWorkflowAccess(request, { action: "read" });
@@ -33920,6 +34151,7 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (re
       sha256: stored.sha256,
       uploadedBy: session.employeeNumber,
     }, personnelRecordDocumentProtectionContext({ id: documentId, employee_number: employeeNumber }));
+    const createdAt = new Date().toISOString();
     await sicknessAmuManagementRepository.transaction(async (repository) => {
       await repository.insertPersonnelDocument({
         id: documentId,
@@ -33927,12 +34159,45 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (re
         storageKey: stored.storageKey,
         protectedPayload,
       });
+      await repository.insertPersonnelDocumentVersion({
+        documentId,
+        versionNumber: 1,
+        storageKey: stored.storageKey,
+        protectedPayload,
+        createdBy: session.employeeNumber,
+        createdAt,
+      });
+      const pointed = await repository.replacePersonnelDocumentCurrentPointer({
+        id: documentId,
+        employeeNumber,
+        expectedCurrentVersion: 0,
+        versionNumber: 1,
+        storageKey: stored.storageKey,
+        protectedPayload,
+        updatedAt: createdAt,
+      });
+      if (!pointed.rowsAffected) {
+        throw httpError(
+          409,
+          "Das Dokument wurde gleichzeitig geändert. Bitte erneut versuchen.",
+          "PERSONNEL_DOCUMENT_CONCURRENT_CHANGE",
+        );
+      }
+      await repository.insertPersonnelDocumentEvent(personnelDocumentEvent({
+        documentId,
+        eventType: "registered",
+        actorEmployeeNumber: session.employeeNumber,
+        createdAt,
+      }));
       await repository.recordAudit({
         actor: session.employeeNumber,
         action: "personnel-record.document.upload",
         entityType: "personnel_record_document",
         entityId: documentId,
-        detail: JSON.stringify({ fields: ["category", "title", "documentDate", "description", "file"] }),
+        detail: JSON.stringify({
+          fields: ["category", "visibility", "title", "documentDate", "description", "file"],
+          versionNumber: 1,
+        }),
       });
     });
     committed = true;
@@ -33957,6 +34222,261 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (re
   }
 });
 
+app.post("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/versions", async (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  if (!access.canWriteDocuments) {
+    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
+    throw httpError(
+      403,
+      "Personalakt-Dokumente dürfen mit diesem Zugang nicht versioniert werden.",
+      "PERSONNEL_DOCUMENT_WRITE_DENIED",
+    );
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const documentId = String(request.params.documentId || "").trim();
+  await assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
+  const current = await personnelRecordDocumentMetadata(employeeNumber, documentId);
+  if (!current || Number(current.current_version || 0) < 1) {
+    auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    throw httpError(
+      404,
+      "Das Personalakt-Dokument wurde nicht gefunden.",
+      "PERSONNEL_DOCUMENT_NOT_FOUND",
+    );
+  }
+  const currentPayload = personnelRecordDocumentPayload(current);
+  const { fields, document } = await parsePersonnelDocumentMultipart(request);
+  const documentFields = personnelDocumentVersionFields(fields, currentPayload);
+  const storage = requireAmuStorage();
+  let stored = null;
+  let committed = false;
+  amuMutationInProgress += 1;
+  try {
+    stored = await storage.saveBuffer({
+      buffer: document.buffer,
+      originalName: document.originalName,
+      maxBytes: 15 * 1024 * 1024,
+    });
+    const expectedCurrentVersion = Number(current.current_version);
+    const versionNumber = expectedCurrentVersion + 1;
+    const createdAt = new Date().toISOString();
+    const protectedPayload = protectJson({
+      ...documentFields,
+      originalFilename: stored.originalFilename,
+      detectedMime: stored.detectedMime,
+      byteSize: stored.byteSize,
+      sha256: stored.sha256,
+      uploadedBy: session.employeeNumber,
+    }, personnelRecordDocumentProtectionContext({ id: documentId, employee_number: employeeNumber }));
+    await sicknessAmuManagementRepository.transaction(async (repository) => {
+      const live = await repository.getPersonnelDocument({
+        employeeNumber,
+        documentId,
+        activeOnly: 1,
+      });
+      if (!live || Number(live.current_version) !== expectedCurrentVersion) {
+        throw httpError(
+          409,
+          "Das Dokument wurde gleichzeitig geändert. Bitte neu laden.",
+          "PERSONNEL_DOCUMENT_CONCURRENT_CHANGE",
+        );
+      }
+      await repository.insertPersonnelDocumentVersion({
+        documentId,
+        versionNumber,
+        storageKey: stored.storageKey,
+        protectedPayload,
+        createdBy: session.employeeNumber,
+        createdAt,
+      });
+      const pointed = await repository.replacePersonnelDocumentCurrentPointer({
+        id: documentId,
+        employeeNumber,
+        expectedCurrentVersion,
+        versionNumber,
+        storageKey: stored.storageKey,
+        protectedPayload,
+        updatedAt: createdAt,
+      });
+      if (!pointed.rowsAffected) {
+        throw httpError(
+          409,
+          "Das Dokument wurde gleichzeitig geändert. Bitte neu laden.",
+          "PERSONNEL_DOCUMENT_CONCURRENT_CHANGE",
+        );
+      }
+      const previousEvent = await repository.getLatestPersonnelDocumentEvent({ documentId });
+      await repository.insertPersonnelDocumentEvent(personnelDocumentEvent({
+        documentId,
+        eventType: "version_added",
+        actorEmployeeNumber: session.employeeNumber,
+        previousEvent,
+        createdAt,
+      }));
+      await repository.recordAudit({
+        actor: session.employeeNumber,
+        action: "personnel-record.document.version.add",
+        entityType: "personnel_record_document",
+        entityId: documentId,
+        detail: JSON.stringify({ versionNumber }),
+      });
+    });
+    committed = true;
+    const updated = await personnelRecordDocumentMetadata(employeeNumber, documentId);
+    const version = await sicknessAmuManagementRepository.getPersonnelDocumentVersion({
+      documentId,
+      versionNumber,
+    });
+    response.status(201).json({
+      document: personnelRecordDocumentProjection(updated),
+      version: personnelRecordDocumentVersionProjection(updated, version),
+      access,
+    });
+  } catch (error) {
+    if (!committed && stored?.storageKey) {
+      try { storage.deleteBlob(stored.storageKey); } catch {}
+    }
+    if (error.status) throw error;
+    if (error.code?.startsWith?.("AMU_")) {
+      const status = error.code.includes("TOO_LARGE") || error.code.includes("LIMIT")
+        ? 413 : error.code.includes("TYPE") || error.code.includes("HEIC") ? 415 : 400;
+      const code = error.code.replace(/^AMU_DOCUMENT_/, "PERSONNEL_DOCUMENT_")
+        .replace(/^AMU_/, "PERSONNEL_DOCUMENT_");
+      throw httpError(status, error.message, code);
+    }
+    throw error;
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
+});
+
+app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/history", async (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request);
+  if (!access.canReadDocuments) {
+    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]);
+    throw httpError(
+      403,
+      "Die Dokumenthistorie darf mit diesem Zugang nicht geöffnet werden.",
+      "PERSONNEL_DOCUMENT_READ_DENIED",
+    );
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const documentId = String(request.params.documentId || "").trim();
+  await assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
+  const metadata = await personnelRecordDocumentMetadata(employeeNumber, documentId, {
+    activeOnly: false,
+  });
+  if (!metadata || metadata.status === "purged" || Number(metadata.current_version || 0) < 1) {
+    auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    throw httpError(
+      404,
+      "Das Personalakt-Dokument wurde nicht gefunden.",
+      "PERSONNEL_DOCUMENT_NOT_FOUND",
+    );
+  }
+  const [versions, events] = await Promise.all([
+    sicknessAmuManagementRepository.listPersonnelDocumentVersions({ documentId }),
+    sicknessAmuManagementRepository.listPersonnelDocumentEvents({ documentId }),
+  ]);
+  auditPortal(
+    session.employeeNumber,
+    "personnel-record.document.history",
+    "personnel_record_document",
+    documentId,
+  );
+  response.json({
+    document: personnelRecordDocumentProjection(metadata),
+    versions: versions.map((version) => (
+      personnelRecordDocumentVersionProjection(metadata, version)
+    )),
+    events: events.map(personnelDocumentEventProjection),
+    access,
+  });
+});
+
+app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/versions/:versionNumber/content", async (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request);
+  if (!access.canReadDocuments) {
+    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]);
+    throw httpError(
+      403,
+      "Diese Dokumentversion darf mit diesem Zugang nicht geöffnet werden.",
+      "PERSONNEL_DOCUMENT_READ_DENIED",
+    );
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const documentId = String(request.params.documentId || "").trim();
+  const versionText = String(request.params.versionNumber || "").trim();
+  if (!/^[1-9]\d*$/.test(versionText) || !Number.isSafeInteger(Number(versionText))) {
+    throw httpError(
+      400,
+      "Die Dokumentversion ist ungültig.",
+      "PERSONNEL_DOCUMENT_VERSION_INVALID",
+    );
+  }
+  const versionNumber = Number(versionText);
+  await assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
+  const metadata = await personnelRecordDocumentMetadata(employeeNumber, documentId, {
+    activeOnly: false,
+  });
+  if (!metadata || metadata.status === "purged" || Number(metadata.current_version || 0) < 1) {
+    auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    throw httpError(
+      404,
+      "Das Personalakt-Dokument wurde nicht gefunden.",
+      "PERSONNEL_DOCUMENT_NOT_FOUND",
+    );
+  }
+  const version = await sicknessAmuManagementRepository.getPersonnelDocumentVersion({
+    documentId,
+    versionNumber,
+  });
+  if (!version) {
+    auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_VERSION_NOT_FOUND", ["documents"]);
+    throw httpError(
+      404,
+      "Die Dokumentversion wurde nicht gefunden.",
+      "PERSONNEL_DOCUMENT_VERSION_NOT_FOUND",
+    );
+  }
+  const versionMetadata = personnelRecordDocumentVersionMetadata(metadata, version);
+  let prepared;
+  try {
+    prepared = readPersonnelRecordDocument(versionMetadata);
+  } catch (error) {
+    auditPortal(
+      session.employeeNumber,
+      "personnel-record.document.integrity-failed",
+      "personnel_record_document",
+      documentId,
+      JSON.stringify({ versionNumber, reason: String(error.code || "read-failed") }),
+    );
+    if (error.code === "AMU_DOCUMENT_INTEGRITY_FAILED") {
+      throw httpError(
+        503,
+        "Die gespeicherte Dokumentversion konnte nicht sicher geprüft werden.",
+        "PERSONNEL_DOCUMENT_INTEGRITY_FAILED",
+      );
+    }
+    throw error;
+  }
+  auditPortal(
+    session.employeeNumber,
+    "personnel-record.document.version.download",
+    "personnel_record_document",
+    documentId,
+    JSON.stringify({ versionNumber }),
+  );
+  sendAmuDocument(response, versionMetadata, prepared);
+});
+
 app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/content", async (request, response) => {
   const { session, access } = requirePersonnelRecordSession(request);
   if (!access.canReadDocuments) {
@@ -33966,8 +34486,12 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   await assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
-  const metadata = await personnelRecordDocumentMetadata(employeeNumber, request.params.documentId);
-  if (!metadata) {
+  const documentId = String(request.params.documentId || "").trim();
+  const metadata = await personnelRecordDocumentMetadata(employeeNumber, documentId, {
+    activeOnly: false,
+  });
+  if (!metadata || !["active", "retention_review"].includes(metadata.status)
+    || Number(metadata.current_version || 0) < 1) {
     auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
     throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
   }
@@ -33977,10 +34501,96 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
   } catch (error) {
     auditPortal(session.employeeNumber, "personnel-record.document.integrity-failed", "personnel_record_document", metadata.id,
       String(error.code || "read-failed"));
+    if (error.code === "AMU_DOCUMENT_INTEGRITY_FAILED") {
+      throw httpError(
+        503,
+        "Das gespeicherte Personalakt-Dokument konnte nicht sicher geprüft werden.",
+        "PERSONNEL_DOCUMENT_INTEGRITY_FAILED",
+      );
+    }
     throw error;
   }
   auditPortal(session.employeeNumber, "personnel-record.document.download", "personnel_record_document", metadata.id);
   sendAmuDocument(response, metadata, prepared);
+});
+
+app.post("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/retention-review", async (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  if (!access.canWriteDocuments) {
+    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
+    throw httpError(
+      403,
+      "Die Aufbewahrungsprüfung darf mit diesem Zugang nicht angefordert werden.",
+      "PERSONNEL_DOCUMENT_WRITE_DENIED",
+    );
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const documentId = String(request.params.documentId || "").trim();
+  await assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
+  const metadata = await personnelRecordDocumentMetadata(employeeNumber, documentId, {
+    activeOnly: false,
+  });
+  if (!metadata || metadata.status !== "active" || Number(metadata.current_version || 0) < 1) {
+    auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    throw httpError(
+      404,
+      "Das aktive Personalakt-Dokument wurde nicht gefunden.",
+      "PERSONNEL_DOCUMENT_NOT_FOUND",
+    );
+  }
+  const submittedRevision = own(request.body || {}, "revision")
+    ? Number(request.body.revision) : Number(metadata.revision);
+  if (!Number.isSafeInteger(submittedRevision) || submittedRevision < 1) {
+    throw httpError(
+      400,
+      "Die Dokumentrevision ist ungültig.",
+      "PERSONNEL_DOCUMENT_REVISION_INVALID",
+    );
+  }
+  if (submittedRevision !== Number(metadata.revision)) {
+    throw httpError(
+      409,
+      "Das Dokument wurde zwischenzeitlich geändert. Bitte neu laden.",
+      "PERSONNEL_DOCUMENT_CONCURRENT_CHANGE",
+    );
+  }
+  const occurredAt = new Date().toISOString();
+  await sicknessAmuManagementRepository.transaction(async (repository) => {
+    const changed = await repository.requestPersonnelDocumentRetentionReview({
+      id: documentId,
+      employeeNumber,
+      expectedRevision: submittedRevision,
+      occurredAt,
+    });
+    if (!changed.rowsAffected) {
+      throw httpError(
+        409,
+        "Das Dokument wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PERSONNEL_DOCUMENT_CONCURRENT_CHANGE",
+      );
+    }
+    const previousEvent = await repository.getLatestPersonnelDocumentEvent({ documentId });
+    await repository.insertPersonnelDocumentEvent(personnelDocumentEvent({
+      documentId,
+      eventType: "retention_review",
+      actorEmployeeNumber: session.employeeNumber,
+      previousEvent,
+      createdAt: occurredAt,
+    }));
+    await repository.recordAudit({
+      actor: session.employeeNumber,
+      action: "personnel-record.document.retention-review",
+      entityType: "personnel_record_document",
+      entityId: documentId,
+      detail: "",
+    });
+  });
+  const updated = await personnelRecordDocumentMetadata(employeeNumber, documentId, {
+    activeOnly: false,
+  });
+  response.json({ document: personnelRecordDocumentProjection(updated), access });
 });
 
 app.delete("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId", async (request, response) => {
@@ -33988,50 +34598,52 @@ app.delete("/api/portal/v1/personnel-records/:employeeNumber/documents/:document
   if (!access.canWriteDocuments) {
     auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
       "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
-    throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht gelöscht werden.", "PERSONNEL_DOCUMENT_WRITE_DENIED");
+    throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht archiviert werden.", "PERSONNEL_DOCUMENT_WRITE_DENIED");
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   await assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
-  const metadata = await personnelRecordDocumentMetadata(employeeNumber, request.params.documentId);
-  if (!metadata) {
+  const documentId = String(request.params.documentId || "").trim();
+  const metadata = await personnelRecordDocumentMetadata(employeeNumber, documentId, {
+    activeOnly: false,
+  });
+  if (!metadata || !["active", "retention_review"].includes(metadata.status)
+    || Number(metadata.current_version || 0) < 1) {
     auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
     throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
   }
-  const purgedPayload = purgedPersonnelRecordDocumentPayload(metadata);
-  amuMutationInProgress += 1;
-  try {
-    await sicknessAmuManagementRepository.transaction(async (repository) => {
-      const deleted = await repository.markPersonnelDocumentDeleted({
-        id: String(metadata.id),
-        employeeNumber,
-        deletedBy: session.employeeNumber,
-      });
-      if (!deleted.rowsAffected) {
-        throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
-      }
-      await repository.recordAudit({
-        actor: session.employeeNumber,
-        action: "personnel-record.document.delete",
-        entityType: "personnel_record_document",
-        entityId: String(metadata.id),
-        detail: "",
-      });
+  const archivedAt = new Date().toISOString();
+  await sicknessAmuManagementRepository.transaction(async (repository) => {
+    const archived = await repository.archivePersonnelDocument({
+      id: documentId,
+      employeeNumber,
+      expectedRevision: Number(metadata.revision),
+      archivedBy: session.employeeNumber,
+      archivedAt,
     });
-    try {
-      requireAmuStorage().deleteBlob(metadata.storage_key);
-      await sicknessAmuManagementRepository.markPersonnelDocumentPurged({
-        id: String(metadata.id),
-        protectedPayload: purgedPayload,
-      });
-    } catch (error) {
-      auditPortal("system", "personnel-record.document.purge-failed", "personnel_record_document", metadata.id,
-        String(error.code || "delete-failed"));
-      throw httpError(503, "Das Dokument wurde gesperrt, konnte aber noch nicht vollständig aus dem Dateispeicher entfernt werden.", "PERSONNEL_DOCUMENT_PURGE_FAILED");
+    if (!archived.rowsAffected) {
+      throw httpError(
+        409,
+        "Das Dokument wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PERSONNEL_DOCUMENT_CONCURRENT_CHANGE",
+      );
     }
-    response.status(204).end();
-  } finally {
-    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
-  }
+    const previousEvent = await repository.getLatestPersonnelDocumentEvent({ documentId });
+    await repository.insertPersonnelDocumentEvent(personnelDocumentEvent({
+      documentId,
+      eventType: "archived",
+      actorEmployeeNumber: session.employeeNumber,
+      previousEvent,
+      createdAt: archivedAt,
+    }));
+    await repository.recordAudit({
+      actor: session.employeeNumber,
+      action: "personnel-record.document.archive",
+      entityType: "personnel_record_document",
+      entityId: documentId,
+      detail: "",
+    });
+  });
+  response.status(204).end();
 });
 
 app.get("/api/portal/v1/me/amu-reports", async (request, response) => {

@@ -78,12 +78,14 @@ async function uploadDocument(employeeNumber, auth, {
   filename = "Dienstvertrag.pdf",
   content = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n% vertraulicher Personalakt\n%%EOF", "utf8"),
   category = "contract",
+  visibility,
   title = "Dienstvertrag",
   documentDate = "2026-02-01",
   description = "Unterzeichnete Vertragsfassung",
 } = {}) {
   const form = new FormData();
   form.append("category", category);
+  if (visibility !== undefined) form.append("visibility", visibility);
   form.append("title", title);
   form.append("documentDate", documentDate);
   form.append("description", description);
@@ -93,6 +95,41 @@ async function uploadDocument(employeeNumber, auth, {
     headers: { Cookie: auth.cookie, "X-CSRF-Token": auth.csrf, Accept: "application/json" },
     body: form,
   });
+  const text = await response.text();
+  let payload = null;
+  try { payload = text ? JSON.parse(text) : null; } catch { payload = { raw: text }; }
+  return { response, payload, text, content };
+}
+
+async function uploadDocumentVersion(employeeNumber, documentId, auth, {
+  filename = "Dienstvertrag-neu.pdf",
+  content = Buffer.from("%PDF-1.7\n% neue vertrauliche Fassung\n%%EOF", "utf8"),
+  category,
+  visibility,
+  title,
+  documentDate,
+  description,
+} = {}) {
+  const form = new FormData();
+  for (const [name, value] of Object.entries({
+    category,
+    visibility,
+    title,
+    documentDate,
+    description,
+  })) {
+    if (value !== undefined) form.append(name, value);
+  }
+  form.append("document", new Blob([content], { type: "application/pdf" }), filename);
+  const response = await fetch(
+    `${baseUrl}/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}`
+      + `/documents/${encodeURIComponent(documentId)}/versions`,
+    {
+      method: "POST",
+      headers: { Cookie: auth.cookie, "X-CSRF-Token": auth.csrf, Accept: "application/json" },
+      body: form,
+    },
+  );
   const text = await response.text();
   let payload = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = { raw: text }; }
@@ -422,11 +459,25 @@ test("v0.71 Block 4: Personalakt-Dokumente sind verschlüsselt, revisionsfähig 
   const document = uploaded.payload.document;
   assert.ok(document.id);
   assert.equal(document.category, "contract");
+  assert.equal(document.visibility, "hr_confidential");
   assert.equal(document.title, `Vertrag ${marker}`);
   assert.equal(document.documentDate, "2026-02-01");
+  assert.equal(document.currentVersion, 1);
 
   const stored = db.prepare("SELECT * FROM personnel_record_documents WHERE id = ?").get(document.id);
   assert.ok(stored);
+  assert.equal(stored.current_version, 1);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM personnel_record_document_versions WHERE document_id = ?
+  `).get(document.id).count, 1);
+  assert.deepEqual(db.prepare(`
+    SELECT sequence_number, event_type, previous_receipt_sha256
+    FROM personnel_record_document_events WHERE document_id = ? ORDER BY sequence_number
+  `).all(document.id).map((row) => ({ ...row })), [{
+    sequence_number: 1,
+    event_type: "registered",
+    previous_receipt_sha256: "",
+  }]);
   assert.match(stored.protected_payload, /^enc:v2:/);
   assertSecretsAbsent(stored.protected_payload, [marker, `${marker}.pdf`, `Vertrag ${marker}`], "Dokumentmetadaten");
   const blobPath = path.join(testRoot, "app-data", "private", "amu", "blobs", ...stored.storage_key.split("/"));
@@ -456,12 +507,9 @@ test("v0.71 Block 4: Personalakt-Dokumente sind verschlüsselt, revisionsfähig 
   );
   assert.equal(crossPerson.status, 404, await crossPerson.clone().text());
 
-  const second = await uploadDocument("8718", hr, { title: "Zweites Dokument" });
-  assert.equal(second.response.status, 201, second.text);
-  const secondStored = db.prepare("SELECT protected_payload FROM personnel_record_documents WHERE id = ?")
-    .get(second.payload.document.id);
-  db.prepare("UPDATE personnel_record_documents SET protected_payload = ? WHERE id = ?")
-    .run(secondStored.protected_payload, document.id);
+  const tamperedBlob = Buffer.from(encryptedBlob);
+  tamperedBlob[tamperedBlob.length - 1] ^= 0xff;
+  fs.writeFileSync(blobPath, tamperedBlob);
   const tampered = await fetch(
     `${baseUrl}/api/portal/v1/personnel-records/8717/documents/${encodeURIComponent(document.id)}/content`,
     { headers: { Cookie: hr.cookie, Accept: "application/json" } },
@@ -472,23 +520,169 @@ test("v0.71 Block 4: Personalakt-Dokumente sind verschlüsselt, revisionsfähig 
     SELECT 1 FROM audit_log
     WHERE actor = '103' AND action = 'personnel-record.document.integrity-failed' AND entity_id = ?
   `).get(document.id));
-  db.prepare("UPDATE personnel_record_documents SET protected_payload = ? WHERE id = ?")
-    .run(stored.protected_payload, document.id);
+  fs.writeFileSync(blobPath, encryptedBlob);
+
+  const unsupportedVisibility = await uploadDocumentVersion("8717", document.id, hr, {
+    visibility: "employee_private",
+  });
+  assert.equal(unsupportedVisibility.response.status, 400, unsupportedVisibility.text);
+  assert.equal(unsupportedVisibility.payload.code, "PERSONNEL_DOCUMENT_VISIBILITY_NOT_AVAILABLE");
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM personnel_record_document_versions WHERE document_id = ?
+  `).get(document.id).count, 1);
+
+  const sourceV2 = Buffer.from(`%PDF-1.7\n% ${marker}-VERSION-2\n%%EOF`, "utf8");
+  const versioned = await uploadDocumentVersion("8717", document.id, hr, {
+    filename: `${marker}-v2.pdf`,
+    content: sourceV2,
+    title: `Vertrag ${marker} – Fassung 2`,
+  });
+  assert.equal(versioned.response.status, 201, versioned.text);
+  assert.equal(versioned.payload.document.currentVersion, 2);
+  assert.equal(versioned.payload.version.versionNumber, 2);
+  assert.equal(versioned.payload.version.current, true);
+  assert.equal(versioned.payload.version.visibility, "hr_confidential");
+  const storedAfterVersion = db.prepare(
+    "SELECT * FROM personnel_record_documents WHERE id = ?",
+  ).get(document.id);
+  assert.equal(storedAfterVersion.current_version, 2);
+  assert.notEqual(storedAfterVersion.storage_key, stored.storage_key);
+  const versionTwoBlobPath = path.join(
+    testRoot,
+    "app-data",
+    "private",
+    "amu",
+    "blobs",
+    ...storedAfterVersion.storage_key.split("/"),
+  );
+  assert.equal(fs.existsSync(blobPath), true);
+  assert.equal(fs.existsSync(versionTwoBlobPath), true);
+
+  const history = await request(
+    `/api/portal/v1/personnel-records/8717/documents/${encodeURIComponent(document.id)}/history`,
+    { auth: hr },
+  );
+  assert.equal(history.response.status, 200, history.text);
+  assert.equal(history.payload.document.currentVersion, 2);
+  assert.deepEqual(history.payload.versions.map(({ versionNumber, current }) => ({
+    versionNumber,
+    current,
+  })), [
+    { versionNumber: 1, current: false },
+    { versionNumber: 2, current: true },
+  ]);
+  assert.deepEqual(
+    history.payload.events.map(({ sequenceNumber, eventType }) => ({ sequenceNumber, eventType })),
+    [
+      { sequenceNumber: 1, eventType: "registered" },
+      { sequenceNumber: 2, eventType: "version_added" },
+    ],
+  );
+  const publicHistory = JSON.stringify(history.payload);
+  for (const forbidden of [
+    "storageKey",
+    "storage_key",
+    "sha256",
+    "receiptSha256",
+    "previousReceiptSha256",
+  ]) assert.equal(publicHistory.includes(forbidden), false, forbidden);
+
+  const crossHistory = await request(
+    `/api/portal/v1/personnel-records/8718/documents/${encodeURIComponent(document.id)}/history`,
+    { auth: hr },
+  );
+  assert.equal(crossHistory.response.status, 404, crossHistory.text);
+
+  const versionOneContent = await fetch(
+    `${baseUrl}/api/portal/v1/personnel-records/8717/documents/${encodeURIComponent(document.id)}`
+      + "/versions/1/content",
+    { headers: { Cookie: hr.cookie } },
+  );
+  assert.equal(versionOneContent.status, 200, await versionOneContent.clone().text());
+  assert.deepEqual(Buffer.from(await versionOneContent.arrayBuffer()), source);
+  const currentVersionContent = await fetch(
+    `${baseUrl}/api/portal/v1/personnel-records/8717/documents/${encodeURIComponent(document.id)}/content`,
+    { headers: { Cookie: hr.cookie } },
+  );
+  assert.equal(currentVersionContent.status, 200, await currentVersionContent.clone().text());
+  assert.deepEqual(Buffer.from(await currentVersionContent.arrayBuffer()), sourceV2);
+
+  const retention = await request(
+    `/api/portal/v1/personnel-records/8717/documents/${encodeURIComponent(document.id)}/retention-review`,
+    {
+      method: "POST",
+      auth: hr,
+      body: { revision: history.payload.document.revision },
+    },
+  );
+  assert.equal(retention.response.status, 200, retention.text);
+  assert.equal(retention.payload.document.status, "retention_review");
+  const recordDuringRetentionReview = await request(
+    "/api/portal/v1/personnel-records/8717",
+    { auth: hr },
+  );
+  assert.equal(recordDuringRetentionReview.response.status, 200, recordDuringRetentionReview.text);
+  assert.equal(
+    recordDuringRetentionReview.payload.documents.some(({ id, status }) => (
+      id === document.id && status === "retention_review"
+    )),
+    true,
+  );
 
   const removed = await request(
     `/api/portal/v1/personnel-records/8717/documents/${encodeURIComponent(document.id)}`,
     { method: "DELETE", auth: hr },
   );
   assert.equal(removed.response.status, 204, removed.text);
-  assert.equal(fs.existsSync(blobPath), false);
-  assert.equal(db.prepare("SELECT status FROM personnel_record_documents WHERE id = ?").get(document.id).status, "purged");
+  assert.equal(fs.existsSync(blobPath), true);
+  assert.equal(fs.existsSync(versionTwoBlobPath), true);
+  assert.equal(db.prepare("SELECT status FROM personnel_record_documents WHERE id = ?")
+    .get(document.id).status, "archived");
+
+  const archivedHistory = await request(
+    `/api/portal/v1/personnel-records/8717/documents/${encodeURIComponent(document.id)}/history`,
+    { auth: hr },
+  );
+  assert.equal(archivedHistory.response.status, 200, archivedHistory.text);
+  assert.equal(archivedHistory.payload.document.status, "archived");
+  assert.deepEqual(archivedHistory.payload.events.map(({ eventType }) => eventType), [
+    "registered",
+    "version_added",
+    "retention_review",
+    "archived",
+  ]);
+  const eventRows = db.prepare(`
+    SELECT sequence_number, previous_receipt_sha256, receipt_sha256
+    FROM personnel_record_document_events
+    WHERE document_id = ?
+    ORDER BY sequence_number
+  `).all(document.id);
+  assert.equal(eventRows.length, 4);
+  for (let index = 0; index < eventRows.length; index += 1) {
+    assert.equal(eventRows[index].sequence_number, index + 1);
+    assert.match(eventRows[index].receipt_sha256, /^[0-9a-f]{64}$/);
+    assert.equal(
+      eventRows[index].previous_receipt_sha256,
+      index === 0 ? "" : eventRows[index - 1].receipt_sha256,
+    );
+  }
   assert.ok(db.prepare(`
     SELECT 1 FROM audit_log
-    WHERE actor = '103' AND action = 'personnel-record.document.delete' AND entity_id = ?
+    WHERE actor = '103' AND action = 'personnel-record.document.archive' AND entity_id = ?
   `).get(document.id));
+  for (const action of [
+    "personnel-record.document.version.add",
+    "personnel-record.document.history",
+    "personnel-record.document.version.download",
+    "personnel-record.document.retention-review",
+  ]) {
+    assert.ok(db.prepare(`
+      SELECT 1 FROM audit_log WHERE actor = '103' AND action = ? AND entity_id = ?
+    `).get(action, document.id), action);
+  }
 });
 
-test("v0.71 Block 4: unterbrochene Dokumentlöschungen werden sicher abgeschlossen", async () => {
+test("M6: versionierte Personalakt-Dokumente bleiben außerhalb des Legacy-Löschpfads", async () => {
   insertEmployee("8719");
   const hr = session("103", "hr");
   const uploaded = await uploadDocument("8719", hr, { title: "Löschwiederholung" });
@@ -497,19 +691,20 @@ test("v0.71 Block 4: unterbrochene Dokumentlöschungen werden sicher abgeschloss
   const blobPath = path.join(testRoot, "app-data", "private", "amu", "blobs", ...stored.storage_key.split("/"));
   assert.equal(fs.existsSync(blobPath), true);
 
-  db.prepare("UPDATE personnel_record_documents SET status = 'deleted', deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
-    .run(stored.id);
+  assert.throws(
+    () => db.prepare(`
+      UPDATE personnel_record_documents
+      SET status = 'deleted', deleted_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(stored.id),
+    /versioned personnel documents cannot be purged/,
+  );
   const finalized = await finalizeDeletedPersonnelRecordDocuments();
-  assert.equal(finalized.purged, 1);
+  assert.equal(finalized.purged, 0);
   assert.equal(finalized.failed, 0);
-  assert.equal(fs.existsSync(blobPath), false);
-  const purged = db.prepare("SELECT status, protected_payload FROM personnel_record_documents WHERE id = ?").get(stored.id);
-  assert.equal(purged.status, "purged");
-  assert.match(purged.protected_payload, /^enc:v2:/);
-  assertSecretsAbsent(purged.protected_payload, ["Löschwiederholung"], "bereinigte Dokumentmetadaten");
-
-  const deletedEmployee = await request("/api/employees/8719", { method: "DELETE", auth: hr });
-  assert.equal(deletedEmployee.response.status, 204, deletedEmployee.text);
+  assert.equal(fs.existsSync(blobPath), true);
+  assert.equal(db.prepare("SELECT status FROM personnel_record_documents WHERE id = ?")
+    .get(stored.id).status, "active");
 });
 
 test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokumente", async () => {
