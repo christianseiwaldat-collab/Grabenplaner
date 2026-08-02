@@ -542,6 +542,282 @@ test("application smoke sanitizes every known protected domain but preserves ope
   }
 });
 
+test("application smoke sanitizes v0.89 personnel lifecycle rows and bound candidate workflows", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-personnel-v089-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  let database = new DatabaseSync(databaseFile);
+  const protectedDeleteTriggers = [
+    "trg_candidate_conversions_immutable_delete",
+    "trg_candidate_document_versions_immutable_delete",
+    "trg_candidate_events_immutable_delete",
+    "trg_custom_process_run_assignments_immutable_delete",
+    "trg_custom_process_run_bindings_immutable_delete",
+    "trg_custom_process_run_steps_personnel_protected_delete",
+    "trg_custom_process_runs_personnel_protected_delete",
+  ];
+  let triggerSqlBefore;
+  try {
+    database.exec(`
+      PRAGMA foreign_keys=ON;
+      CREATE TABLE employees (personnel_number TEXT PRIMARY KEY);
+      CREATE TABLE candidates (
+        id TEXT PRIMARY KEY,
+        protected_payload TEXT NOT NULL
+      );
+      CREATE TABLE candidate_applications (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        protected_payload TEXT NOT NULL,
+        UNIQUE(id, candidate_id),
+        FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE candidate_document_categories (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL
+      );
+      CREATE TABLE candidate_documents (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        application_id TEXT NOT NULL,
+        category_id TEXT NOT NULL,
+        protected_payload TEXT NOT NULL,
+        UNIQUE(id, candidate_id),
+        FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE RESTRICT,
+        FOREIGN KEY (application_id, candidate_id)
+          REFERENCES candidate_applications(id, candidate_id) ON DELETE RESTRICT,
+        FOREIGN KEY (category_id) REFERENCES candidate_document_categories(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE candidate_document_versions (
+        document_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL,
+        protected_payload TEXT NOT NULL,
+        PRIMARY KEY (document_id, version_number),
+        FOREIGN KEY (document_id) REFERENCES candidate_documents(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE candidate_events (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        application_id TEXT,
+        document_id TEXT,
+        protected_payload TEXT NOT NULL,
+        FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE RESTRICT,
+        FOREIGN KEY (application_id, candidate_id)
+          REFERENCES candidate_applications(id, candidate_id) ON DELETE RESTRICT,
+        FOREIGN KEY (document_id, candidate_id)
+          REFERENCES candidate_documents(id, candidate_id) ON DELETE RESTRICT
+      );
+      CREATE TABLE candidate_conversions (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        application_id TEXT NOT NULL,
+        employee_number TEXT NOT NULL,
+        protected_payload TEXT NOT NULL,
+        FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE RESTRICT,
+        FOREIGN KEY (application_id, candidate_id)
+          REFERENCES candidate_applications(id, candidate_id) ON DELETE RESTRICT,
+        FOREIGN KEY (employee_number) REFERENCES employees(personnel_number) ON DELETE RESTRICT
+      );
+      CREATE TABLE custom_process_runs (
+        id TEXT PRIMARY KEY,
+        trigger_type TEXT NOT NULL
+      );
+      CREATE TABLE custom_process_run_steps (
+        run_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        PRIMARY KEY (run_id, step_id),
+        FOREIGN KEY (run_id) REFERENCES custom_process_runs(id) ON DELETE CASCADE
+      );
+      CREATE TABLE custom_process_run_bindings (
+        run_id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        application_id TEXT NOT NULL,
+        FOREIGN KEY (run_id) REFERENCES custom_process_runs(id) ON DELETE RESTRICT,
+        FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE RESTRICT,
+        FOREIGN KEY (application_id, candidate_id)
+          REFERENCES candidate_applications(id, candidate_id) ON DELETE RESTRICT
+      );
+      CREATE TABLE custom_process_run_step_assignments (
+        run_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        employee_number TEXT NOT NULL,
+        PRIMARY KEY (run_id, step_id),
+        FOREIGN KEY (run_id) REFERENCES custom_process_run_bindings(run_id) ON DELETE RESTRICT,
+        FOREIGN KEY (run_id, step_id)
+          REFERENCES custom_process_run_steps(run_id, step_id) ON DELETE RESTRICT,
+        FOREIGN KEY (employee_number) REFERENCES employees(personnel_number) ON DELETE RESTRICT
+      );
+      CREATE TRIGGER trg_candidate_document_versions_immutable_delete
+        BEFORE DELETE ON candidate_document_versions
+        BEGIN SELECT RAISE(ABORT, 'candidate document versions are immutable'); END;
+      CREATE TRIGGER trg_candidate_events_immutable_delete
+        BEFORE DELETE ON candidate_events
+        BEGIN SELECT RAISE(ABORT, 'candidate events are immutable'); END;
+      CREATE TRIGGER trg_candidate_conversions_immutable_delete
+        BEFORE DELETE ON candidate_conversions
+        BEGIN SELECT RAISE(ABORT, 'candidate conversions are immutable'); END;
+      CREATE TRIGGER trg_custom_process_run_bindings_immutable_delete
+        BEFORE DELETE ON custom_process_run_bindings
+        BEGIN SELECT RAISE(ABORT, 'personnel workflow instance bindings are immutable'); END;
+      CREATE TRIGGER trg_custom_process_run_assignments_immutable_delete
+        BEFORE DELETE ON custom_process_run_step_assignments
+        BEGIN SELECT RAISE(ABORT, 'personnel workflow task assignments are immutable'); END;
+      CREATE TRIGGER trg_custom_process_runs_personnel_protected_delete
+        BEFORE DELETE ON custom_process_runs
+        WHEN EXISTS (
+          SELECT 1 FROM custom_process_run_bindings binding WHERE binding.run_id = OLD.id
+        )
+        BEGIN SELECT RAISE(ABORT, 'personnel workflow instances cannot be deleted'); END;
+      CREATE TRIGGER trg_custom_process_run_steps_personnel_protected_delete
+        BEFORE DELETE ON custom_process_run_steps
+        WHEN EXISTS (
+          SELECT 1 FROM custom_process_run_bindings binding WHERE binding.run_id = OLD.run_id
+        )
+        BEGIN SELECT RAISE(ABORT, 'personnel workflow instance steps cannot be deleted'); END;
+
+      INSERT INTO employees VALUES ('101');
+      INSERT INTO candidates VALUES ('candidate-1', 'enc:v2:candidate');
+      INSERT INTO candidate_applications VALUES ('application-1', 'candidate-1', 'enc:v2:application');
+      INSERT INTO candidate_document_categories VALUES ('cv', 'Lebenslauf');
+      INSERT INTO candidate_documents
+        VALUES ('document-1', 'candidate-1', 'application-1', 'cv', 'enc:v2:document');
+      INSERT INTO candidate_document_versions VALUES ('document-1', 1, 'enc:v2:document-version');
+      INSERT INTO candidate_events
+        VALUES ('event-1', 'candidate-1', 'application-1', 'document-1', 'enc:v2:event');
+      INSERT INTO candidate_conversions
+        VALUES ('conversion-1', 'candidate-1', 'application-1', '101', 'enc:v2:conversion');
+      INSERT INTO custom_process_runs VALUES ('personnel-run', 'personnel_manual');
+      INSERT INTO custom_process_runs VALUES ('operational-run', 'manual');
+      INSERT INTO custom_process_run_steps VALUES ('personnel-run', 'step-1');
+      INSERT INTO custom_process_run_steps VALUES ('operational-run', 'step-1');
+      INSERT INTO custom_process_run_bindings
+        VALUES ('personnel-run', 'candidate-1', 'application-1');
+      INSERT INTO custom_process_run_step_assignments VALUES ('personnel-run', 'step-1', '101');
+    `);
+    triggerSqlBefore = Object.fromEntries(database.prepare(`
+      SELECT name, sql FROM sqlite_master
+      WHERE type = 'trigger' AND name IN (${protectedDeleteTriggers.map(() => "?").join(", ")})
+      ORDER BY name
+    `).all(...protectedDeleteTriggers).map((row) => [row.name, row.sql]));
+  } finally {
+    database.close();
+    database = null;
+  }
+
+  try {
+    assert.equal(sanitizeSmokeDatabase(databaseFile), true);
+    database = new DatabaseSync(databaseFile, { readOnly: true });
+    for (const table of [
+      "custom_process_run_step_assignments",
+      "custom_process_run_bindings",
+      "candidate_events",
+      "candidate_document_versions",
+      "candidate_documents",
+      "candidate_conversions",
+      "candidate_applications",
+      "candidates",
+    ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
+    assert.deepEqual(
+      database.prepare("SELECT id, trigger_type FROM custom_process_runs ORDER BY id").all()
+        .map((row) => ({ ...row })),
+      [{ id: "operational-run", trigger_type: "manual" }],
+    );
+    assert.deepEqual(
+      database.prepare("SELECT run_id, step_id FROM custom_process_run_steps").all()
+        .map((row) => ({ ...row })),
+      [{ run_id: "operational-run", step_id: "step-1" }],
+    );
+    assert.deepEqual(
+      database.prepare("SELECT id, label FROM candidate_document_categories").all()
+        .map((row) => ({ ...row })),
+      [{ id: "cv", label: "Lebenslauf" }],
+    );
+    assert.deepEqual(
+      database.prepare("SELECT personnel_number FROM employees").all()
+        .map((row) => ({ ...row })),
+      [{ personnel_number: "101" }],
+    );
+    const triggerSqlAfter = Object.fromEntries(database.prepare(`
+      SELECT name, sql FROM sqlite_master
+      WHERE type = 'trigger' AND name IN (${protectedDeleteTriggers.map(() => "?").join(", ")})
+      ORDER BY name
+    `).all(...protectedDeleteTriggers).map((row) => [row.name, row.sql]));
+    assert.deepEqual(triggerSqlAfter, triggerSqlBefore);
+    for (const column of [
+      "candidates.protected_payload",
+      "candidate_applications.protected_payload",
+      "candidate_documents.protected_payload",
+      "candidate_document_versions.protected_payload",
+      "candidate_events.protected_payload",
+      "candidate_conversions.protected_payload",
+    ]) assert.equal(PROTECTED_COLUMNS.has(column), true, column);
+    for (const table of [
+      "custom_process_run_step_assignments",
+      "custom_process_run_bindings",
+      "candidate_events",
+      "candidate_document_versions",
+      "candidate_documents",
+      "candidate_conversions",
+      "candidate_applications",
+      "candidates",
+    ]) assert.equal(PROTECTED_ROW_TABLES.includes(table), true, table);
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
+  } finally {
+    if (database) database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("application smoke rejects orphan personnel workflow runs before sanitizing v0.89 rows", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-orphan-personnel-run-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  const database = new DatabaseSync(databaseFile);
+  database.exec(`
+    CREATE TABLE candidates (
+      id TEXT PRIMARY KEY,
+      protected_payload TEXT NOT NULL
+    );
+    CREATE TABLE custom_process_runs (
+      id TEXT PRIMARY KEY,
+      trigger_type TEXT NOT NULL
+    );
+    CREATE TABLE custom_process_run_steps (
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      PRIMARY KEY (run_id, step_id)
+    );
+    CREATE TABLE custom_process_run_bindings (
+      run_id TEXT PRIMARY KEY
+    );
+    CREATE TABLE custom_process_run_step_assignments (
+      run_id TEXT NOT NULL
+    );
+    INSERT INTO candidates VALUES ('candidate-1', 'enc:v2:candidate');
+    INSERT INTO custom_process_runs VALUES ('orphan-personnel-run', 'personnel_manual');
+    INSERT INTO custom_process_run_steps VALUES ('orphan-personnel-run', 'step-1');
+  `);
+  database.close();
+  try {
+    assert.throws(() => sanitizeSmokeDatabase(databaseFile), /SMOKE_PRECONDITION_FAILED/);
+    const verify = new DatabaseSync(databaseFile, { readOnly: true });
+    assert.deepEqual(
+      { ...verify.prepare("SELECT id, protected_payload FROM candidates").get() },
+      { id: "candidate-1", protected_payload: "enc:v2:candidate" },
+    );
+    assert.deepEqual(
+      { ...verify.prepare("SELECT id, trigger_type FROM custom_process_runs").get() },
+      { id: "orphan-personnel-run", trigger_type: "personnel_manual" },
+    );
+    assert.deepEqual(
+      { ...verify.prepare("SELECT run_id, step_id FROM custom_process_run_steps").get() },
+      { run_id: "orphan-personnel-run", step_id: "step-1" },
+    );
+    verify.close();
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("application smoke rejects a non-empty legacy sickness destination before cleanup", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-legacy-target-"));
   const databaseFile = path.join(directory, "dienstplan.db");
