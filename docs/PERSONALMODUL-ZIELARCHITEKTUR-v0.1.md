@@ -1,10 +1,10 @@
 # Personalmodul – Zielarchitektur v0.1
 
-Stand: 1. August 2026
+Stand: 2. August 2026
 
-Status: verbindlicher Architekturvertrag; Bewerber-, Dokument-, M3-Umwandlungs-, R1-Bereichsrechte- und M4-Workflow-Publikationsgrundlage im Quellstand umgesetzt
+Status: verbindlicher Architekturvertrag; Bewerber-, Dokument-, M3-Umwandlungs-, R1-Bereichsrechte-, M4-Workflow-Publikations- und M5-Instanzgrundlage im Quellstand umgesetzt
 
-Produktstatus: nicht released; keine Freigabe für den produktiven Betrieb; das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert
+Produktstatus: in v0.89.0-beta als standardmäßig deaktiviertes Fundament enthalten; keine Freigabe für die produktive Aktivierung; das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert
 
 ## 1. Ziel und Abgrenzung
 
@@ -14,7 +14,7 @@ Die bislang im Quellstand umgesetzte technische Ausbaustufe umfasst:
 
 - den Architekturvertrag,
 - das standardmäßig deaktivierte Installationsmerkmal `personnelLifecycle`,
-- die vorbereiteten Einstiege für Bewerbungen und Preboarding, Workflow-Center sowie Personalaufgaben,
+- eine reale Bewerbungsübersicht, read-only Workflow-Instanzen und persönlich bearbeitbare aktive Personalaufgaben innerhalb der bestehenden Personalverwaltung,
 - getrennte SQLite-Entitäten für Bewerber, Bewerbungen, Dokumentmetadaten, Dokumentversionen und eine append-only Historie,
 - einen additiven, unveränderbaren Umwandlungsnachweis zwischen Bewerber, Bewerbung und Mitarbeiter,
 - verschlüsselte Fachpayloads und einen providerneutralen Repository-/Service-Zuschnitt,
@@ -23,10 +23,11 @@ Die bislang im Quellstand umgesetzte technische Ausbaustufe umfasst:
 - serverseitige, datensparsame Bewerberprojektionen und Objektprüfungen für PL, FL und AL,
 - eine fail-closed API für Bewerber, Bewerbungen und die kontrollierte Einstellung unter den neuen Fachrechten sowie den weiterhin erforderlichen mitarbeiterbezogenen Schutzgrenzen,
 - eine additive Publikationsschicht für unveränderbare Workflow-Versionen, Geltungsbereiche, Pflicht-/Ergänzungsauflösung und append-only Archivierung,
+- eine additive, unveränderbare Bindung ausschließlich neu und kontrolliert gestarteter Personalprozess-Instanzen an Veröffentlichung, Fachobjekttyp und eingefrorene Aufgabenzuweisungen,
 - acht eigene Workflow-Rechte mit PL-/PL+-Trennung sowie rechtsspezifischer Scope-Schnittmenge für FL und AL,
 - Migrations-, Integritäts-, Fachlogik- und Regressionstests für diese Integrationsgrenze.
 
-Die M3-Umwandlung ist bewusst eng begrenzt: Sie übernimmt nur Bewerbungen im Status `preboarding`, legt kein Portalprofil an, kopiert keine Bewerberdokumente und startet weder Onboarding noch Workflow. R1 setzt die Bereichsrechte für Bewerbungen und Preboarding um; M4 ergänzt davon getrennte Workflow-Rechte und unveränderbare Veröffentlichungen. Weiterhin nicht umgesetzt sind eine Dokument-Upload-/Download-API, die Bindung neuer Workflow-Instanzen an veröffentlichte Versionen, Mitarbeiterprofil-Tabs, ein grafischer Editor und neue Prozessautomatik. Vertrauliche und Offboarding-Workflows bleiben bis zu ihrem eigenen Schutzvertrag fail-closed. Diese Ausbaustufe ist nicht released. SQLite bleibt der unterstützte Produktprovider. Die PostgreSQL-Grundlage bleibt bis zur gesonderten Freigabe nicht produktiv.
+Die M3-Umwandlung ist bewusst eng begrenzt: Sie übernimmt nur Bewerbungen im Status `preboarding`, legt kein Portalprofil an, kopiert keine Bewerberdokumente und startet weder Onboarding noch Workflow. R1 setzt die Bereichsrechte für Bewerbungen und Preboarding um; M4 ergänzt davon getrennte Workflow-Rechte und unveränderbare Veröffentlichungen. M5 bindet nur neue, ausdrücklich gestartete Standard-Instanzen an genau eine nicht archivierte Veröffentlichung und übernimmt keinen Legacy-Lauf. Weiterhin nicht umgesetzt sind eine Dokument-Upload-/Download-API, Mitarbeiterprofil-Tabs, ein grafischer Editor und neue Prozessautomatik. Vertrauliche, freie `custom_personnel`- sowie Onboarding- und Offboarding-Workflows bleiben bis zu ihrem eigenen Schutzvertrag fail-closed. Diese Ausbaustufe ist in v0.89.0-beta ausschließlich als standardmäßig deaktiviertes Fundament enthalten und keine Aktivierungsfreigabe. SQLite bleibt der unterstützte Produktprovider. Die PostgreSQL-Grundlage bleibt bis zur gesonderten Freigabe nicht produktiv.
 
 ## 2. Einordnung in die bestehende Anwendung
 
@@ -143,7 +144,9 @@ Die vorhandene Prozessbasis wird weiterentwickelt:
 | `custom_process_runs` | Ausgangspunkt für Workflow-Instanzen |
 | `custom_process_run_steps` | Ausgangspunkt für instanzgebundene Aufgaben und Ausführungszustände |
 
-M4 legt über dieser Basis additiv `custom_process_publications` und `custom_process_publication_archives` an. Entwurfsrevision und Veröffentlichungsnummer bleiben getrennt; Publikationen und Archivierungsnachweise sind unveränderbar. `custom_process_runs` wird erst in M5 kontrolliert an veröffentlichte Versionen gebunden. Eine zweite, unabhängige Workflow-Engine ist ausgeschlossen.
+M4 legt über dieser Basis additiv `custom_process_publications` und `custom_process_publication_archives` an. Entwurfsrevision und Veröffentlichungsnummer bleiben getrennt; Publikationen und Archivierungsnachweise sind unveränderbar. M5 ergänzt `custom_process_run_bindings` als unveränderbaren Sidecar für die Bindung eines neuen `custom_process_runs`-Laufs an genau eine Veröffentlichung und einen fachlichen Bewerbungs- oder Mitarbeiterbezug. `custom_process_run_step_assignments` friert je Instanzschritt die beim Start aufgelöste verantwortliche Person ein. Die Bestandsstrukturen werden weder per `ALTER TABLE` erweitert noch als Legacy-Instanzen umgedeutet; eine zweite Workflow-Engine ist ausgeschlossen.
+
+Eine M5-Instanz besitzt `trigger_type = personnel_manual`, genau eine Aktivierung und beim Start ausschließlich aus dem Veröffentlichungssnapshot erzeugte Schritte. Veröffentlichung, Instanzkern, Fachobjektbindung und Zuweisungsbelege sind unveränderbar. Laufstatus und Schrittstatus dürfen nur über die vorhandenen kontrollierten Ausführungsübergänge fortschreiten; eine abgeschlossene Personalprozess-Instanz kann nicht wieder geöffnet oder physisch gelöscht werden. Veröffentlichte Personalprozesse sind zugleich für die alte manuelle und die automatische Personalmangel-Auslösung gesperrt.
 
 ### 4.4 Geltungsbereiche und Pflichtprozesse
 
@@ -167,7 +170,7 @@ Aufgaben werden aus Instanzschritten projiziert und nicht als unabhängige Wahrh
 - Fälligkeit und Status,
 - Abschlussakteur, Zeitpunkt und Nachweis.
 
-Listen wie „Meine Aufgaben“, „Überfällig“ oder „Im Bereich“ sind gefilterte Projektionen derselben serverseitig geschützten Datenbasis.
+M5 projiziert den aktiven Schritt einer serverseitig bereits berechtigten Instanz read-only in das Workflow-Center und als persönlich abschließbare Aufgabe in die bestehende Portalansicht. Diese Projektion ist keine zweite Aufgabenquelle und trifft keine Verantwortlichen-, Frist- oder Eskalationsentscheidung im Client. Der Abschluss bleibt auf die eingefrorene Einzelzuweisung begrenzt und prüft den aktiven persönlichen Zugang, die aktuelle Snapshot-Rolle sowie den aktuellen freigegebenen Bereich erneut. Weiterführende Listen wie „Überfällig“ oder „Im Bereich“ bleiben spätere, serverseitig zu filternde Projektionen derselben geschützten Datenbasis.
 
 ## 5. Kontrollierte Bewerberumwandlung
 
@@ -201,6 +204,8 @@ Für lokale Leitungen gilt pro Recht die Schnittmenge aus allgemeinem Portalbere
 
 M4 leitet Workflow-Rechte ausdrücklich nicht aus R1-Bewerbungsrechten oder dem breiten Bestandsrecht `processes:write` ab. Der eigene Vertrag umfasst `personnel:workflows:read`, `personnel:workflows:draft:write`, `personnel:workflows:review`, `personnel:workflows:publish`, `personnel:workflows:local:supplement`, `personnel:workflows:confidential:read`, `personnel:workflows:confidential:write` und `personnel:workflows:delegate`. PL+ ist auch hier eine PL mit der zusätzlichen, nicht weiterdelegierbaren Delegations-Capability. Die vier lokalen Rechte werden pro Recht an dieselbe allgemeine-Portalbereich-mal-PL+-Fachbereich-Schnittmenge gebunden. IT-Admin bleibt für Personal-Workflows geschlossen; technische Rollen erhalten keine vertraulichen Workflow-Rechte automatisch.
 
+M5 führt kein weiteres Fachrecht ein. Listen und Personalaufgaben benötigen `personnel:workflows:read`; weder `processes:write` noch eine zentrale Personal-Leseberechtigung schalten diese Oberflächen frei. Eine zentrale Personal-Leseberechtigung wird nicht als zusätzliche M5-Lesefreigabe verlangt. Der Server veröffentlicht dafür `canReadInstances` und wertet fehlende Capability-Werte fail-closed aus. Innerhalb der freigegebenen Managementliste bleiben Bewerbungsinstanzen zusätzlich auf aktuell lesbare Bewerbungsbereiche und Mitarbeiterinstanzen auf den vorhandenen Mitarbeiter-Lesezugriff begrenzt; diese Objektfilterung erfolgt ausschließlich serverseitig und kann eine leere Liste ergeben. Die persönliche Aufgabenprojektion verrät keine Fachobjekt-ID und setzt statt dieser Management-Leserechte die eigene eingefrorene Zuordnung sowie aktuelle Rollen- und Bereichsgültigkeit voraus. Das kontrollierte Starten benötigt zusätzlich die bestehende Workflow-Publikationsberechtigung, bei Bewerbungen `personnel:applications:write`, bei Mitarbeitern `employees:read` und jeweils einen für den wirksamen Bereich zugelassenen Start. Die Managementoberfläche in M5 bleibt read-only und enthält bewusst keine Startmaske.
+
 Mitarbeiterprofil-, Schulungs- und Offboarding-Rechte erhalten in den späteren Issues weiterhin eigene Aktions-, Sichtbarkeits- und Schutzverträge. Technische Rechte wie Rollenverwaltung, Systemdiagnose, Schlüsselmaterial oder Sicherheitskonfiguration bleiben außerhalb der fachlichen PL+-Delegation. Das Installationsmerkmal bleibt standardmäßig deaktiviert.
 
 ## 7. Datenbankmigrationen
@@ -213,7 +218,7 @@ Jede Stufe erhält eine eigene, vorwärtskompatible SQLite-Migration und passend
 | M3 | im Quellstand additiv umgesetzt als `v0.89-personnel-lifecycle-conversion` | unveränderbarer Umwandlungsnachweis, Idempotenzbeleg und kontrollierte Einstellung | bestehende M1/M2-Daten bleiben erhalten; Mitarbeiteranlage bleibt transaktional |
 | R1 | im Quellstand additiv umgesetzt als `v0.89-personnel-lifecycle-scoped-rights` | rechtsspezifische, durch PL+ genehmigte Fachbereiche für lokale Bewerbungsrechte | keine Änderung an Bewerberfachdaten; nur SQLite |
 | M4 | im Quellstand additiv umgesetzt als `v0.89-personnel-workflow-publications` | Workflow-Veröffentlichungen, unveränderbare Versionsmetadaten, Geltungsbereiche, additive Auflösung und Archivierung | bestehende Prozesse, Revisionen und Läufe werden erhalten; keine automatische Klassifikation |
-| M5 | offen | Instanzbezug auf Version und Fachobjekt, Aufgabenprojektion | laufende Prozesse werden nicht neu interpretiert |
+| M5 | im Quellstand additiv umgesetzt als `v0.89-personnel-workflow-instances` | unveränderbarer Instanzbezug auf Veröffentlichung und Fachobjekttyp, eingefrorene Schrittzuweisungen, datensparsame Instanz-/Aktivschrittprojektion | nur neue kontrollierte Läufe; bestehende und automatisch ausgelöste Prozesse werden nicht neu interpretiert |
 | M6 | offen | erweiterte Dokumentmetadaten und Historie für Mitarbeiterakten | bestehende Dokumente werden sicher nachklassifiziert |
 
 M1/M2 legen sechs Tabellen, die erforderlichen Indizes, sechs eingebaute Dokumentkategorien und neun Schutztrigger für Bereichsbezüge, Dokumentversionen sowie Historienereignisse an. M3 ergänzt verlustfrei die siebte Tabelle `candidate_conversions` und zwei Unveränderbarkeitstrigger. R1 ergänzt als achte Tabelle `portal_permission_scope_grants` und acht Scope-Schutztrigger; der lokale Gesamtstand umfasst damit acht Personal-Lifecycle-/R1-Tabellen und neunzehn Trigger. Die M3-Tabelle bindet Bewerber und Bewerbung mit `ON DELETE RESTRICT` an den historischen Ursprung und die Personalnummer mit `ON DELETE RESTRICT` an den erzeugten Mitarbeiter. Eindeutigkeitsgrenzen auf Bewerber, Bewerbung und Personalnummer verhindern Mehrfachumwandlungen zusätzlich auf Datenbankebene.
@@ -230,9 +235,11 @@ Der Datenbankimport öffnet die ausgewählte Datei ausschließlich lesend. Eine 
 
 M4 ergänzt zwei Publikationstabellen und zehn Schutztrigger. Der Startpfad prüft DDL, Trigger, lückenlose Versionsnummern, Snapshot-Bezüge und SHA-256-Belege; vor jeder notwendigen Änderung einer vorhandenen Datenbank entsteht zuerst der interne Pre-Migration-Sicherungspunkt. Bestehende Prozesse, Revisionen und Läufe werden weder umgedeutet noch verändert. Die Read-only-Importprüfung akzeptiert einen vollständigen Altstand ohne M4 als `pre-m4-compatible`, einen vollständigen validen M4-Stand als `m4` und sperrt partielle oder manipulierte M4-Strukturen als `invalid`. Der vollständige Vertrag steht in `PERSONALMODUL-WORKFLOW-PUBLIKATION-M4-v0.1.md`.
 
+M5 ergänzt zwei Sidecar-Tabellen und zwölf Schutztrigger. `custom_process_run_bindings` bindet Lauf, Veröffentlichung, idempotente Vorgangs-ID, Fachobjekttyp, revisionsgebundenen Bewerbungsbezug oder Mitarbeiterbezug sowie Startbeleg unveränderbar zusammen. `custom_process_run_step_assignments` bindet jeden Instanzschritt an genau eine beim Start wirksame Person und einen eigenen Zuweisungsbeleg. Fremdschlüssel verwenden `ON DELETE RESTRICT`; Trigger prüfen Veröffentlichung, Snapshot, Bereich, Fachobjektstatus, Portalzugang, Schrittfolge und Unveränderbarkeit. Der Marker wird erst nach vollständiger Integritätsprüfung geschrieben. Altstände ohne M5 bleiben migrationsfähig, ein vollständiger M5-Stand wird als `m5` erkannt; partielle, verwaiste oder manipulierte Bindungen, Zuweisungen, Hashketten und Personal-Läufe sperren Start beziehungsweise Read-only-Import fail-closed. Vor einer notwendigen Änderung einer vorhandenen Datenbank entsteht weiterhin zuerst der interne Pre-Migration-Sicherungspunkt. Die neun providerneutralen Anwendungsmigrationsstufen bleiben unverändert und PostgreSQL bleibt 0/9 ohne Produktfreigabe.
+
 ## 8. API-Oberfläche
 
-Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und durch `personnelLifecycle` fail-closed gesperrt. Im lokalen, unveröffentlichten Stand umgesetzt sind:
+Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und durch `personnelLifecycle` fail-closed gesperrt. Im standardmäßig deaktivierten v0.89.0-beta-Fundament enthalten sind:
 
 - `GET /document-categories`,
 - `GET|POST /candidates`,
@@ -244,7 +251,11 @@ Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und
 - `GET /workflows`,
 - `GET /workflow-publications/resolve`,
 - `POST /workflows/:processId/publish`,
-- `POST /workflow-publications/:publicationId/archive`.
+- `POST /workflow-publications/:publicationId/archive`,
+- `GET /workflow-instances`,
+- `POST /workflow-instances`,
+- `GET /api/portal/v1/me/process-tasks` als gemeinsame Legacy-/M5-Selbstprojektion,
+- `POST /api/portal/v1/me/process-tasks/:runId/:stepId/complete` als bestehende gemeinsame Abschlussgrenze.
 
 R1 ergänzt an dieser Grenze die bisherige pauschale Kombination aus `personnel:central:*` und `personnel:sensitive:*` um aktionsbezogene Bewerbungsrechte, sodass die API nicht mehr allein auf den breiten Bestandsrechten beruht. Für globale Zugriffe bleiben die zentralen und sensiblen Personalrechte als zusätzliche Schutzgrenze erhalten. Lesen benötigt `personnel:candidates:read`. Dokumentkategorien benötigen wegen ihrer Sichtbarkeitsmetadaten zusätzlich `personnel:candidates:confidential:read`. Kandidatenstammänderungen benötigen global `personnel:candidates:write`; vertrauliche Felder bleiben zusätzlich durch `personnel:candidates:confidential:*` geschützt. Bewerbungsänderungen und Statuswechsel benötigen `personnel:applications:write`. FL und AL werden dabei auf ihre Scope-Schnittmenge und strukturierte Nicht-Scope-Felder bereits sichtbarer Bewerbungen begrenzt. Sie dürfen weder neue Bewerbungen anlegen noch Standort oder Abteilung ändern; die Neuanlage setzt global `personnel:candidates:write` und `personnel:applications:write` voraus. Die Umwandlung benötigt global `personnel:candidates:convert`, die vollständige Rechtekette, `employees:write` und die bestehende zentrale Grenze für Mitarbeiteranlage.
 
@@ -270,6 +281,30 @@ Dokumentmutationen sind noch nicht exponiert, damit kein Metadatensatz ohne den 
 
 Die M4-Endpunkte verwenden ausschließlich den eigenen Workflow-Rechtevertrag. Globale Zugriffe benötigen zusätzlich die bestehenden zentralen Personalrechte; lokale Zugriffe werden pro Recht auf die Portalbereich-/PL+-Fachbereich-Schnittmenge beschränkt. Publikation und Archivierung sind CSRF-geschützt und transaktional auditiert. Antworten liefern nur fachliche Metadaten und Capabilities, jedoch weder Rohsnapshot noch Hashwerte, Publikationsakteur, Archivierungsgrund oder Genehmigungsidentitäten. Vertrauliche und Offboarding-Publikationen bleiben fail-closed gesperrt.
 
+M5 erweitert dieselbe Grenze um die Instanzprojektion. `GET /workflow-instances` besitzt keine Client-Scope- oder Include-Parameter; der wirksame Bereich wird ausschließlich aus dem serverseitigen Workflow-Zugriff abgeleitet. Die Antwort lautet `{ instances, capabilities }`. Jede Instanz enthält nur `id`, `publication: { id, workflowCode, workflowType, versionNumber, title }`, `subject: { type }`, `scope`, `status`, `progress: { completedSteps, totalSteps }`, den optionalen `activeStep`, `startedAt` und `resolvedAt`. Fachobjekt-ID, Bewerberdaten, Personalnummer, Zuweisungsperson, Startakteur, Request-/Beleghash und Abschlussnotiz werden nicht ausgegeben. Die Management-Oberfläche reduziert diese Serverprojektion nochmals auf Titel, Typ, Version, generischen Fachobjektbezug, Bereichsbezeichnung, Status, Fortschritt, Zeitpunkte und den Titel des aktiven Schritts. Sie verwendet ausschließlich `GET`, bietet keine Start- oder Abschlussmutation an. M5 enthält keine neue Prozessautomatik sowie keine Frist- oder Eskalationsautomatik.
+
+`POST /workflow-instances` startet ausschließlich eine ausdrücklich gewählte,
+nicht archivierte Standard-Veröffentlichung für `application`, `preboarding`,
+`training`, `position_change`, `department_change`, `location_change` oder
+`return_from_absence`. Freie `custom_personnel`-, Onboarding- und
+Offboarding-Typen bleiben zurückgestellt. Der exakte Request enthält
+`{ operationId, publicationId, subject, assignments }`: `operationId` ist eine
+UUIDv4 für die idempotente Wiederholung, `subject` bindet entweder einen
+versionierten Bewerbungsbezug oder eine Personalnummer, und `assignments`
+ordnet jeden nicht technischen Schritt genau einer berechtigten Person zu.
+Systemschritte erhalten keine Clientzuweisung. Der Server prüft
+Veröffentlichungsbeleg, Fachobjektstatus, Bereich, Verantwortungsart und
+persönlichen Portalzugang; ein Bewerbungsbezug benötigt dabei den aktuellen
+Schreibzugriff auf die Bewerbung, ein Mitarbeiterbezug den vorhandenen
+Mitarbeiter-Lesezugriff. Der Server wählt weder Personen noch Zuständigkeiten
+automatisch aus. Der Erststart antwortet mit `201`; ein inhaltlich exakter
+Replay mit `200` und `Idempotency-Replayed: true`. Die Antwort liefert
+`{ instance, replayed, capabilities }` mit derselben datensparsamen
+Instanzprojektion. Diese Mutation ist bewusst nicht in der
+M5-Management-Oberfläche verdrahtet.
+
+Die bestehenden Portal-Aufgabenendpunkte bleiben die einzige Selbstaufgabenquelle. `GET /api/portal/v1/me/process-tasks` kombiniert unveränderte Legacy-Aufgaben mit M5-Aufgaben, sobald das Personalmodul aktiv ist. Eine M5-Aufgabe enthält zusätzlich zur Legacy-kompatiblen Darstellung nur Workflow-Code, Version, Titel, Fachobjekttyp, generischen Bereichstyp, Fortschritt und aktiven Schritt; Fachobjekt-ID, Personalnummern, Zuweisungsbeleg, Snapshot, Hashwerte und Abschlussnotizen bleiben ausgeschlossen. Der M5-Abschluss akzeptiert strikt `{ action, operationId }`, wobei `action` `complete` oder bei optionalen Schritten `skip` ist und `operationId` eine UUIDv4 sein muss. Ein exakter Replay ist ohne erneute Live-Autorisierung idempotent; abweichende Verwendung derselben Vorgangs-ID wird abgewiesen. Der Erstabschluss prüft eingefrorene Personenzuordnung, aktive Snapshot-Rolle, persönlichen Portalzugang und aktuellen freigegebenen Bereich. M5 speichert keine Abschlussnotiz und erzeugt keine Benachrichtigung. Ist das Personalmodul deaktiviert, bleiben ausschließlich die bisherigen Legacy-Aufgaben sichtbar und bearbeitbar.
+
 ## 9. Priorisierter Issue- und PR-Zuschnitt
 
 1. **Architekturvertrag und Feature-Grenze – im Quellstand abgeschlossen**
@@ -277,7 +312,7 @@ Die M4-Endpunkte verwenden ausschließlich den eigenen Workflow-Rechtevertrag. G
    Dokumentation, standardmäßig deaktiviertes Installationsmerkmal, zukünftiger API-Namespace und Basistests.
 2. **Navigation und Grundseiten – im Quellstand abgeschlossen**
 
-   Bestehende Personalverwaltung um Bewerbungen/Preboarding, Workflow-Center und Personalaufgaben ergänzen; noch ohne Fachdatenspeicherung.
+   Bestehende Personalverwaltung um Bewerbungen/Preboarding, Workflow-Center und Personalaufgaben ergänzen; die damaligen Grundseiten wurden mit R1 und M5 in datensparsame read-only Fachansichten überführt.
 3. **Bewerber- und Dokumentmodell – Fundament im Quellstand umgesetzt**
 
    Migrationen, Repositories, Kategorien, Sichtbarkeiten, Metadaten und Historie.
@@ -287,9 +322,9 @@ Die M4-Endpunkte verwenden ausschließlich den eigenen Workflow-Rechtevertrag. G
 5. **Bereichsbezogene Fachrechte – R1 im Quellstand umgesetzt**
 
    Sieben Bewerbungsrechte, PL-/PL+-Trennung, genehmigte Scope-Schnittmenge für FL und AL, datensparsame Projektionen, IDOR-Grenzen und negative Zugriffstests.
-6. **Workflow-Publikation – M4-Fundament im Quellstand umgesetzt; Instanzen ausdrücklich offen**
+6. **Workflow-Publikation und Instanzbindung – M4 und M5 im Quellstand umgesetzt**
 
-   Vorhandene Prozessbasis um unveränderbare Veröffentlichungen, append-only Archivierung, Pflicht-/Ergänzungsauflösung und eigene Bereichsrechte ergänzen. Die Bindung neuer Instanzen an veröffentlichte Versionen folgt getrennt als M5.
+   Vorhandene Prozessbasis um unveränderbare Veröffentlichungen, append-only Archivierung, Pflicht-/Ergänzungsauflösung und eigene Bereichsrechte ergänzen; ausschließlich neue kontrollierte Instanzen additiv und idempotent an Veröffentlichung, Fachobjekttyp und eingefrorene Aufgabenverantwortung binden. Keine Legacy-Übernahme und keine Automatisierung.
 7. **Mitarbeiterprofil und eingebettete Abläufe**
 
    Tabs, Onboarding, Schulungen und Offboarding mit vertraulichen Schrittklassen.
@@ -323,13 +358,17 @@ Für das Datenfundament, M3 und R1 wurden folgende Entscheidungen festgeschriebe
 - Entwurfsrevision und Veröffentlichungsnummer bleiben getrennt. Jede Veröffentlichung friert Inhalt und Bereich ein und erhält einen eigenen Snapshot- sowie Publikationsbeleg.
 - Unternehmensweite Pflichtprozesse und lokale Ergänzungen werden vereinigt. Gleiche Codes oder Titel erzeugen einen Konflikthinweis und niemals einen impliziten Override.
 - Vertrauliche und Offboarding-Workflows bleiben in M4 gesperrt, weil ihr Inhalt auch im Entwurfs- und Revisionspfad technisch geschützt werden muss.
+- M5 startet ausschließlich ausdrücklich gewählte, nicht archivierte Standard-Veröffentlichungen der freigegebenen Bewerbungs-/Preboarding- und Mitarbeiter-Typen. Freie `custom_personnel`-, Onboarding-, Offboarding- und vertrauliche Workflows sowie Benachrichtigungskanäle bleiben fail-closed zurückgestellt.
+- Der Startauftrag enthält für jeden nicht-systemischen Snapshot-Schritt genau eine ausdrückliche Mitarbeiterzuweisung. Diese Person muss einen aktiven persönlichen Portalzugang besitzen, zur eingefrorenen Rollen- oder Personenverantwortung passen und im wirksamen Bereich zulässig sein. M5 wählt bei mehreren möglichen Verantwortlichen niemanden automatisch aus.
+- Vorgangs-ID und kanonischer Startauftrag machen den Start idempotent. Exakte Wiederholung liefert dieselbe Instanz; dieselbe Vorgangs-ID mit anderem Inhalt ist ein Konflikt. Bindung und Zuweisungen sind mit SHA-256-Belegen geschützt und unveränderbar.
+- M5 übernimmt keine Legacy-Läufe, startet keine Instanz aus der Bewerberumwandlung und enthält keine Frist-, Vertretungs-, Benachrichtigungs- oder Eskalationsautomatik.
 - Abweichende Candidate-Schemata mit Fachdaten werden nicht automatisch umgebaut; vor der ersten produktiven Datenhaltung muss für jede Folgestruktur eine verlustfreie, versionierte Migration vorliegen.
 
 Vor den jeweils genannten Folgestufen sind noch schriftlich zu entscheiden:
 
 - Aufbewahrungsfristen und Rechtsgrundlagen je Dokumentkategorie vor einer automatischen Bereinigung,
 - Übernahmeregeln für ausgewählte Legacy-Prozesse vor ihrer ersten ausdrücklichen M4-Publikation,
-- Konflikt- und Eskalationsregeln bei mehreren passenden Verantwortlichen vor M5,
+- Vertretungs-, Frist- und Eskalationsregeln vor einem späteren Automatisierungsblock; M5 verwendet ausschließlich explizite, geprüfte Einzelzuweisungen,
 - Klassifikation vertraulicher Mitarbeiterprofil- und Offboarding-Daten vor den entsprechenden späteren Fachrechten; die R1-Klassifikation der Bewerberdaten ist abgeschlossen,
 - Grenzen zwischen Schulungsnachweis und externer Lernplattform vor dem Mitarbeiterprofil.
 
@@ -348,7 +387,8 @@ Neue Kernlogik benötigt mindestens:
 - positive und negative Rechte-/Bereichstests,
 - IDOR-, Mehrfachbewerbungs-, IT-Admin-, Scope-Schnittmengen- und datensparsame Projektionstests,
 - Negativtests für reservierte `local`-Prinzipale, inaktive Organisationseinheiten, parallele Rechteänderungen, unveränderte Freigabezeitpunkte und parsebare Auditdetails,
-- Tests für unveränderbare Veröffentlichungen, additive Auflösung, Archivierung und M4-Rechte; Instanzbindung und Aufgabenprojektion folgen erst mit M5,
+- Tests für unveränderbare Veröffentlichungen, additive Auflösung, Archivierung und M4-Rechte,
+- M5-Tests für additive und idempotente Instanzmigration, Read-only-Import, Veröffentlichungs-/Fachobjektbindung, explizite Schrittzuweisung, konkurrierende Starts, Belegintegrität, Legacy-Sperren, bereichsgefilterte Listen, datensparsame UI-Projektion sowie persönliche Aufgaben und idempotenten Abschluss,
 - Dokumentzugriffs-, Historien- und Bereinigungstests erst mit den jeweils freigegebenen Dokument-APIs und Aufbewahrungsregeln,
 - UI- und mobile Überlauftests,
 - Regressionstests für bestehende Personal-, Dienstplan-, Portal- und Prozessfunktionen.

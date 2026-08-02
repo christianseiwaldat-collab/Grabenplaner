@@ -194,6 +194,8 @@ test("M4-Rechte bleiben rollen- und bereichsbezogen; IT-Admin bleibt fail-closed
   });
   assert.deepEqual(forgedItAdmin.capabilities, {
     canRead: false,
+    canReadInstances: false,
+    canStartInstances: false,
     canWriteDrafts: false,
     canReview: false,
     canPublish: false,
@@ -203,6 +205,7 @@ test("M4-Rechte bleiben rollen- und bereichsbezogen; IT-Admin bleibt fail-closed
     canDelegate: false,
   });
   assert.equal(forgedItAdmin.canReadScope(scope("location", LOCATION_A)), false);
+  assert.equal(forgedItAdmin.canStartScope(scope("location", LOCATION_A)), false);
   assert.equal(forgedItAdmin.canPublishScope(scope("location", LOCATION_A)), false);
 
   const forgedAdmin = createPersonnelWorkflowAccessSnapshot({
@@ -228,6 +231,8 @@ test("FL und AL wirken nur in der Schnittmenge aus Portal- und PL+-Fachscope", (
     ],
   });
   assert.equal(fl.canPublishScope(scope("location", LOCATION_A), "supplemental"), true);
+  assert.equal(fl.canStartInstances, true);
+  assert.equal(fl.canStartScope(scope("location", LOCATION_A)), true);
   assert.equal(fl.canPublishScope(scope("department", LOCATION_A, DEPARTMENT_A), "supplemental"), true);
   assert.equal(fl.canPublishScope(scope("location", LOCATION_B), "supplemental"), false);
   assert.equal(fl.canPublishScope(scope("location", LOCATION_A), "mandatory"), false);

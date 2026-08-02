@@ -344,7 +344,13 @@ const {
   PERSONNEL_WORKFLOW_ERROR_KINDS,
   PersonnelWorkflowError,
   createPersonnelWorkflowPublicationService,
+  verifyPersonnelWorkflowPublication,
 } = require("./lib/personnel-workflow-publications");
+const {
+  PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS,
+  PersonnelWorkflowInstanceError,
+  createPersonnelWorkflowInstanceService,
+} = require("./lib/personnel-workflow-instances");
 const {
   OFFICIAL_RETENTION_SOURCES,
   RETENTION_GOVERNANCE_NOTICE,
@@ -549,7 +555,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "personnel:workflows:read", label: "Personal-Workflows im freigegebenen Bereich lesen", description: "Vorlagen- und Versionsmetadaten nur im von PL+ freigegebenen Bereich lesen.", group: "Personal-Workflows", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:workflows:draft:write", label: "Lokale Personal-Workflow-Entw\u00fcrfe bearbeiten", description: "Entw\u00fcrfe im eigenen freigegebenen Bereich bearbeiten; keine zentrale Pflichtwirkung.", group: "Personal-Workflows", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:workflows:review", label: "Personal-Workflow-Entw\u00fcrfe fachlich pr\u00fcfen", description: "Workflow-Entw\u00fcrfe zentral pr\u00fcfen; keine technische Rollenverwaltung.", group: "Personal-Workflows", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
-  { id: "personnel:workflows:publish", label: "Personal-Workflow-Versionen ver\u00f6ffentlichen", description: "Eine unver\u00e4nderliche Version erzeugen; lokal nur als freigegebene Erg\u00e4nzung.", group: "Personal-Workflows", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: "personnel:workflows:publish", label: "Personal-Workflow-Versionen ver\u00f6ffentlichen", description: "Eine unver\u00e4nderliche Version erzeugen; lokal nur als freigegebene Erg\u00e4nzung. M5 nutzt dieses besonders gesch\u00fctzte Recht zus\u00e4tzlich f\u00fcr den kontrollierten Instanzstart im freigegebenen Fachbereich.", group: "Personal-Workflows", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:workflows:local:supplement", label: "Lokale Personal-Workflows erg\u00e4nzen", description: "Zus\u00e4tzliche lokale Prozesse im freigegebenen Bereich verwalten; zentrale Pflichtprozesse bleiben gesch\u00fctzt.", group: "Personal-Workflows", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:workflows:confidential:read", label: "Vertrauliche Personal-Workflow-Inhalte lesen", description: "Gesch\u00fctzte PL- und Offboarding-Schritte lesen; nicht lokal oder technisch delegierbar.", group: "Personal-Workflows", warningLevel: "critical", eligibleRoles: ["hr"] },
   { id: "personnel:workflows:confidential:write", label: "Vertrauliche Personal-Workflow-Inhalte bearbeiten", description: "Gesch\u00fctzte PL- und Offboarding-Schritte bearbeiten; im M4-Fundament noch gesperrt.", group: "Personal-Workflows", warningLevel: "critical", eligibleRoles: ["hr"] },
@@ -2121,6 +2127,17 @@ function requirePersonnelWorkflowPublicationService() {
     );
   }
   return personnelWorkflowPublicationServiceInstance;
+}
+
+let personnelWorkflowInstanceServiceInstance = null;
+
+function requirePersonnelWorkflowInstanceService() {
+  if (!personnelWorkflowInstanceServiceInstance) {
+    personnelWorkflowInstanceServiceInstance = createPersonnelWorkflowInstanceService(
+      customProcessRepository,
+    );
+  }
+  return personnelWorkflowInstanceServiceInstance;
 }
 
 let governanceStoreInstance = null;
@@ -25842,6 +25859,13 @@ async function triggerCustomProcess(actor, id, body = {}) {
   const triggerKey = customProcessLookup("manual-run", `${id}:${suppliedKey}`);
   return customProcessRepository.transaction(async (repository) => {
     const currentBundle = await customProcessById(id, {}, repository);
+    if (await repository.processHasWorkflowPublications({ processId: id })) {
+      throw httpError(
+        409,
+        "Veröffentlichte Personal-Workflows können nur als kontrollierte Personalinstanz gestartet werden.",
+        "CUSTOM_PROCESS_PERSONNEL_INSTANCE_REQUIRED",
+      );
+    }
     if (!currentBundle || currentBundle.process.status !== "active") {
       throw httpError(409, "Nur aktive Prozesse können ausgelöst werden.", "CUSTOM_PROCESS_NOT_ACTIVE");
     }
@@ -25954,16 +25978,23 @@ async function reconcileCustomProcessTriggers(now = new Date()) {
   let triggered = 0;
   for (const bundle of (await customProcessRows()).filter(({ process }) => process.status === "active" && process.trigger_type === "staffing_shortfall")
     .map(({ process, steps }) => ({ process, steps, dto: customProcessDashboardDefinition(process, steps) }))) {
+    const published = await customProcessRepository.processHasWorkflowPublications({
+      processId: bundle.process.id,
+    });
     checked += 1;
     for (const context of await customProcessStaffingContexts(bundle, date)) {
       const triggerKey = customProcessLookup("staffing-run", `${bundle.process.id}:${bundle.process.revision}:${date}:${context.locationId}:${context.departmentId || 0}`);
       activeKeys.add(triggerKey);
+      if (published) continue;
       const changed = await customProcessRepository.transaction(async (repository) => {
         const current = await customProcessById(bundle.process.id, {}, repository);
         if (!current
             || current.process.status !== "active"
             || current.process.trigger_type !== "staffing_shortfall"
             || Number(current.process.revision) !== Number(bundle.process.revision)) return false;
+        if (await repository.processHasWorkflowPublications({
+          processId: current.process.id,
+        })) return false;
         const result = await createOrReopenCustomProcessRun(
           current,
           { triggerKey, triggeredBy: "system", ...context },
@@ -26073,6 +26104,73 @@ async function customProcessTasksForEmployee(
   return items;
 }
 
+function personnelWorkflowTaskScopeLabel(scope = {}) {
+  if (scope.type === "department") return "Freigegebener Abteilungsbereich";
+  if (scope.type === "location") return "Freigegebener Standortbereich";
+  return "Gesamtes Unternehmen";
+}
+
+function personnelWorkflowPortalTask(item) {
+  const activatedAt = item.step?.activatedAt || null;
+  const completedSteps = Number(item.progress?.completedSteps || 0);
+  const totalSteps = Number(item.progress?.totalSteps || 0);
+  return Object.freeze({
+    runId: item.runId,
+    processId: item.workflowCode,
+    processRevision: Number(item.versionNumber),
+    activationCount: 1,
+    processTitle: item.workflowTitle,
+    processSymbol: "P",
+    stepId: item.step.id,
+    stepTitle: item.step.title,
+    stepDescription: "",
+    conditionType: item.step.canSkip ? "conditional" : "always",
+    conditionText: "",
+    canSkip: item.step.canSkip,
+    scopeLabel: personnelWorkflowTaskScopeLabel(item.scope),
+    progress: {
+      completedSteps,
+      totalSteps,
+      finished: completedSteps,
+      total: totalSteps,
+    },
+    position: Number(item.step.position),
+    stepCount: totalSteps,
+    status: "active",
+    canComplete: true,
+    completionNoteRequired: false,
+    activatedAt,
+    assignedAt: activatedAt,
+    createdAt: activatedAt,
+    personnelWorkflow: true,
+    subjectType: item.subjectType,
+    workflowCode: item.workflowCode,
+    versionNumber: Number(item.versionNumber),
+    workflowTitle: item.workflowTitle,
+    step: Object.freeze({ ...item.step }),
+    scope: Object.freeze({ type: item.scope?.type || "company" }),
+  });
+}
+
+async function processTasksForPortalSession(session) {
+  const legacyItems = await customProcessTasksForEmployee(session.employeeNumber);
+  if (!installationFeatureEnabled("personnelLifecycle")) return legacyItems;
+  const workflowAccess = createPersonnelWorkflowAccessSnapshot(session);
+  if (workflowAccess.canReadInstances !== true) return legacyItems;
+  const result = await requirePersonnelWorkflowInstanceService().tasksForEmployee(
+    session.employeeNumber,
+    {
+      access: personnelWorkflowInstanceAccessForSession(session, workflowAccess),
+    },
+  );
+  return [...legacyItems, ...result.items.map(personnelWorkflowPortalTask)]
+    .sort((left, right) => (
+      String(right.assignedAt || right.createdAt || "")
+        .localeCompare(String(left.assignedAt || left.createdAt || ""))
+      || String(left.runId).localeCompare(String(right.runId))
+    ));
+}
+
 async function completeCustomProcessTask(actor, runId, stepId, body = {}) {
   const input = customProcessInputObject(body, "Die Prozessaufgabe");
   assertCustomProcessKeys(input, new Set(["action", "note", "idempotencyKey", "activationCount"]), "Die Prozessaufgabe");
@@ -26148,6 +26246,38 @@ async function completeCustomProcessTask(actor, runId, stepId, body = {}) {
       progress,
     };
   });
+}
+
+async function customProcessTaskOwnedByActor(
+  actor,
+  runId,
+  stepId,
+  repository = customProcessRepository,
+) {
+  const run = await repository.runById({ id: String(runId || "") });
+  if (!run) return false;
+  const bundle = await customProcessRunBundle(run, repository);
+  const step = bundle?.dto.steps.find((entry) => entry.id === String(stepId || ""));
+  const state = await repository.runStepById({
+    runId: run.id,
+    stepId: String(stepId || ""),
+  });
+  if (!bundle || !step || !state) return false;
+  if (["completed", "skipped"].includes(state.status)) {
+    return state.completed_by === String(actor.employeeNumber);
+  }
+  return run.status === "open"
+    && state.status === "active"
+    && (await customProcessRecipients(bundle, step, run, repository))
+      .includes(String(actor.employeeNumber));
+}
+
+function customProcessTaskNotFoundError() {
+  return httpError(
+    404,
+    "Die Prozessaufgabe wurde nicht gefunden.",
+    "CUSTOM_PROCESS_TASK_NOT_FOUND",
+  );
 }
 
 async function rightsDashboardProcesses(actor = null) {
@@ -31822,24 +31952,66 @@ app.get(["/api/portal/v1/me/absence-history", "/api/portal/v1/me/absence-request
 
 app.get("/api/portal/v1/me/process-tasks", async (request, response) => {
   const session = requireEmployeePortalSession(request);
-  const items = await customProcessTasksForEmployee(session.employeeNumber);
-  response.json({
-    available: true,
-    items,
-    tasks: items,
-    summary: { openCount: items.length, activeRuns: new Set(items.map((item) => item.runId)).size },
-  });
+  try {
+    const items = await processTasksForPortalSession(session);
+    response.json({
+      available: true,
+      items,
+      tasks: items,
+      summary: { openCount: items.length, activeRuns: new Set(items.map((item) => item.runId)).size },
+    });
+  } catch (error) {
+    personnelWorkflowRouteError(error);
+  }
 });
 
 app.post("/api/portal/v1/me/process-tasks/:runId/:stepId/complete", async (request, response) => {
   const session = requireEmployeePortalSession(request);
   assertPortalCsrf(request);
+  const runId = String(request.params.runId || "");
+  const stepId = String(request.params.stepId || "");
+  const boundInstance = await customProcessRepository.personnelWorkflowInstanceById({ id: runId });
+  if (boundInstance && installationFeatureEnabled("personnelLifecycle")) {
+    const workflowAccess = createPersonnelWorkflowAccessSnapshot(session);
+    if (workflowAccess.canReadInstances !== true) {
+      auditPersonnelWorkflowAccessDenied(
+        session,
+        request,
+        "CUSTOM_PROCESS_TASK_NOT_FOUND",
+        PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+      );
+      throw customProcessTaskNotFoundError();
+    }
+    const accessContext = { session, access: workflowAccess };
+    try {
+      const result = await requirePersonnelWorkflowInstanceService().completeTask(
+        session.employeeNumber,
+        runId,
+        stepId,
+        request.body,
+        { access: personnelWorkflowInstanceAccessForSession(session, workflowAccess) },
+      );
+      if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+      response.json(result);
+      return;
+    } catch (error) {
+      auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+      if (error instanceof PersonnelWorkflowInstanceError
+        && error.kind === PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.NOT_FOUND) {
+        throw customProcessTaskNotFoundError();
+      }
+      personnelWorkflowRouteError(error);
+    }
+  }
+  if (!await customProcessTaskOwnedByActor(session, runId, stepId)) {
+    throw customProcessTaskNotFoundError();
+  }
   const body = { ...(request.body || {}) };
   if (!body.idempotencyKey) body.idempotencyKey = String(request.get("Idempotency-Key") || "");
   response.json(await completeCustomProcessTask(
     session,
-    String(request.params.runId || ""),
-    String(request.params.stepId || ""),
+    runId,
+    stepId,
     body,
   ));
 });
@@ -32551,11 +32723,25 @@ const PERSONNEL_WORKFLOW_ROUTE_ACTIONS = Object.freeze({
     permission: PERSONNEL_WORKFLOW_PERMISSIONS.READ,
     capability: "canRead",
     write: false,
+    central: true,
   }),
   publish: Object.freeze({
     permission: PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH,
     capability: "canPublish",
     write: true,
+    central: true,
+  }),
+  instanceRead: Object.freeze({
+    permission: PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+    capability: "canReadInstances",
+    write: false,
+    central: false,
+  }),
+  instanceStart: Object.freeze({
+    permission: PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH,
+    capability: "canStartInstances",
+    write: true,
+    central: false,
   }),
 });
 
@@ -32579,6 +32765,8 @@ function publicPersonnelWorkflowCapabilities(access) {
   return Object.freeze({
     scope,
     canRead: access?.canRead === true,
+    canReadInstances: access?.canReadInstances === true,
+    canStartInstances: access?.canStartInstances === true,
     canWriteDrafts: access?.canWriteDrafts === true,
     canReview: access?.canReview === true,
     canPublish: access?.canPublish === true,
@@ -32586,6 +32774,90 @@ function publicPersonnelWorkflowCapabilities(access) {
     canReadConfidential: access?.canReadConfidential === true,
     canWriteConfidential: access?.canWriteConfidential === true,
     canDelegate: access?.canDelegate === true,
+  });
+}
+
+function personnelWorkflowInstanceScope(value = {}) {
+  const locationId = String(value.locationId ?? value.location_id ?? "").trim() || null;
+  const departmentId = Number(value.departmentId ?? value.department_id ?? 0) || null;
+  return {
+    type: departmentId ? "department" : (locationId ? "location" : "company"),
+    locationId,
+    departmentId,
+  };
+}
+
+function personnelWorkflowRecipientAccess(recipient) {
+  const permissionState = effectivePortalPermissionState(
+    recipient?.employee_number,
+    recipient?.role,
+    recipient?.role_permissions,
+    recipient?.granted_permissions,
+    recipient?.denied_permissions,
+  );
+  const explicitScopes = portalAccessScopesForPrincipal({
+    employeeNumber: recipient?.employee_number,
+    role: recipient?.role,
+    homeLocationId: recipient?.home_location_id,
+    preferredDepartmentId: recipient?.preferred_department_id,
+    scopesValue: recipient?.access_scopes,
+  });
+  return createPersonnelWorkflowAccessSnapshot({
+    actorId: recipient?.employee_number,
+    role: recipient?.role,
+    permissions: permissionState.effectivePermissions,
+    explicitScopes,
+    permissionScopes: parsePortalPermissionScopes(recipient?.permission_scopes),
+  });
+}
+
+function personnelWorkflowInstanceAccessForSession(session, workflowAccess) {
+  const lifecycleAccess = personnelLifecycleAccessForSession(session);
+  const permissions = new Set(Array.isArray(session?.permissions) ? session.permissions : []);
+  const canReadEmployeeSubject = workflowAccess?.localSystem === true
+    || permissions.has("employees:read");
+  const actorId = portalActorId(session);
+  return Object.freeze({
+    actorId,
+    canStartScope(scope, publication) {
+      if (workflowAccess?.canStartScope(scope) !== true) return false;
+      const publicationScope = publication?.scope;
+      return publicationScope?.type === "company"
+        || workflowAccess?.canReadScope(publicationScope) === true;
+    },
+    canStartCandidateSubject(subject) {
+      return lifecycleAccess?.canWriteApplication(subject?.scope) === true;
+    },
+    canStartEmployeeSubject() {
+      return canReadEmployeeSubject;
+    },
+    canAssignPersonnelWorkflowStep({ scope, recipient } = {}) {
+      if (!recipient || ["it_admin", "developer", "local"].includes(recipient.role)) {
+        return false;
+      }
+      const recipientAccess = personnelWorkflowRecipientAccess(recipient);
+      return recipientAccess.canReadInstances === true
+        && recipientAccess.canReadScope(scope) === true
+        && customProcessPortalUserInScope(recipient, scope);
+    },
+    canCompletePersonnelWorkflowTask({ scope, assignment, recipient } = {}) {
+      if (workflowAccess?.canReadInstances !== true
+        || workflowAccess?.canReadScope(scope) !== true
+        || !assignment || assignment.employeeNumber !== actorId
+        || !recipient || recipient.employee_number !== actorId
+        || ["it_admin", "developer", "local"].includes(recipient.role)) {
+        return false;
+      }
+      return customProcessPortalUserInScope(recipient, scope);
+    },
+    canReadPersonnelWorkflowInstance(row) {
+      const scope = personnelWorkflowInstanceScope(row);
+      if (workflowAccess?.canReadScope(scope) !== true) return false;
+      if (row?.subject_type === "candidate") {
+        return lifecycleAccess?.canReadApplication(scope) === true;
+      }
+      return row?.subject_type === "employee" && canReadEmployeeSubject;
+    },
   });
 }
 
@@ -32622,7 +32894,7 @@ function requirePersonnelWorkflowAccess(request, { action = "read" } = {}) {
         "PERSONNEL_WORKFLOW_PERMISSION_REQUIRED",
       );
     }
-    if (access.global && !access.localSystem) {
+    if (definition.central && access.global && !access.localSystem) {
       const requiredCentral = definition.write
         ? ["personnel:central:read", "personnel:central:write"]
         : ["personnel:central:read"];
@@ -32653,6 +32925,18 @@ function requirePersonnelWorkflowAccess(request, { action = "read" } = {}) {
 }
 
 function personnelWorkflowRouteError(error) {
+  if (error instanceof PersonnelWorkflowInstanceError) {
+    const status = error.kind === PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.FORBIDDEN
+      ? 403
+      : error.kind === PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.NOT_FOUND
+        ? 404
+        : error.kind === PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.CONFLICT
+          ? 409
+          : error.kind === PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.INTEGRITY
+            ? 503
+            : 400;
+    throw httpError(status, error.message, error.code);
+  }
   if (error instanceof PersonnelWorkflowError) {
     const status = error.kind === PERSONNEL_WORKFLOW_ERROR_KINDS.FORBIDDEN
       ? 403
@@ -32688,10 +32972,14 @@ function personnelWorkflowRouteError(error) {
 }
 
 function auditPersonnelWorkflowServiceDenied(accessContext, request, error) {
-  if (!(error instanceof PersonnelWorkflowError)) return;
+  if (!(error instanceof PersonnelWorkflowError)
+    && !(error instanceof PersonnelWorkflowInstanceError)) return;
   const scopedNotFound = accessContext?.access?.global !== true
-    && error.kind === PERSONNEL_WORKFLOW_ERROR_KINDS.NOT_FOUND;
-  if (error.kind !== PERSONNEL_WORKFLOW_ERROR_KINDS.FORBIDDEN && !scopedNotFound) return;
+    && [PERSONNEL_WORKFLOW_ERROR_KINDS.NOT_FOUND,
+      PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.NOT_FOUND].includes(error.kind);
+  if (![PERSONNEL_WORKFLOW_ERROR_KINDS.FORBIDDEN,
+    PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.FORBIDDEN].includes(error.kind)
+    && !scopedNotFound) return;
   auditPersonnelWorkflowAccessDenied(
     accessContext.session,
     request,
@@ -33003,6 +33291,48 @@ app.get("/api/portal/v1/personnel-lifecycle/workflows", async (request, response
         includeArchived: String(request.query.includeArchived || "") === "1",
         access: accessContext.access,
       }),
+      capabilities: accessContext.capabilities,
+    });
+  } catch (error) {
+    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    personnelWorkflowRouteError(error);
+  }
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/workflow-instances", async (request, response) => {
+  const accessContext = requirePersonnelWorkflowAccess(request, { action: "instanceRead" });
+  try {
+    response.json({
+      ...await requirePersonnelWorkflowInstanceService().list({
+        access: personnelWorkflowInstanceAccessForSession(
+          accessContext.session,
+          accessContext.access,
+        ),
+      }),
+      capabilities: accessContext.capabilities,
+    });
+  } catch (error) {
+    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    personnelWorkflowRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/workflow-instances", async (request, response) => {
+  const accessContext = requirePersonnelWorkflowAccess(request, { action: "instanceStart" });
+  try {
+    const result = await requirePersonnelWorkflowInstanceService().start(
+      request.body,
+      {
+        access: personnelWorkflowInstanceAccessForSession(
+          accessContext.session,
+          accessContext.access,
+        ),
+        actorId: portalActorId(accessContext.session),
+      },
+    );
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    response.status(result.replayed ? 200 : 201).json({
+      ...result,
       capabilities: accessContext.capabilities,
     });
   } catch (error) {
