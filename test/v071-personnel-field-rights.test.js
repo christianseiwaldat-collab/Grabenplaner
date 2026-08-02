@@ -19,6 +19,9 @@ process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
 const { app, db, releaseInstanceLockForTests } = require("../server");
+const {
+  PERSONNEL_DOCUMENT_HISTORY_TRIGGER_DEFINITIONS,
+} = require("../lib/persistence/sqlite/operations/personnel-document-history-schema");
 
 const MANAGER = "9510";
 const DEPARTMENT_MANAGER = "9511";
@@ -34,6 +37,69 @@ let positionId;
 let departmentA;
 let departmentB;
 let departmentRemote;
+
+const PERSONNEL_DOCUMENT_TEST_RESET_TRIGGER_NAMES = Object.freeze([
+  "trg_personnel_record_document_events_immutable_delete",
+  "trg_personnel_record_document_versions_immutable_delete",
+  "trg_personnel_record_documents_no_delete",
+]);
+
+function resetTestPersonnelDocuments(employeeNumbers) {
+  const placeholders = employeeNumbers.map(() => "?").join(", ");
+  const protectedBlobRows = db.prepare(`
+    SELECT version.storage_key
+    FROM personnel_record_document_versions version
+    JOIN personnel_record_documents document ON document.id = version.document_id
+    WHERE document.employee_number IN (${placeholders})
+    UNION
+    SELECT document.storage_key
+    FROM personnel_record_documents document
+    WHERE document.employee_number IN (${placeholders})
+      AND NOT EXISTS (
+        SELECT 1 FROM personnel_record_document_versions version
+        WHERE version.document_id = document.id
+      )
+  `).all(...employeeNumbers, ...employeeNumbers);
+  for (const row of protectedBlobRows) fs.rmSync(blobPath(row.storage_key), { force: true });
+
+  const triggerDefinitions = new Map(
+    PERSONNEL_DOCUMENT_HISTORY_TRIGGER_DEFINITIONS.map((definition) => [
+      definition.name,
+      definition.sql,
+    ]),
+  );
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const name of PERSONNEL_DOCUMENT_TEST_RESET_TRIGGER_NAMES) {
+      db.exec(`DROP TRIGGER IF EXISTS "${name}"`);
+    }
+    db.prepare(`
+      DELETE FROM personnel_record_document_events
+      WHERE document_id IN (
+        SELECT id FROM personnel_record_documents
+        WHERE employee_number IN (${placeholders})
+      )
+    `).run(...employeeNumbers);
+    db.prepare(`
+      DELETE FROM personnel_record_document_versions
+      WHERE document_id IN (
+        SELECT id FROM personnel_record_documents
+        WHERE employee_number IN (${placeholders})
+      )
+    `).run(...employeeNumbers);
+    db.prepare(`
+      DELETE FROM personnel_record_documents
+      WHERE employee_number IN (${placeholders})
+    `).run(...employeeNumbers);
+    for (const name of PERSONNEL_DOCUMENT_TEST_RESET_TRIGGER_NAMES) {
+      db.exec(triggerDefinitions.get(name));
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
 
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
@@ -266,13 +332,7 @@ test.before(async () => {
 });
 
 test.beforeEach(() => {
-  const documentRows = db.prepare(`
-    SELECT storage_key FROM personnel_record_documents
-    WHERE employee_number IN (?, ?, ?, ?)
-  `).all(TARGET_A, TARGET_B, TARGET_REMOTE, TARGET_UNASSIGNED);
-  for (const row of documentRows) fs.rmSync(blobPath(row.storage_key), { force: true });
-  db.prepare("DELETE FROM personnel_record_documents WHERE employee_number IN (?, ?, ?, ?)")
-    .run(TARGET_A, TARGET_B, TARGET_REMOTE, TARGET_UNASSIGNED);
+  resetTestPersonnelDocuments([TARGET_A, TARGET_B, TARGET_REMOTE, TARGET_UNASSIGNED]);
   db.prepare("DELETE FROM personnel_sensitive_records WHERE employee_number IN (?, ?, ?, ?)")
     .run(TARGET_A, TARGET_B, TARGET_REMOTE, TARGET_UNASSIGNED);
   db.prepare("DELETE FROM personnel_field_permissions").run();

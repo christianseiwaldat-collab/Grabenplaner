@@ -392,6 +392,7 @@
           </div>
 
           <section class="personnel-administration-section active" id="personnelDirectorySection" role="tabpanel" aria-labelledby="personnelDirectoryTab">
+            <div class="personnel-directory-workspace" id="personnelDirectoryWorkspace">
             <div class="personnel-administration-summary" id="personnelAdministrationSummary" aria-live="polite"></div>
             <div class="employee-toolbar personnel-directory-toolbar">
               <div><h2>Mitarbeitende</h2><p>Unternehmensweite Übersicht mit ausschließlich freigegebenen Angaben. Die Spaltenauswahl gilt auch für die Teamansicht.</p></div>
@@ -408,6 +409,35 @@
                 <tbody id="personnelDirectoryBody"><tr><td colspan="8">Personalstammdaten werden geladen.</td></tr></tbody>
               </table>
             </div>
+            </div>
+
+            <section class="employee-profile-workspace hidden" id="employeeProfileWorkspace" aria-labelledby="employeeProfileName">
+              <button class="employee-profile-back" id="employeeProfileBackButton" type="button">← Zurück zu Mitarbeitende</button>
+              <article class="employee-profile-shell" id="employeeProfileShell" aria-busy="false">
+                <header class="employee-profile-header">
+                  <span class="employee-profile-avatar" id="employeeProfileAvatar" aria-hidden="true">MA</span>
+                  <div class="employee-profile-heading">
+                    <span class="eyebrow">Mitarbeiterprofil</span>
+                    <h2 id="employeeProfileName" tabindex="-1">Profil wird geladen</h2>
+                    <p id="employeeProfileIdentity">Freigegebene Organisationsdaten werden geladen.</p>
+                  </div>
+                  <span class="status-badge inactive" id="employeeProfileStatus">Wird geladen</span>
+                </header>
+                <div class="employee-profile-tabs" role="tablist" aria-label="Bereiche des Mitarbeiterprofils">
+                  <button class="employee-profile-tab active" id="employeeProfileOverviewTab" type="button" role="tab" aria-selected="true" aria-controls="employeeProfileContent" data-employee-profile-tab="overview">Übersicht</button>
+                  <button class="employee-profile-tab" id="employeeProfileMasterDataTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="masterData">Stammdaten &amp; Organisation</button>
+                  <button class="employee-profile-tab" id="employeeProfileDocumentsTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="documents">Personalakte &amp; Dokumente</button>
+                  <button class="employee-profile-tab" id="employeeProfileOnboardingTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="onboarding">Onboarding</button>
+                  <button class="employee-profile-tab" id="employeeProfileTrainingTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="training">Schulungen</button>
+                  <button class="employee-profile-tab" id="employeeProfileOffboardingTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="offboarding">Offboarding</button>
+                  <button class="employee-profile-tab" id="employeeProfileHistoryTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="history">Historie</button>
+                </div>
+                <p class="employee-profile-message" id="employeeProfileMessage" role="status" aria-live="polite"></p>
+                <div class="employee-profile-content" id="employeeProfileContent" role="tabpanel" aria-labelledby="employeeProfileOverviewTab" aria-live="polite">
+                  <div class="employee-profile-empty"><strong>Profil wird geladen</strong><p>Bitte einen Moment warten.</p></div>
+                </div>
+              </article>
+            </section>
           </section>
 
           <section class="personnel-administration-section personnel-candidates" id="candidatePreboardingSection" role="tabpanel" aria-labelledby="candidatePreboardingTab">
