@@ -106,6 +106,7 @@ function withCleanGitSnapshot(callback) {
       "-c", "user.email=grabenplaner-test@example.invalid",
       "commit", "--quiet", "--allow-empty", "--no-gpg-sign", "-m", "Test snapshot",
     ], snapshotRoot);
+    runGit(["checkout-index", "--force", "--all"], snapshotRoot);
     assert.equal(runGit(["status", "--porcelain", "--untracked-files=all"], snapshotRoot), "");
     callback(snapshotRoot, outputRoot);
   } finally {
@@ -113,16 +114,15 @@ function withCleanGitSnapshot(callback) {
   }
 }
 
-test("v0.90.2 keeps every managed Linux artifact LF-only", () => {
-  const attributes = read(".gitattributes");
-  for (const rule of [
-    "server-tools/linux/**/*.js text eol=lf",
-    "server-tools/linux/**/*.json text eol=lf",
-    "server-tools/linux/**/*.in text eol=lf",
-  ]) assert.equal(attributes.includes(rule), true, rule);
-
+test("v0.90.2 keeps every managed Linux byte contract platform-stable", () => {
   const runtimeSchema = JSON.parse(read("server-tools/linux/runtime-schema.json"));
   const offsiteSchema = JSON.parse(read("server-tools/linux/offsite/module-schema.json"));
+  const expectedCrlf = new Set([
+    "server-tools/linux/grabenplaner-monitor.timer.in",
+    "server-tools/linux/hardening/lib/hardening-contract.js",
+    "server-tools/linux/hardening/lib/hardening-policy.js",
+    "server-tools/linux/hardening/module-schema.json",
+  ]);
   const managedArtifacts = new Set([
     "server-tools/linux/runtime-schema.json",
     "server-tools/linux/offsite/module-schema.json",
@@ -131,9 +131,36 @@ test("v0.90.2 keeps every managed Linux artifact LF-only", () => {
     ...offsiteSchema.managedArtifacts,
     ...schema.managedArtifacts,
   ]);
+  const attributeResult = spawnSync("git", [
+    "-C", root,
+    "check-attr", "-z", "--stdin", "text", "eol",
+  ], {
+    input: `${[...managedArtifacts].join("\0")}\0`,
+    encoding: "utf8",
+  });
+  assert.equal(attributeResult.status, 0, attributeResult.stderr);
+  const fields = attributeResult.stdout.split("\0");
+  assert.equal(fields.pop(), "");
+  const effectiveAttributes = new Map();
+  for (let index = 0; index < fields.length; index += 3) {
+    const [relative, attribute, value] = fields.slice(index, index + 3);
+    if (!effectiveAttributes.has(relative)) effectiveAttributes.set(relative, new Map());
+    effectiveAttributes.get(relative).set(attribute, value);
+  }
+  assert.equal(fields.length, managedArtifacts.size * 6);
   for (const relative of managedArtifacts) {
-    const content = fs.readFileSync(path.join(root, ...relative.split("/")));
-    assert.equal(content.includes(Buffer.from("\r\n")), false, relative);
+    const expectedEol = expectedCrlf.has(relative) ? "crlf" : "lf";
+    assert.equal(effectiveAttributes.get(relative)?.get("text"), "set", `${relative}: text`);
+    assert.equal(effectiveAttributes.get(relative)?.get("eol"), expectedEol, `${relative}: eol`);
+    const content = fs.readFileSync(path.join(root, ...relative.split("/")), "utf8");
+    if (expectedCrlf.has(relative)) {
+      assert.equal(content.includes("\r\n"), true, relative);
+      const withoutCrlf = content.replaceAll("\r\n", "");
+      assert.equal(withoutCrlf.includes("\n"), false, `${relative}: bare LF`);
+      assert.equal(withoutCrlf.includes("\r"), false, `${relative}: bare CR`);
+    } else {
+      assert.equal(content.includes("\r"), false, `${relative}: CR`);
+    }
   }
 });
 
@@ -146,12 +173,15 @@ test("hardening stays separate from the current core runtime and binds its exact
   assert.equal(verification.status, 0, verification.stderr);
   const result = JSON.parse(verification.stdout);
   assert.equal(result.deploymentSchemaVersion, 4);
+  assert.equal(result.fingerprint, "9457dcb880f64709e071b6645acf0ff548ce4c1c00b321d5894f47d9258b876e");
+  assert.equal(result.offsiteModule.fingerprint, "fb94d52f77f5530663586c297fcf778cccb43106fd20a29c026e2214364e8e06");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
   const { moduleContract } = require(path.join(root, "server-tools/linux/hardening/lib/hardening-contract.js"));
   const expected = moduleContract(hardeningRoot);
   assert.deepEqual(result.hardeningModule, expected);
+  assert.equal(result.hardeningModule.fingerprint, "e917ee0355874ce08f8ab096335ea6b533d151a4e9ab2bc4755d4f940682f91d");
   assert.equal(result.hardeningModule.format, "grabenplaner-linux-hardening-installed-contract");
   assert.equal(result.hardeningModule.schemaVersion, schema.schemaVersion);
   assert.equal(result.hardeningModule.moduleVersion, schema.moduleVersion);
@@ -295,6 +325,40 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.2-beta-linux-x64.zip")));
     assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.2-beta-linux-x64.zip.sha256")));
+  });
+});
+
+test("v0.90.2 Linux package builder rejects a clean but stale-EOL worktree", {
+  skip: process.platform !== "win32" ? "PowerShell-Paketbau wird im Windows-Job geprueft." : false,
+}, () => {
+  withCleanGitSnapshot((snapshotRoot, outputRoot) => {
+    const stalePath = path.join(snapshotRoot, "server-tools", "linux", "grabenplaner-monitor.timer.in");
+    const canonical = fs.readFileSync(stalePath, "utf8");
+    assert.equal(canonical.includes("\r\n"), true);
+    fs.writeFileSync(stalePath, canonical.replaceAll("\r\n", "\n"), "utf8");
+
+    const hideStaleBytes = spawnSync("git", [
+      "-C", snapshotRoot,
+      "update-index", "--assume-unchanged", "--",
+      "server-tools/linux/grabenplaner-monitor.timer.in",
+    ], { encoding: "utf8" });
+    assert.equal(hideStaleBytes.status, 0, hideStaleBytes.stderr);
+
+    const status = spawnSync("git", ["-C", snapshotRoot, "status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" });
+    assert.equal(status.status, 0, status.stderr);
+    assert.equal(status.stdout, "", "Git normalisiert die falschen Arbeitsbaum-Bytes weiterhin als sauber.");
+
+    const builder = path.join(snapshotRoot, "server-tools", "package", "New-GrabenplanerLinuxServerPackage.ps1");
+    const result = spawnSync("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", builder,
+      "-SourceDirectory", snapshotRoot,
+      "-OutputDirectory", outputRoot,
+    ], { encoding: "utf8", timeout: 120_000 });
+    assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(`${result.stdout}\n${result.stderr}`, /unzulaessige LF-Bytes/);
+    assert.equal(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.2-beta-linux-x64.zip")), false);
   });
 });
 
