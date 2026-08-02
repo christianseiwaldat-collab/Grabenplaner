@@ -54,26 +54,26 @@ test("M6-Profilzugang ist Feature-, HR- und Zentralzugriffs-gebunden", () => {
   assert.match(directory, /data-central-personnel-record[^>]*>Personalakt</);
 });
 
-test("M6-Übersicht lädt ausschließlich den vereinbarten GET-Endpunkt", () => {
+test("M7-Profilregister laden ausschließlich über den vereinbarten GET-Endpunkt", () => {
   const loader = between(
     app,
-    "async function loadEmployeeProfileOverview(employeeNumber)",
-    "function openEmployeeProfile(employeeNumber",
+    "async function loadEmployeeProfileTab(tabId",
+    "function loadEmployeeProfileOverview(employeeNumber)",
   );
-  assert.match(loader, /api\(`\/api\/portal\/v1\/personnel-lifecycle\/employees\/\$\{encodeURIComponent\(employeeNumber\)\}\/profile\?tab=overview`\)/);
+  assert.match(loader, /api\(`\/api\/portal\/v1\/personnel-lifecycle\/employees\/\$\{encodeURIComponent\(normalizedEmployeeNumber\)\}\/profile\?tab=\$\{definition\.endpointTab\}`\)/);
   assert.doesNotMatch(loader, /method\s*:|POST|PUT|PATCH|DELETE/);
-  assert.match(loader, /employeeProfileRequestToken !== requestToken/);
-  assert.match(loader, /state\.employeeProfile = null/);
+  assert.match(loader, /employeeProfileRequestToken !== profileRequestToken/);
+  assert.match(loader, /state\.employeeProfileTabData\[tabId\] = null/);
 });
 
-test("M6-Client übernimmt nur die freigegebene Positivliste", () => {
+test("M7-Übersicht übernimmt weiterhin nur die freigegebene Positivliste", () => {
   const normalization = between(
     app,
-    "function normalizeEmployeeProfileOverview(payload, expectedEmployeeNumber)",
-    "function employeeProfileInitials(displayName)",
+    "function normalizeEmployeeProfileHeader(payload, expectedEmployeeNumber",
+    "function employeeProfileProjectedPath(source, path)",
   );
-  assert.match(normalization, /capabilities\?\.canReadOverview !== true/);
-  assert.match(normalization, /tabs\?\.overview\?\.available !== true/);
+  assert.match(normalization, /payload\.capabilities\?\.\[capability\] !== true/);
+  assert.match(normalization, /payload\.tabs\?\.\[tabKey\]\?\.available !== true/);
   assert.match(normalization, /employeeNumber !== String\(expectedEmployeeNumber/);
   for (const allowed of ["employeeNumber", "displayName", "active", "positionName", "costCenter", "location", "department"]) {
     assert.match(normalization, new RegExp(allowed));
@@ -83,7 +83,7 @@ test("M6-Client übernimmt nur die freigegebene Positivliste", () => {
   }
 });
 
-test("M6-Folgeregister bleiben neutral gesperrt und lösen keine API aus", () => {
+test("M7-Prozessregister bleiben neutral gesperrt und lösen keine API aus", () => {
   const rendering = between(
     app,
     "function renderEmployeeProfileContent()",
@@ -92,11 +92,12 @@ test("M6-Folgeregister bleiben neutral gesperrt und lösen keine API aus", () =>
   const tabSwitch = between(
     app,
     "function setEmployeeProfileTab(tab",
-    "async function loadEmployeeProfileOverview(employeeNumber)",
+    "function employeeProfileTabHasData(tabId)",
   );
-  assert.match(rendering, /selectedTab !== "overview"/);
+  assert.match(rendering, /!selectedDefinition\.endpointTab/);
   assert.match(rendering, /noch nicht freigeschaltet/);
   assert.match(rendering, /keine zusätzlichen Daten geladen/);
+  assert.match(tabSwitch, /if \(definition\.endpointTab && state\.employeeProfileTabAvailability\[definition\.id\] === true\)/);
   assert.doesNotMatch(`${rendering}\n${tabSwitch}`, /\bapi\s*\(|method\s*:/);
 });
 
