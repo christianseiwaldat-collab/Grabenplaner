@@ -411,6 +411,7 @@
             </div>
             </div>
 
+            <div id="employeeProfileAdministrationMount">
             <section class="employee-profile-workspace hidden" id="employeeProfileWorkspace" aria-labelledby="employeeProfileName">
               <button class="employee-profile-back" id="employeeProfileBackButton" type="button">← Zurück zu Mitarbeitende</button>
               <article class="employee-profile-shell" id="employeeProfileShell" aria-busy="false">
@@ -423,7 +424,7 @@
                   </div>
                   <span class="status-badge inactive" id="employeeProfileStatus">Wird geladen</span>
                 </header>
-                <div class="employee-profile-tabs" role="tablist" aria-label="Bereiche des Mitarbeiterprofils">
+                <div class="employee-profile-tabs" role="tablist" aria-label="Bereiche des Mitarbeiterprofils" aria-orientation="horizontal">
                   <button class="employee-profile-tab active" id="employeeProfileOverviewTab" type="button" role="tab" aria-selected="true" aria-controls="employeeProfileContent" data-employee-profile-tab="overview">Übersicht</button>
                   <button class="employee-profile-tab" id="employeeProfileMasterDataTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="masterData">Stammdaten &amp; Organisation</button>
                   <button class="employee-profile-tab" id="employeeProfileDocumentsTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="documents">Personalakte &amp; Dokumente</button>
@@ -433,11 +434,12 @@
                   <button class="employee-profile-tab" id="employeeProfileHistoryTab" type="button" role="tab" aria-selected="false" aria-controls="employeeProfileContent" tabindex="-1" data-employee-profile-tab="history">Historie</button>
                 </div>
                 <p class="employee-profile-message" id="employeeProfileMessage" role="status" aria-live="polite"></p>
-                <div class="employee-profile-content" id="employeeProfileContent" role="tabpanel" aria-labelledby="employeeProfileOverviewTab" aria-live="polite">
+                <div class="employee-profile-content" id="employeeProfileContent" role="tabpanel" aria-labelledby="employeeProfileOverviewTab" aria-live="polite" tabindex="0">
                   <div class="employee-profile-empty"><strong>Profil wird geladen</strong><p>Bitte einen Moment warten.</p></div>
                 </div>
               </article>
             </section>
+            </div>
           </section>
 
           <section class="personnel-administration-section personnel-candidates" id="candidatePreboardingSection" role="tabpanel" aria-labelledby="candidatePreboardingTab">
@@ -972,6 +974,7 @@
           </div>
 
           <section id="employeeSettings" class="personnel-section active">
+            <div id="teamDirectoryWorkspace">
             <div class="employee-toolbar">
               <div><h2>Team</h2><p>Personalnummer, Name, Dienstplan-Name, Kostenstelle, passende Position, Farbe, Abteilung, Wochen-Sollzeit und fixe Arbeitstage.</p></div>
               <button class="primary-button" id="addEmployeeButton">+ Teammitglied anlegen</button>
@@ -982,6 +985,8 @@
                 <tbody id="employeeTableBody"></tbody>
               </table>
             </div>
+            </div>
+            <div id="employeeProfileTeamMount"></div>
           </section>
 
           <section id="locationSettings" class="personnel-section">
