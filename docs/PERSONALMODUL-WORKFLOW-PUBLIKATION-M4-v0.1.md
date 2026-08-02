@@ -2,7 +2,7 @@
 
 Stand: 1. August 2026
 
-Status: verbindlicher technischer Vertrag; im Quellstand umgesetzt und nicht released
+Status: verbindlicher technischer Vertrag; in v0.89.0-beta als standardmäßig deaktiviertes Fundament enthalten
 
 Produktstatus: nicht für den produktiven Betrieb freigegeben; das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert
 
