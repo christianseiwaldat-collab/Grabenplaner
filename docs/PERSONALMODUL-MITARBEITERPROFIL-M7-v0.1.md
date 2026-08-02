@@ -2,7 +2,7 @@
 
 Stand: 2. August 2026
 
-Status: verbindlicher technischer Vertrag für den gestapelten lokalen M7-Arbeitsstand; abhängig von M6 und weder veröffentlicht noch zur produktiven Aktivierung freigegeben
+Status: verbindlicher technischer Vertrag für den mit v0.90.0-beta veröffentlichten M7-Stand; abhängig von M6 und nicht zur produktiven Aktivierung freigegeben
 
 Produktgrenze: Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert. M7 führt ausschließlich lesende Profilprojektionen ein und erzeugt weder Prozesse noch Aufgaben, Fristen, Benachrichtigungen oder Automatisierungen.
 
