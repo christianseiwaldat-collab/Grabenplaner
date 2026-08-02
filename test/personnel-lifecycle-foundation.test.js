@@ -47,7 +47,7 @@ test("Personalmodul-Fundament: neue Einstiege bleiben Teil der bestehenden Perso
   assert.doesNotMatch(html, /data-view="(?:applications|workflows|personnelTasks)"/);
 });
 
-test("Personalmodul-Fundament: Feature und bestehende Fachrechte sperren Navigation und Routen fail-closed", () => {
+test("Personalmodul-Fundament: Feature und eigene Fachrechte sperren Navigation und Routen fail-closed", () => {
   const access = between(
     app,
     "function personnelLifecycleFoundationEnabled()",
@@ -55,8 +55,9 @@ test("Personalmodul-Fundament: Feature und bestehende Fachrechte sperren Navigat
   );
   assert.match(access, /installationFeatures\?\.personnelLifecycle === true/);
   assert.match(access, /hasGovernancePermission\("personnel:candidates:read"\)/);
-  assert.match(access, /canReadCentralPersonnel\(\)/);
   assert.match(access, /hasGovernancePermission\("personnel:workflows:read"\)/);
+  assert.match(access, /personnelWorkflowInstanceCapabilities\.canRead !== false/);
+  assert.doesNotMatch(access, /canReadCentralPersonnel\(\)|personnel:central:read|processes:write/);
 
   for (const element of [
     "candidatePreboardingNavButton",
@@ -72,14 +73,15 @@ test("Personalmodul-Fundament: Feature und bestehende Fachrechte sperren Navigat
   assert.match(server, /featureCatalog: installationFeatureCatalog\.filter\(\(feature\) => feature\.provisionable !== false\)/);
 });
 
-test("Personalmodul-Fundament: Grundseiten kommunizieren ihren Ausbaustand und bleiben responsiv", () => {
+test("Personalmodul-Fundament: M5-Ansichten kommunizieren ihren read-only Ausbaustand und bleiben responsiv", () => {
   const workflowSection = between(html, 'id="workflowCenterSection"', "</section>");
-  assert.match(workflowSection, /Technisches Fundament/);
-  assert.match(workflowSection, /M4-Fundament/);
-  assert.match(workflowSection, /Folgt in M5/);
+  assert.match(workflowSection, /Versionsgebundene Ausführung/);
+  assert.match(workflowSection, /M5 · Nur Lesen/);
+  assert.match(workflowSection, /personnelWorkflowInstanceList/);
   const taskSection = between(html, 'id="personnelTasksSection"', "</section>");
-  assert.match(taskSection, /Technisches Fundament/);
-  assert.match(taskSection, /Vorbereitet/);
+  assert.match(taskSection, /Datensparsame Projektion/);
+  assert.match(taskSection, /personnelWorkflowTaskList/);
+  assert.doesNotMatch(`${workflowSection}\n${taskSection}`, /Prozess starten|Workflow starten|Aufgabe abschließen/);
   const candidateSection = between(html, 'id="candidatePreboardingSection"', "</section>");
   assert.match(candidateSection, /Bewerbungsübersicht/);
   assert.match(candidateSection, /personnelCandidateList/);
@@ -101,6 +103,7 @@ test("Personalmodul-Fundament: Architekturvertrag hält Entitäten, Versionen un
   ]) assert.match(architecture, new RegExp(statement));
   assert.match(architecture, /M3-Umwandlung ist bewusst eng begrenzt:[\s\S]*kopiert keine Bewerberdokumente[\s\S]*eine Dokument-Upload-\/Download-API/);
   assert.match(architecture, /v0\.89-personnel-lifecycle-candidate-foundation/);
+  assert.match(architecture, /v0\.89-personnel-workflow-instances/);
   const forbiddenPublicContext = new RegExp(
     `${["Mitter", "weg"].join("")}|${["Pi", "lot"].join("")}`,
     "i",

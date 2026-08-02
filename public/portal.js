@@ -2875,6 +2875,7 @@ function normalizeProcessTask(task = {}) {
     dueAt: String(processTaskValue(task, "dueAt", "due_at")),
     canComplete: processTaskValue(task, "canComplete", "can_complete") !== false && task.blocked !== true && task.current !== false,
     completionNoteRequired: processTaskValue(task, "completionNoteRequired", "completion_note_required") === true,
+    personnelWorkflow: task.personnelWorkflow === true,
   };
 }
 
@@ -2930,7 +2931,7 @@ function renderProcessTasks() {
       ${task.stepDescription ? `<p class="process-task-description">${esc(task.stepDescription)}</p>` : ""}
       ${task.conditionText ? `<aside class="process-task-condition"><strong>Gilt, wenn</strong><span>${esc(task.conditionText)}</span></aside>` : ""}
       ${(assigned || due) ? `<div class="process-task-meta">${assigned ? `<span>Zugewiesen ${esc(assigned)}</span>` : ""}${due ? `<span>Fällig ${esc(due)}</span>` : ""}</div>` : ""}
-      <div class="process-task-completion ${task.canComplete ? "" : "hidden"}"><label><span>Abschlussnotiz${task.completionNoteRequired ? " · erforderlich" : " · optional"}${completionPayload ? " · Wiederholung unverändert" : ""}</span><textarea data-process-task-note rows="2" maxlength="500" ${task.completionNoteRequired ? "required" : ""} ${completionPayload ? "disabled" : ""} placeholder="Kurze, sachliche Rückmeldung">${esc(taskNote)}</textarea></label><button class="primary" data-complete-process-task type="button" ${pending ? "disabled" : ""}>${pending ? "Wird gespeichert …" : completionPayload ? "Erneut versuchen" : "Schritt erledigen"}</button></div>
+      <div class="process-task-completion ${task.canComplete ? "" : "hidden"}">${task.personnelWorkflow ? '<p class="settings-note">Der Abschluss wird in M5 ohne Notiz gespeichert.</p>' : `<label><span>Abschlussnotiz${task.completionNoteRequired ? " · erforderlich" : " · optional"}${completionPayload ? " · Wiederholung unverändert" : ""}</span><textarea data-process-task-note rows="2" maxlength="500" ${task.completionNoteRequired ? "required" : ""} ${completionPayload ? "disabled" : ""} placeholder="Kurze, sachliche Rückmeldung">${esc(taskNote)}</textarea></label>`}<button class="primary" data-complete-process-task type="button" ${pending ? "disabled" : ""}>${pending ? "Wird gespeichert …" : completionPayload ? "Erneut versuchen" : "Schritt erledigen"}</button></div>
       ${taskMessage ? `<p class="message error process-task-message">${esc(taskMessage)}</p>` : ""}
     </article>`;
   }).join("") : '<div class="portal-card process-task-empty"><span aria-hidden="true">✓</span><h2>Alles erledigt</h2><p>Derzeit ist dir kein offener Prozessschritt zugewiesen.</p></div>')}`;
@@ -2994,14 +2995,26 @@ async function loadProcessTasks(options = {}) {
 async function completeProcessTask(task, card) {
   if (!task?.canComplete || portalState.processTaskCompletionPending.has(task.key)) return;
   const previousPayload = portalState.processTaskCompletionPayloads.get(task.key);
-  const note = previousPayload?.note ?? String(card?.querySelector("[data-process-task-note]")?.value || "").trim();
+  const note = task.personnelWorkflow
+    ? ""
+    : previousPayload?.note ?? String(card?.querySelector("[data-process-task-note]")?.value || "").trim();
   if (task.completionNoteRequired && !note) {
     portalState.processTaskMessages.set(task.key, "Bitte eine kurze Abschlussnotiz eintragen.");
     renderProcessTasks();
     return;
   }
-  const idempotencyKey = portalState.processTaskCompletionKeys.get(task.key)
-    || globalThis.crypto?.randomUUID?.()
+  const existingKey = portalState.processTaskCompletionKeys.get(task.key);
+  const generatedUuid = globalThis.crypto?.randomUUID?.() || "";
+  if (task.personnelWorkflow && !existingKey && !generatedUuid) {
+    portalState.processTaskMessages.set(
+      task.key,
+      "Dieser Browser kann keine sichere Vorgangs-ID erzeugen. Bitte aktualisieren oder einen anderen Browser verwenden.",
+    );
+    renderProcessTasks();
+    return;
+  }
+  const idempotencyKey = existingKey
+    || generatedUuid
     || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   portalState.processTaskCompletionKeys.set(task.key, idempotencyKey);
   portalState.processTaskCompletionPayloads.set(task.key, { idempotencyKey, note });
@@ -3010,11 +3023,20 @@ async function completeProcessTask(task, card) {
   portalState.processTaskFlash = "";
   renderProcessTasks();
   try {
-    await api(`/api/portal/v1/me/process-tasks/${encodeURIComponent(task.runId)}/${encodeURIComponent(task.stepId)}/complete`, {
-      method: "POST",
-      headers: { "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ idempotencyKey, note, activationCount: task.activationCount }),
-    });
+    const options = task.personnelWorkflow
+      ? {
+        method: "POST",
+        body: JSON.stringify({ action: "complete", operationId: idempotencyKey }),
+      }
+      : {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({ idempotencyKey, note, activationCount: task.activationCount }),
+      };
+    await api(
+      `/api/portal/v1/me/process-tasks/${encodeURIComponent(task.runId)}/${encodeURIComponent(task.stepId)}/complete`,
+      options,
+    );
     portalState.processTaskCompletionKeys.delete(task.key);
     portalState.processTaskCompletionPayloads.delete(task.key);
     portalState.processTaskNotes.delete(task.key);

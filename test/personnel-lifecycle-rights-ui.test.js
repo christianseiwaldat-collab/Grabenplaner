@@ -214,6 +214,6 @@ test("Bewerberansicht bleibt bis 320 Pixel ohne horizontale Tabellenachse", () =
   assert.match(candidateStyles, /min-width:0/);
   assert.doesNotMatch(candidateStyles, /overflow-x\s*:/);
   assert.match(styles, /@media \(max-width:900px\) \{[\s\S]*?\.personnel-candidate-workspace \{ grid-template-columns:1fr; \}/);
-  assert.match(styles, /@media \(max-width:700px\) \{[\s\S]*?\.personnel-candidate-toolbar,.personnel-candidate-status-form \{ grid-template-columns:1fr; \}/);
+  assert.match(styles, /@media \(max-width:700px\) \{[\s\S]*?\.personnel-candidate-toolbar,.personnel-candidate-status-form(?:,[^{]+)? \{ grid-template-columns:1fr; \}/);
   assert.match(styles, /@media \(max-width:420px\) \{[\s\S]*?\.personnel-candidate-facts \{ grid-template-columns:1fr; \}/);
 });
