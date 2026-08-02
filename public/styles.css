@@ -895,7 +895,7 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .personnel-directory-filters { display:grid; grid-template-columns:minmax(230px,1.5fr) minmax(180px,1fr) minmax(150px,.7fr); gap:11px; margin-bottom:11px; padding:13px 15px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
 .personnel-directory-filters .field { margin:0; }
 .personnel-directory-table-wrap { min-width:0; overflow-x:auto; border:1px solid var(--line); border-radius:15px; background:var(--surface); box-shadow:var(--shadow); }
-.personnel-directory-workspace,.employee-profile-workspace { min-width:0; }
+.personnel-directory-workspace,.employee-profile-workspace,#teamDirectoryWorkspace,#employeeProfileAdministrationMount,#employeeProfileTeamMount { min-width:0; }
 .employee-profile-back { display:inline-flex; align-items:center; min-height:40px; margin:0 0 11px; padding:0 13px; border:1px solid var(--line); border-radius:11px; color:var(--green); background:var(--surface); font-size:11px; font-weight:800; cursor:pointer; }
 .employee-profile-back:hover { border-color:color-mix(in srgb,var(--green) 40%,var(--line)); background:var(--surface-soft); }
 .employee-profile-shell { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:17px; background:var(--surface); box-shadow:var(--shadow); }
@@ -909,9 +909,10 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .employee-profile-tab { flex:0 0 auto; min-height:40px; padding:0 12px; border:1px solid transparent; border-radius:10px; color:var(--muted); background:transparent; font-size:10.5px; font-weight:800; white-space:nowrap; cursor:pointer; }
 .employee-profile-tab:hover { color:var(--ink); background:var(--surface); }
 .employee-profile-tab.active { color:var(--green); border-color:color-mix(in srgb,var(--green) 30%,var(--line)); background:var(--surface); box-shadow:0 4px 12px rgba(20,62,48,.07); }
+.employee-profile-tab:focus-visible,.employee-profile-back:focus-visible,.employee-profile-content:focus-visible { outline:3px solid color-mix(in srgb,var(--green) 45%,transparent); outline-offset:2px; }
 .employee-profile-message { margin:0; padding:12px 20px 0; color:var(--danger,#a23d3d); font-size:11px; font-weight:700; }
 .employee-profile-message:empty { display:none; }
-.employee-profile-content { min-width:0; min-height:250px; padding:20px; }
+.employee-profile-content { min-width:0; min-height:250px; padding:20px; overflow-x:hidden; }
 .employee-profile-overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
 .employee-profile-overview-card { min-width:0; padding:16px; border:1px solid var(--line); border-radius:13px; background:var(--surface-soft); }
 .employee-profile-overview-card span { display:block; color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
@@ -921,6 +922,21 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .employee-profile-empty strong { color:var(--ink); font-size:14px; }
 .employee-profile-empty p { max-width:520px; margin:7px 0 0; color:var(--muted); font-size:11px; line-height:1.5; }
 .employee-profile-lock { display:grid; place-items:center; width:38px; height:38px; margin-bottom:10px; border:1px solid var(--line); border-radius:50%; color:var(--muted); background:var(--surface-soft); font-size:15px; transform:rotate(-45deg); }
+.employee-profile-organization-grid { margin-bottom:15px; }
+.employee-profile-data-section { min-width:0; margin-top:14px; padding:16px; border:1px solid var(--line); border-radius:13px; background:var(--surface-soft); }
+.employee-profile-data-section h3 { margin:0 0 12px; color:var(--ink); font-size:13px; }
+.employee-profile-data-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0; }
+.employee-profile-data-grid > div,.employee-profile-document-meta > div { min-width:0; }
+.employee-profile-data-grid dt,.employee-profile-document-meta dt { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.employee-profile-data-grid dd,.employee-profile-document-meta dd { margin:4px 0 0; color:var(--ink); font-size:11px; font-weight:750; line-height:1.4; overflow-wrap:anywhere; }
+.employee-profile-inline-empty { min-height:135px; border:1px dashed var(--line); border-radius:13px; }
+.employee-profile-document-list { display:grid; gap:12px; min-width:0; }
+.employee-profile-document { min-width:0; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); }
+.employee-profile-document > header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; min-width:0; }
+.employee-profile-document > header > div { min-width:0; }
+.employee-profile-document h3 { margin:4px 0 0; color:var(--ink); font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
+.employee-profile-document > p { margin:10px 0 0; color:var(--muted); font-size:10.5px; line-height:1.5; overflow-wrap:anywhere; }
+.employee-profile-document-meta { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:11px; margin:14px 0 0; padding-top:13px; border-top:1px solid var(--line); }
 .personnel-directory-table { width:100%; min-width:max(100%,calc(var(--employee-column-count,8) * 118px)); border-collapse:collapse; table-layout:auto; }
 .personnel-directory-table th { padding:11px 10px; color:var(--muted); background:var(--surface-soft); font-size:10.5px; text-align:left; text-transform:uppercase; letter-spacing:.06em; }
 .personnel-directory-table td { min-width:0; padding:11px 10px; border-top:1px solid var(--line); font-size:12.5px; overflow-wrap:anywhere; vertical-align:middle; }
@@ -1340,6 +1356,9 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .employee-profile-content { min-height:230px; padding:14px; }
   .employee-profile-overview-grid { grid-template-columns:1fr; }
   .employee-profile-overview-card { padding:14px; }
+  .employee-profile-data-grid,.employee-profile-document-meta { grid-template-columns:1fr; }
+  .employee-profile-data-section,.employee-profile-document { padding:14px; }
+  .employee-profile-document > header { align-items:flex-start; flex-direction:column; }
   .employee-profile-message { padding:10px 14px 0; }
   .cost-center-subheading,.cost-center-type-position-heading { align-items:stretch; flex-direction:column; }
   .cost-center-subheading > p { max-width:none; }

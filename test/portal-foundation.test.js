@@ -1131,6 +1131,10 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       "personnel:workflows:confidential:read",
       "personnel:workflows:confidential:write",
       "personnel:workflows:delegate",
+      "personnel:profiles:read",
+      "personnel:profiles:master:read",
+      "personnel:profiles:documents:read",
+      "personnel:profiles:delegate",
     ]);
     assert.ok(itAdminRightsPayload.catalog
       .filter((permission) => !personnelLifecyclePermissionIds.has(permission.id))

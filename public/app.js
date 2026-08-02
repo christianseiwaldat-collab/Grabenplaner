@@ -209,11 +209,18 @@ const state = {
   employeeProfile: null,
   employeeProfileEmployeeNumber: "",
   employeeProfileTab: "overview",
+  employeeProfileTabData: { masterData: null, documents: null },
+  employeeProfileTabAvailability: { overview: true, masterData: null, documents: null },
+  employeeProfileLoadingTabs: new Set(),
+  employeeProfileTabErrors: {},
+  employeeProfileTabRequestTokens: {},
+  employeeProfileTabAccessFingerprints: {},
   employeeProfileLoading: false,
   employeeProfileLoadError: "",
   employeeProfileRequestToken: null,
   employeeProfileReturnFocus: null,
   employeeProfileOpen: false,
+  employeeProfileHost: "administration",
   editingCostCenterId: null,
   editingCostCenterTypeId: null,
   costCenterTypePositionSelection: new Set(),
@@ -329,7 +336,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
@@ -721,6 +728,7 @@ function csrfHeader() {
 }
 
 function showLoginGate(message = "") {
+  if (employeeProfileIsOpen()) closeEmployeeProfile({ restoreFocus: false });
   document.body.classList.add("portal-locked");
   elements.loginGate?.classList.remove("hidden");
   if (elements.adminLoginError) {
@@ -932,7 +940,70 @@ function personnelLifecycleFoundationEnabled() {
 function canOpenEmployeeProfileFoundation() {
   if (!personnelLifecycleFoundationEnabled()) return false;
   if (!state.portalStatus?.portalEnabled) return true;
-  return state.portalSession?.user?.role === "hr" && canReadCentralPersonnel();
+  return state.portalSession?.user?.role === "hr"
+    && canReadCentralPersonnel()
+    && hasGovernancePermission("personnel:profiles:read");
+}
+
+function canOpenTeamEmployeeProfileFoundation(employeeNumber) {
+  if (!personnelLifecycleFoundationEnabled()
+    || !hasGovernancePermission("personnel:profiles:read")) return false;
+  const normalizedEmployeeNumber = String(employeeNumber || "").trim();
+  return normalizedEmployeeNumber !== "" && state.allEmployees.some((employee) => (
+    String(employee.personnel_number || "").trim() === normalizedEmployeeNumber
+      && employee.personnel_profile_access?.available === true
+  ));
+}
+
+function currentEmployeeProfileAccess() {
+  if (!personnelLifecycleFoundationEnabled()) {
+    return { read: false, masterData: false, documents: false, masterDataFieldFingerprint: "" };
+  }
+  if (!state.portalStatus?.portalEnabled) {
+    return {
+      read: true,
+      masterData: true,
+      documents: true,
+      masterDataFieldFingerprint: employeeProfileMasterDataFieldFingerprint(
+        EMPLOYEE_PROFILE_MASTER_DATA_FIELDS.map(({ key }) => key),
+      ),
+    };
+  }
+  const permissions = state.portalSession?.user?.permissions || [];
+  if (state.employeeProfileHost === "team") {
+    const read = permissions.includes("personnel:profiles:read")
+      && canOpenTeamEmployeeProfileFoundation(state.employeeProfileEmployeeNumber);
+    return {
+      read,
+      masterData: read && permissions.includes("personnel:profiles:master:read"),
+      documents: false,
+      masterDataFieldFingerprint: "",
+    };
+  }
+  const read = canOpenEmployeeProfileFoundation();
+  const recordAccess = state.portalSession?.user?.personnelRecordAccess || {};
+  const fieldAccess = recordAccess.fieldAccess && typeof recordAccess.fieldAccess === "object"
+    ? recordAccess.fieldAccess
+    : {};
+  const canReadSensitiveFields = Object.entries(fieldAccess).some(([fieldKey, level]) => (
+    !["phone", "documents"].includes(fieldKey) && ["read", "write"].includes(level)
+  ));
+  const sensitivePermission = permissions.includes("personnel:sensitive:read");
+  const readableMasterDataFields = EMPLOYEE_PROFILE_MASTER_DATA_FIELDS
+    .map(({ key }) => key)
+    .filter((fieldKey) => ["read", "write"].includes(fieldAccess[fieldKey]));
+  return {
+    read,
+    masterData: read
+      && permissions.includes("personnel:profiles:master:read")
+      && sensitivePermission
+      && canReadSensitiveFields,
+    documents: read
+      && permissions.includes("personnel:profiles:documents:read")
+      && sensitivePermission
+      && recordAccess.canReadDocuments === true,
+    masterDataFieldFingerprint: employeeProfileMasterDataFieldFingerprint(readableMasterDataFields),
+  };
 }
 
 function canReadCandidatePreboarding() {
@@ -1260,6 +1331,9 @@ function applyRoleVisibility() {
     || state.personnelWorkflowInstancesLoading
     || state.personnelWorkflowInstanceLoadError
   )) clearPersonnelWorkflowInstanceState("Workflow-Daten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
+  if (employeeProfileIsOpen()) {
+    reconcileOpenEmployeeProfileAccess(currentEmployeeProfileAccess());
+  }
   if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
     setPersonnelAdministrationTab(firstAccessiblePersonnelAdministrationTab());
   }
@@ -3865,31 +3939,80 @@ function renderPersonnelDirectory() {
 }
 
 const EMPLOYEE_PROFILE_TABS = Object.freeze([
-  { id: "overview", label: "Übersicht" },
-  { id: "masterData", label: "Stammdaten & Organisation" },
-  { id: "documents", label: "Personalakte & Dokumente" },
+  { id: "overview", endpointTab: "overview", capability: "canReadOverview", label: "Übersicht" },
+  { id: "masterData", endpointTab: "master_org", capability: "canReadMasterOrg", label: "Stammdaten & Organisation" },
+  { id: "documents", endpointTab: "documents", capability: "canReadDocuments", label: "Personalakte & Dokumente" },
   { id: "onboarding", label: "Onboarding" },
   { id: "training", label: "Schulungen" },
   { id: "offboarding", label: "Offboarding" },
   { id: "history", label: "Historie" },
 ]);
 
+const EMPLOYEE_PROFILE_MASTER_DATA_FIELDS = Object.freeze([
+  { key: "phone", group: "Kontakt", label: "Telefonnummer" },
+  { key: "alternatePhone", group: "Kontakt", label: "Weitere Telefonnummer" },
+  { key: "privateEmail", group: "Kontakt", label: "Private E-Mail" },
+  { key: "identity.firstName", group: "Persönliche Daten", label: "Vorname" },
+  { key: "identity.lastName", group: "Persönliche Daten", label: "Nachname" },
+  { key: "identity.previousName", group: "Persönliche Daten", label: "Früherer Name" },
+  { key: "identity.salutation", group: "Persönliche Daten", label: "Anrede" },
+  { key: "identity.title", group: "Persönliche Daten", label: "Titel" },
+  { key: "identity.birthDate", group: "Persönliche Daten", label: "Geburtsdatum", kind: "date" },
+  { key: "identity.birthPlace", group: "Persönliche Daten", label: "Geburtsort" },
+  { key: "identity.nationality", group: "Persönliche Daten", label: "Staatsangehörigkeit" },
+  { key: "emergencyContact.name", group: "Notfallkontakt", label: "Name" },
+  { key: "emergencyContact.relationship", group: "Notfallkontakt", label: "Beziehung" },
+  { key: "emergencyContact.phone", group: "Notfallkontakt", label: "Telefonnummer" },
+  { key: "socialSecurityNumber", group: "Besonders geschützt", label: "SV-Nummer" },
+  { key: "accountHolder", group: "Besonders geschützt", label: "Kontoinhaber/-in" },
+  { key: "iban", group: "Besonders geschützt", label: "IBAN" },
+  { key: "bic", group: "Besonders geschützt", label: "BIC" },
+  { key: "address.street", group: "Adresse", label: "Straße und Hausnummer" },
+  { key: "address.supplement", group: "Adresse", label: "Adresszusatz" },
+  { key: "address.postalCode", group: "Adresse", label: "Postleitzahl" },
+  { key: "address.city", group: "Adresse", label: "Ort" },
+  { key: "address.state", group: "Adresse", label: "Bundesland" },
+  { key: "address.country", group: "Adresse", label: "Land" },
+  { key: "employment.startDate", group: "Beschäftigung & Vertrag", label: "Eintrittsdatum", kind: "date" },
+  { key: "employment.endDate", group: "Beschäftigung & Vertrag", label: "Austrittsdatum", kind: "date" },
+  { key: "employment.fixedTermEnd", group: "Beschäftigung & Vertrag", label: "Befristet bis", kind: "date" },
+  { key: "employment.probationEnd", group: "Beschäftigung & Vertrag", label: "Probezeit bis", kind: "date" },
+  { key: "employment.employmentType", group: "Beschäftigung & Vertrag", label: "Beschäftigungsart" },
+  { key: "employment.contractType", group: "Beschäftigung & Vertrag", label: "Vertragsart" },
+  { key: "employment.employmentStatus", group: "Beschäftigung & Vertrag", label: "Beschäftigungsstatus" },
+  { key: "employment.collectiveAgreement", group: "Beschäftigung & Vertrag", label: "Kollektivvertrag" },
+  { key: "employment.classification", group: "Beschäftigung & Vertrag", label: "Einstufung" },
+  { key: "employment.payrollGroup", group: "Beschäftigung & Vertrag", label: "Lohnverrechnungsgruppe" },
+]);
+
+const EMPLOYEE_PROFILE_DOCUMENT_STATUSES = Object.freeze({
+  active: "Aktiv",
+  retention_review: "Aufbewahrung prüfen",
+  archived: "Archiviert",
+});
+
+function employeeProfileMasterDataFieldFingerprint(fieldKeys) {
+  return [...new Set((Array.isArray(fieldKeys) ? fieldKeys : []).map(String).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, "en"))
+    .join("\0");
+}
+
 function employeeProfileIsOpen() {
   return state.employeeProfileOpen === true;
 }
 
-function normalizeEmployeeProfileOverview(payload, expectedEmployeeNumber) {
+function normalizeEmployeeProfileHeader(payload, expectedEmployeeNumber, capability, tabKey) {
   if (!payload || typeof payload !== "object"
-    || payload.capabilities?.canReadOverview !== true
-    || payload.tabs?.overview?.available !== true) {
-    throw new Error("Die Profilübersicht ist nicht freigegeben.");
+    || payload.capabilities?.[capability] !== true
+    || payload.tabs?.[tabKey]?.available !== true) {
+    throw new Error("Dieser Profilbereich ist nicht freigegeben.");
   }
   const profile = payload.profile;
   const employeeNumber = String(profile?.employeeNumber || "").trim();
   const displayName = String(profile?.displayName || "").trim();
   if (!employeeNumber || employeeNumber !== String(expectedEmployeeNumber || "").trim()
     || !displayName || typeof profile?.active !== "boolean") {
-    throw new Error("Die Profilübersicht ist unvollständig.");
+    throw new Error("Die Profilprojektion ist unvollständig.");
   }
   const organization = profile.organization && typeof profile.organization === "object"
     ? profile.organization
@@ -3913,11 +4036,109 @@ function normalizeEmployeeProfileOverview(payload, expectedEmployeeNumber) {
         name: String(organization.department?.name || "").trim(),
       },
     },
-    tabs: Object.fromEntries(EMPLOYEE_PROFILE_TABS.map(({ id }) => [id, {
-      available: payload.tabs?.[id]?.available === true,
-    }])),
-    capabilities: { canReadOverview: true },
   };
+}
+
+function normalizeEmployeeProfileAccess(payload) {
+  return {
+    tabs: Object.fromEntries(EMPLOYEE_PROFILE_TABS.map(({ id }) => [id, {
+      available: payload.tabs?.[id]?.available === true && (
+        id === "overview" ? payload.capabilities?.canReadOverview === true
+          : id === "masterData" ? payload.capabilities?.canReadMasterOrg === true
+            : id === "documents" ? payload.capabilities?.canReadDocuments === true
+              : false
+      ),
+    }])),
+    capabilities: {
+      canReadOverview: payload.capabilities?.canReadOverview === true,
+      canReadMasterOrg: payload.capabilities?.canReadMasterOrg === true,
+      canReadDocuments: payload.capabilities?.canReadDocuments === true,
+    },
+  };
+}
+
+function normalizeEmployeeProfileOverview(payload, expectedEmployeeNumber) {
+  return {
+    ...normalizeEmployeeProfileHeader(payload, expectedEmployeeNumber, "canReadOverview", "overview"),
+    ...normalizeEmployeeProfileAccess(payload),
+  };
+}
+
+function employeeProfileProjectedPath(source, path) {
+  let value = source;
+  for (const segment of String(path || "").split(".")) {
+    if (!value || typeof value !== "object" || !Object.hasOwn(value, segment)) {
+      return { available: false, value: null };
+    }
+    value = value[segment];
+  }
+  return { available: true, value };
+}
+
+function normalizeEmployeeProfileMasterData(payload, expectedEmployeeNumber) {
+  const profile = normalizeEmployeeProfileHeader(
+    payload,
+    expectedEmployeeNumber,
+    "canReadMasterOrg",
+    "masterData",
+  );
+  const source = payload.masterData && typeof payload.masterData === "object"
+    && !Array.isArray(payload.masterData) ? payload.masterData : {};
+  const fields = EMPLOYEE_PROFILE_MASTER_DATA_FIELDS.flatMap((definition) => {
+    const projected = employeeProfileProjectedPath(source, definition.key);
+    if (!projected.available || projected.value === null || typeof projected.value === "object") return [];
+    return [{
+      key: definition.key,
+      group: definition.group,
+      label: definition.label,
+      kind: definition.kind || "text",
+      value: String(projected.value).trim(),
+    }];
+  });
+  return { profile, fields, ...normalizeEmployeeProfileAccess(payload) };
+}
+
+function normalizeEmployeeProfileDocuments(payload, expectedEmployeeNumber) {
+  const profile = normalizeEmployeeProfileHeader(
+    payload,
+    expectedEmployeeNumber,
+    "canReadDocuments",
+    "documents",
+  );
+  if (!Array.isArray(payload.documents)) throw new Error("Die Dokumentprojektion ist unvollständig.");
+  const documents = payload.documents.map((document) => {
+    const id = String(document?.id || "").trim();
+    const currentVersion = Number(document?.currentVersion);
+    const revision = Number(document?.revision);
+    const byteSize = Number(document?.byteSize);
+    const visibility = String(document?.visibility || "").trim();
+    const status = String(document?.status || "").trim();
+    if (!id || !Number.isInteger(currentVersion) || currentVersion < 1
+      || !Number.isInteger(revision) || revision < 1
+      || !Number.isSafeInteger(byteSize) || byteSize < 0
+      || visibility !== "hr_confidential"
+      || !Object.hasOwn(EMPLOYEE_PROFILE_DOCUMENT_STATUSES, status)) {
+      throw new Error("Die Dokumentprojektion ist ungültig.");
+    }
+    return {
+      id,
+      status,
+      category: String(document?.category || "").trim(),
+      visibility,
+      title: String(document?.title || "").trim(),
+      documentDate: String(document?.documentDate || "").trim(),
+      description: String(document?.description || "").trim(),
+      originalFilename: String(document?.originalFilename || "").trim(),
+      detectedMime: String(document?.detectedMime || "").trim(),
+      byteSize,
+      currentVersion,
+      revision,
+      archivedAt: document?.archivedAt ? String(document.archivedAt).trim() : "",
+      createdAt: String(document?.createdAt || "").trim(),
+      updatedAt: String(document?.updatedAt || "").trim(),
+    };
+  });
+  return { profile, documents, ...normalizeEmployeeProfileAccess(payload) };
 }
 
 function employeeProfileInitials(displayName) {
@@ -3937,13 +4158,14 @@ function employeeProfileReferenceLabel(reference, { includeCode = false } = {}) 
 function renderEmployeeProfileHeader() {
   const profile = state.employeeProfile;
   if (!profile) {
+    const unavailable = Boolean(state.employeeProfileLoadError || state.employeeProfileTabErrors.overview);
     if (elements.employeeProfileAvatar) elements.employeeProfileAvatar.textContent = "MA";
-    if (elements.employeeProfileName) elements.employeeProfileName.textContent = state.employeeProfileLoadError ? "Profil nicht verfügbar" : "Profil wird geladen";
-    if (elements.employeeProfileIdentity) elements.employeeProfileIdentity.textContent = state.employeeProfileLoadError
+    if (elements.employeeProfileName) elements.employeeProfileName.textContent = unavailable ? "Profil nicht verfügbar" : "Profil wird geladen";
+    if (elements.employeeProfileIdentity) elements.employeeProfileIdentity.textContent = unavailable
       ? "Es wurden keine Profildaten angezeigt."
       : "Freigegebene Organisationsdaten werden geladen.";
     if (elements.employeeProfileStatus) {
-      elements.employeeProfileStatus.textContent = state.employeeProfileLoadError ? "Nicht verfügbar" : "Wird geladen";
+      elements.employeeProfileStatus.textContent = unavailable ? "Nicht verfügbar" : "Wird geladen";
       elements.employeeProfileStatus.classList.add("inactive");
     }
     return;
@@ -3957,37 +4179,174 @@ function renderEmployeeProfileHeader() {
   }
 }
 
+function employeeProfileTabDefinition(tabId = state.employeeProfileTab) {
+  return EMPLOYEE_PROFILE_TABS.find(({ id }) => id === tabId) || null;
+}
+
+function applyEmployeeProfileAccessProjection(result) {
+  state.employeeProfileTabAvailability = {
+    overview: result?.tabs?.overview?.available === true
+      && result?.capabilities?.canReadOverview === true,
+    masterData: result?.tabs?.masterData?.available === true
+      && result?.capabilities?.canReadMasterOrg === true,
+    documents: result?.tabs?.documents?.available === true
+      && result?.capabilities?.canReadDocuments === true,
+  };
+}
+
+function employeeProfileTabIsLoading(tabId = state.employeeProfileTab) {
+  return state.employeeProfileLoadingTabs.has(tabId);
+}
+
+function employeeProfileFormatValue(field) {
+  if (!String(field?.value || "").trim()) return "Nicht hinterlegt";
+  return field.kind === "date" ? formatDate(field.value, undefined, field.value) : field.value;
+}
+
+function employeeProfileFormatTimestamp(value, fallback = "Nicht hinterlegt") {
+  const parsed = new Date(String(value || ""));
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  try {
+    return new Intl.DateTimeFormat("de-AT", { dateStyle: "short", timeStyle: "short" }).format(parsed);
+  } catch {
+    return fallback;
+  }
+}
+
+function employeeProfileFormatFileSize(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return "Nicht hinterlegt";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let size = bytes / 1024;
+  let unit = units[0];
+  for (let index = 1; index < units.length && size >= 1024; index += 1) {
+    size /= 1024;
+    unit = units[index];
+  }
+  return `${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(size)} ${unit}`;
+}
+
+function renderEmployeeProfileMasterData(data) {
+  const organization = state.employeeProfile?.organization || {};
+  const organizationRows = [
+    ["Position", organization.positionName || "Nicht hinterlegt"],
+    ["Kostenstelle", employeeProfileReferenceLabel(organization.costCenter, { includeCode: true })],
+    ["Standort", employeeProfileReferenceLabel(organization.location)],
+    ["Abteilung", employeeProfileReferenceLabel(organization.department)],
+  ];
+  const groupOrder = [...new Set(EMPLOYEE_PROFILE_MASTER_DATA_FIELDS.map(({ group }) => group))];
+  const groups = groupOrder.map((group) => ({
+    group,
+    fields: (data?.fields || []).filter((field) => field.group === group),
+  })).filter(({ fields }) => fields.length);
+  const fieldMarkup = groups.map(({ group, fields }) => `
+    <section class="employee-profile-data-section">
+      <h3>${escapeHtml(group)}</h3>
+      <dl class="employee-profile-data-grid">${fields.map((field) => `
+        <div><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(employeeProfileFormatValue(field))}</dd></div>`).join("")}</dl>
+    </section>`).join("");
+  return `<div class="employee-profile-overview-grid employee-profile-organization-grid">${organizationRows.map(([label, value]) => `
+      <article class="employee-profile-overview-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("")}</div>
+    ${fieldMarkup || '<div class="employee-profile-empty employee-profile-inline-empty"><strong>Keine weiteren Stammdaten freigegeben</strong><p>Für diesen Bereich wurden ausschließlich Organisationsdaten bereitgestellt.</p></div>'}
+    <p class="employee-profile-boundary">Nur die serverseitig für diesen Zugriff freigegebenen Felder werden angezeigt. Änderungen sind in diesem Profil nicht möglich.</p>`;
+}
+
+function renderEmployeeProfileDocuments(documents) {
+  if (!documents.length) {
+    return '<div class="employee-profile-empty"><strong>Keine Dokumente sichtbar</strong><p>Für dieses Profil wurden keine Dokumentmetadaten freigegeben.</p></div>';
+  }
+  return `<div class="employee-profile-document-list">${documents.map((document) => {
+    const statusLabel = EMPLOYEE_PROFILE_DOCUMENT_STATUSES[document.status] || "Status nicht verfügbar";
+    const documentDate = formatDate(document.documentDate, undefined, "Kein Dokumentdatum");
+    const updatedAt = employeeProfileFormatTimestamp(document.updatedAt || document.createdAt);
+    return `<article class="employee-profile-document">
+      <header><div><span class="eyebrow">${escapeHtml(document.category || "Dokument")}</span><h3>${escapeHtml(document.title || document.originalFilename || "Dokument")}</h3></div><span class="status-badge ${document.status === "active" ? "approved" : "inactive"}">${escapeHtml(statusLabel)}</span></header>
+      ${document.description ? `<p>${escapeHtml(document.description)}</p>` : ""}
+      <dl class="employee-profile-document-meta">
+        <div><dt>Version</dt><dd>${document.currentVersion}</dd></div>
+        <div><dt>Dokumentdatum</dt><dd>${escapeHtml(documentDate)}</dd></div>
+        <div><dt>Datei</dt><dd>${escapeHtml(document.originalFilename || "Nicht hinterlegt")}</dd></div>
+        <div><dt>Format</dt><dd>${escapeHtml(document.detectedMime || "Nicht hinterlegt")}</dd></div>
+        <div><dt>Größe</dt><dd>${escapeHtml(employeeProfileFormatFileSize(document.byteSize))}</dd></div>
+        <div><dt>Aktualisiert</dt><dd>${escapeHtml(updatedAt)}</dd></div>
+      </dl>
+    </article>`;
+  }).join("")}</div>
+  <p class="employee-profile-boundary">Diese Ansicht enthält ausschließlich freigegebene Metadaten und Versionsstände. Dateiinhalte, Speicherpfade und technische Prüfnachweise werden nicht geladen.</p>`;
+}
+
 function renderEmployeeProfileContent() {
   if (!elements.employeeProfileContent) return;
-  const selectedTab = EMPLOYEE_PROFILE_TABS.some(({ id }) => id === state.employeeProfileTab)
-    ? state.employeeProfileTab
-    : "overview";
-  state.employeeProfileTab = selectedTab;
+  const selectedTab = employeeProfileTabDefinition() ? state.employeeProfileTab : "";
   document.querySelectorAll("[data-employee-profile-tab]").forEach((button) => {
     const active = button.dataset.employeeProfileTab === selectedTab;
+    const tab = employeeProfileTabDefinition(button.dataset.employeeProfileTab);
+    const available = tab?.endpointTab
+      ? state.employeeProfileTabAvailability[tab.id] === true
+      : false;
     button.classList.toggle("active", active);
+    button.classList.toggle("available", available);
     button.setAttribute("aria-selected", String(active));
+    button.dataset.employeeProfileAvailable = String(available);
     button.tabIndex = active ? 0 : -1;
   });
   const activeTabButton = document.querySelector(`[data-employee-profile-tab="${selectedTab}"]`);
   if (activeTabButton?.id) elements.employeeProfileContent.setAttribute("aria-labelledby", activeTabButton.id);
-  if (elements.employeeProfileShell) elements.employeeProfileShell.setAttribute("aria-busy", String(state.employeeProfileLoading));
-  if (elements.employeeProfileMessage) elements.employeeProfileMessage.textContent = state.employeeProfileLoadError;
+  const activeLoading = employeeProfileTabIsLoading(selectedTab);
+  const activeError = state.employeeProfileTabErrors[selectedTab] || state.employeeProfileLoadError;
+  state.employeeProfileLoading = state.employeeProfileLoadingTabs.size > 0;
+  const accessPending = state.employeeProfileTabAvailability[selectedTab] === null
+    && state.employeeProfileLoading;
+  if (elements.employeeProfileShell) elements.employeeProfileShell.setAttribute("aria-busy", String(activeLoading || accessPending));
+  if (elements.employeeProfileMessage) elements.employeeProfileMessage.textContent = activeError;
 
-  if (selectedTab !== "overview") {
-    const tab = EMPLOYEE_PROFILE_TABS.find(({ id }) => id === selectedTab);
+  if (!selectedTab) {
+    elements.employeeProfileContent.innerHTML = '<div class="employee-profile-empty employee-profile-locked"><span class="employee-profile-lock" aria-hidden="true">↗</span><strong>Bereich nicht verfügbar</strong><p>Dieser Profilbereich ist nicht freigegeben. Es wurden keine Daten geladen.</p></div>';
+    return;
+  }
+  const selectedDefinition = employeeProfileTabDefinition(selectedTab);
+  if (!selectedDefinition.endpointTab) {
     elements.employeeProfileContent.innerHTML = `<div class="employee-profile-empty employee-profile-locked">
       <span class="employee-profile-lock" aria-hidden="true">↗</span>
-      <strong>${escapeHtml(tab?.label || "Dieser Bereich")}</strong>
+      <strong>${escapeHtml(selectedDefinition.label)}</strong>
       <p>Dieser Bereich ist im Grundgerüst vorbereitet, aber noch nicht freigeschaltet. Es werden keine zusätzlichen Daten geladen.</p>
     </div>`;
     return;
   }
-  if (state.employeeProfileLoading) {
-    elements.employeeProfileContent.innerHTML = '<div class="employee-profile-empty"><strong>Profil wird geladen</strong><p>Bitte einen Moment warten.</p></div>';
+  if (state.employeeProfileTabAvailability[selectedTab] !== true) {
+    const pending = state.employeeProfileTabAvailability[selectedTab] === null
+      && employeeProfileTabIsLoading("overview");
+    elements.employeeProfileContent.innerHTML = `<div class="employee-profile-empty employee-profile-locked">
+      <span class="employee-profile-lock" aria-hidden="true">↗</span>
+      <strong>${pending ? "Berechtigungen werden geprüft" : "Bereich nicht freigegeben"}</strong>
+      <p>${pending ? "Die Profilübersicht ermittelt zunächst die verfügbaren Bereiche." : "Es wurden keine Daten für diesen Profilbereich geladen."}</p>
+    </div>`;
     return;
   }
-  if (state.employeeProfileLoadError || !state.employeeProfile) {
+  if (activeLoading) {
+    elements.employeeProfileContent.innerHTML = `<div class="employee-profile-empty"><strong>${escapeHtml(selectedDefinition.label)} wird geladen</strong><p>Bitte einen Moment warten.</p></div>`;
+    return;
+  }
+  if (activeError) {
+    elements.employeeProfileContent.innerHTML = `<div class="employee-profile-empty"><strong>${escapeHtml(selectedDefinition.label)} nicht verfügbar</strong><p>Es werden keine Daten dieses Profilbereichs angezeigt.</p></div>`;
+    return;
+  }
+  if (selectedTab === "masterData") {
+    const data = state.employeeProfileTabData.masterData;
+    elements.employeeProfileContent.innerHTML = data
+      ? renderEmployeeProfileMasterData(data)
+      : '<div class="employee-profile-empty"><strong>Stammdaten nicht geladen</strong><p>Es werden keine Profildaten angezeigt.</p></div>';
+    return;
+  }
+  if (selectedTab === "documents") {
+    const documents = state.employeeProfileTabData.documents;
+    elements.employeeProfileContent.innerHTML = Array.isArray(documents)
+      ? renderEmployeeProfileDocuments(documents)
+      : '<div class="employee-profile-empty"><strong>Dokumente nicht geladen</strong><p>Es werden keine Dokumentmetadaten angezeigt.</p></div>';
+    return;
+  }
+  if (!state.employeeProfile) {
     elements.employeeProfileContent.innerHTML = '<div class="employee-profile-empty"><strong>Übersicht nicht verfügbar</strong><p>Es werden keine Profildaten angezeigt.</p></div>';
     return;
   }
@@ -4010,49 +4369,188 @@ function renderEmployeeProfile() {
 
 function syncEmployeeProfileWorkspace() {
   const open = employeeProfileIsOpen();
-  elements.personnelDirectoryWorkspace?.classList.toggle("hidden", open);
+  const teamHost = state.employeeProfileHost === "team";
+  const host = teamHost ? elements.employeeProfileTeamMount : elements.employeeProfileAdministrationMount;
+  if (host && elements.employeeProfileWorkspace?.parentElement !== host) {
+    host.append(elements.employeeProfileWorkspace);
+  }
+  elements.personnelDirectoryWorkspace?.classList.toggle("hidden", open && !teamHost);
+  elements.teamDirectoryWorkspace?.classList.toggle("hidden", open && teamHost);
   elements.employeeProfileWorkspace?.classList.toggle("hidden", !open);
-  elements.personnelDisplayColumnsButton?.classList.toggle("hidden", state.personnelAdministrationTab !== "employees" || open);
+  elements.personnelDisplayColumnsButton?.classList.toggle("hidden", state.personnelAdministrationTab !== "employees" || (open && !teamHost));
+  elements.teamDisplayColumnsButton?.classList.toggle("hidden", state.personnelTab !== "employees" || (open && teamHost));
+}
+
+function employeeProfileSensitiveAccessWasExposed(tabId) {
+  return state.employeeProfileTabAvailability[tabId] === true
+    || state.employeeProfileTabData[tabId] !== null
+    || state.employeeProfileLoadingTabs.has(tabId)
+    || Object.hasOwn(state.employeeProfileTabRequestTokens, tabId);
+}
+
+function reconcileOpenEmployeeProfileAccess(access = {}) {
+  if (!employeeProfileIsOpen()) return true;
+  const masterDataFieldAccessChanged = employeeProfileSensitiveAccessWasExposed("masterData")
+    && access.masterData === true
+    && typeof state.employeeProfileTabAccessFingerprints.masterData === "string"
+    && state.employeeProfileTabAccessFingerprints.masterData
+      !== String(access.masterDataFieldFingerprint || "");
+  const sensitiveAccessLost = (
+    employeeProfileSensitiveAccessWasExposed("masterData") && access.masterData !== true
+  ) || (
+    employeeProfileSensitiveAccessWasExposed("documents") && access.documents !== true
+  );
+  if (access.read !== true || sensitiveAccessLost || masterDataFieldAccessChanged) {
+    closeEmployeeProfile({ restoreFocus: false });
+    return false;
+  }
+  return true;
+}
+
+function clearEmployeeProfileSensitiveTabs({ except = "" } = {}) {
+  for (const tabId of ["masterData", "documents"]) {
+    if (tabId === except) continue;
+    state.employeeProfileTabData[tabId] = null;
+    delete state.employeeProfileTabErrors[tabId];
+    delete state.employeeProfileTabRequestTokens[tabId];
+    delete state.employeeProfileTabAccessFingerprints[tabId];
+    state.employeeProfileLoadingTabs.delete(tabId);
+  }
+}
+
+function resetEmployeeProfileData({ accessPending = false } = {}) {
+  state.employeeProfile = null;
+  state.employeeProfileTabData = { masterData: null, documents: null };
+  state.employeeProfileTabAvailability = {
+    overview: true,
+    masterData: accessPending ? null : false,
+    documents: accessPending ? null : false,
+  };
+  state.employeeProfileLoadingTabs = new Set();
+  state.employeeProfileTabErrors = {};
+  state.employeeProfileTabRequestTokens = {};
+  state.employeeProfileTabAccessFingerprints = {};
+  state.employeeProfileLoading = false;
+}
+
+function invalidateEmployeeProfileData(message) {
+  state.employeeProfileRequestToken = Symbol("employee-profile-invalidated");
+  state.employeeProfileEmployeeNumber = "";
+  resetEmployeeProfileData();
+  state.employeeProfileLoadError = String(message || "Der Profilzugriff ist nicht mehr verfügbar.");
+  renderEmployeeProfile();
 }
 
 function setEmployeeProfileTab(tab, { focus = false } = {}) {
-  const nextTab = EMPLOYEE_PROFILE_TABS.some(({ id }) => id === tab) ? tab : "overview";
-  state.employeeProfileTab = nextTab;
+  const definition = employeeProfileTabDefinition(tab);
+  if (!definition) {
+    clearEmployeeProfileSensitiveTabs();
+    state.employeeProfileTab = "";
+    renderEmployeeProfileContent();
+    return;
+  }
+  if (state.employeeProfileTab !== definition.id) clearEmployeeProfileSensitiveTabs({ except: definition.id });
+  state.employeeProfileTab = definition.id;
   renderEmployeeProfileContent();
-  if (focus) document.querySelector(`[data-employee-profile-tab="${nextTab}"]`)?.focus();
+  if (focus) document.querySelector(`[data-employee-profile-tab="${definition.id}"]`)?.focus();
+  if (definition.endpointTab && state.employeeProfileTabAvailability[definition.id] === true) {
+    loadEmployeeProfileTab(definition.id);
+  }
 }
 
-async function loadEmployeeProfileOverview(employeeNumber) {
-  const requestToken = Symbol("employee-profile-overview");
-  state.employeeProfileRequestToken = requestToken;
+function employeeProfileTabHasData(tabId) {
+  if (tabId === "overview") return Boolean(state.employeeProfile);
+  if (tabId === "masterData") return Boolean(state.employeeProfileTabData.masterData);
+  if (tabId === "documents") return Array.isArray(state.employeeProfileTabData.documents);
+  return false;
+}
+
+function ensureEmployeeProfileActiveTabLoaded() {
+  const definition = employeeProfileTabDefinition();
+  if (!definition?.endpointTab || state.employeeProfileTabAvailability[definition.id] !== true
+    || employeeProfileTabHasData(definition.id) || employeeProfileTabIsLoading(definition.id)) return;
+  loadEmployeeProfileTab(definition.id);
+}
+
+async function loadEmployeeProfileTab(tabId, employeeNumber = state.employeeProfileEmployeeNumber) {
+  const definition = employeeProfileTabDefinition(tabId);
+  const normalizedEmployeeNumber = String(employeeNumber || "").trim();
+  if (!definition?.endpointTab || !normalizedEmployeeNumber || !employeeProfileIsOpen()
+    || state.employeeProfileTabAvailability[tabId] !== true
+    || employeeProfileTabHasData(tabId) || employeeProfileTabIsLoading(tabId)) return;
+  const profileRequestToken = state.employeeProfileRequestToken;
+  const requestToken = Symbol(`employee-profile-${definition.endpointTab}`);
+  state.employeeProfileTabRequestTokens[tabId] = requestToken;
+  if (tabId === "masterData") {
+    state.employeeProfileTabAccessFingerprints.masterData = String(
+      currentEmployeeProfileAccess().masterDataFieldFingerprint || "",
+    );
+  }
+  state.employeeProfileLoadingTabs.add(tabId);
+  delete state.employeeProfileTabErrors[tabId];
+  if (tabId !== "overview") state.employeeProfileTabData[tabId] = null;
   state.employeeProfileLoading = true;
-  state.employeeProfileLoadError = "";
-  state.employeeProfile = null;
   renderEmployeeProfile();
   try {
-    const payload = await api(`/api/portal/v1/personnel-lifecycle/employees/${encodeURIComponent(employeeNumber)}/profile?tab=overview`);
-    if (state.employeeProfileRequestToken !== requestToken || !employeeProfileIsOpen()) return;
-    state.employeeProfile = normalizeEmployeeProfileOverview(payload, employeeNumber);
-  } catch (_error) {
-    if (state.employeeProfileRequestToken !== requestToken || !employeeProfileIsOpen()) return;
-    state.employeeProfile = null;
-    state.employeeProfileLoadError = "Die Profilübersicht konnte nicht geladen werden.";
+    const payload = await api(`/api/portal/v1/personnel-lifecycle/employees/${encodeURIComponent(normalizedEmployeeNumber)}/profile?tab=${definition.endpointTab}`);
+    if (state.employeeProfileRequestToken !== profileRequestToken
+      || state.employeeProfileTabRequestTokens[tabId] !== requestToken
+      || state.employeeProfileEmployeeNumber !== normalizedEmployeeNumber
+      || !employeeProfileIsOpen()) return;
+    const normalized = tabId === "overview"
+      ? normalizeEmployeeProfileOverview(payload, normalizedEmployeeNumber)
+      : tabId === "masterData"
+        ? normalizeEmployeeProfileMasterData(payload, normalizedEmployeeNumber)
+        : normalizeEmployeeProfileDocuments(payload, normalizedEmployeeNumber);
+    state.employeeProfile = tabId === "overview" ? normalized : normalized.profile;
+    if (tabId === "masterData") {
+      state.employeeProfileTabData.masterData = { fields: normalized.fields };
+      state.employeeProfileTabAccessFingerprints.masterData = employeeProfileMasterDataFieldFingerprint(
+        normalized.fields.map(({ key }) => key),
+      );
+    }
+    if (tabId === "documents") state.employeeProfileTabData.documents = normalized.documents;
+    applyEmployeeProfileAccessProjection(normalized);
+    state.employeeProfileLoadError = "";
+  } catch (error) {
+    if (state.employeeProfileRequestToken !== profileRequestToken
+      || state.employeeProfileTabRequestTokens[tabId] !== requestToken
+      || !employeeProfileIsOpen()) return;
+    if ([401, 403, 404].includes(error.status)) {
+      invalidateEmployeeProfileData("Der Profilzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    if (tabId === "overview") state.employeeProfile = null;
+    else state.employeeProfileTabData[tabId] = null;
+    state.employeeProfileTabErrors[tabId] = `${definition.label} konnte nicht geladen werden.`;
   } finally {
-    if (state.employeeProfileRequestToken === requestToken && employeeProfileIsOpen()) {
-      state.employeeProfileLoading = false;
+    if (state.employeeProfileRequestToken === profileRequestToken
+      && state.employeeProfileTabRequestTokens[tabId] === requestToken
+      && employeeProfileIsOpen()) {
+      delete state.employeeProfileTabRequestTokens[tabId];
+      state.employeeProfileLoadingTabs.delete(tabId);
+      state.employeeProfileLoading = state.employeeProfileLoadingTabs.size > 0;
       renderEmployeeProfile();
+      if (tabId === "overview") ensureEmployeeProfileActiveTabLoaded();
     }
   }
 }
 
+function loadEmployeeProfileOverview(employeeNumber) {
+  return loadEmployeeProfileTab("overview", employeeNumber);
+}
+
 function openEmployeeProfile(employeeNumber, trigger = null) {
   const normalizedEmployeeNumber = String(employeeNumber || "").trim();
-  if (!normalizedEmployeeNumber || !canOpenEmployeeProfileFoundation()) return;
+  const teamTrigger = trigger?.dataset?.teamEmployeeProfileAccess === "true";
+  const teamAccess = teamTrigger && canOpenTeamEmployeeProfileFoundation(normalizedEmployeeNumber);
+  if (!normalizedEmployeeNumber || (teamTrigger ? !teamAccess : !canOpenEmployeeProfileFoundation())) return;
+  state.employeeProfileRequestToken = Symbol(`employee-profile-${normalizedEmployeeNumber}`);
   state.employeeProfileOpen = true;
   state.employeeProfileEmployeeNumber = normalizedEmployeeNumber;
   state.employeeProfileTab = "overview";
-  state.employeeProfile = null;
-  state.employeeProfileLoading = true;
+  state.employeeProfileHost = teamAccess ? "team" : "administration";
+  resetEmployeeProfileData({ accessPending: true });
   state.employeeProfileLoadError = "";
   state.employeeProfileReturnFocus = trigger || document.activeElement;
   syncEmployeeProfileWorkspace();
@@ -4063,15 +4561,16 @@ function openEmployeeProfile(employeeNumber, trigger = null) {
 
 function closeEmployeeProfile({ restoreFocus = true } = {}) {
   const returnFocus = state.employeeProfileReturnFocus;
-  state.employeeProfileRequestToken = null;
+  state.employeeProfileRequestToken = Symbol("employee-profile-closed");
   state.employeeProfileOpen = false;
   state.employeeProfileEmployeeNumber = "";
   state.employeeProfileTab = "overview";
-  state.employeeProfile = null;
-  state.employeeProfileLoading = false;
+  resetEmployeeProfileData();
   state.employeeProfileLoadError = "";
   state.employeeProfileReturnFocus = null;
+  renderEmployeeProfile();
   syncEmployeeProfileWorkspace();
+  state.employeeProfileHost = "administration";
   if (restoreFocus && returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
 }
 
@@ -8329,6 +8828,11 @@ async function deactivateCostCenterType() {
 function renderEmployees() {
   const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
   const employees = sortedEmployeesForDisplay(showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active));
+  if (employeeProfileIsOpen() && state.employeeProfileHost === "team"
+    && !employees.some((employee) => (
+      String(employee.personnel_number || "") === state.employeeProfileEmployeeNumber
+      && employee.personnel_profile_access?.available === true
+    ))) closeEmployeeProfile({ restoreFocus: false });
   const canEditFull = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
   const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
   const canEditNickname = canEditFull || state.portalSession?.user?.permissions?.includes("employees:nickname:write");
@@ -8340,11 +8844,13 @@ function renderEmployees() {
   state.employeeDisplayColumns = columns.map((column) => column.id);
   if (elements.employeeTableHead) elements.employeeTableHead.innerHTML = employeeDisplayHeader(columns);
   applyEmployeeDisplayTableLayout(elements.employeeTable, columns);
-  elements.employeeTableBody.innerHTML = employees.map((employee) => `
-    <tr>
+  elements.employeeTableBody.innerHTML = employees.map((employee) => {
+    const canOpenProfile = canOpenTeamEmployeeProfileFoundation(employee.personnel_number);
+    return `<tr>
       ${columns.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${employeeDisplayCell(employee, column)}</td>`).join("")}
-      <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">${recordButtonLabel}</button>` : ""}${canEditDisplay ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">${canEditFull ? "Bearbeiten" : canEditNickname ? "Darstellung ändern" : "Farbe ändern"}</button>` : ""}</span></td>
-    </tr>`).join("");
+      <td><span class="table-actions">${canOpenProfile ? `<button type="button" class="edit-button" data-team-employee-profile="${escapeHtmlAttribute(employee.personnel_number)}" data-team-employee-profile-access="true">Profil</button>` : ""}${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">${recordButtonLabel}</button>` : ""}${canEditDisplay ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">${canEditFull ? "Bearbeiten" : canEditNickname ? "Darstellung ändern" : "Farbe ändern"}</button>` : ""}</span></td>
+    </tr>`;
+  }).join("");
 }
 
 function renderLocations() {
@@ -8610,6 +9116,27 @@ const permissionDependencyRules = Object.freeze([
     removedMessage: "Lokale Workflow-Rechte freigeben wurde ebenfalls entzogen, weil das Leserecht fehlt.",
     unavailableMessage: "Lokale Workflow-Rechte können ohne verwaltbares Leserecht nicht freigegeben werden.",
     addedMessage: "Personal-Workflows lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:profiles:master:read",
+    requiredPermissionId: "personnel:profiles:read",
+    removedMessage: "Profilstammdaten lesen wurde ebenfalls entzogen, weil der Profilzugriff fehlt.",
+    unavailableMessage: "Profilstammdaten können ohne verwaltbaren Profilzugriff nicht freigegeben werden.",
+    addedMessage: "Mitarbeiterprofile lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:profiles:documents:read",
+    requiredPermissionId: "personnel:profiles:read",
+    removedMessage: "Profildokumente lesen wurde ebenfalls entzogen, weil der Profilzugriff fehlt.",
+    unavailableMessage: "Profildokumente können ohne verwaltbaren Profilzugriff nicht freigegeben werden.",
+    addedMessage: "Mitarbeiterprofile lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:profiles:delegate",
+    requiredPermissionId: "personnel:profiles:read",
+    removedMessage: "Lokale Profilrechte freigeben wurde ebenfalls entzogen, weil der Profilzugriff fehlt.",
+    unavailableMessage: "Lokale Profilrechte können ohne verwaltbaren Profilzugriff nicht freigegeben werden.",
+    addedMessage: "Mitarbeiterprofile lesen wurde automatisch ergänzt.",
   }),
   Object.freeze({
     permissionId: "schedule:write",
@@ -14807,6 +15334,8 @@ function setView(view) {
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
+  const profileView = state.employeeProfileHost === "team" ? "personnel" : "personnelAdministration";
+  if (employeeProfileIsOpen() && view !== profileView) closeEmployeeProfile({ restoreFocus: false });
   state.currentView = view;
   if (view === "requests") ensureAccessibleManagerRequestTab();
   if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
@@ -14947,6 +15476,9 @@ function setSettingsTab(tab) {
 }
 
 function setPersonnelTab(tab) {
+  if (tab !== "employees" && employeeProfileIsOpen() && state.employeeProfileHost === "team") {
+    closeEmployeeProfile({ restoreFocus: false });
+  }
   state.personnelTab = tab;
   document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.classList.toggle("active", button.dataset.personnelTab === tab));
   elements.employeeSettings.classList.toggle("active", tab === "employees");
@@ -19300,6 +19832,11 @@ elements.costCenterTypeList?.addEventListener("click", (event) => {
 });
 
 elements.employeeTableBody.addEventListener("click", async (event) => {
+  const profileButton = event.target.closest("[data-team-employee-profile][data-team-employee-profile-access=\"true\"]");
+  if (profileButton) {
+    openEmployeeProfile(profileButton.dataset.teamEmployeeProfile, profileButton);
+    return;
+  }
   const recordButton = event.target.closest("[data-personnel-record]");
   if (recordButton) {
     openPersonnelRecord(recordButton.dataset.personnelRecord);
