@@ -2,9 +2,9 @@
 
 Stand: 2. August 2026
 
-Status: verbindlicher Architekturvertrag; M1 bis M5 veröffentlicht, M6-Dokumenthistorie und M7-Mitarbeiterprofil-Projektionen im gestapelten lokalen Arbeitsstand umgesetzt
+Status: verbindlicher Architekturvertrag; M1 bis M7 mit v0.90.0-beta veröffentlicht
 
-Produktstatus: v0.89.1-beta enthält das standardmäßig deaktivierte Fundament bis M5. M6 und M7 sind ausschließlich gestapelte Entwicklungsstände und noch nicht veröffentlicht. Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert; es besteht keine Freigabe für die produktive Aktivierung.
+Produktstatus: v0.90.0-beta enthält das standardmäßig deaktivierte Fundament bis M7. Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert; es besteht keine Freigabe für die produktive Aktivierung.
 
 ## 1. Ziel und Abgrenzung
 
@@ -225,8 +225,8 @@ Jede Stufe erhält eine eigene, vorwärtskompatible SQLite-Migration und passend
 | R1 | im Quellstand additiv umgesetzt als `v0.89-personnel-lifecycle-scoped-rights` | rechtsspezifische, durch PL+ genehmigte Fachbereiche für lokale Bewerbungsrechte | keine Änderung an Bewerberfachdaten; nur SQLite |
 | M4 | im Quellstand additiv umgesetzt als `v0.89-personnel-workflow-publications` | Workflow-Veröffentlichungen, unveränderbare Versionsmetadaten, Geltungsbereiche, additive Auflösung und Archivierung | bestehende Prozesse, Revisionen und Läufe werden erhalten; keine automatische Klassifikation |
 | M5 | im Quellstand additiv umgesetzt als `v0.89-personnel-workflow-instances` | unveränderbarer Instanzbezug auf Veröffentlichung und Fachobjekttyp, eingefrorene Schrittzuweisungen, datensparsame Instanz-/Aktivschrittprojektion | nur neue kontrollierte Läufe; bestehende und automatisch ausgelöste Prozesse werden nicht neu interpretiert |
-| M6 | im lokalen Arbeitsstand additiv umgesetzt als `v0.90-personnel-document-history` | Kategorien, unveränderbare Versionen, verkettete Ereignisse, Archivierung und Aufbewahrungsprüfung für Mitarbeiterakten | bestehende Dokumente werden verlustfrei als Version 1 nachklassifiziert; physische Löschung bleibt gesperrt |
-| M7 | im gestapelten lokalen Arbeitsstand additiv umgesetzt als `v0.90-personnel-profile-scoped-rights` | zwei lokal delegierbare Profil-Leserechte im vorhandenen Fachscope-Träger | exakte R1-/M4-Vorgängerschemata werden nach Sicherung verlustfrei übernommen; partielle oder manipulierte Strukturen bleiben gesperrt |
+| M6 | mit v0.90.0-beta additiv veröffentlicht als `v0.90-personnel-document-history` | Kategorien, unveränderbare Versionen, verkettete Ereignisse, Archivierung und Aufbewahrungsprüfung für Mitarbeiterakten | bestehende Dokumente werden verlustfrei als Version 1 nachklassifiziert; physische Löschung bleibt gesperrt |
+| M7 | mit v0.90.0-beta additiv veröffentlicht als `v0.90-personnel-profile-scoped-rights` | zwei lokal delegierbare Profil-Leserechte im vorhandenen Fachscope-Träger | exakte R1-/M4-Vorgängerschemata werden nach Sicherung verlustfrei übernommen; partielle oder manipulierte Strukturen bleiben gesperrt |
 
 M1/M2 legen sechs Tabellen, die erforderlichen Indizes, sechs eingebaute Dokumentkategorien und neun Schutztrigger für Bereichsbezüge, Dokumentversionen sowie Historienereignisse an. M3 ergänzt verlustfrei die siebte Tabelle `candidate_conversions` und zwei Unveränderbarkeitstrigger. R1 ergänzt als achte Tabelle `portal_permission_scope_grants` und acht Scope-Schutztrigger; der lokale Gesamtstand umfasst damit acht Personal-Lifecycle-/R1-Tabellen und neunzehn Trigger. Die M3-Tabelle bindet Bewerber und Bewerbung mit `ON DELETE RESTRICT` an den historischen Ursprung und die Personalnummer mit `ON DELETE RESTRICT` an den erzeugten Mitarbeiter. Eindeutigkeitsgrenzen auf Bewerber, Bewerbung und Personalnummer verhindern Mehrfachumwandlungen zusätzlich auf Datenbankebene.
 
@@ -244,13 +244,13 @@ M4 ergänzt zwei Publikationstabellen und zehn Schutztrigger. Der Startpfad prü
 
 M5 ergänzt zwei Sidecar-Tabellen und zwölf Schutztrigger. `custom_process_run_bindings` bindet Lauf, Veröffentlichung, idempotente Vorgangs-ID, Fachobjekttyp, revisionsgebundenen Bewerbungsbezug oder Mitarbeiterbezug sowie Startbeleg unveränderbar zusammen. `custom_process_run_step_assignments` bindet jeden Instanzschritt an genau eine beim Start wirksame Person und einen eigenen Zuweisungsbeleg. Fremdschlüssel verwenden `ON DELETE RESTRICT`; Trigger prüfen Veröffentlichung, Snapshot, Bereich, Fachobjektstatus, Portalzugang, Schrittfolge und Unveränderbarkeit. Der Marker wird erst nach vollständiger Integritätsprüfung geschrieben. Altstände ohne M5 bleiben migrationsfähig, ein vollständiger M5-Stand wird als `m5` erkannt; partielle, verwaiste oder manipulierte Bindungen, Zuweisungen, Hashketten und Personal-Läufe sperren Start beziehungsweise Read-only-Import fail-closed. Vor einer notwendigen Änderung einer vorhandenen Datenbank entsteht weiterhin zuerst der interne Pre-Migration-Sicherungspunkt. Die neun providerneutralen Anwendungsmigrationsstufen bleiben unverändert und PostgreSQL bleibt 0/9 ohne Produktfreigabe.
 
-M6 ergänzt die bestehende Tabelle `personnel_record_documents` um den aktuellen Versionszeiger, eine optimistische Revision und Archivierungsmetadaten. `personnel_document_categories`, `personnel_record_document_versions` und `personnel_record_document_events` bilden Kategorien, unveränderbare Fassungen und eine SHA-256-verkettete Historie ab. Kategorie, Sichtbarkeit und fachliche Metadaten verbleiben im geschützten Payload; öffentlich unterstützt wird zunächst ausschließlich `hr_confidential`. Schutztrigger sperren nachträgliche Versions- und Ereignisänderungen, inkonsistente Zeiger, von ihrem terminalen Ereignis abweichende Archivmetadaten sowie das physische Löschen versionierter Dokumente. Dokumente in Aufbewahrungsprüfung bleiben in der berechtigten Personalakt-Liste sichtbar. Migration und Read-only-Import prüfen Sequenzen, Zeiger, Status, Ereigniskette und Belege; eine notwendige Migration erzeugt zuvor eine Sicherung und ist wiederholbar. Der vollständige lokale Vertrag steht in `PERSONALMODUL-MITARBEITERDOKUMENTE-M6-v0.1.md`.
+M6 ergänzt die bestehende Tabelle `personnel_record_documents` um den aktuellen Versionszeiger, eine optimistische Revision und Archivierungsmetadaten. `personnel_document_categories`, `personnel_record_document_versions` und `personnel_record_document_events` bilden Kategorien, unveränderbare Fassungen und eine SHA-256-verkettete Historie ab. Kategorie, Sichtbarkeit und fachliche Metadaten verbleiben im geschützten Payload; öffentlich unterstützt wird zunächst ausschließlich `hr_confidential`. Schutztrigger sperren nachträgliche Versions- und Ereignisänderungen, inkonsistente Zeiger, von ihrem terminalen Ereignis abweichende Archivmetadaten sowie das physische Löschen versionierter Dokumente. Dokumente in Aufbewahrungsprüfung bleiben in der berechtigten Personalakt-Liste sichtbar. Migration und Read-only-Import prüfen Sequenzen, Zeiger, Status, Ereigniskette und Belege; eine notwendige Migration erzeugt zuvor eine Sicherung und ist wiederholbar. Der vollständige Vertrag steht in `PERSONALMODUL-MITARBEITERDOKUMENTE-M6-v0.1.md`.
 
-M7 erweitert `portal_permission_scope_grants` ausschließlich um `personnel:profiles:read` und `personnel:profiles:master:read`; Dokument- und Delegationsrecht bleiben global und erhalten keine Scope-Zeilen. Die acht bestehenden Schutztrigger bleiben kanonisch unverändert. Start, Read-only-Import und Maintenance unterscheiden den exakten ursprünglichen R1-Stand, den exakten M4-Stand und das kanonische M7-Schema. R1- und M4-Zeilen werden erst nach dem vorhandenen Pre-Migration-Sicherungspunkt verlustfrei in die erweiterte Tabelle kopiert; unbekannte, partielle oder semantisch widersprüchliche Strukturen bleiben fail-closed. Der vollständige lokale Vertrag steht in `PERSONALMODUL-MITARBEITERPROFIL-M7-v0.1.md`.
+M7 erweitert `portal_permission_scope_grants` ausschließlich um `personnel:profiles:read` und `personnel:profiles:master:read`; Dokument- und Delegationsrecht bleiben global und erhalten keine Scope-Zeilen. Die acht bestehenden Schutztrigger bleiben kanonisch unverändert. Start, Read-only-Import und Maintenance unterscheiden den exakten ursprünglichen R1-Stand, den exakten M4-Stand und das kanonische M7-Schema. R1- und M4-Zeilen werden erst nach dem vorhandenen Pre-Migration-Sicherungspunkt verlustfrei in die erweiterte Tabelle kopiert; unbekannte, partielle oder semantisch widersprüchliche Strukturen bleiben fail-closed. Der vollständige Vertrag steht in `PERSONALMODUL-MITARBEITERPROFIL-M7-v0.1.md`.
 
 ## 8. API-Oberfläche
 
-Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und durch `personnelLifecycle` fail-closed gesperrt. Im standardmäßig deaktivierten v0.89.1-beta-Fundament bis M5 enthalten sind:
+Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und durch `personnelLifecycle` fail-closed gesperrt. Im standardmäßig deaktivierten v0.90.0-beta-Fundament bis M5 enthalten sind:
 
 - `GET /document-categories`,
 - `GET|POST /candidates`,
@@ -268,7 +268,7 @@ Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und
 - `GET /api/portal/v1/me/process-tasks` als gemeinsame Legacy-/M5-Selbstprojektion,
 - `POST /api/portal/v1/me/process-tasks/:runId/:stepId/complete` als bestehende gemeinsame Abschlussgrenze.
 
-Der lokale M6-Arbeitsstand ergänzt innerhalb der bestehenden Personalakt-API:
+M6 ergänzt innerhalb der bestehenden Personalakt-API:
 
 - `POST /api/portal/v1/personnel-records/:employeeNumber/documents` für die erste gescannte und verschlüsselte Fassung,
 - `POST /api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/versions` für eine neue unveränderbare Fassung,
@@ -348,9 +348,9 @@ Die bestehenden Portal-Aufgabenendpunkte bleiben die einzige Selbstaufgabenquell
 6. **Workflow-Publikation und Instanzbindung – M4 und M5 im Quellstand umgesetzt**
 
    Vorhandene Prozessbasis um unveränderbare Veröffentlichungen, append-only Archivierung, Pflicht-/Ergänzungsauflösung und eigene Bereichsrechte ergänzen; ausschließlich neue kontrollierte Instanzen additiv und idempotent an Veröffentlichung, Fachobjekttyp und eingefrorene Aufgabenverantwortung binden. Keine Legacy-Übernahme und keine Automatisierung.
-7. **Mitarbeiterprofil und eingebettete Abläufe – Read-only-Projektionen lokal umgesetzt, Fachkonzept im Entwurf**
+7. **Mitarbeiterprofil und eingebettete Abläufe – Read-only-Projektionen veröffentlicht, Fachkonzept im Entwurf**
 
-   Sieben Tabs sowie getrennte positive Read-only-Projektionen für Übersicht, Stammdaten/Organisation und Dokumentliste sind lokal umgesetzt. Eigene Rechte- und Bereichsverträge schützen PL, PL+, FL und AL; Prozess- und Historientabs bleiben geschlossen. Der gesonderte fachlich-organisatorische Onboarding-/Offboarding-Konzeptentwurf liegt vor, ist aber noch nicht fachlich freigegeben und eröffnet keine technische Umsetzung.
+   Sieben Tabs sowie getrennte positive Read-only-Projektionen für Übersicht, Stammdaten/Organisation und Dokumentliste sind mit v0.90.0-beta veröffentlicht. Eigene Rechte- und Bereichsverträge schützen PL, PL+, FL und AL; Prozess- und Historientabs bleiben geschlossen. Der gesonderte fachlich-organisatorische Onboarding-/Offboarding-Konzeptentwurf liegt vor, ist aber noch nicht fachlich freigegeben und eröffnet keine technische Umsetzung.
 8. **Grafischer Editor und Automatisierung**
 
    erst nach stabilen Domänen-, Rechte- und Versionsgrenzen; Vorschau, Validierung und kontrollierte Trigger.
