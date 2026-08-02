@@ -5,7 +5,7 @@
 - Die bytegenauen Zeilenenden der verwalteten Runtime-, Offsite- und Hardening-Artefakte sind für Windows- und Linux-Checkouts ausdrücklich festgelegt.
 - Der bestehende Deployment-Schema-4- und Hardening-Vertrag bleiben dadurch unverändert. Das v0.90.1-Windows-Paket wurde wegen abweichender Zeilenenden vor jeder Serveränderung korrekt fail-closed abgewiesen.
 - Das Offsite-v6-Modul verwendet anschließend einheitliche LF-Artefakte und wird vor dem Core-Update ausdrücklich mit unveränderter Provider- und Repository-Bindung migriert.
-- Ein Pakettest prüft sämtliche verwalteten Artefakte gegen ihren erwarteten Zeilenendenvertrag sowie die exakten Runtime- und Hardening-Fingerprints.
+- Pakettest und Paketbuilder prüfen sämtliche verwalteten Artefakte gegen ihre effektiv aufgelösten Git-Attribute und physischen Zeilenenden sowie gegen die exakten Runtime-, Offsite- und Hardening-Fingerprints. Auch ein von Git formal als sauber gemeldeter, aber veraltet materialisierter Arbeitsbaum wird fail-closed abgewiesen.
 - Der Recovery-Smoke-Hotfix aus v0.90.1 ist vollständig enthalten. Produktive Daten, Funktionsumfang, Runtime-Schema, SQLite-Produktfreigabe und Host-Härtung bleiben gegenüber v0.90.0-beta unverändert.
 
 ## v0.90.1 Beta · Recovery-Smoke für versionierte Personalakten korrigiert
