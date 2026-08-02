@@ -542,6 +542,114 @@ test("application smoke sanitizes every known protected domain but preserves ope
   }
 });
 
+test("application smoke sanitizes v0.90 personnel document history and restores delete guards", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-personnel-v090-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  const protectedDeleteTriggers = [
+    "trg_personnel_record_document_events_immutable_delete",
+    "trg_personnel_record_document_versions_immutable_delete",
+    "trg_personnel_record_documents_no_delete",
+  ];
+  let database = new DatabaseSync(databaseFile);
+  let triggerSqlBefore;
+  try {
+    database.exec(`
+      PRAGMA foreign_keys=ON;
+      CREATE TABLE employees (
+        personnel_number TEXT PRIMARY KEY,
+        full_name TEXT NOT NULL
+      );
+      CREATE TABLE personnel_record_document_categories (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL
+      );
+      CREATE TABLE personnel_record_documents (
+        id TEXT PRIMARY KEY,
+        employee_number TEXT NOT NULL,
+        category_id TEXT NOT NULL,
+        protected_payload TEXT NOT NULL,
+        FOREIGN KEY (employee_number) REFERENCES employees(personnel_number) ON DELETE RESTRICT,
+        FOREIGN KEY (category_id) REFERENCES personnel_record_document_categories(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE personnel_record_document_versions (
+        document_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL,
+        protected_payload TEXT NOT NULL,
+        PRIMARY KEY (document_id, version_number),
+        FOREIGN KEY (document_id) REFERENCES personnel_record_documents(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE personnel_record_document_events (
+        id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL,
+        FOREIGN KEY (document_id, version_number)
+          REFERENCES personnel_record_document_versions(document_id, version_number) ON DELETE RESTRICT
+      );
+      CREATE TRIGGER trg_personnel_record_document_events_immutable_delete
+        BEFORE DELETE ON personnel_record_document_events
+        BEGIN SELECT RAISE(ABORT, 'personnel document events are immutable'); END;
+      CREATE TRIGGER trg_personnel_record_document_versions_immutable_delete
+        BEFORE DELETE ON personnel_record_document_versions
+        BEGIN SELECT RAISE(ABORT, 'personnel document versions are immutable'); END;
+      CREATE TRIGGER trg_personnel_record_documents_no_delete
+        BEFORE DELETE ON personnel_record_documents
+        BEGIN SELECT RAISE(ABORT, 'versioned personnel documents cannot be deleted'); END;
+
+      INSERT INTO employees VALUES ('101', 'Demo Person');
+      INSERT INTO personnel_record_document_categories VALUES ('contract', 'Vertrag');
+      INSERT INTO personnel_record_documents
+        VALUES ('document-1', '101', 'contract', 'enc:v2:document');
+      INSERT INTO personnel_record_document_versions
+        VALUES ('document-1', 1, 'enc:v2:document-version');
+      INSERT INTO personnel_record_document_events VALUES ('event-1', 'document-1', 1);
+    `);
+    triggerSqlBefore = Object.fromEntries(database.prepare(`
+      SELECT name, sql FROM sqlite_master
+      WHERE type = 'trigger' AND name IN (${protectedDeleteTriggers.map(() => "?").join(", ")})
+      ORDER BY name
+    `).all(...protectedDeleteTriggers).map((row) => [row.name, row.sql]));
+  } finally {
+    database.close();
+    database = null;
+  }
+
+  try {
+    assert.equal(sanitizeSmokeDatabase(databaseFile), true);
+    database = new DatabaseSync(databaseFile, { readOnly: true });
+    for (const table of [
+      "personnel_record_document_events",
+      "personnel_record_document_versions",
+      "personnel_record_documents",
+    ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
+    assert.deepEqual(
+      database.prepare("SELECT id, label FROM personnel_record_document_categories").all()
+        .map((row) => ({ ...row })),
+      [{ id: "contract", label: "Vertrag" }],
+    );
+    assert.deepEqual(
+      database.prepare("SELECT personnel_number, full_name FROM employees").all()
+        .map((row) => ({ ...row })),
+      [{ personnel_number: "101", full_name: "Demo Person" }],
+    );
+    const triggerSqlAfter = Object.fromEntries(database.prepare(`
+      SELECT name, sql FROM sqlite_master
+      WHERE type = 'trigger' AND name IN (${protectedDeleteTriggers.map(() => "?").join(", ")})
+      ORDER BY name
+    `).all(...protectedDeleteTriggers).map((row) => [row.name, row.sql]));
+    assert.deepEqual(triggerSqlAfter, triggerSqlBefore);
+    assert.equal(PROTECTED_COLUMNS.has("personnel_record_document_versions.protected_payload"), true);
+    for (const table of [
+      "personnel_record_document_events",
+      "personnel_record_document_versions",
+    ]) assert.equal(PROTECTED_ROW_TABLES.includes(table), true, table);
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
+  } finally {
+    if (database) database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("application smoke sanitizes v0.89 personnel lifecycle rows and bound candidate workflows", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-personnel-v089-"));
   const databaseFile = path.join(directory, "dienstplan.db");
