@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.90.2 Beta · Linux-Paketzeilenenden reproduzierbar festgeschrieben
+
+- Alle verwalteten JavaScript-, JSON- und Vorlagendateien des Linux-Serverpakets werden auch in Windows-Checkouts ausdrücklich mit LF-Zeilenenden ausgegeben.
+- Dadurch bleibt der bytegenaue Runtime-Fingerprint identisch mit der bestehenden Deployment-Schema-4-Installation. Das v0.90.1-Windows-Paket wurde wegen abweichender CRLF-Zeilenenden vor jeder Serveränderung korrekt fail-closed abgewiesen.
+- Ein Pakettest prüft sämtliche verwalteten Runtime-, Offsite- und Hardening-Artefakte auf LF und verhindert die erneute Veröffentlichung eines plattformabhängigen Pakets.
+- Der Recovery-Smoke-Hotfix aus v0.90.1 ist vollständig enthalten. Produktive Daten, Funktionsumfang, Runtime-Schema, SQLite-Produktfreigabe und Host-Härtung bleiben gegenüber v0.90.0-beta unverändert.
+
 ## v0.90.1 Beta · Recovery-Smoke für versionierte Personalakten korrigiert
 
 - Der isolierte Recovery-App-Smoke entfernt nun auch die geschützten Versionen und Ereignisse versionierter Mitarbeiterdokumente in einer fremdschlüsselsicheren Reihenfolge aus seiner temporären Datenbank.
