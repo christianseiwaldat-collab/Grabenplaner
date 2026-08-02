@@ -4,6 +4,9 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const {
+  protectedStorageReferencesFromDatabase,
+} = require("../../../lib/persistence/sqlite/operations/maintenance");
 
 const MAX_MARKER_BYTES = 64 * 1024;
 
@@ -15,30 +18,11 @@ function verifyBackup(databasePath, amuBackupDirectory, amuModule, commitMarkerP
   if (![databasePath, amuBackupDirectory, amuModule].every(Boolean)) throw new Error("Pruefparameter fehlen.");
   const { verifyBackupReferences } = require(path.resolve(amuModule));
   const database = new DatabaseSync(path.resolve(databasePath), { readOnly: true });
-  const requiredStorageKeys = [];
+  let requiredStorageKeys = [];
   try {
     const quickCheck = database.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
     if (quickCheck.length !== 1 || quickCheck[0] !== "ok") throw new Error(`SQLite quick_check: ${quickCheck.join("; ")}`);
-    const hasTable = (name) => Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
-    const hasColumn = (table, column) => hasTable(table)
-      && Boolean(database.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?").get(table, column));
-    for (const reference of [
-      { table: "amu_documents", where: "WHERE status = 'active'" },
-      { table: "personnel_record_documents", where: "WHERE status = 'active'" },
-      { table: "loan_documents", where: "" },
-      { table: "loan_photo_attachments", where: "" },
-      {
-        table: "loan_photos",
-        where: hasColumn("loan_photos", "original_retained")
-          ? "WHERE original_retained = 1"
-          : "",
-      },
-    ]) {
-      if (!hasTable(reference.table)) continue;
-      requiredStorageKeys.push(...database.prepare(
-        `SELECT storage_key FROM ${reference.table} ${reference.where}`,
-      ).all().map((row) => row.storage_key));
-    }
+    requiredStorageKeys = protectedStorageReferencesFromDatabase(database);
   } finally {
     database.close();
   }

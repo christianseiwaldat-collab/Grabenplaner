@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -11,6 +12,7 @@ const { DatabaseSync } = require("node:sqlite");
 const root = path.resolve(__dirname, "..");
 const amuModule = path.join(root, "lib/amu-storage.js");
 const stageHelper = path.join(root, "server-tools/linux/offsite/lib/offsite-stage.js");
+const snapshotHelper = path.join(root, "server-tools/linux/lib/backup-snapshot.js");
 const backupVerifier = path.join(root, "server-tools/linux/lib/verify-backup.js");
 const integrationModule = path.join(root, "lib/integration-secret-vault.js");
 const databaseLockModule = path.join(root, "lib/database-lock.js");
@@ -18,6 +20,14 @@ const { createAmuStorage, syncEncryptedFilesBackup } = require(amuModule);
 const {
   ensureSqliteApplicationSchema,
 } = require("../lib/persistence/sqlite/operations/application-schema");
+const {
+  candidateApplicationProtectionContext,
+  candidateConversionProtectionContext,
+  candidateDocumentProtectionContext,
+  candidateDocumentVersionProtectionContext,
+  candidateEventProtectionContext,
+  candidateProtectionContext,
+} = require("../lib/personnel-lifecycle");
 const { verifyBackup } = require("../server-tools/linux/lib/verify-backup.js");
 const {
   verifyProtectedRecords,
@@ -197,6 +207,132 @@ test("Linux recovery verifies PII-free notification preferences and rejects lega
   }
 });
 
+test("Linux recovery verifies all v0.89 candidate payloads with their canonical contexts", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-candidate-recovery-"));
+  const database = new DatabaseSync(":memory:");
+  try {
+    const storage = createAmuStorage({
+      rootDirectory: path.join(temporary, "amu"),
+      encryptionKeys: { recovery: Buffer.alloc(32, 12) },
+      activeKeyId: "recovery",
+    });
+    const candidate = { id: "candidate-1" };
+    const application = { id: "application-1", candidate_id: candidate.id };
+    const document = { id: "document-1", candidate_id: candidate.id };
+    const documentVersion = {
+      document_id: document.id,
+      version_number: 1,
+      candidate_id: candidate.id,
+    };
+    const event = { id: "event-1", candidate_id: candidate.id };
+    const conversion = { id: "conversion-1", candidate_id: candidate.id };
+    const protectedPayloads = {
+      candidate: storage.protectRecord(
+        JSON.stringify({ firstName: "Recovery" }),
+        candidateProtectionContext(candidate),
+      ),
+      application: storage.protectRecord(
+        JSON.stringify({ source: "recovery-test" }),
+        candidateApplicationProtectionContext(application),
+      ),
+      document: storage.protectRecord(
+        JSON.stringify({ title: "Unterlage" }),
+        candidateDocumentProtectionContext(document),
+      ),
+      documentVersion: storage.protectRecord(
+        JSON.stringify({ originalFilename: "unterlage.pdf" }),
+        candidateDocumentVersionProtectionContext(documentVersion),
+      ),
+      event: storage.protectRecord(
+        JSON.stringify({ state: "created" }),
+        candidateEventProtectionContext(event),
+      ),
+      conversion: storage.protectRecord(
+        JSON.stringify({ employeeNumber: "101" }),
+        candidateConversionProtectionContext(conversion),
+      ),
+    };
+    database.exec(`
+      CREATE TABLE candidates (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE candidate_applications (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        protected_payload TEXT NOT NULL
+      );
+      CREATE TABLE candidate_documents (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        protected_payload TEXT NOT NULL
+      );
+      CREATE TABLE candidate_document_versions (
+        document_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL,
+        protected_payload TEXT NOT NULL,
+        PRIMARY KEY (document_id, version_number)
+      );
+      CREATE TABLE candidate_events (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        protected_payload TEXT NOT NULL
+      );
+      CREATE TABLE candidate_conversions (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        protected_payload TEXT NOT NULL
+      );
+    `);
+    database.prepare("INSERT INTO candidates VALUES (?, ?)")
+      .run(candidate.id, protectedPayloads.candidate);
+    database.prepare("INSERT INTO candidate_applications VALUES (?, ?, ?)")
+      .run(application.id, application.candidate_id, protectedPayloads.application);
+    database.prepare("INSERT INTO candidate_documents VALUES (?, ?, ?)")
+      .run(document.id, document.candidate_id, protectedPayloads.document);
+    database.prepare("INSERT INTO candidate_document_versions VALUES (?, ?, ?)")
+      .run(documentVersion.document_id, documentVersion.version_number, protectedPayloads.documentVersion);
+    database.prepare("INSERT INTO candidate_events VALUES (?, ?, ?)")
+      .run(event.id, event.candidate_id, protectedPayloads.event);
+    database.prepare("INSERT INTO candidate_conversions VALUES (?, ?, ?)")
+      .run(conversion.id, conversion.candidate_id, protectedPayloads.conversion);
+
+    assert.equal(verifyProtectedRecords(database, storage), 6);
+
+    database.prepare("UPDATE candidate_events SET protected_payload = ? WHERE id = ?")
+      .run("enc:v3:unknown", event.id);
+    assert.throws(
+      () => verifyProtectedRecords(database, storage),
+      (error) => error?.code === "PERSONNEL_RECORD_PLAINTEXT_REJECTED",
+    );
+    database.prepare("UPDATE candidate_events SET protected_payload = ? WHERE id = ?")
+      .run(protectedPayloads.event, event.id);
+
+    database.prepare("UPDATE candidate_document_versions SET protected_payload = ?")
+      .run("enc:v2:broken");
+    assert.throws(
+      () => verifyProtectedRecords(database, storage),
+      (error) => error?.code === "PERSONNEL_RECORD_INTEGRITY_FAILED",
+    );
+    database.prepare("UPDATE candidate_document_versions SET protected_payload = ?")
+      .run(protectedPayloads.documentVersion);
+
+    const wrongContextPayload = storage.protectRecord(
+      JSON.stringify({ source: "wrong-context" }),
+      candidateApplicationProtectionContext({
+        id: application.id,
+        candidate_id: "candidate-other",
+      }),
+    );
+    database.prepare("UPDATE candidate_applications SET protected_payload = ? WHERE id = ?")
+      .run(wrongContextPayload, application.id);
+    assert.throws(
+      () => verifyProtectedRecords(database, storage),
+      (error) => error?.code === "PERSONNEL_RECORD_INTEGRITY_FAILED",
+    );
+  } finally {
+    database.close();
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
 test("Linux recovery verification rejects missing loan documents and photos", () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-loan-backup-verify-"));
   const liveAmu = path.join(temporary, "source-amu");
@@ -246,6 +382,94 @@ test("Linux recovery verification rejects missing loan documents and photos", ()
     });
     assert.throws(
       () => verifyBackup(databasePath, photoBackup, amuModule),
+      (error) => error?.code === "AMU_BACKUP_REFERENCE_MISSING",
+    );
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("Linux snapshot creation rejects a missing candidate document blob", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-candidate-snapshot-"));
+  const liveAmu = path.join(temporary, "source-amu");
+  const databasePath = path.join(temporary, "live.db");
+  const targetDatabase = path.join(temporary, "snapshot.db");
+  const targetAmu = path.join(temporary, "snapshot.amu");
+  try {
+    createAmuStorage({
+      rootDirectory: liveAmu,
+      encryptionKeys: { primary: crypto.randomBytes(32) },
+      activeKeyId: "primary",
+    });
+    const database = new DatabaseSync(databasePath);
+    database.exec(`
+      CREATE TABLE candidate_documents (id TEXT PRIMARY KEY);
+      CREATE TABLE candidate_document_versions (
+        document_id TEXT NOT NULL,
+        storage_key TEXT NOT NULL
+      );
+      INSERT INTO candidate_documents (id) VALUES ('candidate-document');
+      INSERT INTO candidate_document_versions (document_id, storage_key)
+      VALUES (
+        'candidate-document',
+        'dd/dddddddd-dddd-4ddd-8ddd-dddddddddddd.amu'
+      );
+    `);
+    database.close();
+
+    const result = spawnSync(process.execPath, [
+      snapshotHelper,
+      databasePath,
+      targetDatabase,
+      databaseLockModule,
+      amuModule,
+      liveAmu,
+      targetAmu,
+      path.basename(targetDatabase),
+    ], { encoding: "utf8" });
+    assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stderr, /referenzierte gesch.tzte Datei/i);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("Linux recovery verification rejects a missing candidate document blob", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-candidate-backup-verify-"));
+  const liveAmu = path.join(temporary, "source-amu");
+  const databasePath = path.join(temporary, "snapshot.db");
+  try {
+    createAmuStorage({
+      rootDirectory: liveAmu,
+      encryptionKeys: { primary: crypto.randomBytes(32) },
+      activeKeyId: "primary",
+    });
+    const database = new DatabaseSync(databasePath);
+    database.exec(`
+      CREATE TABLE candidate_documents (id TEXT PRIMARY KEY);
+      CREATE TABLE candidate_document_versions (
+        document_id TEXT NOT NULL,
+        storage_key TEXT NOT NULL
+      );
+      INSERT INTO candidate_documents (id) VALUES ('candidate-document');
+      INSERT INTO candidate_document_versions (document_id, storage_key)
+      VALUES (
+        'candidate-document',
+        'cc/cccccccc-cccc-4ccc-8ccc-cccccccccccc.amu'
+      );
+    `);
+    database.close();
+
+    const backupDirectory = path.join(temporary, "candidate.amu");
+    syncEncryptedFilesBackup({
+      sourceDirectory: liveAmu,
+      targetDirectory: backupDirectory,
+      manifestMetadata: {
+        database: { fileName: path.basename(databasePath), sha256: sha256(databasePath) },
+      },
+    });
+    assert.throws(
+      () => verifyBackup(databasePath, backupDirectory, amuModule),
       (error) => error?.code === "AMU_BACKUP_REFERENCE_MISSING",
     );
   } finally {

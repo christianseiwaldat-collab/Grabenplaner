@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.89.1 Beta · Recovery-Smoke für das Personalmodul abgesichert
+
+- Der isolierte Recovery-App-Smoke entfernt nun auch die geschützten Bewerber-, Bewerbungs-, Dokument-, Ereignis- und Umwandlungsdaten sowie die gebundenen Personal-Workflow-Instanzen aus seiner temporären Datenbank. Verwaiste Personal-Workflow-Läufe stoppen den Nachweis vor jeder Änderung fail-closed.
+- Unveränderliche Löschtrigger werden nur anhand der bekannten Namen und Tabellen vorübergehend gelöst und anschließend wiederhergestellt. Unbekannte geschützte Spalten oder Trigger stoppen den Nachweis weiterhin fail-closed.
+- Snapshot-Erstellung, Backup-Verifikation und laufender Dokumentabgleich verwenden dieselbe vollständige Referenzliste für geschützte Dateien. Bewerberdokumente werden dadurch weder als vermeintliche Waisen entfernt noch bei Sicherung und Recovery übersehen.
+- Die Recovery-Prüfung entschlüsselt alle sechs geschützten Bewerberdomänen mit dem echten Wiederherstellungsschlüssel und ihrer kanonischen Kontextbindung; beschädigte, unbekannte oder falsch zugeordnete Schutzdaten werden abgewiesen.
+- Produktive Daten und Sicherungsstände bleiben unverändert. Funktionsumfang, standardmäßig deaktiviertes Installationsmerkmal, SQLite-Produktfreigabe, Runtime-Schema und Host-Härtung entsprechen v0.89.0-beta.
+
 ## v0.89 Beta · Personalmodul-Fundament und unveränderliche Workflow-Instanzen
 
 - Bewerber, Bewerbungen und Mitarbeiter bleiben als getrennte Fachobjekte mit eigener Historie erhalten. Bewerber führen keine Personalnummer; die kontrollierte Umwandlung in einen Mitarbeiter bindet den Ursprung unveränderbar und verhindert Mehrfachübernahmen.

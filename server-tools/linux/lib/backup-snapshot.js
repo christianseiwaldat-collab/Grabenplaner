@@ -4,33 +4,12 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const {
+  protectedStorageReferencesFromDatabase,
+} = require("../../../lib/persistence/sqlite/operations/maintenance");
 
 function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
-}
-
-function requiredProtectedStorageKeys(database) {
-  const hasTable = (name) => Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
-  const hasColumn = (table, column) => hasTable(table)
-    && Boolean(database.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?").get(table, column));
-  const keys = [];
-  for (const reference of [
-    { table: "amu_documents", where: "WHERE status = 'active'" },
-    { table: "personnel_record_documents", where: "WHERE status = 'active'" },
-    { table: "loan_documents", where: "" },
-    { table: "loan_photo_attachments", where: "" },
-    {
-      table: "loan_photos",
-      where: hasColumn("loan_photos", "original_retained")
-        ? "WHERE original_retained = 1"
-        : "",
-    },
-  ]) {
-    if (!hasTable(reference.table)) continue;
-    keys.push(...database.prepare(`SELECT storage_key FROM ${reference.table} ${reference.where}`).all()
-      .map((row) => row.storage_key));
-  }
-  return keys;
 }
 
 function quoteSqlitePath(filePath) {
@@ -58,7 +37,7 @@ function main() {
     try {
       const quickCheck = snapshot.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
       if (quickCheck.length !== 1 || quickCheck[0] !== "ok") throw new Error(`SQLite quick_check: ${quickCheck.join("; ")}`);
-      requiredKeys = requiredProtectedStorageKeys(snapshot);
+      requiredKeys = protectedStorageReferencesFromDatabase(snapshot);
     } finally {
       snapshot.close();
     }
