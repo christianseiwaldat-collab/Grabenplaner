@@ -1,9 +1,15 @@
 *.pdf binary
 *.webp binary
 *.sh text eol=lf
-server-tools/linux/**/*.js text eol=lf
-server-tools/linux/**/*.json text eol=lf
-server-tools/linux/**/*.in text eol=lf
+server-tools/linux/runtime-schema.json text eol=lf
+server-tools/linux/grabenplaner-monitor.timer.in text eol=crlf
+server-tools/linux/host-control/lib/*.js text eol=lf
+server-tools/linux/host-control/systemd/*.in text eol=lf
+server-tools/linux/offsite/**/*.js text eol=lf
+server-tools/linux/offsite/**/*.json text eol=lf
+server-tools/linux/offsite/**/*.in text eol=lf
+server-tools/linux/hardening/lib/*.js text eol=crlf
+server-tools/linux/hardening/module-schema.json text eol=crlf
 server-tools/linux/*.sh.in text eol=lf
 server-tools/linux/*.service.in text eol=lf
 server-tools/linux/offsite/systemd/*.service.in text eol=lf
