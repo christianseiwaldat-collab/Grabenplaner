@@ -278,7 +278,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   );
 
   // Die kanonischen Personalmodul-Schemaoperationen sind explizit als SQLite-Phase-3-Dateien klassifiziert.
-  assert.equal(report.summary.productionDirectFiles, 51);
+  assert.equal(report.summary.productionDirectFiles, 52);
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 1);
   assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 3);
   const expectedTestDriverFiles = BASELINE_DIRECT_TEST_DRIVER_FILES
@@ -388,7 +388,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 928);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 939);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -405,7 +405,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 928,
+    requiredReceiptCount: 939,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -550,17 +550,17 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   assert.match(phase3, /direkte `db\.exec`-Aufrufe in `server\.js` \| 0/);
   assert.match(phase3, /lokal mit Node 22\.13\.0/);
   assert.match(phase4, /Status:\*\* Block 4\/7 abgeschlossen/);
-  assert.match(phase4, /928 Statementvertr/);
+  assert.match(phase4, /939 Statementvertr/);
   assert.match(phase4, /SQLite-Baseline \| 24/);
-  assert.match(phase4, /SQLite-Dialektvariante \| 904/);
-  assert.match(phase4, /832[\s\S]{0,100}Dollar-Parameter/i);
+  assert.match(phase4, /SQLite-Dialektvariante \| 915/);
+  assert.match(phase4, /842[\s\S]{0,100}Dollar-Parameter/i);
   assert.match(phase4, /`contract-only`/);
   assert.match(phase4, /Implementierungs-Fingerprint/);
   assert.match(phase4, /`mapped-not-ledger-activated`/);
   assert.match(phase4, /`genericAdapterCompatible: false`/);
   assert.match(phase4, /Phase-5-Zwischenstand/);
   assert.match(phase4, /Phase 5[\s\S]{0,80}begonnen[\s\S]{0,80}in Bearbeitung/i);
-  assert.match(phase4, /826 Syntaxkandidaten \(`portable-generated`\)/);
+  assert.match(phase4, /837 Syntaxkandidaten \(`portable-generated`\)/);
   assert.match(phase4, /102[^\r\n]*`requires-override`/);
   assert.match(
     phase4,
@@ -569,7 +569,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   assert.match(phase5, /nicht produktiven Status/i);
   assert.match(phase5, /`development-contract`/);
   assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/928/);
+  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/939/);
   assert.match(phase5, /`applicationExecutable: false`/);
   assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
   assert.match(strategy, /Block 3[\s\S]{0,100}abgeschlossen/i);
@@ -581,7 +581,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   );
   assert.match(
     strategy,
-    /928 Anwendungsstatements:[\s\S]{0,60}826[\s\S]{0,100}`portable-generated`[\s\S]{0,60}102[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 928[\s\S]{0,100}Vollanwendungskatalog/i,
+    /939 Anwendungsstatements:[\s\S]{0,60}837[\s\S]{0,100}`portable-generated`[\s\S]{0,60}102[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 939[\s\S]{0,100}Vollanwendungskatalog/i,
   );
   assert.match(
     strategy,

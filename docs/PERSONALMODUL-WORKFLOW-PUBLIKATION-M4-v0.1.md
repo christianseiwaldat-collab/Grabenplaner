@@ -2,7 +2,7 @@
 
 Stand: 1. August 2026
 
-Status: verbindlicher technischer Vertrag; im Quellstand umgesetzt und nicht released
+Status: verbindlicher technischer Vertrag; in v0.89.0-beta als standardmäßig deaktiviertes Fundament enthalten
 
 Produktstatus: nicht für den produktiven Betrieb freigegeben; das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert
 
@@ -91,9 +91,9 @@ Schreibzugriffe benötigen CSRF. Globale Zugriffe benötigen zusätzlich die vor
 
 `publish` akzeptiert ausschließlich `workflowCode`, `workflowType`, `requirementKind`, `dataClassification` und `containsConfidentialSteps`. Unbekannte Felder werden abgewiesen. `archive` akzeptiert ausschließlich eine Begründung mit 3 bis 300 Zeichen.
 
-## 7. Bewusste Abgrenzung und nächste Entscheidungen
+## 7. Bewusste Abgrenzung und M5-Folgestand
 
-M4 erzeugt oder verändert keine laufende Instanz. Für M5 bleiben ausdrücklich offen:
+M4 erzeugt oder verändert keine laufende Instanz. An dieser historischen M4-Grenze waren für M5 ausdrücklich offen:
 
 - die unveränderliche Bindung einer neuen Instanz an genau eine veröffentlichte Version,
 - der Fachobjektbezug zu Bewerber oder Mitarbeiter,
@@ -102,6 +102,8 @@ M4 erzeugt oder verändert keine laufende Instanz. Für M5 bleiben ausdrücklich
 - die Klassifikation und technische Speicherung vertraulicher Onboarding-/Offboarding-Schritte.
 
 Der grafische Editor und erweiterte Automatisierungen bleiben spätere, getrennte Blöcke.
+
+Der Folgestand M5 löst ausschließlich die kontrollierte Bindung neuer Standard-Instanzen: Die Sidecars `custom_process_run_bindings` und `custom_process_run_step_assignments` binden einen neu erzeugten Lauf unveränderbar an genau eine Veröffentlichung, einen Bewerbungs- oder Mitarbeiterbezug sowie explizit geprüfte Einzelzuweisungen. Legacy-Läufe werden weiterhin nicht übernommen. Die Managementoberfläche zeigt Instanzen und ihren aktiven Schritt ausschließlich read-only; die bestehende persönliche Portalaufgabenroute darf den eingefroren zugewiesenen aktiven Schritt nach erneuter Live-Prüfung idempotent abschließen. Verantwortlichenautomatik, Fristen, Eskalation, Benachrichtigungen, freie `custom_personnel`-Workflows, Onboarding, Offboarding und vertrauliche Schritte bleiben außerhalb von M5. Der aktuelle Gesamtvertrag steht in `PERSONALMODUL-ZIELARCHITEKTUR-v0.1.md`.
 
 ## 8. Abnahme
 

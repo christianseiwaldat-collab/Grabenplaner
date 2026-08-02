@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.89 Beta · Personalmodul-Fundament und unveränderliche Workflow-Instanzen
+
+- Bewerber, Bewerbungen und Mitarbeiter bleiben als getrennte Fachobjekte mit eigener Historie erhalten. Bewerber führen keine Personalnummer; die kontrollierte Umwandlung in einen Mitarbeiter bindet den Ursprung unveränderbar und verhindert Mehrfachübernahmen.
+- Bereichs- und aktionsbezogene Personalrechte begrenzen lokale Zugriffe auf die von PL+ freigegebenen Standort- beziehungsweise Abteilungsschnittmengen. Vertrauliche Inhalte und technische Rechte bleiben serverseitig geschützt.
+- Workflow-Entwurf, veröffentlichte Version und laufende Instanz sind getrennt. Neue Standardinstanzen werden unveränderlich an genau eine veröffentlichte Version und explizit geprüfte Einzelzuweisungen gebunden; bestehende Legacy-Läufe werden nicht umgedeutet.
+- Die Verwaltungsansicht zeigt Instanzen und aktive Schritte ausschließlich lesend. Persönlich zugewiesene Aufgaben nutzen die bestehende Portal-Aufgabengrenze mit erneuter Live-Rechteprüfung und idempotentem Abschluss.
+- Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert und nicht provisionierbar. Automatisierungen, Fristen, Eskalationen, Benachrichtigungen, freie oder vertrauliche Personalprozesse sowie Onboarding und Offboarding werden durch diesen Release nicht aktiviert.
+- Additive SQLite-Migrationen, Read-only-Importprüfung und Schutztrigger sichern Altstände und neue Bindungen fail-closed ab. SQLite bleibt der einzige freigegebene Produktprovider; PostgreSQL bleibt eine nicht produktive Entwicklungsgrundlage.
+
 ## v0.88.6 Beta · Zeitwertung, Benachrichtigungskanäle und Ubuntu-Bootnachweis
 
 - Die Wochenstundenübersicht trennt eingeteilte, gewertete und vertragliche Zeit zuverlässig. Urlaub wird wochenübergreifend von Montag bis Freitag angerechnet; Dienste, Krankenstand, Feiertage und doppelte Optionen werden nicht mehrfach gewertet.

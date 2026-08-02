@@ -777,6 +777,47 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .personnel-candidate-status-form { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) auto; align-items:end; gap:8px; min-width:0; margin-top:11px; padding-top:11px; border-top:1px solid var(--line); }
 .personnel-candidate-status-form > * { min-width:0; max-width:100%; }
 .personnel-candidate-status-form .primary-button { min-height:37px; margin:0; white-space:normal; }
+.personnel-workflow-instances,.personnel-workflow-tasks { min-width:0; max-width:100%; }
+.personnel-workflow-toolbar { display:grid; grid-template-columns:minmax(190px,1fr) auto; align-items:end; gap:11px; min-width:0; margin-bottom:10px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:var(--shadow); }
+.personnel-workflow-toolbar > * { min-width:0; max-width:100%; }
+.personnel-workflow-toolbar .secondary-button,.personnel-workflow-task-heading .secondary-button { min-height:37px; margin:0; white-space:normal; }
+.personnel-workflow-status { min-width:0; margin:0 0 10px; color:var(--muted); font-size:9px; line-height:1.45; overflow-wrap:anywhere; }
+.personnel-workflow-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; min-width:0; margin-bottom:12px; }
+.personnel-workflow-summary article { min-width:0; padding:13px 15px; border:1px solid var(--line); border-radius:13px; color:var(--ink); background:var(--surface); box-shadow:var(--shadow); }
+.personnel-workflow-summary span,.personnel-workflow-summary strong,.personnel-workflow-summary small { display:block; min-width:0; overflow-wrap:anywhere; }
+.personnel-workflow-summary span { color:var(--muted); font-size:7.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+.personnel-workflow-summary strong { margin:4px 0 2px; font-size:21px; }
+.personnel-workflow-summary small { color:var(--muted); font-size:8px; line-height:1.4; }
+.personnel-workflow-list,.personnel-workflow-task-list { display:grid; gap:11px; min-width:0; max-width:100%; }
+.personnel-workflow-instance-card { min-width:0; max-width:100%; padding:16px; border:1px solid var(--line); border-radius:15px; color:var(--ink); background:var(--surface); box-shadow:var(--shadow); }
+.personnel-workflow-instance-card > header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:10px; min-width:0; margin-bottom:12px; }
+.personnel-workflow-instance-card > header > div { min-width:0; }
+.personnel-workflow-instance-card h3,.personnel-workflow-task-card h3 { min-width:0; margin:4px 0 0; font-size:13px; line-height:1.35; overflow-wrap:anywhere; }
+.personnel-workflow-status-badge { display:inline-flex; align-items:center; max-width:100%; min-height:23px; padding:3px 8px; border-radius:999px; color:#345c4d; background:#e7f0ec; font-size:7.5px; font-weight:800; line-height:1.25; overflow-wrap:anywhere; }
+.personnel-workflow-status-badge:is(.status-resolved,.status-completed,.status-skipped) { color:#5b6460; background:#e9edeb; }
+.personnel-workflow-status-badge.status-active { color:#1f654f; background:#dff1ea; }
+.personnel-workflow-instance-meta { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; min-width:0; }
+.personnel-workflow-instance-meta > span { min-width:0; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-soft); }
+.personnel-workflow-instance-meta small,.personnel-workflow-instance-meta strong { display:block; min-width:0; overflow-wrap:anywhere; }
+.personnel-workflow-instance-meta small { color:var(--muted); font-size:7px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+.personnel-workflow-instance-meta strong { margin-top:3px; font-size:8.8px; line-height:1.4; }
+.personnel-workflow-resolved { margin:9px 0 0; color:var(--muted); font-size:8px; }
+.personnel-workflow-instance-tasks { display:grid; gap:6px; min-width:0; margin-top:11px; padding-top:11px; border-top:1px solid var(--line); }
+.personnel-workflow-instance-tasks > div { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:8px 9px; border-radius:9px; background:var(--surface-soft); }
+.personnel-workflow-instance-tasks > div > span { min-width:0; }
+.personnel-workflow-instance-tasks strong,.personnel-workflow-instance-tasks small { display:block; min-width:0; overflow-wrap:anywhere; }
+.personnel-workflow-instance-tasks strong { font-size:8.8px; line-height:1.4; }
+.personnel-workflow-instance-tasks small { margin-top:2px; color:var(--muted); font-size:7px; }
+.personnel-workflow-instance-tasks > p { margin:0; color:var(--muted); font-size:8.5px; }
+.personnel-workflow-empty { min-width:0; margin:0; padding:22px 15px; border:1px dashed var(--line); border-radius:13px; color:var(--muted); background:var(--surface-soft); font-size:9px; line-height:1.5; text-align:center; overflow-wrap:anywhere; }
+.personnel-workflow-empty strong { display:block; color:var(--ink); font-size:10.5px; }
+.personnel-workflow-empty p { margin:5px 0 0; }
+.personnel-workflow-empty.error { color:#8d4638; border-color:#e3bdb5; background:#fdf1ee; }
+.personnel-workflow-task-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; margin-bottom:10px; }
+.personnel-workflow-task-heading .personnel-workflow-status { margin:0; }
+.personnel-workflow-task-card { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; min-width:0; max-width:100%; padding:14px 15px; border:1px solid var(--line); border-radius:13px; color:var(--ink); background:var(--surface); box-shadow:var(--shadow); }
+.personnel-workflow-task-card > div { min-width:0; }
+.personnel-workflow-task-card p { min-width:0; margin:5px 0 0; color:var(--muted); font-size:8.5px; line-height:1.4; overflow-wrap:anywhere; }
 .personnel-dashboard-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:15px; padding:19px 20px; border:1px solid var(--line); border-radius:16px; background:var(--surface); box-shadow:var(--shadow); }
 .personnel-dashboard-heading h2,.personnel-dashboard-customizer-heading h3 { margin:3px 0 0; color:var(--ink); font:800 17px/1.25 "Manrope","DM Sans","Segoe UI",sans-serif; }
 .personnel-dashboard-heading p,.personnel-dashboard-customizer-heading p { max-width:700px; margin:6px 0 0; color:var(--muted); font-size:10px; line-height:1.5; }
@@ -918,6 +959,7 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 }
 @media (max-width:900px) {
   .personnel-candidate-workspace { grid-template-columns:1fr; }
+  .personnel-workflow-instance-meta { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media (max-width:700px) {
   .personnel-dashboard-heading,.personnel-dashboard-customizer-heading { flex-direction:column; }
@@ -927,13 +969,18 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .personnel-dashboard-card-symbol { width:42px; height:42px; border-radius:13px; font-size:19px; }
   .personnel-dashboard-customizer-actions { display:grid; grid-template-columns:1fr; }
   .personnel-lifecycle-foundation-heading { align-items:stretch; flex-direction:column; }
-  .personnel-candidate-toolbar,.personnel-candidate-status-form { grid-template-columns:1fr; }
-  .personnel-candidate-toolbar .secondary-button,.personnel-candidate-status-form .primary-button { width:100%; }
+  .personnel-candidate-toolbar,.personnel-candidate-status-form,.personnel-workflow-toolbar { grid-template-columns:1fr; }
+  .personnel-candidate-toolbar .secondary-button,.personnel-candidate-status-form .primary-button,.personnel-workflow-toolbar .secondary-button { width:100%; }
+  .personnel-workflow-task-heading { align-items:stretch; flex-direction:column; }
+  .personnel-workflow-task-heading .secondary-button { width:100%; }
 }
 @media (max-width:420px) {
   .personnel-candidate-toolbar,.personnel-candidate-list-panel,.personnel-candidate-detail-panel { padding:12px; }
   .personnel-candidate-list-item,.personnel-candidate-application { padding:11px; }
   .personnel-candidate-facts { grid-template-columns:1fr; }
+  .personnel-workflow-summary,.personnel-workflow-instance-meta { grid-template-columns:1fr; }
+  .personnel-workflow-instance-card,.personnel-workflow-task-card { padding:12px; }
+  .personnel-workflow-task-card { flex-direction:column; }
 }
 .location-overview-toolbar { margin-bottom: 15px; }
 .location-overview-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
@@ -2609,7 +2656,7 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.sec
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .settings-tab.active { color:#10241d; background:#79d0ad; }
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .employee-table tr:hover td { background:#24322d; }
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .personnel-directory-table tr:hover td { background:#24322d; }
-html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.personnel-candidate-empty.error,.personnel-candidate-inline-error) { color:#f0b8ab; border-color:#744d45; background:#392722; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.personnel-candidate-empty.error,.personnel-candidate-inline-error,.personnel-workflow-empty.error) { color:#f0b8ab; border-color:#744d45; background:#392722; }
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .pdf-live-preview iframe { border-color:var(--line); background:#fff; }
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .page-theme-switch { border-color:var(--line); background:var(--surface); }
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .page-theme-switch button[aria-pressed="true"] { color:#10241d; background:#79d0ad; }

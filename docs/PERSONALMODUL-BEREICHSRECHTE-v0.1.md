@@ -2,7 +2,7 @@
 
 Stand: 1. August 2026
 
-Status: verbindlicher R1-Architekturvertrag; im Quellstand umgesetzt, nicht released
+Status: verbindlicher R1-Architekturvertrag; in v0.89.0-beta als standardmäßig deaktiviertes Fundament enthalten
 
 Bezug: `PERSONALMODUL-ZIELARCHITEKTUR-v0.1.md`, Issue 5 „Bereichsbezogene Fachrechte“
 
@@ -217,4 +217,4 @@ R1 umfasst ausschließlich Bewerbungen und Preboarding. Nicht Bestandteil sind:
 
 Repository-Zugriffsprojektion, serverseitige Policy und positive Antwortprojektion bilden gemeinsam die verbindliche R1-Schutzgrenze. `listCandidateAccessHeaders(...)` liefert für die Vorselektion nur Identität, Zustand, Revision und Zeitstempel; `listApplicationAccessScopes(candidateId)` liefert nur die strukturellen Bewerbungsbereiche und keine geschützten Payloads. Erst anschließend werden ausschließlich berechtigte Bewerber über die bestehende Fachprojektion geladen und entschlüsselt.
 
-Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert. R1 ist im Quellstand umgesetzt, nicht released und keine Produktivfreigabe. R1 selbst begann den Workflow-Ausbau nicht; die Publikations- und Workflow-Rechtegrenze wurde inzwischen getrennt als M4-Fundament umgesetzt und in `PERSONALMODUL-WORKFLOW-PUBLIKATION-M4-v0.1.md` dokumentiert. Die Instanzbindung bleibt als M5 ausdrücklich offen.
+Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert. R1 ist im Quellstand umgesetzt und keine Produktivfreigabe. R1 selbst begann den Workflow-Ausbau nicht; die Publikations- und Workflow-Rechtegrenze wurde inzwischen getrennt als M4-Fundament umgesetzt und in `PERSONALMODUL-WORKFLOW-PUBLIKATION-M4-v0.1.md` dokumentiert. M5 ergänzt darauf ausschließlich die kontrollierte Instanzbindung für neue Standardprozesse; Automatisierungen, vertrauliche Workflows sowie Onboarding und Offboarding bleiben fail-closed späteren Schutzverträgen vorbehalten.

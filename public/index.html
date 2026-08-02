@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.88.6 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.89 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -448,35 +448,45 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section personnel-lifecycle-foundation" id="workflowCenterSection" role="tabpanel" aria-labelledby="workflowCenterTab">
+          <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-instances" id="workflowCenterSection" role="tabpanel" aria-labelledby="workflowCenterTab">
             <div class="employee-toolbar personnel-lifecycle-foundation-heading">
-              <div><span class="eyebrow">Technisches Fundament</span><h2>Workflow-Center</h2><p>Die vorhandene Prozessbasis besitzt jetzt eine getrennte, unveränderbare Publikationsschicht für Personalprozesse.</p></div>
-              <span class="status-badge inactive">M4-Fundament</span>
+              <div><span class="eyebrow">Versionsgebundene Ausführung</span><h2>Workflow-Center</h2><p>Neue Personalprozess-Instanzen bleiben dauerhaft an genau die beim Start veröffentlichte Version gebunden.</p></div>
+              <span class="status-badge">M5 · Nur Lesen</span>
             </div>
             <article class="personnel-lifecycle-boundary">
-              <strong>Vorlage, Version und Instanz bleiben getrennt</strong>
-              <p>Veröffentlichungen frieren Version und Geltungsbereich ein, ohne bestehende Prozesse oder Läufe zu verändern. Die Bindung neuer Instanzen folgt getrennt in M5.</p>
+              <strong>Vorlage, Veröffentlichung und Instanz bleiben getrennt</strong>
+              <p>Diese Ansicht zeigt ausschließlich serverseitig freigegebene Instanzmetadaten. Sie startet keinen Prozess, ändert keine Aufgabe und übernimmt keine bestehenden Läufe automatisch.</p>
             </article>
-            <div class="personnel-lifecycle-foundation-grid">
-              <article><span class="eyebrow">Entwurf</span><h3>Workflow-Vorlagen</h3><p>Abläufe bearbeiten, ohne bereits laufende Prozesse zu verändern.</p></article>
-              <article><span class="eyebrow">Freigabe</span><h3>Veröffentlichte Versionen</h3><p>Geprüfte Fassungen unveränderbar veröffentlichen und bei Bedarf archivieren.</p></article>
-              <article><span class="eyebrow">Folgt in M5</span><h3>Prozessinstanzen</h3><p>Konkrete Onboarding-, Schulungs- und Offboarding-Abläufe werden erst nach der Versionsgrenze angebunden.</p></article>
+            <div class="personnel-workflow-toolbar">
+              <label class="field"><span>Status</span><select id="personnelWorkflowInstanceStatusFilter">
+                <option value="all">Alle sichtbaren Instanzen</option>
+                <option value="open">Offen</option>
+                <option value="resolved">Abgeschlossen</option>
+              </select></label>
+              <button class="secondary-button" id="refreshPersonnelWorkflowInstancesButton" type="button">Aktualisieren</button>
+            </div>
+            <p class="personnel-workflow-status" id="personnelWorkflowInstanceStatus" role="status" aria-live="polite">Instanzen werden beim Öffnen geladen.</p>
+            <div class="personnel-workflow-summary" id="personnelWorkflowInstanceSummary" aria-label="Zusammenfassung der Workflow-Instanzen"></div>
+            <div class="personnel-workflow-list" id="personnelWorkflowInstanceList">
+              <p class="personnel-workflow-empty">Noch keine Instanzen geladen.</p>
             </div>
           </section>
 
-          <section class="personnel-administration-section personnel-lifecycle-foundation" id="personnelTasksSection" role="tabpanel" aria-labelledby="personnelTasksTab">
+          <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks" id="personnelTasksSection" role="tabpanel" aria-labelledby="personnelTasksTab">
             <div class="employee-toolbar personnel-lifecycle-foundation-heading">
-              <div><span class="eyebrow">Technisches Fundament</span><h2>Personalaufgaben</h2><p>Eigene und bereichsbezogene Aufgaben sollen hier später in einer geschützten, gemeinsamen Sicht zusammenlaufen.</p></div>
-              <span class="status-badge inactive">Vorbereitet</span>
+              <div><span class="eyebrow">Datensparsame Projektion</span><h2>Personalaufgaben</h2><p>Die sichtbaren Aufgaben stammen aus denselben versionsgebundenen Instanzen und werden nicht als zweite Wahrheit dupliziert.</p></div>
+              <span class="status-badge">M5 · Nur Lesen</span>
             </div>
             <article class="personnel-lifecycle-boundary">
-              <strong>Keine neue Aufgabenquelle</strong>
-              <p>Aufgaben werden künftig aus versionsgebundenen Prozessinstanzen projiziert. Die Grundseite erzeugt noch keine Aufgaben und erweitert keine bestehenden Zugriffsrechte.</p>
+              <strong>Serverfreigabe statt Client-Ableitung</strong>
+              <p>Gezeigt werden nur bereits berechtigte Aufgabenschritte. Die Oberfläche löst keine Verantwortlichen auf, trifft keine Fachentscheidung und führt keine Frist- oder Eskalationsautomatik aus.</p>
             </article>
-            <div class="personnel-lifecycle-foundation-grid">
-              <article><span class="eyebrow">Persönlich</span><h3>Meine Aufgaben</h3><p>Nur Aufgaben anzeigen, die der angemeldeten Person wirksam zugewiesen sind.</p></article>
-              <article><span class="eyebrow">Fristen</span><h3>Überfällig</h3><p>Fälligkeiten und Eskalationen nachvollziehbar und ohne automatische Fachentscheidung bündeln.</p></article>
-              <article><span class="eyebrow">Bereich</span><h3>Standort &amp; Abteilung</h3><p>Leitungsaufgaben ausschließlich innerhalb des von PL+ freigegebenen Bereichs zeigen.</p></article>
+            <div class="personnel-workflow-task-heading">
+              <p class="personnel-workflow-status" id="personnelWorkflowTaskStatus" role="status" aria-live="polite">Aufgaben werden beim Öffnen geladen.</p>
+              <button class="secondary-button" id="refreshPersonnelWorkflowTasksButton" type="button">Aktualisieren</button>
+            </div>
+            <div class="personnel-workflow-task-list" id="personnelWorkflowTaskList">
+              <p class="personnel-workflow-empty">Noch keine Aufgaben geladen.</p>
             </div>
           </section>
 
@@ -1899,7 +1909,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.88.6 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.89 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

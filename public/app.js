@@ -184,6 +184,13 @@ const state = {
   personnelCandidateMutationPending: "",
   personnelCandidateLoadError: "",
   personnelCandidateDetailError: "",
+  personnelWorkflowInstances: [],
+  personnelWorkflowTasks: [],
+  personnelWorkflowInstanceCapabilities: { scope: null, canRead: null },
+  personnelWorkflowInstancesLoaded: false,
+  personnelWorkflowInstancesLoading: false,
+  personnelWorkflowInstanceStatusFilter: "all",
+  personnelWorkflowInstanceLoadError: "",
   customWorkRuleRegistry: null,
   workRuleGovernance: null,
   customWorkRulesLoading: false,
@@ -315,6 +322,7 @@ const elements = Object.fromEntries(
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
     "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -920,12 +928,14 @@ function canReadCandidatePreboarding() {
 
 function canOpenWorkflowCenter() {
   return personnelLifecycleFoundationEnabled()
-    && hasGovernancePermission("personnel:workflows:read");
+    && hasGovernancePermission("personnel:workflows:read")
+    && state.personnelWorkflowInstanceCapabilities.canRead !== false;
 }
 
 function canReadPersonnelTasks() {
   return personnelLifecycleFoundationEnabled()
-    && (canReadCentralPersonnel() || hasGovernancePermission("processes:write"));
+    && hasGovernancePermission("personnel:workflows:read")
+    && state.personnelWorkflowInstanceCapabilities.canRead !== false;
 }
 
 function canOpenPersonnelAdministrationView() {
@@ -1231,6 +1241,11 @@ function applyRoleVisibility() {
     || state.selectedPersonnelCandidateId
     || state.personnelCandidateLoadError
   )) clearPersonnelLifecycleCandidateState("Bewerberdaten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
+  if (!workflowCenterAccess && !personnelTasksAccess && (
+    state.personnelWorkflowInstancesLoaded
+    || state.personnelWorkflowInstancesLoading
+    || state.personnelWorkflowInstanceLoadError
+  )) clearPersonnelWorkflowInstanceState("Workflow-Daten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
   if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
     setPersonnelAdministrationTab(firstAccessiblePersonnelAdministrationTab());
   }
@@ -7300,6 +7315,318 @@ async function savePersonnelCandidateApplicationStatus(event) {
   }
 }
 
+const PERSONNEL_WORKFLOW_TYPE_LABELS = Object.freeze({
+  application: "Bewerbung",
+  preboarding: "Preboarding",
+  training: "Schulung",
+  position_change: "Positionswechsel",
+  department_change: "Abteilungswechsel",
+  location_change: "Standortwechsel",
+  return_from_absence: "Rückkehr",
+  custom_personnel: "Personalprozess",
+});
+
+const PERSONNEL_WORKFLOW_STATUS_LABELS = Object.freeze({
+  open: "Offen",
+  resolved: "Abgeschlossen",
+});
+
+const PERSONNEL_WORKFLOW_TASK_STATUS_LABELS = Object.freeze({
+  pending: "Ausstehend",
+  active: "Aktiv",
+  completed: "Erledigt",
+  skipped: "Übersprungen",
+});
+
+function defaultPersonnelWorkflowInstanceCapabilities() {
+  return { scope: null, canRead: null };
+}
+
+function normalizePersonnelWorkflowInstanceCapabilities(value) {
+  const submitted = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const scope = submitted.scope && typeof submitted.scope === "object" && !Array.isArray(submitted.scope)
+    ? { type: String(submitted.scope.type || "none") }
+    : null;
+  return {
+    scope,
+    canRead: submitted.canReadInstances === true,
+  };
+}
+
+function applyPersonnelWorkflowInstanceCapabilities(payload) {
+  state.personnelWorkflowInstanceCapabilities = normalizePersonnelWorkflowInstanceCapabilities(
+    payload?.capabilities,
+  );
+  return state.personnelWorkflowInstanceCapabilities;
+}
+
+function personnelWorkflowObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function personnelWorkflowText(...values) {
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function normalizePersonnelWorkflowStatus(value) {
+  const status = personnelWorkflowText(value).toLowerCase();
+  return Object.hasOwn(PERSONNEL_WORKFLOW_STATUS_LABELS, status) ? status : "";
+}
+
+function personnelWorkflowScopeLabel(value, fallback = "Freigegebener Bereich") {
+  const scope = personnelWorkflowObject(value);
+  const type = personnelWorkflowText(scope.type).toLowerCase();
+  if (type === "company") return "Unternehmensweit";
+  if (type === "department") return "Freigegebener Abteilungsbereich";
+  if (type === "location") return "Freigegebener Standortbereich";
+  return fallback;
+}
+
+function normalizePersonnelWorkflowTask(value, workflowTitle = "Personalprozess") {
+  const task = personnelWorkflowObject(value);
+  return {
+    title: personnelWorkflowText(task.title, "Aufgabenschritt"),
+    workflowTitle: personnelWorkflowText(workflowTitle, "Personalprozess"),
+    status: "active",
+  };
+}
+
+function personnelWorkflowStepCount(value) {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+}
+
+function normalizePersonnelWorkflowInstance(value) {
+  const instance = personnelWorkflowObject(value);
+  const publication = personnelWorkflowObject(instance.publication);
+  const title = personnelWorkflowText(publication.title, "Personalprozess");
+  const workflowType = personnelWorkflowText(publication.workflowType).toLowerCase();
+  const version = personnelWorkflowText(publication.versionNumber);
+  const subject = personnelWorkflowObject(instance.subject);
+  const subjectType = personnelWorkflowText(subject.type).toLowerCase();
+  const progress = personnelWorkflowObject(instance.progress);
+  const activeStep = personnelWorkflowObject(instance.activeStep);
+  const activeTasks = personnelWorkflowText(activeStep.title)
+    ? [{ title: activeStep.title, status: "active" }]
+    : [];
+  return {
+    title,
+    workflowType,
+    version,
+    subjectType: ["candidate", "employee"].includes(subjectType) ? subjectType : "",
+    scopeLabel: personnelWorkflowScopeLabel(instance.scope),
+    status: normalizePersonnelWorkflowStatus(instance.status),
+    completedSteps: personnelWorkflowStepCount(progress.completedSteps),
+    totalSteps: personnelWorkflowStepCount(progress.totalSteps),
+    startedAt: personnelWorkflowText(instance.startedAt),
+    resolvedAt: personnelWorkflowText(instance.resolvedAt),
+    tasks: activeTasks.map((task) => normalizePersonnelWorkflowTask(task, title)),
+  };
+}
+
+function filteredPersonnelWorkflowInstances() {
+  const filter = state.personnelWorkflowInstanceStatusFilter;
+  return filter === "all"
+    ? state.personnelWorkflowInstances
+    : state.personnelWorkflowInstances.filter((instance) => instance.status === filter);
+}
+
+function personnelWorkflowTimestamp(value, fallback = "Nicht angegeben") {
+  const parsed = new Date(String(value || ""));
+  if (!Number.isFinite(parsed.getTime())) return fallback;
+  try {
+    return new Intl.DateTimeFormat("de-AT", { dateStyle: "short", timeStyle: "short" }).format(parsed);
+  } catch {
+    return fallback;
+  }
+}
+
+function personnelWorkflowStatusBadge(status, task = false) {
+  const labels = task ? PERSONNEL_WORKFLOW_TASK_STATUS_LABELS : PERSONNEL_WORKFLOW_STATUS_LABELS;
+  const label = labels[status] || "Status nicht angegeben";
+  return `<span class="personnel-workflow-status-badge status-${escapeHtmlAttribute(status)}">${escapeHtml(label)}</span>`;
+}
+
+function renderPersonnelWorkflowInstanceSummary() {
+  if (!elements.personnelWorkflowInstanceSummary) return;
+  const open = state.personnelWorkflowInstances.filter((instance) => instance.status === "open").length;
+  const resolved = state.personnelWorkflowInstances.filter((instance) => instance.status === "resolved").length;
+  elements.personnelWorkflowInstanceSummary.innerHTML = [
+    ["Sichtbar", state.personnelWorkflowInstances.length, "serverseitig freigegebene Instanzen"],
+    ["Offen", open, "laufende versionsgebundene Ausführungen"],
+    ["Abgeschlossen", resolved, "unverändert historisch gebunden"],
+  ].map(([label, value, detail]) => `<article><span>${escapeHtml(label)}</span><strong>${value}</strong><small>${escapeHtml(detail)}</small></article>`).join("");
+}
+
+function renderPersonnelWorkflowInstanceList() {
+  if (!elements.personnelWorkflowInstanceList) return;
+  if (state.personnelWorkflowInstancesLoading) {
+    elements.personnelWorkflowInstanceList.innerHTML = '<p class="personnel-workflow-empty">Die freigegebenen Instanzen werden geladen …</p>';
+    return;
+  }
+  if (state.personnelWorkflowInstanceLoadError) {
+    elements.personnelWorkflowInstanceList.innerHTML = `<div class="personnel-workflow-empty error"><strong>Instanzen konnten nicht geladen werden</strong><p>${escapeHtml(state.personnelWorkflowInstanceLoadError)}</p></div>`;
+    return;
+  }
+  if (!state.personnelWorkflowInstancesLoaded) {
+    elements.personnelWorkflowInstanceList.innerHTML = '<p class="personnel-workflow-empty">Noch keine Instanzen geladen.</p>';
+    return;
+  }
+  const instances = filteredPersonnelWorkflowInstances();
+  if (!instances.length) {
+    elements.personnelWorkflowInstanceList.innerHTML = '<div class="personnel-workflow-empty"><strong>Keine sichtbaren Instanzen</strong><p>Im gewählten Status ist derzeit keine serverseitig freigegebene Instanz vorhanden.</p></div>';
+    return;
+  }
+  elements.personnelWorkflowInstanceList.innerHTML = instances.map((instance) => {
+    const type = PERSONNEL_WORKFLOW_TYPE_LABELS[instance.workflowType] || "Personalprozess";
+    const subject = instance.subjectType === "candidate"
+      ? "Bewerbungsbezug"
+      : instance.subjectType === "employee" ? "Mitarbeiterbezug" : "Fachobjekt geschützt";
+    const version = instance.version ? `Version ${instance.version}` : "Veröffentlichte Version";
+    const progress = instance.totalSteps > 0
+      ? `${Math.min(instance.completedSteps, instance.totalSteps)} von ${instance.totalSteps} Schritten`
+      : "Noch kein Fortschritt";
+    return `<article class="personnel-workflow-instance-card">
+      <header><div><span class="eyebrow">${escapeHtml(type)} · ${escapeHtml(version)}</span><h3>${escapeHtml(instance.title)}</h3></div>${personnelWorkflowStatusBadge(instance.status)}</header>
+      <div class="personnel-workflow-instance-meta">
+        <span><small>Bereich</small><strong>${escapeHtml(instance.scopeLabel)}</strong></span>
+        <span><small>Bezug</small><strong>${escapeHtml(subject)}</strong></span>
+        <span><small>Fortschritt</small><strong>${escapeHtml(progress)}</strong></span>
+        <span><small>Gestartet</small><strong>${escapeHtml(personnelWorkflowTimestamp(instance.startedAt))}</strong></span>
+      </div>
+      ${instance.status === "resolved" ? `<p class="personnel-workflow-resolved">Abgeschlossen: ${escapeHtml(personnelWorkflowTimestamp(instance.resolvedAt))}</p>` : ""}
+      <div class="personnel-workflow-instance-tasks">
+        ${instance.tasks.length
+          ? instance.tasks.map((task) => `<div><span><strong>${escapeHtml(task.title)}</strong></span>${personnelWorkflowStatusBadge(task.status, true)}</div>`).join("")
+          : '<p>Keine freigegebenen Aufgabenschritte in dieser Projektion.</p>'}
+      </div>
+    </article>`;
+  }).join("");
+}
+
+function renderPersonnelWorkflowTasks() {
+  if (!elements.personnelWorkflowTaskList) return;
+  if (state.personnelWorkflowInstancesLoading) {
+    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Die freigegebenen Aufgaben werden geladen …</p>';
+    return;
+  }
+  if (state.personnelWorkflowInstanceLoadError) {
+    elements.personnelWorkflowTaskList.innerHTML = `<div class="personnel-workflow-empty error"><strong>Aufgaben konnten nicht geladen werden</strong><p>${escapeHtml(state.personnelWorkflowInstanceLoadError)}</p></div>`;
+    return;
+  }
+  if (!state.personnelWorkflowInstancesLoaded) {
+    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Noch keine Aufgaben geladen.</p>';
+    return;
+  }
+  if (!state.personnelWorkflowTasks.length) {
+    elements.personnelWorkflowTaskList.innerHTML = '<div class="personnel-workflow-empty"><strong>Keine sichtbaren Aufgaben</strong><p>Der Server hat derzeit keine Aufgabenschritte für diese geschützte Projektion freigegeben.</p></div>';
+    return;
+  }
+  elements.personnelWorkflowTaskList.innerHTML = state.personnelWorkflowTasks.map((task) => `
+    <article class="personnel-workflow-task-card">
+      <div><span class="eyebrow">Freigegebener Aktivschritt</span><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.workflowTitle)}</p></div>
+      ${personnelWorkflowStatusBadge(task.status, true)}
+    </article>`).join("");
+}
+
+function renderPersonnelWorkflowInstanceOverview() {
+  const visibleCount = filteredPersonnelWorkflowInstances().length;
+  if (elements.personnelWorkflowInstanceStatusFilter) {
+    elements.personnelWorkflowInstanceStatusFilter.value = state.personnelWorkflowInstanceStatusFilter;
+    elements.personnelWorkflowInstanceStatusFilter.disabled = state.personnelWorkflowInstancesLoading;
+  }
+  if (elements.refreshPersonnelWorkflowInstancesButton) {
+    elements.refreshPersonnelWorkflowInstancesButton.disabled = state.personnelWorkflowInstancesLoading || !canOpenWorkflowCenter();
+  }
+  if (elements.refreshPersonnelWorkflowTasksButton) {
+    elements.refreshPersonnelWorkflowTasksButton.disabled = state.personnelWorkflowInstancesLoading || !canReadPersonnelTasks();
+  }
+  if (elements.personnelWorkflowInstanceStatus) {
+    elements.personnelWorkflowInstanceStatus.textContent = state.personnelWorkflowInstancesLoading
+      ? "Workflow-Instanzen werden geladen."
+      : state.personnelWorkflowInstanceLoadError
+        ? state.personnelWorkflowInstanceLoadError
+        : state.personnelWorkflowInstancesLoaded
+          ? `${visibleCount} von ${state.personnelWorkflowInstances.length} freigegebenen Instanzen sichtbar. Fachobjekt-Schlüssel und Belegdaten bleiben ausgeblendet.`
+          : "Instanzen werden beim Öffnen geladen.";
+  }
+  if (elements.personnelWorkflowTaskStatus) {
+    elements.personnelWorkflowTaskStatus.textContent = state.personnelWorkflowInstancesLoading
+      ? "Personalaufgaben werden geladen."
+      : state.personnelWorkflowInstanceLoadError
+        ? state.personnelWorkflowInstanceLoadError
+        : state.personnelWorkflowInstancesLoaded
+          ? `${state.personnelWorkflowTasks.length} freigegebene Aufgabenschritte aus versionsgebundenen Instanzen.`
+          : "Aufgaben werden beim Öffnen geladen.";
+  }
+  renderPersonnelWorkflowInstanceSummary();
+  renderPersonnelWorkflowInstanceList();
+  renderPersonnelWorkflowTasks();
+}
+
+function clearPersonnelWorkflowInstanceState(message = "") {
+  state.personnelWorkflowInstances = [];
+  state.personnelWorkflowTasks = [];
+  state.personnelWorkflowInstanceCapabilities = { scope: null, canRead: false };
+  state.personnelWorkflowInstancesLoaded = false;
+  state.personnelWorkflowInstancesLoading = false;
+  state.personnelWorkflowInstanceLoadError = message;
+  renderPersonnelWorkflowInstanceOverview();
+}
+
+async function loadPersonnelWorkflowInstances({ force = false } = {}) {
+  if (!personnelLifecycleFoundationEnabled()
+    || !hasGovernancePermission("personnel:workflows:read")
+    || state.personnelWorkflowInstancesLoading) return;
+  if (state.personnelWorkflowInstancesLoaded && !force) {
+    renderPersonnelWorkflowInstanceOverview();
+    return;
+  }
+  state.personnelWorkflowInstancesLoading = true;
+  state.personnelWorkflowInstanceLoadError = "";
+  renderPersonnelWorkflowInstanceOverview();
+  try {
+    const result = await api("/api/portal/v1/personnel-lifecycle/workflow-instances");
+    if (!personnelLifecycleFoundationEnabled()
+      || !hasGovernancePermission("personnel:workflows:read")) {
+      clearPersonnelWorkflowInstanceState("Der Workflow-Zugriff wurde während des Ladens entzogen.");
+      applyRoleVisibility();
+      return;
+    }
+    const capabilities = applyPersonnelWorkflowInstanceCapabilities(result);
+    if (!capabilities.canRead) {
+      clearPersonnelWorkflowInstanceState("Der Server hat keinen Lesezugriff auf Workflow-Instanzen freigegeben.");
+      applyRoleVisibility();
+      return;
+    }
+    if (!Array.isArray(result?.instances)) {
+      throw new Error("Der Server hat keine gültige Workflow-Instanzliste geliefert.");
+    }
+    const rawInstances = result.instances;
+    state.personnelWorkflowInstances = rawInstances.map(normalizePersonnelWorkflowInstance);
+    state.personnelWorkflowTasks = state.personnelWorkflowInstances
+      .flatMap((instance) => instance.tasks);
+    state.personnelWorkflowInstancesLoaded = true;
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelWorkflowInstanceState("Der Workflow-Zugriff ist nicht mehr verfügbar.");
+      applyRoleVisibility();
+      return;
+    }
+    state.personnelWorkflowInstances = [];
+    state.personnelWorkflowTasks = [];
+    state.personnelWorkflowInstancesLoaded = false;
+    state.personnelWorkflowInstanceLoadError = error.message || "Die Workflow-Instanzen konnten nicht geladen werden.";
+  } finally {
+    state.personnelWorkflowInstancesLoading = false;
+    renderPersonnelWorkflowInstanceOverview();
+  }
+}
+
 function renderPersonnelAdministration() {
   if (!canOpenPersonnelAdministrationView()) return;
   if (canReadCentralPersonnel()) {
@@ -7311,6 +7638,7 @@ function renderPersonnelAdministration() {
     renderCostCenters();
   }
   if (canReadCandidatePreboarding()) renderPersonnelCandidateOverview();
+  if (canOpenWorkflowCenter() || canReadPersonnelTasks()) renderPersonnelWorkflowInstanceOverview();
   if (canAccessCustomWorkRuleGovernance() && state.customWorkRuleRegistry) renderCustomWorkRuleRegistry();
   if (canReadCollectiveAgreements() && state.collectiveAgreementRegistry) renderCollectiveAgreementRegistry();
   if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
@@ -7385,7 +7713,7 @@ function personnelDashboardCatalog() {
       symbol: "□",
       eyebrow: "Aufgaben",
       label: "Personalaufgaben",
-      description: "Persönliche und bereichsbezogene Prozessaufgaben geschützt zusammenführen.",
+      description: "Aktive Schritte aus freigegebenen Prozessinstanzen datensparsam zusammenführen.",
       view: "personnelAdministration",
       route: "tasks",
       available: canReadPersonnelTasks(),
@@ -7573,6 +7901,9 @@ function setPersonnelAdministrationTab(tab) {
     loadPersonnelAdministration().catch((error) => showToast(error.message, true));
   }
   if (normalized === "applications") loadPersonnelCandidates();
+  if (["workflows", "tasks"].includes(normalized)) {
+    loadPersonnelWorkflowInstances().catch((error) => showToast(error.message, true));
+  }
   if (normalized === "ruleDrafts") loadCustomWorkRuleRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
@@ -18348,6 +18679,18 @@ elements.personnelCandidateDetail?.addEventListener("change", (event) => {
   if (form && event.target.name === "status") updatePersonnelCandidateReasonField(form);
 });
 elements.personnelCandidateDetail?.addEventListener("submit", savePersonnelCandidateApplicationStatus);
+elements.personnelWorkflowInstanceStatusFilter?.addEventListener("change", (event) => {
+  state.personnelWorkflowInstanceStatusFilter = ["all", "open", "resolved"].includes(event.target.value)
+    ? event.target.value
+    : "all";
+  renderPersonnelWorkflowInstanceOverview();
+});
+elements.refreshPersonnelWorkflowInstancesButton?.addEventListener("click", () => (
+  loadPersonnelWorkflowInstances({ force: true })
+));
+elements.refreshPersonnelWorkflowTasksButton?.addEventListener("click", () => (
+  loadPersonnelWorkflowInstances({ force: true })
+));
 elements.centralVacationSearch?.addEventListener("input", (event) => {
   state.centralVacationSearch = event.target.value;
   renderCentralVacations();
