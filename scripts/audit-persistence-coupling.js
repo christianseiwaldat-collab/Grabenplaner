@@ -168,6 +168,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/maintenance.js",
   "lib/persistence/sqlite/operations/organization-schema-migrations.js",
   "lib/persistence/sqlite/operations/personnel-lifecycle-schema.js",
+  "lib/persistence/sqlite/operations/personnel-workflow-instance-schema.js",
   "lib/persistence/sqlite/operations/personnel-workflow-schema.js",
   "lib/persistence/sqlite/operations/protected-record-migrations.js",
   "lib/persistence/sqlite/operations/startup-schema-migrations.js",
@@ -237,6 +238,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/personnel-lifecycle-scoped-rights-persistence.test.js",
   "test/personnel-workflow-api.test.js",
   "test/personnel-workflow-import.test.js",
+  "test/personnel-workflow-instances-api.test.js",
   "test/personnel-workflow-publications.test.js",
   "test/personnel-workflow-startup-migration.test.js",
   "test/v087-protected-record-migrations.test.js",
@@ -293,10 +295,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 928;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 939;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 24;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 904;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 832;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 915;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 842;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 9;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -336,7 +338,7 @@ const PHASE_5_POSTGRESQL_TEST_FILES = Object.freeze([
 ]);
 const PHASE_5_POSTGRESQL_TEST_FILE_SET = new Set(PHASE_5_POSTGRESQL_TEST_FILES);
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 826;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 837;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 102;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

@@ -11,12 +11,23 @@ const {
   personnelWorkflowPublicationReceiptBody,
 } = require("../lib/personnel-workflow-publication-receipt");
 const {
+  personnelWorkflowInstanceReceiptBody,
+  personnelWorkflowTaskAssignmentReceiptBody,
+} = require("../lib/personnel-workflow-instance-receipt");
+const {
   PERSONNEL_WORKFLOW_MIGRATION_ID,
   PERSONNEL_WORKFLOW_TABLE_NAMES,
   PERSONNEL_WORKFLOW_TRIGGER_DEFINITIONS,
   inspectSqlitePersonnelWorkflowRows,
   inspectSqlitePersonnelWorkflowSchema,
 } = require("../lib/persistence/sqlite/operations/personnel-workflow-schema");
+const {
+  PERSONNEL_WORKFLOW_INSTANCE_MIGRATION_ID,
+  PERSONNEL_WORKFLOW_INSTANCE_TABLE_NAMES,
+  PERSONNEL_WORKFLOW_INSTANCE_TRIGGER_DEFINITIONS,
+  inspectSqlitePersonnelWorkflowInstanceRows,
+  inspectSqlitePersonnelWorkflowInstanceSchema,
+} = require("../lib/persistence/sqlite/operations/personnel-workflow-instance-schema");
 const {
   runSqliteStartupSchemaMigrations,
 } = require("../lib/persistence/sqlite/operations/startup-schema-migrations");
@@ -131,6 +142,7 @@ function markUnrelatedStartupMigrationsApplied(database) {
 }
 
 function removePersonnelWorkflowPublicationLayer(database) {
+  removePersonnelWorkflowInstanceLayer(database);
   for (const definition of PERSONNEL_WORKFLOW_TRIGGER_DEFINITIONS) {
     database.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
   }
@@ -139,6 +151,17 @@ function removePersonnelWorkflowPublicationLayer(database) {
   }
   database.prepare("DELETE FROM schema_migrations WHERE id = ?")
     .run(PERSONNEL_WORKFLOW_MIGRATION_ID);
+}
+
+function removePersonnelWorkflowInstanceLayer(database) {
+  for (const definition of PERSONNEL_WORKFLOW_INSTANCE_TRIGGER_DEFINITIONS) {
+    database.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
+  }
+  for (const name of [...PERSONNEL_WORKFLOW_INSTANCE_TABLE_NAMES].reverse()) {
+    database.exec(`DROP TABLE IF EXISTS "${name}"`);
+  }
+  database.prepare("DELETE FROM schema_migrations WHERE id = ?")
+    .run(PERSONNEL_WORKFLOW_INSTANCE_MIGRATION_ID);
 }
 
 function insertProcessFixture(database, suffix, { withRun = true } = {}) {
@@ -273,6 +296,287 @@ function insertPublication(database, fixture, { snapshotSha256 } = {}) {
     row.published_at,
   );
   return row;
+}
+
+function insertPersonnelWorkflowInstance(database, suffix = "m5", options = {}) {
+  const occurredAt = "2026-08-02T09:00:00.000Z";
+  const assignmentRole = options.assignmentRole || "hr";
+  const locationId = options.locationId || null;
+  const departmentId = options.departmentId || null;
+  const scopeType = departmentId ? "department" : (locationId ? "location" : "company");
+  const candidateId = `candidate-${suffix}`;
+  const applicationId = `application-${suffix}`;
+  const employeeNumber = `hr-${suffix}`;
+  const processId = `process-${suffix}`;
+  const stepId = `step-${suffix}`;
+  const publicationId = `publication-${suffix}`;
+  const runId = `run-${suffix}`;
+  const operationId = crypto.randomUUID();
+  const candidateRevision = 2;
+  const applicationRevision = 3;
+  const snapshotJson = JSON.stringify({
+    id: processId,
+    revision: 1,
+    title: `Preboarding ${suffix}`,
+    scope: { type: scopeType, locationId, departmentId },
+    steps: [{
+      id: stepId,
+      type: "actor",
+      title: "Unterlagen pruefen",
+      responsibilityType: "role",
+      responsibilityReference: assignmentRole,
+      conditionType: "always",
+    }],
+  });
+  if (locationId) {
+    database.prepare(`
+      INSERT INTO locations (id, name, active) VALUES (?, ?, 1)
+    `).run(locationId, `Standort ${suffix}`);
+  }
+  if (departmentId) {
+    database.prepare(`
+      INSERT INTO departments (id, location_id, name, active)
+      VALUES (?, ?, ?, 1)
+    `).run(departmentId, locationId, `Abteilung ${suffix}`);
+  }
+  database.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, home_location_id,
+      preferred_department_id, active
+    ) VALUES (?, ?, ?, ?, ?, 1)
+  `).run(
+    employeeNumber,
+    `Empfaenger ${suffix}`,
+    `Empfaenger ${suffix}`,
+    options.homeLocationId || null,
+    options.preferredDepartmentId || null,
+  );
+  database.prepare(`
+    INSERT INTO portal_roles (id, name, builtin, permissions)
+    VALUES (?, ?, 1, '["personnel:workflows:read"]')
+    ON CONFLICT(id) DO UPDATE SET permissions = excluded.permissions
+  `).run(assignmentRole, `Rolle ${assignmentRole}`);
+  database.prepare(`
+    INSERT INTO portal_users (employee_number, password_hash, role, active)
+    VALUES (?, 'test-password-hash', ?, 1)
+  `).run(employeeNumber, assignmentRole);
+  database.prepare(`
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+    VALUES (?, 'personnel:workflows:read', 'PL-PLUS')
+  `).run(employeeNumber);
+  if (locationId && options.generalScopeDepartmentId !== undefined) {
+    database.prepare(`
+      INSERT INTO portal_access_scopes (
+        employee_number, location_id, department_id, assigned_by
+      ) VALUES (?, ?, ?, 'PL-PLUS')
+    `).run(employeeNumber, locationId, options.generalScopeDepartmentId);
+  }
+  if (locationId && options.permissionScopeDepartmentId !== undefined) {
+    database.prepare(`
+      INSERT INTO portal_permission_scope_grants (
+        employee_number, permission, location_id, department_id, approved_by
+      ) VALUES (?, 'personnel:workflows:read', ?, ?, 'PL-PLUS')
+    `).run(employeeNumber, locationId, options.permissionScopeDepartmentId);
+  }
+  database.prepare(`
+    INSERT INTO candidates (
+      id, state, protected_payload, revision, created_by, updated_by,
+      created_at, updated_at
+    ) VALUES (?, 'active', 'enc:test', ?, 'PL-PLUS', 'PL-PLUS', ?, ?)
+  `).run(candidateId, candidateRevision, occurredAt, occurredAt);
+  database.prepare(`
+    INSERT INTO candidate_applications (
+      id, candidate_id, status, protected_payload, revision, status_changed_at,
+      desired_location_id, desired_department_id,
+      created_by, updated_by, created_at, updated_at
+    ) VALUES (
+      ?, ?, 'preboarding', 'enc:test', ?, ?, ?, ?,
+      'PL-PLUS', 'PL-PLUS', ?, ?
+    )
+  `).run(
+    applicationId,
+    candidateId,
+    applicationRevision,
+    occurredAt,
+    locationId,
+    departmentId,
+    occurredAt,
+    occurredAt,
+  );
+  database.prepare(`
+    INSERT INTO custom_processes (
+      id, title, scope_type, location_id, department_id,
+      trigger_type, status, revision,
+      created_by, updated_by, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'manual', 'active', 1,
+      'PL-PLUS', 'PL-PLUS', ?, ?)
+  `).run(
+    processId,
+    `Preboarding ${suffix}`,
+    scopeType,
+    locationId,
+    departmentId,
+    occurredAt,
+    occurredAt,
+  );
+  database.prepare(`
+    INSERT INTO custom_process_steps (
+      id, process_id, sort_order, step_type, title,
+      responsibility_type, responsibility_reference, responsibility_label,
+      condition_type, notification_channels, created_at, updated_at
+    ) VALUES (?, ?, 1, 'actor', 'Unterlagen pruefen',
+      'role', ?, 'Zustaendige Rolle', 'always', '[]', ?, ?)
+  `).run(stepId, processId, assignmentRole, occurredAt, occurredAt);
+  database.prepare(`
+    INSERT INTO custom_process_revisions (
+      process_id, revision, snapshot_json, created_by, created_at
+    ) VALUES (?, 1, ?, 'PL-PLUS', ?)
+  `).run(processId, snapshotJson, occurredAt);
+  const publication = {
+    id: publicationId,
+    process_id: processId,
+    source_revision: 1,
+    version_number: 1,
+    workflow_code: `preboarding-${suffix}`,
+    workflow_type: "preboarding",
+    authority_level: scopeType === "company" ? "central" : "local",
+    requirement_kind: scopeType === "company" ? "mandatory" : "supplemental",
+    data_classification: "standard",
+    scope_type: scopeType,
+    location_id: locationId,
+    department_id: departmentId,
+    snapshot_json: snapshotJson,
+    snapshot_sha256: sha256(snapshotJson),
+    published_by: "PL-PLUS",
+    published_at: occurredAt,
+  };
+  publication.receipt_sha256 = sha256(JSON.stringify(
+    personnelWorkflowPublicationReceiptBody(publication),
+  ));
+  database.prepare(`
+    INSERT INTO custom_process_publications (
+      id, process_id, source_revision, version_number, workflow_code,
+      workflow_type, authority_level, requirement_kind, data_classification,
+      scope_type, location_id, department_id, snapshot_json, snapshot_sha256,
+      receipt_sha256, published_by, published_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    publication.id,
+    publication.process_id,
+    publication.source_revision,
+    publication.version_number,
+    publication.workflow_code,
+    publication.workflow_type,
+    publication.authority_level,
+    publication.requirement_kind,
+    publication.data_classification,
+    publication.scope_type,
+    publication.location_id,
+    publication.department_id,
+    publication.snapshot_json,
+    publication.snapshot_sha256,
+    publication.receipt_sha256,
+    publication.published_by,
+    publication.published_at,
+  );
+  database.prepare(`
+    INSERT INTO custom_process_runs (
+      id, process_id, process_revision, trigger_type, trigger_key, status,
+      location_id, department_id, triggered_by, activation_count, created_at, updated_at
+    ) VALUES (
+      ?, ?, 1, 'personnel_manual', ?, 'open', ?, ?, 'PL-PLUS', 1, ?, ?
+    )
+  `).run(
+    runId,
+    processId,
+    `personnel:${operationId}`,
+    locationId,
+    departmentId,
+    occurredAt,
+    occurredAt,
+  );
+  const binding = {
+    run_id: runId,
+    publication_id: publicationId,
+    operation_id: operationId,
+    subject_type: "candidate",
+    candidate_id: candidateId,
+    application_id: applicationId,
+    candidate_revision: candidateRevision,
+    application_revision: applicationRevision,
+    employee_number: null,
+    location_id: locationId,
+    department_id: departmentId,
+    request_sha256: "a".repeat(64),
+    started_by: "PL-PLUS",
+    started_at: occurredAt,
+  };
+  binding.receipt_sha256 = sha256(JSON.stringify(
+    personnelWorkflowInstanceReceiptBody(binding),
+  ));
+  database.prepare(`
+    INSERT INTO custom_process_run_bindings (
+      run_id, publication_id, operation_id, subject_type,
+      candidate_id, application_id, candidate_revision, application_revision,
+      employee_number, request_sha256, receipt_sha256, started_by, started_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    binding.run_id,
+    binding.publication_id,
+    binding.operation_id,
+    binding.subject_type,
+    binding.candidate_id,
+    binding.application_id,
+    binding.candidate_revision,
+    binding.application_revision,
+    binding.employee_number,
+    binding.request_sha256,
+    binding.receipt_sha256,
+    binding.started_by,
+    binding.started_at,
+  );
+  database.prepare(`
+    INSERT INTO custom_process_run_steps (run_id, step_id, sort_order)
+    VALUES (?, ?, 1)
+  `).run(runId, stepId);
+  const assignment = {
+    run_id: runId,
+    step_id: stepId,
+    employee_number: employeeNumber,
+    responsibility_type: "role",
+    responsibility_reference: assignmentRole,
+    assigned_by: binding.started_by,
+    assigned_at: binding.started_at,
+  };
+  assignment.receipt_sha256 = sha256(JSON.stringify(
+    personnelWorkflowTaskAssignmentReceiptBody(assignment),
+  ));
+  database.prepare(`
+    INSERT INTO custom_process_run_step_assignments (
+      run_id, step_id, employee_number, responsibility_type,
+      responsibility_reference, assigned_by, assigned_at, receipt_sha256
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    assignment.run_id,
+    assignment.step_id,
+    assignment.employee_number,
+    assignment.responsibility_type,
+    assignment.responsibility_reference,
+    assignment.assigned_by,
+    assignment.assigned_at,
+    assignment.receipt_sha256,
+  );
+  database.prepare(`
+    UPDATE custom_process_run_steps
+    SET status = 'active', activated_at = ?, updated_at = ?
+    WHERE run_id = ? AND step_id = ?
+  `).run(occurredAt, occurredAt, runId, stepId);
+  return {
+    ...binding,
+    employeeNumber,
+    processId,
+    stepId,
+  };
 }
 
 test("Personalmodul M4 Startup: Legacy-Prozessdaten bleiben bytegleich und werden nicht automatisch publiziert", () => {
@@ -458,6 +762,370 @@ test("Personalmodul M4 Startup: nichtleerer Daten-Drift bricht nach Sicherung un
     ]);
     assert.equal(database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = ?")
       .get(PERSONNEL_WORKFLOW_MIGRATION_ID).count, 1);
+  } finally {
+    database.close();
+  }
+});
+
+test("Personalmodul M5 Startup: Sidecar-Schema wird additiv ohne Legacy-Backfill migriert", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  const backups = [];
+  try {
+    runMigrations(database);
+    markUnrelatedStartupMigrationsApplied(database);
+    removePersonnelWorkflowInstanceLayer(database);
+    const legacy = insertProcessFixture(database, "pre-m5");
+    const before = processDataBytes(database, legacy.processId);
+
+    const result = runMigrations(database, {
+      databaseExistedBeforeOpen: true,
+      onBackup: () => backups.push("pre-migration"),
+    });
+
+    assert.equal(result.personnelWorkflowInstanceMigrationRequired, true);
+    assert.deepEqual(backups, ["pre-migration"]);
+    assert.deepEqual(processDataBytes(database, legacy.processId), before);
+    assert.equal(inspectSqlitePersonnelWorkflowInstanceSchema(database).valid, true);
+    assert.equal(inspectSqlitePersonnelWorkflowInstanceRows(database).valid, true);
+    assert.equal(database.prepare(`
+      SELECT COUNT(*) AS count FROM custom_process_run_bindings
+    `).get().count, 0);
+    assert.equal(database.prepare(`
+      SELECT COUNT(*) AS count FROM schema_migrations WHERE id = ?
+    `).get(PERSONNEL_WORKFLOW_INSTANCE_MIGRATION_ID).count, 1);
+
+    const rerun = runMigrations(database, {
+      databaseExistedBeforeOpen: true,
+      onBackup: () => backups.push("unexpected"),
+    });
+    assert.equal(rerun.personnelWorkflowInstanceMigrationRequired, false);
+    assert.deepEqual(backups, ["pre-migration"]);
+  } finally {
+    database.close();
+  }
+});
+
+test("Personalmodul M5 Startup: Binding akzeptiert nur den frischen idempotenten Run", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  try {
+    runMigrations(database);
+    const fixture = insertPersonnelWorkflowInstance(database, "binding-guard");
+    const insertRun = (runId, triggerKey) => database.prepare(`
+      INSERT INTO custom_process_runs (
+        id, process_id, process_revision, trigger_type, trigger_key, status,
+        triggered_by, activation_count, created_at, updated_at
+      ) VALUES (?, ?, 1, 'personnel_manual', ?, 'open', ?, 1, ?, ?)
+    `).run(
+      runId,
+      fixture.processId,
+      triggerKey,
+      fixture.started_by,
+      fixture.started_at,
+      fixture.started_at,
+    );
+    const insertBinding = (runId, operationId, overrides = {}) => {
+      const binding = {
+        ...fixture,
+        run_id: runId,
+        operation_id: operationId,
+        ...overrides,
+      };
+      binding.receipt_sha256 = sha256(JSON.stringify(
+        personnelWorkflowInstanceReceiptBody(binding),
+      ));
+      return database.prepare(`
+        INSERT INTO custom_process_run_bindings (
+          run_id, publication_id, operation_id, subject_type,
+          candidate_id, application_id, candidate_revision, application_revision,
+          employee_number, request_sha256, receipt_sha256, started_by, started_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        binding.run_id,
+        binding.publication_id,
+        binding.operation_id,
+        binding.subject_type,
+        binding.candidate_id,
+        binding.application_id,
+        binding.candidate_revision,
+        binding.application_revision,
+        binding.employee_number,
+        binding.request_sha256,
+        binding.receipt_sha256,
+        binding.started_by,
+        binding.started_at,
+      );
+    };
+
+    const wrongKeyOperationId = crypto.randomUUID();
+    const wrongKeyRunId = "run-binding-wrong-key";
+    insertRun(wrongKeyRunId, `wrong:${wrongKeyOperationId}`);
+    assert.throws(
+      () => insertBinding(wrongKeyRunId, wrongKeyOperationId),
+      /personnel workflow instance binding is invalid/,
+    );
+    database.prepare("DELETE FROM custom_process_runs WHERE id = ?").run(wrongKeyRunId);
+
+    const prefilledOperationId = crypto.randomUUID();
+    const prefilledRunId = "run-binding-prefilled";
+    insertRun(prefilledRunId, `personnel:${prefilledOperationId}`);
+    database.prepare(`
+      INSERT INTO custom_process_run_steps (run_id, step_id, sort_order)
+      VALUES (?, ?, 1)
+    `).run(prefilledRunId, fixture.stepId);
+    assert.throws(
+      () => insertBinding(prefilledRunId, prefilledOperationId),
+      /personnel workflow instance binding is invalid/,
+    );
+    database.prepare("DELETE FROM custom_process_runs WHERE id = ?").run(prefilledRunId);
+
+    const immutablePublicationTrigger = PERSONNEL_WORKFLOW_TRIGGER_DEFINITIONS.find(
+      ({ name }) => name === "trg_custom_process_publications_immutable_update",
+    );
+    const originalPublication = database.prepare(`
+      SELECT * FROM custom_process_publications WHERE id = ?
+    `).get(fixture.publication_id);
+    const replacePublicationContract = ({ workflowType, snapshotJson }) => {
+      const replacement = {
+        ...originalPublication,
+        workflow_type: workflowType,
+        snapshot_json: snapshotJson,
+        snapshot_sha256: sha256(snapshotJson),
+      };
+      replacement.receipt_sha256 = sha256(JSON.stringify(
+        personnelWorkflowPublicationReceiptBody(replacement),
+      ));
+      database.exec("DROP TRIGGER trg_custom_process_publications_immutable_update");
+      database.prepare(`
+        UPDATE custom_process_publications
+        SET workflow_type = ?, snapshot_json = ?, snapshot_sha256 = ?, receipt_sha256 = ?
+        WHERE id = ?
+      `).run(
+        replacement.workflow_type,
+        replacement.snapshot_json,
+        replacement.snapshot_sha256,
+        replacement.receipt_sha256,
+        replacement.id,
+      );
+      database.exec(immutablePublicationTrigger.sql);
+    };
+
+    const notificationSnapshot = JSON.parse(originalPublication.snapshot_json);
+    notificationSnapshot.steps[0].notificationChannels = ["email"];
+    replacePublicationContract({
+      workflowType: originalPublication.workflow_type,
+      snapshotJson: JSON.stringify(notificationSnapshot),
+    });
+    const notificationOperationId = crypto.randomUUID();
+    const notificationRunId = "run-binding-notifications";
+    insertRun(notificationRunId, `personnel:${notificationOperationId}`);
+    assert.throws(
+      () => insertBinding(notificationRunId, notificationOperationId),
+      /personnel workflow instance binding is invalid/,
+    );
+    database.prepare("DELETE FROM custom_process_runs WHERE id = ?")
+      .run(notificationRunId);
+
+    replacePublicationContract({
+      workflowType: "custom_personnel",
+      snapshotJson: originalPublication.snapshot_json,
+    });
+    const deferredOperationId = crypto.randomUUID();
+    const deferredRunId = "run-binding-deferred-type";
+    insertRun(deferredRunId, `personnel:${deferredOperationId}`);
+    assert.throws(
+      () => insertBinding(deferredRunId, deferredOperationId, {
+        subject_type: "employee",
+        candidate_id: null,
+        application_id: null,
+        candidate_revision: null,
+        application_revision: null,
+        employee_number: fixture.employeeNumber,
+      }),
+      /personnel workflow instance binding is invalid/,
+    );
+    database.prepare("DELETE FROM custom_process_runs WHERE id = ?")
+      .run(deferredRunId);
+
+    replacePublicationContract({
+      workflowType: originalPublication.workflow_type,
+      snapshotJson: originalPublication.snapshot_json,
+    });
+
+    assert.deepEqual(inspectSqlitePersonnelWorkflowInstanceRows(database).issues, []);
+  } finally {
+    database.close();
+  }
+});
+
+test("Personalmodul M5 Startup: SQL-Zuweisung erzwingt FL-Standort und AL-Abteilung exakt", () => {
+  const cases = [
+    {
+      label: "manager-valid",
+      accepted: true,
+      assignmentRole: "manager",
+      generalScopeDepartmentId: 0,
+      permissionScopeDepartmentId: 0,
+    },
+    {
+      label: "manager-department-only",
+      accepted: false,
+      assignmentRole: "manager",
+      generalScopeDepartmentId: 901,
+      permissionScopeDepartmentId: 901,
+    },
+    {
+      label: "department-manager-valid",
+      accepted: true,
+      assignmentRole: "department_manager",
+      generalScopeDepartmentId: 901,
+      permissionScopeDepartmentId: 901,
+    },
+    {
+      label: "department-manager-location-only",
+      accepted: false,
+      assignmentRole: "department_manager",
+      generalScopeDepartmentId: 0,
+      permissionScopeDepartmentId: 0,
+    },
+  ];
+
+  for (const entry of cases) {
+    const database = openSqliteLegacyDatabase(":memory:");
+    try {
+      runMigrations(database);
+      const insert = () => insertPersonnelWorkflowInstance(database, entry.label, {
+        assignmentRole: entry.assignmentRole,
+        locationId: `LOC-${entry.label}`,
+        departmentId: 901,
+        generalScopeDepartmentId: entry.generalScopeDepartmentId,
+        permissionScopeDepartmentId: entry.permissionScopeDepartmentId,
+      });
+      if (entry.accepted) {
+        insert();
+        assert.deepEqual(inspectSqlitePersonnelWorkflowInstanceRows(database).issues, []);
+      } else {
+        assert.throws(insert, /personnel workflow task assignment is invalid/);
+      }
+    } finally {
+      database.close();
+    }
+  }
+});
+
+test("Personalmodul M5 Startup: historische Bindung bleibt nach Archivierung und Subject-Aenderung valide", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  try {
+    runMigrations(database);
+    const fixture = insertPersonnelWorkflowInstance(database, "history");
+    assert.deepEqual(inspectSqlitePersonnelWorkflowInstanceRows(database).issues, []);
+
+    database.prepare(`
+      INSERT INTO custom_process_publication_archives (
+        publication_id, reason, archived_by, archived_at
+      ) VALUES (?, 'Durch eine neue Version ersetzt', 'PL-PLUS', ?)
+    `).run(fixture.publication_id, "2026-08-03T08:00:00.000Z");
+    database.prepare(`
+      UPDATE candidates
+      SET state = 'archived', revision = revision + 1,
+          archived_at = '2026-08-03T08:00:00.000Z',
+          updated_at = '2026-08-03T08:00:00.000Z'
+      WHERE id = ?
+    `).run(fixture.candidate_id);
+    database.prepare(`
+      UPDATE candidate_applications
+      SET status = 'converted', revision = revision + 1,
+          status_changed_at = '2026-08-03T08:00:00.000Z',
+          updated_at = '2026-08-03T08:00:00.000Z'
+      WHERE id = ? AND candidate_id = ?
+    `).run(fixture.application_id, fixture.candidate_id);
+
+    assert.deepEqual(inspectSqlitePersonnelWorkflowInstanceRows(database).issues, []);
+    assert.throws(
+      () => database.prepare(`
+        UPDATE custom_process_runs SET process_revision = 2 WHERE id = ?
+      `).run(fixture.run_id),
+      /personnel workflow instance core is immutable/,
+    );
+    assert.throws(
+      () => database.prepare(`
+        UPDATE custom_process_run_steps SET sort_order = 2
+        WHERE run_id = ? AND step_id = ?
+      `).run(fixture.run_id, fixture.stepId),
+      /personnel workflow instance step transition is invalid/,
+    );
+    assert.throws(
+      () => database.prepare(`
+        INSERT INTO custom_process_run_steps (run_id, step_id, sort_order)
+        VALUES (?, 'unexpected-step', 2)
+      `).run(fixture.run_id),
+      /personnel workflow instance step is invalid/,
+    );
+    assert.throws(
+      () => database.prepare(`
+        DELETE FROM custom_process_run_steps WHERE run_id = ? AND step_id = ?
+      `).run(fixture.run_id, fixture.stepId),
+      /personnel workflow instance steps cannot be deleted/,
+    );
+    database.prepare(`
+      UPDATE custom_process_run_steps
+      SET status = 'completed', completed_at = ?, completed_by = ?,
+          completion_request_id = ?, updated_at = ?
+      WHERE run_id = ? AND step_id = ?
+    `).run(
+      "2026-08-03T08:00:00.000Z",
+      fixture.employeeNumber,
+      "b".repeat(64),
+      "2026-08-03T08:00:00.000Z",
+      fixture.run_id,
+      fixture.stepId,
+    );
+    database.prepare(`
+      UPDATE custom_process_runs
+      SET status = 'resolved', resolved_at = '2026-08-03T08:00:00.000Z'
+      WHERE id = ?
+    `).run(fixture.run_id);
+    assert.throws(
+      () => database.prepare(`
+        UPDATE custom_process_runs SET status = 'open', resolved_at = NULL
+        WHERE id = ?
+      `).run(fixture.run_id),
+      /personnel workflow instance state transition is invalid/,
+    );
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally {
+    database.close();
+  }
+});
+
+test("Personalmodul M5 Startup: verwaister personnel_manual-Run stoppt fail-closed nach Sicherung", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  const backups = [];
+  try {
+    runMigrations(database);
+    removePersonnelWorkflowInstanceLayer(database);
+    const fixture = insertProcessFixture(database, "orphan");
+    database.prepare(`
+      UPDATE custom_process_runs SET trigger_type = 'personnel_manual' WHERE id = ?
+    `).run(fixture.runId);
+    assert.deepEqual(inspectSqlitePersonnelWorkflowInstanceRows(database).issues, [
+      `orphan-personnel-run:${fixture.runId}`,
+    ]);
+
+    assert.throws(
+      () => runMigrations(database, {
+        databaseExistedBeforeOpen: true,
+        onBackup: () => backups.push("pre-migration"),
+      }),
+      (error) => error?.code === "PERSONNEL_WORKFLOW_INSTANCE_SCHEMA_DATA_PRESENT",
+    );
+    assert.deepEqual(backups, ["pre-migration"]);
+    assert.equal(database.prepare(`
+      SELECT 1 FROM sqlite_master
+      WHERE type = 'table' AND name = 'custom_process_run_bindings'
+    `).get(), undefined);
+    assert.equal(database.prepare(`
+      SELECT trigger_type FROM custom_process_runs WHERE id = ?
+    `).get(fixture.runId).trigger_type, "personnel_manual");
   } finally {
     database.close();
   }
