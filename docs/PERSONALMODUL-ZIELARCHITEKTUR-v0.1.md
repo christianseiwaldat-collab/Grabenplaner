@@ -31,6 +31,10 @@ Die bislang im Quellstand umgesetzte technische Ausbaustufe umfasst:
 
 Die M3-Umwandlung ist bewusst eng begrenzt: Sie übernimmt nur Bewerbungen im Status `preboarding`, legt kein Portalprofil an, kopiert keine Bewerberdokumente und startet weder Onboarding noch Workflow. R1 setzt die Bereichsrechte für Bewerbungen und Preboarding um; M4 ergänzt davon getrennte Workflow-Rechte und unveränderbare Veröffentlichungen. M5 bindet nur neue, ausdrücklich gestartete Standard-Instanzen an genau eine nicht archivierte Veröffentlichung und übernimmt keinen Legacy-Lauf. M6 erweitert ausschließlich die bestehende verschlüsselte Mitarbeiterakte: Upload, neue Version, Historie, historischer Abruf, Aufbewahrungsprüfung und Archivierung verwenden den vorhandenen Scan- und Binärspeicherpfad. M7 ergänzt getrennte Leserechte und positive Projektionen für Übersicht, Stammdaten/Organisation und die sichere M6-Dokumentliste. FL und AL bleiben auf die Schnittmenge aus allgemeinem Portalbereich und PL+-Fachbereich sowie auf minimale Organisationsdaten begrenzt; Dokumente bleiben für sie geschlossen. Onboarding, Schulungen, Offboarding und Gesamthistorie besitzen weiterhin weder Fachprojektion noch Mutation. Ebenfalls nicht umgesetzt sind die Übernahme von Bewerberdokumenten, eingebettete Personalprozesse, ein grafischer Editor und neue Prozessautomatik. Vertrauliche, freie `custom_personnel`- sowie Onboarding- und Offboarding-Workflows bleiben bis zu ihrem eigenen Schutzvertrag fail-closed. SQLite bleibt der unterstützte Produktprovider. Die PostgreSQL-Grundlage bleibt bis zur gesonderten Freigabe nicht produktiv.
 
+Das fachlich-organisatorische Ziel für Onboarding und Offboarding ist als gesonderter, noch freizugebender Konzeptentwurf in `PERSONALMODUL-ONBOARDING-OFFBOARDING-FACHKONZEPT-v0.1.md` dokumentiert. Der Entwurf ändert keinen Produktstatus und hebt keine technische Sperre auf.
+
+Terminologiehinweis: Im neuen Fachkonzept bezeichnet `PL+` die Ebene „Personalleitung und darüber“ und umfasst PL, Admin, IT-Admin und Developer. Die bereits umgesetzten Verträge R1, M4 und M7 verwenden `PL+` historisch enger als Bezeichnung einer PL mit zusätzlicher Delegations-Capability. Vor O1 muss dieser technische Altbegriff in ein ausdrücklich benanntes Delegationsrecht überführt werden. Diese spätere Begriffsmigration darf weder Fachrechte stillschweigend erweitern noch die alleinige PL von zentralen Personalaktionen abhängig machen.
+
 ## 2. Einordnung in die bestehende Anwendung
 
 | Zielbaustein | Bestehender Anknüpfungspunkt | Ausbauprinzip |
@@ -344,9 +348,9 @@ Die bestehenden Portal-Aufgabenendpunkte bleiben die einzige Selbstaufgabenquell
 6. **Workflow-Publikation und Instanzbindung – M4 und M5 im Quellstand umgesetzt**
 
    Vorhandene Prozessbasis um unveränderbare Veröffentlichungen, append-only Archivierung, Pflicht-/Ergänzungsauflösung und eigene Bereichsrechte ergänzen; ausschließlich neue kontrollierte Instanzen additiv und idempotent an Veröffentlichung, Fachobjekttyp und eingefrorene Aufgabenverantwortung binden. Keine Legacy-Übernahme und keine Automatisierung.
-7. **Mitarbeiterprofil und eingebettete Abläufe – Read-only-Projektionen lokal umgesetzt**
+7. **Mitarbeiterprofil und eingebettete Abläufe – Read-only-Projektionen lokal umgesetzt, Fachkonzept im Entwurf**
 
-   Sieben Tabs sowie getrennte positive Read-only-Projektionen für Übersicht, Stammdaten/Organisation und Dokumentliste sind lokal umgesetzt. Eigene Rechte- und Bereichsverträge schützen PL, PL+, FL und AL; Prozess- und Historientabs bleiben geschlossen. Vor Onboarding und Offboarding ist ein eigener fachlich-organisatorischer Vertrag erforderlich.
+   Sieben Tabs sowie getrennte positive Read-only-Projektionen für Übersicht, Stammdaten/Organisation und Dokumentliste sind lokal umgesetzt. Eigene Rechte- und Bereichsverträge schützen PL, PL+, FL und AL; Prozess- und Historientabs bleiben geschlossen. Der gesonderte fachlich-organisatorische Onboarding-/Offboarding-Konzeptentwurf liegt vor, ist aber noch nicht fachlich freigegeben und eröffnet keine technische Umsetzung.
 8. **Grafischer Editor und Automatisierung**
 
    erst nach stabilen Domänen-, Rechte- und Versionsgrenzen; Vorschau, Validierung und kontrollierte Trigger.
@@ -392,7 +396,8 @@ Vor den jeweils genannten Folgestufen sind noch schriftlich zu entscheiden:
 - Aufbewahrungsfristen und Rechtsgrundlagen je Dokumentkategorie vor einer automatischen Bereinigung,
 - Übernahmeregeln für ausgewählte Legacy-Prozesse vor ihrer ersten ausdrücklichen M4-Publikation,
 - Vertretungs-, Frist- und Eskalationsregeln vor einem späteren Automatisierungsblock; M5 verwendet ausschließlich explizite, geprüfte Einzelzuweisungen,
-- Klassifikation weiterer vertraulicher Profil-, Onboarding- und Offboarding-Daten vor den entsprechenden späteren Fachrechten; M7 klassifiziert nur seine positive Read-only-Projektion,
+- Freigabe und technische Konkretisierung der im Onboarding-/Offboarding-Konzept vorgeschlagenen Schutzklassen vor den entsprechenden späteren Fachrechten; M7 klassifiziert nur seine positive Read-only-Projektion,
+- Auflösung des technischen Altbegriffs `PL+` aus R1/M4/M7 in eine PL+-Rollenebene und davon getrennte, aktionsbezogene Fach- und Delegationsrechte, ohne implizite Datenfreigabe,
 - Grenzen zwischen Schulungsnachweis und externer Lernplattform vor dem Mitarbeiterprofil.
 
 Offene Entscheidungen sind keine Erlaubnis für implizite Standardwerte in produktiven Daten. Wo eine Entscheidung fehlt, bleibt die betreffende Mutation gesperrt.
