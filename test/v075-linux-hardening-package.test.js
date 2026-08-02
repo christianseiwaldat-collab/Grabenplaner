@@ -113,6 +113,30 @@ function withCleanGitSnapshot(callback) {
   }
 }
 
+test("v0.90.2 keeps every managed Linux artifact LF-only", () => {
+  const attributes = read(".gitattributes");
+  for (const rule of [
+    "server-tools/linux/**/*.js text eol=lf",
+    "server-tools/linux/**/*.json text eol=lf",
+    "server-tools/linux/**/*.in text eol=lf",
+  ]) assert.equal(attributes.includes(rule), true, rule);
+
+  const runtimeSchema = JSON.parse(read("server-tools/linux/runtime-schema.json"));
+  const offsiteSchema = JSON.parse(read("server-tools/linux/offsite/module-schema.json"));
+  const managedArtifacts = new Set([
+    "server-tools/linux/runtime-schema.json",
+    "server-tools/linux/offsite/module-schema.json",
+    "server-tools/linux/hardening/module-schema.json",
+    ...runtimeSchema.managedArtifacts,
+    ...offsiteSchema.managedArtifacts,
+    ...schema.managedArtifacts,
+  ]);
+  for (const relative of managedArtifacts) {
+    const content = fs.readFileSync(path.join(root, ...relative.split("/")));
+    assert.equal(content.includes(Buffer.from("\r\n")), false, relative);
+  }
+});
+
 test("hardening stays separate from the current core runtime and binds its exact fingerprint", () => {
   const verification = spawnSync(process.execPath, [
     path.join(root, "server-tools/linux/lib/verify-package.js"),
@@ -269,8 +293,8 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
       "-OutputDirectory", outputRoot,
     ], { encoding: "utf8", timeout: 120_000 });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.1-beta-linux-x64.zip")));
-    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.1-beta-linux-x64.zip.sha256")));
+    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.2-beta-linux-x64.zip")));
+    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.2-beta-linux-x64.zip.sha256")));
   });
 });
 
