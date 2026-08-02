@@ -48,12 +48,17 @@ test("Personalmodul-Fundament: neue Einstiege bleiben Teil der bestehenden Perso
 });
 
 test("Personalmodul-Fundament: Feature und eigene Fachrechte sperren Navigation und Routen fail-closed", () => {
-  const access = between(
+  const featureBoundary = between(
     app,
     "function personnelLifecycleFoundationEnabled()",
+    "function canOpenEmployeeProfileFoundation()",
+  );
+  const access = between(
+    app,
+    "function canReadCandidatePreboarding()",
     "function canOpenPersonnelAdministrationView()",
   );
-  assert.match(access, /installationFeatures\?\.personnelLifecycle === true/);
+  assert.match(featureBoundary, /installationFeatures\?\.personnelLifecycle === true/);
   assert.match(access, /hasGovernancePermission\("personnel:candidates:read"\)/);
   assert.match(access, /hasGovernancePermission\("personnel:workflows:read"\)/);
   assert.match(access, /personnelWorkflowInstanceCapabilities\.canRead !== false/);
