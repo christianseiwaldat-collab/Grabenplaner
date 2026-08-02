@@ -239,6 +239,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/personnel-lifecycle-scoped-rights-persistence.test.js",
   "test/personnel-document-history-persistence.test.js",
   "test/personnel-profile-overview-api.test.js",
+  "test/personnel-profile-scoped-rights-persistence.test.js",
   "test/personnel-workflow-api.test.js",
   "test/personnel-workflow-import.test.js",
   "test/personnel-workflow-instances-api.test.js",

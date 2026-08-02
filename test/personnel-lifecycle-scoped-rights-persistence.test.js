@@ -28,6 +28,8 @@ const {
   protectedSicknessAmuStorageSnapshotFromDatabase,
 } = require("../lib/persistence/sqlite/operations/maintenance");
 const {
+  PERSONNEL_LIFECYCLE_LEGACY_SCOPED_RIGHTS_TABLE_DEFINITION,
+  PERSONNEL_LIFECYCLE_M4_SCOPED_RIGHTS_TABLE_DEFINITION,
   PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_MIGRATION_ID,
   PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TABLE_DEFINITIONS,
   PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS,
@@ -392,13 +394,78 @@ test("Personalmodul R1: Import und Maintenance akzeptieren pre-R1, aber kein par
         PRIMARY KEY (employee_number, location_id, department_id)
       );
     `);
+    database.exec(PERSONNEL_LIFECYCLE_LEGACY_SCOPED_RIGHTS_TABLE_DEFINITION.sql);
+    for (const definition of PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS) {
+      database.exec(definition.sql);
+    }
+    database.close();
+    database = null;
+
+    const validHistoricalR1 = inspectSqliteImportFile(databasePath);
+    assert.equal(validHistoricalR1.candidateScopedRightsSchemaState, "pre-m7-r1-compatible");
+    assert.equal(validHistoricalR1.candidateScopedRightsPredecessorVersion, "r1");
+    assert.equal(validHistoricalR1.protectedInspectionError, false);
+
+    database = openSqliteLegacyDatabase(databasePath);
+    for (const definition of PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS) {
+      database.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
+    }
+    database.exec("DROP TABLE portal_permission_scope_grants");
+    database.exec(PERSONNEL_LIFECYCLE_M4_SCOPED_RIGHTS_TABLE_DEFINITION.sql);
+    for (const definition of PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS) {
+      database.exec(definition.sql);
+    }
+    database.prepare("INSERT INTO locations (id) VALUES ('historical-m4-location')").run();
+    database.prepare(`
+      INSERT INTO employees (personnel_number, full_name, nickname)
+      VALUES ('historical-m4-employee', 'Historical M4', 'M4')
+    `).run();
+    database.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES ('historical-m4-employee', 'personnel:workflows:read', 'pl-plus')
+    `).run();
+    database.prepare(`
+      INSERT INTO portal_access_scopes
+        (employee_number, location_id, department_id, assigned_by)
+      VALUES ('historical-m4-employee', 'historical-m4-location', 0, 'pl-plus')
+    `).run();
+    database.prepare(`
+      INSERT INTO portal_permission_scope_grants
+        (employee_number, permission, location_id, department_id, approved_by)
+      VALUES (
+        'historical-m4-employee', 'personnel:workflows:read',
+        'historical-m4-location', 0, 'pl-plus'
+      )
+    `).run();
+    database.close();
+    database = null;
+
+    const validHistoricalM4 = inspectSqliteImportFile(databasePath);
+    assert.equal(validHistoricalM4.candidateScopedRightsSchemaState, "pre-m7-m4-compatible");
+    assert.equal(validHistoricalM4.candidateScopedRightsPredecessorVersion, "m4");
+    assert.equal(validHistoricalM4.protectedInspectionError, false);
+    const historicalM4Database = openSqliteLegacyDatabase(databasePath, { readOnly: true });
+    try {
+      assert.doesNotThrow(() => protectedSicknessAmuStorageSnapshotFromDatabase(
+        historicalM4Database,
+      ));
+    } finally {
+      historicalM4Database.close();
+    }
+
+    database = openSqliteLegacyDatabase(databasePath);
+    for (const definition of PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS) {
+      database.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
+    }
+    database.exec("DROP TABLE portal_permission_scope_grants");
     ensureSqlitePersonnelLifecycleScopedRightsSchema(database);
     database.close();
     database = null;
 
-    const validR1 = inspectSqliteImportFile(databasePath);
-    assert.equal(validR1.candidateScopedRightsSchemaState, "r1");
-    assert.equal(validR1.protectedInspectionError, false);
+    const validM7 = inspectSqliteImportFile(databasePath);
+    assert.equal(validM7.candidateScopedRightsSchemaState, "m7");
+    assert.equal(validM7.candidateScopedRightsPredecessorVersion, null);
+    assert.equal(validM7.protectedInspectionError, false);
 
     database = openSqliteLegacyDatabase(databasePath);
     database.exec("DROP TRIGGER trg_portal_permission_scope_grants_scope_insert");
