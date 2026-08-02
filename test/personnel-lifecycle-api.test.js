@@ -7,6 +7,13 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
+const { createAmuStorage } = require("../lib/amu-storage");
+const {
+  candidateDocumentProtectionContext,
+  candidateDocumentVersionProtectionContext,
+  candidateProtectionContext,
+} = require("../lib/personnel-lifecycle");
+
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-personnel-lifecycle-api-"));
 process.env.DB_PATH = path.join(testRoot, "dienstplan.db");
 process.env.BACKUP_DIR = path.join(testRoot, "backups");
@@ -21,6 +28,7 @@ process.env.TZ = "Europe/Vienna";
 const {
   app,
   db,
+  reconcileOrphanAmuBlobs,
   releaseInstanceLockForTests,
 } = require("../server");
 const {
@@ -863,4 +871,102 @@ test("Personalmodul-API: Create, Read, Update und Status liefern stabile Erfolgs
     db.prepare("SELECT revision FROM candidates WHERE id = ?").get(deniedReadCandidate.id).revision,
     deniedReadCandidate.revision,
   );
+});
+
+test("Personalmodul M2: Candidate-Dokument bleibt beim Blob-Abgleich erhalten", async () => {
+  const storageRoot = path.join(testRoot, "app-data", "private", "amu");
+  const key = fs.readFileSync(
+    path.join(testRoot, "app-data", "private", "amu-local.key"),
+    "utf8",
+  ).trim();
+  const storage = createAmuStorage({
+    rootDirectory: storageRoot,
+    encryptionKeys: { "local-v1": key },
+    activeKeyId: "local-v1",
+    scanner: async () => true,
+  });
+  const content = Buffer.from(
+    "%PDF-1.7\n1 0 obj\n<<>>\nendobj\n% candidate reconciliation\n%%EOF",
+    "utf8",
+  );
+  const stored = await storage.saveBuffer({
+    buffer: content,
+    originalName: "bewerberunterlage.pdf",
+  });
+  const candidate = { id: crypto.randomUUID() };
+  const document = { id: crypto.randomUUID(), candidate_id: candidate.id };
+  const version = {
+    document_id: document.id,
+    version_number: 1,
+    candidate_id: candidate.id,
+  };
+  const createdAt = new Date().toISOString();
+  const category = db.prepare(
+    "SELECT id FROM candidate_document_categories WHERE code = 'resume'",
+  ).get();
+  assert.ok(category?.id);
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO candidates (
+        id, state, protected_payload, revision, created_by, updated_by, created_at, updated_at
+      ) VALUES (?, 'active', ?, 1, 'M2-TEST', 'M2-TEST', ?, ?)
+    `).run(
+      candidate.id,
+      storage.protectRecord(
+        JSON.stringify({ firstName: "Synthetic", lastName: "Candidate" }),
+        candidateProtectionContext(candidate),
+      ),
+      createdAt,
+      createdAt,
+    );
+    db.prepare(`
+      INSERT INTO candidate_documents (
+        id, candidate_id, category_id, visibility, status, current_version,
+        protected_payload, revision, created_by, updated_by, created_at, updated_at
+      ) VALUES (?, ?, ?, 'recruiting', 'active', 0, ?, 1, 'M2-TEST', 'M2-TEST', ?, ?)
+    `).run(
+      document.id,
+      document.candidate_id,
+      category.id,
+      storage.protectRecord(
+        JSON.stringify({ title: "Bewerberunterlage" }),
+        candidateDocumentProtectionContext(document),
+      ),
+      createdAt,
+      createdAt,
+    );
+    db.prepare(`
+      INSERT INTO candidate_document_versions (
+        document_id, version_number, storage_key, content_sha256, size_bytes,
+        media_type, protected_payload, uploaded_by, created_at
+      ) VALUES (?, 1, ?, ?, ?, ?, ?, 'M2-TEST', ?)
+    `).run(
+      version.document_id,
+      stored.storageKey,
+      stored.sha256,
+      stored.byteSize,
+      stored.detectedMime,
+      storage.protectRecord(
+        JSON.stringify({ originalFilename: stored.originalFilename }),
+        candidateDocumentVersionProtectionContext(version),
+      ),
+      createdAt,
+    );
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+
+  const reconciliation = await reconcileOrphanAmuBlobs();
+  assert.equal(reconciliation.removed, 0);
+  assert.deepEqual(storage.readBuffer({
+    storageKey: stored.storageKey,
+    byteSize: stored.byteSize,
+    sha256: stored.sha256,
+    detectedMime: stored.detectedMime,
+    originalFilename: stored.originalFilename,
+  }), content);
 });

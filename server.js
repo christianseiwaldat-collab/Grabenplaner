@@ -116,6 +116,7 @@ const {
   createSqliteSchemaOperations,
   protectedLoanStorageSnapshotFromDatabase,
   protectedSicknessAmuStorageSnapshotFromDatabase,
+  protectedStorageReferencesFromDatabase,
   protectedStorageReferencesFromFile,
   verifySqliteDatabaseFile,
 } = require("./lib/persistence/sqlite/operations/maintenance");
@@ -12339,22 +12340,8 @@ async function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
 
 async function reconcileOrphanAmuBlobs() {
   if (!amuStorage || amuMutationInProgress > 0) return { removed: 0 };
-  const [personnelFinalization, amuKeys, personnelKeys] = await Promise.all([
-    finalizeDeletedPersonnelRecordDocuments(),
-    sicknessAmuManagementRepository.listAmuDocumentStorageKeys({}),
-    sicknessAmuManagementRepository.listPersonnelDocumentStorageKeys({}),
-  ]);
-  const referenced = new Set(amuKeys.map((row) => String(row.storage_key || "").toLowerCase()));
-  for (const row of personnelKeys) {
-    referenced.add(String(row.storage_key || "").toLowerCase());
-  }
-  for (const rows of [
-    loanProtectedStorageSnapshot.documents,
-    loanProtectedStorageSnapshot.photos,
-    loanProtectedStorageSnapshot.photoAttachments,
-  ]) {
-    for (const row of rows) referenced.add(String(row.storage_key || "").toLowerCase());
-  }
+  const personnelFinalization = await finalizeDeletedPersonnelRecordDocuments();
+  const referenced = new Set(protectedStorageReferencesFromDatabase(db));
   let removed = 0;
   for (const storageKey of amuStorage.listStorageKeys()) {
     if (referenced.has(storageKey)) continue;

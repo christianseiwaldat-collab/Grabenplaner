@@ -24,6 +24,12 @@ const MAX_RESULT_BYTES = 2048;
 const PROTECTED_COLUMNS = new Set([
   "amu_documents.protected_payload",
   "amu_reports.protected_payload",
+  "candidate_applications.protected_payload",
+  "candidate_conversions.protected_payload",
+  "candidate_document_versions.protected_payload",
+  "candidate_documents.protected_payload",
+  "candidate_events.protected_payload",
+  "candidates.protected_payload",
   "integration_connections.protected_credentials",
   "outbound_notification_jobs.protected_payload",
   "payroll_handoff_events.payload_json",
@@ -44,6 +50,14 @@ const EMPTY_ONLY_LEGACY_COLUMNS = new Set([
   "sickness_notification_preferences.protected_destination",
 ]);
 const PROTECTED_ROW_TABLES = Object.freeze([
+  "custom_process_run_step_assignments",
+  "custom_process_run_bindings",
+  "candidate_events",
+  "candidate_document_versions",
+  "candidate_documents",
+  "candidate_conversions",
+  "candidate_applications",
+  "candidates",
   "amu_documents",
   "personnel_record_documents",
   "loan_document_deliveries",
@@ -69,6 +83,13 @@ const PROTECTED_ROW_TABLES = Object.freeze([
   "retention_preview_runs",
 ]);
 const PROTECTED_DELETE_TRIGGERS = Object.freeze({
+  trg_candidate_conversions_immutable_delete: "candidate_conversions",
+  trg_candidate_document_versions_immutable_delete: "candidate_document_versions",
+  trg_candidate_events_immutable_delete: "candidate_events",
+  trg_custom_process_run_assignments_immutable_delete: "custom_process_run_step_assignments",
+  trg_custom_process_run_bindings_immutable_delete: "custom_process_run_bindings",
+  trg_custom_process_run_steps_personnel_protected_delete: "custom_process_run_steps",
+  trg_custom_process_runs_personnel_protected_delete: "custom_process_runs",
   trg_loan_document_deliveries_immutable_delete: "loan_document_deliveries",
   trg_loan_documents_immutable_delete: "loan_documents",
   trg_loan_photo_attachments_immutable_delete: "loan_photo_attachments",
@@ -83,6 +104,10 @@ const PROTECTED_DELETE_TRIGGERS = Object.freeze({
   trg_vacation_account_revisions_immutable_delete: "vacation_account_revisions",
   trg_vacation_history_events_immutable_delete: "vacation_history_events",
 });
+const PERSONNEL_WORKFLOW_SHARED_ROW_TABLES = Object.freeze([
+  "custom_process_run_steps",
+  "custom_process_runs",
+]);
 const REASONS = new Set([
   "CHILD_EXITED",
   "HEALTH_INVALID",
@@ -235,7 +260,10 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
       }
       throw new Error("SMOKE_PRECONDITION_FAILED");
     }
-    const protectedTableSet = new Set(PROTECTED_ROW_TABLES);
+    const protectedTableSet = new Set([
+      ...PROTECTED_ROW_TABLES,
+      ...PERSONNEL_WORKFLOW_SHARED_ROW_TABLES,
+    ]);
     const deleteTriggers = database.prepare(`
       SELECT name, tbl_name, sql FROM sqlite_master
       WHERE type = 'trigger'
@@ -254,9 +282,75 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
       return { name, sql };
     });
 
+    const workflowInstanceTables = [
+      "custom_process_run_bindings",
+      "custom_process_run_step_assignments",
+    ];
+    const presentWorkflowInstanceTables = workflowInstanceTables
+      .filter((table) => tableSet.has(table));
+    const workflowInstanceSchemaPresent = presentWorkflowInstanceTables.length > 0;
+    if (workflowInstanceSchemaPresent && (
+      presentWorkflowInstanceTables.length !== workflowInstanceTables.length
+      || PERSONNEL_WORKFLOW_SHARED_ROW_TABLES.some((table) => !tableSet.has(table))
+    )) {
+      throw new Error("SMOKE_PRECONDITION_FAILED");
+    }
+    if (workflowInstanceSchemaPresent) {
+      const requiredWorkflowColumns = Object.freeze({
+        custom_process_run_bindings: ["run_id"],
+        custom_process_run_step_assignments: ["run_id"],
+        custom_process_run_steps: ["run_id"],
+        custom_process_runs: ["id", "trigger_type"],
+      });
+      for (const [table, requiredColumns] of Object.entries(requiredWorkflowColumns)) {
+        const availableColumns = tableColumns(database, table);
+        if (requiredColumns.some((column) => !availableColumns.has(column))) {
+          throw new Error("SMOKE_PRECONDITION_FAILED");
+        }
+      }
+      const invalidBinding = database.prepare(`
+        SELECT 1 AS present
+        FROM custom_process_run_bindings binding
+        LEFT JOIN custom_process_runs run ON run.id = binding.run_id
+        WHERE run.id IS NULL OR run.trigger_type <> 'personnel_manual'
+        LIMIT 1
+      `).get();
+      const orphanPersonnelRun = database.prepare(`
+        SELECT 1 AS present
+        FROM custom_process_runs run
+        LEFT JOIN custom_process_run_bindings binding ON binding.run_id = run.id
+        WHERE run.trigger_type = 'personnel_manual'
+          AND binding.run_id IS NULL
+        LIMIT 1
+      `).get();
+      if (invalidBinding || orphanPersonnelRun) {
+        throw new Error("SMOKE_PRECONDITION_FAILED");
+      }
+    } else if (tableSet.has("custom_process_runs")
+      && tableColumns(database, "custom_process_runs").has("trigger_type")
+      && database.prepare(`
+        SELECT 1 AS present FROM custom_process_runs
+        WHERE trigger_type = 'personnel_manual'
+        LIMIT 1
+      `).get()) {
+      throw new Error("SMOKE_PRECONDITION_FAILED");
+    }
+
     database.exec("PRAGMA secure_delete=ON; PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE");
     transactionOpen = true;
     for (const trigger of deleteTriggers) database.exec(`DROP TRIGGER ${quoteIdentifier(trigger.name)}`);
+    if (workflowInstanceSchemaPresent) {
+      database.exec("DELETE FROM custom_process_run_step_assignments");
+      database.exec(`
+        DELETE FROM custom_process_run_steps
+        WHERE run_id IN (
+          SELECT id FROM custom_process_runs
+          WHERE trigger_type = 'personnel_manual'
+        )
+      `);
+      database.exec("DELETE FROM custom_process_run_bindings");
+      database.exec("DELETE FROM custom_process_runs WHERE trigger_type = 'personnel_manual'");
+    }
     for (const table of PROTECTED_ROW_TABLES) {
       if (tableSet.has(table)) database.exec(`DELETE FROM ${quoteIdentifier(table)}`);
     }
