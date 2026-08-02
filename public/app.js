@@ -206,6 +206,14 @@ const state = {
   personnelDirectorySearch: "",
   personnelDirectoryCostCenterFilter: "",
   personnelDirectoryStatusFilter: "active",
+  employeeProfile: null,
+  employeeProfileEmployeeNumber: "",
+  employeeProfileTab: "overview",
+  employeeProfileLoading: false,
+  employeeProfileLoadError: "",
+  employeeProfileRequestToken: null,
+  employeeProfileReturnFocus: null,
+  employeeProfileOpen: false,
   editingCostCenterId: null,
   editingCostCenterTypeId: null,
   costCenterTypePositionSelection: new Set(),
@@ -321,7 +329,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
@@ -919,6 +927,12 @@ function canManageLoanSettings() {
 
 function personnelLifecycleFoundationEnabled() {
   return state.portalStatus?.installationFeatures?.personnelLifecycle === true;
+}
+
+function canOpenEmployeeProfileFoundation() {
+  if (!personnelLifecycleFoundationEnabled()) return false;
+  if (!state.portalStatus?.portalEnabled) return true;
+  return state.portalSession?.user?.role === "hr" && canReadCentralPersonnel();
 }
 
 function canReadCandidatePreboarding() {
@@ -3836,8 +3850,10 @@ function renderPersonnelDirectory() {
   const rows = sortedEmployeesForDisplay(filteredPersonnelDirectory());
   const canEdit = canWriteCentralPersonnel();
   const canOpenRecord = personnelRecordAvailableInUi();
+  const canOpenProfile = canOpenEmployeeProfileFoundation();
   elements.personnelDirectoryBody.innerHTML = rows.length ? rows.map((employee) => {
     const actions = [
+      canOpenProfile ? `<button type="button" class="edit-button" data-central-employee-profile="${escapeHtmlAttribute(employee.personnel_number)}">Profil</button>` : "",
       canEdit ? `<button type="button" class="edit-button" data-central-edit-employee="${escapeHtmlAttribute(employee.personnel_number)}">Stammdaten</button>` : "",
       canOpenRecord ? `<button type="button" class="edit-button" data-central-personnel-record="${escapeHtmlAttribute(employee.personnel_number)}">Personalakt</button>` : "",
     ].filter(Boolean).join("");
@@ -3846,6 +3862,217 @@ function renderPersonnelDirectory() {
       <td data-label="Aktionen"><span class="table-actions">${actions || "–"}</span></td>
     </tr>`;
   }).join("") : `<tr><td colspan="${columns.length + 1}" class="personnel-directory-empty">Keine passenden Mitarbeitenden gefunden.</td></tr>`;
+}
+
+const EMPLOYEE_PROFILE_TABS = Object.freeze([
+  { id: "overview", label: "Übersicht" },
+  { id: "masterData", label: "Stammdaten & Organisation" },
+  { id: "documents", label: "Personalakte & Dokumente" },
+  { id: "onboarding", label: "Onboarding" },
+  { id: "training", label: "Schulungen" },
+  { id: "offboarding", label: "Offboarding" },
+  { id: "history", label: "Historie" },
+]);
+
+function employeeProfileIsOpen() {
+  return state.employeeProfileOpen === true;
+}
+
+function normalizeEmployeeProfileOverview(payload, expectedEmployeeNumber) {
+  if (!payload || typeof payload !== "object"
+    || payload.capabilities?.canReadOverview !== true
+    || payload.tabs?.overview?.available !== true) {
+    throw new Error("Die Profilübersicht ist nicht freigegeben.");
+  }
+  const profile = payload.profile;
+  const employeeNumber = String(profile?.employeeNumber || "").trim();
+  const displayName = String(profile?.displayName || "").trim();
+  if (!employeeNumber || employeeNumber !== String(expectedEmployeeNumber || "").trim()
+    || !displayName || typeof profile?.active !== "boolean") {
+    throw new Error("Die Profilübersicht ist unvollständig.");
+  }
+  const organization = profile.organization && typeof profile.organization === "object"
+    ? profile.organization
+    : {};
+  return {
+    employeeNumber,
+    displayName,
+    active: profile.active,
+    organization: {
+      positionName: String(organization.positionName || "").trim(),
+      costCenter: {
+        code: String(organization.costCenter?.code || "").trim(),
+        name: String(organization.costCenter?.name || "").trim(),
+      },
+      location: {
+        id: String(organization.location?.id || "").trim(),
+        name: String(organization.location?.name || "").trim(),
+      },
+      department: {
+        id: String(organization.department?.id || "").trim(),
+        name: String(organization.department?.name || "").trim(),
+      },
+    },
+    tabs: Object.fromEntries(EMPLOYEE_PROFILE_TABS.map(({ id }) => [id, {
+      available: payload.tabs?.[id]?.available === true,
+    }])),
+    capabilities: { canReadOverview: true },
+  };
+}
+
+function employeeProfileInitials(displayName) {
+  const parts = String(displayName || "").trim().split(/\s+/).filter(Boolean);
+  return (parts.length ? `${parts[0][0] || ""}${parts.length > 1 ? parts.at(-1)[0] || "" : ""}` : "MA")
+    .toLocaleUpperCase("de-AT")
+    .slice(0, 2);
+}
+
+function employeeProfileReferenceLabel(reference, { includeCode = false } = {}) {
+  const name = String(reference?.name || "").trim();
+  const code = String(reference?.code || "").trim();
+  if (includeCode && code && name) return `${code} · ${name}`;
+  return name || (includeCode ? code : "") || "Nicht hinterlegt";
+}
+
+function renderEmployeeProfileHeader() {
+  const profile = state.employeeProfile;
+  if (!profile) {
+    if (elements.employeeProfileAvatar) elements.employeeProfileAvatar.textContent = "MA";
+    if (elements.employeeProfileName) elements.employeeProfileName.textContent = state.employeeProfileLoadError ? "Profil nicht verfügbar" : "Profil wird geladen";
+    if (elements.employeeProfileIdentity) elements.employeeProfileIdentity.textContent = state.employeeProfileLoadError
+      ? "Es wurden keine Profildaten angezeigt."
+      : "Freigegebene Organisationsdaten werden geladen.";
+    if (elements.employeeProfileStatus) {
+      elements.employeeProfileStatus.textContent = state.employeeProfileLoadError ? "Nicht verfügbar" : "Wird geladen";
+      elements.employeeProfileStatus.classList.add("inactive");
+    }
+    return;
+  }
+  if (elements.employeeProfileAvatar) elements.employeeProfileAvatar.textContent = employeeProfileInitials(profile.displayName);
+  if (elements.employeeProfileName) elements.employeeProfileName.textContent = profile.displayName;
+  if (elements.employeeProfileIdentity) elements.employeeProfileIdentity.textContent = `Personalnummer ${profile.employeeNumber}`;
+  if (elements.employeeProfileStatus) {
+    elements.employeeProfileStatus.textContent = profile.active ? "Aktiv" : "Inaktiv";
+    elements.employeeProfileStatus.classList.toggle("inactive", !profile.active);
+  }
+}
+
+function renderEmployeeProfileContent() {
+  if (!elements.employeeProfileContent) return;
+  const selectedTab = EMPLOYEE_PROFILE_TABS.some(({ id }) => id === state.employeeProfileTab)
+    ? state.employeeProfileTab
+    : "overview";
+  state.employeeProfileTab = selectedTab;
+  document.querySelectorAll("[data-employee-profile-tab]").forEach((button) => {
+    const active = button.dataset.employeeProfileTab === selectedTab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  const activeTabButton = document.querySelector(`[data-employee-profile-tab="${selectedTab}"]`);
+  if (activeTabButton?.id) elements.employeeProfileContent.setAttribute("aria-labelledby", activeTabButton.id);
+  if (elements.employeeProfileShell) elements.employeeProfileShell.setAttribute("aria-busy", String(state.employeeProfileLoading));
+  if (elements.employeeProfileMessage) elements.employeeProfileMessage.textContent = state.employeeProfileLoadError;
+
+  if (selectedTab !== "overview") {
+    const tab = EMPLOYEE_PROFILE_TABS.find(({ id }) => id === selectedTab);
+    elements.employeeProfileContent.innerHTML = `<div class="employee-profile-empty employee-profile-locked">
+      <span class="employee-profile-lock" aria-hidden="true">↗</span>
+      <strong>${escapeHtml(tab?.label || "Dieser Bereich")}</strong>
+      <p>Dieser Bereich ist im Grundgerüst vorbereitet, aber noch nicht freigeschaltet. Es werden keine zusätzlichen Daten geladen.</p>
+    </div>`;
+    return;
+  }
+  if (state.employeeProfileLoading) {
+    elements.employeeProfileContent.innerHTML = '<div class="employee-profile-empty"><strong>Profil wird geladen</strong><p>Bitte einen Moment warten.</p></div>';
+    return;
+  }
+  if (state.employeeProfileLoadError || !state.employeeProfile) {
+    elements.employeeProfileContent.innerHTML = '<div class="employee-profile-empty"><strong>Übersicht nicht verfügbar</strong><p>Es werden keine Profildaten angezeigt.</p></div>';
+    return;
+  }
+  const organization = state.employeeProfile.organization;
+  const overviewRows = [
+    ["Position", organization.positionName || "Nicht hinterlegt"],
+    ["Kostenstelle", employeeProfileReferenceLabel(organization.costCenter, { includeCode: true })],
+    ["Standort", employeeProfileReferenceLabel(organization.location)],
+    ["Abteilung", employeeProfileReferenceLabel(organization.department)],
+  ];
+  elements.employeeProfileContent.innerHTML = `<div class="employee-profile-overview-grid">${overviewRows.map(([label, value]) => `
+    <article class="employee-profile-overview-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("")}</div>
+    <p class="employee-profile-boundary">Diese Übersicht enthält ausschließlich freigegebene Organisationsdaten. Geschützte Personalakt- und Prozessdaten werden nicht mitgeladen.</p>`;
+}
+
+function renderEmployeeProfile() {
+  renderEmployeeProfileHeader();
+  renderEmployeeProfileContent();
+}
+
+function syncEmployeeProfileWorkspace() {
+  const open = employeeProfileIsOpen();
+  elements.personnelDirectoryWorkspace?.classList.toggle("hidden", open);
+  elements.employeeProfileWorkspace?.classList.toggle("hidden", !open);
+  elements.personnelDisplayColumnsButton?.classList.toggle("hidden", state.personnelAdministrationTab !== "employees" || open);
+}
+
+function setEmployeeProfileTab(tab, { focus = false } = {}) {
+  const nextTab = EMPLOYEE_PROFILE_TABS.some(({ id }) => id === tab) ? tab : "overview";
+  state.employeeProfileTab = nextTab;
+  renderEmployeeProfileContent();
+  if (focus) document.querySelector(`[data-employee-profile-tab="${nextTab}"]`)?.focus();
+}
+
+async function loadEmployeeProfileOverview(employeeNumber) {
+  const requestToken = Symbol("employee-profile-overview");
+  state.employeeProfileRequestToken = requestToken;
+  state.employeeProfileLoading = true;
+  state.employeeProfileLoadError = "";
+  state.employeeProfile = null;
+  renderEmployeeProfile();
+  try {
+    const payload = await api(`/api/portal/v1/personnel-lifecycle/employees/${encodeURIComponent(employeeNumber)}/profile?tab=overview`);
+    if (state.employeeProfileRequestToken !== requestToken || !employeeProfileIsOpen()) return;
+    state.employeeProfile = normalizeEmployeeProfileOverview(payload, employeeNumber);
+  } catch (_error) {
+    if (state.employeeProfileRequestToken !== requestToken || !employeeProfileIsOpen()) return;
+    state.employeeProfile = null;
+    state.employeeProfileLoadError = "Die Profilübersicht konnte nicht geladen werden.";
+  } finally {
+    if (state.employeeProfileRequestToken === requestToken && employeeProfileIsOpen()) {
+      state.employeeProfileLoading = false;
+      renderEmployeeProfile();
+    }
+  }
+}
+
+function openEmployeeProfile(employeeNumber, trigger = null) {
+  const normalizedEmployeeNumber = String(employeeNumber || "").trim();
+  if (!normalizedEmployeeNumber || !canOpenEmployeeProfileFoundation()) return;
+  state.employeeProfileOpen = true;
+  state.employeeProfileEmployeeNumber = normalizedEmployeeNumber;
+  state.employeeProfileTab = "overview";
+  state.employeeProfile = null;
+  state.employeeProfileLoading = true;
+  state.employeeProfileLoadError = "";
+  state.employeeProfileReturnFocus = trigger || document.activeElement;
+  syncEmployeeProfileWorkspace();
+  renderEmployeeProfile();
+  elements.employeeProfileName?.focus({ preventScroll: true });
+  loadEmployeeProfileOverview(normalizedEmployeeNumber);
+}
+
+function closeEmployeeProfile({ restoreFocus = true } = {}) {
+  const returnFocus = state.employeeProfileReturnFocus;
+  state.employeeProfileRequestToken = null;
+  state.employeeProfileOpen = false;
+  state.employeeProfileEmployeeNumber = "";
+  state.employeeProfileTab = "overview";
+  state.employeeProfile = null;
+  state.employeeProfileLoading = false;
+  state.employeeProfileLoadError = "";
+  state.employeeProfileReturnFocus = null;
+  syncEmployeeProfileWorkspace();
+  if (restoreFocus && returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
 }
 
 function renderCostCenterTypes() {
@@ -7876,6 +8103,7 @@ function setPersonnelAdministrationTab(tab) {
   const normalized = canOpenPersonnelAdministrationTab(tab)
     ? tab
     : firstAccessiblePersonnelAdministrationTab();
+  if (normalized !== "employees" && employeeProfileIsOpen()) closeEmployeeProfile({ restoreFocus: false });
   state.personnelAdministrationTab = normalized;
   document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => {
     const active = button.dataset.personnelAdministrationTab === normalized;
@@ -7894,7 +8122,7 @@ function setPersonnelAdministrationTab(tab) {
   elements.collectiveAgreementsSection?.classList.toggle("active", normalized === "collectiveAgreements");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
   elements.dataSubjectRequestsSection?.classList.toggle("active", normalized === "dataRequests");
-  elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees");
+  elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees" || employeeProfileIsOpen());
   if (normalized === "dashboard") renderPersonnelDashboard();
   if (state.currentView === "personnelAdministration") renderContextNavigation();
   if (state.currentView === "personnelAdministration" && ["employees", "costCenters"].includes(normalized)) {
@@ -12504,7 +12732,7 @@ function renderPersonnelDocuments(employeeNumber, result, access) {
     const title = document.title || document.original_name || document.original_filename || "Personalakt-Dokument";
     const category = document.category_label || document.category || "Sonstiges";
     const description = document.description ? `<p>${escapeHtml(document.description)}</p>` : "";
-    return `<article class="personnel-document-entry"><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(category)} · ${escapeHtml(personnelDocumentDate(document.document_date || document.documentDate))}</small>${description}</div><div class="personnel-document-actions"><a class="secondary-button compact-button" href="/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}/documents/${encodeURIComponent(id)}/content" target="_blank" rel="noopener">Öffnen</a>${canWriteDocuments ? `<button type="button" class="danger-button compact-button" data-delete-personnel-document="${escapeHtmlAttribute(id)}">Löschen</button>` : ""}</div></article>`;
+    return `<article class="personnel-document-entry"><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(category)} · ${escapeHtml(personnelDocumentDate(document.document_date || document.documentDate))}</small>${description}</div><div class="personnel-document-actions"><a class="secondary-button compact-button" href="/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}/documents/${encodeURIComponent(id)}/content" target="_blank" rel="noopener">Öffnen</a>${canWriteDocuments ? `<button type="button" class="secondary-button compact-button" data-archive-personnel-document="${escapeHtmlAttribute(id)}">Archivieren</button>` : ""}</div></article>`;
   }).join("");
   const upload = canWriteDocuments ? `
     <div class="personnel-document-upload">
@@ -12698,12 +12926,12 @@ async function uploadPersonnelDocument() {
   }
 }
 
-async function deletePersonnelDocument(documentId) {
+async function archivePersonnelDocument(documentId) {
   const current = state.personnelRecord;
-  if (!current || !documentId || !confirm("Dieses Personalakt-Dokument wirklich löschen?")) return;
+  if (!current || !documentId || !confirm("Dieses Personalakt-Dokument archivieren? Alle Versionen bleiben geschützt erhalten.")) return;
   try {
     await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
-    showToast("Das Dokument wurde gelöscht.");
+    showToast("Das Dokument wurde archiviert.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
     showToast(error.message, true);
@@ -18996,8 +19224,8 @@ elements.personnelRecordContent?.addEventListener("click", (event) => {
     uploadPersonnelDocument();
     return;
   }
-  const deleteButton = event.target.closest("[data-delete-personnel-document]");
-  if (deleteButton) deletePersonnelDocument(deleteButton.dataset.deletePersonnelDocument);
+  const archiveButton = event.target.closest("[data-archive-personnel-document]");
+  if (archiveButton) archivePersonnelDocument(archiveButton.dataset.archivePersonnelDocument);
 });
 elements.workRuleAssessmentPanel?.addEventListener("toggle", () => {
   const expanded = elements.workRuleAssessmentPanel.open;
@@ -19023,6 +19251,11 @@ document.querySelector("#employeeColorHex").addEventListener("input", (event) =>
 });
 
 elements.personnelDirectoryBody?.addEventListener("click", async (event) => {
+  const profileButton = event.target.closest("[data-central-employee-profile]");
+  if (profileButton) {
+    openEmployeeProfile(profileButton.dataset.centralEmployeeProfile, profileButton);
+    return;
+  }
   const recordButton = event.target.closest("[data-central-personnel-record]");
   if (recordButton) {
     openPersonnelRecord(recordButton.dataset.centralPersonnelRecord);
@@ -19033,6 +19266,23 @@ elements.personnelDirectoryBody?.addEventListener("click", async (event) => {
   const employeeNumber = editButton.dataset.centralEditEmployee;
   const employee = state.personnelDirectory.find((item) => item.personnel_number === employeeNumber);
   if (employee) openEmployeeModal(employee);
+});
+
+elements.employeeProfileBackButton?.addEventListener("click", () => closeEmployeeProfile());
+document.querySelectorAll("[data-employee-profile-tab]").forEach((button) => {
+  button.addEventListener("click", () => setEmployeeProfileTab(button.dataset.employeeProfileTab));
+  button.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const tabs = [...document.querySelectorAll("[data-employee-profile-tab]")];
+    const currentIndex = tabs.indexOf(button);
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    setEmployeeProfileTab(tabs[nextIndex]?.dataset.employeeProfileTab, { focus: true });
+  });
 });
 
 elements.costCenterList?.addEventListener("click", (event) => {
