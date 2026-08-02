@@ -78,6 +78,54 @@ function Get-Sha256File([string]$Path) {
     }
 }
 
+function Assert-ManagedTextByteContracts([string]$SourceRoot, [string[]]$RelativePaths) {
+    foreach ($relative in $RelativePaths) {
+        $candidate = Join-Path $SourceRoot $relative.Replace('/', '\')
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            throw "Verwaltetes Bytevertragsartefakt fehlt: $relative"
+        }
+
+        $attributeLines = @(& git -C $SourceRoot check-attr text eol -- $relative)
+        if ($LASTEXITCODE -ne 0 -or $attributeLines.Count -ne 2) {
+            throw "Git-Attribute konnten fuer das Bytevertragsartefakt nicht bestimmt werden: $relative"
+        }
+        $attributes = @{}
+        foreach ($line in $attributeLines) {
+            $parts = [string]$line -split ': ', 3
+            if ($parts.Count -ne 3) {
+                throw "Ungueltige Git-Attributantwort fuer das Bytevertragsartefakt: $relative"
+            }
+            $attributes[$parts[1]] = $parts[2]
+        }
+        $expectedEol = [string]$attributes['eol']
+        if ([string]$attributes['text'] -cne 'set' -or $expectedEol -notin @('lf', 'crlf')) {
+            throw "Das Bytevertragsartefakt hat keinen eindeutigen text/eol-Vertrag: $relative"
+        }
+
+        $bytes = [IO.File]::ReadAllBytes($candidate)
+        $sawNewline = $false
+        for ($index = 0; $index -lt $bytes.Length; $index++) {
+            if ($bytes[$index] -eq 13) {
+                if ($expectedEol -ne 'crlf' -or $index + 1 -ge $bytes.Length -or $bytes[$index + 1] -ne 10) {
+                    throw "Das Bytevertragsartefakt enthaelt unzulaessige CR-Bytes: $relative"
+                }
+                $sawNewline = $true
+                $index++
+                continue
+            }
+            if ($bytes[$index] -eq 10) {
+                if ($expectedEol -ne 'lf') {
+                    throw "Das Bytevertragsartefakt enthaelt unzulaessige LF-Bytes: $relative"
+                }
+                $sawNewline = $true
+            }
+        }
+        if (-not $sawNewline) {
+            throw "Das Bytevertragsartefakt enthaelt keine pruefbaren Zeilenenden: $relative"
+        }
+    }
+}
+
 function Remove-TemporaryTreeBestEffort([string]$Path, [string]$ExpectedParent) {
     $resolved = [System.IO.Path]::GetFullPath($Path)
     $parentPrefix = [System.IO.Path]::GetFullPath($ExpectedParent).TrimEnd('\') + '\'
@@ -196,6 +244,19 @@ $sourceTimestamp = ((& git -C $sourceRoot log -1 --format=%cI) | Select-Object -
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sourceTimestamp)) { throw 'Der Git-Zeitstempel konnte nicht ermittelt werden.' }
 $trackedFiles = @(& git -C $sourceRoot ls-files | ForEach-Object { ([string]$_).Replace('\', '/') } | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw 'Die versionierten neutralen App-Dateien konnten nicht ermittelt werden.' }
+
+$runtimeSchemaSource = Get-Content -LiteralPath (Join-Path $sourceRoot 'server-tools\linux\runtime-schema.json') -Raw -Encoding utf8 | ConvertFrom-Json
+$offsiteSchemaSource = Get-Content -LiteralPath (Join-Path $sourceRoot 'server-tools\linux\offsite\module-schema.json') -Raw -Encoding utf8 | ConvertFrom-Json
+$hardeningSchemaSource = Get-Content -LiteralPath (Join-Path $sourceRoot 'server-tools\linux\hardening\module-schema.json') -Raw -Encoding utf8 | ConvertFrom-Json
+$managedByteContractArtifacts = [string[]]@(
+    'server-tools/linux/runtime-schema.json'
+    'server-tools/linux/offsite/module-schema.json'
+    'server-tools/linux/hardening/module-schema.json'
+    @($runtimeSchemaSource.managedArtifacts | ForEach-Object { [string]$_ })
+    @($offsiteSchemaSource.managedArtifacts | ForEach-Object { [string]$_ })
+    @($hardeningSchemaSource.managedArtifacts | ForEach-Object { [string]$_ })
+) | Sort-Object -Unique
+Assert-ManagedTextByteContracts -SourceRoot $sourceRoot -RelativePaths $managedByteContractArtifacts
 
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
 $archiveName = "Grabenplaner-Server-v$version-linux-x64.zip"
