@@ -125,8 +125,19 @@ test("M7 Profilrechte: PL liest global, PL+ delegiert nur mit eigener Capability
   assert.equal(withoutBase.capabilities.canDelegateProfiles, true);
 });
 
-test("M7 Profilrechte: technische Rollen erhalten durch Delegate keinen Profildatenzugriff", () => {
-  for (const role of ["admin", "developer"]) {
+test("M7 Profilrechte: Developer hat globalen Vollzugriff, andere technische Rollen nicht", () => {
+  const developer = createPersonnelProfileAccessSnapshot(personalSession("developer"));
+  assert.deepEqual(developer.capabilities, {
+    canReadProfiles: true,
+    canReadMaster: true,
+    canReadDocuments: true,
+    canDelegateProfiles: true,
+  });
+  assert.equal(developer.canReadSubject({ locationId: "vienna", departmentId: 17 }), true);
+  assert.equal(developer.canReadMasterSubject({ locationId: "graz", departmentId: 99 }), true);
+  assert.equal(developer.canReadDocumentsSubject({ locationId: "vienna" }), true);
+
+  for (const role of ["admin"]) {
     const technical = createPersonnelProfileAccessSnapshot(personalSession(role));
     assert.equal(technical.capabilities.canReadProfiles, false, role);
     assert.equal(technical.capabilities.canReadMaster, false, role);
