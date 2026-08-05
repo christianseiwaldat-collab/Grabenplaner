@@ -763,6 +763,7 @@ const permissionEligibleRoles = new Map(delegablePortalPermissionCatalog
   .map((entry) => [entry.id, new Set(entry.eligibleRoles)]));
 
 function portalPermissionAllowedForRole(permission, role) {
+  if (String(role || "") === "developer") return true;
   const eligibleRoles = permissionEligibleRoles.get(String(permission || ""));
   return !eligibleRoles || eligibleRoles.has(String(role || ""));
 }
@@ -1444,6 +1445,15 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "collective_agreements:assign",
   ]);
 }
+
+// Die geschuetzte Developer-Rolle ist der technische Eigentuerzugang der
+// Installation. Sie erhaelt jede bekannte App-Berechtigung direkt aus dem
+// Katalog, damit neue Personal-, Lifecycle- und Regelrechte nicht versehentlich
+// hinter einem unvollstaendigen statischen Rollensnapshot fehlen.
+addBuiltinRolePermissions("developer", [
+  ...delegablePortalPermissionCatalog.map((permission) => permission.id),
+  ...portalGlobalPermissionIds,
+]);
 
 const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
 const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);

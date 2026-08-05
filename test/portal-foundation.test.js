@@ -186,7 +186,27 @@ test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", a
   assert.ok(roles.some((role) => role.id === "it_admin" && role.permissions.includes("rights:write")
     && role.permissions.includes("update:write") && role.permissions.includes("employees:write")
     && role.permissions.includes("system:diagnostics:read") && role.permissions.includes("system:diagnostics:technical")));
-  assert.ok(roles.some((role) => role.id === "developer" && role.protected && !role.assignable && role.permissions.includes("developer:system")));
+  const developer = roles.find((role) => role.id === "developer");
+  assert.ok(developer?.protected && !developer.assignable);
+  for (const permission of [
+    "developer:system",
+    "personnel:profiles:read",
+    "personnel:profiles:master:read",
+    "personnel:profiles:documents:read",
+    "personnel:workflows:confidential:read",
+    "personnel:workflows:confidential:write",
+    "personnel:lifecycle:onboarding:read",
+    "personnel:lifecycle:onboarding:execute",
+    "personnel:lifecycle:offboarding:confidential:read",
+    "personnel:lifecycle:offboarding:execute",
+    "work_rules:draft",
+    "work_rules:manage",
+    "work_rules:review",
+    "work_rules:publish",
+    "work_rules:assign",
+    "work_rules:exception",
+    "work_rules:audit",
+  ]) assert.ok(developer.permissions.includes(permission), permission);
   assert.equal(custom.name, "Eigene Prüferrolle");
   assert.deepEqual(custom.permissions, ["audit:read"]);
 });

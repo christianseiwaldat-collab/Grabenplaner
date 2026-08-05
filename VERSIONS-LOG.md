@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.90.5 Beta · Vollständiger Developer-Zugang
+
+- Die geschützte Developer-Rolle erhält automatisch alle bekannten Anwendungsberechtigungen, einschließlich Mitarbeiterprofile, On- und Offboarding, Arbeitszeitregeln und Personal-Workflows.
+- Diese Ausnahme ist ausschließlich an die lokal bindbare, geschützte Developer-Rolle gebunden. Andere Rollen, fachliche Freigaben, Auditspuren und Prozessprüfungen bleiben unverändert.
+
 ## v0.90.4 Beta · Hotfix für vorhandene Profil-Rechtebestände
 
 - Die geschützte Wartungs- und Sicherungsprüfung erkennt nun auch den bereits freigegebenen Profil-Rechtebestand aus v0.90.2 als migrationsfähigen Vorgänger.
