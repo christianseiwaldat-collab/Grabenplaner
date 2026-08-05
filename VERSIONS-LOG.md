@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.90.4 Beta · Hotfix für vorhandene Profil-Rechtebestände
+
+- Die geschützte Wartungs- und Sicherungsprüfung erkennt nun auch den bereits freigegebenen Profil-Rechtebestand aus v0.90.2 als migrationsfähigen Vorgänger.
+- Unvollständige Tabellen, Trigger oder ungültige Bereichsrechte bleiben weiterhin fail-closed. Ein gezielter Regressionstest deckt den vorhandenen Acht-Rechte-Bestand vor dem Serverstart ab.
+
 ## v0.90.3 Beta · Kontrolliertes On- und Offboarding-Fundament
 
 - Das Personalmodul erhält rollen- und bereichsgebundene Vorgänge für Onboarding und Offboarding. Fallanlage, Vorschau, kontrollierte Ausführung und Abschlussbelege bleiben serverseitig prüfbar und nachvollziehbar.

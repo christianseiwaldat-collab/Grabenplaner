@@ -30,6 +30,7 @@ const {
 const {
   PERSONNEL_LIFECYCLE_LEGACY_SCOPED_RIGHTS_TABLE_DEFINITION,
   PERSONNEL_LIFECYCLE_M4_SCOPED_RIGHTS_TABLE_DEFINITION,
+  PERSONNEL_PROFILE_SCOPED_RIGHTS_TABLE_DEFINITION,
   PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_MIGRATION_ID,
   PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TABLE_DEFINITIONS,
   PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS,
@@ -451,6 +452,48 @@ test("Personalmodul R1: Import und Maintenance akzeptieren pre-R1, aber kein par
       ));
     } finally {
       historicalM4Database.close();
+    }
+
+    database = openSqliteLegacyDatabase(databasePath);
+    for (const definition of PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS) {
+      database.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
+    }
+    database.exec("DROP TABLE portal_permission_scope_grants");
+    database.exec(PERSONNEL_PROFILE_SCOPED_RIGHTS_TABLE_DEFINITION.sql);
+    for (const definition of PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS) {
+      database.exec(definition.sql);
+    }
+    database.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES ('historical-profile-employee', 'personnel:profiles:master:read', 'pl-plus')
+    `).run();
+    database.prepare(`
+      INSERT INTO portal_access_scopes
+        (employee_number, location_id, department_id, assigned_by)
+      VALUES ('historical-profile-employee', 'historical-m4-location', 0, 'pl-plus')
+    `).run();
+    database.prepare(`
+      INSERT INTO portal_permission_scope_grants
+        (employee_number, permission, location_id, department_id, approved_by)
+      VALUES (
+        'historical-profile-employee', 'personnel:profiles:master:read',
+        'historical-m4-location', 0, 'pl-plus'
+      )
+    `).run();
+    database.close();
+    database = null;
+
+    const validHistoricalProfile = inspectSqliteImportFile(databasePath);
+    assert.equal(validHistoricalProfile.candidateScopedRightsSchemaState, "pre-m7-profile-compatible");
+    assert.equal(validHistoricalProfile.candidateScopedRightsPredecessorVersion, "profile");
+    assert.equal(validHistoricalProfile.protectedInspectionError, false);
+    const historicalProfileDatabase = openSqliteLegacyDatabase(databasePath, { readOnly: true });
+    try {
+      assert.doesNotThrow(() => protectedSicknessAmuStorageSnapshotFromDatabase(
+        historicalProfileDatabase,
+      ));
+    } finally {
+      historicalProfileDatabase.close();
     }
 
     database = openSqliteLegacyDatabase(databasePath);
