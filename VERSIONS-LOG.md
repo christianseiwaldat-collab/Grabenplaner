@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.90.3 Beta · Kontrolliertes On- und Offboarding-Fundament
+
+- Das Personalmodul erhält rollen- und bereichsgebundene Vorgänge für Onboarding und Offboarding. Fallanlage, Vorschau, kontrollierte Ausführung und Abschlussbelege bleiben serverseitig prüfbar und nachvollziehbar.
+- Offboarding trennt vertrauliche Austrittsdaten von delegierten Aufgaben. Rückgaben, Zugriffsprüfungen, Schulungen, Fristen, Vertretungen und Erinnerungsentwürfe sind in klar abgegrenzten Arbeitslisten geführt.
+- Der grafische Prozesseditor stellt ausschließlich den freigegebenen Vertragsentwurf dar. Er speichert, veröffentlicht oder startet keine Prozessversionen und erweitert keine Rechte.
+- Bestehende Personal- und Betriebsdaten bleiben erhalten. SQLite-Migrationen werden beim Start fail-closed geprüft; die bestehende Sicherungs-, Rollback- und Linux-Runtime-Grenze bleibt unverändert.
+
 ## v0.90.2 Beta · Linux-Paketverträge reproduzierbar festgeschrieben
 
 - Die bytegenauen Zeilenenden der verwalteten Runtime-, Offsite- und Hardening-Artefakte sind für Windows- und Linux-Checkouts ausdrücklich festgelegt.

@@ -6,7 +6,9 @@ const test = require("node:test");
 
 const {
   PersonnelWorkflowInstanceError,
+  completePersonnelLifecycleOnboardingTaskInTransaction,
   createPersonnelWorkflowInstanceService,
+  instantiatePersonnelLifecycleOnboardingInTransaction,
 } = require("../lib/personnel-workflow-instances");
 const {
   personnelWorkflowPublicationReceiptBody,
@@ -428,6 +430,28 @@ function serviceFor(fixture) {
   });
 }
 
+function transactionBoundRepository(fixture) {
+  const { transaction: _transaction, ...repository } = fixture.repository;
+  return repository;
+}
+
+function lifecycleOnboardingFixture() {
+  return repositoryFixture({
+    publication: publicationFixture({
+      workflowType: "onboarding",
+      workflowCode: "standard.onboarding",
+    }),
+  });
+}
+
+function lifecycleOnboardingInput(overrides = {}) {
+  return startInput({
+    publicationId: "publication-onboarding",
+    subject: { type: "employee", employeeNumber: "EMP-7" },
+    ...overrides,
+  });
+}
+
 test("M5 startet atomar, friert exakte Zuordnungen ein und aktiviert den ersten Fachschritt", async () => {
   const fixture = repositoryFixture();
   let assignmentContext;
@@ -470,6 +494,227 @@ test("M5 startet atomar, friert exakte Zuordnungen ein und aktiviert den ersten 
   assert.match(binding.receipt_sha256, /^[0-9a-f]{64}$/);
   assert.equal(fixture.state.runs.get(RUN_ID).trigger_key, `personnel:${OPERATION_ID}`);
   assert.equal(fixture.state.audits[0].detail.includes("candidate-1"), false);
+});
+
+test("M5 stellt Lifecycle-Onboarding transaktionsgebunden zwischen Run und Binding bereit", async () => {
+  const fixture = lifecycleOnboardingFixture();
+  let lifecycleBinding;
+  const result = await instantiatePersonnelLifecycleOnboardingInTransaction(
+    transactionBoundRepository(fixture),
+    lifecycleOnboardingInput(),
+    {
+      access: accessFixture(),
+      now: () => new Date(STARTED_AT),
+      randomUUID: () => RUN_ID,
+      async bindLifecyclePackageRun(value) {
+        lifecycleBinding = value;
+        fixture.state.writes.push(`lifecycle:${value.runId}`);
+      },
+    },
+  );
+
+  assert.equal(result.replayed, false);
+  assert.deepEqual(fixture.state.writes, [
+    `run:${RUN_ID}`,
+    `lifecycle:${RUN_ID}`,
+    `binding:${RUN_ID}`,
+    "step:system-prepare",
+    "step:hr-review",
+    "step:employee-confirm",
+    "assignment:hr-review",
+    "assignment:employee-confirm",
+    "complete:system-prepare",
+    "activate:hr-review",
+    `audit:${RUN_ID}`,
+  ]);
+  assert.deepEqual(lifecycleBinding, {
+    runId: RUN_ID,
+    runOperationId: OPERATION_ID,
+    publicationId: "publication-onboarding",
+    employeeNumber: "EMP-7",
+    requestSha256: fixture.state.bindings.get(RUN_ID).request_sha256,
+    instanceReceiptSha256: fixture.state.bindings.get(RUN_ID).receipt_sha256,
+    startedBy: "PL-PLUS",
+    startedAt: STARTED_AT,
+  });
+  assert.equal(Object.isFrozen(lifecycleBinding), true);
+  assert.equal(result.instance.publication.workflowType, "onboarding");
+  assert.equal(result.instance.subject.type, "employee");
+});
+
+test("M5 Lifecycle-Onboarding spielt exakt wieder ab, ohne die Paketbindung erneut aufzurufen", async () => {
+  const fixture = lifecycleOnboardingFixture();
+  const repository = transactionBoundRepository(fixture);
+  let bindingCalls = 0;
+  const options = {
+    access: accessFixture(),
+    now: () => new Date(STARTED_AT),
+    randomUUID: () => RUN_ID,
+    bindLifecyclePackageRun() {
+      bindingCalls += 1;
+    },
+  };
+  await instantiatePersonnelLifecycleOnboardingInTransaction(
+    repository,
+    lifecycleOnboardingInput(),
+    options,
+  );
+  const writesAfterStart = [...fixture.state.writes];
+
+  const replayed = await instantiatePersonnelLifecycleOnboardingInTransaction(
+    repository,
+    lifecycleOnboardingInput({
+      assignments: [
+        { stepId: "hr-review", employeeNumber: "HR-1" },
+        { stepId: "employee-confirm", employeeNumber: "EMP-7" },
+      ],
+    }),
+    options,
+  );
+
+  assert.equal(replayed.replayed, true);
+  assert.equal(bindingCalls, 1);
+  assert.deepEqual(fixture.state.writes, writesAfterStart);
+});
+
+test("M5 schliesst Lifecycle-Onboarding-Aufgaben mit atomarem Ergebnisbeleg und exaktem Replay ab", async () => {
+  const fixture = lifecycleOnboardingFixture();
+  const repository = transactionBoundRepository(fixture);
+  await instantiatePersonnelLifecycleOnboardingInTransaction(
+    repository,
+    lifecycleOnboardingInput(),
+    {
+      access: accessFixture(),
+      now: () => new Date(STARTED_AT),
+      randomUUID: () => RUN_ID,
+      bindLifecyclePackageRun() {},
+    },
+  );
+  fixture.state.writes.length = 0;
+  let taskOutcome;
+  let outcomeCalls = 0;
+  const options = {
+    access: accessFixture({ actorId: "HR-1" }),
+    recordLifecycleTaskOutcome(value) {
+      outcomeCalls += 1;
+      taskOutcome = value;
+      fixture.state.writes.push(`lifecycle-task:${value.stepId}`);
+    },
+  };
+
+  const completed = await completePersonnelLifecycleOnboardingTaskInTransaction(
+    repository,
+    "HR-1",
+    RUN_ID,
+    "hr-review",
+    { action: "complete", operationId: COMPLETION_OPERATION_ID },
+    options,
+  );
+
+  assert.equal(completed.replayed, false);
+  assert.deepEqual(fixture.state.writes, [
+    "task-completed:hr-review",
+    "lifecycle-task:hr-review",
+    "activate:employee-confirm",
+    `audit:${RUN_ID}`,
+  ]);
+  assert.deepEqual(taskOutcome, {
+    runId: RUN_ID,
+    taskOperationId: COMPLETION_OPERATION_ID,
+    publicationId: "publication-onboarding",
+    employeeNumber: "EMP-7",
+    stepId: "hr-review",
+    action: "complete",
+    completedStatus: "completed",
+    completionRequestSha256: fixture.state.steps.get(RUN_ID)[1].completion_request_id,
+    completedBy: "HR-1",
+    completedAt: STARTED_AT,
+  });
+  assert.equal(Object.isFrozen(taskOutcome), true);
+
+  const writesAfterCompletion = [...fixture.state.writes];
+  const replayed = await completePersonnelLifecycleOnboardingTaskInTransaction(
+    repository,
+    "HR-1",
+    RUN_ID,
+    "hr-review",
+    { action: "complete", operationId: COMPLETION_OPERATION_ID },
+    options,
+  );
+  assert.equal(replayed.replayed, true);
+  assert.equal(outcomeCalls, 1);
+  assert.deepEqual(fixture.state.writes, writesAfterCompletion);
+});
+
+test("M5 Lifecycle-Onboarding verlangt eine fremdgeführte Transaktion und Pflichtbindung", async () => {
+  const fixture = lifecycleOnboardingFixture();
+  const options = {
+    access: accessFixture(),
+    bindLifecyclePackageRun() {},
+  };
+
+  await assert.rejects(
+    instantiatePersonnelLifecycleOnboardingInTransaction(
+      fixture.repository,
+      lifecycleOnboardingInput(),
+      options,
+    ),
+    (error) => error instanceof TypeError
+      && error.message.includes("bereits transaktionsgebundenes Repository"),
+  );
+  await assert.rejects(
+    instantiatePersonnelLifecycleOnboardingInTransaction(
+      transactionBoundRepository(fixture),
+      lifecycleOnboardingInput(),
+      { access: accessFixture() },
+    ),
+    (error) => error instanceof TypeError
+      && error.message.includes("Paket-Run-Bindung"),
+  );
+  assert.deepEqual(fixture.state.writes, []);
+});
+
+test("M5 haelt Lifecycle-Onboarding ausserhalb der Primitive in allen generischen Wegen gesperrt", async () => {
+  const genericStartFixture = lifecycleOnboardingFixture();
+  await assert.rejects(
+    serviceFor(genericStartFixture).start(lifecycleOnboardingInput(), {
+      access: accessFixture(),
+    }),
+    (error) => error.code === "PERSONNEL_WORKFLOW_INSTANCE_TYPE_DEFERRED",
+  );
+
+  const lifecycleFixture = lifecycleOnboardingFixture();
+  await instantiatePersonnelLifecycleOnboardingInTransaction(
+    transactionBoundRepository(lifecycleFixture),
+    lifecycleOnboardingInput(),
+    {
+      access: accessFixture(),
+      now: () => new Date(STARTED_AT),
+      randomUUID: () => RUN_ID,
+      bindLifecyclePackageRun() {},
+    },
+  );
+  const genericService = serviceFor(lifecycleFixture);
+  await assert.rejects(
+    genericService.list({ access: accessFixture() }),
+    (error) => error.code === "PERSONNEL_WORKFLOW_INSTANCE_TYPE_DEFERRED",
+  );
+  await assert.rejects(
+    genericService.tasksForEmployee("HR-1", {
+      access: accessFixture({ actorId: "HR-1" }),
+    }),
+    (error) => error.code === "PERSONNEL_WORKFLOW_INSTANCE_TYPE_DEFERRED",
+  );
+  await assert.rejects(
+    genericService.completeTask(
+      "HR-1",
+      RUN_ID,
+      "hr-review",
+      { action: "complete", operationId: COMPLETION_OPERATION_ID },
+      { access: accessFixture({ actorId: "HR-1" }) },
+    ),
+    (error) => error.code === "PERSONNEL_WORKFLOW_INSTANCE_TYPE_DEFERRED",
+  );
 });
 
 test("M5 schliesst eine reine Systemschrittfolge vor dem Commit vollstaendig ab", async () => {

@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.90.2 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.90.3 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -483,35 +483,44 @@
           <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-instances" id="workflowCenterSection" role="tabpanel" aria-labelledby="workflowCenterTab">
             <div class="employee-toolbar personnel-lifecycle-foundation-heading">
               <div><span class="eyebrow">Versionsgebundene Ausführung</span><h2>Workflow-Center</h2><p>Neue Personalprozess-Instanzen bleiben dauerhaft an genau die beim Start veröffentlichte Version gebunden.</p></div>
-              <span class="status-badge">M5 · Nur Lesen</span>
+              <span class="status-badge">M5 / O8 · kontrolliert</span>
             </div>
             <article class="personnel-lifecycle-boundary">
-              <strong>Vorlage, Veröffentlichung und Instanz bleiben getrennt</strong>
-              <p>Diese Ansicht zeigt ausschließlich serverseitig freigegebene Instanzmetadaten. Sie startet keinen Prozess, ändert keine Aufgabe und übernimmt keine bestehenden Läufe automatisch.</p>
+              <strong>Vorlage, Arbeitsentwurf, Veröffentlichung und Instanz bleiben getrennt</strong>
+              <p>Die Instanzliste zeigt ausschließlich serverseitig freigegebene Metadaten. Der grafische O8-Arbeitsentwurf lebt nur im Arbeitsspeicher des Browsers: Er veröffentlicht und startet keinen Prozess, ändert keine Aufgabe und übernimmt keine bestehenden Läufe automatisch.</p>
             </article>
-            <div class="personnel-workflow-toolbar">
-              <label class="field"><span>Status</span><select id="personnelWorkflowInstanceStatusFilter">
-                <option value="all">Alle sichtbaren Instanzen</option>
-                <option value="open">Offen</option>
-                <option value="resolved">Abgeschlossen</option>
-              </select></label>
-              <button class="secondary-button" id="refreshPersonnelWorkflowInstancesButton" type="button">Aktualisieren</button>
-            </div>
-            <p class="personnel-workflow-status" id="personnelWorkflowInstanceStatus" role="status" aria-live="polite">Instanzen werden beim Öffnen geladen.</p>
-            <div class="personnel-workflow-summary" id="personnelWorkflowInstanceSummary" aria-label="Zusammenfassung der Workflow-Instanzen"></div>
-            <div class="personnel-workflow-list" id="personnelWorkflowInstanceList">
-              <p class="personnel-workflow-empty">Noch keine Instanzen geladen.</p>
+            <section class="personnel-lifecycle-editor-entry hidden" id="personnelLifecycleEditorSection" aria-labelledby="personnelLifecycleEditorEntryTitle">
+              <header>
+                <div><span class="eyebrow">O8 · grafischer Arbeitsentwurf</span><h3 id="personnelLifecycleEditorEntryTitle">Linearen Personalprozess entwerfen</h3><p>Eine freigegebene Quelle kann lokal als lineare Arbeitskopie angeordnet und serverseitig geprüft werden. Der Entwurf wird weder gespeichert noch veröffentlicht.</p></div>
+                <button class="primary-button" id="openPersonnelLifecycleEditorButton" type="button" aria-haspopup="dialog" aria-controls="personnelLifecycleEditorDialog">Grafischen Editor öffnen</button>
+              </header>
+              <p class="personnel-lifecycle-editor-entry-status" id="personnelLifecycleEditorEntryStatus" role="status" aria-live="polite">O8-Katalog wird erst beim Öffnen geladen.</p>
+            </section>
+            <div class="hidden" id="personnelWorkflowInstanceWorkspace">
+              <div class="personnel-workflow-toolbar">
+                <label class="field"><span>Status</span><select id="personnelWorkflowInstanceStatusFilter">
+                  <option value="all">Alle sichtbaren Instanzen</option>
+                  <option value="open">Offen</option>
+                  <option value="resolved">Abgeschlossen</option>
+                </select></label>
+                <button class="secondary-button" id="refreshPersonnelWorkflowInstancesButton" type="button">Aktualisieren</button>
+              </div>
+              <p class="personnel-workflow-status" id="personnelWorkflowInstanceStatus" role="status" aria-live="polite">Instanzen werden beim Öffnen geladen.</p>
+              <div class="personnel-workflow-summary" id="personnelWorkflowInstanceSummary" aria-label="Zusammenfassung der Workflow-Instanzen"></div>
+              <div class="personnel-workflow-list" id="personnelWorkflowInstanceList">
+                <p class="personnel-workflow-empty">Noch keine Instanzen geladen.</p>
+              </div>
             </div>
           </section>
 
           <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks" id="personnelTasksSection" role="tabpanel" aria-labelledby="personnelTasksTab">
             <div class="employee-toolbar personnel-lifecycle-foundation-heading">
               <div><span class="eyebrow">Datensparsame Projektion</span><h2>Personalaufgaben</h2><p>Die sichtbaren Aufgaben stammen aus denselben versionsgebundenen Instanzen und werden nicht als zweite Wahrheit dupliziert.</p></div>
-              <span class="status-badge">M5 · Nur Lesen</span>
+              <span class="status-badge" data-pre-o6-stage="M5 / O4 / O5 · kontrolliert" data-pre-o7-stage="M5 / O4 / O5 / O6 · kontrolliert">M5 / O4 / O5 / O6 / O7 · kontrolliert</span>
             </div>
             <article class="personnel-lifecycle-boundary">
               <strong>Serverfreigabe statt Client-Ableitung</strong>
-              <p>Gezeigt werden nur bereits berechtigte Aufgabenschritte. Die Oberfläche löst keine Verantwortlichen auf, trifft keine Fachentscheidung und führt keine Frist- oder Eskalationsautomatik aus.</p>
+              <p>Gezeigt werden nur bereits berechtigte Aufgabenschritte. O4 und O5 erlauben ausschließlich die bewusst bestätigte Erledigung persönlich zugewiesener Aufgaben. Fristen und Eskalationen werden nicht automatisiert: O7 zeigt Fristen, Klärungsbedarf, Erinnerungs- und Eskalationszustände nur als serverseitig berechnete Vorschau; der Browser ergänzt keine Fristannahmen und löst keine Folgeaktion aus. Vertrauliche Offboarding-Fälle bleiben vor der Kommunikationsfreigabe vollständig unsichtbar.</p>
             </article>
             <div class="personnel-workflow-task-heading">
               <p class="personnel-workflow-status" id="personnelWorkflowTaskStatus" role="status" aria-live="polite">Aufgaben werden beim Öffnen geladen.</p>
@@ -520,6 +529,29 @@
             <div class="personnel-workflow-task-list" id="personnelWorkflowTaskList">
               <p class="personnel-workflow-empty">Noch keine Aufgaben geladen.</p>
             </div>
+            <section class="personnel-lifecycle-interface-catalog hidden" id="personnelLifecycleInterfacesSection" aria-labelledby="personnelLifecycleInterfacesTitle">
+              <header>
+                <div><span class="eyebrow">O6 · kontrollierte Schnittstellengrenze</span><h3 id="personnelLifecycleInterfacesTitle">Schulungen, Arbeitsmittel und Zugänge</h3><p>Der Katalog zeigt ausschließlich die für das angemeldete Konto freigegebenen Domänen. Er löst keine Aktion in einem Zielsystem aus.</p></div>
+                <span class="status-badge inactive">Außenwirkung gesperrt</span>
+              </header>
+              <p class="personnel-lifecycle-interface-status" id="personnelLifecycleInterfacesStatus" role="status" aria-live="polite">Schnittstellenstatus wird beim Öffnen geladen.</p>
+              <div class="personnel-lifecycle-interface-list" id="personnelLifecycleInterfacesList"></div>
+            </section>
+            <section class="personnel-lifecycle-automation hidden" id="personnelLifecycleAutomationSection" aria-labelledby="personnelLifecycleAutomationTitle">
+              <header>
+                <div><span class="eyebrow">O7 · kontrollierte Vorschau</span><h3 id="personnelLifecycleAutomationTitle">Fristen, Vertretung, Erinnerungen und Eskalationen</h3><p>Der Katalog und die persönliche Aufgabenansicht zeigen ausschließlich serverseitig freigegebene Domänen und Zustände. Es wird keine Automatik aktiviert.</p></div>
+                <span class="status-badge warning">Nur Vorschau</span>
+              </header>
+              <p class="personnel-lifecycle-automation-status" id="personnelLifecycleAutomationStatus" role="status" aria-live="polite">O7-Katalog und Vorschau werden beim Öffnen geladen.</p>
+              <div class="personnel-lifecycle-automation-catalog" id="personnelLifecycleAutomationCatalog" aria-label="Freigegebene O7-Domänen"></div>
+              <div class="personnel-lifecycle-automation-summary" id="personnelLifecycleAutomationSummary" aria-label="Serverprojizierte O7-Kennzahlen"></div>
+              <div class="personnel-lifecycle-automation-list" id="personnelLifecycleAutomationList"></div>
+              <ul class="personnel-lifecycle-automation-boundary" aria-label="Grenzen der O7-Vorschau">
+                <li><strong>Nur Vorschau.</strong> Es wird keine Aufgabe im Browser neu berechnet.</li>
+                <li><strong>Keine Erinnerung versendet.</strong> Interne und externe Benachrichtigungen bleiben gesperrt.</li>
+                <li><strong>Keine automatische Vertretung/Eskalation.</strong> Klärungen bleiben bewusst bei der Personalstelle.</li>
+              </ul>
+            </section>
           </section>
 
           <section class="personnel-administration-section" id="costCenterSection" role="tabpanel" aria-labelledby="costCentersTab">
@@ -1944,7 +1976,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.90.2 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.90.3 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -2535,6 +2567,66 @@
         <p class="message hidden" id="customProcessMessage"></p>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="customProcessModal">Abbrechen</button><button type="submit" class="primary-button" id="saveCustomProcessButton">Ablauf speichern</button></div>
       </form>
+    </dialog>
+
+    <dialog class="modal personnel-lifecycle-editor-dialog" id="personnelLifecycleEditorDialog" aria-labelledby="personnelLifecycleEditorTitle" aria-describedby="personnelLifecycleEditorBoundary">
+      <div class="personnel-lifecycle-editor-shell">
+        <div class="modal-header personnel-lifecycle-editor-header">
+          <div><span class="eyebrow">O8 · grafischer Editor</span><h2 id="personnelLifecycleEditorTitle">Linearen Personalprozess entwerfen</h2><p>Arbeitsentwurf – nicht gespeichert</p></div>
+          <button type="button" class="close-button" id="closePersonnelLifecycleEditorButton" aria-label="Grafischen Editor schließen">×</button>
+        </div>
+        <article class="personnel-lifecycle-editor-boundary" id="personnelLifecycleEditorBoundary">
+          <strong>Nur flüchtige Arbeitskopie</strong>
+          <p>Der Browser speichert, veröffentlicht, aktiviert oder startet diesen Entwurf nicht. Es gibt keine Trigger, Benachrichtigungskanäle, automatische Kanten oder Außenwirkungen.</p>
+        </article>
+        <p class="personnel-lifecycle-editor-status" id="personnelLifecycleEditorStatus" role="status" aria-live="polite" aria-atomic="true">Der O8-Katalog wird beim Öffnen geladen.</p>
+
+        <div class="personnel-lifecycle-editor-workspace" id="personnelLifecycleEditorWorkspace">
+          <aside class="personnel-lifecycle-editor-basics" aria-labelledby="personnelLifecycleEditorBasicsTitle">
+            <div class="personnel-lifecycle-editor-panel-heading"><span class="eyebrow">Arbeitskopie</span><h3 id="personnelLifecycleEditorBasicsTitle">Grunddaten</h3></div>
+            <label class="field"><span>Prozessart</span><select id="personnelLifecycleEditorWorkflowType" aria-describedby="personnelLifecycleEditorCatalogHint"><option value="">Katalog wird geladen</option></select></label>
+            <p class="personnel-lifecycle-editor-hint" id="personnelLifecycleEditorCatalogHint">Sichtbar sind nur die serverseitig und fachrechtlich freigegebenen Prozessarten.</p>
+            <label class="field"><span>Workflow-Code</span><input id="personnelLifecycleEditorWorkflowCode" maxlength="80" pattern="[a-z][a-z0-9._-]{1,79}" autocomplete="off" placeholder="z. B. onboarding.basis" /></label>
+            <label class="field"><span>Titel</span><input id="personnelLifecycleEditorDraftTitle" maxlength="120" autocomplete="off" placeholder="Titel des Arbeitsentwurfs" /></label>
+            <label class="field"><span>Beschreibung</span><textarea id="personnelLifecycleEditorDraftDescription" rows="4" maxlength="600" placeholder="Zweck und fachliche Grenze"></textarea></label>
+            <label class="field"><span>Geltungsbereich</span><select id="personnelLifecycleEditorScopeType"><option value="">Katalog wird geladen</option></select></label>
+            <label class="field"><span>Pflichtart</span><select id="personnelLifecycleEditorRequirementKind"><option value="">Katalog wird geladen</option></select></label>
+          </aside>
+
+          <section class="personnel-lifecycle-editor-flow-panel" aria-labelledby="personnelLifecycleEditorFlowTitle">
+            <div class="personnel-lifecycle-editor-panel-heading personnel-lifecycle-editor-flow-heading"><div><span class="eyebrow">Linearer Ablauf</span><h3 id="personnelLifecycleEditorFlowTitle">Schrittreihenfolge</h3></div><button class="secondary-button" id="addPersonnelLifecycleEditorStepButton" type="button">Schritt hinzufügen</button></div>
+            <ol class="personnel-lifecycle-editor-flow" id="personnelLifecycleEditorFlow" aria-label="Lineare Schrittreihenfolge"></ol>
+          </section>
+
+          <aside class="personnel-lifecycle-editor-inspector" aria-labelledby="personnelLifecycleEditorInspectorTitle">
+            <div class="personnel-lifecycle-editor-panel-heading"><span class="eyebrow">Auswahl</span><h3 id="personnelLifecycleEditorInspectorTitle">Schritt bearbeiten</h3></div>
+            <form id="personnelLifecycleEditorInspectorForm" autocomplete="off" novalidate>
+              <fieldset id="personnelLifecycleEditorInspectorFields" disabled>
+                <legend class="visually-hidden">Felder des ausgewählten Schritts</legend>
+                <label class="field"><span>Schrittart</span><select id="personnelLifecycleEditorStepType"><option value="">Schritt auswählen</option></select></label>
+                <label class="field"><span>Titel</span><input id="personnelLifecycleEditorStepTitle" maxlength="120" autocomplete="off" /></label>
+                <label class="field"><span>Beschreibung</span><textarea id="personnelLifecycleEditorStepDescription" rows="5" maxlength="600"></textarea></label>
+                <label class="field"><span>Verantwortungsklasse</span><select id="personnelLifecycleEditorResponsibilityClass"><option value="">Bitte wählen</option></select></label>
+                <label class="field"><span>Verbindlichkeit</span><select id="personnelLifecycleEditorStepRequired"><option value="true">Pflichtschritt</option><option value="false">Optionaler Schritt</option></select></label>
+              </fieldset>
+            </form>
+            <div class="personnel-lifecycle-editor-step-actions" role="group" aria-label="Ausgewählten Schritt anordnen">
+              <button type="button" id="movePersonnelLifecycleEditorStepUpButton">Nach oben</button>
+              <button type="button" id="movePersonnelLifecycleEditorStepDownButton">Nach unten</button>
+              <button type="button" class="danger" id="removePersonnelLifecycleEditorStepButton">Entfernen</button>
+            </div>
+          </aside>
+        </div>
+
+        <section class="personnel-lifecycle-editor-validation" id="personnelLifecycleEditorValidation" aria-labelledby="personnelLifecycleEditorValidationTitle">
+          <div class="personnel-lifecycle-editor-panel-heading"><span class="eyebrow">Serverprüfung</span><h3 id="personnelLifecycleEditorValidationTitle">Noch nicht geprüft</h3></div>
+          <div id="personnelLifecycleEditorValidationResult"><p>Die Prüfung verändert und speichert keine Daten.</p></div>
+        </section>
+        <div class="personnel-lifecycle-editor-actions">
+          <button class="secondary-button" id="resetPersonnelLifecycleEditorButton" type="button">Lokalen Entwurf zurücksetzen</button>
+          <button class="primary-button" id="validatePersonnelLifecycleEditorButton" type="button">Serverprüfung starten</button>
+        </div>
+      </div>
     </dialog>
 
     <dialog class="modal request-action-modal" id="requestActionModal">

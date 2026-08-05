@@ -78,10 +78,17 @@ test("Personalmodul-Fundament: Feature und eigene Fachrechte sperren Navigation 
   assert.match(server, /featureCatalog: installationFeatureCatalog\.filter\(\(feature\) => feature\.provisionable !== false\)/);
 });
 
-test("Personalmodul-Fundament: M5-Ansichten kommunizieren ihren read-only Ausbaustand und bleiben responsiv", () => {
-  const workflowSection = between(html, 'id="workflowCenterSection"', "</section>");
+test("Personalmodul-Fundament: M5- und O8-Ansichten kommunizieren ihre Wirkungsgrenzen und bleiben responsiv", () => {
+  const workflowSection = between(
+    html,
+    'id="workflowCenterSection"',
+    '<section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks"',
+  );
   assert.match(workflowSection, /Versionsgebundene Ausführung/);
-  assert.match(workflowSection, /M5 · Nur Lesen/);
+  assert.match(workflowSection, /M5 \/ O8 · kontrolliert/);
+  assert.match(workflowSection, /personnelLifecycleEditorSection/);
+  assert.match(workflowSection, /Arbeitsentwurf lebt nur im Arbeitsspeicher/);
+  assert.match(workflowSection, /personnelWorkflowInstanceWorkspace/);
   assert.match(workflowSection, /personnelWorkflowInstanceList/);
   const taskSection = between(html, 'id="personnelTasksSection"', "</section>");
   assert.match(taskSection, /Datensparsame Projektion/);

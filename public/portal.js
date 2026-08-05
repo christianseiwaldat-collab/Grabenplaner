@@ -12,6 +12,8 @@ const portalState = {
   processTaskSummary: null,
   processTasksLoading: false,
   processTasksLoadPromise: null,
+  processTasksRequestGeneration: 0,
+  processTasksOwnerFingerprint: "",
   processTasksAvailable: true,
   processTasksError: "",
   processTaskCompletionPending: new Set(),
@@ -1140,6 +1142,12 @@ async function withdrawPrivacyRequest(id) {
 }
 
 function showLogin(error = "") {
+  const hadProcessTaskOwner = Boolean(
+    portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
+  );
+  portalState.session = null;
+  clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
+  portalState.processTasksOwnerFingerprint = "";
   el.portalLogin.classList.remove("hidden");
   el.portalApp.classList.add("hidden");
   message(el.loginError, error, Boolean(error));
@@ -1176,6 +1184,9 @@ function applySelfServiceVisibility() {
   el.historyTab?.classList.toggle("hidden", !portalTabAllowed("history"));
   el.amuTab?.classList.toggle("hidden", !portalTabAllowed("amu"));
   el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
+  if (!portalTabAllowed("processTasks")) {
+    clearProcessTaskState({ clearRequest: true });
+  }
   el.leadershipTimeOffShortcut?.classList.toggle("hidden", !portalTabAllowed("timeOff"));
   el.leadershipVacationShortcut?.classList.toggle("hidden", !portalTabAllowed("vacation"));
   el.leadershipAmuShortcut?.classList.toggle("hidden", !portalTabAllowed("amu"));
@@ -1202,7 +1213,17 @@ function populateVacationAccountYears() {
 }
 
 function showPortal(session) {
+  const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
+    || processTaskActorFingerprint(portalUser());
   portalState.session = session;
+  const nextProcessTaskOwner = processTaskActorFingerprint(session?.user);
+  if (previousProcessTaskOwner !== nextProcessTaskOwner) {
+    clearProcessTaskState({
+      resetAvailability: true,
+      clearRequest: Boolean(previousProcessTaskOwner),
+    });
+  }
+  portalState.processTasksOwnerFingerprint = nextProcessTaskOwner;
   if (session.status) portalState.status = session.status;
   applyPortalBranding(session.status?.branding || session.branding || portalState.status?.branding || {});
   applyPortalCapabilities();
@@ -1263,6 +1284,12 @@ async function login(event) {
 }
 
 async function logout() {
+  const hadProcessTaskOwner = Boolean(
+    portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
+  );
+  portalState.session = null;
+  clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
+  portalState.processTasksOwnerFingerprint = "";
   try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
   clearRememberedPortalTab();
   location.reload();
@@ -2856,7 +2883,6 @@ function normalizeProcessTask(task = {}) {
   const position = Number(processTaskValue(task, "position", "stepPosition", "step_position", "step.position", "step.sequence") || 1);
   const stepCount = Number(processTaskValue(task, "stepCount", "step_count", "totalSteps", "total_steps", "progress.total") || position);
   return {
-    ...task,
     runId,
     stepId,
     activationCount: Number.isInteger(activationCount) && activationCount > 0 ? activationCount : 1,
@@ -2877,6 +2903,71 @@ function normalizeProcessTask(task = {}) {
     completionNoteRequired: processTaskValue(task, "completionNoteRequired", "completion_note_required") === true,
     personnelWorkflow: task.personnelWorkflow === true,
   };
+}
+
+function normalizeProcessTaskSummary(summary = {}) {
+  const openCount = Number(summary?.openCount);
+  const activeRuns = Number(summary?.activeRuns);
+  return {
+    openCount: Number.isInteger(openCount) && openCount >= 0 ? openCount : 0,
+    activeRuns: Number.isInteger(activeRuns) && activeRuns >= 0 ? activeRuns : 0,
+  };
+}
+
+function processTaskActorFingerprint(user = portalUser()) {
+  if (!user) return "";
+  const permissions = [...new Set((Array.isArray(user.permissions) ? user.permissions : [])
+    .map((permission) => String(permission || "").trim())
+    .filter(Boolean))].sort();
+  const scopes = (Array.isArray(user.scopes) ? user.scopes : []).map((scope) => [
+    scope?.locationId ?? scope?.location_id ?? "",
+    scope?.departmentId ?? scope?.department_id ?? "",
+    scope?.scopeType ?? scope?.scope_type ?? "",
+  ].map((value) => String(value || "")))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return JSON.stringify({
+    actorId: String(user.employeeNumber || user.accountId || user.loginName || ""),
+    accountType: String(user.accountType || ""),
+    isEmployee: user.isEmployee !== false,
+    role: String(user.role || ""),
+    profileId: String(user.profileId || user.profile?.id || ""),
+    homeLocationId: String(user.homeLocationId || ""),
+    positionId: String(user.positionId || ""),
+    mustChangePassword: user.mustChangePassword === true,
+    permissions,
+    scopes,
+  });
+}
+
+function processTaskRequestContextCurrent(generation, actorFingerprint) {
+  return Boolean(
+    portalState.session
+      && actorFingerprint
+      && portalState.processTasksRequestGeneration === generation
+      && portalState.processTasksOwnerFingerprint === actorFingerprint
+      && processTaskActorFingerprint(portalUser()) === actorFingerprint,
+  );
+}
+
+function clearProcessTaskState({ resetAvailability = false, clearRequest = false } = {}) {
+  portalState.processTasksRequestGeneration += 1;
+  portalState.processTasks = [];
+  portalState.processTaskSummary = null;
+  portalState.processTasksLoading = false;
+  portalState.processTasksLoadPromise = null;
+  portalState.processTasksError = "";
+  portalState.processTaskFlash = "";
+  portalState.processTaskCompletionPending.clear();
+  portalState.processTaskCompletionKeys.clear();
+  portalState.processTaskCompletionPayloads.clear();
+  portalState.processTaskNotes.clear();
+  portalState.processTaskMessages.clear();
+  portalState.processTaskRequestedRunId = "";
+  portalState.processTaskRequestedStepId = "";
+  if (resetAvailability) portalState.processTasksAvailable = true;
+  if (clearRequest) clearProcessTaskRequest();
+  if (el.refreshProcessTasks) el.refreshProcessTasks.disabled = false;
+  renderProcessTasks();
 }
 
 function processTaskDateTime(value) {
@@ -2947,14 +3038,43 @@ function renderProcessTasks() {
 
 async function loadProcessTasks(options = {}) {
   const afterCurrent = options?.afterCurrent === true;
-  if (!portalState.session || !portalState.processTasksAvailable) return;
+  if (!portalState.session) return;
+  const currentActorFingerprint = processTaskActorFingerprint(portalUser());
+  if (portalState.processTasksOwnerFingerprint !== currentActorFingerprint) {
+    const previousOwner = portalState.processTasksOwnerFingerprint;
+    clearProcessTaskState({
+      resetAvailability: true,
+      clearRequest: Boolean(previousOwner),
+    });
+    portalState.processTasksOwnerFingerprint = currentActorFingerprint;
+  }
+  if (!currentActorFingerprint || !portalState.processTasksAvailable) return;
+  if (!portalTabAllowed("processTasks")) {
+    const hasTaskState = portalState.processTasks.length > 0
+      || portalState.processTaskSummary
+      || portalState.processTasksLoading
+      || portalState.processTasksError
+      || portalState.processTaskCompletionPending.size > 0
+      || portalState.processTaskCompletionKeys.size > 0
+      || portalState.processTaskCompletionPayloads.size > 0
+      || portalState.processTaskNotes.size > 0
+      || portalState.processTaskMessages.size > 0;
+    if (hasTaskState) clearProcessTaskState({ clearRequest: true });
+    return;
+  }
   if (portalState.processTasksLoading) {
+    const waitingGeneration = portalState.processTasksRequestGeneration;
+    const waitingActorFingerprint = portalState.processTasksOwnerFingerprint;
     const currentLoad = portalState.processTasksLoadPromise;
     if (!afterCurrent) return currentLoad;
     if (currentLoad) await currentLoad;
-    if (!portalState.session || !portalState.processTasksAvailable) return;
+    if (!processTaskRequestContextCurrent(waitingGeneration, waitingActorFingerprint)
+        || !portalState.processTasksAvailable
+        || !portalTabAllowed("processTasks")) return;
     return loadProcessTasks();
   }
+  const requestGeneration = portalState.processTasksRequestGeneration;
+  const actorFingerprint = portalState.processTasksOwnerFingerprint;
   portalState.processTasksLoading = true;
   if (el.refreshProcessTasks) el.refreshProcessTasks.disabled = true;
   el.processTaskList?.setAttribute("aria-busy", "true");
@@ -2962,6 +3082,14 @@ async function loadProcessTasks(options = {}) {
     try {
       portalState.processTasksError = "";
       const data = await api("/api/portal/v1/me/process-tasks");
+      if (!processTaskRequestContextCurrent(requestGeneration, actorFingerprint)) return;
+      if (data?.available === false) {
+        portalState.processTasksAvailable = false;
+        clearProcessTaskState({ clearRequest: true });
+        el.processTasksTab?.classList.add("hidden");
+        if (portalState.activeTab === "processTasks") setTab("schedule");
+        return;
+      }
       portalState.processTasks = (Array.isArray(data?.tasks) ? data.tasks : Array.isArray(data?.items) ? data.items : []).map(normalizeProcessTask)
         .filter((task) => task.runId && task.stepId)
         .sort((left, right) => String(left.assignedAt).localeCompare(String(right.assignedAt)) || left.position - right.position);
@@ -2969,16 +3097,19 @@ async function loadProcessTasks(options = {}) {
       [portalState.processTaskNotes, portalState.processTaskMessages, portalState.processTaskCompletionKeys, portalState.processTaskCompletionPayloads].forEach((entries) => {
         for (const key of entries.keys()) if (!activeKeys.has(key)) entries.delete(key);
       });
-      portalState.processTaskSummary = data?.summary || null;
-      portalState.processTasksAvailable = data?.available !== false;
+      portalState.processTaskSummary = normalizeProcessTaskSummary(data?.summary);
+      portalState.processTasksAvailable = true;
       el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
     } catch (error) {
+      if (!processTaskRequestContextCurrent(requestGeneration, actorFingerprint)) return;
       if ([403, 404].includes(error.status)) {
         portalState.processTasksAvailable = false;
+        clearProcessTaskState({ clearRequest: true });
         el.processTasksTab?.classList.add("hidden");
         if (portalState.activeTab === "processTasks") setTab("schedule");
       } else portalState.processTasksError = error.message;
     } finally {
+      if (!processTaskRequestContextCurrent(requestGeneration, actorFingerprint)) return;
       portalState.processTasksLoading = false;
       if (el.refreshProcessTasks) el.refreshProcessTasks.disabled = false;
       renderProcessTasks();
@@ -2994,6 +3125,11 @@ async function loadProcessTasks(options = {}) {
 
 async function completeProcessTask(task, card) {
   if (!task?.canComplete || portalState.processTaskCompletionPending.has(task.key)) return;
+  const requestGeneration = portalState.processTasksRequestGeneration;
+  const actorFingerprint = portalState.processTasksOwnerFingerprint;
+  if (!processTaskRequestContextCurrent(requestGeneration, actorFingerprint)
+      || !portalTabAllowed("processTasks")
+      || !portalState.processTasks.some((entry) => entry.key === task.key)) return;
   const previousPayload = portalState.processTaskCompletionPayloads.get(task.key);
   const note = task.personnelWorkflow
     ? ""
@@ -3037,6 +3173,7 @@ async function completeProcessTask(task, card) {
       `/api/portal/v1/me/process-tasks/${encodeURIComponent(task.runId)}/${encodeURIComponent(task.stepId)}/complete`,
       options,
     );
+    if (!processTaskRequestContextCurrent(requestGeneration, actorFingerprint)) return;
     portalState.processTaskCompletionKeys.delete(task.key);
     portalState.processTaskCompletionPayloads.delete(task.key);
     portalState.processTaskNotes.delete(task.key);
@@ -3047,8 +3184,10 @@ async function completeProcessTask(task, card) {
     portalState.processTaskFlash = "Der Arbeitsschritt wurde nachvollziehbar abgeschlossen.";
     await Promise.allSettled([loadProcessTasks({ afterCurrent: true }), loadNotifications()]);
   } catch (error) {
+    if (!processTaskRequestContextCurrent(requestGeneration, actorFingerprint)) return;
     portalState.processTaskMessages.set(task.key, `${error.message} Beim erneuten Versuch wird dieselbe Vorgangs-ID verwendet.`);
   } finally {
+    if (!processTaskRequestContextCurrent(requestGeneration, actorFingerprint)) return;
     portalState.processTaskCompletionPending.delete(task.key);
     renderProcessTasks();
   }

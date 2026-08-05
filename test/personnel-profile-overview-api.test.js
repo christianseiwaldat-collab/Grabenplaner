@@ -6,6 +6,9 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const {
+  personnelWorkflowPublicationReceiptBody,
+} = require("../lib/personnel-workflow-publication-receipt");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-personnel-profile-api-"));
 process.env.DB_PATH = path.join(testRoot, "dienstplan.db");
@@ -281,24 +284,142 @@ function expectedProfile(departmentId) {
   };
 }
 
-function expectedTabs(masterDataAvailable, documentsAvailable) {
+function expectedTabs(masterDataAvailable, documentsAvailable, onboardingAvailable = false) {
   return {
     overview: { available: true },
     masterData: { available: masterDataAvailable },
     documents: { available: documentsAvailable },
-    onboarding: { available: false },
+    onboarding: { available: onboardingAvailable },
     training: { available: false },
     offboarding: { available: false },
     history: { available: false },
   };
 }
 
-function expectedCapabilities(masterDataAvailable, documentsAvailable) {
+function expectedCapabilities(masterDataAvailable, documentsAvailable, onboardingAvailable = false) {
   return {
     canReadOverview: true,
     canReadMasterOrg: masterDataAvailable,
     canReadDocuments: documentsAvailable,
+    canReadOnboardingPreview: onboardingAvailable,
+    canStartOnboarding: false,
+    canCloseOnboarding: false,
+    canReadOffboardingConfidential: false,
+    canPrepareOffboarding: false,
+    canApproveOffboardingException: false,
+    canReleaseOffboardingCommunication: false,
+    canConfirmOffboardingInformation: false,
+    canExecuteOffboarding: false,
+    canCloseOffboarding: false,
+    canReadOffboardingConfidentialAudit: false,
   };
+}
+
+function insertO3OnboardingPublication() {
+  const processId = "m7-o3-onboarding-process";
+  const snapshotJson = JSON.stringify({
+    id: processId,
+    revision: 1,
+    title: "M7 O3 Onboarding",
+    scope: { type: "company", locationId: null, departmentId: null },
+    steps: [
+      {
+        id: "m7-o3-fixed-hr",
+        type: "actor",
+        title: "Personalunterlagen prüfen",
+        description: "M7 O3 vertrauliche Rohbeschreibung darf nicht projiziert werden",
+        responsibilityType: "employee",
+        responsibilityReference: ACTORS.hr.employeeNumber,
+        responsibilityLabel: "Feste PL-Person",
+        conditionType: "always",
+        conditionText: "",
+        notificationChannels: [],
+      },
+      {
+        id: "m7-o3-role-hr",
+        type: "actor",
+        title: "Eintritt abstimmen",
+        description: "M7 O3 zweite Rohbeschreibung",
+        responsibilityType: "role",
+        responsibilityReference: "hr",
+        responsibilityLabel: "Personalleitung",
+        conditionType: "always",
+        conditionText: "",
+        notificationChannels: [],
+      },
+      {
+        id: "m7-o3-system",
+        type: "system",
+        title: "Zugang nur vormerken",
+        description: "Keine Außenwirkung",
+        responsibilityType: "system",
+        responsibilityReference: "",
+        responsibilityLabel: "Grabenplaner",
+        conditionType: "always",
+        conditionText: "",
+        notificationChannels: [],
+      },
+    ],
+  });
+  const row = {
+    id: "m7-o3-onboarding-publication",
+    process_id: processId,
+    source_revision: 1,
+    version_number: 1,
+    workflow_code: "onboarding.m7-o3",
+    workflow_type: "onboarding",
+    authority_level: "central",
+    requirement_kind: "mandatory",
+    data_classification: "standard",
+    scope_type: "company",
+    location_id: null,
+    department_id: null,
+    snapshot_json: snapshotJson,
+    snapshot_sha256: crypto.createHash("sha256").update(snapshotJson).digest("hex"),
+    published_by: ACTORS.hr.employeeNumber,
+    published_at: "2026-08-03T10:00:00.000Z",
+  };
+  row.receipt_sha256 = crypto.createHash("sha256")
+    .update(JSON.stringify(personnelWorkflowPublicationReceiptBody(row)))
+    .digest("hex");
+  db.prepare(`
+    INSERT INTO custom_processes (
+      id, title, symbol, description, category, scope_type, trigger_type,
+      trigger_minimum_shortfall, status, revision, created_by, updated_by
+    ) VALUES (?, 'M7 O3 Onboarding', 'O3', 'Read-only O3 API-Test', 'other',
+      'company', 'manual', 1, 'active', 1, ?, ?)
+  `).run(processId, ACTORS.hr.employeeNumber, ACTORS.hr.employeeNumber);
+  db.prepare(`
+    INSERT INTO custom_process_revisions (
+      process_id, revision, snapshot_json, created_by
+    ) VALUES (?, 1, ?, ?)
+  `).run(processId, snapshotJson, ACTORS.hr.employeeNumber);
+  db.prepare(`
+    INSERT INTO custom_process_publications (
+      id, process_id, source_revision, version_number, workflow_code,
+      workflow_type, authority_level, requirement_kind, data_classification,
+      scope_type, location_id, department_id, snapshot_json, snapshot_sha256,
+      receipt_sha256, published_by, published_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    row.id,
+    row.process_id,
+    row.source_revision,
+    row.version_number,
+    row.workflow_code,
+    row.workflow_type,
+    row.authority_level,
+    row.requirement_kind,
+    row.data_classification,
+    row.scope_type,
+    row.location_id,
+    row.department_id,
+    row.snapshot_json,
+    row.snapshot_sha256,
+    row.receipt_sha256,
+    row.published_by,
+    row.published_at,
+  );
 }
 
 function leafPaths(value, prefix = "") {
@@ -347,6 +468,11 @@ test("M7 Mitarbeiterprofil: tabweise positive Projektionen und bestehende Objekt
   const disabled = await request(`${PROFILE_ROUTE}?tab=overview`, { auth: sessions.hr });
   assert.equal(disabled.response.status, 403);
   assert.equal(disabled.payload.code, "FEATURE_DISABLED");
+  const disabledOnboarding = await request(`${PROFILE_ROUTE}?tab=onboarding`, {
+    auth: sessions.developer,
+  });
+  assert.equal(disabledOnboarding.response.status, 403);
+  assert.equal(disabledOnboarding.payload.code, "FEATURE_DISABLED");
   const disabledRoster = await request("/api/employees", { auth: sessions.hr });
   assert.equal(disabledRoster.response.status, 200, disabledRoster.text);
   assert.deepEqual(
@@ -393,6 +519,166 @@ test("M7 Mitarbeiterprofil: tabweise positive Projektionen und bestehende Objekt
       employee_number, permission, location_id, department_id, approved_by
     ) VALUES (?, ?, ?, ?, ?)
   `);
+
+  insertO3OnboardingPublication();
+  for (const permission of [
+    "personnel:lifecycle:operational:read",
+    "personnel:lifecycle:operational:update",
+  ]) {
+    insertGrant.run(
+      ACTORS.hr.employeeNumber,
+      permission,
+      ACTORS.hr.employeeNumber,
+    );
+  }
+  const developerOnboardingDenied = await request(`${PROFILE_ROUTE}?tab=onboarding`, {
+    auth: sessions.developer,
+  });
+  assert.equal(developerOnboardingDenied.response.status, 403);
+  assert.equal(developerOnboardingDenied.payload.code, "PORTAL_PERMISSION_DENIED");
+  insertGrant.run(
+    ACTORS.developer.employeeNumber,
+    "personnel:lifecycle:onboarding:read",
+    ACTORS.hr.employeeNumber,
+  );
+  const developerMissingPackageRight = await request(`${PROFILE_ROUTE}?tab=onboarding`, {
+    auth: sessions.developer,
+  });
+  assert.equal(developerMissingPackageRight.response.status, 403);
+  assert.equal(
+    developerMissingPackageRight.payload.code,
+    "PERSONNEL_LIFECYCLE_ONBOARDING_PREVIEW_ACCESS_DENIED",
+  );
+  insertGrant.run(
+    ACTORS.developer.employeeNumber,
+    "personnel:lifecycle:packages:read",
+    ACTORS.hr.employeeNumber,
+  );
+  const lifecycleTables = [
+    "personnel_employment_episodes",
+    "personnel_lifecycle_cases",
+    "personnel_lifecycle_case_reference_dates",
+    "personnel_lifecycle_case_package_bindings",
+    "personnel_lifecycle_case_assignments",
+    "personnel_lifecycle_case_events",
+    "personnel_lifecycle_confidential_access_events",
+  ];
+  const lifecycleCountsBefore = Object.fromEntries(lifecycleTables.map((table) => [
+    table,
+    db.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get().count,
+  ]));
+  const developerOnboarding = await request(`${PROFILE_ROUTE}?tab=onboarding`, {
+    auth: sessions.developer,
+  });
+  assert.equal(developerOnboarding.response.status, 200, developerOnboarding.text);
+  assert.deepEqual(developerOnboarding.payload.profile, expectedProfile(departmentId));
+  assert.deepEqual(developerOnboarding.payload.tabs, {
+    overview: { available: false },
+    masterData: { available: false },
+    documents: { available: false },
+    onboarding: { available: true },
+    training: { available: false },
+    offboarding: { available: false },
+    history: { available: false },
+  });
+  assert.deepEqual(developerOnboarding.payload.capabilities, {
+    canReadOverview: false,
+    canReadMasterOrg: false,
+    canReadDocuments: false,
+    canReadOnboardingPreview: true,
+    canStartOnboarding: false,
+    canCloseOnboarding: false,
+    canReadOffboardingConfidential: false,
+    canPrepareOffboarding: false,
+    canApproveOffboardingException: false,
+    canReleaseOffboardingCommunication: false,
+    canConfirmOffboardingInformation: false,
+    canExecuteOffboarding: false,
+    canCloseOffboarding: false,
+    canReadOffboardingConfidentialAudit: false,
+  });
+  const preview = developerOnboarding.payload.onboardingPreview;
+  assert.equal(preview.contractVersion, "o3-v0.1");
+  assert.equal(preview.mode, "read_only_onboarding_profile_preview");
+  assert.equal(preview.caseType, "onboarding");
+  assert.equal(preview.startAllowed, false);
+  assert.equal(preview.casePersisted, false);
+  assert.equal(preview.instanceCount, 0);
+  assert.equal(preview.taskCount, 0);
+  assert.equal(preview.assignmentCount, 0);
+  assert.deepEqual(preview.packageResolution.selectedBindings, []);
+  assert.equal(preview.packageResolution.packages.length, 1);
+  assert.deepEqual(
+    preview.packageResolution.packages[0].assignments.map(({ state }) => state),
+    ["fixed_recipient_eligible", "selection_required", "system_deferred"],
+  );
+  assert.equal(
+    preview.packageResolution.packages[0].assignments
+      .every(({ selectedAssignee }) => selectedAssignee === null),
+    true,
+  );
+  assert.deepEqual(preview.assignmentPreview, {
+    packageCount: 1,
+    stepCount: 3,
+    fixedRecipientCount: 1,
+    selectionRequiredCount: 1,
+    unresolvedCount: 0,
+    systemStepCount: 1,
+    selectedAssignmentCount: 0,
+  });
+  assert.equal(
+    preview.blockers.some(({ code }) => code === "onboarding_execution_deferred_until_o4"),
+    true,
+  );
+  assert.equal(
+    preview.blockers.some(({ code }) => code === "assignment_selection_required"),
+    true,
+  );
+  const onboardingJson = JSON.stringify(developerOnboarding.payload);
+  for (const forbidden of [
+    "M7 O3 vertrauliche Rohbeschreibung",
+    "notificationChannels",
+    "snapshot_json",
+    "snapshotSha256",
+    "receiptSha256",
+    "role_permissions",
+    "password_hash",
+    "offboardingPreview",
+  ]) assert.equal(onboardingJson.includes(forbidden), false, forbidden);
+  assert.deepEqual(
+    Object.fromEntries(lifecycleTables.map((table) => [
+      table,
+      db.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get().count,
+    ])),
+    lifecycleCountsBefore,
+  );
+  const onboardingAudit = db.prepare(`
+    SELECT actor, action, entity_type, entity_id, detail
+    FROM audit_log
+    WHERE action = 'personnel-lifecycle.onboarding-preview.view'
+      AND actor = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(ACTORS.developer.employeeNumber);
+  assert.equal(onboardingAudit.actor, ACTORS.developer.employeeNumber);
+  assert.equal(onboardingAudit.entity_type, "employee");
+  assert.equal(onboardingAudit.entity_id, PROFILE_EMPLOYEE);
+  assert.deepEqual(JSON.parse(onboardingAudit.detail), {
+    packages: 1,
+    steps: 3,
+    blockers: preview.blockers.map(({ code }) => code),
+  });
+  const developerOverviewStillDenied = await request(`${PROFILE_ROUTE}?tab=overview`, {
+    auth: sessions.developer,
+  });
+  assert.equal(developerOverviewStillDenied.response.status, 403);
+  assert.equal(developerOverviewStillDenied.payload.code, "PERSONNEL_PROFILE_ACCESS_DENIED");
+  const hrOnboardingWithoutExplicitRights = await request(`${PROFILE_ROUTE}?tab=onboarding`, {
+    auth: sessions.hr,
+  });
+  assert.equal(hrOnboardingWithoutExplicitRights.response.status, 403);
+  assert.equal(hrOnboardingWithoutExplicitRights.payload.code, "PORTAL_PERMISSION_DENIED");
+
   for (const permission of ["personnel:profiles:read", "personnel:profiles:master:read"]) {
     insertGrant.run(ACTORS.branch.employeeNumber, permission, ACTORS.hr.employeeNumber);
     insertScope.run(

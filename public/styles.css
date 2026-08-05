@@ -818,6 +818,72 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .personnel-workflow-task-card { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; min-width:0; max-width:100%; padding:14px 15px; border:1px solid var(--line); border-radius:13px; color:var(--ink); background:var(--surface); box-shadow:var(--shadow); }
 .personnel-workflow-task-card > div { min-width:0; }
 .personnel-workflow-task-card p { min-width:0; margin:5px 0 0; color:var(--muted); font-size:8.5px; line-height:1.4; overflow-wrap:anywhere; }
+.personnel-lifecycle-onboarding-task-group { display:grid; gap:11px; min-width:0; max-width:100%; margin-top:12px; padding:14px; border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line)); border-radius:15px; background:color-mix(in srgb,var(--surface) 96%,var(--accent)); }
+.personnel-lifecycle-onboarding-task-group > header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:10px; min-width:0; }
+.personnel-lifecycle-onboarding-task-group > header > div { min-width:0; }
+.personnel-lifecycle-onboarding-task-group h3 { margin:4px 0 0; overflow-wrap:anywhere; }
+.personnel-lifecycle-onboarding-task-group header p { margin:5px 0 0; color:var(--muted); font-size:8.5px; line-height:1.45; }
+.personnel-lifecycle-onboarding-task-list { display:grid; gap:10px; min-width:0; }
+.personnel-lifecycle-onboarding-task-card > div > small { display:block; margin-top:6px; color:var(--muted); font-size:7.5px; }
+.personnel-lifecycle-onboarding-task-card form { display:grid; flex:0 1 330px; gap:8px; min-width:240px; max-width:100%; }
+.personnel-lifecycle-onboarding-task-card form label { display:flex; align-items:flex-start; gap:7px; min-width:0; color:var(--muted); font-size:8px; line-height:1.4; }
+.personnel-lifecycle-onboarding-task-card form label span { min-width:0; overflow-wrap:anywhere; }
+.personnel-lifecycle-onboarding-task-card form input { flex:0 0 auto; margin-top:2px; }
+.personnel-lifecycle-onboarding-task-card form button { width:100%; min-height:40px; margin:0; white-space:normal; }
+.personnel-lifecycle-interface-catalog { display:grid; gap:12px; min-width:0; max-width:100%; margin-top:16px; padding:15px; border:1px solid color-mix(in srgb,var(--green) 30%,var(--line)); border-radius:15px; background:var(--surface-soft); box-sizing:border-box; overflow-wrap:anywhere; }
+.personnel-lifecycle-interface-catalog.hidden { display:none; }
+.personnel-lifecycle-interface-catalog > header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:11px; min-width:0; }
+.personnel-lifecycle-interface-catalog > header > div { min-width:0; }
+.personnel-lifecycle-interface-catalog h3 { margin:4px 0 0; color:var(--ink); font-size:14px; line-height:1.4; overflow-wrap:anywhere; }
+.personnel-lifecycle-interface-catalog header p { max-width:720px; margin:6px 0 0; color:var(--muted); font-size:8.5px; line-height:1.5; overflow-wrap:anywhere; }
+.personnel-lifecycle-interface-status { min-width:0; margin:0; color:var(--muted); font-size:8.5px; line-height:1.5; overflow-wrap:anywhere; }
+.personnel-lifecycle-interface-status.error { color:#8d4638; }
+.personnel-lifecycle-interface-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; min-width:0; max-width:100%; }
+.personnel-lifecycle-interface-card { display:grid; align-content:start; gap:10px; min-width:0; max-width:100%; padding:13px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--surface); box-sizing:border-box; }
+.personnel-lifecycle-interface-card > header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:8px; min-width:0; }
+.personnel-lifecycle-interface-card h4 { min-width:0; margin:3px 0 0; font-size:12px; overflow-wrap:anywhere; }
+.personnel-lifecycle-interface-card dl { display:grid; gap:8px; min-width:0; margin:0; }
+.personnel-lifecycle-interface-card dl > div { min-width:0; padding-top:8px; border-top:1px solid var(--line); }
+.personnel-lifecycle-interface-card dt { color:var(--muted); font-size:7.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.personnel-lifecycle-interface-card dd { min-width:0; margin:4px 0 0; color:var(--ink); font-size:8.5px; line-height:1.45; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation { display:grid; gap:12px; min-width:0; max-width:100%; margin-top:16px; padding:15px; border:1px solid color-mix(in srgb,#b7791f 34%,var(--line)); border-radius:15px; background:color-mix(in srgb,var(--surface-soft) 96%,#f4c46c); box-sizing:border-box; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation.hidden { display:none; }
+.personnel-lifecycle-automation > header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:11px; min-width:0; }
+.personnel-lifecycle-automation > header > div { min-width:0; }
+.personnel-lifecycle-automation h3 { min-width:0; margin:4px 0 0; color:var(--ink); font-size:14px; line-height:1.4; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation header p { max-width:760px; margin:6px 0 0; color:var(--muted); font-size:8.5px; line-height:1.5; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation-status { min-width:0; margin:0; color:var(--muted); font-size:8.5px; line-height:1.5; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation-status.error { color:#8d4638; }
+.personnel-lifecycle-automation-catalog { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; min-width:0; max-width:100%; }
+.personnel-lifecycle-automation-domain-card { display:grid; align-content:start; gap:9px; min-width:0; max-width:100%; padding:12px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--surface); box-sizing:border-box; }
+.personnel-lifecycle-automation-domain-card > header,.personnel-lifecycle-automation-task-card > header { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:8px; min-width:0; }
+.personnel-lifecycle-automation-domain-card > header > div,.personnel-lifecycle-automation-task-card > header > div { min-width:0; }
+.personnel-lifecycle-automation-domain-card h4,.personnel-lifecycle-automation-task-card h4 { min-width:0; margin:3px 0 0; font-size:11px; line-height:1.4; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation-domain-card dl,.personnel-lifecycle-automation-task-card dl { display:grid; gap:7px; min-width:0; margin:0; }
+.personnel-lifecycle-automation-domain-card dl > div,.personnel-lifecycle-automation-task-card dl > div { min-width:0; padding-top:7px; border-top:1px solid var(--line); }
+.personnel-lifecycle-automation-domain-card dt,.personnel-lifecycle-automation-task-card dt { color:var(--muted); font-size:7px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.personnel-lifecycle-automation-domain-card dd,.personnel-lifecycle-automation-task-card dd { min-width:0; margin:3px 0 0; color:var(--ink); font-size:8.3px; line-height:1.45; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; min-width:0; max-width:100%; }
+.personnel-lifecycle-automation-summary article { min-width:0; padding:11px 12px; border:1px solid var(--line); border-radius:11px; color:var(--ink); background:var(--surface); box-sizing:border-box; }
+.personnel-lifecycle-automation-summary span,.personnel-lifecycle-automation-summary strong,.personnel-lifecycle-automation-summary small { display:block; min-width:0; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation-summary span { color:var(--muted); font-size:7px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+.personnel-lifecycle-automation-summary strong { margin:3px 0 2px; font-size:19px; }
+.personnel-lifecycle-automation-summary small { color:var(--muted); font-size:7.5px; line-height:1.4; }
+.personnel-lifecycle-automation-list { display:grid; gap:10px; min-width:0; max-width:100%; }
+.personnel-lifecycle-automation-task-card { display:grid; gap:10px; min-width:0; max-width:100%; padding:13px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--surface); box-sizing:border-box; }
+.personnel-lifecycle-automation-task-card dl { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.personnel-lifecycle-automation-due-badge { display:inline-flex; align-items:center; max-width:100%; min-height:24px; padding:4px 9px; border-radius:999px; color:#5b6460; background:#e9edeb; font-size:7.5px; font-weight:800; line-height:1.25; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation-due-badge.due-not_due { color:#345c4d; background:#e7f0ec; }
+.personnel-lifecycle-automation-due-badge.due-due_soon { color:#765819; background:#fff0bf; }
+.personnel-lifecycle-automation-due-badge.due-due_today { color:#8a4f18; background:#ffe2bf; }
+.personnel-lifecycle-automation-due-badge.due-overdue { color:#8d352c; background:#f9d8d3; }
+.personnel-lifecycle-automation-blockers { display:grid; gap:3px; min-width:0; margin:0; padding:9px 10px; border-radius:9px; color:var(--muted); background:var(--surface-soft); font-size:8px; line-height:1.45; }
+.personnel-lifecycle-automation-blockers strong,.personnel-lifecycle-automation-blockers span { min-width:0; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation-blockers strong { color:var(--ink); }
+.personnel-lifecycle-automation-boundary { display:grid; gap:6px; min-width:0; margin:0; padding:11px 12px 11px 28px; border:1px solid color-mix(in srgb,#b7791f 28%,var(--line)); border-radius:11px; color:var(--muted); background:var(--surface); font-size:8px; line-height:1.45; }
+.personnel-lifecycle-automation-boundary li,.personnel-lifecycle-automation-boundary strong { min-width:0; overflow-wrap:anywhere; }
+.personnel-lifecycle-automation-boundary strong { color:var(--ink); }
+.personnel-lifecycle-automation-empty { min-width:0; margin:0; padding:15px 12px; border:1px dashed var(--line); border-radius:11px; color:var(--muted); background:var(--surface); font-size:8.5px; line-height:1.5; text-align:center; overflow-wrap:anywhere; }
 .personnel-dashboard-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:15px; padding:19px 20px; border:1px solid var(--line); border-radius:16px; background:var(--surface); box-shadow:var(--shadow); }
 .personnel-dashboard-heading h2,.personnel-dashboard-customizer-heading h3 { margin:3px 0 0; color:var(--ink); font:800 17px/1.25 "Manrope","DM Sans","Segoe UI",sans-serif; }
 .personnel-dashboard-heading p,.personnel-dashboard-customizer-heading p { max-width:700px; margin:6px 0 0; color:var(--muted); font-size:10px; line-height:1.5; }
@@ -937,6 +1003,103 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .employee-profile-document h3 { margin:4px 0 0; color:var(--ink); font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
 .employee-profile-document > p { margin:10px 0 0; color:var(--muted); font-size:10.5px; line-height:1.5; overflow-wrap:anywhere; }
 .employee-profile-document-meta { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:11px; margin:14px 0 0; padding-top:13px; border-top:1px solid var(--line); }
+.employee-onboarding-intro { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:14px; padding:17px; border:1px solid color-mix(in srgb,var(--green) 25%,var(--line)); border-radius:14px; background:color-mix(in srgb,var(--green) 6%,var(--surface)); }
+.employee-onboarding-intro > div { min-width:0; }
+.employee-onboarding-intro h3 { margin:4px 0 0; color:var(--ink); font-size:16px; }
+.employee-onboarding-intro p { max-width:720px; margin:7px 0 0; color:var(--muted); font-size:11px; line-height:1.5; }
+.employee-onboarding-intro > .status-badge { flex:0 0 auto; }
+.employee-onboarding-summary { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.employee-onboarding-blockers { margin-top:14px; padding:16px; border:1px solid color-mix(in srgb,#d39b24 40%,var(--line)); border-radius:14px; background:color-mix(in srgb,#f1c95d 10%,var(--surface)); }
+.employee-onboarding-blockers h3 { margin:0; color:var(--ink); font-size:13px; }
+.employee-onboarding-blockers ul { margin:9px 0 0; padding-left:19px; color:var(--muted); font-size:10.5px; line-height:1.55; }
+.employee-onboarding-blockers li + li { margin-top:4px; }
+.employee-onboarding-package-list { display:grid; gap:13px; min-width:0; margin-top:14px; }
+.employee-onboarding-package { min-width:0; padding:17px; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); }
+.employee-onboarding-package > header { display:flex; align-items:flex-start; justify-content:space-between; gap:13px; }
+.employee-onboarding-package > header > div { min-width:0; }
+.employee-onboarding-package h3 { margin:4px 0 0; color:var(--ink); font-size:15px; overflow-wrap:anywhere; }
+.employee-onboarding-package-meta { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:14px 0 0; }
+.employee-onboarding-package-meta > div,.employee-onboarding-assignment dl > div { min-width:0; }
+.employee-onboarding-package-meta dt,.employee-onboarding-assignment dt { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.employee-onboarding-package-meta dd,.employee-onboarding-assignment dd { margin:4px 0 0; color:var(--ink); font-size:10.5px; font-weight:700; line-height:1.4; overflow-wrap:anywhere; }
+.employee-onboarding-assignment-list { display:grid; gap:9px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+.employee-onboarding-assignment { min-width:0; padding:13px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.employee-onboarding-assignment > header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.employee-onboarding-assignment > header > div { min-width:0; }
+.employee-onboarding-assignment > header span:first-child { display:block; color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.employee-onboarding-assignment > header strong { display:block; margin-top:4px; color:var(--ink); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+.employee-onboarding-assignment dl { display:grid; grid-template-columns:minmax(150px,.7fr) minmax(0,1.3fr); gap:11px; margin:11px 0 0; padding-top:10px; border-top:1px solid var(--line); }
+.employee-onboarding-execution,.employee-onboarding-active-case,.employee-onboarding-execution-unavailable { min-width:0; max-width:100%; margin-top:18px; padding:18px; border:1px solid color-mix(in srgb,var(--green) 34%,var(--line)); border-radius:16px; background:color-mix(in srgb,var(--green) 5%,var(--surface)); overflow:hidden; }
+.employee-onboarding-execution > header,.employee-onboarding-active-case > header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.employee-onboarding-execution > header > div,.employee-onboarding-active-case > header > div { min-width:0; }
+.employee-onboarding-execution h3,.employee-onboarding-active-case h3 { margin:4px 0 0; color:var(--ink); font-size:17px; overflow-wrap:anywhere; }
+.employee-onboarding-execution > header p,.employee-onboarding-active-case > p,.employee-onboarding-execution-unavailable p { margin:7px 0 0; color:var(--muted); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.employee-onboarding-active-case dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:15px 0 0; }
+.employee-onboarding-active-case dl > div { min-width:0; padding:11px; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
+.employee-onboarding-active-case dt { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.employee-onboarding-active-case dd { margin:4px 0 0; color:var(--ink); font-size:11px; font-weight:750; line-height:1.4; overflow-wrap:anywhere; }
+.employee-onboarding-close-form { display:grid; gap:10px; min-width:0; max-width:680px; margin-top:15px; padding:14px; border:1px solid color-mix(in srgb,var(--green) 28%,var(--line)); border-radius:12px; background:var(--surface); }
+.employee-onboarding-start-form { display:grid; gap:14px; min-width:0; max-width:100%; margin-top:16px; }
+.employee-onboarding-start-section { min-width:0; padding:15px; border:1px solid var(--line); border-radius:13px; background:var(--surface); overflow:hidden; }
+.employee-onboarding-start-section > h4,.employee-onboarding-start-package h4 { margin:0; color:var(--ink); font-size:13px; overflow-wrap:anywhere; }
+.employee-onboarding-date-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:11px; }
+.employee-onboarding-family-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:11px; }
+.employee-onboarding-start-field { display:grid; gap:6px; min-width:0; color:var(--ink); font-size:10.5px; font-weight:750; }
+.employee-onboarding-start-field input,.employee-onboarding-start-field select,.employee-onboarding-start-assignment select { width:100%; min-width:0; max-width:100%; min-height:44px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:var(--surface); font:inherit; }
+.employee-onboarding-start-field input:focus-visible,.employee-onboarding-start-field select:focus-visible,.employee-onboarding-start-assignment select:focus-visible,.employee-onboarding-start-check input:focus-visible { outline:2px solid color-mix(in srgb,var(--green) 72%,white); outline-offset:2px; }
+.employee-onboarding-start-package { min-width:0; margin-top:12px; padding:14px; border:1px solid color-mix(in srgb,var(--green) 22%,var(--line)); border-radius:12px; background:var(--surface-soft); overflow:hidden; }
+.employee-onboarding-start-package > header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.employee-onboarding-start-package > header > div { min-width:0; }
+.employee-onboarding-start-assignments { display:grid; gap:9px; margin-top:12px; }
+.employee-onboarding-start-assignment { display:grid; grid-template-columns:minmax(0,1fr) minmax(220px,.9fr); align-items:center; gap:12px; min-width:0; padding:11px; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
+.employee-onboarding-start-assignment > span,.employee-onboarding-start-assignment > div { min-width:0; }
+.employee-onboarding-start-assignment small,.employee-onboarding-start-assignment strong { display:block; overflow-wrap:anywhere; }
+.employee-onboarding-start-assignment small { color:var(--muted); font-size:9px; font-weight:800; line-height:1.35; }
+.employee-onboarding-start-assignment strong { margin-top:4px; color:var(--ink); font-size:11.5px; line-height:1.4; }
+.employee-onboarding-start-assignment.system { grid-template-columns:minmax(0,1fr) auto; }
+.employee-onboarding-start-check { display:grid; grid-template-columns:20px minmax(0,1fr); align-items:start; gap:10px; min-width:0; min-height:44px; padding:10px 11px; border:1px solid var(--line); border-radius:11px; color:var(--ink); background:var(--surface); cursor:pointer; }
+.employee-onboarding-start-check input { width:18px; min-width:18px; height:18px; min-height:18px; margin:1px 0 0; padding:0; accent-color:var(--green); }
+.employee-onboarding-start-check span { min-width:0; font-size:10.5px; font-weight:700; line-height:1.45; overflow-wrap:anywhere; }
+.employee-onboarding-review-check { margin-top:12px; }
+.employee-onboarding-confirmations { display:grid; gap:8px; margin-top:11px; }
+.employee-onboarding-final-confirmation { border-color:color-mix(in srgb,var(--green) 55%,var(--line)); background:color-mix(in srgb,var(--green) 9%,var(--surface)); }
+.employee-onboarding-responsible,.employee-onboarding-start-hint { margin:9px 0 0; color:var(--muted); font-size:10.5px; line-height:1.5; overflow-wrap:anywhere; }
+.employee-onboarding-responsible strong { color:var(--ink); }
+.employee-onboarding-start-message { min-height:18px; margin:0; color:var(--muted); font-size:10.5px; line-height:1.45; overflow-wrap:anywhere; }
+.employee-onboarding-start-message.error { padding:10px 11px; border:1px solid color-mix(in srgb,#b93131 38%,var(--line)); border-radius:10px; color:#8e2424; background:color-mix(in srgb,#d34b4b 8%,var(--surface)); }
+.employee-onboarding-start-actions { display:flex; justify-content:flex-end; min-width:0; }
+.employee-onboarding-start-actions .primary-button { min-height:44px; max-width:100%; white-space:normal; }
+.employee-onboarding-start-form :disabled { cursor:not-allowed; opacity:.7; }
+.employee-onboarding-execution-unavailable strong { display:block; color:var(--ink); font-size:12px; }
+.employee-offboarding-workspace,.employee-offboarding-boundary { min-width:0; max-width:100%; padding:18px; border:1px solid color-mix(in srgb,#7f4aa5 38%,var(--line)); border-radius:16px; background:color-mix(in srgb,#7f4aa5 5%,var(--surface)); overflow:hidden; }
+.employee-offboarding-workspace > header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:15px; }
+.employee-offboarding-workspace > header > div { min-width:0; }
+.employee-offboarding-workspace > header h3 { margin:4px 0 0; color:var(--ink); font-size:17px; overflow-wrap:anywhere; }
+.employee-offboarding-workspace > header p,.employee-offboarding-boundary p { margin:7px 0 0; color:var(--muted); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.employee-offboarding-workspace form[data-employee-offboarding-prepare] { display:grid; gap:14px; min-width:0; }
+.employee-offboarding-package-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; min-width:0; margin-top:11px; }
+.employee-offboarding-package { display:grid; gap:10px; min-width:0; padding:13px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); overflow:hidden; }
+.employee-offboarding-package > header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; min-width:0; }
+.employee-offboarding-package > header strong,.employee-offboarding-package p { min-width:0; margin:0; overflow-wrap:anywhere; }
+.employee-offboarding-package > header strong { color:var(--ink); font-size:11.5px; line-height:1.4; }
+.employee-offboarding-package p { color:var(--muted); font-size:9.5px; line-height:1.45; }
+.employee-offboarding-package .field,.employee-offboarding-action .field,.employee-offboarding-workspace .field { min-width:0; }
+.employee-offboarding-package textarea,.employee-offboarding-workspace textarea { width:100%; min-width:0; max-width:100%; box-sizing:border-box; resize:vertical; }
+.employee-offboarding-confidential { min-width:0; margin-top:14px; padding:14px; border:1px solid color-mix(in srgb,#7f4aa5 28%,var(--line)); border-radius:12px; background:var(--surface); }
+.employee-offboarding-confidential h4,.employee-offboarding-actions > h4 { margin:0; color:var(--ink); font-size:13px; }
+.employee-offboarding-confidential p { margin:8px 0 0; color:var(--muted); font-size:10.5px; line-height:1.5; overflow-wrap:anywhere; }
+.employee-offboarding-actions { display:grid; gap:11px; min-width:0; margin-top:16px; }
+.employee-offboarding-action { display:grid; gap:10px; min-width:0; padding:13px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.employee-offboarding-action.danger { border-color:color-mix(in srgb,#b93131 38%,var(--line)); }
+.employee-offboarding-action h4 { margin:0; color:var(--ink); font-size:12px; overflow-wrap:anywhere; }
+.employee-offboarding-action > button { justify-self:end; min-height:42px; max-width:100%; white-space:normal; }
+.employee-offboarding-workspace :disabled { cursor:not-allowed; opacity:.7; }
+.employee-offboarding-task-group { border-color:color-mix(in srgb,#7f4aa5 32%,var(--line)); background:color-mix(in srgb,var(--surface) 96%,#7f4aa5); }
+.employee-offboarding-task-details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; min-width:0; margin-top:9px; }
+.employee-offboarding-task-details span { display:block; min-width:0; padding:7px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+.employee-offboarding-task-details small,.employee-offboarding-task-details strong { display:block; min-width:0; overflow-wrap:anywhere; }
+.employee-offboarding-task-details small { color:var(--muted); font-size:7.5px; font-weight:800; text-transform:uppercase; }
+.employee-offboarding-task-details strong { margin-top:3px; color:var(--ink); font-size:9px; }
 .personnel-directory-table { width:100%; min-width:max(100%,calc(var(--employee-column-count,8) * 118px)); border-collapse:collapse; table-layout:auto; }
 .personnel-directory-table th { padding:11px 10px; color:var(--muted); background:var(--surface-soft); font-size:10.5px; text-align:left; text-transform:uppercase; letter-spacing:.06em; }
 .personnel-directory-table td { min-width:0; padding:11px 10px; border-top:1px solid var(--line); font-size:12.5px; overflow-wrap:anywhere; vertical-align:middle; }
@@ -1002,6 +1165,10 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 @media (max-width:900px) {
   .personnel-candidate-workspace { grid-template-columns:1fr; }
   .personnel-workflow-instance-meta { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .personnel-lifecycle-onboarding-task-card form { flex-basis:100%; width:100%; min-width:0; }
+  .personnel-lifecycle-interface-list { grid-template-columns:minmax(0,1fr); }
+  .personnel-lifecycle-automation-catalog { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .personnel-lifecycle-automation-task-card dl { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media (max-width:700px) {
   .personnel-dashboard-heading,.personnel-dashboard-customizer-heading { flex-direction:column; }
@@ -1023,7 +1190,339 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .personnel-workflow-summary,.personnel-workflow-instance-meta { grid-template-columns:1fr; }
   .personnel-workflow-instance-card,.personnel-workflow-task-card { padding:12px; }
   .personnel-workflow-task-card { flex-direction:column; }
+  .personnel-lifecycle-onboarding-task-group { padding:11px; }
+  .personnel-lifecycle-onboarding-task-card form { width:100%; min-width:0; }
+  .personnel-lifecycle-interface-catalog { width:100%; min-width:0; max-width:100%; padding:11px; }
+  .personnel-lifecycle-interface-card { width:100%; min-width:0; max-width:100%; padding:11px; }
+  .personnel-lifecycle-automation { width:100%; min-width:0; max-width:100%; padding:11px; }
+  .personnel-lifecycle-automation-catalog,.personnel-lifecycle-automation-summary,.personnel-lifecycle-automation-task-card dl { grid-template-columns:minmax(0,1fr); }
+  .personnel-lifecycle-automation-domain-card,.personnel-lifecycle-automation-task-card { width:100%; min-width:0; max-width:100%; padding:11px; }
+  .personnel-lifecycle-automation-boundary { padding:10px 10px 10px 25px; }
 }
+
+/* O8: eigenständiger, rein flüchtiger Editor für lineare Personalprozess-Entwürfe. */
+.personnel-lifecycle-editor-entry {
+  display:grid;
+  gap:12px;
+  min-width:0;
+  margin-top:16px;
+  padding:16px;
+  border:1px solid color-mix(in srgb,#35705a 38%,var(--line));
+  border-radius:15px;
+  background:color-mix(in srgb,var(--surface-soft) 96%,#d8eee5);
+  box-sizing:border-box;
+  overflow-wrap:anywhere;
+}
+.personnel-lifecycle-editor-entry.hidden { display:none; }
+.personnel-lifecycle-editor-entry > header {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  min-width:0;
+}
+.personnel-lifecycle-editor-entry > header > div { min-width:0; }
+.personnel-lifecycle-editor-entry h3 { margin:4px 0 0; font-size:15px; line-height:1.35; }
+.personnel-lifecycle-editor-entry header p,
+.personnel-lifecycle-editor-entry-status {
+  margin:6px 0 0;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.55;
+}
+.personnel-lifecycle-editor-entry-status { margin:0; }
+.personnel-lifecycle-editor-entry button { min-height:44px; flex:0 0 auto; }
+
+.modal.personnel-lifecycle-editor-dialog {
+  width:min(1400px,calc(100vw - 32px));
+  max-width:calc(100vw - 32px);
+}
+.personnel-lifecycle-editor-shell {
+  min-width:0;
+  max-width:100%;
+  max-height:calc(100vh - 35px);
+  max-height:calc(100dvh - 35px);
+  padding:24px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  box-sizing:border-box;
+}
+.personnel-lifecycle-editor-header { align-items:center; }
+.personnel-lifecycle-editor-header .close-button { min-width:44px; min-height:44px; }
+.personnel-lifecycle-editor-boundary {
+  display:grid;
+  gap:5px;
+  min-width:0;
+  margin:0 0 12px;
+  padding:12px 14px;
+  border:1px solid color-mix(in srgb,#b7791f 42%,var(--line));
+  border-radius:12px;
+  color:var(--muted);
+  background:color-mix(in srgb,var(--surface-soft) 94%,#fff0bf);
+  overflow-wrap:anywhere;
+}
+.personnel-lifecycle-editor-boundary strong { color:var(--ink); font-size:12px; }
+.personnel-lifecycle-editor-boundary p { margin:0; font-size:10px; line-height:1.55; }
+.personnel-lifecycle-editor-status {
+  min-height:24px;
+  margin:0 0 12px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.personnel-lifecycle-editor-status.error { color:#983e33; }
+.personnel-lifecycle-editor-workspace {
+  display:grid;
+  grid-template-columns:minmax(230px,.78fr) minmax(360px,1.35fr) minmax(260px,.9fr);
+  align-items:start;
+  gap:14px;
+  min-width:0;
+  max-width:100%;
+}
+.personnel-lifecycle-editor-basics,
+.personnel-lifecycle-editor-flow-panel,
+.personnel-lifecycle-editor-inspector,
+.personnel-lifecycle-editor-validation {
+  min-width:0;
+  max-width:100%;
+  padding:15px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface);
+  box-sizing:border-box;
+  overflow-wrap:anywhere;
+}
+.personnel-lifecycle-editor-basics,
+.personnel-lifecycle-editor-inspector { display:grid; gap:12px; }
+.personnel-lifecycle-editor-panel-heading { min-width:0; }
+.personnel-lifecycle-editor-panel-heading h3 { margin:3px 0 0; font-size:14px; line-height:1.35; }
+.personnel-lifecycle-editor-flow-heading {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.personnel-lifecycle-editor-flow-heading > div { min-width:0; }
+.personnel-lifecycle-editor-hint {
+  margin:-6px 0 0;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.45;
+}
+.personnel-lifecycle-editor-dialog .field { min-width:0; margin:0; }
+.personnel-lifecycle-editor-dialog .field > span { font-size:10px; line-height:1.35; }
+.personnel-lifecycle-editor-dialog :is(input,select,textarea) {
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  font-size:14px;
+  box-sizing:border-box;
+}
+.personnel-lifecycle-editor-dialog textarea { min-height:92px; resize:vertical; }
+.personnel-lifecycle-editor-flow-panel { display:grid; gap:13px; }
+.personnel-lifecycle-editor-flow-heading button { min-height:44px; flex:0 0 auto; }
+.personnel-lifecycle-editor-flow {
+  display:grid;
+  gap:12px;
+  min-width:0;
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+.personnel-lifecycle-editor-flow li { position:relative; min-width:0; }
+.personnel-lifecycle-editor-flow li:not(:last-child)::after {
+  position:absolute;
+  top:100%;
+  left:27px;
+  width:2px;
+  height:12px;
+  background:color-mix(in srgb,#35705a 48%,var(--line));
+  content:"";
+}
+.personnel-lifecycle-editor-flow button {
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr);
+  align-items:center;
+  gap:11px;
+  width:100%;
+  min-width:0;
+  min-height:76px;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  color:var(--ink);
+  background:var(--surface-soft);
+  text-align:left;
+  box-sizing:border-box;
+}
+.personnel-lifecycle-editor-flow button[aria-current="step"] {
+  border-color:#35705a;
+  background:color-mix(in srgb,var(--surface-soft) 88%,#cfe8de);
+  box-shadow:0 0 0 2px color-mix(in srgb,#35705a 22%,transparent);
+}
+.personnel-lifecycle-editor-node-number {
+  display:grid;
+  place-items:center;
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  color:#fff;
+  background:#58716a;
+  font-size:12px;
+  font-weight:800;
+}
+.personnel-lifecycle-editor-flow li[data-editor-step-type="approval"] .personnel-lifecycle-editor-node-number { background:#8a641c; }
+.personnel-lifecycle-editor-flow li[data-editor-step-type="finish"] .personnel-lifecycle-editor-node-number { background:#2e6953; }
+.personnel-lifecycle-editor-node-copy { display:grid; gap:3px; min-width:0; }
+.personnel-lifecycle-editor-node-copy strong { font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
+.personnel-lifecycle-editor-node-copy small,
+.personnel-lifecycle-editor-node-copy span {
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.personnel-lifecycle-editor-dialog .personnel-lifecycle-editor-inspector form {
+  max-height:none;
+  padding:0;
+  overflow:visible;
+}
+.personnel-lifecycle-editor-inspector fieldset {
+  display:grid;
+  gap:12px;
+  min-width:0;
+  margin:0;
+  padding:0;
+  border:0;
+}
+.personnel-lifecycle-editor-step-actions {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+  min-width:0;
+}
+.personnel-lifecycle-editor-step-actions button {
+  min-width:0;
+  min-height:44px;
+  padding:8px;
+  white-space:normal;
+}
+.personnel-lifecycle-editor-step-actions .danger { color:#8d352c; border-color:#d8aaa4; }
+.personnel-lifecycle-editor-validation { display:grid; gap:8px; margin-top:14px; }
+.personnel-lifecycle-editor-validation.ready { border-color:#8fbaa9; background:#edf6f2; }
+.personnel-lifecycle-editor-validation.blocked { border-color:#d8aaa4; background:#fff2ef; }
+.personnel-lifecycle-editor-validation p,
+.personnel-lifecycle-editor-validation ul { margin:0; color:var(--muted); font-size:10px; line-height:1.5; }
+.personnel-lifecycle-editor-validation ul { display:grid; gap:7px; padding-left:20px; }
+.personnel-lifecycle-editor-validation li span { display:block; color:var(--muted); font-size:9px; overflow-wrap:anywhere; }
+.personnel-lifecycle-editor-validation code { overflow-wrap:anywhere; }
+.personnel-lifecycle-editor-actions {
+  position:sticky;
+  bottom:-24px;
+  z-index:3;
+  display:flex;
+  justify-content:flex-end;
+  gap:9px;
+  min-width:0;
+  margin-top:14px;
+  padding:18px 0 2px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(transparent,var(--modal-surface) 30%);
+}
+.personnel-lifecycle-editor-actions button { min-height:44px; white-space:normal; }
+.personnel-lifecycle-editor-dialog :is(button,input,select,textarea):focus-visible {
+  outline:3px solid color-mix(in srgb,#35705a 52%,transparent);
+  outline-offset:2px;
+}
+
+html[data-active-page-theme="dark"] :is(
+  .personnel-lifecycle-editor-entry,
+  .personnel-lifecycle-editor-basics,
+  .personnel-lifecycle-editor-flow-panel,
+  .personnel-lifecycle-editor-inspector,
+  .personnel-lifecycle-editor-validation,
+  .personnel-lifecycle-editor-flow button,
+  .personnel-lifecycle-editor-boundary
+) {
+  color:var(--ink);
+  border-color:var(--line);
+  background:var(--surface-soft);
+}
+html[data-active-page-theme="dark"] .personnel-lifecycle-editor-flow button[aria-current="step"] {
+  border-color:#75ad98;
+  background:#263b34;
+}
+html[data-active-page-theme="dark"] .personnel-lifecycle-editor-status.error,
+html[data-active-page-theme="dark"] .personnel-lifecycle-editor-step-actions .danger { color:#ffb5aa; }
+
+@media (max-width:1100px) {
+  .personnel-lifecycle-editor-workspace { grid-template-columns:minmax(230px,.8fr) minmax(360px,1.2fr); }
+  .personnel-lifecycle-editor-inspector { grid-column:1 / -1; }
+}
+
+@media (max-width:700px) {
+  .personnel-lifecycle-editor-entry > header,
+  .personnel-lifecycle-editor-flow-heading { align-items:stretch; flex-direction:column; }
+  .personnel-lifecycle-editor-entry button,
+  .personnel-lifecycle-editor-flow-heading button { width:100%; }
+  .modal.personnel-lifecycle-editor-dialog {
+    width:100vw;
+    max-width:none;
+    max-height:100vh;
+    max-height:100dvh;
+    margin:0;
+    border-radius:0;
+  }
+  .personnel-lifecycle-editor-shell {
+    min-height:100vh;
+    min-height:100dvh;
+    max-height:100vh;
+    max-height:100dvh;
+    padding:16px;
+  }
+  .personnel-lifecycle-editor-header { gap:10px; }
+  .personnel-lifecycle-editor-workspace { grid-template-columns:minmax(0,1fr); }
+  .personnel-lifecycle-editor-inspector { grid-column:auto; }
+  .personnel-lifecycle-editor-basics,
+  .personnel-lifecycle-editor-flow-panel,
+  .personnel-lifecycle-editor-inspector,
+  .personnel-lifecycle-editor-validation { width:100%; padding:13px; }
+  .personnel-lifecycle-editor-step-actions { grid-template-columns:minmax(0,1fr); }
+  .personnel-lifecycle-editor-actions {
+    bottom:-16px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    padding-bottom:4px;
+  }
+  .personnel-lifecycle-editor-actions button { width:100%; }
+  .personnel-lifecycle-editor-dialog .field > span,
+  .personnel-lifecycle-editor-hint,
+  .personnel-lifecycle-editor-node-copy small,
+  .personnel-lifecycle-editor-node-copy span,
+  .personnel-lifecycle-editor-validation p,
+  .personnel-lifecycle-editor-validation ul { font-size:12px; }
+  .personnel-lifecycle-editor-node-copy strong,
+  .personnel-lifecycle-editor-panel-heading h3 { font-size:14px; }
+}
+
+@media (max-width:360px) {
+  .personnel-lifecycle-editor-shell { padding:12px; }
+  .personnel-lifecycle-editor-basics,
+  .personnel-lifecycle-editor-flow-panel,
+  .personnel-lifecycle-editor-inspector,
+  .personnel-lifecycle-editor-validation { padding:11px; }
+  .personnel-lifecycle-editor-flow button { grid-template-columns:34px minmax(0,1fr); padding:10px; }
+  .personnel-lifecycle-editor-node-number { width:32px; height:32px; }
+  .personnel-lifecycle-editor-flow li:not(:last-child)::after { left:25px; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .personnel-lifecycle-editor-dialog *,
+  .personnel-lifecycle-editor-entry * { scroll-behavior:auto !important; transition:none !important; }
+}
+/* Ende O8-Editor. */
 .location-overview-toolbar { margin-bottom: 15px; }
 .location-overview-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
 .location-list-card { margin-bottom: 15px; }
@@ -1359,6 +1858,22 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .employee-profile-data-grid,.employee-profile-document-meta { grid-template-columns:1fr; }
   .employee-profile-data-section,.employee-profile-document { padding:14px; }
   .employee-profile-document > header { align-items:flex-start; flex-direction:column; }
+  .employee-onboarding-intro,.employee-onboarding-package > header,.employee-onboarding-assignment > header { flex-direction:column; }
+  .employee-onboarding-summary,.employee-onboarding-package-meta,.employee-onboarding-assignment dl { grid-template-columns:1fr; }
+  .employee-onboarding-intro,.employee-onboarding-package,.employee-onboarding-blockers { padding:14px; }
+  .employee-onboarding-execution,.employee-onboarding-active-case,.employee-onboarding-execution-unavailable { width:100%; max-width:100%; padding:14px; box-sizing:border-box; }
+  .employee-onboarding-execution > header,.employee-onboarding-active-case > header,.employee-onboarding-start-package > header { align-items:stretch; flex-direction:column; }
+  .employee-onboarding-date-grid,.employee-onboarding-family-grid,.employee-onboarding-active-case dl,.employee-onboarding-start-assignment { grid-template-columns:minmax(0,1fr); }
+  .employee-onboarding-start-assignment.system { grid-template-columns:minmax(0,1fr); }
+  .employee-onboarding-start-assignment .status-badge { justify-self:start; max-width:100%; white-space:normal; }
+  .employee-onboarding-start-actions { justify-content:stretch; }
+  .employee-onboarding-start-actions .primary-button { width:100%; }
+  .employee-onboarding-close-form { width:100%; max-width:100%; padding:12px; box-sizing:border-box; }
+  .employee-offboarding-workspace,.employee-offboarding-boundary { width:100%; max-width:100%; padding:14px; box-sizing:border-box; }
+  .employee-offboarding-workspace > header,.employee-offboarding-package > header { align-items:stretch; flex-direction:column; }
+  .employee-offboarding-package-list { grid-template-columns:minmax(0,1fr); }
+  .employee-offboarding-task-details { grid-template-columns:minmax(0,1fr); }
+  .employee-offboarding-action > button { justify-self:stretch; width:100%; }
   .employee-profile-message { padding:10px 14px 0; }
   .cost-center-subheading,.cost-center-type-position-heading { align-items:stretch; flex-direction:column; }
   .cost-center-subheading > p { max-width:none; }

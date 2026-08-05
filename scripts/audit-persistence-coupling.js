@@ -168,6 +168,9 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/maintenance.js",
   "lib/persistence/sqlite/operations/organization-schema-migrations.js",
   "lib/persistence/sqlite/operations/personnel-document-history-schema.js",
+  "lib/persistence/sqlite/operations/personnel-lifecycle-case-schema.js",
+  "lib/persistence/sqlite/operations/personnel-lifecycle-offboarding-schema.js",
+  "lib/persistence/sqlite/operations/personnel-lifecycle-onboarding-schema.js",
   "lib/persistence/sqlite/operations/personnel-lifecycle-schema.js",
   "lib/persistence/sqlite/operations/personnel-workflow-instance-schema.js",
   "lib/persistence/sqlite/operations/personnel-workflow-schema.js",
@@ -235,6 +238,22 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/personnel-lifecycle-conversion-domain.test.js",
   "test/personnel-lifecycle-conversion-import.test.js",
   "test/personnel-lifecycle-conversion-migration.test.js",
+  "test/personnel-lifecycle-case-foundation-migration.test.js",
+  "test/personnel-lifecycle-case-foundation.test.js",
+  "test/personnel-lifecycle-automation-api.test.js",
+  "test/personnel-lifecycle-editor-api.test.js",
+  "test/personnel-lifecycle-interfaces-api.test.js",
+  "test/personnel-lifecycle-offboarding-api.test.js",
+  "test/personnel-lifecycle-offboarding-persistence.test.js",
+  "test/personnel-lifecycle-offboarding-service.test.js",
+  "test/personnel-lifecycle-offboarding-sqlite-integration.test.js",
+  "test/personnel-lifecycle-onboarding-preview.test.js",
+  "test/personnel-lifecycle-onboarding-persistence.test.js",
+  "test/personnel-lifecycle-onboarding-execution.test.js",
+  "test/personnel-lifecycle-onboarding-execution-api.test.js",
+  "test/personnel-lifecycle-onboarding-tasks.test.js",
+  "test/personnel-lifecycle-onboarding-tasks-api.test.js",
+  "test/personnel-workflow-lifecycle-onboarding-schema.test.js",
   "test/personnel-lifecycle-data-foundation.test.js",
   "test/personnel-lifecycle-scoped-rights-persistence.test.js",
   "test/personnel-document-history-persistence.test.js",
@@ -299,10 +318,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 950;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1013;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 24;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 926;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 853;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 989;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 916;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 9;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -342,8 +361,8 @@ const PHASE_5_POSTGRESQL_TEST_FILES = Object.freeze([
 ]);
 const PHASE_5_POSTGRESQL_TEST_FILE_SET = new Set(PHASE_5_POSTGRESQL_TEST_FILES);
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 848;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 102;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 907;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 106;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -829,6 +848,13 @@ const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   ...BASELINE_DIRECT_PRODUCTION_DRIVER_FILES.filter((file) => file !== "server.js"),
   ...PHASE_3_SQLITE_DRIVER_FILES,
   ...MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES,
+]);
+const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
+  ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![
+    "test/block6-custom-work-rule-evaluator.test.js",
+    "test/work-rule-store.test.js",
+  ].includes(file)),
+  "test/personnel-workflow-lifecycle-onboarding-schema.test.js",
 ]);
 const SIGNALS = Object.freeze([
   { id: "directNodeSqliteImport", operation: "driver import", sqliteFeature: "node:sqlite", directDiscovery: true },
@@ -3497,11 +3523,19 @@ function scanRepository(root = REPOSITORY_ROOT) {
     "lib/work-rules/governance.js",
     "lib/work-rules/store.js",
   ]);
+  const providerNeutralServerPrepareCalls = countMatches(
+    serverText,
+    /\brequirePersonnelLifecycleOffboardingService\(\)\.prepare\s*\(/g,
+  );
   const remainingDomainRawAccess = productionDirect
     .filter((record) => domainRuntimeFiles.has(record.file))
     .reduce((sum, record) => (
       sum
-      + Number(record.counts.prepareCall || 0)
+      + Math.max(
+        0,
+        Number(record.counts.prepareCall || 0)
+          - (record.file === "server.js" ? providerNeutralServerPrepareCalls : 0),
+      )
       + Number(record.counts.execCall || 0)
     ), 0);
   const fullSqliteParity = remainingDomainRawAccess === 0
@@ -3643,7 +3677,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
   if (productionRegressions.length) errors.push(`Produktive Kopplungswerte gestiegen: ${productionRegressions.map((entry) => entry.key).join(", ")}`);
   if (serverRegressions.length) errors.push(`server.js-Kopplungswerte gestiegen: ${serverRegressions.map((entry) => entry.key).join(", ")}`);
   const unexpectedProductionDrivers = sortedDifference(productionDriverFiles, PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES);
-  const unexpectedTestDrivers = sortedDifference(testDriverFiles, BASELINE_DIRECT_TEST_DRIVER_FILES);
+  const unexpectedTestDrivers = sortedDifference(testDriverFiles, PHASE_3_ALLOWED_TEST_DRIVER_FILES);
   if (unexpectedProductionDrivers.length) errors.push(`Neue produktive node:sqlite-Importe: ${unexpectedProductionDrivers.join(", ")}`);
   if (unexpectedTestDrivers.length) errors.push(`Neue Test-node:sqlite-Importe: ${unexpectedTestDrivers.join(", ")}`);
   if (phase3ProviderDriverFiles.length !== 1 || phase3ProviderDriverImports !== 1) {
@@ -3779,6 +3813,7 @@ module.exports = {
   PHASE_2_CONTRACT_FILES,
   PHASE_2_CONTRACT_TEST_FILES,
   PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES,
+  PHASE_3_ALLOWED_TEST_DRIVER_FILES,
   PHASE_3_SQLITE_DRIVER_FILES,
   PHASE_3_SQLITE_PROVIDER_FILES,
   PHASE_3_SQLITE_PROVIDER_TEST_FILES,

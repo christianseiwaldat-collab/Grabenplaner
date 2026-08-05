@@ -191,6 +191,13 @@ const state = {
   personnelWorkflowInstancesLoading: false,
   personnelWorkflowInstanceStatusFilter: "all",
   personnelWorkflowInstanceLoadError: "",
+  personnelLifecycleOnboardingTasks: [],
+  personnelLifecycleOnboardingTasksLoaded: false,
+  personnelLifecycleOnboardingTasksLoading: false,
+  personnelLifecycleOnboardingTasksError: "",
+  personnelLifecycleOnboardingTaskCapabilities: { canRead: null, canComplete: null },
+  personnelLifecycleOnboardingTaskOperations: {},
+  personnelLifecycleOnboardingTaskPending: "",
   customWorkRuleRegistry: null,
   workRuleGovernance: null,
   customWorkRulesLoading: false,
@@ -209,8 +216,14 @@ const state = {
   employeeProfile: null,
   employeeProfileEmployeeNumber: "",
   employeeProfileTab: "overview",
-  employeeProfileTabData: { masterData: null, documents: null },
-  employeeProfileTabAvailability: { overview: true, masterData: null, documents: null },
+  employeeProfileTabData: { masterData: null, documents: null, onboarding: null, offboarding: null },
+  employeeProfileTabAvailability: {
+    overview: true,
+    masterData: null,
+    documents: null,
+    onboarding: null,
+    offboarding: null,
+  },
   employeeProfileLoadingTabs: new Set(),
   employeeProfileTabErrors: {},
   employeeProfileTabRequestTokens: {},
@@ -221,6 +234,44 @@ const state = {
   employeeProfileReturnFocus: null,
   employeeProfileOpen: false,
   employeeProfileHost: "administration",
+  employeeOnboardingStartDraft: null,
+  employeeOnboardingCloseDraft: null,
+  employeeOffboardingDraft: null,
+  personnelLifecycleOffboardingTasks: [],
+  personnelLifecycleOffboardingTasksLoaded: false,
+  personnelLifecycleOffboardingTasksLoading: false,
+  personnelLifecycleOffboardingTasksError: "",
+  personnelLifecycleOffboardingTaskCapabilities: { canRead: null, canComplete: null },
+  personnelLifecycleOffboardingTaskOperations: {},
+  personnelLifecycleOffboardingTaskPending: "",
+  personnelLifecycleInterfacesCatalog: null,
+  personnelLifecycleInterfacesLoaded: false,
+  personnelLifecycleInterfacesLoading: false,
+  personnelLifecycleInterfacesError: "",
+  personnelLifecycleInterfacesActorAccessKey: "",
+  personnelLifecycleInterfacesRequestToken: null,
+  personnelLifecycleAutomationCatalog: null,
+  personnelLifecycleAutomationPreview: null,
+  personnelLifecycleAutomationCatalogLoaded: false,
+  personnelLifecycleAutomationPreviewLoaded: false,
+  personnelLifecycleAutomationLoading: false,
+  personnelLifecycleAutomationError: "",
+  personnelLifecycleAutomationActorAccessKey: "",
+  personnelLifecycleAutomationRequestToken: null,
+  personnelLifecycleEditorCatalog: null,
+  personnelLifecycleEditorCatalogLoaded: false,
+  personnelLifecycleEditorLoading: false,
+  personnelLifecycleEditorError: "",
+  personnelLifecycleEditorActorAccessKey: "",
+  personnelLifecycleEditorRequestToken: null,
+  personnelLifecycleEditorDraft: null,
+  personnelLifecycleEditorPristineDraft: null,
+  personnelLifecycleEditorSelectedStepId: "",
+  personnelLifecycleEditorDirty: false,
+  personnelLifecycleEditorValidation: null,
+  personnelLifecycleEditorValidating: false,
+  personnelLifecycleEditorReturnFocus: null,
+  personnelLifecycleEditorDiscardBypass: false,
   editingCostCenterId: null,
   editingCostCenterTypeId: null,
   costCenterTypePositionSelection: new Set(),
@@ -337,7 +388,8 @@ const elements = Object.fromEntries(
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
     "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
-    "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList",
+    "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList", "personnelLifecycleInterfacesSection", "personnelLifecycleInterfacesStatus", "personnelLifecycleInterfacesList", "personnelLifecycleAutomationSection", "personnelLifecycleAutomationStatus", "personnelLifecycleAutomationCatalog", "personnelLifecycleAutomationSummary", "personnelLifecycleAutomationList",
+    "personnelWorkflowInstanceWorkspace", "personnelLifecycleEditorSection", "personnelLifecycleEditorEntryTitle", "openPersonnelLifecycleEditorButton", "personnelLifecycleEditorEntryStatus", "personnelLifecycleEditorDialog", "personnelLifecycleEditorTitle", "closePersonnelLifecycleEditorButton", "personnelLifecycleEditorStatus", "personnelLifecycleEditorWorkspace", "personnelLifecycleEditorWorkflowType", "personnelLifecycleEditorCatalogHint", "personnelLifecycleEditorWorkflowCode", "personnelLifecycleEditorDraftTitle", "personnelLifecycleEditorDraftDescription", "personnelLifecycleEditorScopeType", "personnelLifecycleEditorRequirementKind", "addPersonnelLifecycleEditorStepButton", "personnelLifecycleEditorFlow", "personnelLifecycleEditorInspectorForm", "personnelLifecycleEditorInspectorFields", "personnelLifecycleEditorStepType", "personnelLifecycleEditorStepTitle", "personnelLifecycleEditorStepDescription", "personnelLifecycleEditorResponsibilityClass", "personnelLifecycleEditorStepRequired", "movePersonnelLifecycleEditorStepUpButton", "movePersonnelLifecycleEditorStepDownButton", "removePersonnelLifecycleEditorStepButton", "personnelLifecycleEditorValidation", "personnelLifecycleEditorValidationTitle", "personnelLifecycleEditorValidationResult", "resetPersonnelLifecycleEditorButton", "validatePersonnelLifecycleEditorButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -729,6 +781,7 @@ function csrfHeader() {
 
 function showLoginGate(message = "") {
   if (employeeProfileIsOpen()) closeEmployeeProfile({ restoreFocus: false });
+  clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
   document.body.classList.add("portal-locked");
   elements.loginGate?.classList.remove("hidden");
   if (elements.adminLoginError) {
@@ -937,12 +990,31 @@ function personnelLifecycleFoundationEnabled() {
   return state.portalStatus?.installationFeatures?.personnelLifecycle === true;
 }
 
-function canOpenEmployeeProfileFoundation() {
+function canOpenStandardEmployeeProfileFoundation() {
   if (!personnelLifecycleFoundationEnabled()) return false;
   if (!state.portalStatus?.portalEnabled) return true;
   return state.portalSession?.user?.role === "hr"
     && canReadCentralPersonnel()
     && hasGovernancePermission("personnel:profiles:read");
+}
+
+function canReadEmployeeOnboardingPreview() {
+  if (!personnelLifecycleFoundationEnabled() || !state.portalStatus?.portalEnabled) return false;
+  return canReadCentralPersonnel()
+    && hasGovernancePermission("personnel:lifecycle:onboarding:read")
+    && hasGovernancePermission("personnel:lifecycle:packages:read");
+}
+
+function canReadEmployeeOffboardingConfidential() {
+  if (!personnelLifecycleFoundationEnabled() || !state.portalStatus?.portalEnabled) return false;
+  return canReadCentralPersonnel()
+    && hasGovernancePermission("personnel:lifecycle:offboarding:confidential:read");
+}
+
+function canOpenEmployeeProfileFoundation() {
+  return canOpenStandardEmployeeProfileFoundation()
+    || canReadEmployeeOnboardingPreview()
+    || canReadEmployeeOffboardingConfidential();
 }
 
 function canOpenTeamEmployeeProfileFoundation(employeeNumber) {
@@ -957,13 +1029,22 @@ function canOpenTeamEmployeeProfileFoundation(employeeNumber) {
 
 function currentEmployeeProfileAccess() {
   if (!personnelLifecycleFoundationEnabled()) {
-    return { read: false, masterData: false, documents: false, masterDataFieldFingerprint: "" };
+    return {
+      read: false,
+      masterData: false,
+      documents: false,
+      onboarding: false,
+      offboarding: false,
+      masterDataFieldFingerprint: "",
+    };
   }
   if (!state.portalStatus?.portalEnabled) {
     return {
       read: true,
       masterData: true,
       documents: true,
+      onboarding: false,
+      offboarding: false,
       masterDataFieldFingerprint: employeeProfileMasterDataFieldFingerprint(
         EMPLOYEE_PROFILE_MASTER_DATA_FIELDS.map(({ key }) => key),
       ),
@@ -977,10 +1058,12 @@ function currentEmployeeProfileAccess() {
       read,
       masterData: read && permissions.includes("personnel:profiles:master:read"),
       documents: false,
+      onboarding: false,
+      offboarding: false,
       masterDataFieldFingerprint: "",
     };
   }
-  const read = canOpenEmployeeProfileFoundation();
+  const read = canOpenStandardEmployeeProfileFoundation();
   const recordAccess = state.portalSession?.user?.personnelRecordAccess || {};
   const fieldAccess = recordAccess.fieldAccess && typeof recordAccess.fieldAccess === "object"
     ? recordAccess.fieldAccess
@@ -1002,6 +1085,8 @@ function currentEmployeeProfileAccess() {
       && permissions.includes("personnel:profiles:documents:read")
       && sensitivePermission
       && recordAccess.canReadDocuments === true,
+    onboarding: canReadEmployeeOnboardingPreview(),
+    offboarding: canReadEmployeeOffboardingConfidential(),
     masterDataFieldFingerprint: employeeProfileMasterDataFieldFingerprint(readableMasterDataFields),
   };
 }
@@ -1011,16 +1096,236 @@ function canReadCandidatePreboarding() {
     && hasGovernancePermission("personnel:candidates:read");
 }
 
-function canOpenWorkflowCenter() {
+function canReadPersonnelWorkflowInstances() {
   return personnelLifecycleFoundationEnabled()
     && hasGovernancePermission("personnel:workflows:read")
     && state.personnelWorkflowInstanceCapabilities.canRead !== false;
 }
 
-function canReadPersonnelTasks() {
+function canOpenWorkflowCenter() {
+  return canReadPersonnelWorkflowInstances() || canReadPersonnelLifecycleEditorCatalog();
+}
+
+function canReadLifecycleOnboardingTasks() {
   return personnelLifecycleFoundationEnabled()
-    && hasGovernancePermission("personnel:workflows:read")
-    && state.personnelWorkflowInstanceCapabilities.canRead !== false;
+    && hasGovernancePermission("personnel:lifecycle:operational:read")
+    && state.personnelLifecycleOnboardingTaskCapabilities.canRead !== false;
+}
+
+function canReadLifecycleOffboardingTasks() {
+  return personnelLifecycleFoundationEnabled()
+    && hasGovernancePermission("personnel:lifecycle:operational:read")
+    && state.personnelLifecycleOffboardingTaskCapabilities.canRead !== false;
+}
+
+const PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS = Object.freeze({
+  training: "personnel:lifecycle:interfaces:training:read",
+  asset: "personnel:lifecycle:interfaces:asset:read",
+  access: "personnel:lifecycle:interfaces:access:read",
+});
+
+function canReadLifecycleInterfaceDomain(domainId) {
+  const permission = PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS[domainId];
+  return personnelLifecycleFoundationEnabled()
+    && state.portalStatus?.portalEnabled === true
+    && Boolean(personnelLifecycleInterfacesIdentityKey())
+    && Boolean(permission)
+    && hasGovernancePermission(permission);
+}
+
+function canReadLifecycleInterfaces() {
+  return personnelLifecycleFoundationEnabled()
+    && state.portalStatus?.portalEnabled === true
+    && Boolean(personnelLifecycleInterfacesIdentityKey())
+    && Object.values(PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS)
+      .some((permission) => hasGovernancePermission(permission));
+}
+
+function personnelLifecycleInterfacesIdentityKey() {
+  if (state.portalStatus?.portalEnabled !== true) return "";
+  return String(state.portalSession?.user?.employeeNumber || "").trim();
+}
+
+function personnelLifecycleInterfacesActorAccessKey() {
+  const identityKey = personnelLifecycleInterfacesIdentityKey();
+  if (!identityKey) return "";
+  const readableDomains = Object.entries(PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS)
+    .filter(([, permission]) => hasGovernancePermission(permission))
+    .map(([domainId]) => domainId)
+    .sort();
+  return readableDomains.length ? `${identityKey}\0${readableDomains.join("\0")}` : "";
+}
+
+const PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS = Object.freeze({
+  deadlines: "personnel:lifecycle:automation:deadlines:read",
+  substitutions: "personnel:lifecycle:automation:substitutions:read",
+  reminders: "personnel:lifecycle:automation:reminders:read",
+  escalations: "personnel:lifecycle:automation:escalations:read",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS = Object.freeze([
+  "personnel:lifecycle:automation:deadlines:read",
+  "personnel:lifecycle:automation:deadlines:manage",
+  "personnel:lifecycle:automation:deadlines:recalculate",
+  "personnel:lifecycle:automation:deadlines:reconcile",
+  "personnel:lifecycle:automation:substitutions:read",
+  "personnel:lifecycle:automation:substitutions:manage",
+  "personnel:lifecycle:automation:substitutions:apply",
+  "personnel:lifecycle:automation:substitutions:reconcile",
+  "personnel:lifecycle:automation:reminders:read",
+  "personnel:lifecycle:automation:reminders:manage",
+  "personnel:lifecycle:automation:reminders:dispatch",
+  "personnel:lifecycle:automation:reminders:reconcile",
+  "personnel:lifecycle:automation:escalations:read",
+  "personnel:lifecycle:automation:escalations:manage",
+  "personnel:lifecycle:automation:escalations:trigger",
+  "personnel:lifecycle:automation:escalations:reconcile",
+]);
+
+function personnelLifecycleAutomationIdentityKey() {
+  if (state.portalStatus?.portalEnabled !== true
+    || state.portalSession?.user?.isEmployee === false) return "";
+  return String(state.portalSession?.user?.employeeNumber || "").trim();
+}
+
+function canReadLifecycleAutomationDomain(domainId) {
+  const permission = PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS[domainId];
+  return personnelLifecycleFoundationEnabled()
+    && state.portalStatus?.portalEnabled === true
+    && Boolean(personnelLifecycleAutomationIdentityKey())
+    && Boolean(permission)
+    && hasGovernancePermission(permission);
+}
+
+function canReadLifecycleAutomationCatalog() {
+  return personnelLifecycleFoundationEnabled()
+    && state.portalStatus?.portalEnabled === true
+    && Boolean(personnelLifecycleAutomationIdentityKey())
+    && Object.values(PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS)
+      .some((permission) => hasGovernancePermission(permission));
+}
+
+function canReadLifecycleAutomationPreview() {
+  return canReadLifecycleAutomationCatalog()
+    && Object.values(PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS)
+      .every((permission) => hasGovernancePermission(permission))
+    && hasGovernancePermission("personnel:lifecycle:operational:read")
+    && (
+      hasGovernancePermission("personnel:lifecycle:onboarding:read")
+      || hasGovernancePermission("personnel:lifecycle:offboarding:confidential:read")
+    );
+}
+
+function personnelLifecycleAutomationScopeFingerprint() {
+  const user = state.portalSession?.user || {};
+  try {
+    return JSON.stringify({
+      scopes: Array.isArray(user.scopes) ? user.scopes : [],
+      permissionScopes: Array.isArray(user.permissionScopes) ? user.permissionScopes : [],
+      personnelLifecyclePermissionScopes: Array.isArray(user.personnelLifecyclePermissionScopes)
+        ? user.personnelLifecyclePermissionScopes
+        : [],
+    });
+  } catch {
+    return "";
+  }
+}
+
+function personnelLifecycleAutomationActorAccessKey() {
+  const identityKey = personnelLifecycleAutomationIdentityKey();
+  const scopeFingerprint = personnelLifecycleAutomationScopeFingerprint();
+  if (!identityKey || !scopeFingerprint || !canReadLifecycleAutomationCatalog()) return "";
+  const permissionFingerprint = [
+    ...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
+    "personnel:lifecycle:operational:read",
+    "personnel:lifecycle:onboarding:read",
+    "personnel:lifecycle:offboarding:confidential:read",
+  ].map((permission) => `${permission}:${hasGovernancePermission(permission) ? "1" : "0"}`)
+    .join("\0");
+  return `${identityKey}\0${permissionFingerprint}\0${scopeFingerprint}`;
+}
+
+function canReadPersonnelTasks() {
+  return canReadPersonnelWorkflowInstances()
+    || canReadLifecycleOnboardingTasks()
+    || canReadLifecycleOffboardingTasks()
+    || canReadLifecycleInterfaces()
+    || canReadLifecycleAutomationCatalog();
+}
+
+const PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS = Object.freeze([
+  "personnel:lifecycle:editor:read",
+  "personnel:lifecycle:editor:draft:write",
+  "personnel:lifecycle:editor:validate",
+  "personnel:lifecycle:editor:review",
+  "personnel:lifecycle:editor:publish",
+  "personnel:lifecycle:editor:archive",
+]);
+const PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSION_IDS = Object.freeze([
+  "personnel:lifecycle:onboarding:read",
+  "personnel:lifecycle:offboarding:confidential:read",
+  "personnel:lifecycle:hr-confidential:read",
+]);
+
+function personnelLifecycleEditorIdentityKey() {
+  if (state.portalStatus?.portalEnabled !== true
+    || state.portalSession?.user?.isEmployee !== true) return "";
+  return String(state.portalSession?.user?.employeeNumber || "").trim();
+}
+
+function canReadPersonnelLifecycleEditorWorkflowType(workflowType) {
+  if (workflowType === "onboarding") {
+    return hasGovernancePermission("personnel:lifecycle:onboarding:read");
+  }
+  if (workflowType === "offboarding") {
+    return hasGovernancePermission("personnel:lifecycle:offboarding:confidential:read")
+      && hasGovernancePermission("personnel:lifecycle:hr-confidential:read");
+  }
+  return false;
+}
+
+function canReadPersonnelLifecycleEditorCatalog() {
+  return personnelLifecycleFoundationEnabled()
+    && state.portalStatus?.portalEnabled === true
+    && Boolean(personnelLifecycleEditorIdentityKey())
+    && hasGovernancePermission("personnel:lifecycle:editor:read")
+    && ["onboarding", "offboarding"].some(canReadPersonnelLifecycleEditorWorkflowType);
+}
+
+function canWritePersonnelLifecycleEditorDraft() {
+  return canReadPersonnelLifecycleEditorCatalog()
+    && hasGovernancePermission("personnel:lifecycle:editor:draft:write");
+}
+
+function canValidatePersonnelLifecycleEditorDraft() {
+  return canWritePersonnelLifecycleEditorDraft()
+    && hasGovernancePermission("personnel:lifecycle:editor:validate");
+}
+
+function personnelLifecycleEditorScopeFingerprint() {
+  const user = state.portalSession?.user || {};
+  try {
+    return JSON.stringify({
+      scopes: Array.isArray(user.scopes) ? user.scopes : [],
+      permissionScopes: Array.isArray(user.permissionScopes) ? user.permissionScopes : [],
+      personnelLifecyclePermissionScopes: Array.isArray(user.personnelLifecyclePermissionScopes)
+        ? user.personnelLifecyclePermissionScopes
+        : [],
+    });
+  } catch {
+    return "";
+  }
+}
+
+function personnelLifecycleEditorActorAccessKey() {
+  const identityKey = personnelLifecycleEditorIdentityKey();
+  const scopeFingerprint = personnelLifecycleEditorScopeFingerprint();
+  if (!identityKey || !scopeFingerprint || !canReadPersonnelLifecycleEditorCatalog()) return "";
+  const permissionFingerprint = [
+    ...PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS,
+    ...PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSION_IDS,
+  ].map((permission) => `${permission}:${hasGovernancePermission(permission) ? "1" : "0"}`)
+    .join("\0");
+  return `${identityKey}\0${permissionFingerprint}\0${scopeFingerprint}`;
 }
 
 function canOpenPersonnelAdministrationView() {
@@ -1153,7 +1458,13 @@ function applyRoleVisibility() {
   const dataSubjectRequestsReadAccess = canReadDataSubjectRequests();
   const dataSubjectRequestsManageAccess = canManageDataSubjectRequests() && dataSubjectRequestsReadAccess;
   const candidatePreboardingAccess = canReadCandidatePreboarding();
+  const workflowInstanceAccess = canReadPersonnelWorkflowInstances();
   const workflowCenterAccess = canOpenWorkflowCenter();
+  const lifecycleOnboardingTasksAccess = canReadLifecycleOnboardingTasks();
+  const lifecycleOffboardingTasksAccess = canReadLifecycleOffboardingTasks();
+  const lifecycleInterfacesAccess = canReadLifecycleInterfaces();
+  const lifecycleAutomationAccess = canReadLifecycleAutomationCatalog();
+  const lifecycleEditorAccess = canReadPersonnelLifecycleEditorCatalog();
   const personnelTasksAccess = canReadPersonnelTasks();
   const customWorkRulesAccess = canAccessCustomWorkRuleGovernance();
   const collectiveAgreementsReadAccess = canReadCollectiveAgreements();
@@ -1239,7 +1550,11 @@ function applyRoleVisibility() {
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
   elements.candidatePreboardingTab?.classList.toggle("hidden", !candidatePreboardingAccess);
   elements.workflowCenterTab?.classList.toggle("hidden", !workflowCenterAccess);
+  elements.personnelWorkflowInstanceWorkspace?.classList.toggle("hidden", !workflowInstanceAccess);
   elements.personnelTasksTab?.classList.toggle("hidden", !personnelTasksAccess);
+  elements.personnelLifecycleInterfacesSection?.classList.toggle("hidden", !lifecycleInterfacesAccess);
+  elements.personnelLifecycleAutomationSection?.classList.toggle("hidden", !lifecycleAutomationAccess);
+  elements.personnelLifecycleEditorSection?.classList.toggle("hidden", !lifecycleEditorAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
   elements.customWorkRulesTab?.classList.toggle("hidden", !customWorkRulesAccess);
   elements.collectiveAgreementsTab?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
@@ -1326,11 +1641,81 @@ function applyRoleVisibility() {
     || state.selectedPersonnelCandidateId
     || state.personnelCandidateLoadError
   )) clearPersonnelLifecycleCandidateState("Bewerberdaten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
-  if (!workflowCenterAccess && !personnelTasksAccess && (
+  if (!workflowInstanceAccess && (
     state.personnelWorkflowInstancesLoaded
     || state.personnelWorkflowInstancesLoading
-    || state.personnelWorkflowInstanceLoadError
+    || state.personnelWorkflowInstances.length
+    || state.personnelWorkflowTasks.length
+    || state.personnelWorkflowInstanceCapabilities.scope
+    || state.personnelWorkflowInstanceCapabilities.canRead === true
   )) clearPersonnelWorkflowInstanceState("Workflow-Daten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
+  if (!lifecycleOnboardingTasksAccess && (
+    state.personnelLifecycleOnboardingTasksLoaded
+    || state.personnelLifecycleOnboardingTasksLoading
+    || state.personnelLifecycleOnboardingTasksError
+    || state.personnelLifecycleOnboardingTasks.length
+  )) clearPersonnelLifecycleOnboardingTaskState(
+    "Onboarding-Aufgaben wurden wegen geänderter Rechte aus der Ansicht entfernt.",
+  );
+  if (!lifecycleOffboardingTasksAccess && (
+    state.personnelLifecycleOffboardingTasksLoaded
+    || state.personnelLifecycleOffboardingTasksLoading
+    || state.personnelLifecycleOffboardingTasksError
+    || state.personnelLifecycleOffboardingTasks.length
+  )) clearPersonnelLifecycleOffboardingTaskState(
+    "Offboarding-Aufgaben wurden wegen geänderter Rechte aus der Ansicht entfernt.",
+  );
+  const lifecycleInterfacesActorAccessChanged = Boolean(
+    state.personnelLifecycleInterfacesActorAccessKey
+    && state.personnelLifecycleInterfacesActorAccessKey
+      !== personnelLifecycleInterfacesActorAccessKey(),
+  );
+  if ((!lifecycleInterfacesAccess || lifecycleInterfacesActorAccessChanged) && (
+    state.personnelLifecycleInterfacesCatalog
+    || state.personnelLifecycleInterfacesLoaded
+    || state.personnelLifecycleInterfacesLoading
+    || state.personnelLifecycleInterfacesError
+  )) clearPersonnelLifecycleInterfacesState(
+    lifecycleInterfacesActorAccessChanged
+      ? "Der Schnittstellenstatus wurde wegen geänderter Identität oder Fachrechte entfernt."
+      : "Der Schnittstellenstatus wurde wegen geänderter Rechte entfernt.",
+  );
+  const lifecycleAutomationActorAccessChanged = Boolean(
+    state.personnelLifecycleAutomationActorAccessKey
+    && state.personnelLifecycleAutomationActorAccessKey
+      !== personnelLifecycleAutomationActorAccessKey(),
+  );
+  if ((!lifecycleAutomationAccess || lifecycleAutomationActorAccessChanged) && (
+    state.personnelLifecycleAutomationCatalog
+    || state.personnelLifecycleAutomationPreview
+    || state.personnelLifecycleAutomationCatalogLoaded
+    || state.personnelLifecycleAutomationPreviewLoaded
+    || state.personnelLifecycleAutomationLoading
+    || state.personnelLifecycleAutomationError
+  )) clearPersonnelLifecycleAutomationState(
+    lifecycleAutomationActorAccessChanged
+      ? "Die O7-Vorschau wurde wegen geänderter Identität, Fachrechte oder Bereiche entfernt."
+      : "Die O7-Vorschau wurde wegen geänderter Rechte entfernt.",
+  );
+  const lifecycleEditorActorAccessChanged = Boolean(
+    state.personnelLifecycleEditorActorAccessKey
+    && state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey(),
+  );
+  if ((!lifecycleEditorAccess || lifecycleEditorActorAccessChanged) && (
+    state.personnelLifecycleEditorCatalog
+    || state.personnelLifecycleEditorCatalogLoaded
+    || state.personnelLifecycleEditorLoading
+    || state.personnelLifecycleEditorDraft
+    || state.personnelLifecycleEditorValidation
+    || state.personnelLifecycleEditorError
+    || elements.personnelLifecycleEditorDialog?.open
+  )) clearPersonnelLifecycleEditorState(
+    lifecycleEditorActorAccessChanged
+      ? "Der O8-Arbeitsentwurf wurde wegen geänderter Identität, Fachrechte oder Bereiche entfernt."
+      : "Der O8-Arbeitsentwurf wurde wegen geänderter Rechte entfernt.",
+    { closeDialog: true, restoreFocus: false },
+  );
+  renderPersonnelLifecycleEditor();
   if (employeeProfileIsOpen()) {
     reconcileOpenEmployeeProfileAccess(currentEmployeeProfileAccess());
   }
@@ -1408,6 +1793,10 @@ async function loginToAdministration(event) {
 }
 
 async function logoutPortal() {
+  clearEmployeeOnboardingStartState();
+  clearPersonnelLifecycleInterfacesState();
+  clearPersonnelLifecycleAutomationState();
+  clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
   try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
   window.location.reload();
 }
@@ -3942,9 +4331,14 @@ const EMPLOYEE_PROFILE_TABS = Object.freeze([
   { id: "overview", endpointTab: "overview", capability: "canReadOverview", label: "Übersicht" },
   { id: "masterData", endpointTab: "master_org", capability: "canReadMasterOrg", label: "Stammdaten & Organisation" },
   { id: "documents", endpointTab: "documents", capability: "canReadDocuments", label: "Personalakte & Dokumente" },
-  { id: "onboarding", label: "Onboarding" },
+  { id: "onboarding", endpointTab: "onboarding", capability: "canReadOnboardingPreview", label: "Onboarding" },
   { id: "training", label: "Schulungen" },
-  { id: "offboarding", label: "Offboarding" },
+  {
+    id: "offboarding",
+    endpointTab: "offboarding",
+    capability: "canReadOffboardingConfidential",
+    label: "Offboarding",
+  },
   { id: "history", label: "Historie" },
 ]);
 
@@ -4046,13 +4440,32 @@ function normalizeEmployeeProfileAccess(payload) {
         id === "overview" ? payload.capabilities?.canReadOverview === true
           : id === "masterData" ? payload.capabilities?.canReadMasterOrg === true
             : id === "documents" ? payload.capabilities?.canReadDocuments === true
-              : false
+              : id === "onboarding" ? payload.capabilities?.canReadOnboardingPreview === true
+                : id === "offboarding"
+                  ? payload.capabilities?.canReadOffboardingConfidential === true
+                  : false
       ),
     }])),
     capabilities: {
       canReadOverview: payload.capabilities?.canReadOverview === true,
       canReadMasterOrg: payload.capabilities?.canReadMasterOrg === true,
       canReadDocuments: payload.capabilities?.canReadDocuments === true,
+      canReadOnboardingPreview: payload.capabilities?.canReadOnboardingPreview === true,
+      canStartOnboarding: payload.capabilities?.canStartOnboarding === true,
+      canCloseOnboarding: payload.capabilities?.canCloseOnboarding === true,
+      canReadOffboardingConfidential:
+        payload.capabilities?.canReadOffboardingConfidential === true,
+      canPrepareOffboarding: payload.capabilities?.canPrepareOffboarding === true,
+      canApproveOffboardingException:
+        payload.capabilities?.canApproveOffboardingException === true,
+      canReleaseOffboardingCommunication:
+        payload.capabilities?.canReleaseOffboardingCommunication === true,
+      canConfirmOffboardingInformation:
+        payload.capabilities?.canConfirmOffboardingInformation === true,
+      canExecuteOffboarding: payload.capabilities?.canExecuteOffboarding === true,
+      canCloseOffboarding: payload.capabilities?.canCloseOffboarding === true,
+      canReadOffboardingConfidentialAudit:
+        payload.capabilities?.canReadOffboardingConfidentialAudit === true,
     },
   };
 }
@@ -4141,6 +4554,505 @@ function normalizeEmployeeProfileDocuments(payload, expectedEmployeeNumber) {
   return { profile, documents, ...normalizeEmployeeProfileAccess(payload) };
 }
 
+const EMPLOYEE_ONBOARDING_ASSIGNMENT_STATES = new Set([
+  "system_deferred",
+  "fixed_recipient_eligible",
+  "selection_required",
+  "unresolved",
+]);
+
+const EMPLOYEE_ONBOARDING_REQUIRED_START_FAMILIES = Object.freeze([
+  "personnel_administration",
+  "base_security_privacy",
+]);
+
+const EMPLOYEE_ONBOARDING_CONFIRMATION_FIELDS = Object.freeze([
+  "responsibility",
+  "packages",
+  "lifecycleReviews",
+  "assignments",
+  "atomicStart",
+]);
+
+function normalizeEmployeeOnboardingScope(value) {
+  if (value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Der Onboarding-Geltungsbereich ist ungültig.");
+  }
+  const type = String(value.type || "").trim();
+  const locationId = value.locationId === null ? null : String(value.locationId || "").trim();
+  const departmentId = value.departmentId === null ? null : Number(value.departmentId);
+  if (!new Set(["company", "location", "department"]).has(type)
+    || (type === "company" && (locationId !== null || departmentId !== null))
+    || (type !== "company" && !locationId)
+    || (type === "location" && departmentId !== null)
+    || (type === "department" && (!Number.isSafeInteger(departmentId) || departmentId < 1))) {
+    throw new Error("Der Onboarding-Geltungsbereich ist ungültig.");
+  }
+  return { type, locationId, departmentId };
+}
+
+function normalizeEmployeeOnboardingAssignment(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Eine Onboarding-Zuweisungsvorschau ist ungültig.");
+  }
+  const stepReference = String(value.stepReference || "").trim();
+  const title = String(value.title || "").trim();
+  const sortOrder = Number(value.sortOrder);
+  const stateValue = String(value.state || "").trim();
+  const responsibilityType = String(value.responsibility?.type || "").trim();
+  const responsibilityReference = String(value.responsibility?.reference || "").trim();
+  const responsibilityLabel = String(value.responsibility?.label || "").trim();
+  if (!stepReference || !title || !Number.isSafeInteger(sortOrder) || sortOrder < 1
+    || !EMPLOYEE_ONBOARDING_ASSIGNMENT_STATES.has(stateValue)
+    || !new Set(["system", "role", "employee"]).has(responsibilityType)
+    || !responsibilityLabel || value.selectedAssignee !== null
+    || !Array.isArray(value.eligibleRecipients)
+    || (responsibilityType === "system") !== (stateValue === "system_deferred")
+    || (responsibilityType === "system" && responsibilityReference)
+    || (responsibilityType !== "system" && !responsibilityReference)
+    || (responsibilityType === "employee"
+      && !new Set(["fixed_recipient_eligible", "unresolved"]).has(stateValue))
+    || (responsibilityType === "role"
+      && !new Set(["selection_required", "unresolved"]).has(stateValue))) {
+    throw new Error("Eine Onboarding-Zuweisungsvorschau ist ungültig.");
+  }
+  const eligibleRecipients = value.eligibleRecipients.map((recipient) => {
+    const actorId = String(recipient?.actorId || "").trim();
+    const displayName = String(recipient?.displayName || "").trim();
+    if (!actorId || !displayName) {
+      throw new Error("Ein möglicher Onboarding-Empfänger ist ungültig.");
+    }
+    return { actorId, displayName };
+  });
+  if (new Set(eligibleRecipients.map(({ actorId }) => actorId)).size !== eligibleRecipients.length
+    || (stateValue === "system_deferred"
+      && (responsibilityType !== "system" || eligibleRecipients.length))
+    || (stateValue === "fixed_recipient_eligible"
+      && (responsibilityType !== "employee" || eligibleRecipients.length !== 1
+        || eligibleRecipients[0].actorId !== responsibilityReference))
+    || (stateValue === "selection_required" && !eligibleRecipients.length)
+    || (stateValue === "unresolved" && eligibleRecipients.length)) {
+    throw new Error("Die Empfängerauflösung der Onboarding-Vorschau ist widersprüchlich.");
+  }
+  return {
+    stepReference,
+    title,
+    sortOrder,
+    state: stateValue,
+    responsibility: {
+      type: responsibilityType,
+      reference: responsibilityReference,
+      label: responsibilityLabel,
+    },
+    eligibleRecipients,
+    selectedAssignee: null,
+  };
+}
+
+function normalizeEmployeeOnboardingPackage(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || !Array.isArray(value.assignments) || !value.assignments.length
+    || value.assignments.length > 30) {
+    throw new Error("Ein Onboarding-Paket ist ungültig.");
+  }
+  const publicationId = String(value.publicationId || "").trim();
+  const processId = String(value.processId || "").trim();
+  const workflowCode = String(value.workflowCode || "").trim();
+  const title = String(value.title || "").trim();
+  const versionNumber = Number(value.versionNumber);
+  const sourceRevision = Number(value.sourceRevision);
+  const authorityLevel = String(value.authorityLevel || "").trim();
+  const requirementKind = String(value.requirementKind || "").trim();
+  const reviewStatus = String(value.reviewStatus || "").trim();
+  if (!publicationId || !processId || !workflowCode || !title
+    || !Number.isSafeInteger(versionNumber) || versionNumber < 1
+    || !Number.isSafeInteger(sourceRevision) || sourceRevision < 1
+    || !new Set(["central", "local"]).has(authorityLevel)
+    || !new Set(["mandatory", "supplemental"]).has(requirementKind)
+    || reviewStatus !== "requires_new_lifecycle_review") {
+    throw new Error("Ein Onboarding-Paket ist ungültig.");
+  }
+  const assignments = value.assignments.map(normalizeEmployeeOnboardingAssignment);
+  if (new Set(assignments.map(({ stepReference }) => stepReference)).size !== assignments.length) {
+    throw new Error("Ein Onboarding-Paket enthält doppelte Schrittbezüge.");
+  }
+  return {
+    publicationId,
+    processId,
+    sourceRevision,
+    versionNumber,
+    workflowCode,
+    title,
+    authorityLevel,
+    requirementKind,
+    scope: normalizeEmployeeOnboardingScope(value.scope),
+    publishedAt: String(value.publishedAt || "").trim(),
+    reviewStatus,
+    assignments,
+  };
+}
+
+function normalizeEmployeeOnboardingExecutionTimestamp(value, { nullable = false } = {}) {
+  if (value === null && nullable) return null;
+  const normalized = String(value || "").trim();
+  if (!normalized || Number.isNaN(new Date(normalized).getTime())) {
+    throw new Error("Ein Zeitwert des aktiven Onboarding-Falls ist ungültig.");
+  }
+  return normalized;
+}
+
+function normalizeEmployeeOnboardingActiveCase(value) {
+  if (value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Der aktive Onboarding-Fall ist ungültig.");
+  }
+  const caseId = String(value.caseId || "").trim();
+  const caseState = String(value.state || "").trim();
+  const packageCount = Number(value.packageCount);
+  const taskCount = Number(value.taskCount);
+  const completedTaskCount = Number(value.completedTaskCount);
+  if (!caseId || caseId.length > 120
+    || !new Set(["prepared", "approved", "active", "completed", "cancelled"]).has(caseState)
+    || !Number.isSafeInteger(packageCount) || packageCount < 0
+    || !Number.isSafeInteger(taskCount) || taskCount < 0
+    || !Number.isSafeInteger(completedTaskCount) || completedTaskCount < 0
+    || completedTaskCount > taskCount
+    || typeof value.closeAvailable !== "boolean"
+    || (value.closeAvailable && (
+      caseState !== "active"
+      || taskCount < 1
+      || completedTaskCount !== taskCount
+    ))) {
+    throw new Error("Der aktive Onboarding-Fall ist ungültig.");
+  }
+  return {
+    caseId,
+    state: caseState,
+    createdAt: normalizeEmployeeOnboardingExecutionTimestamp(value.createdAt, { nullable: true }),
+    startedAt: normalizeEmployeeOnboardingExecutionTimestamp(value.startedAt, { nullable: true }),
+    completedAt: normalizeEmployeeOnboardingExecutionTimestamp(value.completedAt, { nullable: true }),
+    packageCount,
+    taskCount,
+    completedTaskCount,
+    closeAvailable: value.closeAvailable,
+  };
+}
+
+function normalizeEmployeeOnboardingExecution(payload) {
+  const canStartOnboarding = payload.capabilities?.canStartOnboarding === true;
+  const canCloseOnboarding = payload.capabilities?.canCloseOnboarding === true;
+  const source = payload.onboardingExecution;
+  if (source === undefined || source === null) {
+    if (canStartOnboarding) {
+      throw new Error("Die Onboarding-Ausführungsprojektion fehlt.");
+    }
+    return null;
+  }
+  if (!source || typeof source !== "object" || Array.isArray(source)
+    || source.contractVersion !== "o4-v0.1"
+    || source.mode !== "controlled_onboarding_start"
+    || !/^[0-9a-f]{64}$/i.test(String(source.previewSha256 || ""))
+    || typeof source.formAvailable !== "boolean"
+    || source.requiredConfirmation !== "START_ONBOARDING") {
+    throw new Error("Die Onboarding-Ausführungsprojektion ist ungültig.");
+  }
+  const activeCase = normalizeEmployeeOnboardingActiveCase(source.activeCase);
+  if (source.formAvailable && (!canStartOnboarding || activeCase !== null)) {
+    throw new Error("Die Onboarding-Ausführungsprojektion ist widersprüchlich.");
+  }
+  if (activeCase?.closeAvailable && !canCloseOnboarding) {
+    throw new Error("Die Onboarding-Abschlussfreigabe ist widersprüchlich.");
+  }
+  return {
+    contractVersion: source.contractVersion,
+    mode: source.mode,
+    previewSha256: String(source.previewSha256).toLowerCase(),
+    formAvailable: source.formAvailable,
+    requiredConfirmation: source.requiredConfirmation,
+    activeCase,
+  };
+}
+
+function normalizeEmployeeProfileOnboarding(payload, expectedEmployeeNumber) {
+  const profile = normalizeEmployeeProfileHeader(
+    payload,
+    expectedEmployeeNumber,
+    "canReadOnboardingPreview",
+    "onboarding",
+  );
+  const source = payload.onboardingPreview;
+  if (!source || typeof source !== "object" || Array.isArray(source)
+    || source.contractVersion !== "o3-v0.1"
+    || source.mode !== "read_only_onboarding_profile_preview"
+    || source.caseType !== "onboarding"
+    || source.startAllowed !== false
+    || source.casePersisted !== false
+    || source.instanceCount !== 0
+    || source.taskCount !== 0
+    || source.assignmentCount !== 0
+    || source.subject?.employeeNumber !== String(expectedEmployeeNumber || "").trim()
+    || !Array.isArray(source.packageResolution?.packages)
+    || !Array.isArray(source.packageResolution?.requiredPackageFamilies)
+    || !Array.isArray(source.packageResolution?.selectedBindings)
+    || source.packageResolution.selectedBindings.length
+    || !Array.isArray(source.packageResolution?.conflicts)
+    || !Array.isArray(source.blockers)) {
+    throw new Error("Die Onboarding-Profilprojektion ist unvollständig.");
+  }
+  const packages = source.packageResolution.packages.map(normalizeEmployeeOnboardingPackage);
+  const assignments = packages.flatMap((entry) => entry.assignments);
+  const summary = source.assignmentPreview;
+  const expectedSummary = {
+    packageCount: packages.length,
+    stepCount: assignments.length,
+    fixedRecipientCount: assignments.filter(({ state: value }) => value === "fixed_recipient_eligible").length,
+    selectionRequiredCount: assignments.filter(({ state: value }) => value === "selection_required").length,
+    unresolvedCount: assignments.filter(({ state: value }) => value === "unresolved").length,
+    systemStepCount: assignments.filter(({ state: value }) => value === "system_deferred").length,
+    selectedAssignmentCount: 0,
+  };
+  if (!summary || Object.entries(expectedSummary).some(([key, value]) => summary[key] !== value)) {
+    throw new Error("Die Zusammenfassung der Onboarding-Zuweisungen ist widersprüchlich.");
+  }
+  const blockers = source.blockers.map((entry) => {
+    const code = String(entry?.code || "").trim();
+    if (!code) throw new Error("Ein Onboarding-Blocker ist ungültig.");
+    return { code };
+  });
+  const onboardingExecution = normalizeEmployeeOnboardingExecution(payload);
+  return {
+    profile,
+    onboardingPreview: {
+      contractVersion: source.contractVersion,
+      scope: normalizeEmployeeOnboardingScope(source.scope),
+      packageResolution: {
+        requiredPackageFamilies: source.packageResolution.requiredPackageFamilies
+          .map((value) => String(value || "").trim()).filter(Boolean),
+        packages,
+        conflictCount: source.packageResolution.conflicts.length,
+      },
+      assignmentPreview: expectedSummary,
+      blockers,
+      startAllowed: false,
+      casePersisted: false,
+      instanceCount: 0,
+      taskCount: 0,
+      assignmentCount: 0,
+    },
+    onboardingExecution,
+    ...normalizeEmployeeProfileAccess(payload),
+  };
+}
+
+const EMPLOYEE_OFFBOARDING_FAMILIES = Object.freeze({
+  hr_contract_end: "Vertragsende und Personaladministration",
+  communication_release_information: "Kommunikationsfreigabe und Information",
+  accounts_permissions: "Konten und Berechtigungen",
+  work_access_assets: "Arbeitszugänge und Betriebsmittel",
+  handover_open_responsibilities: "Übergabe und offene Verantwortungen",
+  closing_documents_follow_up: "Abschlussdokumente und Nachbearbeitung",
+});
+
+const EMPLOYEE_OFFBOARDING_STATES = new Set([
+  "internally_prepared",
+  "communication_released",
+  "employee_informed",
+  "active",
+  "completed",
+  "cancelled",
+]);
+
+const EMPLOYEE_OFFBOARDING_PACKAGE_STATES = new Set([
+  "confidential_preparation",
+  "pending",
+  "active",
+  "complete",
+  "terminated",
+]);
+
+function normalizeEmployeeOffboardingTimestamp(value, { nullable = false } = {}) {
+  if (nullable && value === null) return null;
+  const normalized = String(value || "").trim();
+  const parsed = new Date(normalized);
+  if (!normalized || Number.isNaN(parsed.getTime()) || parsed.toISOString() !== normalized) {
+    throw new Error("Ein Offboarding-Zeitpunkt ist ungültig.");
+  }
+  return normalized;
+}
+
+function normalizeEmployeeOffboardingDate(value) {
+  const normalized = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)
+    || new Date(`${normalized}T00:00:00.000Z`).toISOString().slice(0, 10) !== normalized) {
+    throw new Error("Ein Offboarding-Datum ist ungültig.");
+  }
+  return normalized;
+}
+
+function normalizeEmployeeOffboardingCandidate(entry, expectedEmployeeNumber) {
+  const actorId = String(entry?.actorId || "").trim();
+  const displayName = String(entry?.displayName || "").trim();
+  if (!actorId || !displayName || actorId === String(expectedEmployeeNumber || "").trim()) {
+    throw new Error("Eine Offboarding-Zuweisung ist ungültig.");
+  }
+  return {
+    actorId,
+    displayName,
+    roleLabel: String(entry?.roleLabel || "Fachperson").trim(),
+  };
+}
+
+function normalizeEmployeeOffboardingPackages(value, {
+  preparedOnly = false,
+  expectedEmployeeNumber = "",
+} = {}) {
+  if (!Array.isArray(value) || value.length !== 6) {
+    throw new Error("Die sechs Offboarding-Pflichtfamilien fehlen.");
+  }
+  const seen = new Set();
+  return value.map((entry) => {
+    const familyCode = String(entry?.familyCode || "").trim();
+    if (!Object.hasOwn(EMPLOYEE_OFFBOARDING_FAMILIES, familyCode) || seen.has(familyCode)) {
+      throw new Error("Eine Offboarding-Pflichtfamilie ist ungültig.");
+    }
+    seen.add(familyCode);
+    if (preparedOnly) {
+      if (!Array.isArray(entry?.candidates)) {
+        throw new Error("Die Empfängerfreigabe einer Offboarding-Pflichtfamilie fehlt.");
+      }
+      return {
+        familyCode,
+        title: String(entry?.title || EMPLOYEE_OFFBOARDING_FAMILIES[familyCode]).trim(),
+        recipientClass: String(entry?.recipientClass || "").trim(),
+        candidates: entry.candidates.map((candidate) => (
+          normalizeEmployeeOffboardingCandidate(candidate, expectedEmployeeNumber)
+        )),
+      };
+    }
+    const orderId = String(entry?.orderId || "").trim();
+    const status = String(entry?.status || "").trim();
+    const assigneeActorId = String(entry?.assigneeActorId || "").trim();
+    if (!orderId || !assigneeActorId || !EMPLOYEE_OFFBOARDING_PACKAGE_STATES.has(status)) {
+      throw new Error("Ein Offboarding-Auftrag ist ungültig.");
+    }
+    return {
+      familyCode,
+      title: String(entry?.title || EMPLOYEE_OFFBOARDING_FAMILIES[familyCode]).trim(),
+      recipientClass: String(entry?.recipientClass || "").trim(),
+      assigneeActorId,
+      assigneeDisplayName: String(entry?.assigneeDisplayName || assigneeActorId).trim(),
+      orderId,
+      status,
+      dueAt: entry?.dueAt === null
+        ? null
+        : normalizeEmployeeOffboardingTimestamp(entry?.dueAt),
+    };
+  });
+}
+
+function normalizeEmployeeOffboardingCase(value, expectedEmployeeNumber) {
+  if (value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Der vertrauliche Offboarding-Fall ist ungültig.");
+  }
+  const caseId = String(value.caseId || "").trim();
+  const stateValue = String(value.state || "").trim();
+  const revision = Number(value.revision);
+  if (!caseId || !EMPLOYEE_OFFBOARDING_STATES.has(stateValue)
+    || !Number.isSafeInteger(revision) || revision < 1
+    || String(value.employeeNumber || expectedEmployeeNumber).trim()
+      !== String(expectedEmployeeNumber || "").trim()) {
+    throw new Error("Der vertrauliche Offboarding-Fall ist ungültig.");
+  }
+  const referenceTimes = value.referenceTimes || {};
+  const urgency = value.urgency || {};
+  const confidential = value.confidential || {};
+  const allowedActions = value.allowedActions || {};
+  const mode = String(urgency.mode || "").trim();
+  if (!["standard", "time_critical"].includes(mode)
+    || typeof urgency.approved !== "boolean"
+    || !Array.isArray(confidential.documentReferenceIds)) {
+    throw new Error("Die geschützte Offboarding-Projektion ist ungültig.");
+  }
+  return {
+    caseId,
+    state: stateValue,
+    revision,
+    responsibleActorId: String(value.responsibleActorId || "").trim(),
+    createdAt: normalizeEmployeeOffboardingTimestamp(value.createdAt),
+    updatedAt: normalizeEmployeeOffboardingTimestamp(value.updatedAt),
+    referenceTimes: {
+      plannedExitAt: normalizeEmployeeOffboardingTimestamp(referenceTimes.plannedExitAt),
+      lastWorkingDay: normalizeEmployeeOffboardingDate(referenceTimes.lastWorkingDay),
+      legalExitDate: normalizeEmployeeOffboardingDate(referenceTimes.legalExitDate),
+      accessBlockAt: normalizeEmployeeOffboardingTimestamp(referenceTimes.accessBlockAt),
+    },
+    urgency: {
+      mode,
+      exceptionReasonCode: urgency.exceptionReasonCode === null
+        ? null
+        : String(urgency.exceptionReasonCode || "").trim(),
+      followUpDueAt: urgency.followUpDueAt === null
+        ? null
+        : normalizeEmployeeOffboardingTimestamp(urgency.followUpDueAt),
+      approved: urgency.approved,
+    },
+    confidential: {
+      exitReasonCode: String(confidential.exitReasonCode || "").trim(),
+      exitReasonNote: String(confidential.exitReasonNote || "").trim(),
+      hrNote: String(confidential.hrNote || "").trim(),
+      documentReferenceIds: confidential.documentReferenceIds
+        .map((entry) => String(entry || "").trim()).filter(Boolean),
+    },
+    packages: normalizeEmployeeOffboardingPackages(value.packages),
+    allowedActions: {
+      approveTimeCritical: allowedActions.approveTimeCritical === true,
+      releaseCommunication: allowedActions.releaseCommunication === true,
+      confirmInformation: allowedActions.confirmInformation === true,
+      activate: allowedActions.activate === true,
+      cancel: allowedActions.cancel === true,
+      close: allowedActions.close === true,
+    },
+  };
+}
+
+function normalizeEmployeeProfileOffboarding(payload, expectedEmployeeNumber) {
+  const profile = normalizeEmployeeProfileHeader(
+    payload,
+    expectedEmployeeNumber,
+    "canReadOffboardingConfidential",
+    "offboarding",
+  );
+  const source = payload.offboarding;
+  if (!source || typeof source !== "object" || Array.isArray(source)
+    || source.contractVersion !== "o5-v0.1"
+    || source.mode !== "confidential_offboarding") {
+    throw new Error("Die vertrauliche Offboarding-Projektion ist unvollständig.");
+  }
+  const preparation = source.preparation || {};
+  if (typeof preparation.available !== "boolean"
+    || !Array.isArray(preparation.packages)) {
+    throw new Error("Die vertrauliche Offboarding-Vorbereitung ist unvollständig.");
+  }
+  return {
+    profile,
+    offboarding: {
+      contractVersion: source.contractVersion,
+      mode: source.mode,
+      case: normalizeEmployeeOffboardingCase(source.case, expectedEmployeeNumber),
+      preparation: {
+        available: preparation.available,
+        packages: normalizeEmployeeOffboardingPackages(preparation.packages, {
+          preparedOnly: true,
+          expectedEmployeeNumber,
+        }),
+      },
+    },
+    ...normalizeEmployeeProfileAccess(payload),
+  };
+}
+
 function employeeProfileInitials(displayName) {
   const parts = String(displayName || "").trim().split(/\s+/).filter(Boolean);
   return (parts.length ? `${parts[0][0] || ""}${parts.length > 1 ? parts.at(-1)[0] || "" : ""}` : "MA")
@@ -4191,6 +5103,10 @@ function applyEmployeeProfileAccessProjection(result) {
       && result?.capabilities?.canReadMasterOrg === true,
     documents: result?.tabs?.documents?.available === true
       && result?.capabilities?.canReadDocuments === true,
+    onboarding: result?.tabs?.onboarding?.available === true
+      && result?.capabilities?.canReadOnboardingPreview === true,
+    offboarding: result?.tabs?.offboarding?.available === true
+      && result?.capabilities?.canReadOffboardingConfidential === true,
   };
 }
 
@@ -4276,6 +5192,939 @@ function renderEmployeeProfileDocuments(documents) {
   <p class="employee-profile-boundary">Diese Ansicht enthält ausschließlich freigegebene Metadaten und Versionsstände. Dateiinhalte, Speicherpfade und technische Prüfnachweise werden nicht geladen.</p>`;
 }
 
+const EMPLOYEE_ONBOARDING_BLOCKER_LABELS = Object.freeze({
+  onboarding_execution_deferred_until_o4: "Der Onboarding-Start bleibt bis zum ausdrücklich freigegebenen Ausführungsblock O4 technisch gesperrt.",
+  subject_not_found: "Der Mitarbeiterbezug konnte nicht sicher aufgelöst werden.",
+  subject_inactive: "Der Mitarbeiterbezug ist nicht aktiv.",
+  scope_unresolved: "Standort oder Abteilung ist noch nicht eindeutig zugeordnet.",
+  scope_inactive: "Ein benötigter Organisationsbereich ist nicht aktiv.",
+  scope_relation_invalid: "Standort und Abteilung sind widersprüchlich verknüpft.",
+  no_applicable_onboarding_packages: "Für diesen Organisationsbereich wurde kein passendes Onboarding-Paket gefunden.",
+  m4_publication_review_required: "Die vorhandenen Workflow-Veröffentlichungen müssen unter dem neuen Lifecycle-Schutzvertrag erneut fachlich geprüft werden.",
+  required_package_family_unmapped: "Mindestens eine verpflichtende Paketfamilie ist noch keiner geprüften Veröffentlichung zugeordnet.",
+  package_conflict: "Mehrere Pakete besitzen einen nicht automatisch auflösbaren fachlichen Konflikt.",
+  assignment_selection_required: "Für mindestens einen Schritt muss später ausdrücklich eine verantwortliche Person ausgewählt werden.",
+  assignment_unresolved: "Für mindestens einen Schritt wurde derzeit keine geeignete verantwortliche Person gefunden.",
+  onboarding_notifications_deferred: "Mindestens ein Paket enthält Benachrichtigungen. Diese bleiben in O4 technisch gesperrt.",
+});
+
+function employeeOnboardingScopeLabel(scope) {
+  if (!scope) return "Noch nicht eindeutig";
+  if (scope.type === "company") return "Gesamtes Unternehmen";
+  if (scope.type === "location") return `Standort ${scope.locationId}`;
+  return `Standort ${scope.locationId} · Abteilung ${scope.departmentId}`;
+}
+
+function employeeOnboardingAssignmentState(value) {
+  return ({
+    system_deferred: { label: "Systemschritt gesperrt", tone: "inactive" },
+    fixed_recipient_eligible: { label: "Feste Person geeignet", tone: "approved" },
+    selection_required: { label: "Auswahl erforderlich", tone: "warning" },
+    unresolved: { label: "Noch ungeklärt", tone: "inactive" },
+  })[value] || { label: "Nicht verfügbar", tone: "inactive" };
+}
+
+function renderEmployeeProfileOnboardingPreview(preview, { controlledExecution = false } = {}) {
+  const summary = preview.assignmentPreview;
+  const packages = preview.packageResolution.packages;
+  const blockerLabels = [...new Set(preview.blockers
+    .filter(({ code }) => !controlledExecution || code !== "onboarding_execution_deferred_until_o4")
+    .map(({ code }) => (
+    EMPLOYEE_ONBOARDING_BLOCKER_LABELS[code] || "Eine fachliche Voraussetzung ist noch nicht erfüllt."
+  )))];
+  const packageMarkup = packages.length ? `<div class="employee-onboarding-package-list">${packages.map((entry) => `
+    <article class="employee-onboarding-package">
+      <header>
+        <div><span class="eyebrow">${entry.requirementKind === "mandatory" ? "Unternehmensweites Pflichtpaket" : "Ergänzung"}</span><h3>${escapeHtml(entry.title)}</h3></div>
+        <span class="status-badge warning">Prüfung erforderlich</span>
+      </header>
+      <dl class="employee-onboarding-package-meta">
+        <div><dt>Version</dt><dd>${entry.versionNumber}</dd></div>
+        <div><dt>Workflow-Code</dt><dd>${escapeHtml(entry.workflowCode)}</dd></div>
+        <div><dt>Geltungsbereich</dt><dd>${escapeHtml(employeeOnboardingScopeLabel(entry.scope))}</dd></div>
+        <div><dt>Veröffentlicht</dt><dd>${escapeHtml(employeeProfileFormatTimestamp(entry.publishedAt, "Nicht hinterlegt"))}</dd></div>
+      </dl>
+      <div class="employee-onboarding-assignment-list">${entry.assignments.map((assignment) => {
+        const assignmentState = employeeOnboardingAssignmentState(assignment.state);
+        const recipients = assignment.eligibleRecipients.length
+          ? assignment.eligibleRecipients.map(({ displayName, actorId }) => `${displayName} · ${actorId}`).join(", ")
+          : assignment.state === "system_deferred"
+            ? "Keine Ausführung in O3"
+            : "Keine geeignete Person gefunden";
+        return `<section class="employee-onboarding-assignment">
+          <header><div><span>Schritt ${assignment.sortOrder}</span><strong>${escapeHtml(assignment.title)}</strong></div><span class="status-badge ${assignmentState.tone}">${escapeHtml(assignmentState.label)}</span></header>
+          <dl>
+            <div><dt>Verantwortung</dt><dd>${escapeHtml(assignment.responsibility.label)}</dd></div>
+            <div><dt>Geeignete Personen</dt><dd>${escapeHtml(recipients)}</dd></div>
+          </dl>
+        </section>`;
+      }).join("")}</div>
+    </article>`).join("")}</div>`
+    : '<div class="employee-profile-empty employee-profile-inline-empty"><strong>Keine Pakete aufgelöst</strong><p>Die serverseitige Vorschau hat derzeit kein anwendbares Onboarding-Paket gefunden.</p></div>';
+  return `<section class="employee-onboarding-intro">
+      <div><span class="eyebrow">${controlledExecution ? "Kontrollierter Start" : "Geschützte Lesevorschau"}</span><h3>${controlledExecution ? "Onboarding sicher vorbereiten" : "Onboarding ist noch nicht startbar"}</h3><p>${controlledExecution ? "Pakete, fachliche Prüfungen und Verantwortliche werden vor dem atomaren Start ausdrücklich bestätigt." : "Pakete und mögliche Verantwortliche werden serverseitig ermittelt. Diese Ansicht erzeugt weder Fall noch Instanz, Aufgabe oder Zuweisung."}</p></div>
+      <span class="status-badge ${controlledExecution ? "warning" : "inactive"}">${controlledExecution ? "O4" : "Nur Vorschau"}</span>
+    </section>
+    <div class="employee-profile-overview-grid employee-onboarding-summary">
+      <article class="employee-profile-overview-card"><span>Pakete</span><strong>${summary.packageCount}</strong></article>
+      <article class="employee-profile-overview-card"><span>Schritte</span><strong>${summary.stepCount}</strong></article>
+      <article class="employee-profile-overview-card"><span>Personenauswahl offen</span><strong>${summary.selectionRequiredCount}</strong></article>
+      <article class="employee-profile-overview-card"><span>Ungeklärte Zuweisungen</span><strong>${summary.unresolvedCount}</strong></article>
+    </div>
+    ${blockerLabels.length ? `<section class="employee-onboarding-blockers"><h3>${controlledExecution ? "Hinweise vor dem Start" : "Fehlende Voraussetzungen"}</h3><ul>${blockerLabels.map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul></section>` : ""}
+    ${packageMarkup}
+    <p class="employee-profile-boundary">${controlledExecution ? "O4 startet ausschließlich den bestätigten Onboarding-Fall und die ausgewählten Pakete als eine atomare Aktion. Es gibt keine automatische Verantwortlichenwahl, Benachrichtigung oder externe Aktion." : "O3 ist vollständig read-only. Es gibt hier bewusst keinen Startknopf, keine automatische Verantwortlichenwahl, keine Fortschaltung, keine Benachrichtigung und keine externe Aktion."}</p>`;
+}
+
+const EMPLOYEE_ONBOARDING_START_FAMILY_LABELS = Object.freeze({
+  personnel_administration: "Personaladministration",
+  base_security_privacy: "Grundschutz, Sicherheit & Datenschutz",
+});
+
+const EMPLOYEE_ONBOARDING_START_CONFIRMATION_LABELS = Object.freeze({
+  responsibility: "Ich übernehme die Verantwortung für diesen kontrollierten Onboarding-Start.",
+  packages: "Ich habe beide Pflichtfamilien zwei verschiedenen unternehmensweiten Pflichtpaketen zugeordnet.",
+  lifecycleReviews: "Ich habe die Lifecycle-Eignung jedes anwendbaren Pakets fachlich geprüft.",
+  assignments: "Ich habe für jeden nicht-systemischen Schritt ausdrücklich eine verantwortliche Person ausgewählt.",
+  atomicStart: "Ich bestätige, dass Fall, Pakete und Zuweisungen gemeinsam und atomar gestartet werden müssen.",
+});
+
+const EMPLOYEE_ONBOARDING_ACTIVE_CASE_STATES = Object.freeze({
+  prepared: "Vorbereitet",
+  approved: "Freigegeben",
+  active: "Aktiv",
+  completed: "Abgeschlossen",
+  cancelled: "Abgebrochen",
+});
+
+function clearEmployeeOnboardingStartState() {
+  state.employeeOnboardingStartDraft = null;
+  state.employeeOnboardingCloseDraft = null;
+}
+
+function employeeOnboardingCloseDraftFor(activeCase) {
+  if (!activeCase?.closeAvailable) return null;
+  const existing = state.employeeOnboardingCloseDraft;
+  if (existing?.caseId === activeCase.caseId) return existing;
+  state.employeeOnboardingCloseDraft = {
+    caseId: activeCase.caseId,
+    confirmed: false,
+    pending: false,
+    operationId: "",
+    error: "",
+  };
+  return state.employeeOnboardingCloseDraft;
+}
+
+function employeeOnboardingResponsibleActorId() {
+  const user = state.portalSession?.user;
+  const projectedActorId = String(user?.actorId || "").trim();
+  if (projectedActorId) return projectedActorId;
+  const employeeNumber = String(user?.employeeNumber || "").trim();
+  if (employeeNumber) return employeeNumber;
+  const accountId = String(user?.accountId || "").trim();
+  return accountId ? `account:${accountId}` : "";
+}
+
+function employeeOnboardingAssignmentDraftKey(publicationId, stepReference) {
+  return `${String(publicationId || "").trim()}\0${String(stepReference || "").trim()}`;
+}
+
+function employeeOnboardingStartDraftFor(preview) {
+  const execution = preview?.onboardingExecution;
+  if (!execution?.formAvailable) return null;
+  const employeeNumber = String(state.employeeProfileEmployeeNumber || "").trim();
+  const existing = state.employeeOnboardingStartDraft;
+  if (existing?.employeeNumber === employeeNumber
+    && existing.previewSha256 === execution.previewSha256) return existing;
+  state.employeeOnboardingStartDraft = {
+    employeeNumber,
+    previewSha256: execution.previewSha256,
+    referenceDates: {
+      contractualEntryDate: "",
+      firstWorkingDay: "",
+      onboardingTargetDate: "",
+    },
+    packageSelections: Object.fromEntries(
+      EMPLOYEE_ONBOARDING_REQUIRED_START_FAMILIES.map((familyCode) => [familyCode, ""]),
+    ),
+    packageReviews: {},
+    assignments: {},
+    confirmations: Object.fromEntries(
+      EMPLOYEE_ONBOARDING_CONFIRMATION_FIELDS.map((field) => [field, false]),
+    ),
+    finalConfirmation: false,
+    pending: false,
+    operationId: "",
+    requestFingerprint: "",
+    error: "",
+  };
+  return state.employeeOnboardingStartDraft;
+}
+
+function employeeOnboardingStartCandidatePackages(preview) {
+  return preview.packageResolution.packages.filter((entry) => (
+    entry.requirementKind === "mandatory"
+      && entry.scope?.type === "company"
+      && entry.authorityLevel === "central"
+  ));
+}
+
+function pruneEmployeeOnboardingStartDraft(preview, draft) {
+  const candidatePublicationIds = new Set(
+    employeeOnboardingStartCandidatePackages(preview).map(({ publicationId }) => publicationId),
+  );
+  for (const familyCode of EMPLOYEE_ONBOARDING_REQUIRED_START_FAMILIES) {
+    if (!candidatePublicationIds.has(draft.packageSelections[familyCode])) {
+      draft.packageSelections[familyCode] = "";
+    }
+  }
+  const applicablePublicationIds = new Set(
+    preview.packageResolution.packages.map(({ publicationId }) => publicationId),
+  );
+  draft.packageReviews = Object.fromEntries(Object.entries(draft.packageReviews)
+    .filter(([publicationId]) => applicablePublicationIds.has(publicationId)));
+  draft.assignments = Object.fromEntries(Object.entries(draft.assignments)
+    .filter(([key]) => applicablePublicationIds.has(key.split("\0", 1)[0])));
+}
+
+function employeeOnboardingStartSelectedPackages(preview, draft) {
+  const candidates = employeeOnboardingStartCandidatePackages(preview);
+  return EMPLOYEE_ONBOARDING_REQUIRED_START_FAMILIES.flatMap((familyCode) => {
+    const publicationId = draft.packageSelections[familyCode];
+    const selectedPackage = candidates.find((entry) => entry.publicationId === publicationId);
+    return selectedPackage ? [{ familyCode, package: selectedPackage }] : [];
+  });
+}
+
+function employeeOnboardingIsIsoDate(value) {
+  const normalized = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
+  const parsed = new Date(`${normalized}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === normalized;
+}
+
+function buildEmployeeOnboardingStartRequest(preview, draft) {
+  const execution = preview?.onboardingExecution;
+  const responsibleActorId = employeeOnboardingResponsibleActorId();
+  if (!execution?.formAvailable || preview.canStartOnboarding !== true
+    || execution.requiredConfirmation !== "START_ONBOARDING"
+    || draft.employeeNumber !== state.employeeProfileEmployeeNumber
+    || draft.previewSha256 !== execution.previewSha256
+    || !responsibleActorId) {
+    throw new Error("Der kontrollierte Onboarding-Start ist nicht mehr verfügbar.");
+  }
+  if (!Object.values(draft.referenceDates).every(employeeOnboardingIsIsoDate)) {
+    throw new Error("Bitte alle drei Referenzdaten vollständig und gültig eintragen.");
+  }
+  if (draft.referenceDates.contractualEntryDate > draft.referenceDates.firstWorkingDay
+    || draft.referenceDates.firstWorkingDay > draft.referenceDates.onboardingTargetDate) {
+    throw new Error("Die Referenzdaten müssen in zeitlicher Reihenfolge liegen.");
+  }
+  const selectedPackages = employeeOnboardingStartSelectedPackages(preview, draft);
+  const selectedPublicationIds = selectedPackages.map(({ package: entry }) => entry.publicationId);
+  if (selectedPackages.length !== EMPLOYEE_ONBOARDING_REQUIRED_START_FAMILIES.length
+    || new Set(selectedPublicationIds).size !== selectedPublicationIds.length) {
+    throw new Error("Bitte jeder Pflichtfamilie ein anderes unternehmensweites Pflichtpaket zuordnen.");
+  }
+  const familyCodesByPublication = new Map(selectedPackages.map(({ familyCode, package: entry }) => (
+    [entry.publicationId, [familyCode]]
+  )));
+  const packageBindings = preview.packageResolution.packages.map((entry) => {
+    if (draft.packageReviews[entry.publicationId] !== true) {
+      throw new Error("Bitte die Lifecycle-Prüfung jedes anwendbaren Pakets bestätigen.");
+    }
+    const assignments = entry.assignments
+      .filter(({ responsibility }) => responsibility.type !== "system")
+      .map((assignment) => {
+        const assigneeActorId = String(draft.assignments[
+          employeeOnboardingAssignmentDraftKey(entry.publicationId, assignment.stepReference)
+        ] || "").trim();
+        if (!assigneeActorId
+          || !assignment.eligibleRecipients.some(({ actorId }) => actorId === assigneeActorId)) {
+          throw new Error("Bitte für jeden nicht-systemischen Schritt ausdrücklich eine geeignete Person auswählen.");
+        }
+        return { stepReference: assignment.stepReference, assigneeActorId };
+      });
+    return {
+      publicationId: entry.publicationId,
+      versionNumber: entry.versionNumber,
+      familyCodes: familyCodesByPublication.get(entry.publicationId) || [],
+      reviewConfirmed: true,
+      assignments,
+    };
+  });
+  if (!EMPLOYEE_ONBOARDING_CONFIRMATION_FIELDS.every((field) => draft.confirmations[field] === true)
+    || draft.finalConfirmation !== true) {
+    throw new Error("Bitte alle ausdrücklichen Bestätigungen einschließlich START_ONBOARDING setzen.");
+  }
+  return {
+    expectedPreviewSha256: execution.previewSha256,
+    responsibleActorId,
+    confirmation: "START_ONBOARDING",
+    confirmations: Object.fromEntries(
+      EMPLOYEE_ONBOARDING_CONFIRMATION_FIELDS.map((field) => [field, true]),
+    ),
+    referenceDates: { ...draft.referenceDates },
+    packageBindings,
+  };
+}
+
+function employeeOnboardingStartRequestWithOperation(draft, request) {
+  const fingerprint = JSON.stringify(request);
+  if (!draft.operationId || draft.requestFingerprint !== fingerprint) {
+    const operationId = globalThis.crypto?.randomUUID?.();
+    if (!operationId) throw new Error("Für den sicheren Start konnte keine Vorgangs-ID erzeugt werden.");
+    draft.operationId = operationId;
+    draft.requestFingerprint = fingerprint;
+  }
+  return { operationId: draft.operationId, ...request };
+}
+
+function renderEmployeeOnboardingActiveCase(activeCase) {
+  const terminal = ["completed", "cancelled"].includes(activeCase.state);
+  const closeDraft = employeeOnboardingCloseDraftFor(activeCase);
+  const closeMarkup = closeDraft ? `<form class="employee-onboarding-close-form" data-employee-onboarding-close-form aria-busy="${String(closeDraft.pending)}">
+      <label class="employee-onboarding-start-check">
+        <input type="checkbox" required data-onboarding-close-confirmation${closeDraft.confirmed ? " checked" : ""}${closeDraft.pending ? " disabled" : ""}>
+        <span>Ich best&auml;tige, dass alle verkn&uuml;pften Onboarding-Aufgaben erledigt sind: <strong>CLOSE_ONBOARDING</strong></span>
+      </label>
+      <p class="employee-onboarding-start-message${closeDraft.error ? " error" : ""}" data-onboarding-close-message role="status" aria-live="polite">${escapeHtml(closeDraft.error)}</p>
+      <div class="employee-onboarding-start-actions"><button type="submit" class="primary-button"${closeDraft.pending ? " disabled" : ""}>${closeDraft.pending ? "Fall wird abgeschlossen &hellip;" : "Onboarding-Fall verbindlich abschlie&szlig;en"}</button></div>
+    </form>` : "";
+  const stateLabel = EMPLOYEE_ONBOARDING_ACTIVE_CASE_STATES[activeCase.state] || "Status nicht verfügbar";
+  return `<section class="employee-onboarding-active-case" aria-labelledby="employeeOnboardingActiveCaseTitle">
+    <header><div><span class="eyebrow">${terminal ? "Abgeschlossener" : "Aktiver"} Onboarding-Fall</span><h3 id="employeeOnboardingActiveCaseTitle">${escapeHtml(stateLabel)}</h3></div><span class="status-badge ${activeCase.closeAvailable || activeCase.state === "active" ? "approved" : "inactive"}">${activeCase.closeAvailable ? "Abschluss freigegeben" : "Nur Status"}</span></header>
+    <dl>
+      <div><dt>Fallreferenz</dt><dd>${escapeHtml(activeCase.caseId)}</dd></div>
+      <div><dt>Angelegt</dt><dd>${escapeHtml(employeeProfileFormatTimestamp(activeCase.createdAt))}</dd></div>
+      <div><dt>Gestartet</dt><dd>${escapeHtml(activeCase.startedAt ? employeeProfileFormatTimestamp(activeCase.startedAt) : "Noch nicht gestartet")}</dd></div>
+      <div><dt>Abgeschlossen</dt><dd>${escapeHtml(activeCase.completedAt ? employeeProfileFormatTimestamp(activeCase.completedAt) : "Noch offen")}</dd></div>
+      <div><dt>Pakete</dt><dd>${activeCase.packageCount}</dd></div>
+      <div><dt>Aufgaben</dt><dd>${activeCase.completedTaskCount} von ${activeCase.taskCount} erledigt</dd></div>
+    </dl>
+    ${closeMarkup}
+    <p>Der Fall bleibt als minimierte Statusprojektion sichtbar. Außer dem ausdrücklich freigegebenen Abschluss sind Änderungen und externe Aktionen nicht verfügbar.</p>
+  </section>`;
+}
+
+function renderEmployeeOnboardingStartForm(preview) {
+  const execution = preview.onboardingExecution;
+  const draft = employeeOnboardingStartDraftFor(preview);
+  if (!draft) return "";
+  pruneEmployeeOnboardingStartDraft(preview, draft);
+  const candidates = employeeOnboardingStartCandidatePackages(preview);
+  const requiredFamiliesProjected = EMPLOYEE_ONBOARDING_REQUIRED_START_FAMILIES.every(
+    (familyCode) => preview.packageResolution.requiredPackageFamilies.includes(familyCode),
+  );
+  const responsibleActorId = employeeOnboardingResponsibleActorId();
+  const structuralBlocker = !requiredFamiliesProjected
+    ? "Die beiden Pflichtfamilien fehlen in der aktuellen Servervorschau."
+    : candidates.length < 2
+      ? "Für den kontrollierten Start werden zwei verschiedene unternehmensweite Pflichtpakete benötigt."
+      : !responsibleActorId
+        ? "Die verantwortliche angemeldete Person konnte nicht sicher bestimmt werden."
+        : "";
+  const disabled = draft.pending ? " disabled" : "";
+  const selectedPackages = employeeOnboardingStartSelectedPackages(preview, draft);
+  const familySelectors = EMPLOYEE_ONBOARDING_REQUIRED_START_FAMILIES.map((familyCode) => {
+    const selectedPublicationId = draft.packageSelections[familyCode] || "";
+    const selectedElsewhere = new Set(EMPLOYEE_ONBOARDING_REQUIRED_START_FAMILIES
+      .filter((otherFamilyCode) => otherFamilyCode !== familyCode)
+      .map((otherFamilyCode) => draft.packageSelections[otherFamilyCode]).filter(Boolean));
+    return `<label class="employee-onboarding-start-field">
+      <span>${escapeHtml(EMPLOYEE_ONBOARDING_START_FAMILY_LABELS[familyCode])}</span>
+      <select required data-onboarding-family-code="${escapeHtmlAttribute(familyCode)}"${disabled}>
+        <option value="">Pflichtpaket ausdrücklich auswählen</option>
+        ${candidates.map((entry) => `<option value="${escapeHtmlAttribute(entry.publicationId)}"${entry.publicationId === selectedPublicationId ? " selected" : ""}${selectedElsewhere.has(entry.publicationId) ? " disabled" : ""}>${escapeHtml(entry.title)} · Version ${entry.versionNumber}</option>`).join("")}
+      </select>
+    </label>`;
+  }).join("");
+  const familyCodesByPublication = new Map(selectedPackages.map(({ familyCode, package: entry }) => (
+    [entry.publicationId, [familyCode]]
+  )));
+  const applicablePackageMarkup = preview.packageResolution.packages.map((entry) => {
+    const familyCodes = familyCodesByPublication.get(entry.publicationId) || [];
+    const packagePurpose = familyCodes.length
+      ? familyCodes.map((familyCode) => EMPLOYEE_ONBOARDING_START_FAMILY_LABELS[familyCode]).join(" · ")
+      : "Zusätzliches anwendbares Paket";
+    return `
+    <article class="employee-onboarding-start-package">
+      <header><div><span class="eyebrow">${escapeHtml(packagePurpose)}</span><h4>${escapeHtml(entry.title)}</h4></div><span class="status-badge warning">Version ${entry.versionNumber}</span></header>
+      <label class="employee-onboarding-start-check employee-onboarding-review-check">
+        <input type="checkbox" required data-onboarding-review-publication="${escapeHtmlAttribute(entry.publicationId)}"${draft.packageReviews[entry.publicationId] ? " checked" : ""}${disabled}>
+        <span>Ich habe dieses Paket und seine Schritte unter dem Lifecycle-Schutzvertrag fachlich geprüft.</span>
+      </label>
+      <div class="employee-onboarding-start-assignments">${entry.assignments.map((assignment) => {
+        if (assignment.responsibility.type === "system") {
+          return `<section class="employee-onboarding-start-assignment system"><div><span>Schritt ${assignment.sortOrder}</span><strong>${escapeHtml(assignment.title)}</strong></div><span class="status-badge inactive">Systemschritt · keine externe Aktion</span></section>`;
+        }
+        const assignmentKey = employeeOnboardingAssignmentDraftKey(entry.publicationId, assignment.stepReference);
+        const selectedActorId = draft.assignments[assignmentKey] || "";
+        return `<label class="employee-onboarding-start-assignment">
+          <span><small>Schritt ${assignment.sortOrder} · ${escapeHtml(assignment.responsibility.label)}</small><strong>${escapeHtml(assignment.title)}</strong></span>
+          <select required data-onboarding-assignment-publication="${escapeHtmlAttribute(entry.publicationId)}" data-onboarding-assignment-step="${escapeHtmlAttribute(assignment.stepReference)}"${disabled}>
+            <option value="">Verantwortliche Person ausdrücklich auswählen</option>
+            ${assignment.eligibleRecipients.map((recipient) => `<option value="${escapeHtmlAttribute(recipient.actorId)}"${recipient.actorId === selectedActorId ? " selected" : ""}>${escapeHtml(recipient.displayName)} · ${escapeHtml(recipient.actorId)}</option>`).join("")}
+          </select>
+        </label>`;
+      }).join("")}</div>
+    </article>`;
+  }).join("");
+  const confirmationMarkup = EMPLOYEE_ONBOARDING_CONFIRMATION_FIELDS.map((field) => `
+    <label class="employee-onboarding-start-check">
+      <input type="checkbox" required data-onboarding-confirmation="${field}"${draft.confirmations[field] ? " checked" : ""}${disabled}>
+      <span>${escapeHtml(EMPLOYEE_ONBOARDING_START_CONFIRMATION_LABELS[field])}</span>
+    </label>`).join("");
+  return `<section class="employee-onboarding-execution" aria-labelledby="employeeOnboardingStartTitle">
+    <header><div><span class="eyebrow">O4 · kontrollierte Ausführung</span><h3 id="employeeOnboardingStartTitle">Onboarding atomar starten</h3><p>Alle Felder beginnen bewusst leer. Der Server prüft Vorschau, Pakete, Rechte und Zuweisungen beim Start erneut.</p></div><span class="status-badge warning">Explizite Freigabe</span></header>
+    <form class="employee-onboarding-start-form" data-employee-onboarding-start-form autocomplete="off" aria-busy="${String(draft.pending)}">
+      <section class="employee-onboarding-start-section"><h4>1. Referenzdaten</h4><div class="employee-onboarding-date-grid">
+        ${[["contractualEntryDate", "Vertraglicher Eintritt"], ["firstWorkingDay", "Erster Arbeitstag"], ["onboardingTargetDate", "Onboarding-Zieldatum"]].map(([field, label]) => `<label class="employee-onboarding-start-field"><span>${label}</span><input type="date" required data-onboarding-reference-date="${field}" value="${escapeHtmlAttribute(draft.referenceDates[field])}"${disabled}></label>`).join("")}
+      </div></section>
+      <section class="employee-onboarding-start-section"><h4>2. Pflichtfamilien und Pakete</h4><div class="employee-onboarding-family-grid">${familySelectors}</div><p class="employee-onboarding-start-hint">Alle anwendbaren Pakete müssen einzeln geprüft und jeder nicht-systemische Schritt ausdrücklich zugewiesen werden.</p>${applicablePackageMarkup}</section>
+      <section class="employee-onboarding-start-section"><h4>3. Verantwortlicher Start</h4><p class="employee-onboarding-responsible">Angemeldete verantwortliche Person: <strong>${escapeHtml(state.portalSession?.user?.fullName || state.portalSession?.user?.nickname || responsibleActorId || "Nicht verfügbar")}</strong></p></section>
+      <section class="employee-onboarding-start-section"><h4>4. Ausdrückliche Bestätigungen</h4><div class="employee-onboarding-confirmations">${confirmationMarkup}</div></section>
+      <label class="employee-onboarding-start-check employee-onboarding-final-confirmation">
+        <input type="checkbox" required data-onboarding-final-confirmation${draft.finalConfirmation ? " checked" : ""}${disabled}>
+        <span>Ich bestätige abschließend: <strong>${escapeHtml(execution.requiredConfirmation)}</strong></span>
+      </label>
+      ${structuralBlocker ? `<p class="employee-onboarding-start-message error" role="alert">${escapeHtml(structuralBlocker)}</p>` : `<p class="employee-onboarding-start-message${draft.error ? " error" : ""}" data-onboarding-start-message role="status" aria-live="polite">${escapeHtml(draft.error)}</p>`}
+      <div class="employee-onboarding-start-actions"><button type="submit" class="primary-button"${draft.pending || structuralBlocker ? " disabled" : ""}>${draft.pending ? "Onboarding wird atomar gestartet …" : "Onboarding verbindlich starten"}</button></div>
+    </form>
+  </section>`;
+}
+
+function renderEmployeeProfileOnboarding(preview) {
+  const execution = preview.onboardingExecution;
+  const controlledExecution = Boolean(execution);
+  const previewMarkup = renderEmployeeProfileOnboardingPreview(preview, { controlledExecution });
+  if (!execution) return previewMarkup;
+  if (execution.activeCase) return `${previewMarkup}${renderEmployeeOnboardingActiveCase(execution.activeCase)}`;
+  if (execution.formAvailable && preview.canStartOnboarding === true) {
+    return `${previewMarkup}${renderEmployeeOnboardingStartForm(preview)}`;
+  }
+  return `${previewMarkup}<section class="employee-onboarding-execution-unavailable"><strong>Kontrollierter Start nicht verfügbar</strong><p>Der aktuelle Serverstand gibt für dieses Profil kein Startformular frei.</p></section>`;
+}
+
+function captureEmployeeOnboardingStartForm(form) {
+  const preview = state.employeeProfileTabData.onboarding;
+  const draft = employeeOnboardingStartDraftFor(preview);
+  if (!draft || draft.pending) return draft;
+  form.querySelectorAll("[data-onboarding-reference-date]").forEach((input) => {
+    draft.referenceDates[input.dataset.onboardingReferenceDate] = String(input.value || "").trim();
+  });
+  form.querySelectorAll("[data-onboarding-family-code]").forEach((select) => {
+    draft.packageSelections[select.dataset.onboardingFamilyCode] = String(select.value || "").trim();
+  });
+  draft.packageReviews = {};
+  form.querySelectorAll("[data-onboarding-review-publication]").forEach((input) => {
+    draft.packageReviews[input.dataset.onboardingReviewPublication] = input.checked === true;
+  });
+  draft.assignments = {};
+  form.querySelectorAll("[data-onboarding-assignment-publication][data-onboarding-assignment-step]").forEach((select) => {
+    draft.assignments[employeeOnboardingAssignmentDraftKey(
+      select.dataset.onboardingAssignmentPublication,
+      select.dataset.onboardingAssignmentStep,
+    )] = String(select.value || "").trim();
+  });
+  form.querySelectorAll("[data-onboarding-confirmation]").forEach((input) => {
+    draft.confirmations[input.dataset.onboardingConfirmation] = input.checked === true;
+  });
+  draft.finalConfirmation = form.querySelector("[data-onboarding-final-confirmation]")?.checked === true;
+  draft.error = "";
+  pruneEmployeeOnboardingStartDraft(preview, draft);
+  return draft;
+}
+
+function employeeOnboardingStartContextIsCurrent(employeeNumber, profileRequestToken, previewSha256) {
+  return employeeProfileIsOpen()
+    && state.employeeProfileTab === "onboarding"
+    && state.employeeProfileEmployeeNumber === employeeNumber
+    && state.employeeProfileRequestToken === profileRequestToken
+    && state.employeeProfileTabData.onboarding?.onboardingExecution?.previewSha256 === previewSha256;
+}
+
+async function reloadEmployeeOnboardingProjection(employeeNumber = state.employeeProfileEmployeeNumber) {
+  const normalizedEmployeeNumber = String(employeeNumber || "").trim();
+  if (!normalizedEmployeeNumber || !employeeProfileIsOpen()
+    || state.employeeProfileTab !== "onboarding"
+    || state.employeeProfileEmployeeNumber !== normalizedEmployeeNumber) return;
+  state.employeeProfileTabData.onboarding = null;
+  delete state.employeeProfileTabErrors.onboarding;
+  await loadEmployeeProfileTab("onboarding", normalizedEmployeeNumber);
+}
+
+async function submitEmployeeOnboardingStart(event) {
+  const form = event.target.closest("[data-employee-onboarding-start-form]");
+  if (!form) return;
+  event.preventDefault();
+  const preview = state.employeeProfileTabData.onboarding;
+  const draft = captureEmployeeOnboardingStartForm(form);
+  if (!draft || draft.pending) return;
+  if (typeof form.reportValidity === "function" && !form.reportValidity()) return;
+  let request;
+  try {
+    request = employeeOnboardingStartRequestWithOperation(
+      draft,
+      buildEmployeeOnboardingStartRequest(preview, draft),
+    );
+  } catch (error) {
+    draft.error = error.message;
+    renderEmployeeProfileContent();
+    return;
+  }
+  const employeeNumber = state.employeeProfileEmployeeNumber;
+  const profileRequestToken = state.employeeProfileRequestToken;
+  const previewSha256 = preview.onboardingExecution.previewSha256;
+  draft.pending = true;
+  draft.error = "";
+  renderEmployeeProfileContent();
+  try {
+    const result = await api(`/api/portal/v1/personnel-lifecycle/employees/${encodeURIComponent(employeeNumber)}/onboarding-starts`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    if (!employeeOnboardingStartContextIsCurrent(employeeNumber, profileRequestToken, previewSha256)) return;
+    clearEmployeeOnboardingStartState();
+    await reloadEmployeeOnboardingProjection(employeeNumber);
+    showToast(String(result?.message || "Onboarding wurde atomar gestartet."));
+  } catch (error) {
+    if (!employeeOnboardingStartContextIsCurrent(employeeNumber, profileRequestToken, previewSha256)) return;
+    if ([403, 409].includes(error.status)) {
+      clearEmployeeOnboardingStartState();
+      showToast(error.message, true);
+      await reloadEmployeeOnboardingProjection(employeeNumber);
+      return;
+    }
+    draft.pending = false;
+    draft.error = error.message || "Der Onboarding-Start konnte nicht sicher bestätigt werden.";
+    renderEmployeeProfileContent();
+  }
+}
+
+function captureEmployeeOnboardingCloseForm(form) {
+  const activeCase = state.employeeProfileTabData.onboarding?.onboardingExecution?.activeCase;
+  const draft = employeeOnboardingCloseDraftFor(activeCase);
+  if (!draft || draft.pending) return draft;
+  draft.confirmed = form.querySelector("[data-onboarding-close-confirmation]")?.checked === true;
+  draft.error = "";
+  return draft;
+}
+
+function employeeOnboardingCloseContextIsCurrent(employeeNumber, profileRequestToken, caseId) {
+  return employeeProfileIsOpen()
+    && state.employeeProfileTab === "onboarding"
+    && state.employeeProfileEmployeeNumber === employeeNumber
+    && state.employeeProfileRequestToken === profileRequestToken
+    && state.employeeProfileTabData.onboarding?.onboardingExecution?.activeCase?.caseId === caseId;
+}
+
+async function submitEmployeeOnboardingClose(event) {
+  const form = event.target.closest("[data-employee-onboarding-close-form]");
+  if (!form) return;
+  event.preventDefault();
+  const draft = captureEmployeeOnboardingCloseForm(form);
+  if (!draft || draft.pending) return;
+  if (typeof form.reportValidity === "function" && !form.reportValidity()) return;
+  if (!draft.confirmed) {
+    draft.error = "Bitte CLOSE_ONBOARDING ausdrücklich bestätigen.";
+    renderEmployeeProfileContent();
+    return;
+  }
+  if (!draft.operationId) {
+    draft.operationId = globalThis.crypto?.randomUUID?.() || "";
+    if (!draft.operationId) {
+      draft.error = "Für den sicheren Abschluss konnte keine Vorgangs-ID erzeugt werden.";
+      renderEmployeeProfileContent();
+      return;
+    }
+  }
+  const employeeNumber = state.employeeProfileEmployeeNumber;
+  const profileRequestToken = state.employeeProfileRequestToken;
+  const caseId = draft.caseId;
+  draft.pending = true;
+  draft.error = "";
+  renderEmployeeProfileContent();
+  try {
+    const result = await api(`/api/portal/v1/personnel-lifecycle/onboarding/cases/${encodeURIComponent(caseId)}/close`, {
+      method: "POST",
+      body: JSON.stringify({
+        operationId: draft.operationId,
+        confirmation: "CLOSE_ONBOARDING",
+        evidenceReference: null,
+      }),
+    });
+    if (!employeeOnboardingCloseContextIsCurrent(employeeNumber, profileRequestToken, caseId)) return;
+    clearEmployeeOnboardingStartState();
+    await reloadEmployeeOnboardingProjection(employeeNumber);
+    showToast(String(result?.message || "Onboarding-Fall wurde abgeschlossen."));
+  } catch (error) {
+    if (!employeeOnboardingCloseContextIsCurrent(employeeNumber, profileRequestToken, caseId)) return;
+    if ([403, 409].includes(error.status)) {
+      clearEmployeeOnboardingStartState();
+      showToast(error.message, true);
+      await reloadEmployeeOnboardingProjection(employeeNumber);
+      return;
+    }
+    draft.pending = false;
+    draft.error = error.message || "Der Onboarding-Abschluss konnte nicht sicher bestätigt werden.";
+    renderEmployeeProfileContent();
+  }
+}
+
+const EMPLOYEE_OFFBOARDING_STATE_LABELS = Object.freeze({
+  internally_prepared: "Intern vorbereitet",
+  communication_released: "Kommunikation freigegeben",
+  employee_informed: "Mitarbeiter/-in informiert",
+  active: "In Ausführung",
+  completed: "Abgeschlossen",
+  cancelled: "Abgebrochen",
+});
+
+const EMPLOYEE_OFFBOARDING_ACTIONS = Object.freeze({
+  approveTimeCritical: Object.freeze({
+    route: "time-critical-approvals",
+    confirmation: "CONFIRM_TIME_CRITICAL_OFFBOARDING",
+    label: "Zeitkritische Ausnahme freigeben",
+    reason: true,
+  }),
+  releaseCommunication: Object.freeze({
+    route: "communication-releases",
+    confirmation: "RELEASE_OFFBOARDING_COMMUNICATION",
+    label: "Kommunikation verbindlich freigeben",
+    reason: true,
+  }),
+  confirmInformation: Object.freeze({
+    route: "information-confirmations",
+    confirmation: "CONFIRM_OFFBOARDING_INFORMATION",
+    label: "Information bestätigen",
+    informedAt: true,
+  }),
+  activate: Object.freeze({
+    route: "activations",
+    confirmation: "ACTIVATE_OFFBOARDING",
+    label: "Ausführung aktivieren",
+  }),
+  cancel: Object.freeze({
+    route: "cancellations",
+    confirmation: "CANCEL_OFFBOARDING",
+    label: "Offboarding kontrolliert abbrechen",
+    reason: true,
+    danger: true,
+  }),
+  close: Object.freeze({
+    route: "closures",
+    confirmation: "CLOSE_OFFBOARDING",
+    label: "Offboarding-Fall abschließen",
+  }),
+});
+
+function employeeOffboardingDraftFor(offboarding) {
+  const caseKey = offboarding?.case
+    ? `${offboarding.case.caseId}:${offboarding.case.revision}`
+    : `prepare:${state.employeeProfileEmployeeNumber}`;
+  if (!state.employeeOffboardingDraft || state.employeeOffboardingDraft.key !== caseKey) {
+    state.employeeOffboardingDraft = {
+      key: caseKey,
+      pending: "",
+      error: "",
+      operationIds: {},
+      requestFingerprints: {},
+    };
+  }
+  return state.employeeOffboardingDraft;
+}
+
+function clearEmployeeOffboardingState() {
+  state.employeeOffboardingDraft = null;
+}
+
+function employeeOffboardingDateTimeInputValue(value) {
+  const parsed = new Date(String(value || ""));
+  if (Number.isNaN(parsed.getTime())) return "";
+  const offset = parsed.getTimezoneOffset() * 60_000;
+  return new Date(parsed.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function employeeOffboardingIsoFromInput(value, label) {
+  const normalized = String(value || "").trim();
+  const parsed = new Date(normalized);
+  if (!normalized || Number.isNaN(parsed.getTime())) {
+    throw new Error(`${label} ist ungültig.`);
+  }
+  return parsed.toISOString();
+}
+
+function employeeOffboardingOperationId(draft, action, requestBody) {
+  const fingerprint = JSON.stringify(requestBody);
+  if (!draft.operationIds[action] || draft.requestFingerprints[action] !== fingerprint) {
+    const operationId = globalThis.crypto?.randomUUID?.();
+    if (!operationId) throw new Error("Für die sichere Offboarding-Aktion konnte keine Vorgangs-ID erzeugt werden.");
+    draft.operationIds[action] = operationId.toLowerCase();
+    draft.requestFingerprints[action] = fingerprint;
+  }
+  return draft.operationIds[action];
+}
+
+function renderEmployeeOffboardingPreparation(offboarding) {
+  const preparation = offboarding.preparation;
+  if (!preparation.available) {
+    return `<section class="employee-offboarding-boundary"><strong>Keine neue Vorbereitung möglich</strong><p>Der Server hat für dieses Profil keine vertrauliche Vorbereitung freigegeben.</p></section>`;
+  }
+  const draft = employeeOffboardingDraftFor(offboarding);
+  const disabled = draft.pending ? " disabled" : "";
+  const packageMarkup = preparation.packages.map((entry) => {
+    const candidateOptions = entry.candidates.map((candidate) => (
+      `<option value="${escapeHtmlAttribute(candidate.actorId)}">${escapeHtml(candidate.displayName)} · ${escapeHtml(candidate.roleLabel)}</option>`
+    )).join("");
+    return `<article class="employee-offboarding-package" data-offboarding-family="${escapeHtmlAttribute(entry.familyCode)}">
+    <header><strong>${escapeHtml(entry.title || EMPLOYEE_OFFBOARDING_FAMILIES[entry.familyCode])}</strong><span class="status-badge inactive">Noch nicht freigegeben</span></header>
+    <label class="field"><span>Zuständige Fachperson</span><select required data-offboarding-assignee="${escapeHtmlAttribute(entry.familyCode)}"${disabled}><option value="">Bitte auswählen</option>${candidateOptions}</select></label>
+    <label class="field"><span>Geschützter Auftragstitel</span><input required maxlength="160" data-offboarding-title="${escapeHtmlAttribute(entry.familyCode)}" value="${escapeHtmlAttribute(entry.title || EMPLOYEE_OFFBOARDING_FAMILIES[entry.familyCode])}"${disabled}></label>
+    <label class="field"><span>Geschützte Arbeitsanweisung</span><textarea required maxlength="4000" rows="3" data-offboarding-instructions="${escapeHtmlAttribute(entry.familyCode)}"${disabled}></textarea></label>
+  </article>`;
+  }).join("");
+  const blocked = preparation.packages.some(({ candidates }) => candidates.length === 0);
+  return `<section class="employee-offboarding-workspace" aria-labelledby="employeeOffboardingPrepareTitle">
+    <header><div><span class="eyebrow">O5 · streng vertraulich</span><h3 id="employeeOffboardingPrepareTitle">Offboarding intern vorbereiten</h3><p>Vor der ausdrücklichen Kommunikationsfreigabe entstehen keine sichtbaren Aufgaben, Zähler, Meldungen oder Kalenderhinweise.</p></div><span class="status-badge warning">Nur berechtigte Personen</span></header>
+    <form data-employee-offboarding-prepare autocomplete="off" aria-busy="${String(Boolean(draft.pending))}">
+      <section class="employee-onboarding-start-section"><h4>1. Referenztermine</h4><div class="employee-onboarding-date-grid">
+        <label class="field"><span>Geplanter Austrittszeitpunkt</span><input type="datetime-local" required data-offboarding-reference="plannedExitAt"${disabled}></label>
+        <label class="field"><span>Letzter Arbeitstag</span><input type="date" required data-offboarding-reference="lastWorkingDay"${disabled}></label>
+        <label class="field"><span>Rechtliches Austrittsdatum</span><input type="date" required data-offboarding-reference="legalExitDate"${disabled}></label>
+        <label class="field"><span>Zugriffssperrzeitpunkt</span><input type="datetime-local" required data-offboarding-reference="accessBlockAt"${disabled}></label>
+      </div></section>
+      <section class="employee-onboarding-start-section"><h4>2. Geschützter Fallinhalt</h4><div class="employee-onboarding-date-grid">
+        <label class="field"><span>Grundcode</span><input required maxlength="80" pattern="[a-z][a-z0-9_]{1,79}" data-offboarding-exit-code placeholder="z. B. employee_notice"${disabled}></label>
+        <label class="field"><span>Dringlichkeit</span><select required data-offboarding-urgency${disabled}><option value="standard">Standard</option><option value="time_critical">Zeitkritische Ausnahme</option></select></label>
+        <label class="field"><span>Ausnahmegrund-Code (nur zeitkritisch)</span><input maxlength="80" pattern="[a-z][a-z0-9_]{1,79}" data-offboarding-exception-code${disabled}></label>
+        <label class="field"><span>Nacharbeit bis (nur zeitkritisch)</span><input type="datetime-local" data-offboarding-follow-up${disabled}></label>
+      </div>
+      <label class="field"><span>Geschützte Begründung</span><textarea required maxlength="2000" rows="3" data-offboarding-exit-note${disabled}></textarea></label>
+      <label class="field"><span>Vertraulicher PL-Vermerk</span><textarea maxlength="4000" rows="3" data-offboarding-hr-note${disabled}></textarea></label>
+      <label class="field"><span>Dokumentreferenzen (eine pro Zeile)</span><textarea maxlength="4000" rows="2" data-offboarding-documents${disabled}></textarea></label>
+      <label class="field"><span>Begründung der zeitkritischen Ausnahme</span><textarea maxlength="2000" rows="2" data-offboarding-exception-note${disabled}></textarea></label></section>
+      <section class="employee-onboarding-start-section"><h4>3. Sechs Pflichtfamilien</h4><div class="employee-offboarding-package-list">${packageMarkup}</div></section>
+      <label class="employee-onboarding-start-check employee-onboarding-final-confirmation"><input type="checkbox" required data-offboarding-prepare-confirm${disabled}><span>Ich bestätige die rein interne Vorbereitung mit <strong>PREPARE_OFFBOARDING</strong>.</span></label>
+      ${blocked ? '<p class="employee-onboarding-start-message error">Es steht keine berechtigte Fachperson für die Pflichtzuweisungen zur Verfügung.</p>' : `<p class="employee-onboarding-start-message${draft.error ? " error" : ""}" role="status" aria-live="polite">${escapeHtml(draft.error)}</p>`}
+      <div class="employee-onboarding-start-actions"><button type="submit" class="primary-button"${disabled}${blocked ? " disabled" : ""}>${draft.pending ? "Vorbereitung wird geschützt gespeichert …" : "Internes Offboarding vorbereiten"}</button></div>
+    </form>
+  </section>`;
+}
+
+function renderEmployeeOffboardingAction(action, currentCase, draft) {
+  const definition = EMPLOYEE_OFFBOARDING_ACTIONS[action];
+  if (!definition || currentCase.allowedActions[action] !== true) return "";
+  const disabled = draft.pending ? " disabled" : "";
+  const reasonMarkup = definition.reason ? `<div class="employee-onboarding-date-grid">
+    <label class="field"><span>Grundcode</span><input required maxlength="80" pattern="[a-z][a-z0-9_]{1,79}" data-offboarding-action-reason-code${disabled}></label>
+    <label class="field"><span>Dokumentreferenzen (eine pro Zeile)</span><textarea rows="2" data-offboarding-action-documents${disabled}></textarea></label>
+  </div><label class="field"><span>Geschützte Begründung</span><textarea required maxlength="2000" rows="2" data-offboarding-action-reason-note${disabled}></textarea></label>` : "";
+  const informedMarkup = definition.informedAt
+    ? `<label class="field"><span>Tatsächlicher Informationszeitpunkt</span><input type="datetime-local" required data-offboarding-informed-at${disabled}></label>`
+    : "";
+  return `<form class="employee-offboarding-action${definition.danger ? " danger" : ""}" data-employee-offboarding-action="${escapeHtmlAttribute(action)}" aria-busy="${String(draft.pending === action)}">
+    <h4>${escapeHtml(definition.label)}</h4>${reasonMarkup}${informedMarkup}
+    <label class="employee-onboarding-start-check"><input type="checkbox" required data-offboarding-action-confirm${disabled}><span>Ich bestätige ausdrücklich: <strong>${escapeHtml(definition.confirmation)}</strong></span></label>
+    <button type="submit" class="${definition.danger ? "danger-button" : "primary-button"}"${disabled}>${draft.pending === action ? "Wird sicher verarbeitet …" : escapeHtml(definition.label)}</button>
+  </form>`;
+}
+
+function renderEmployeeOffboardingCase(offboarding) {
+  const currentCase = offboarding.case;
+  const draft = employeeOffboardingDraftFor(offboarding);
+  const packageMarkup = currentCase.packages.map((entry) => `<article class="employee-offboarding-package">
+    <header><strong>${escapeHtml(entry.title)}</strong><span class="status-badge${entry.status === "complete" ? "" : " warning"}">${escapeHtml(entry.status)}</span></header>
+    <p>${escapeHtml(entry.assigneeDisplayName)} · ${escapeHtml(entry.recipientClass)}</p>
+  </article>`).join("");
+  const actionMarkup = Object.keys(EMPLOYEE_OFFBOARDING_ACTIONS)
+    .map((action) => renderEmployeeOffboardingAction(action, currentCase, draft)).join("");
+  return `<section class="employee-offboarding-workspace" aria-labelledby="employeeOffboardingCaseTitle">
+    <header><div><span class="eyebrow">O5 · vertraulicher Fall</span><h3 id="employeeOffboardingCaseTitle">${escapeHtml(EMPLOYEE_OFFBOARDING_STATE_LABELS[currentCase.state])}</h3><p>Revision ${currentCase.revision} · Verantwortlich: ${escapeHtml(currentCase.responsibleActorId)}</p></div><span class="status-badge warning">Nicht allgemein sichtbar</span></header>
+    <div class="employee-profile-overview-grid">
+      <article class="employee-profile-overview-card"><span>Letzter Arbeitstag</span><strong>${escapeHtml(formatDate(currentCase.referenceTimes.lastWorkingDay, undefined, currentCase.referenceTimes.lastWorkingDay))}</strong></article>
+      <article class="employee-profile-overview-card"><span>Rechtliches Austrittsdatum</span><strong>${escapeHtml(formatDate(currentCase.referenceTimes.legalExitDate, undefined, currentCase.referenceTimes.legalExitDate))}</strong></article>
+      <article class="employee-profile-overview-card"><span>Zugriffssperre geplant</span><strong>${escapeHtml(employeeProfileFormatTimestamp(currentCase.referenceTimes.accessBlockAt))}</strong></article>
+      <article class="employee-profile-overview-card"><span>Dringlichkeit</span><strong>${currentCase.urgency.mode === "time_critical" ? `Zeitkritisch · ${currentCase.urgency.approved ? "freigegeben" : "Freigabe ausstehend"}` : "Standard"}</strong></article>
+    </div>
+    <section class="employee-offboarding-confidential"><h4>Vertraulicher Fallinhalt</h4><p><strong>${escapeHtml(currentCase.confidential.exitReasonCode)}</strong> · ${escapeHtml(currentCase.confidential.exitReasonNote)}</p>${currentCase.confidential.hrNote ? `<p>${escapeHtml(currentCase.confidential.hrNote)}</p>` : ""}</section>
+    <section><h4>Pflichtfamilien</h4><div class="employee-offboarding-package-list">${packageMarkup}</div></section>
+    ${draft.error ? `<p class="employee-onboarding-start-message error" role="alert">${escapeHtml(draft.error)}</p>` : ""}
+    ${actionMarkup ? `<section class="employee-offboarding-actions"><h4>Kontrollierte nächste Schritte</h4>${actionMarkup}</section>` : '<p class="employee-profile-boundary">Für den aktuellen Zustand ist keine weitere Aktion freigegeben.</p>'}
+  </section>`;
+}
+
+function renderEmployeeProfileOffboarding(offboarding) {
+  return offboarding.case
+    ? renderEmployeeOffboardingCase(offboarding)
+    : renderEmployeeOffboardingPreparation(offboarding);
+}
+
+function employeeOffboardingCurrentContext(employeeNumber, profileRequestToken, caseId = null) {
+  return employeeProfileIsOpen()
+    && state.employeeProfileTab === "offboarding"
+    && state.employeeProfileEmployeeNumber === employeeNumber
+    && state.employeeProfileRequestToken === profileRequestToken
+    && (caseId === null
+      || state.employeeProfileTabData.offboarding?.case?.caseId === caseId);
+}
+
+async function reloadEmployeeOffboardingProjection(employeeNumber = state.employeeProfileEmployeeNumber) {
+  const normalizedEmployeeNumber = String(employeeNumber || "").trim();
+  if (!employeeOffboardingCurrentContext(
+    normalizedEmployeeNumber,
+    state.employeeProfileRequestToken,
+  )) return;
+  state.employeeProfileTabData.offboarding = null;
+  delete state.employeeProfileTabErrors.offboarding;
+  await loadEmployeeProfileTab("offboarding", normalizedEmployeeNumber);
+}
+
+async function submitEmployeeOffboardingPreparation(event) {
+  const form = event.target.closest("[data-employee-offboarding-prepare]");
+  if (!form) return;
+  event.preventDefault();
+  if (typeof form.reportValidity === "function" && !form.reportValidity()) return;
+  const offboarding = state.employeeProfileTabData.offboarding;
+  const draft = employeeOffboardingDraftFor(offboarding);
+  if (!offboarding || draft.pending) return;
+  try {
+    const references = Object.fromEntries([...form.querySelectorAll("[data-offboarding-reference]")]
+      .map((input) => [input.dataset.offboardingReference, String(input.value || "").trim()]));
+    const urgencyMode = String(form.querySelector("[data-offboarding-urgency]")?.value || "");
+    const assignments = offboarding.preparation.packages.map((entry) => ({
+      familyCode: entry.familyCode,
+      assigneeActorId: String(form.querySelector(`[data-offboarding-assignee="${entry.familyCode}"]`)?.value || "").trim(),
+      title: String(form.querySelector(`[data-offboarding-title="${entry.familyCode}"]`)?.value || "").trim(),
+      instructions: String(form.querySelector(`[data-offboarding-instructions="${entry.familyCode}"]`)?.value || "").trim(),
+    }));
+    const requestWithoutOperation = {
+      confirmation: "PREPARE_OFFBOARDING",
+      referenceTimes: {
+        plannedExitAt: employeeOffboardingIsoFromInput(references.plannedExitAt, "Der geplante Austrittszeitpunkt"),
+        lastWorkingDay: references.lastWorkingDay,
+        legalExitDate: references.legalExitDate,
+        accessBlockAt: employeeOffboardingIsoFromInput(references.accessBlockAt, "Der Zugriffssperrzeitpunkt"),
+      },
+      urgency: urgencyMode === "time_critical" ? {
+        mode: "time_critical",
+        confirmation: "CONFIRM_TIME_CRITICAL_OFFBOARDING",
+        exceptionReason: {
+          code: String(form.querySelector("[data-offboarding-exception-code]")?.value || "").trim(),
+          note: String(form.querySelector("[data-offboarding-exception-note]")?.value || "").trim(),
+        },
+        followUpDueAt: employeeOffboardingIsoFromInput(
+          form.querySelector("[data-offboarding-follow-up]")?.value,
+          "Der Nacharbeitstermin",
+        ),
+      } : {
+        mode: "standard",
+        confirmation: null,
+        exceptionReason: null,
+        followUpDueAt: null,
+      },
+      exitReason: {
+        code: String(form.querySelector("[data-offboarding-exit-code]")?.value || "").trim(),
+        note: String(form.querySelector("[data-offboarding-exit-note]")?.value || "").trim(),
+      },
+      hrNote: String(form.querySelector("[data-offboarding-hr-note]")?.value || "").trim(),
+      documentReferenceIds: String(form.querySelector("[data-offboarding-documents]")?.value || "")
+        .split(/\r?\n/).map((entry) => entry.trim()).filter(Boolean),
+      assignments,
+    };
+    const operationId = employeeOffboardingOperationId(
+      draft,
+      "prepare",
+      requestWithoutOperation,
+    );
+    const employeeNumber = state.employeeProfileEmployeeNumber;
+    const profileRequestToken = state.employeeProfileRequestToken;
+    draft.pending = "prepare";
+    draft.error = "";
+    renderEmployeeProfileContent();
+    await api(`/api/portal/v1/personnel-lifecycle/employees/${encodeURIComponent(employeeNumber)}/offboarding-preparations`, {
+      method: "POST",
+      body: JSON.stringify({ operationId, ...requestWithoutOperation }),
+    });
+    if (!employeeOffboardingCurrentContext(employeeNumber, profileRequestToken)) return;
+    clearEmployeeOffboardingState();
+    await reloadEmployeeOffboardingProjection(employeeNumber);
+    showToast("Offboarding wurde ausschließlich intern vorbereitet.");
+  } catch (error) {
+    const currentDraft = state.employeeOffboardingDraft;
+    if (!currentDraft) return;
+    currentDraft.pending = "";
+    currentDraft.error = error.message || "Die interne Vorbereitung konnte nicht sicher gespeichert werden.";
+    renderEmployeeProfileContent();
+  }
+}
+
+async function submitEmployeeOffboardingAction(event) {
+  const form = event.target.closest("[data-employee-offboarding-action]");
+  if (!form) return;
+  event.preventDefault();
+  if (typeof form.reportValidity === "function" && !form.reportValidity()) return;
+  const action = String(form.dataset.employeeOffboardingAction || "");
+  const definition = EMPLOYEE_OFFBOARDING_ACTIONS[action];
+  const offboarding = state.employeeProfileTabData.offboarding;
+  const currentCase = offboarding?.case;
+  const draft = employeeOffboardingDraftFor(offboarding);
+  if (!definition || !currentCase || currentCase.allowedActions[action] !== true || draft.pending) return;
+  const requestWithoutOperation = {
+    expectedRevision: currentCase.revision,
+    confirmation: definition.confirmation,
+  };
+  if (definition.reason) {
+    requestWithoutOperation.reason = {
+      code: String(form.querySelector("[data-offboarding-action-reason-code]")?.value || "").trim(),
+      note: String(form.querySelector("[data-offboarding-action-reason-note]")?.value || "").trim(),
+      documentReferenceIds: String(form.querySelector("[data-offboarding-action-documents]")?.value || "")
+        .split(/\r?\n/).map((entry) => entry.trim()).filter(Boolean),
+    };
+  }
+  if (definition.informedAt) {
+    try {
+      requestWithoutOperation.employeeInformedAt = employeeOffboardingIsoFromInput(
+        form.querySelector("[data-offboarding-informed-at]")?.value,
+        "Der Informationszeitpunkt",
+      );
+    } catch (error) {
+      draft.error = error.message;
+      renderEmployeeProfileContent();
+      return;
+    }
+  }
+  const employeeNumber = state.employeeProfileEmployeeNumber;
+  const profileRequestToken = state.employeeProfileRequestToken;
+  const caseId = currentCase.caseId;
+  try {
+    const operationId = employeeOffboardingOperationId(draft, action, requestWithoutOperation);
+    draft.pending = action;
+    draft.error = "";
+    renderEmployeeProfileContent();
+    await api(`/api/portal/v1/personnel-lifecycle/offboarding/cases/${encodeURIComponent(caseId)}/${definition.route}`, {
+      method: "POST",
+      body: JSON.stringify({ operationId, ...requestWithoutOperation }),
+    });
+    if (!employeeOffboardingCurrentContext(employeeNumber, profileRequestToken, caseId)) return;
+    clearEmployeeOffboardingState();
+    await reloadEmployeeOffboardingProjection(employeeNumber);
+    showToast(`${definition.label} wurde sicher verarbeitet.`);
+  } catch (error) {
+    if (!employeeOffboardingCurrentContext(employeeNumber, profileRequestToken, caseId)) return;
+    if ([403, 404, 409].includes(error.status)) {
+      clearEmployeeOffboardingState();
+      showToast(error.message, true);
+      await reloadEmployeeOffboardingProjection(employeeNumber);
+      return;
+    }
+    draft.pending = "";
+    draft.error = error.message || "Die Offboarding-Aktion konnte nicht sicher bestätigt werden.";
+    renderEmployeeProfileContent();
+  }
+}
+
 function renderEmployeeProfileContent() {
   if (!elements.employeeProfileContent) return;
   const selectedTab = employeeProfileTabDefinition() ? state.employeeProfileTab : "";
@@ -4346,6 +6195,20 @@ function renderEmployeeProfileContent() {
       : '<div class="employee-profile-empty"><strong>Dokumente nicht geladen</strong><p>Es werden keine Dokumentmetadaten angezeigt.</p></div>';
     return;
   }
+  if (selectedTab === "onboarding") {
+    const onboardingPreview = state.employeeProfileTabData.onboarding;
+    elements.employeeProfileContent.innerHTML = onboardingPreview
+      ? renderEmployeeProfileOnboarding(onboardingPreview)
+      : '<div class="employee-profile-empty"><strong>Onboarding-Vorschau nicht geladen</strong><p>Es werden keine Lifecycle-Daten angezeigt.</p></div>';
+    return;
+  }
+  if (selectedTab === "offboarding") {
+    const offboarding = state.employeeProfileTabData.offboarding;
+    elements.employeeProfileContent.innerHTML = offboarding
+      ? renderEmployeeProfileOffboarding(offboarding)
+      : '<div class="employee-profile-empty"><strong>Vertrauliches Offboarding nicht geladen</strong><p>Es werden keine Lifecycle-Daten angezeigt.</p></div>';
+    return;
+  }
   if (!state.employeeProfile) {
     elements.employeeProfileContent.innerHTML = '<div class="employee-profile-empty"><strong>Übersicht nicht verfügbar</strong><p>Es werden keine Profildaten angezeigt.</p></div>';
     return;
@@ -4399,8 +6262,17 @@ function reconcileOpenEmployeeProfileAccess(access = {}) {
     employeeProfileSensitiveAccessWasExposed("masterData") && access.masterData !== true
   ) || (
     employeeProfileSensitiveAccessWasExposed("documents") && access.documents !== true
+  ) || (
+    employeeProfileSensitiveAccessWasExposed("onboarding") && access.onboarding !== true
+  ) || (
+    employeeProfileSensitiveAccessWasExposed("offboarding") && access.offboarding !== true
   );
-  if (access.read !== true || sensitiveAccessLost || masterDataFieldAccessChanged) {
+  const selectedAccessAvailable = state.employeeProfileTab === "onboarding"
+    ? access.onboarding === true
+    : state.employeeProfileTab === "offboarding"
+      ? access.offboarding === true
+      : access.read === true;
+  if (!selectedAccessAvailable || sensitiveAccessLost || masterDataFieldAccessChanged) {
     closeEmployeeProfile({ restoreFocus: false });
     return false;
   }
@@ -4408,8 +6280,10 @@ function reconcileOpenEmployeeProfileAccess(access = {}) {
 }
 
 function clearEmployeeProfileSensitiveTabs({ except = "" } = {}) {
-  for (const tabId of ["masterData", "documents"]) {
+  for (const tabId of ["masterData", "documents", "onboarding", "offboarding"]) {
     if (tabId === except) continue;
+    if (tabId === "onboarding") clearEmployeeOnboardingStartState();
+    if (tabId === "offboarding") clearEmployeeOffboardingState();
     state.employeeProfileTabData[tabId] = null;
     delete state.employeeProfileTabErrors[tabId];
     delete state.employeeProfileTabRequestTokens[tabId];
@@ -4418,13 +6292,22 @@ function clearEmployeeProfileSensitiveTabs({ except = "" } = {}) {
   }
 }
 
-function resetEmployeeProfileData({ accessPending = false } = {}) {
+function resetEmployeeProfileData({ accessPending = false, initialTab = "overview" } = {}) {
+  clearEmployeeOnboardingStartState();
+  clearEmployeeOffboardingState();
   state.employeeProfile = null;
-  state.employeeProfileTabData = { masterData: null, documents: null };
+  state.employeeProfileTabData = {
+    masterData: null,
+    documents: null,
+    onboarding: null,
+    offboarding: null,
+  };
   state.employeeProfileTabAvailability = {
-    overview: true,
+    overview: initialTab === "overview" ? true : (accessPending ? null : false),
     masterData: accessPending ? null : false,
     documents: accessPending ? null : false,
+    onboarding: initialTab === "onboarding" ? true : (accessPending ? null : false),
+    offboarding: initialTab === "offboarding" ? true : (accessPending ? null : false),
   };
   state.employeeProfileLoadingTabs = new Set();
   state.employeeProfileTabErrors = {};
@@ -4462,6 +6345,8 @@ function employeeProfileTabHasData(tabId) {
   if (tabId === "overview") return Boolean(state.employeeProfile);
   if (tabId === "masterData") return Boolean(state.employeeProfileTabData.masterData);
   if (tabId === "documents") return Array.isArray(state.employeeProfileTabData.documents);
+  if (tabId === "onboarding") return Boolean(state.employeeProfileTabData.onboarding);
+  if (tabId === "offboarding") return Boolean(state.employeeProfileTabData.offboarding);
   return false;
 }
 
@@ -4501,7 +6386,11 @@ async function loadEmployeeProfileTab(tabId, employeeNumber = state.employeeProf
       ? normalizeEmployeeProfileOverview(payload, normalizedEmployeeNumber)
       : tabId === "masterData"
         ? normalizeEmployeeProfileMasterData(payload, normalizedEmployeeNumber)
-        : normalizeEmployeeProfileDocuments(payload, normalizedEmployeeNumber);
+        : tabId === "documents"
+          ? normalizeEmployeeProfileDocuments(payload, normalizedEmployeeNumber)
+          : tabId === "onboarding"
+            ? normalizeEmployeeProfileOnboarding(payload, normalizedEmployeeNumber)
+            : normalizeEmployeeProfileOffboarding(payload, normalizedEmployeeNumber);
     state.employeeProfile = tabId === "overview" ? normalized : normalized.profile;
     if (tabId === "masterData") {
       state.employeeProfileTabData.masterData = { fields: normalized.fields };
@@ -4510,6 +6399,22 @@ async function loadEmployeeProfileTab(tabId, employeeNumber = state.employeeProf
       );
     }
     if (tabId === "documents") state.employeeProfileTabData.documents = normalized.documents;
+    if (tabId === "onboarding") {
+      clearEmployeeOnboardingStartState();
+      state.employeeProfileTabData.onboarding = {
+        ...normalized.onboardingPreview,
+        onboardingExecution: normalized.onboardingExecution,
+        canStartOnboarding: normalized.capabilities.canStartOnboarding,
+        canCloseOnboarding: normalized.capabilities.canCloseOnboarding,
+      };
+    }
+    if (tabId === "offboarding") {
+      clearEmployeeOffboardingState();
+      state.employeeProfileTabData.offboarding = {
+        ...normalized.offboarding,
+        capabilities: normalized.capabilities,
+      };
+    }
     applyEmployeeProfileAccessProjection(normalized);
     state.employeeProfileLoadError = "";
   } catch (error) {
@@ -4522,6 +6427,8 @@ async function loadEmployeeProfileTab(tabId, employeeNumber = state.employeeProf
     }
     if (tabId === "overview") state.employeeProfile = null;
     else state.employeeProfileTabData[tabId] = null;
+    if (tabId === "onboarding") clearEmployeeOnboardingStartState();
+    if (tabId === "offboarding") clearEmployeeOffboardingState();
     state.employeeProfileTabErrors[tabId] = `${definition.label} konnte nicht geladen werden.`;
   } finally {
     if (state.employeeProfileRequestToken === profileRequestToken
@@ -4545,18 +6452,24 @@ function openEmployeeProfile(employeeNumber, trigger = null) {
   const teamTrigger = trigger?.dataset?.teamEmployeeProfileAccess === "true";
   const teamAccess = teamTrigger && canOpenTeamEmployeeProfileFoundation(normalizedEmployeeNumber);
   if (!normalizedEmployeeNumber || (teamTrigger ? !teamAccess : !canOpenEmployeeProfileFoundation())) return;
+  const initialTab = canOpenStandardEmployeeProfileFoundation()
+    ? "overview"
+    : canReadEmployeeOnboardingPreview()
+      ? "onboarding"
+      : (canReadEmployeeOffboardingConfidential() ? "offboarding" : "");
+  if (!initialTab) return;
   state.employeeProfileRequestToken = Symbol(`employee-profile-${normalizedEmployeeNumber}`);
   state.employeeProfileOpen = true;
   state.employeeProfileEmployeeNumber = normalizedEmployeeNumber;
-  state.employeeProfileTab = "overview";
+  state.employeeProfileTab = initialTab;
   state.employeeProfileHost = teamAccess ? "team" : "administration";
-  resetEmployeeProfileData({ accessPending: true });
+  resetEmployeeProfileData({ accessPending: true, initialTab });
   state.employeeProfileLoadError = "";
   state.employeeProfileReturnFocus = trigger || document.activeElement;
   syncEmployeeProfileWorkspace();
   renderEmployeeProfile();
   elements.employeeProfileName?.focus({ preventScroll: true });
-  loadEmployeeProfileOverview(normalizedEmployeeNumber);
+  loadEmployeeProfileTab(initialTab, normalizedEmployeeNumber);
 }
 
 function closeEmployeeProfile({ restoreFocus = true } = {}) {
@@ -8121,6 +10034,1275 @@ function normalizePersonnelWorkflowTask(value, workflowTitle = "Personalprozess"
   };
 }
 
+function normalizePersonnelLifecycleOnboardingTaskCapabilities(value) {
+  const capabilities = personnelWorkflowObject(value);
+  return {
+    canRead: capabilities.canReadOnboardingTasks === true,
+    canComplete: capabilities.canCompleteOnboardingTasks === true,
+  };
+}
+
+function requiredPersonnelLifecycleOnboardingTaskText(value, label, maximum = 160) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || normalized.length > maximum || /[\0\r\n]/.test(normalized)) {
+    throw new Error(`${label} ist ungültig.`);
+  }
+  return normalized;
+}
+
+function normalizePersonnelLifecycleOnboardingTask(value) {
+  const task = personnelWorkflowObject(value);
+  const step = personnelWorkflowObject(task.step);
+  const scope = personnelWorkflowObject(task.scope);
+  const scopeType = String(scope.type || "").trim();
+  const locationId = String(scope.locationId || "").trim();
+  const departmentId = scope.departmentId === null ? null : Number(scope.departmentId);
+  const position = Number(step.position);
+  const activatedAt = requiredPersonnelLifecycleOnboardingTaskText(
+    step.activatedAt,
+    "Der Aktivierungszeitpunkt",
+    40,
+  );
+  if (!["location", "department"].includes(scopeType)
+    || !locationId || locationId.length > 80 || locationId.includes("\0")
+    || (scopeType === "location" && departmentId !== null)
+    || (scopeType === "department"
+      && (!Number.isSafeInteger(departmentId) || departmentId < 1))
+    || !Number.isSafeInteger(position) || position < 1
+    || Number.isNaN(new Date(activatedAt).getTime())) {
+    throw new Error("Eine Lifecycle-Onboarding-Aufgabe ist unvollständig.");
+  }
+  return {
+    caseId: requiredPersonnelLifecycleOnboardingTaskText(task.caseId, "Der Fallbezug", 120),
+    runId: requiredPersonnelLifecycleOnboardingTaskText(task.runId, "Der Instanzbezug", 120),
+    stepId: requiredPersonnelLifecycleOnboardingTaskText(task.stepId, "Der Schrittbezug", 120),
+    workflowCode: requiredPersonnelLifecycleOnboardingTaskText(task.workflowCode, "Der Workflow-Code", 120),
+    workflowTitle: requiredPersonnelLifecycleOnboardingTaskText(task.workflowTitle, "Der Workflow-Titel", 200),
+    title: requiredPersonnelLifecycleOnboardingTaskText(step.title, "Der Aufgabentitel", 200),
+    position,
+    activatedAt,
+    scope: { type: scopeType, locationId, departmentId },
+  };
+}
+
+function personnelLifecycleOnboardingTaskKey(task) {
+  return `${task.runId}\0${task.stepId}`;
+}
+
+const PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_FIELDS = Object.freeze({
+  leadership_task: Object.freeze([
+    "displayName",
+    "employeeNumber",
+    "locationId",
+    "departmentId",
+    "dueAt",
+  ]),
+  it_security_task: Object.freeze([
+    "businessIdentifier",
+    "targetSystem",
+    "action",
+    "executeAt",
+  ]),
+  asset_task: Object.freeze(["assetIdentifier", "dueAt"]),
+  payroll_task: Object.freeze([
+    "displayName",
+    "employeeNumber",
+    "payrollAction",
+    "effectiveDate",
+    "dueAt",
+  ]),
+});
+
+function normalizePersonnelLifecycleOffboardingTaskCapabilities(value) {
+  const capabilities = personnelWorkflowObject(value);
+  return {
+    canRead: capabilities.canReadOffboardingTasks === true,
+    canComplete: capabilities.canCompleteOffboardingTasks === true,
+  };
+}
+
+function normalizePersonnelLifecycleOffboardingTask(value) {
+  const task = personnelWorkflowObject(value);
+  const projection = requiredPersonnelLifecycleOnboardingTaskText(
+    task.projection,
+    "Die Aufgabenprojektion",
+    80,
+  );
+  const allowedFields = PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_FIELDS[projection];
+  const status = String(task.status || "").trim();
+  if (!allowedFields || !["pending", "active"].includes(status)) {
+    throw new Error("Eine Lifecycle-Offboarding-Aufgabe ist unvollständig.");
+  }
+  const normalized = {
+    runId: requiredPersonnelLifecycleOnboardingTaskText(
+      task.runId,
+      "Der Instanzbezug",
+      120,
+    ),
+    stepId: requiredPersonnelLifecycleOnboardingTaskText(
+      task.stepId,
+      "Der Schrittbezug",
+      120,
+    ),
+    orderId: requiredPersonnelLifecycleOnboardingTaskText(
+      task.orderId,
+      "Der Auftragsbezug",
+      120,
+    ),
+    projection,
+    title: requiredPersonnelLifecycleOnboardingTaskText(
+      task.title,
+      "Der Aufgabentitel",
+      200,
+    ),
+    status,
+  };
+  for (const field of allowedFields) {
+    const submitted = task[field];
+    if (submitted === null || submitted === undefined || submitted === "") continue;
+    if (typeof submitted === "object" || /[\0\r\n]/.test(String(submitted))) {
+      throw new Error("Eine Lifecycle-Offboarding-Aufgabe enthält ungültige Projektionsdaten.");
+    }
+    normalized[field] = String(submitted).trim().slice(0, 200);
+  }
+  return normalized;
+}
+
+function personnelLifecycleOffboardingTaskKey(task) {
+  return `${task.runId}\0${task.stepId}`;
+}
+
+const PERSONNEL_LIFECYCLE_INTERFACE_CATALOG_VERSION = "o6-v0.1";
+const PERSONNEL_LIFECYCLE_INTERFACE_RUNTIME_GATES = Object.freeze([
+  "networkDispatch",
+  "persistence",
+  "outbox",
+  "externalMutation",
+]);
+const PERSONNEL_LIFECYCLE_INTERFACE_BLOCKER_LABELS = Object.freeze({
+  provider_target_identifier_missing: "Zielsystemkennung fehlt",
+  command_identifier_missing: "Vorgangskennung fehlt",
+  command_identifier_invalid: "Vorgangskennung ist ungültig",
+  order_identifier_missing: "Auftragsbezug fehlt",
+  task_status_not_actionable: "Aufgabe ist nicht aktuell bearbeitbar",
+  module_identifier_missing: "Schulungsmodul fehlt",
+  asset_identifier_missing: "Arbeitsmittelkennung fehlt",
+  location_identifier_missing: "Standortkennung fehlt",
+  business_identifier_missing: "Geschäftskennung fehlt",
+  target_system_identifier_missing: "Zielsystemkennung fehlt",
+  due_at_missing: "Fälligkeit fehlt",
+  effective_at_missing: "Wirksamkeitszeitpunkt fehlt",
+  evidence_status_missing: "Nachweisstatus fehlt",
+  allowlist_not_found: "Keine freigegebene Positivliste",
+  allowlist_ambiguous: "Positivliste ist nicht eindeutig",
+  allowlist_stale: "Positivliste ist nicht aktuell",
+  allowlist_inactive: "Positivliste ist nicht aktiv",
+  domain_not_allowed: "Domäne ist nicht freigegeben",
+  target_system_not_allowed: "Zielsystem nicht für diesen Auftrag freigegeben",
+  action_not_allowed: "Vorgang ist nicht freigegeben",
+  scope_not_allowed: "Organisationsbereich ist nicht freigegeben",
+  provider_field_not_allowlisted: "Feld ist nicht freigegeben",
+  provider_field_value_missing: "Erforderlicher Feldwert fehlt",
+});
+const PERSONNEL_LIFECYCLE_INTERFACE_FIELD_LABELS = Object.freeze({
+  schemaVersion: "Vertragsschema",
+  commandId: "Vorgangskennung",
+  orderId: "Auftragsbezug",
+  operation: "Strukturierter Vorgang",
+  displayName: "Anzeigename",
+  locationId: "Standort",
+  departmentId: "Abteilung",
+  module: "Schulungsmodul",
+  dueAt: "Fälligkeit",
+  evidenceStatus: "Nachweisstatus",
+  status: "Status",
+  assetIdentifier: "Arbeitsmittelkennung",
+  action: "Fachaktion",
+  effectiveAt: "Wirksamkeitszeitpunkt",
+  businessIdentifier: "Geschäftskennung",
+  targetSystem: "Zielsystem",
+  executeAt: "Ausführungszeitpunkt",
+});
+const PERSONNEL_LIFECYCLE_INTERFACE_OPERATION_LABELS = Object.freeze({
+  training_assign: "Schulung zuweisen",
+  training_status: "Schulungsstatus abgleichen",
+  training_evidence: "Schulungsnachweis abgleichen",
+  asset_issue: "Arbeitsmittel ausgeben",
+  asset_return: "Arbeitsmittel zurücknehmen",
+  access_grant: "Zugang erteilen",
+  access_change: "Zugang ändern",
+  access_revoke: "Zugang entziehen",
+});
+const PERSONNEL_LIFECYCLE_INTERFACE_DOMAIN_CONTRACTS = Object.freeze({
+  training: Object.freeze({
+    label: "Schulung",
+    operations: Object.freeze(["training_assign", "training_status", "training_evidence"]),
+    maximumProjectionFields: Object.freeze([
+      "orderId", "displayName", "locationId", "departmentId", "module", "dueAt",
+      "evidenceStatus", "status",
+    ]),
+    defaultPayloadFields: Object.freeze([
+      "schemaVersion", "commandId", "orderId", "operation", "module", "dueAt",
+      "evidenceStatus",
+    ]),
+    optionalProviderFields: Object.freeze(["locationId", "departmentId", "displayName"]),
+  }),
+  asset: Object.freeze({
+    label: "Arbeitsmittel",
+    operations: Object.freeze(["asset_issue", "asset_return"]),
+    maximumProjectionFields: Object.freeze([
+      "orderId", "displayName", "locationId", "assetIdentifier", "action", "dueAt", "status",
+    ]),
+    defaultPayloadFields: Object.freeze([
+      "schemaVersion", "commandId", "orderId", "operation", "assetIdentifier", "locationId",
+      "effectiveAt",
+    ]),
+    optionalProviderFields: Object.freeze(["displayName"]),
+  }),
+  access: Object.freeze({
+    label: "Zugang",
+    operations: Object.freeze(["access_grant", "access_change", "access_revoke"]),
+    maximumProjectionFields: Object.freeze([
+      "orderId", "displayName", "businessIdentifier", "targetSystem", "action", "executeAt",
+      "status",
+    ]),
+    defaultPayloadFields: Object.freeze([
+      "schemaVersion", "commandId", "orderId", "operation", "businessIdentifier", "targetSystem",
+      "effectiveAt",
+    ]),
+    optionalProviderFields: Object.freeze(["displayName"]),
+  }),
+});
+
+function normalizePersonnelLifecycleInterfaceStringList(value, allowedValues, label, {
+  exact = false,
+  requireValue = false,
+} = {}) {
+  if (!Array.isArray(value) || (requireValue && value.length === 0)) {
+    throw new Error(`${label} ist keine gültige Positivliste.`);
+  }
+  const normalized = value.map((entry) => {
+    if (typeof entry !== "string" || !entry || /[\0\r\n]/.test(entry)) {
+      throw new Error(`${label} enthält einen ungültigen Wert.`);
+    }
+    return entry;
+  });
+  if (new Set(normalized).size !== normalized.length
+    || normalized.some((entry) => !allowedValues.includes(entry))) {
+    throw new Error(`${label} überschreitet den O6-Vertrag.`);
+  }
+  if (exact && (normalized.length !== allowedValues.length
+    || allowedValues.some((entry) => !normalized.includes(entry)))) {
+    throw new Error(`${label} ist unvollständig.`);
+  }
+  return exact ? [...allowedValues] : normalized;
+}
+
+function personnelLifecycleInterfaceHasExactKeys(value, allowedKeys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length === allowedKeys.length
+    && keys.every((key) => allowedKeys.includes(key));
+}
+
+function normalizePersonnelLifecycleInterfaceDomain(value) {
+  if (!personnelLifecycleInterfaceHasExactKeys(value, [
+    "id", "label", "status", "blockerCodes", "operations", "maximumProjectionFields",
+    "defaultPayloadFields", "optionalProviderFields", "providerCount", "externalEffectsEnabled",
+  ])) {
+    throw new Error("Eine O6-Domänenprojektion ist ungültig.");
+  }
+  const id = typeof value.id === "string" ? value.id : "";
+  const contract = PERSONNEL_LIFECYCLE_INTERFACE_DOMAIN_CONTRACTS[id];
+  if (!contract || value.label !== contract.label || value.status !== "blocked"
+    || value.providerCount !== 0 || value.externalEffectsEnabled !== false) {
+    throw new Error("Eine O6-Domänenprojektion ist nicht fail-closed.");
+  }
+  return {
+    id,
+    label: contract.label,
+    status: "blocked",
+    blockerCodes: normalizePersonnelLifecycleInterfaceStringList(
+      value.blockerCodes,
+      Object.keys(PERSONNEL_LIFECYCLE_INTERFACE_BLOCKER_LABELS),
+      "Die O6-Sperrgründe",
+      { requireValue: true },
+    ),
+    operations: normalizePersonnelLifecycleInterfaceStringList(
+      value.operations,
+      contract.operations,
+      "Die O6-Vorgänge",
+      { exact: true, requireValue: true },
+    ),
+    maximumProjectionFields: normalizePersonnelLifecycleInterfaceStringList(
+      value.maximumProjectionFields,
+      contract.maximumProjectionFields,
+      "Die O6-Maximalprojektion",
+      { exact: true, requireValue: true },
+    ),
+    defaultPayloadFields: normalizePersonnelLifecycleInterfaceStringList(
+      value.defaultPayloadFields,
+      contract.defaultPayloadFields,
+      "Die O6-Standardfelder",
+      { exact: true, requireValue: true },
+    ),
+    optionalProviderFields: normalizePersonnelLifecycleInterfaceStringList(
+      value.optionalProviderFields,
+      contract.optionalProviderFields,
+      "Die optionalen O6-Felder",
+      { exact: true },
+    ),
+    providerCount: 0,
+    externalEffectsEnabled: false,
+  };
+}
+
+function normalizePersonnelLifecycleInterfacesCatalog(value) {
+  if (!personnelLifecycleInterfaceHasExactKeys(
+    value,
+    ["contractVersion", "registry", "runtimeGates", "domains"],
+  )
+    || value.contractVersion !== PERSONNEL_LIFECYCLE_INTERFACE_CATALOG_VERSION
+    || !personnelLifecycleInterfaceHasExactKeys(
+      value.registry,
+      ["providerCount", "activeProviderCount", "customerConfigured"],
+    )
+    || value.registry.providerCount !== 0
+    || value.registry.activeProviderCount !== 0
+    || value.registry.customerConfigured !== false
+    || !personnelLifecycleInterfaceHasExactKeys(
+      value.runtimeGates,
+      PERSONNEL_LIFECYCLE_INTERFACE_RUNTIME_GATES,
+    )
+    || PERSONNEL_LIFECYCLE_INTERFACE_RUNTIME_GATES
+      .some((gate) => value.runtimeGates[gate] !== false)
+    || !Array.isArray(value.domains)) {
+    throw new Error("Der O6-Schnittstellenkatalog ist nicht fail-closed.");
+  }
+  const domains = value.domains.map(normalizePersonnelLifecycleInterfaceDomain);
+  if (new Set(domains.map(({ id }) => id)).size !== domains.length) {
+    throw new Error("Der O6-Schnittstellenkatalog enthält doppelte Domänen.");
+  }
+  return {
+    contractVersion: PERSONNEL_LIFECYCLE_INTERFACE_CATALOG_VERSION,
+    registry: {
+      providerCount: 0,
+      activeProviderCount: 0,
+      customerConfigured: false,
+    },
+    runtimeGates: Object.fromEntries(
+      PERSONNEL_LIFECYCLE_INTERFACE_RUNTIME_GATES.map((gate) => [gate, false]),
+    ),
+    domains,
+  };
+}
+
+const PERSONNEL_LIFECYCLE_AUTOMATION_CONTRACT_VERSION = "o7-v0.1";
+const PERSONNEL_LIFECYCLE_AUTOMATION_REGISTRY_NAMES = Object.freeze([
+  "deadlinePolicies",
+  "calendarRules",
+  "substitutionRules",
+  "reminderRules",
+  "escalationRules",
+  "notificationChannels",
+]);
+const PERSONNEL_LIFECYCLE_AUTOMATION_RUNTIME_GATES = Object.freeze([
+  "policyPersistence",
+  "deadlinePersistence",
+  "referenceDateMutation",
+  "assignmentMutation",
+  "scheduler",
+  "internalNotification",
+  "externalNotification",
+  "calendarMutation",
+  "automaticSubstitution",
+  "automaticEscalation",
+  "outboxDispatch",
+  "externalMutation",
+]);
+const PERSONNEL_LIFECYCLE_AUTOMATION_MODES = Object.freeze({
+  deadlineCalculation: "explicit_versioned_policy_only",
+  representation: "manual_hr_clarification",
+  reminders: "preview_only",
+  escalations: "preview_only",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_BLOCKER_LABELS = Object.freeze({
+  policy_registry_empty: "Kein freigegebenes Regelregister",
+  policy_binding_missing: "Regelbindung fehlt",
+  policy_not_found: "Gebundene Regel nicht gefunden",
+  policy_binding_stale: "Regelbindung ist nicht aktuell",
+  policy_inactive: "Gebundene Regel ist inaktiv",
+  policy_not_applicable: "Gebundene Regel ist nicht anwendbar",
+  task_status_not_actionable: "Aufgabenstatus ist nicht bearbeitbar",
+  process_version_missing: "Prozessversion fehlt",
+  reference_kind_missing: "Referenzart fehlt",
+  reference_date_missing: "Referenztermin fehlt",
+  calendar_rule_missing: "Kalenderregel fehlt",
+  notification_channel_not_approved: "Kein Benachrichtigungskanal freigegeben",
+  effects_activation_not_approved: "Außenwirkung nicht freigegeben",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_CATALOG_BLOCKERS = Object.freeze([
+  "policy_registry_empty",
+  "calendar_rule_missing",
+  "notification_channel_not_approved",
+  "effects_activation_not_approved",
+]);
+const PERSONNEL_LIFECYCLE_AUTOMATION_DOMAIN_CONTRACTS = Object.freeze({
+  deadlines: Object.freeze({
+    label: "Fristen und Kalenderregeln",
+    registry: "deadlinePolicies",
+    blockerCodes: Object.freeze([
+      "policy_registry_empty", "calendar_rule_missing", "effects_activation_not_approved",
+    ]),
+  }),
+  substitutions: Object.freeze({
+    label: "Vertretung und Verantwortlichkeit",
+    registry: "substitutionRules",
+    blockerCodes: Object.freeze(["policy_registry_empty", "effects_activation_not_approved"]),
+  }),
+  reminders: Object.freeze({
+    label: "Erinnerungen",
+    registry: "reminderRules",
+    blockerCodes: Object.freeze([
+      "policy_registry_empty", "notification_channel_not_approved",
+      "effects_activation_not_approved",
+    ]),
+  }),
+  escalations: Object.freeze({
+    label: "Eskalationen",
+    registry: "escalationRules",
+    blockerCodes: Object.freeze([
+      "policy_registry_empty", "notification_channel_not_approved",
+      "effects_activation_not_approved",
+    ]),
+  }),
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_SOURCE_LABELS = Object.freeze({
+  onboarding: "Onboarding",
+  offboarding: "Offboarding",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_TASK_STATUS_LABELS = Object.freeze({
+  pending: "Vorgemerkt",
+  active: "Aktiv",
+  completed: "Abgeschlossen",
+  cancelled: "Abgebrochen",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_DUE_STATE_LABELS = Object.freeze({
+  not_configured: "Nicht konfiguriert",
+  not_due: "Noch nicht fällig",
+  due_soon: "Bald fällig",
+  due_today: "Heute fällig",
+  overdue: "Überfällig",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_RESPONSIBILITY_LABELS = Object.freeze({
+  assigned: "Verantwortung zugewiesen",
+  unavailable: "Verantwortliche Person nicht verfügbar",
+  unknown: "Verantwortung nicht bewertet",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_REPRESENTATION_LABELS = Object.freeze({
+  manual_only: "Nur manuelle Klärung",
+  clarification_required: "Klärung erforderlich",
+  not_evaluated: "Nicht bewertet",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_REMINDER_LABELS = Object.freeze({
+  blocked: "Gesperrt",
+  not_scheduled: "Nicht vorgesehen",
+  preview_due: "In Vorschau fällig",
+  not_due: "Noch nicht fällig",
+});
+const PERSONNEL_LIFECYCLE_AUTOMATION_ESCALATION_LABELS = Object.freeze({
+  blocked: "Gesperrt",
+  preview_due: "In Vorschau fällig",
+  not_due: "Noch nicht fällig",
+});
+
+function personnelLifecycleAutomationHasExactKeys(value, allowedKeys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length === allowedKeys.length
+    && keys.every((key) => allowedKeys.includes(key));
+}
+
+function normalizePersonnelLifecycleAutomationText(value, label, {
+  maximum = 256,
+  nullable = false,
+} = {}) {
+  if (nullable && value === null) return null;
+  if (typeof value !== "string" || !value.trim() || value.length > maximum
+    || /[\0\r\n]/.test(value)) {
+    throw new Error(`${label} ist kein gültiger O7-Textwert.`);
+  }
+  return value;
+}
+
+function normalizePersonnelLifecycleAutomationCount(value, label, maximum = 1000) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > maximum) {
+    throw new Error(`${label} ist kein gültiger O7-Zähler.`);
+  }
+  return value;
+}
+
+function normalizePersonnelLifecycleAutomationStringList(value, allowed, label, {
+  exact = false,
+  requireValue = false,
+} = {}) {
+  if (!Array.isArray(value) || value.length > allowed.length
+    || (requireValue && value.length === 0)) {
+    throw new Error(`${label} ist keine gültige O7-Positivliste.`);
+  }
+  const normalized = value.map((entry) => normalizePersonnelLifecycleAutomationText(
+    entry,
+    label,
+    { maximum: 64 },
+  ));
+  if (new Set(normalized).size !== normalized.length
+    || normalized.some((entry) => !allowed.includes(entry))) {
+    throw new Error(`${label} überschreitet den O7-Vertrag.`);
+  }
+  if (exact && (normalized.length !== allowed.length
+    || allowed.some((entry) => !normalized.includes(entry)))) {
+    throw new Error(`${label} ist unvollständig.`);
+  }
+  return exact ? [...allowed] : normalized;
+}
+
+function normalizePersonnelLifecycleAutomationRuntimeGates(value) {
+  if (!personnelLifecycleAutomationHasExactKeys(
+    value,
+    PERSONNEL_LIFECYCLE_AUTOMATION_RUNTIME_GATES,
+  ) || PERSONNEL_LIFECYCLE_AUTOMATION_RUNTIME_GATES.some((gate) => value[gate] !== false)) {
+    throw new Error("Die O7-Laufzeitgrenzen sind nicht fail-closed.");
+  }
+  return Object.fromEntries(
+    PERSONNEL_LIFECYCLE_AUTOMATION_RUNTIME_GATES.map((gate) => [gate, false]),
+  );
+}
+
+function normalizePersonnelLifecycleAutomationModes(value) {
+  const modeNames = Object.keys(PERSONNEL_LIFECYCLE_AUTOMATION_MODES);
+  if (!personnelLifecycleAutomationHasExactKeys(value, modeNames)
+    || modeNames.some((mode) => value[mode] !== PERSONNEL_LIFECYCLE_AUTOMATION_MODES[mode])) {
+    throw new Error("Die O7-Betriebsarten überschreiten den Vorschauvertrag.");
+  }
+  return { ...PERSONNEL_LIFECYCLE_AUTOMATION_MODES };
+}
+
+function normalizePersonnelLifecycleAutomationEmptyRegistry(value, label) {
+  if (!personnelLifecycleAutomationHasExactKeys(
+    value,
+    ["recordCount", "activeRecordCount", "customerConfigured"],
+  ) || value.recordCount !== 0 || value.activeRecordCount !== 0
+    || value.customerConfigured !== false) {
+    throw new Error(`${label} ist nicht leer und fail-closed.`);
+  }
+  return { recordCount: 0, activeRecordCount: 0, customerConfigured: false };
+}
+
+function normalizePersonnelLifecycleAutomationCatalogDomain(value) {
+  if (!personnelLifecycleAutomationHasExactKeys(value, [
+    "id", "label", "status", "registry", "configurationCount",
+    "externalEffectsEnabled", "blockerCodes",
+  ])) {
+    throw new Error("Eine O7-Domänenprojektion ist ungültig.");
+  }
+  const id = typeof value.id === "string" ? value.id : "";
+  const contract = PERSONNEL_LIFECYCLE_AUTOMATION_DOMAIN_CONTRACTS[id];
+  if (!contract || value.label !== contract.label || value.status !== "blocked"
+    || value.registry !== contract.registry || value.configurationCount !== 0
+    || value.externalEffectsEnabled !== false) {
+    throw new Error("Eine O7-Domänenprojektion ist nicht fail-closed.");
+  }
+  return {
+    id,
+    label: contract.label,
+    status: "blocked",
+    registry: contract.registry,
+    configurationCount: 0,
+    externalEffectsEnabled: false,
+    blockerCodes: normalizePersonnelLifecycleAutomationStringList(
+      value.blockerCodes,
+      contract.blockerCodes,
+      "Die O7-Domänensperren",
+      { exact: true, requireValue: true },
+    ),
+  };
+}
+
+function normalizePersonnelLifecycleAutomationCatalog(value) {
+  if (!personnelLifecycleAutomationHasExactKeys(value, [
+    "contractVersion", "registries", "runtimeGates", "modes", "blockerCodes", "domains",
+  ]) || value.contractVersion !== PERSONNEL_LIFECYCLE_AUTOMATION_CONTRACT_VERSION
+    || !personnelLifecycleAutomationHasExactKeys(
+      value.registries,
+      PERSONNEL_LIFECYCLE_AUTOMATION_REGISTRY_NAMES,
+    ) || !Array.isArray(value.domains)
+    || value.domains.length > Object.keys(PERSONNEL_LIFECYCLE_AUTOMATION_DOMAIN_CONTRACTS).length) {
+    throw new Error("Der O7-Automatisierungskatalog ist nicht fail-closed.");
+  }
+  const registries = Object.fromEntries(PERSONNEL_LIFECYCLE_AUTOMATION_REGISTRY_NAMES.map((name) => [
+    name,
+    normalizePersonnelLifecycleAutomationEmptyRegistry(value.registries[name], `Das Register ${name}`),
+  ]));
+  const domains = value.domains.map(normalizePersonnelLifecycleAutomationCatalogDomain);
+  if (new Set(domains.map(({ id }) => id)).size !== domains.length) {
+    throw new Error("Der O7-Automatisierungskatalog enthält doppelte Domänen.");
+  }
+  return {
+    contractVersion: PERSONNEL_LIFECYCLE_AUTOMATION_CONTRACT_VERSION,
+    registries,
+    runtimeGates: normalizePersonnelLifecycleAutomationRuntimeGates(value.runtimeGates),
+    modes: normalizePersonnelLifecycleAutomationModes(value.modes),
+    blockerCodes: normalizePersonnelLifecycleAutomationStringList(
+      value.blockerCodes,
+      PERSONNEL_LIFECYCLE_AUTOMATION_CATALOG_BLOCKERS,
+      "Die O7-Katalogsperren",
+      { exact: true, requireValue: true },
+    ),
+    domains,
+  };
+}
+
+function normalizePersonnelLifecycleAutomationIsoDate(value, label, { nullable = false } = {}) {
+  if (nullable && value === null) return null;
+  const match = typeof value === "string"
+    ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+    : null;
+  if (!match) throw new Error(`${label} ist kein ISO-Kalendertag.`);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (month < 1 || month > 12 || day < 1 || day > monthDays[month - 1]) {
+    throw new Error(`${label} ist kein realer Kalendertag.`);
+  }
+  return value;
+}
+
+function normalizePersonnelLifecycleAutomationGeneratedAt(value) {
+  const match = typeof value === "string"
+    ? /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})Z$/.exec(value)
+    : null;
+  if (!match || Number(match[2]) > 23 || Number(match[3]) > 59 || Number(match[4]) > 59) {
+    throw new Error("Der Erzeugungszeitpunkt der O7-Vorschau ist ungültig.");
+  }
+  normalizePersonnelLifecycleAutomationIsoDate(match[1], "Der Erzeugungstag");
+  return value;
+}
+
+function normalizePersonnelLifecycleAutomationPolicyRegistry(value) {
+  if (!personnelLifecycleAutomationHasExactKeys(
+    value,
+    ["policyCount", "activePolicyCount", "customerConfigured"],
+  )) throw new Error("Die O7-Regelregisterprojektion ist ungültig.");
+  const policyCount = normalizePersonnelLifecycleAutomationCount(value.policyCount, "Regelanzahl");
+  const activePolicyCount = normalizePersonnelLifecycleAutomationCount(
+    value.activePolicyCount,
+    "Aktive Regelanzahl",
+  );
+  if (activePolicyCount > policyCount
+    || value.customerConfigured !== (policyCount > 0)) {
+    throw new Error("Die O7-Regelregisterprojektion ist widersprüchlich.");
+  }
+  return { policyCount, activePolicyCount, customerConfigured: value.customerConfigured };
+}
+
+function normalizePersonnelLifecycleAutomationPreviewItem(value) {
+  if (!personnelLifecycleAutomationHasExactKeys(value, [
+    "source", "runId", "processVersionId", "stepId", "title", "status", "referenceKind",
+    "referenceDate", "dueAt", "dueState", "responsibilityState", "representationState",
+    "reminderState", "escalationState", "blockerCodes",
+  ])) throw new Error("Eine O7-Aufgabenprojektion ist ungültig.");
+  const source = normalizePersonnelLifecycleAutomationText(value.source, "Die O7-Quelle", {
+    maximum: 32,
+  });
+  const status = normalizePersonnelLifecycleAutomationText(value.status, "Der O7-Aufgabenstatus", {
+    maximum: 32,
+  });
+  const dueState = normalizePersonnelLifecycleAutomationText(value.dueState, "Der O7-Friststatus", {
+    maximum: 32,
+  });
+  const responsibilityState = normalizePersonnelLifecycleAutomationText(
+    value.responsibilityState,
+    "Der O7-Verantwortungsstatus",
+    { maximum: 32 },
+  );
+  const representationState = normalizePersonnelLifecycleAutomationText(
+    value.representationState,
+    "Der O7-Vertretungsstatus",
+    { maximum: 32 },
+  );
+  const reminderState = normalizePersonnelLifecycleAutomationText(
+    value.reminderState,
+    "Der O7-Erinnerungsstatus",
+    { maximum: 32 },
+  );
+  const escalationState = normalizePersonnelLifecycleAutomationText(
+    value.escalationState,
+    "Der O7-Eskalationsstatus",
+    { maximum: 32 },
+  );
+  if (!Object.hasOwn(PERSONNEL_LIFECYCLE_AUTOMATION_SOURCE_LABELS, source)
+    || !Object.hasOwn(PERSONNEL_LIFECYCLE_AUTOMATION_TASK_STATUS_LABELS, status)
+    || !Object.hasOwn(PERSONNEL_LIFECYCLE_AUTOMATION_DUE_STATE_LABELS, dueState)
+    || !Object.hasOwn(PERSONNEL_LIFECYCLE_AUTOMATION_RESPONSIBILITY_LABELS, responsibilityState)
+    || !Object.hasOwn(PERSONNEL_LIFECYCLE_AUTOMATION_REPRESENTATION_LABELS, representationState)
+    || !Object.hasOwn(PERSONNEL_LIFECYCLE_AUTOMATION_REMINDER_LABELS, reminderState)
+    || !Object.hasOwn(PERSONNEL_LIFECYCLE_AUTOMATION_ESCALATION_LABELS, escalationState)) {
+    throw new Error("Eine O7-Aufgabenprojektion enthält einen unbekannten Zustand.");
+  }
+  const processVersionId = normalizePersonnelLifecycleAutomationText(
+    value.processVersionId,
+    "Die O7-Prozessversion",
+    { maximum: 128, nullable: true },
+  );
+  const referenceKind = normalizePersonnelLifecycleAutomationText(
+    value.referenceKind,
+    "Die O7-Referenzart",
+    { maximum: 64, nullable: true },
+  );
+  const referenceDate = normalizePersonnelLifecycleAutomationIsoDate(
+    value.referenceDate,
+    "Der O7-Referenztermin",
+    { nullable: true },
+  );
+  const dueAt = normalizePersonnelLifecycleAutomationIsoDate(
+    value.dueAt,
+    "Die serverprojizierte O7-Fälligkeit",
+    { nullable: true },
+  );
+  const blockerCodes = normalizePersonnelLifecycleAutomationStringList(
+    value.blockerCodes,
+    Object.keys(PERSONNEL_LIFECYCLE_AUTOMATION_BLOCKER_LABELS),
+    "Die O7-Aufgabensperren",
+  );
+  const expectedRepresentation = responsibilityState === "assigned"
+    ? "manual_only"
+    : responsibilityState === "unavailable" ? "clarification_required" : "not_evaluated";
+  const unconfigured = dueState === "not_configured";
+  if (representationState !== expectedRepresentation
+    || (unconfigured && (dueAt !== null || reminderState !== "blocked"
+      || escalationState !== "blocked" || blockerCodes.length === 0))
+    || (!unconfigured && (dueAt === null || referenceDate === null
+      || reminderState === "blocked" || escalationState === "blocked"
+      || blockerCodes.length !== 0))
+    || (processVersionId === null && !blockerCodes.includes("process_version_missing"))
+    || (referenceKind === null && !blockerCodes.includes("reference_kind_missing"))
+    || (referenceDate === null && !blockerCodes.includes("reference_date_missing"))) {
+    throw new Error("Eine O7-Aufgabenprojektion ist nicht fail-closed.");
+  }
+  return {
+    source,
+    runId: normalizePersonnelLifecycleAutomationText(value.runId, "Der O7-Laufbezug", {
+      maximum: 128,
+    }),
+    processVersionId,
+    stepId: normalizePersonnelLifecycleAutomationText(value.stepId, "Der O7-Schrittbezug", {
+      maximum: 128,
+    }),
+    title: normalizePersonnelLifecycleAutomationText(value.title, "Der O7-Aufgabentitel", {
+      maximum: 200,
+    }),
+    status,
+    referenceKind,
+    referenceDate,
+    dueAt,
+    dueState,
+    responsibilityState,
+    representationState,
+    reminderState,
+    escalationState,
+    blockerCodes,
+  };
+}
+
+function normalizePersonnelLifecycleAutomationSummary(value, items) {
+  const fields = [
+    "visibleTasks", "configuredDeadlines", "dueSoon", "dueToday", "overdue",
+    "clarificationRequired", "notConfigured",
+  ];
+  if (!personnelLifecycleAutomationHasExactKeys(value, fields)) {
+    throw new Error("Die O7-Zusammenfassung ist ungültig.");
+  }
+  const normalized = Object.fromEntries(fields.map((field) => [
+    field,
+    normalizePersonnelLifecycleAutomationCount(value[field], `O7-Zähler ${field}`),
+  ]));
+  const expected = {
+    visibleTasks: items.length,
+    configuredDeadlines: items.filter(({ dueState }) => dueState !== "not_configured").length,
+    dueSoon: items.filter(({ dueState }) => dueState === "due_soon").length,
+    dueToday: items.filter(({ dueState }) => dueState === "due_today").length,
+    overdue: items.filter(({ dueState }) => dueState === "overdue").length,
+    clarificationRequired: items.filter(({ blockerCodes, representationState }) => (
+      blockerCodes.length > 0 || representationState === "clarification_required"
+    )).length,
+    notConfigured: items.filter(({ dueState }) => dueState === "not_configured").length,
+  };
+  if (fields.some((field) => normalized[field] !== expected[field])) {
+    throw new Error("Die O7-Zusammenfassung stimmt nicht mit der sichtbaren Projektion überein.");
+  }
+  return normalized;
+}
+
+function normalizePersonnelLifecycleAutomationPreview(value) {
+  if (!personnelLifecycleAutomationHasExactKeys(value, [
+    "contractVersion", "generatedAt", "policyRegistry", "runtimeGates", "modes", "summary",
+    "items",
+  ]) || value.contractVersion !== PERSONNEL_LIFECYCLE_AUTOMATION_CONTRACT_VERSION
+    || !Array.isArray(value.items) || value.items.length > 1000) {
+    throw new Error("Die O7-Automatisierungsvorschau ist ungültig.");
+  }
+  const items = value.items.map(normalizePersonnelLifecycleAutomationPreviewItem);
+  const keys = new Set(items.map(({ source, runId, stepId }) => `${source}\0${runId}\0${stepId}`));
+  if (keys.size !== items.length) {
+    throw new Error("Die O7-Automatisierungsvorschau enthält doppelte Aufgaben.");
+  }
+  return {
+    contractVersion: PERSONNEL_LIFECYCLE_AUTOMATION_CONTRACT_VERSION,
+    generatedAt: normalizePersonnelLifecycleAutomationGeneratedAt(value.generatedAt),
+    policyRegistry: normalizePersonnelLifecycleAutomationPolicyRegistry(value.policyRegistry),
+    runtimeGates: normalizePersonnelLifecycleAutomationRuntimeGates(value.runtimeGates),
+    modes: normalizePersonnelLifecycleAutomationModes(value.modes),
+    summary: normalizePersonnelLifecycleAutomationSummary(value.summary, items),
+    items,
+  };
+}
+
+const PERSONNEL_LIFECYCLE_EDITOR_CONTRACT_VERSION = "o8-v0.1";
+const PERSONNEL_LIFECYCLE_EDITOR_MODEL = "linear-v1";
+const PERSONNEL_LIFECYCLE_EDITOR_MODE = "memory_only";
+const PERSONNEL_LIFECYCLE_EDITOR_SOURCE = "memory";
+const PERSONNEL_LIFECYCLE_EDITOR_ENUMS = Object.freeze({
+  workflowTypes: Object.freeze(["onboarding", "offboarding"]),
+  stepTypes: Object.freeze(["task", "approval", "finish"]),
+  scopeTypes: Object.freeze(["company", "location", "department"]),
+  requirementKinds: Object.freeze(["mandatory", "optional"]),
+  responsibilityClassesByWorkflowType: Object.freeze({
+    onboarding: Object.freeze([
+      "hr_case", "payroll", "leadership", "it_security", "asset_custodian", "trainer", "employee",
+    ]),
+    offboarding: Object.freeze([
+      "offboarding_confidential", "hr_confidential", "payroll", "leadership", "it_security",
+      "asset_custodian", "employee",
+    ]),
+  }),
+});
+const PERSONNEL_LIFECYCLE_EDITOR_LIMITS = Object.freeze({
+  minimumSteps: 2,
+  maximumSteps: 30,
+  draftIdMaximumLength: 128,
+  workflowCodeMaximumLength: 80,
+  titleMaximumLength: 120,
+  descriptionMaximumLength: 600,
+  stepIdMaximumLength: 80,
+  stepTitleMaximumLength: 120,
+  stepDescriptionMaximumLength: 600,
+});
+const PERSONNEL_LIFECYCLE_EDITOR_RUNTIME_GATES = Object.freeze({
+  persistence: false,
+  draftPersistence: false,
+  publication: false,
+  archive: false,
+  instantiation: false,
+  runtimeExecution: false,
+  taskMutation: false,
+  notification: false,
+  scheduler: false,
+  externalMutation: false,
+  legacyBridge: false,
+});
+const PERSONNEL_LIFECYCLE_EDITOR_LABELS = Object.freeze({
+  workflowTypes: Object.freeze({ onboarding: "Onboarding", offboarding: "Offboarding" }),
+  stepTypes: Object.freeze({ task: "Aufgabe", approval: "Freigabe", finish: "Abschluss" }),
+  scopeTypes: Object.freeze({ company: "Gesamtes Unternehmen", location: "Standort", department: "Abteilung" }),
+  requirementKinds: Object.freeze({ mandatory: "Pflichtprozess", optional: "Ergänzungsprozess" }),
+  responsibilityClasses: Object.freeze({
+    hr_case: "Fallverantwortliche Personalstelle",
+    offboarding_confidential: "Vertrauliche Offboarding-Verantwortung",
+    hr_confidential: "Vertrauliche Personalstelle",
+    payroll: "Lohnverrechnung",
+    leadership: "Führung",
+    it_security: "IT / Security",
+    asset_custodian: "Arbeitsmittelverantwortung",
+    trainer: "Schulung / Training",
+    employee: "Mitarbeiter",
+  }),
+});
+
+function personnelLifecycleEditorHasExactKeys(value, allowedKeys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.some((key) => typeof key !== "string")) return false;
+  const keys = Object.keys(value);
+  if (keys.length !== ownKeys.length || keys.length !== allowedKeys.length
+    || !keys.every((key) => allowedKeys.includes(key))) return false;
+  return keys.every((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && Object.hasOwn(descriptor, "value")
+      && !Object.hasOwn(descriptor, "get") && !Object.hasOwn(descriptor, "set");
+  });
+}
+
+function personnelLifecycleEditorIsDenseArray(value, maximum = 1000) {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype
+    || value.length > maximum) return false;
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.some((key) => typeof key === "symbol")) return false;
+  const elementKeys = ownKeys.filter((key) => key !== "length");
+  if (elementKeys.length !== value.length) return false;
+  return elementKeys.every((key, index) => key === String(index)
+    && Object.hasOwn(Object.getOwnPropertyDescriptor(value, key) || {}, "value"));
+}
+
+function normalizePersonnelLifecycleEditorText(value, label, {
+  maximum,
+  allowEmpty = false,
+} = {}) {
+  if (typeof value !== "string") {
+    throw new Error(`${label} ist kein gültiger O8-Textwert.`);
+  }
+  const normalized = value.normalize("NFC").trim();
+  if (normalized.length > maximum
+    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(normalized)
+    || (!allowEmpty && normalized === "")) {
+    throw new Error(`${label} ist kein gültiger O8-Textwert.`);
+  }
+  return normalized;
+}
+
+function normalizePersonnelLifecycleEditorIdentifier(value, label, {
+  maximum,
+  allowEmpty = false,
+  workflowCode = false,
+  allowServerGraphId = false,
+} = {}) {
+  const normalized = normalizePersonnelLifecycleEditorText(value, label, { maximum, allowEmpty });
+  if (!normalized) return normalized;
+  const lower = normalized.toLowerCase();
+  const reserved = ["__proto__", "prototype", "constructor", "local", "system"].includes(lower)
+    || ["memory-node-", "memory-edge-"].some((prefix) => lower.startsWith(prefix));
+  const serverGraphId = allowServerGraphId && /^memory-node-[1-9][0-9]*$/.test(normalized);
+  const pattern = workflowCode
+    ? /^[a-z][a-z0-9._-]{1,79}$/
+    : /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+  if ((reserved && !serverGraphId) || !pattern.test(normalized)) {
+    throw new Error(`${label} ist keine zulässige O8-Kennung.`);
+  }
+  return normalized;
+}
+
+function normalizePersonnelLifecycleEditorExactStringList(value, expected, label) {
+  if (!personnelLifecycleEditorIsDenseArray(value, expected.length)
+    || value.length !== expected.length
+    || new Set(value).size !== value.length
+    || expected.some((entry, index) => value[index] !== entry)) {
+    throw new Error(`${label} überschreitet den O8-Vertrag.`);
+  }
+  return [...expected];
+}
+
+function normalizePersonnelLifecycleEditorRuntimeGates(value) {
+  const names = Object.keys(PERSONNEL_LIFECYCLE_EDITOR_RUNTIME_GATES);
+  if (!personnelLifecycleEditorHasExactKeys(value, names)
+    || names.some((name) => value[name] !== false)) {
+    throw new Error("Die O8-Wirkungsgrenzen sind nicht fail-closed.");
+  }
+  return { ...PERSONNEL_LIFECYCLE_EDITOR_RUNTIME_GATES };
+}
+
+function normalizePersonnelLifecycleEditorLimits(value) {
+  const names = Object.keys(PERSONNEL_LIFECYCLE_EDITOR_LIMITS);
+  if (!personnelLifecycleEditorHasExactKeys(value, names)
+    || names.some((name) => value[name] !== PERSONNEL_LIFECYCLE_EDITOR_LIMITS[name])) {
+    throw new Error("Die O8-Editorgrenzen sind ungültig.");
+  }
+  return { ...PERSONNEL_LIFECYCLE_EDITOR_LIMITS };
+}
+
+function normalizePersonnelLifecycleEditorEnums(value, allowedWorkflowTypes) {
+  const keys = [
+    "workflowTypes", "stepTypes", "scopeTypes", "requirementKinds",
+    "responsibilityClassesByWorkflowType",
+  ];
+  if (!personnelLifecycleEditorHasExactKeys(value, keys)
+    || !personnelLifecycleEditorHasExactKeys(
+      value.responsibilityClassesByWorkflowType,
+      allowedWorkflowTypes,
+    )) {
+    throw new Error("Die O8-Positivlisten sind ungültig.");
+  }
+  const responsibilityClassesByWorkflowType = Object.fromEntries(
+    allowedWorkflowTypes.map((workflowType) => [
+      workflowType,
+      normalizePersonnelLifecycleEditorExactStringList(
+        value.responsibilityClassesByWorkflowType[workflowType],
+        PERSONNEL_LIFECYCLE_EDITOR_ENUMS.responsibilityClassesByWorkflowType[workflowType],
+        `Die O8-Verantwortungsklassen für ${workflowType}`,
+      ),
+    ]),
+  );
+  return {
+    workflowTypes: normalizePersonnelLifecycleEditorExactStringList(
+      value.workflowTypes,
+      allowedWorkflowTypes,
+      "Die O8-Prozessarten",
+    ),
+    stepTypes: normalizePersonnelLifecycleEditorExactStringList(
+      value.stepTypes,
+      PERSONNEL_LIFECYCLE_EDITOR_ENUMS.stepTypes,
+      "Die O8-Schrittarten",
+    ),
+    scopeTypes: normalizePersonnelLifecycleEditorExactStringList(
+      value.scopeTypes,
+      PERSONNEL_LIFECYCLE_EDITOR_ENUMS.scopeTypes,
+      "Die O8-Geltungsbereiche",
+    ),
+    requirementKinds: normalizePersonnelLifecycleEditorExactStringList(
+      value.requirementKinds,
+      PERSONNEL_LIFECYCLE_EDITOR_ENUMS.requirementKinds,
+      "Die O8-Pflichtarten",
+    ),
+    responsibilityClassesByWorkflowType,
+  };
+}
+
+function normalizePersonnelLifecycleEditorCatalog(value) {
+  const keys = [
+    "contractVersion", "model", "mode", "source", "workflowTypes", "enums", "limits",
+    "runtimeGates",
+  ];
+  if (!personnelLifecycleEditorHasExactKeys(value, keys)
+    || value.contractVersion !== PERSONNEL_LIFECYCLE_EDITOR_CONTRACT_VERSION
+    || value.model !== PERSONNEL_LIFECYCLE_EDITOR_MODEL
+    || value.mode !== PERSONNEL_LIFECYCLE_EDITOR_MODE
+    || value.source !== PERSONNEL_LIFECYCLE_EDITOR_SOURCE
+    || !personnelLifecycleEditorIsDenseArray(
+      value.workflowTypes,
+      PERSONNEL_LIFECYCLE_EDITOR_ENUMS.workflowTypes.length,
+    )
+    || value.workflowTypes.length < 1
+    || value.workflowTypes.length > PERSONNEL_LIFECYCLE_EDITOR_ENUMS.workflowTypes.length) {
+    throw new Error("Der O8-Editorkatalog ist ungültig.");
+  }
+  const workflowTypes = value.workflowTypes.map((entry) => normalizePersonnelLifecycleEditorText(
+    entry,
+    "Die O8-Prozessart",
+    { maximum: 32 },
+  ));
+  const canonicalWorkflowTypes = PERSONNEL_LIFECYCLE_EDITOR_ENUMS.workflowTypes
+    .filter((entry) => workflowTypes.includes(entry));
+  if (new Set(workflowTypes).size !== workflowTypes.length
+    || workflowTypes.some((entry) => !PERSONNEL_LIFECYCLE_EDITOR_ENUMS.workflowTypes.includes(entry))
+    || canonicalWorkflowTypes.some((entry, index) => workflowTypes[index] !== entry)
+    || workflowTypes.some((entry) => !canReadPersonnelLifecycleEditorWorkflowType(entry))) {
+    throw new Error("Der O8-Editorkatalog enthält eine nicht freigegebene Prozessart.");
+  }
+  return {
+    contractVersion: PERSONNEL_LIFECYCLE_EDITOR_CONTRACT_VERSION,
+    model: PERSONNEL_LIFECYCLE_EDITOR_MODEL,
+    mode: PERSONNEL_LIFECYCLE_EDITOR_MODE,
+    source: PERSONNEL_LIFECYCLE_EDITOR_SOURCE,
+    workflowTypes,
+    enums: normalizePersonnelLifecycleEditorEnums(value.enums, workflowTypes),
+    limits: normalizePersonnelLifecycleEditorLimits(value.limits),
+    runtimeGates: normalizePersonnelLifecycleEditorRuntimeGates(value.runtimeGates),
+  };
+}
+
+function normalizePersonnelLifecycleEditorStep(value, workflowType, { node = false } = {}) {
+  const keys = node
+    ? ["id", "position", "type", "title", "description", "responsibilityClass", "required"]
+    : ["id", "type", "title", "description", "responsibilityClass", "required"];
+  if (!personnelLifecycleEditorHasExactKeys(value, keys)) {
+    throw new Error("Ein O8-Schritt enthält unbekannte Felder.");
+  }
+  const id = normalizePersonnelLifecycleEditorIdentifier(value.id, "Die O8-Schrittkennung", {
+    maximum: PERSONNEL_LIFECYCLE_EDITOR_LIMITS.stepIdMaximumLength,
+    allowEmpty: !node,
+    allowServerGraphId: node,
+  });
+  const type = normalizePersonnelLifecycleEditorText(value.type, "Die O8-Schrittart", {
+    maximum: 32,
+    allowEmpty: true,
+  });
+  const responsibilityClass = normalizePersonnelLifecycleEditorText(
+    value.responsibilityClass,
+    "Die O8-Verantwortungsklasse",
+    { maximum: 64, allowEmpty: true },
+  );
+  const allowedResponsibilities = PERSONNEL_LIFECYCLE_EDITOR_ENUMS
+    .responsibilityClassesByWorkflowType[workflowType] || [];
+  if ((type && !PERSONNEL_LIFECYCLE_EDITOR_ENUMS.stepTypes.includes(type))
+    || (responsibilityClass && !allowedResponsibilities.includes(responsibilityClass))
+    || typeof value.required !== "boolean"
+    || (node && (!Number.isSafeInteger(value.position) || value.position < 1
+      || value.position > PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps))) {
+    throw new Error("Ein O8-Schritt überschreitet die Positivliste.");
+  }
+  return {
+    id,
+    ...(node ? { position: value.position } : {}),
+    type,
+    title: normalizePersonnelLifecycleEditorText(value.title, "Der O8-Schritttitel", {
+      maximum: PERSONNEL_LIFECYCLE_EDITOR_LIMITS.stepTitleMaximumLength,
+      allowEmpty: true,
+    }),
+    description: normalizePersonnelLifecycleEditorText(value.description, "Die O8-Schrittbeschreibung", {
+      maximum: PERSONNEL_LIFECYCLE_EDITOR_LIMITS.stepDescriptionMaximumLength,
+      allowEmpty: true,
+      multiline: true,
+    }),
+    responsibilityClass,
+    required: value.required,
+  };
+}
+
+function normalizePersonnelLifecycleEditorDraft(value) {
+  const keys = [
+    "draftId", "workflowType", "workflowCode", "title", "description", "scopeType",
+    "requirementKind", "steps",
+  ];
+  if (!personnelLifecycleEditorHasExactKeys(value, keys)
+    || !personnelLifecycleEditorIsDenseArray(
+      value.steps,
+      PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps,
+    )
+    || value.steps.length > PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps) {
+    throw new Error("Der O8-Arbeitsentwurf ist ungültig.");
+  }
+  const workflowType = normalizePersonnelLifecycleEditorText(
+    value.workflowType,
+    "Die O8-Prozessart",
+    { maximum: 32 },
+  );
+  const scopeType = normalizePersonnelLifecycleEditorText(value.scopeType, "Der O8-Geltungsbereich", {
+    maximum: 32,
+  });
+  const requirementKind = normalizePersonnelLifecycleEditorText(
+    value.requirementKind,
+    "Die O8-Pflichtart",
+    { maximum: 32 },
+  );
+  if (!PERSONNEL_LIFECYCLE_EDITOR_ENUMS.workflowTypes.includes(workflowType)
+    || !canReadPersonnelLifecycleEditorWorkflowType(workflowType)
+    || !PERSONNEL_LIFECYCLE_EDITOR_ENUMS.scopeTypes.includes(scopeType)
+    || !PERSONNEL_LIFECYCLE_EDITOR_ENUMS.requirementKinds.includes(requirementKind)) {
+    throw new Error("Der O8-Arbeitsentwurf überschreitet die Positivliste.");
+  }
+  const steps = value.steps.map((step) => normalizePersonnelLifecycleEditorStep(step, workflowType));
+  const nonemptyStepIds = steps.map(({ id }) => id).filter(Boolean);
+  if (new Set(nonemptyStepIds).size !== nonemptyStepIds.length) {
+    throw new Error("Der O8-Arbeitsentwurf enthält doppelte Schritte.");
+  }
+  return {
+    draftId: normalizePersonnelLifecycleEditorIdentifier(value.draftId, "Die O8-Entwurfskennung", {
+      maximum: PERSONNEL_LIFECYCLE_EDITOR_LIMITS.draftIdMaximumLength,
+      allowEmpty: true,
+    }),
+    workflowType,
+    workflowCode: normalizePersonnelLifecycleEditorIdentifier(value.workflowCode, "Der O8-Workflow-Code", {
+      maximum: PERSONNEL_LIFECYCLE_EDITOR_LIMITS.workflowCodeMaximumLength,
+      allowEmpty: true,
+      workflowCode: true,
+    }),
+    title: normalizePersonnelLifecycleEditorText(value.title, "Der O8-Entwurfstitel", {
+      maximum: PERSONNEL_LIFECYCLE_EDITOR_LIMITS.titleMaximumLength,
+      allowEmpty: true,
+    }),
+    description: normalizePersonnelLifecycleEditorText(value.description, "Die O8-Entwurfsbeschreibung", {
+      maximum: PERSONNEL_LIFECYCLE_EDITOR_LIMITS.descriptionMaximumLength,
+      allowEmpty: true,
+      multiline: true,
+    }),
+    scopeType,
+    requirementKind,
+    steps,
+  };
+}
+
+function normalizePersonnelLifecycleEditorValidation(value) {
+  const keys = [
+    "contractVersion", "model", "mode", "source", "status", "valid", "fingerprint", "draft",
+    "nodes", "edges", "blockers", "runtimeGates",
+  ];
+  if (!personnelLifecycleEditorHasExactKeys(value, keys)
+    || value.contractVersion !== PERSONNEL_LIFECYCLE_EDITOR_CONTRACT_VERSION
+    || value.model !== PERSONNEL_LIFECYCLE_EDITOR_MODEL
+    || value.mode !== PERSONNEL_LIFECYCLE_EDITOR_MODE
+    || value.source !== PERSONNEL_LIFECYCLE_EDITOR_SOURCE
+    || !["ready", "blocked"].includes(value.status)
+    || typeof value.valid !== "boolean"
+    || !personnelLifecycleEditorIsDenseArray(value.nodes, PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps)
+    || !personnelLifecycleEditorIsDenseArray(value.edges, PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps - 1)
+    || !personnelLifecycleEditorIsDenseArray(value.blockers, 150)
+    || value.blockers.length > 150
+    || typeof value.fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(value.fingerprint)) {
+    throw new Error("Die O8-Serverprüfung ist ungültig.");
+  }
+  const draft = normalizePersonnelLifecycleEditorDraft(value.draft);
+  const nodes = value.nodes.map((node) => normalizePersonnelLifecycleEditorStep(
+    node,
+    draft.workflowType,
+    { node: true },
+  ));
+  if (nodes.length !== draft.steps.length || nodes.some((node, index) => {
+    const step = draft.steps[index];
+    const expectedNodeId = step.id || `memory-node-${index + 1}`;
+    return node.position !== index + 1 || node.id !== expectedNodeId
+      || ["type", "title", "description", "responsibilityClass", "required"]
+        .some((key) => node[key] !== step[key]);
+  })) throw new Error("Die O8-Knoten stimmen nicht mit dem Arbeitsentwurf überein.");
+  const edges = value.edges.map((edge, index) => {
+    if (!personnelLifecycleEditorHasExactKeys(edge, ["id", "from", "to", "type"])
+      || edge.id !== `memory-edge-${index + 1}` || edge.type !== "sequence"
+      || edge.from !== nodes[index]?.id || edge.to !== nodes[index + 1]?.id) {
+      throw new Error("Die O8-Kanten sind nicht rein linear abgeleitet.");
+    }
+    return { id: edge.id, from: edge.from, to: edge.to, type: "sequence" };
+  });
+  if (edges.length !== Math.max(0, nodes.length - 1)) {
+    throw new Error("Die O8-Kantenfolge ist unvollständig.");
+  }
+  const blockers = value.blockers.map((blocker) => {
+    if (!personnelLifecycleEditorHasExactKeys(blocker, ["code", "path", "message"])) {
+      throw new Error("Eine O8-Prüfsperre enthält unbekannte Felder.");
+    }
+    const code = normalizePersonnelLifecycleEditorText(blocker.code, "Der O8-Sperrcode", { maximum: 80 });
+    if (!/^[a-z][a-z0-9_]*$/.test(code)) throw new Error("Ein O8-Sperrcode ist ungültig.");
+    return {
+      code,
+      path: normalizePersonnelLifecycleEditorText(blocker.path, "Der O8-Sperrpfad", {
+        maximum: 240,
+      }),
+      message: normalizePersonnelLifecycleEditorText(blocker.message, "Die O8-Sperrmeldung", {
+        maximum: 600,
+        multiline: true,
+      }),
+    };
+  });
+  if ((value.valid && (value.status !== "ready" || blockers.length !== 0))
+    || (!value.valid && (value.status !== "blocked" || blockers.length === 0))) {
+    throw new Error("Der O8-Prüfstatus ist widersprüchlich.");
+  }
+  return {
+    contractVersion: PERSONNEL_LIFECYCLE_EDITOR_CONTRACT_VERSION,
+    model: PERSONNEL_LIFECYCLE_EDITOR_MODEL,
+    mode: PERSONNEL_LIFECYCLE_EDITOR_MODE,
+    source: PERSONNEL_LIFECYCLE_EDITOR_SOURCE,
+    status: value.status,
+    valid: value.valid,
+    fingerprint: value.fingerprint,
+    draft,
+    nodes,
+    edges,
+    blockers,
+    runtimeGates: normalizePersonnelLifecycleEditorRuntimeGates(value.runtimeGates),
+  };
+}
+
 function personnelWorkflowStepCount(value) {
   const count = Number(value);
   return Number.isSafeInteger(count) && count >= 0 ? count : 0;
@@ -8234,29 +11416,1068 @@ function renderPersonnelWorkflowInstanceList() {
   }).join("");
 }
 
+function renderPersonnelLifecycleOnboardingTasksMarkup() {
+  if (!state.personnelLifecycleOnboardingTasks.length) return "";
+  const canComplete = state.personnelLifecycleOnboardingTaskCapabilities.canComplete === true;
+  return `<section class="personnel-lifecycle-onboarding-task-group" aria-labelledby="personnelLifecycleOnboardingTasksTitle">
+    <header><div><span class="eyebrow">O4 · kontrollierte Ausführung</span><h3 id="personnelLifecycleOnboardingTasksTitle">Eigene Onboarding-Aufgaben</h3><p>Nur die aktuell persönlich zugewiesene Aufgabe im wirksamen Fachbereich wird angezeigt.</p></div><span class="status-badge warning">Keine Automatik</span></header>
+    <div class="personnel-lifecycle-onboarding-task-list">${state.personnelLifecycleOnboardingTasks.map((task) => {
+      const key = personnelLifecycleOnboardingTaskKey(task);
+      const pending = state.personnelLifecycleOnboardingTaskPending === key;
+      const scopeLabel = task.scope.type === "department"
+        ? `Standort ${task.scope.locationId} · Abteilung ${task.scope.departmentId}`
+        : `Standort ${task.scope.locationId}`;
+      return `<article class="personnel-workflow-task-card personnel-lifecycle-onboarding-task-card">
+        <div><span class="eyebrow">Schritt ${task.position} · ${escapeHtml(task.workflowCode)}</span><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.workflowTitle)} · ${escapeHtml(scopeLabel)}</p><small>Aktiv seit ${escapeHtml(personnelWorkflowTimestamp(task.activatedAt))}</small></div>
+        ${canComplete ? `<form data-personnel-lifecycle-onboarding-task-complete data-run-id="${escapeHtmlAttribute(task.runId)}" data-step-id="${escapeHtmlAttribute(task.stepId)}">
+          <label><input type="checkbox" required data-onboarding-task-confirm${pending ? " disabled" : ""}><span>Ich bestätige, dass diese Aufgabe tatsächlich erledigt ist.</span></label>
+          <button type="submit" class="primary-button"${pending ? " disabled" : ""}>${pending ? "Wird sicher bestätigt …" : "Erledigung bestätigen"}</button>
+        </form>` : '<span class="status-badge inactive">Nur Lesen</span>'}
+      </article>`;
+    }).join("")}</div>
+    <p class="employee-profile-boundary">O4 erlaubt hier ausschließlich den Status „erledigt“. Überspringen, „nicht anwendbar“, Ausnahmen, Nachweisverknüpfungen, Benachrichtigungen und externe Aktionen bleiben gesperrt.</p>
+  </section>`;
+}
+
+const PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_FIELD_LABELS = Object.freeze({
+  displayName: "Mitarbeiter/-in",
+  employeeNumber: "Personalnummer",
+  locationId: "Standort",
+  departmentId: "Abteilung",
+  businessIdentifier: "Geschäftskennung",
+  targetSystem: "Zielsystem",
+  action: "Auftrag",
+  executeAt: "Ausführen am",
+  assetIdentifier: "Betriebsmittel",
+  dueAt: "Fällig am",
+  payrollAction: "Lohnverrechnungsauftrag",
+  effectiveDate: "Wirksam am",
+});
+
+function renderPersonnelLifecycleOffboardingTasksMarkup() {
+  if (!state.personnelLifecycleOffboardingTasks.length) return "";
+  const canComplete = state.personnelLifecycleOffboardingTaskCapabilities.canComplete === true;
+  return `<section class="personnel-lifecycle-onboarding-task-group employee-offboarding-task-group" aria-labelledby="personnelLifecycleOffboardingTasksTitle">
+    <header><div><span class="eyebrow">O5 · nach Kommunikationsfreigabe</span><h3 id="personnelLifecycleOffboardingTasksTitle">Eigene Offboarding-Aufträge</h3><p>Nur die persönlich zugewiesene Minimalprojektion wird angezeigt; der vertrauliche Gesamtfall bleibt verborgen.</p></div><span class="status-badge warning">Keine Vorabhinweise</span></header>
+    <div class="personnel-lifecycle-onboarding-task-list">${state.personnelLifecycleOffboardingTasks.map((task) => {
+      const key = personnelLifecycleOffboardingTaskKey(task);
+      const pending = state.personnelLifecycleOffboardingTaskPending === key;
+      const details = PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_FIELDS[task.projection]
+        .filter((field) => task[field])
+        .map((field) => `<span><small>${escapeHtml(PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_FIELD_LABELS[field])}</small><strong>${escapeHtml(task[field])}</strong></span>`)
+        .join("");
+      const completable = canComplete && task.status === "active";
+      return `<article class="personnel-workflow-task-card personnel-lifecycle-onboarding-task-card employee-offboarding-task-card">
+        <div><span class="eyebrow">${escapeHtml(task.projection)}</span><h3>${escapeHtml(task.title)}</h3>${details ? `<div class="employee-offboarding-task-details">${details}</div>` : ""}</div>
+        ${completable ? `<form data-personnel-lifecycle-offboarding-task-complete data-run-id="${escapeHtmlAttribute(task.runId)}" data-step-id="${escapeHtmlAttribute(task.stepId)}">
+          <label><input type="checkbox" required data-offboarding-task-confirm${pending ? " disabled" : ""}><span>Ich bestätige, dass dieser Auftrag tatsächlich erledigt ist.</span></label>
+          <button type="submit" class="primary-button"${pending ? " disabled" : ""}>${pending ? "Wird sicher bestätigt …" : "Erledigung bestätigen"}</button>
+        </form>` : '<span class="status-badge inactive">Bis zur Aktivierung nur Lesen</span>'}
+      </article>`;
+    }).join("")}</div>
+    <p class="employee-profile-boundary">O5 erlaubt nur die ausdrückliche Erledigung aktiver Aufträge. Überspringen, „nicht anwendbar“, freie Nachweise und externe Kontoaktionen sind nicht freigegeben.</p>
+  </section>`;
+}
+
+function renderPersonnelLifecycleInterfacesCatalog() {
+  if (!elements.personnelLifecycleInterfacesSection
+    || !elements.personnelLifecycleInterfacesStatus
+    || !elements.personnelLifecycleInterfacesList) return;
+  const readable = canReadLifecycleInterfaces();
+  elements.personnelLifecycleInterfacesSection.classList.toggle("hidden", !readable);
+  if (!readable) {
+    elements.personnelLifecycleInterfacesStatus.textContent = "";
+    elements.personnelLifecycleInterfacesStatus.classList.remove("error");
+    elements.personnelLifecycleInterfacesList.innerHTML = "";
+    return;
+  }
+  if (state.personnelLifecycleInterfacesLoading) {
+    elements.personnelLifecycleInterfacesStatus.textContent = "Der Schnittstellenstatus wird geladen …";
+    elements.personnelLifecycleInterfacesStatus.classList.remove("error");
+    elements.personnelLifecycleInterfacesList.innerHTML = "";
+    return;
+  }
+  if (state.personnelLifecycleInterfacesError) {
+    elements.personnelLifecycleInterfacesStatus.textContent = state.personnelLifecycleInterfacesError;
+    elements.personnelLifecycleInterfacesStatus.classList.add("error");
+    elements.personnelLifecycleInterfacesList.innerHTML = "";
+    return;
+  }
+  elements.personnelLifecycleInterfacesStatus.classList.remove("error");
+  if (!state.personnelLifecycleInterfacesLoaded || !state.personnelLifecycleInterfacesCatalog) {
+    elements.personnelLifecycleInterfacesStatus.textContent = "Schnittstellenstatus wird beim Öffnen geladen.";
+    elements.personnelLifecycleInterfacesList.innerHTML = "";
+    return;
+  }
+  const { domains } = state.personnelLifecycleInterfacesCatalog;
+  elements.personnelLifecycleInterfacesStatus.textContent = domains.length
+    ? "Keine Zielsysteme freigegeben. Außenwirkung gesperrt."
+    : "Keine serverseitig freigegebene Domänenprojektion verfügbar. Außenwirkung gesperrt.";
+  elements.personnelLifecycleInterfacesList.innerHTML = domains.map((domain) => {
+    const operations = domain.operations
+      .map((operation) => PERSONNEL_LIFECYCLE_INTERFACE_OPERATION_LABELS[operation])
+      .join(", ");
+    const projectionFields = domain.maximumProjectionFields
+      .map((field) => PERSONNEL_LIFECYCLE_INTERFACE_FIELD_LABELS[field])
+      .join(", ");
+    const blockers = domain.blockerCodes
+      .map((code) => PERSONNEL_LIFECYCLE_INTERFACE_BLOCKER_LABELS[code])
+      .join(", ");
+    return `<article class="personnel-lifecycle-interface-card" data-personnel-lifecycle-interface-domain="${escapeHtmlAttribute(domain.id)}">
+      <header><div><span class="eyebrow">O6 · Nur Lesen</span><h4>${escapeHtml(domain.label)}</h4></div><span class="status-badge inactive">Gesperrt</span></header>
+      <dl>
+        <div><dt>Zielsysteme</dt><dd>Keine Zielsysteme freigegeben</dd></div>
+        <div><dt>Außenwirkung</dt><dd>Außenwirkung gesperrt</dd></div>
+        <div><dt>Vertraglich bekannte Vorgänge</dt><dd>${escapeHtml(operations)}</dd></div>
+        <div><dt>Maximalprojektion, keine Versandfreigabe</dt><dd>${escapeHtml(projectionFields)}</dd></div>
+        <div><dt>Sperrgrund</dt><dd>${escapeHtml(blockers)}</dd></div>
+      </dl>
+    </article>`;
+  }).join("");
+}
+
+function clearPersonnelLifecycleInterfacesState(message = "") {
+  state.personnelLifecycleInterfacesRequestToken = null;
+  state.personnelLifecycleInterfacesCatalog = null;
+  state.personnelLifecycleInterfacesLoaded = false;
+  state.personnelLifecycleInterfacesLoading = false;
+  state.personnelLifecycleInterfacesError = String(message || "");
+  state.personnelLifecycleInterfacesActorAccessKey = "";
+  renderPersonnelLifecycleInterfacesCatalog();
+}
+
+async function loadPersonnelLifecycleInterfacesCatalog({ force = false } = {}) {
+  if (!canReadLifecycleInterfaces() || state.personnelLifecycleInterfacesLoading) return;
+  const actorAccessKey = personnelLifecycleInterfacesActorAccessKey();
+  if (!actorAccessKey) {
+    clearPersonnelLifecycleInterfacesState(
+      "Der Schnittstellenstatus kann ohne eindeutige Sitzungsidentität nicht geladen werden.",
+    );
+    return;
+  }
+  if (state.personnelLifecycleInterfacesLoaded
+    && state.personnelLifecycleInterfacesActorAccessKey === actorAccessKey
+    && !force) {
+    renderPersonnelLifecycleInterfacesCatalog();
+    return;
+  }
+  if (state.personnelLifecycleInterfacesActorAccessKey
+    && state.personnelLifecycleInterfacesActorAccessKey !== actorAccessKey) {
+    clearPersonnelLifecycleInterfacesState();
+  }
+  const requestToken = {};
+  state.personnelLifecycleInterfacesRequestToken = requestToken;
+  state.personnelLifecycleInterfacesLoading = true;
+  state.personnelLifecycleInterfacesError = "";
+  state.personnelLifecycleInterfacesActorAccessKey = actorAccessKey;
+  renderPersonnelLifecycleInterfacesCatalog();
+  try {
+    const result = await api("/api/portal/v1/personnel-lifecycle/interfaces/catalog");
+    if (state.personnelLifecycleInterfacesRequestToken !== requestToken) return;
+    if (!canReadLifecycleInterfaces()
+      || personnelLifecycleInterfacesActorAccessKey() !== actorAccessKey) {
+      clearPersonnelLifecycleInterfacesState(
+        "Der Schnittstellenstatus wurde während des Ladens aus der Ansicht entfernt.",
+      );
+      applyRoleVisibility();
+      return;
+    }
+    const catalog = normalizePersonnelLifecycleInterfacesCatalog(result);
+    state.personnelLifecycleInterfacesCatalog = {
+      ...catalog,
+      domains: catalog.domains.filter(({ id }) => canReadLifecycleInterfaceDomain(id)),
+    };
+    state.personnelLifecycleInterfacesLoaded = true;
+  } catch (error) {
+    if (state.personnelLifecycleInterfacesRequestToken !== requestToken) return;
+    const denied = [401, 403].includes(error.status);
+    clearPersonnelLifecycleInterfacesState(
+      denied
+        ? "Der O6-Schnittstellenzugriff ist nicht mehr verfügbar."
+        : "Der O6-Schnittstellenstatus konnte nicht sicher geladen werden.",
+    );
+    if (denied) applyRoleVisibility();
+    return;
+  } finally {
+    if (state.personnelLifecycleInterfacesRequestToken === requestToken) {
+      state.personnelLifecycleInterfacesRequestToken = null;
+      state.personnelLifecycleInterfacesLoading = false;
+      renderPersonnelLifecycleInterfacesCatalog();
+    }
+  }
+}
+
+function personnelLifecycleAutomationDateLabel(value) {
+  if (!value) return "Nicht konfiguriert";
+  const [year, month, day] = value.split("-");
+  return `${day}.${month}.${year}`;
+}
+
+function renderPersonnelLifecycleAutomationCatalogMarkup(catalog) {
+  if (!catalog.domains.length) {
+    return '<p class="personnel-lifecycle-automation-empty">Keine serverseitig freigegebene O7-Domäne sichtbar.</p>';
+  }
+  return catalog.domains.map((domain) => {
+    const blockers = domain.blockerCodes
+      .map((code) => PERSONNEL_LIFECYCLE_AUTOMATION_BLOCKER_LABELS[code])
+      .join(", ");
+    return `<article class="personnel-lifecycle-automation-domain-card" data-personnel-lifecycle-automation-domain="${escapeHtmlAttribute(domain.id)}">
+      <header><div><span class="eyebrow">O7 · Katalog</span><h4>${escapeHtml(domain.label)}</h4></div><span class="status-badge inactive">Gesperrt</span></header>
+      <dl>
+        <div><dt>Konfigurationen</dt><dd>Keine kundenspezifische Regel freigegeben</dd></div>
+        <div><dt>Außenwirkung</dt><dd>Gesperrt</dd></div>
+        <div><dt>Sperrgründe</dt><dd>${escapeHtml(blockers)}</dd></div>
+      </dl>
+    </article>`;
+  }).join("");
+}
+
+function personnelLifecycleAutomationDueBadge(item) {
+  const label = PERSONNEL_LIFECYCLE_AUTOMATION_DUE_STATE_LABELS[item.dueState];
+  return `<span class="personnel-lifecycle-automation-due-badge due-${escapeHtmlAttribute(item.dueState)}">${escapeHtml(label)}</span>`;
+}
+
+function renderPersonnelLifecycleAutomationPreviewItems(preview) {
+  if (!preview.items.length) {
+    return '<p class="personnel-lifecycle-automation-empty">Keine serverseitig freigegebene Aufgabe in der O7-Vorschau.</p>';
+  }
+  return preview.items.map((item) => {
+    const blockers = item.blockerCodes.length
+      ? item.blockerCodes.map((code) => PERSONNEL_LIFECYCLE_AUTOMATION_BLOCKER_LABELS[code]).join(", ")
+      : "Keine serverseitigen Sperrgründe";
+    return `<article class="personnel-lifecycle-automation-task-card" data-personnel-lifecycle-automation-source="${escapeHtmlAttribute(item.source)}">
+      <header>
+        <div><span class="eyebrow">${escapeHtml(PERSONNEL_LIFECYCLE_AUTOMATION_SOURCE_LABELS[item.source])} · ${escapeHtml(PERSONNEL_LIFECYCLE_AUTOMATION_TASK_STATUS_LABELS[item.status])}</span><h4>${escapeHtml(item.title)}</h4></div>
+        ${personnelLifecycleAutomationDueBadge(item)}
+      </header>
+      <dl>
+        <div><dt>Referenztermin</dt><dd>${escapeHtml(personnelLifecycleAutomationDateLabel(item.referenceDate))}</dd></div>
+        <div><dt>Server-Fälligkeit</dt><dd>${escapeHtml(personnelLifecycleAutomationDateLabel(item.dueAt))}</dd></div>
+        <div><dt>Verantwortung</dt><dd>${escapeHtml(PERSONNEL_LIFECYCLE_AUTOMATION_RESPONSIBILITY_LABELS[item.responsibilityState])}</dd></div>
+        <div><dt>Vertretung</dt><dd>${escapeHtml(PERSONNEL_LIFECYCLE_AUTOMATION_REPRESENTATION_LABELS[item.representationState])}</dd></div>
+        <div><dt>Erinnerung</dt><dd>${escapeHtml(PERSONNEL_LIFECYCLE_AUTOMATION_REMINDER_LABELS[item.reminderState])}</dd></div>
+        <div><dt>Eskalation</dt><dd>${escapeHtml(PERSONNEL_LIFECYCLE_AUTOMATION_ESCALATION_LABELS[item.escalationState])}</dd></div>
+      </dl>
+      <p class="personnel-lifecycle-automation-blockers"><strong>Prüfgrenze</strong><span>${escapeHtml(blockers)}</span></p>
+    </article>`;
+  }).join("");
+}
+
+function renderPersonnelLifecycleAutomation() {
+  if (!elements.personnelLifecycleAutomationSection
+    || !elements.personnelLifecycleAutomationStatus
+    || !elements.personnelLifecycleAutomationCatalog
+    || !elements.personnelLifecycleAutomationSummary
+    || !elements.personnelLifecycleAutomationList) return;
+  const readable = canReadLifecycleAutomationCatalog();
+  elements.personnelLifecycleAutomationSection.classList.toggle("hidden", !readable);
+  if (!readable) {
+    elements.personnelLifecycleAutomationStatus.textContent = "";
+    elements.personnelLifecycleAutomationStatus.classList.remove("error");
+    elements.personnelLifecycleAutomationCatalog.innerHTML = "";
+    elements.personnelLifecycleAutomationSummary.innerHTML = "";
+    elements.personnelLifecycleAutomationList.innerHTML = "";
+    return;
+  }
+  if (state.personnelLifecycleAutomationLoading) {
+    elements.personnelLifecycleAutomationStatus.textContent = "Der O7-Katalog und die freigegebene Vorschau werden geladen …";
+    elements.personnelLifecycleAutomationStatus.classList.remove("error");
+    elements.personnelLifecycleAutomationCatalog.innerHTML = "";
+    elements.personnelLifecycleAutomationSummary.innerHTML = "";
+    elements.personnelLifecycleAutomationList.innerHTML = "";
+    return;
+  }
+  if (state.personnelLifecycleAutomationError) {
+    elements.personnelLifecycleAutomationStatus.textContent = state.personnelLifecycleAutomationError;
+    elements.personnelLifecycleAutomationStatus.classList.add("error");
+    elements.personnelLifecycleAutomationCatalog.innerHTML = "";
+    elements.personnelLifecycleAutomationSummary.innerHTML = "";
+    elements.personnelLifecycleAutomationList.innerHTML = "";
+    return;
+  }
+  elements.personnelLifecycleAutomationStatus.classList.remove("error");
+  if (!state.personnelLifecycleAutomationCatalogLoaded
+    || !state.personnelLifecycleAutomationCatalog) {
+    elements.personnelLifecycleAutomationStatus.textContent = "O7-Katalog und Vorschau werden beim Öffnen geladen.";
+    elements.personnelLifecycleAutomationCatalog.innerHTML = "";
+    elements.personnelLifecycleAutomationSummary.innerHTML = "";
+    elements.personnelLifecycleAutomationList.innerHTML = "";
+    return;
+  }
+  elements.personnelLifecycleAutomationCatalog.innerHTML = renderPersonnelLifecycleAutomationCatalogMarkup(
+    state.personnelLifecycleAutomationCatalog,
+  );
+  const preview = state.personnelLifecycleAutomationPreviewLoaded
+    ? state.personnelLifecycleAutomationPreview
+    : null;
+  if (!preview) {
+    elements.personnelLifecycleAutomationStatus.textContent = "Der servergefilterte O7-Katalog ist sichtbar. Die persönliche Vorschau erfordert alle vier O7-Leserechte, das operative Leserecht und mindestens ein Fallleserecht.";
+    elements.personnelLifecycleAutomationSummary.innerHTML = "";
+    elements.personnelLifecycleAutomationList.innerHTML = '<p class="personnel-lifecycle-automation-empty">Mit dem aktuellen Rechteumfang ist keine persönliche O7-Aufgabenvorschau freigegeben.</p>';
+    return;
+  }
+  elements.personnelLifecycleAutomationStatus.textContent = `Nur Vorschau · serverseitig erzeugt ${personnelWorkflowTimestamp(preview.generatedAt)}.`;
+  const summaryCards = [
+    ["Sichtbar", preview.summary.visibleTasks, "serverseitig freigegebene Aufgaben"],
+    ["Bald fällig", preview.summary.dueSoon, "serverprojizierter Friststatus"],
+    ["Heute fällig", preview.summary.dueToday, "serverprojizierter Friststatus"],
+    ["Überfällig", preview.summary.overdue, "keine automatische Folgeaktion"],
+    ["Klärung", preview.summary.clarificationRequired, "manuelle Personalstellen-Klärung"],
+    ["Nicht konfiguriert", preview.summary.notConfigured, "keine Fristannahme im Browser"],
+  ];
+  elements.personnelLifecycleAutomationSummary.innerHTML = summaryCards
+    .map(([label, value, detail]) => `<article><span>${escapeHtml(label)}</span><strong>${value}</strong><small>${escapeHtml(detail)}</small></article>`)
+    .join("");
+  elements.personnelLifecycleAutomationList.innerHTML = renderPersonnelLifecycleAutomationPreviewItems(preview);
+}
+
+function clearPersonnelLifecycleAutomationState(message = "") {
+  state.personnelLifecycleAutomationRequestToken = null;
+  state.personnelLifecycleAutomationCatalog = null;
+  state.personnelLifecycleAutomationPreview = null;
+  state.personnelLifecycleAutomationCatalogLoaded = false;
+  state.personnelLifecycleAutomationPreviewLoaded = false;
+  state.personnelLifecycleAutomationLoading = false;
+  state.personnelLifecycleAutomationError = String(message || "");
+  state.personnelLifecycleAutomationActorAccessKey = "";
+  renderPersonnelLifecycleAutomation();
+}
+
+async function loadPersonnelLifecycleAutomation({ force = false } = {}) {
+  if (!canReadLifecycleAutomationCatalog() || state.personnelLifecycleAutomationLoading) return;
+  const actorAccessKey = personnelLifecycleAutomationActorAccessKey();
+  if (!actorAccessKey) {
+    clearPersonnelLifecycleAutomationState(
+      "Die O7-Vorschau kann ohne eindeutige Sitzungsidentität und Bereichsbindung nicht geladen werden.",
+    );
+    return;
+  }
+  const previewReadable = canReadLifecycleAutomationPreview();
+  if (state.personnelLifecycleAutomationCatalogLoaded
+    && state.personnelLifecycleAutomationActorAccessKey === actorAccessKey
+    && (!previewReadable || state.personnelLifecycleAutomationPreviewLoaded)
+    && !force) {
+    renderPersonnelLifecycleAutomation();
+    return;
+  }
+  if (state.personnelLifecycleAutomationActorAccessKey
+    && state.personnelLifecycleAutomationActorAccessKey !== actorAccessKey) {
+    clearPersonnelLifecycleAutomationState();
+  }
+  const requestToken = {};
+  state.personnelLifecycleAutomationRequestToken = requestToken;
+  state.personnelLifecycleAutomationLoading = true;
+  state.personnelLifecycleAutomationError = "";
+  state.personnelLifecycleAutomationActorAccessKey = actorAccessKey;
+  renderPersonnelWorkflowInstanceOverview();
+  try {
+    const [catalogResult, previewResult] = await Promise.all([
+      api("/api/portal/v1/personnel-lifecycle/automation/catalog"),
+      previewReadable
+        ? api("/api/portal/v1/personnel-lifecycle/automation/preview")
+        : Promise.resolve(null),
+    ]);
+    if (state.personnelLifecycleAutomationRequestToken !== requestToken) return;
+    if (!canReadLifecycleAutomationCatalog()
+      || personnelLifecycleAutomationActorAccessKey() !== actorAccessKey
+      || (previewReadable && !canReadLifecycleAutomationPreview())) {
+      clearPersonnelLifecycleAutomationState(
+        "Die O7-Vorschau wurde während des Ladens aus der Ansicht entfernt.",
+      );
+      applyRoleVisibility();
+      return;
+    }
+    const catalog = normalizePersonnelLifecycleAutomationCatalog(catalogResult);
+    if (catalog.domains.some(({ id }) => !canReadLifecycleAutomationDomain(id))) {
+      throw new Error("Der O7-Katalog überschreitet den aktuellen Lesebereich.");
+    }
+    state.personnelLifecycleAutomationCatalog = catalog;
+    state.personnelLifecycleAutomationCatalogLoaded = true;
+    state.personnelLifecycleAutomationPreview = previewReadable
+      ? normalizePersonnelLifecycleAutomationPreview(previewResult)
+      : null;
+    state.personnelLifecycleAutomationPreviewLoaded = previewReadable;
+  } catch (error) {
+    if (state.personnelLifecycleAutomationRequestToken !== requestToken) return;
+    const denied = [401, 403].includes(error.status);
+    clearPersonnelLifecycleAutomationState(
+      denied
+        ? "Der O7-Automatisierungszugriff ist nicht mehr verfügbar."
+        : "Der O7-Katalog und die Vorschau konnten nicht sicher geladen werden.",
+    );
+    if (denied) applyRoleVisibility();
+    return;
+  } finally {
+    if (state.personnelLifecycleAutomationRequestToken === requestToken) {
+      state.personnelLifecycleAutomationRequestToken = null;
+      state.personnelLifecycleAutomationLoading = false;
+      renderPersonnelWorkflowInstanceOverview();
+    }
+  }
+}
+
 function renderPersonnelWorkflowTasks() {
+  return renderPersonnelWorkflowTasksImpl();
+}
+
+function clonePersonnelLifecycleEditorDraft(value) {
+  if (!value) return null;
+  return {
+    draftId: value.draftId,
+    workflowType: value.workflowType,
+    workflowCode: value.workflowCode,
+    title: value.title,
+    description: value.description,
+    scopeType: value.scopeType,
+    requirementKind: value.requirementKind,
+    steps: value.steps.map((step) => ({ ...step })),
+  };
+}
+
+function personnelLifecycleEditorDraftId() {
+  const suffix = globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `memory-draft-${suffix}`.slice(0, PERSONNEL_LIFECYCLE_EDITOR_LIMITS.draftIdMaximumLength);
+}
+
+function nextPersonnelLifecycleEditorStepId(steps = []) {
+  const used = new Set(steps.map(({ id }) => id));
+  for (let index = 1; index <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps + 1; index += 1) {
+    const candidate = `step-${index}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  const suffix = globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `step-${suffix}`.slice(0, PERSONNEL_LIFECYCLE_EDITOR_LIMITS.stepIdMaximumLength);
+}
+
+function createPersonnelLifecycleEditorDraft(workflowType) {
+  const firstId = nextPersonnelLifecycleEditorStepId();
+  const finishId = nextPersonnelLifecycleEditorStepId([{ id: firstId }]);
+  return {
+    draftId: personnelLifecycleEditorDraftId(),
+    workflowType,
+    workflowCode: "",
+    title: "",
+    description: "",
+    scopeType: "company",
+    requirementKind: "mandatory",
+    steps: [
+      {
+        id: firstId,
+        type: "task",
+        title: "",
+        description: "",
+        responsibilityClass: "",
+        required: true,
+      },
+      {
+        id: finishId,
+        type: "finish",
+        title: "",
+        description: "",
+        responsibilityClass: "",
+        required: true,
+      },
+    ],
+  };
+}
+
+function selectedPersonnelLifecycleEditorStep() {
+  return state.personnelLifecycleEditorDraft?.steps.find(
+    ({ id }) => id === state.personnelLifecycleEditorSelectedStepId,
+  ) || null;
+}
+
+function setPersonnelLifecycleEditorStatus(message = "", error = false) {
+  if (!elements.personnelLifecycleEditorStatus) return;
+  elements.personnelLifecycleEditorStatus.textContent = message;
+  elements.personnelLifecycleEditorStatus.classList.toggle("error", error);
+}
+
+function personnelLifecycleEditorOptions(values, labels, selected, placeholder = "") {
+  const placeholderMarkup = placeholder
+    ? `<option value="">${escapeHtml(placeholder)}</option>`
+    : "";
+  return `${placeholderMarkup}${values.map((value) => (
+    `<option value="${escapeHtmlAttribute(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(labels[value] || value)}</option>`
+  )).join("")}`;
+}
+
+function renderPersonnelLifecycleEditorCatalogControls() {
+  const catalog = state.personnelLifecycleEditorCatalog;
+  const draft = state.personnelLifecycleEditorDraft;
+  if (!catalog || !draft) return;
+  if (elements.personnelLifecycleEditorWorkflowType) {
+    elements.personnelLifecycleEditorWorkflowType.innerHTML = personnelLifecycleEditorOptions(
+      catalog.workflowTypes,
+      PERSONNEL_LIFECYCLE_EDITOR_LABELS.workflowTypes,
+      draft.workflowType,
+    );
+    elements.personnelLifecycleEditorWorkflowType.value = draft.workflowType;
+  }
+  if (elements.personnelLifecycleEditorScopeType) {
+    elements.personnelLifecycleEditorScopeType.innerHTML = personnelLifecycleEditorOptions(
+      catalog.enums.scopeTypes,
+      PERSONNEL_LIFECYCLE_EDITOR_LABELS.scopeTypes,
+      draft.scopeType,
+      "Bitte wählen",
+    );
+    elements.personnelLifecycleEditorScopeType.value = draft.scopeType;
+  }
+  if (elements.personnelLifecycleEditorRequirementKind) {
+    elements.personnelLifecycleEditorRequirementKind.innerHTML = personnelLifecycleEditorOptions(
+      catalog.enums.requirementKinds,
+      PERSONNEL_LIFECYCLE_EDITOR_LABELS.requirementKinds,
+      draft.requirementKind,
+      "Bitte wählen",
+    );
+    elements.personnelLifecycleEditorRequirementKind.value = draft.requirementKind;
+  }
+  if (elements.personnelLifecycleEditorStepType) {
+    elements.personnelLifecycleEditorStepType.innerHTML = personnelLifecycleEditorOptions(
+      catalog.enums.stepTypes,
+      PERSONNEL_LIFECYCLE_EDITOR_LABELS.stepTypes,
+      selectedPersonnelLifecycleEditorStep()?.type || "",
+      "Schritt auswählen",
+    );
+  }
+  const responsibilities = catalog.enums.responsibilityClassesByWorkflowType[draft.workflowType] || [];
+  if (elements.personnelLifecycleEditorResponsibilityClass) {
+    elements.personnelLifecycleEditorResponsibilityClass.innerHTML = personnelLifecycleEditorOptions(
+      responsibilities,
+      PERSONNEL_LIFECYCLE_EDITOR_LABELS.responsibilityClasses,
+      selectedPersonnelLifecycleEditorStep()?.responsibilityClass || "",
+      "Bitte wählen",
+    );
+  }
+}
+
+function renderPersonnelLifecycleEditorFlow() {
+  if (!elements.personnelLifecycleEditorFlow) return;
+  const draft = state.personnelLifecycleEditorDraft;
+  if (!draft) {
+    elements.personnelLifecycleEditorFlow.innerHTML = "";
+    return;
+  }
+  elements.personnelLifecycleEditorFlow.innerHTML = draft.steps.map((step, index) => {
+    const selected = step.id === state.personnelLifecycleEditorSelectedStepId;
+    const typeLabel = PERSONNEL_LIFECYCLE_EDITOR_LABELS.stepTypes[step.type] || "Schritt";
+    const responsibilityLabel = step.responsibilityClass
+      ? PERSONNEL_LIFECYCLE_EDITOR_LABELS.responsibilityClasses[step.responsibilityClass]
+      : "Verantwortung noch nicht festgelegt";
+    return `<li data-editor-step-type="${escapeHtmlAttribute(step.type)}">
+      <button type="button" data-personnel-lifecycle-editor-step="${escapeHtmlAttribute(step.id)}" ${selected ? 'aria-current="step"' : ""} aria-label="Schritt ${index + 1} von ${draft.steps.length}: ${escapeHtmlAttribute(step.title || typeLabel)}">
+        <span class="personnel-lifecycle-editor-node-number" aria-hidden="true">${index + 1}</span>
+        <span class="personnel-lifecycle-editor-node-copy"><strong>${escapeHtml(step.title || `Unbenannter ${typeLabel}`)}</strong><small>${escapeHtml(typeLabel)} · ${escapeHtml(step.required ? "Pflichtschritt" : "Optional")}</small><span>${escapeHtml(responsibilityLabel)}</span></span>
+      </button>
+    </li>`;
+  }).join("");
+}
+
+function renderPersonnelLifecycleEditorInspector() {
+  const step = selectedPersonnelLifecycleEditorStep();
+  const writable = canWritePersonnelLifecycleEditorDraft();
+  const interactive = writable && !state.personnelLifecycleEditorValidating;
+  if (elements.personnelLifecycleEditorInspectorFields) {
+    elements.personnelLifecycleEditorInspectorFields.disabled = !step || !interactive;
+  }
+  if (step) {
+    if (elements.personnelLifecycleEditorStepType) elements.personnelLifecycleEditorStepType.value = step.type;
+    if (elements.personnelLifecycleEditorStepTitle) elements.personnelLifecycleEditorStepTitle.value = step.title;
+    if (elements.personnelLifecycleEditorStepDescription) elements.personnelLifecycleEditorStepDescription.value = step.description;
+    if (elements.personnelLifecycleEditorResponsibilityClass) {
+      elements.personnelLifecycleEditorResponsibilityClass.value = step.responsibilityClass;
+    }
+    if (elements.personnelLifecycleEditorStepRequired) {
+      elements.personnelLifecycleEditorStepRequired.value = String(step.required);
+    }
+  } else {
+    if (elements.personnelLifecycleEditorStepTitle) elements.personnelLifecycleEditorStepTitle.value = "";
+    if (elements.personnelLifecycleEditorStepDescription) elements.personnelLifecycleEditorStepDescription.value = "";
+    if (elements.personnelLifecycleEditorResponsibilityClass) elements.personnelLifecycleEditorResponsibilityClass.value = "";
+  }
+  const steps = state.personnelLifecycleEditorDraft?.steps || [];
+  const index = step ? steps.findIndex(({ id }) => id === step.id) : -1;
+  if (elements.movePersonnelLifecycleEditorStepUpButton) {
+    elements.movePersonnelLifecycleEditorStepUpButton.disabled = !interactive || index <= 0;
+  }
+  if (elements.movePersonnelLifecycleEditorStepDownButton) {
+    elements.movePersonnelLifecycleEditorStepDownButton.disabled = !interactive
+      || index < 0 || index >= steps.length - 1;
+  }
+  if (elements.removePersonnelLifecycleEditorStepButton) {
+    elements.removePersonnelLifecycleEditorStepButton.disabled = !interactive
+      || index < 0 || steps.length <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.minimumSteps;
+  }
+}
+
+function renderPersonnelLifecycleEditorValidation() {
+  if (!elements.personnelLifecycleEditorValidationTitle
+    || !elements.personnelLifecycleEditorValidationResult) return;
+  const validation = state.personnelLifecycleEditorValidation;
+  elements.personnelLifecycleEditorValidation.classList.remove("ready", "blocked");
+  if (!validation) {
+    elements.personnelLifecycleEditorValidationTitle.textContent = "Noch nicht geprüft";
+    elements.personnelLifecycleEditorValidationResult.innerHTML = "<p>Die Prüfung verändert und speichert keine Daten.</p>";
+    return;
+  }
+  const tone = validation.valid ? "ready" : "blocked";
+  elements.personnelLifecycleEditorValidation.classList.add(tone);
+  elements.personnelLifecycleEditorValidationTitle.textContent = validation.valid
+    ? "Arbeitsentwurf ist strukturell bereit"
+    : "Arbeitsentwurf ist blockiert";
+  elements.personnelLifecycleEditorValidationResult.innerHTML = validation.valid
+    ? `<p>Die lineare Struktur wurde serverseitig geprüft. Prüffingerabdruck: <code>${escapeHtml(validation.fingerprint)}</code>. Es wurde nichts gespeichert.</p>`
+    : `<ul>${validation.blockers.map((blocker) => `<li><strong>${escapeHtml(blocker.message)}</strong><span>${escapeHtml(blocker.path)} · ${escapeHtml(blocker.code)}</span></li>`).join("")}</ul>`;
+}
+
+function renderPersonnelLifecycleEditor() {
+  const readable = canReadPersonnelLifecycleEditorCatalog();
+  const writable = canWritePersonnelLifecycleEditorDraft();
+  const validating = state.personnelLifecycleEditorValidating;
+  elements.personnelLifecycleEditorSection?.classList.toggle("hidden", !readable);
+  if (elements.openPersonnelLifecycleEditorButton) {
+    elements.openPersonnelLifecycleEditorButton.disabled = !readable || state.personnelLifecycleEditorLoading;
+  }
+  if (elements.personnelLifecycleEditorEntryStatus) {
+    elements.personnelLifecycleEditorEntryStatus.textContent = !readable
+      ? "Der grafische Editor ist für diese Sitzung nicht freigegeben."
+      : state.personnelLifecycleEditorError
+        ? state.personnelLifecycleEditorError
+        : "Arbeitsentwurf – nicht gespeichert · keine Veröffentlichung oder Außenwirkung.";
+  }
+  if (elements.personnelLifecycleEditorDialog) {
+    elements.personnelLifecycleEditorDialog.setAttribute(
+      "aria-busy",
+      state.personnelLifecycleEditorLoading || validating ? "true" : "false",
+    );
+  }
+  if (!state.personnelLifecycleEditorCatalog || !state.personnelLifecycleEditorDraft) {
+    if (elements.personnelLifecycleEditorFlow) elements.personnelLifecycleEditorFlow.innerHTML = "";
+    if (elements.personnelLifecycleEditorInspectorFields) {
+      elements.personnelLifecycleEditorInspectorFields.disabled = true;
+    }
+    if (elements.addPersonnelLifecycleEditorStepButton) elements.addPersonnelLifecycleEditorStepButton.disabled = true;
+    if (elements.validatePersonnelLifecycleEditorButton) elements.validatePersonnelLifecycleEditorButton.disabled = true;
+    if (elements.resetPersonnelLifecycleEditorButton) elements.resetPersonnelLifecycleEditorButton.disabled = true;
+    renderPersonnelLifecycleEditorValidation();
+    return;
+  }
+  renderPersonnelLifecycleEditorCatalogControls();
+  const metadataControls = [
+    elements.personnelLifecycleEditorWorkflowType,
+    elements.personnelLifecycleEditorWorkflowCode,
+    elements.personnelLifecycleEditorDraftTitle,
+    elements.personnelLifecycleEditorDraftDescription,
+    elements.personnelLifecycleEditorScopeType,
+    elements.personnelLifecycleEditorRequirementKind,
+  ];
+  metadataControls.forEach((control) => { if (control) control.disabled = !writable || validating; });
+  if (elements.personnelLifecycleEditorWorkflowCode) {
+    elements.personnelLifecycleEditorWorkflowCode.value = state.personnelLifecycleEditorDraft.workflowCode;
+  }
+  if (elements.personnelLifecycleEditorDraftTitle) {
+    elements.personnelLifecycleEditorDraftTitle.value = state.personnelLifecycleEditorDraft.title;
+  }
+  if (elements.personnelLifecycleEditorDraftDescription) {
+    elements.personnelLifecycleEditorDraftDescription.value = state.personnelLifecycleEditorDraft.description;
+  }
+  renderPersonnelLifecycleEditorFlow();
+  renderPersonnelLifecycleEditorInspector();
+  renderPersonnelLifecycleEditorValidation();
+  if (elements.addPersonnelLifecycleEditorStepButton) {
+    elements.addPersonnelLifecycleEditorStepButton.disabled = !writable || validating
+      || state.personnelLifecycleEditorDraft.steps.length >= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps;
+  }
+  if (elements.resetPersonnelLifecycleEditorButton) {
+    elements.resetPersonnelLifecycleEditorButton.disabled = !writable || validating
+      || !state.personnelLifecycleEditorDirty;
+  }
+  if (elements.validatePersonnelLifecycleEditorButton) {
+    elements.validatePersonnelLifecycleEditorButton.disabled = !canValidatePersonnelLifecycleEditorDraft()
+      || validating;
+    elements.validatePersonnelLifecycleEditorButton.textContent = validating
+      ? "Serverprüfung läuft …"
+      : "Serverprüfung starten";
+  }
+}
+
+function purgePersonnelLifecycleEditorDom(message = "") {
+  if (elements.personnelLifecycleEditorWorkflowType) {
+    elements.personnelLifecycleEditorWorkflowType.innerHTML = '<option value="">Katalog wird geladen</option>';
+  }
+  if (elements.personnelLifecycleEditorScopeType) {
+    elements.personnelLifecycleEditorScopeType.innerHTML = '<option value="">Katalog wird geladen</option>';
+  }
+  if (elements.personnelLifecycleEditorRequirementKind) {
+    elements.personnelLifecycleEditorRequirementKind.innerHTML = '<option value="">Katalog wird geladen</option>';
+  }
+  if (elements.personnelLifecycleEditorStepType) {
+    elements.personnelLifecycleEditorStepType.innerHTML = '<option value="">Schritt auswählen</option>';
+  }
+  if (elements.personnelLifecycleEditorResponsibilityClass) {
+    elements.personnelLifecycleEditorResponsibilityClass.innerHTML = '<option value="">Bitte wählen</option>';
+  }
+  [
+    elements.personnelLifecycleEditorWorkflowCode,
+    elements.personnelLifecycleEditorDraftTitle,
+    elements.personnelLifecycleEditorDraftDescription,
+    elements.personnelLifecycleEditorStepTitle,
+    elements.personnelLifecycleEditorStepDescription,
+  ].forEach((control) => { if (control) control.value = ""; });
+  if (elements.personnelLifecycleEditorFlow) elements.personnelLifecycleEditorFlow.innerHTML = "";
+  if (elements.personnelLifecycleEditorInspectorFields) {
+    elements.personnelLifecycleEditorInspectorFields.disabled = true;
+  }
+  if (elements.personnelLifecycleEditorValidationTitle) {
+    elements.personnelLifecycleEditorValidationTitle.textContent = "Noch nicht geprüft";
+  }
+  if (elements.personnelLifecycleEditorValidationResult) {
+    elements.personnelLifecycleEditorValidationResult.innerHTML = "<p>Die Prüfung verändert und speichert keine Daten.</p>";
+  }
+  setPersonnelLifecycleEditorStatus(message || "Der O8-Katalog wird beim Öffnen geladen.", Boolean(message));
+}
+
+function clearPersonnelLifecycleEditorState(message = "", {
+  closeDialog = true,
+  restoreFocus = false,
+} = {}) {
+  const returnFocus = restoreFocus ? state.personnelLifecycleEditorReturnFocus : null;
+  state.personnelLifecycleEditorRequestToken = null;
+  state.personnelLifecycleEditorCatalog = null;
+  state.personnelLifecycleEditorCatalogLoaded = false;
+  state.personnelLifecycleEditorLoading = false;
+  state.personnelLifecycleEditorError = String(message || "");
+  state.personnelLifecycleEditorActorAccessKey = "";
+  state.personnelLifecycleEditorDraft = null;
+  state.personnelLifecycleEditorPristineDraft = null;
+  state.personnelLifecycleEditorSelectedStepId = "";
+  state.personnelLifecycleEditorDirty = false;
+  state.personnelLifecycleEditorValidation = null;
+  state.personnelLifecycleEditorValidating = false;
+  state.personnelLifecycleEditorReturnFocus = null;
+  purgePersonnelLifecycleEditorDom(message);
+  const dialogWillClose = Boolean(closeDialog && elements.personnelLifecycleEditorDialog?.open);
+  if (dialogWillClose) {
+    state.personnelLifecycleEditorDiscardBypass = true;
+    elements.personnelLifecycleEditorDialog.close();
+  } else {
+    state.personnelLifecycleEditorDiscardBypass = false;
+  }
+  renderPersonnelLifecycleEditor();
+  if (returnFocus?.isConnected && canReadPersonnelLifecycleEditorCatalog()) returnFocus.focus();
+}
+
+function markPersonnelLifecycleEditorDirty() {
+  state.personnelLifecycleEditorDirty = true;
+  state.personnelLifecycleEditorValidation = null;
+  setPersonnelLifecycleEditorStatus("Lokale Änderungen sind noch nicht serverseitig geprüft.");
+  renderPersonnelLifecycleEditorValidation();
+  if (elements.resetPersonnelLifecycleEditorButton) {
+    elements.resetPersonnelLifecycleEditorButton.disabled = !canWritePersonnelLifecycleEditorDraft();
+  }
+}
+
+function requestClosePersonnelLifecycleEditor({ force = false, restoreFocus = true } = {}) {
+  if (!elements.personnelLifecycleEditorDialog?.open) return true;
+  if (!force && state.personnelLifecycleEditorDirty
+    && !confirm("Den lokalen O8-Arbeitsentwurf verwerfen? Er wurde nicht gespeichert.")) return false;
+  clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus });
+  return true;
+}
+
+async function loadPersonnelLifecycleEditorCatalog() {
+  if (!canReadPersonnelLifecycleEditorCatalog() || state.personnelLifecycleEditorLoading) return;
+  const actorAccessKey = personnelLifecycleEditorActorAccessKey();
+  if (!actorAccessKey || !elements.personnelLifecycleEditorDialog?.open) {
+    clearPersonnelLifecycleEditorState(
+      "Der O8-Katalog kann ohne eindeutige persönliche Identität und Bereichsbindung nicht geladen werden.",
+      { closeDialog: false },
+    );
+    return;
+  }
+  const requestToken = {};
+  state.personnelLifecycleEditorRequestToken = requestToken;
+  state.personnelLifecycleEditorLoading = true;
+  state.personnelLifecycleEditorError = "";
+  state.personnelLifecycleEditorActorAccessKey = actorAccessKey;
+  setPersonnelLifecycleEditorStatus("Der O8-Katalog wird geladen …");
+  renderPersonnelLifecycleEditor();
+  try {
+    const result = await api("/api/portal/v1/personnel-lifecycle/editor/catalog");
+    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (!elements.personnelLifecycleEditorDialog?.open
+      || !canReadPersonnelLifecycleEditorCatalog()
+      || personnelLifecycleEditorActorAccessKey() !== actorAccessKey) {
+      clearPersonnelLifecycleEditorState(
+        "Der O8-Arbeitsentwurf wurde wegen geänderter Identität, Fachrechte oder Bereiche entfernt.",
+      );
+      applyRoleVisibility();
+      return;
+    }
+    const catalog = normalizePersonnelLifecycleEditorCatalog(result);
+    const workflowType = catalog.workflowTypes[0];
+    const draft = createPersonnelLifecycleEditorDraft(workflowType);
+    state.personnelLifecycleEditorCatalog = catalog;
+    state.personnelLifecycleEditorCatalogLoaded = true;
+    state.personnelLifecycleEditorDraft = draft;
+    state.personnelLifecycleEditorPristineDraft = clonePersonnelLifecycleEditorDraft(draft);
+    state.personnelLifecycleEditorSelectedStepId = draft.steps[0].id;
+    state.personnelLifecycleEditorDirty = false;
+    state.personnelLifecycleEditorValidation = null;
+    setPersonnelLifecycleEditorStatus(
+      canWritePersonnelLifecycleEditorDraft()
+        ? "Arbeitsentwurf – nicht gespeichert. Änderungen bleiben ausschließlich in diesem Dialog."
+        : "Nur Lesen. Für lokale Änderungen fehlt das Entwurfsrecht.",
+    );
+  } catch (error) {
+    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    const denied = [401, 403].includes(error.status);
+    clearPersonnelLifecycleEditorState(
+      denied
+        ? "Der O8-Editorzugriff ist nicht mehr verfügbar."
+        : "Der O8-Katalog konnte nicht sicher geladen werden.",
+      { closeDialog: denied, restoreFocus: false },
+    );
+    if (denied) applyRoleVisibility();
+    return;
+  } finally {
+    if (state.personnelLifecycleEditorRequestToken === requestToken) {
+      state.personnelLifecycleEditorRequestToken = null;
+      state.personnelLifecycleEditorLoading = false;
+      renderPersonnelLifecycleEditor();
+      if (state.personnelLifecycleEditorCatalogLoaded) {
+        elements.personnelLifecycleEditorFlow
+          ?.querySelector("[data-personnel-lifecycle-editor-step]")?.focus();
+      }
+    }
+  }
+}
+
+function openPersonnelLifecycleEditor(opener) {
+  if (!canReadPersonnelLifecycleEditorCatalog() || !elements.personnelLifecycleEditorDialog) return;
+  clearPersonnelLifecycleEditorState("", { closeDialog: false });
+  state.personnelLifecycleEditorReturnFocus = opener || null;
+  elements.personnelLifecycleEditorDialog.showModal();
+  renderPersonnelLifecycleEditor();
+  loadPersonnelLifecycleEditorCatalog().catch(() => {});
+}
+
+function setPersonnelLifecycleEditorDraftField(field, value) {
+  const draft = state.personnelLifecycleEditorDraft;
+  if (!draft || state.personnelLifecycleEditorValidating
+    || !canWritePersonnelLifecycleEditorDraft()) return;
+  draft[field] = value;
+  markPersonnelLifecycleEditorDirty();
+}
+
+function setPersonnelLifecycleEditorStepField(field, value) {
+  const step = selectedPersonnelLifecycleEditorStep();
+  if (!step || state.personnelLifecycleEditorValidating
+    || !canWritePersonnelLifecycleEditorDraft()) return;
+  step[field] = value;
+  markPersonnelLifecycleEditorDirty();
+  renderPersonnelLifecycleEditorFlow();
+}
+
+function focusPersonnelLifecycleEditorStep(stepId) {
+  const focus = () => elements.personnelLifecycleEditorFlow
+    ?.querySelector(`[data-personnel-lifecycle-editor-step="${CSS.escape(stepId)}"]`)?.focus();
+  if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(focus);
+  else window.setTimeout(focus, 0);
+}
+
+function movePersonnelLifecycleEditorStep(direction) {
+  const draft = state.personnelLifecycleEditorDraft;
+  const selectedId = state.personnelLifecycleEditorSelectedStepId;
+  if (!draft || !selectedId || state.personnelLifecycleEditorValidating
+    || !canWritePersonnelLifecycleEditorDraft()) return;
+  const index = draft.steps.findIndex(({ id }) => id === selectedId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= draft.steps.length) return;
+  [draft.steps[index], draft.steps[target]] = [draft.steps[target], draft.steps[index]];
+  markPersonnelLifecycleEditorDirty();
+  renderPersonnelLifecycleEditor();
+  setPersonnelLifecycleEditorStatus(`Schritt ${target + 1} von ${draft.steps.length}. Lokale Reihenfolge geändert.`);
+  focusPersonnelLifecycleEditorStep(selectedId);
+}
+
+function addPersonnelLifecycleEditorStep() {
+  const draft = state.personnelLifecycleEditorDraft;
+  if (!draft || state.personnelLifecycleEditorValidating || !canWritePersonnelLifecycleEditorDraft()
+    || draft.steps.length >= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps) return;
+  const step = {
+    id: nextPersonnelLifecycleEditorStepId(draft.steps),
+    type: "task",
+    title: "",
+    description: "",
+    responsibilityClass: "",
+    required: true,
+  };
+  const finishIndex = draft.steps.findIndex(({ type }) => type === "finish");
+  const insertAt = finishIndex >= 0 ? finishIndex : draft.steps.length;
+  draft.steps.splice(insertAt, 0, step);
+  state.personnelLifecycleEditorSelectedStepId = step.id;
+  markPersonnelLifecycleEditorDirty();
+  renderPersonnelLifecycleEditor();
+  setPersonnelLifecycleEditorStatus(`Schritt ${insertAt + 1} von ${draft.steps.length} hinzugefügt.`);
+  focusPersonnelLifecycleEditorStep(step.id);
+}
+
+function removePersonnelLifecycleEditorStep() {
+  const draft = state.personnelLifecycleEditorDraft;
+  const selectedId = state.personnelLifecycleEditorSelectedStepId;
+  if (!draft || !selectedId || state.personnelLifecycleEditorValidating
+    || !canWritePersonnelLifecycleEditorDraft()
+    || draft.steps.length <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.minimumSteps) return;
+  const index = draft.steps.findIndex(({ id }) => id === selectedId);
+  if (index < 0) return;
+  draft.steps.splice(index, 1);
+  const next = draft.steps[Math.min(index, draft.steps.length - 1)];
+  state.personnelLifecycleEditorSelectedStepId = next?.id || "";
+  markPersonnelLifecycleEditorDirty();
+  renderPersonnelLifecycleEditor();
+  setPersonnelLifecycleEditorStatus(`Schritt entfernt. ${draft.steps.length} Schritte verbleiben.`);
+  if (next) focusPersonnelLifecycleEditorStep(next.id);
+}
+
+function resetPersonnelLifecycleEditorDraft() {
+  if (state.personnelLifecycleEditorValidating || !canWritePersonnelLifecycleEditorDraft()
+    || !state.personnelLifecycleEditorPristineDraft) return;
+  if (state.personnelLifecycleEditorDirty
+    && !confirm("Den lokalen O8-Arbeitsentwurf auf den Ausgangszustand zurücksetzen?")) return;
+  const draft = clonePersonnelLifecycleEditorDraft(state.personnelLifecycleEditorPristineDraft);
+  state.personnelLifecycleEditorDraft = draft;
+  state.personnelLifecycleEditorSelectedStepId = draft.steps[0]?.id || "";
+  state.personnelLifecycleEditorDirty = false;
+  state.personnelLifecycleEditorValidation = null;
+  renderPersonnelLifecycleEditor();
+  setPersonnelLifecycleEditorStatus("Der lokale Arbeitsentwurf wurde zurückgesetzt.");
+  if (draft.steps[0]) focusPersonnelLifecycleEditorStep(draft.steps[0].id);
+}
+
+async function validatePersonnelLifecycleEditorDraft() {
+  if (!canValidatePersonnelLifecycleEditorDraft()
+    || !state.personnelLifecycleEditorDraft
+    || state.personnelLifecycleEditorValidating) return;
+  const actorAccessKey = personnelLifecycleEditorActorAccessKey();
+  if (!actorAccessKey || actorAccessKey !== state.personnelLifecycleEditorActorAccessKey) {
+    clearPersonnelLifecycleEditorState(
+      "Der O8-Arbeitsentwurf wurde wegen geänderter Identität, Fachrechte oder Bereiche entfernt.",
+    );
+    return;
+  }
+  let draft;
+  try {
+    draft = normalizePersonnelLifecycleEditorDraft(
+      clonePersonnelLifecycleEditorDraft(state.personnelLifecycleEditorDraft),
+    );
+  } catch (error) {
+    state.personnelLifecycleEditorValidation = null;
+    setPersonnelLifecycleEditorStatus(
+      `Serverprüfung nicht gestartet: ${error.message}`,
+      true,
+    );
+    renderPersonnelLifecycleEditorValidation();
+    return;
+  }
+  const body = JSON.stringify(draft);
+  const requestToken = {};
+  state.personnelLifecycleEditorRequestToken = requestToken;
+  state.personnelLifecycleEditorValidating = true;
+  state.personnelLifecycleEditorValidation = null;
+  setPersonnelLifecycleEditorStatus("Der flüchtige Arbeitsentwurf wird serverseitig geprüft …");
+  renderPersonnelLifecycleEditor();
+  try {
+    const result = await api("/api/portal/v1/personnel-lifecycle/editor/validate", {
+      method: "POST",
+      body,
+    });
+    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (!elements.personnelLifecycleEditorDialog?.open
+      || !canValidatePersonnelLifecycleEditorDraft()
+      || personnelLifecycleEditorActorAccessKey() !== actorAccessKey) {
+      clearPersonnelLifecycleEditorState(
+        "Der O8-Arbeitsentwurf wurde während der Prüfung aus der Ansicht entfernt.",
+      );
+      applyRoleVisibility();
+      return;
+    }
+    const currentBody = JSON.stringify(normalizePersonnelLifecycleEditorDraft(
+      clonePersonnelLifecycleEditorDraft(state.personnelLifecycleEditorDraft),
+    ));
+    if (currentBody !== body) {
+      state.personnelLifecycleEditorValidation = null;
+      setPersonnelLifecycleEditorStatus("Der Arbeitsentwurf wurde während der Prüfung geändert. Das veraltete Ergebnis wurde verworfen.");
+      return;
+    }
+    const validation = normalizePersonnelLifecycleEditorValidation(result);
+    if (JSON.stringify(validation.draft) !== body) {
+      throw new Error("Die O8-Serverprüfung bezieht sich nicht auf den gesendeten Arbeitsentwurf.");
+    }
+    state.personnelLifecycleEditorValidation = validation;
+    setPersonnelLifecycleEditorStatus(
+      validation.valid
+        ? "Serverprüfung abgeschlossen: strukturell bereit, weiterhin nicht gespeichert."
+        : `Serverprüfung abgeschlossen: ${validation.blockers.length} Blockierung(en).`,
+      !validation.valid,
+    );
+  } catch (error) {
+    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    const denied = [401, 403].includes(error.status);
+    clearPersonnelLifecycleEditorState(
+      denied
+        ? "Der O8-Editorzugriff ist nicht mehr verfügbar."
+        : "Die O8-Serverprüfung konnte nicht sicher verarbeitet werden; der lokale Entwurf wurde entfernt.",
+      { closeDialog: denied, restoreFocus: false },
+    );
+    if (denied) applyRoleVisibility();
+    return;
+  } finally {
+    if (state.personnelLifecycleEditorRequestToken === requestToken) {
+      state.personnelLifecycleEditorRequestToken = null;
+      state.personnelLifecycleEditorValidating = false;
+      renderPersonnelLifecycleEditor();
+    }
+  }
+}
+
+function renderPersonnelWorkflowTasksImpl() {
   if (!elements.personnelWorkflowTaskList) return;
-  if (state.personnelWorkflowInstancesLoading) {
+  if (state.personnelWorkflowInstancesLoading
+    || state.personnelLifecycleOnboardingTasksLoading
+    || state.personnelLifecycleOffboardingTasksLoading) {
     elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Die freigegebenen Aufgaben werden geladen …</p>';
     return;
   }
-  if (state.personnelWorkflowInstanceLoadError) {
-    elements.personnelWorkflowTaskList.innerHTML = `<div class="personnel-workflow-empty error"><strong>Aufgaben konnten nicht geladen werden</strong><p>${escapeHtml(state.personnelWorkflowInstanceLoadError)}</p></div>`;
+  const loadErrors = [
+    state.personnelWorkflowInstanceLoadError,
+    state.personnelLifecycleOnboardingTasksError,
+    state.personnelLifecycleOffboardingTasksError,
+  ].filter(Boolean);
+  if (loadErrors.length) {
+    elements.personnelWorkflowTaskList.innerHTML = `<div class="personnel-workflow-empty error"><strong>Aufgaben konnten nicht vollständig geladen werden</strong><p>${escapeHtml(loadErrors.join(" "))}</p></div>`;
     return;
   }
-  if (!state.personnelWorkflowInstancesLoaded) {
+  if (!state.personnelWorkflowInstancesLoaded
+    && !state.personnelLifecycleOnboardingTasksLoaded
+    && !state.personnelLifecycleOffboardingTasksLoaded) {
     elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Noch keine Aufgaben geladen.</p>';
     return;
   }
-  if (!state.personnelWorkflowTasks.length) {
+  if (!state.personnelWorkflowTasks.length
+    && !state.personnelLifecycleOnboardingTasks.length
+    && !state.personnelLifecycleOffboardingTasks.length) {
     elements.personnelWorkflowTaskList.innerHTML = '<div class="personnel-workflow-empty"><strong>Keine sichtbaren Aufgaben</strong><p>Der Server hat derzeit keine Aufgabenschritte für diese geschützte Projektion freigegeben.</p></div>';
     return;
   }
-  elements.personnelWorkflowTaskList.innerHTML = state.personnelWorkflowTasks.map((task) => `
-    <article class="personnel-workflow-task-card">
-      <div><span class="eyebrow">Freigegebener Aktivschritt</span><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.workflowTitle)}</p></div>
-      ${personnelWorkflowStatusBadge(task.status, true)}
-    </article>`).join("");
+  const genericTasks = state.personnelWorkflowTasks.map((task) => `
+      <article class="personnel-workflow-task-card">
+        <div><span class="eyebrow">Freigegebener Aktivschritt</span><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.workflowTitle)}</p></div>
+        ${personnelWorkflowStatusBadge(task.status, true)}
+      </article>`).join("");
+  elements.personnelWorkflowTaskList.innerHTML = `${genericTasks}${renderPersonnelLifecycleOnboardingTasksMarkup()}${renderPersonnelLifecycleOffboardingTasksMarkup()}`;
 }
 
 function renderPersonnelWorkflowInstanceOverview() {
@@ -8266,10 +12487,16 @@ function renderPersonnelWorkflowInstanceOverview() {
     elements.personnelWorkflowInstanceStatusFilter.disabled = state.personnelWorkflowInstancesLoading;
   }
   if (elements.refreshPersonnelWorkflowInstancesButton) {
-    elements.refreshPersonnelWorkflowInstancesButton.disabled = state.personnelWorkflowInstancesLoading || !canOpenWorkflowCenter();
+    elements.refreshPersonnelWorkflowInstancesButton.disabled = state.personnelWorkflowInstancesLoading
+      || !canReadPersonnelWorkflowInstances();
   }
   if (elements.refreshPersonnelWorkflowTasksButton) {
-    elements.refreshPersonnelWorkflowTasksButton.disabled = state.personnelWorkflowInstancesLoading || !canReadPersonnelTasks();
+    elements.refreshPersonnelWorkflowTasksButton.disabled = state.personnelWorkflowInstancesLoading
+      || state.personnelLifecycleOnboardingTasksLoading
+      || state.personnelLifecycleOffboardingTasksLoading
+      || state.personnelLifecycleInterfacesLoading
+      || state.personnelLifecycleAutomationLoading
+      || !canReadPersonnelTasks();
   }
   if (elements.personnelWorkflowInstanceStatus) {
     elements.personnelWorkflowInstanceStatus.textContent = state.personnelWorkflowInstancesLoading
@@ -8281,17 +12508,31 @@ function renderPersonnelWorkflowInstanceOverview() {
           : "Instanzen werden beim Öffnen geladen.";
   }
   if (elements.personnelWorkflowTaskStatus) {
+    const visibleTaskCount = state.personnelWorkflowTasks.length
+      + state.personnelLifecycleOnboardingTasks.length
+      + state.personnelLifecycleOffboardingTasks.length;
     elements.personnelWorkflowTaskStatus.textContent = state.personnelWorkflowInstancesLoading
+      || state.personnelLifecycleOnboardingTasksLoading
+      || state.personnelLifecycleOffboardingTasksLoading
       ? "Personalaufgaben werden geladen."
       : state.personnelWorkflowInstanceLoadError
+        || state.personnelLifecycleOnboardingTasksError
+        || state.personnelLifecycleOffboardingTasksError
         ? state.personnelWorkflowInstanceLoadError
+          || state.personnelLifecycleOnboardingTasksError
+          || state.personnelLifecycleOffboardingTasksError
         : state.personnelWorkflowInstancesLoaded
-          ? `${state.personnelWorkflowTasks.length} freigegebene Aufgabenschritte aus versionsgebundenen Instanzen.`
+          || state.personnelLifecycleOnboardingTasksLoaded
+          || state.personnelLifecycleOffboardingTasksLoaded
+          ? `${visibleTaskCount} freigegebene Aufgabenschritte aus versionsgebundenen Instanzen.`
           : "Aufgaben werden beim Öffnen geladen.";
   }
   renderPersonnelWorkflowInstanceSummary();
   renderPersonnelWorkflowInstanceList();
   renderPersonnelWorkflowTasks();
+  renderPersonnelLifecycleInterfacesCatalog();
+  renderPersonnelLifecycleAutomation();
+  renderPersonnelLifecycleEditor();
 }
 
 function clearPersonnelWorkflowInstanceState(message = "") {
@@ -8305,8 +12546,7 @@ function clearPersonnelWorkflowInstanceState(message = "") {
 }
 
 async function loadPersonnelWorkflowInstances({ force = false } = {}) {
-  if (!personnelLifecycleFoundationEnabled()
-    || !hasGovernancePermission("personnel:workflows:read")
+  if (!canReadPersonnelWorkflowInstances()
     || state.personnelWorkflowInstancesLoading) return;
   if (state.personnelWorkflowInstancesLoaded && !force) {
     renderPersonnelWorkflowInstanceOverview();
@@ -8351,6 +12591,247 @@ async function loadPersonnelWorkflowInstances({ force = false } = {}) {
     state.personnelWorkflowInstancesLoading = false;
     renderPersonnelWorkflowInstanceOverview();
   }
+}
+
+function clearPersonnelLifecycleOnboardingTaskState(message = "") {
+  state.personnelLifecycleOnboardingTasks = [];
+  state.personnelLifecycleOnboardingTasksLoaded = false;
+  state.personnelLifecycleOnboardingTasksLoading = false;
+  state.personnelLifecycleOnboardingTasksError = message;
+  state.personnelLifecycleOnboardingTaskCapabilities = { canRead: false, canComplete: false };
+  state.personnelLifecycleOnboardingTaskOperations = {};
+  state.personnelLifecycleOnboardingTaskPending = "";
+  renderPersonnelWorkflowInstanceOverview();
+}
+
+async function loadPersonnelLifecycleOnboardingTasks({ force = false } = {}) {
+  if (!personnelLifecycleFoundationEnabled()
+    || !hasGovernancePermission("personnel:lifecycle:operational:read")
+    || state.personnelLifecycleOnboardingTasksLoading) return;
+  if (state.personnelLifecycleOnboardingTasksLoaded && !force) {
+    renderPersonnelWorkflowInstanceOverview();
+    return;
+  }
+  state.personnelLifecycleOnboardingTasksLoading = true;
+  state.personnelLifecycleOnboardingTasksError = "";
+  renderPersonnelWorkflowInstanceOverview();
+  try {
+    const result = await api("/api/portal/v1/personnel-lifecycle/onboarding/tasks");
+    if (!personnelLifecycleFoundationEnabled()
+      || !hasGovernancePermission("personnel:lifecycle:operational:read")) {
+      clearPersonnelLifecycleOnboardingTaskState(
+        "Der Onboarding-Aufgabenzugriff wurde während des Ladens entzogen.",
+      );
+      applyRoleVisibility();
+      return;
+    }
+    const capabilities = normalizePersonnelLifecycleOnboardingTaskCapabilities(
+      result?.capabilities,
+    );
+    if (!capabilities.canRead || !Array.isArray(result?.tasks)) {
+      throw new Error("Der Server hat keine gültige Onboarding-Aufgabenprojektion geliefert.");
+    }
+    const tasks = result.tasks.map(normalizePersonnelLifecycleOnboardingTask);
+    const keys = new Set(tasks.map(personnelLifecycleOnboardingTaskKey));
+    if (keys.size !== tasks.length) {
+      throw new Error("Die Onboarding-Aufgabenprojektion ist nicht eindeutig.");
+    }
+    state.personnelLifecycleOnboardingTasks = tasks;
+    state.personnelLifecycleOnboardingTaskCapabilities = capabilities;
+    state.personnelLifecycleOnboardingTaskOperations = Object.fromEntries(
+      Object.entries(state.personnelLifecycleOnboardingTaskOperations)
+        .filter(([key]) => keys.has(key)),
+    );
+    state.personnelLifecycleOnboardingTasksLoaded = true;
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleOnboardingTaskState(
+        "Der Onboarding-Aufgabenzugriff ist nicht mehr verfügbar.",
+      );
+      applyRoleVisibility();
+      return;
+    }
+    state.personnelLifecycleOnboardingTasks = [];
+    state.personnelLifecycleOnboardingTasksLoaded = false;
+    state.personnelLifecycleOnboardingTasksError = error.message
+      || "Die Onboarding-Aufgaben konnten nicht geladen werden.";
+  } finally {
+    state.personnelLifecycleOnboardingTasksLoading = false;
+    renderPersonnelWorkflowInstanceOverview();
+  }
+}
+
+async function submitPersonnelLifecycleOnboardingTaskCompletion(event) {
+  const form = event.target.closest("[data-personnel-lifecycle-onboarding-task-complete]");
+  if (!form) return;
+  event.preventDefault();
+  if (state.personnelLifecycleOnboardingTaskPending
+    || state.personnelLifecycleOnboardingTaskCapabilities.canComplete !== true
+    || (typeof form.reportValidity === "function" && !form.reportValidity())) return;
+  const runId = String(form.dataset.runId || "").trim();
+  const stepId = String(form.dataset.stepId || "").trim();
+  const task = state.personnelLifecycleOnboardingTasks.find((entry) => (
+    entry.runId === runId && entry.stepId === stepId
+  ));
+  if (!task || form.querySelector("[data-onboarding-task-confirm]")?.checked !== true) return;
+  const key = personnelLifecycleOnboardingTaskKey(task);
+  let operationId = state.personnelLifecycleOnboardingTaskOperations[key];
+  if (!operationId) {
+    operationId = globalThis.crypto?.randomUUID?.();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(operationId || ""))) {
+      showToast("Die sichere Vorgangs-ID konnte nicht erzeugt werden.", true);
+      return;
+    }
+    state.personnelLifecycleOnboardingTaskOperations[key] = operationId.toLowerCase();
+  }
+  state.personnelLifecycleOnboardingTaskPending = key;
+  renderPersonnelWorkflowInstanceOverview();
+  try {
+    await api(`/api/portal/v1/personnel-lifecycle/onboarding/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(stepId)}/complete`, {
+      method: "POST",
+      body: JSON.stringify({
+        operationId: state.personnelLifecycleOnboardingTaskOperations[key],
+        action: "complete",
+        evidenceReference: null,
+      }),
+    });
+    delete state.personnelLifecycleOnboardingTaskOperations[key];
+    state.personnelLifecycleOnboardingTaskPending = "";
+    await loadPersonnelLifecycleOnboardingTasks({ force: true });
+    showToast("Die Onboarding-Aufgabe wurde nachvollziehbar als erledigt bestätigt.");
+  } catch (error) {
+    state.personnelLifecycleOnboardingTaskPending = "";
+    if ([403, 404, 409].includes(error.status)) {
+      delete state.personnelLifecycleOnboardingTaskOperations[key];
+      showToast(error.message, true);
+      await loadPersonnelLifecycleOnboardingTasks({ force: true });
+      return;
+    }
+    state.personnelLifecycleOnboardingTasksError = error.message
+      || "Die Erledigung konnte nicht sicher bestätigt werden.";
+    renderPersonnelWorkflowInstanceOverview();
+  }
+}
+
+function clearPersonnelLifecycleOffboardingTaskState(message = "") {
+  state.personnelLifecycleOffboardingTasks = [];
+  state.personnelLifecycleOffboardingTasksLoaded = false;
+  state.personnelLifecycleOffboardingTasksLoading = false;
+  state.personnelLifecycleOffboardingTasksError = message;
+  state.personnelLifecycleOffboardingTaskCapabilities = { canRead: false, canComplete: false };
+  state.personnelLifecycleOffboardingTaskOperations = {};
+  state.personnelLifecycleOffboardingTaskPending = "";
+  renderPersonnelWorkflowInstanceOverview();
+}
+
+async function loadPersonnelLifecycleOffboardingTasks({ force = false } = {}) {
+  if (!personnelLifecycleFoundationEnabled()
+    || !hasGovernancePermission("personnel:lifecycle:operational:read")
+    || state.personnelLifecycleOffboardingTasksLoading) return;
+  if (state.personnelLifecycleOffboardingTasksLoaded && !force) {
+    renderPersonnelWorkflowInstanceOverview();
+    return;
+  }
+  state.personnelLifecycleOffboardingTasksLoading = true;
+  state.personnelLifecycleOffboardingTasksError = "";
+  renderPersonnelWorkflowInstanceOverview();
+  try {
+    const result = await api("/api/portal/v1/personnel-lifecycle/offboarding/tasks");
+    if (!personnelLifecycleFoundationEnabled()
+      || !hasGovernancePermission("personnel:lifecycle:operational:read")) {
+      clearPersonnelLifecycleOffboardingTaskState(
+        "Der Offboarding-Aufgabenzugriff wurde während des Ladens entzogen.",
+      );
+      applyRoleVisibility();
+      return;
+    }
+    const capabilities = normalizePersonnelLifecycleOffboardingTaskCapabilities(
+      result?.capabilities,
+    );
+    if (!capabilities.canRead || !Array.isArray(result?.tasks)) {
+      throw new Error("Der Server hat keine gültige Offboarding-Aufgabenprojektion geliefert.");
+    }
+    const tasks = result.tasks.map(normalizePersonnelLifecycleOffboardingTask);
+    const keys = new Set(tasks.map(personnelLifecycleOffboardingTaskKey));
+    if (keys.size !== tasks.length) {
+      throw new Error("Die Offboarding-Aufgabenprojektion ist nicht eindeutig.");
+    }
+    state.personnelLifecycleOffboardingTasks = tasks;
+    state.personnelLifecycleOffboardingTaskCapabilities = capabilities;
+    state.personnelLifecycleOffboardingTaskOperations = Object.fromEntries(
+      Object.entries(state.personnelLifecycleOffboardingTaskOperations)
+        .filter(([key]) => keys.has(key)),
+    );
+    state.personnelLifecycleOffboardingTasksLoaded = true;
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleOffboardingTaskState(
+        "Der Offboarding-Aufgabenzugriff ist nicht mehr verfügbar.",
+      );
+      applyRoleVisibility();
+      return;
+    }
+    state.personnelLifecycleOffboardingTasks = [];
+    state.personnelLifecycleOffboardingTasksLoaded = false;
+    state.personnelLifecycleOffboardingTasksError = error.message
+      || "Die Offboarding-Aufgaben konnten nicht geladen werden.";
+  } finally {
+    state.personnelLifecycleOffboardingTasksLoading = false;
+    renderPersonnelWorkflowInstanceOverview();
+  }
+}
+
+async function submitPersonnelLifecycleOffboardingTaskCompletion(event) {
+  const form = event.target.closest("[data-personnel-lifecycle-offboarding-task-complete]");
+  if (!form) return false;
+  event.preventDefault();
+  if (state.personnelLifecycleOffboardingTaskPending
+    || state.personnelLifecycleOffboardingTaskCapabilities.canComplete !== true
+    || (typeof form.reportValidity === "function" && !form.reportValidity())) return true;
+  const runId = String(form.dataset.runId || "").trim();
+  const stepId = String(form.dataset.stepId || "").trim();
+  const task = state.personnelLifecycleOffboardingTasks.find((entry) => (
+    entry.runId === runId && entry.stepId === stepId && entry.status === "active"
+  ));
+  if (!task || form.querySelector("[data-offboarding-task-confirm]")?.checked !== true) return true;
+  const key = personnelLifecycleOffboardingTaskKey(task);
+  let operationId = state.personnelLifecycleOffboardingTaskOperations[key];
+  if (!operationId) {
+    operationId = globalThis.crypto?.randomUUID?.();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(operationId || ""))) {
+      showToast("Die sichere Vorgangs-ID konnte nicht erzeugt werden.", true);
+      return true;
+    }
+    state.personnelLifecycleOffboardingTaskOperations[key] = operationId.toLowerCase();
+  }
+  state.personnelLifecycleOffboardingTaskPending = key;
+  renderPersonnelWorkflowInstanceOverview();
+  try {
+    await api(`/api/portal/v1/personnel-lifecycle/offboarding/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(stepId)}/completions`, {
+      method: "POST",
+      body: JSON.stringify({
+        operationId: state.personnelLifecycleOffboardingTaskOperations[key],
+        action: "complete",
+        evidenceReference: null,
+      }),
+    });
+    delete state.personnelLifecycleOffboardingTaskOperations[key];
+    state.personnelLifecycleOffboardingTaskPending = "";
+    await loadPersonnelLifecycleOffboardingTasks({ force: true });
+    showToast("Der Offboarding-Auftrag wurde nachvollziehbar als erledigt bestätigt.");
+  } catch (error) {
+    state.personnelLifecycleOffboardingTaskPending = "";
+    if ([403, 404, 409].includes(error.status)) {
+      delete state.personnelLifecycleOffboardingTaskOperations[key];
+      showToast(error.message, true);
+      await loadPersonnelLifecycleOffboardingTasks({ force: true });
+      return true;
+    }
+    state.personnelLifecycleOffboardingTasksError = error.message
+      || "Die Erledigung konnte nicht sicher bestätigt werden.";
+    renderPersonnelWorkflowInstanceOverview();
+  }
+  return true;
 }
 
 function renderPersonnelAdministration() {
@@ -8602,6 +13083,23 @@ function setPersonnelAdministrationTab(tab) {
   const normalized = canOpenPersonnelAdministrationTab(tab)
     ? tab
     : firstAccessiblePersonnelAdministrationTab();
+  if (normalized !== "workflows" && (
+    state.personnelLifecycleEditorCatalog
+    || state.personnelLifecycleEditorCatalogLoaded
+    || state.personnelLifecycleEditorLoading
+    || state.personnelLifecycleEditorDraft
+    || state.personnelLifecycleEditorValidation
+    || state.personnelLifecycleEditorError
+    || elements.personnelLifecycleEditorDialog?.open
+  )) clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
+  if (normalized !== "tasks" && (
+    state.personnelLifecycleAutomationCatalog
+    || state.personnelLifecycleAutomationPreview
+    || state.personnelLifecycleAutomationCatalogLoaded
+    || state.personnelLifecycleAutomationPreviewLoaded
+    || state.personnelLifecycleAutomationLoading
+    || state.personnelLifecycleAutomationError
+  )) clearPersonnelLifecycleAutomationState();
   if (normalized !== "employees" && employeeProfileIsOpen()) closeEmployeeProfile({ restoreFocus: false });
   state.personnelAdministrationTab = normalized;
   document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => {
@@ -8628,8 +13126,21 @@ function setPersonnelAdministrationTab(tab) {
     loadPersonnelAdministration().catch((error) => showToast(error.message, true));
   }
   if (normalized === "applications") loadPersonnelCandidates();
-  if (["workflows", "tasks"].includes(normalized)) {
+  if ((normalized === "workflows" || normalized === "tasks")
+    && canReadPersonnelWorkflowInstances()) {
     loadPersonnelWorkflowInstances().catch((error) => showToast(error.message, true));
+  }
+  if (normalized === "tasks" && canReadLifecycleOnboardingTasks()) {
+    loadPersonnelLifecycleOnboardingTasks().catch((error) => showToast(error.message, true));
+  }
+  if (normalized === "tasks" && canReadLifecycleOffboardingTasks()) {
+    loadPersonnelLifecycleOffboardingTasks().catch((error) => showToast(error.message, true));
+  }
+  if (normalized === "tasks" && canReadLifecycleInterfaces()) {
+    loadPersonnelLifecycleInterfacesCatalog().catch((error) => showToast(error.message, true));
+  }
+  if (normalized === "tasks" && canReadLifecycleAutomationCatalog()) {
+    loadPersonnelLifecycleAutomation().catch((error) => showToast(error.message, true));
   }
   if (normalized === "ruleDrafts") loadCustomWorkRuleRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
@@ -9011,6 +13522,16 @@ function permissionEligibleForRole(permission, role) {
   return !Array.isArray(permission.eligibleRoles) || permission.eligibleRoles.includes(role);
 }
 
+function lifecycleRightsDependency(permissionId, requiredPermissionId, label) {
+  return Object.freeze({
+    permissionId,
+    requiredPermissionId,
+    removedMessage: `${label} wurde ebenfalls entzogen, weil das erforderliche Leserecht fehlt.`,
+    unavailableMessage: `${label} kann ohne verwaltbares Leserecht nicht vergeben werden.`,
+    addedMessage: "Das erforderliche Lifecycle-Leserecht wurde automatisch ergänzt.",
+  });
+}
+
 const permissionDependencyRules = Object.freeze([
   Object.freeze({
     permissionId: "personnel:candidates:convert",
@@ -9138,6 +13659,176 @@ const permissionDependencyRules = Object.freeze([
     unavailableMessage: "Lokale Profilrechte können ohne verwaltbaren Profilzugriff nicht freigegeben werden.",
     addedMessage: "Mitarbeiterprofile lesen wurde automatisch ergänzt.",
   }),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:onboarding:prepare",
+    "personnel:lifecycle:onboarding:read",
+    "Onboarding vorbereiten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:onboarding:approve",
+    "personnel:lifecycle:onboarding:read",
+    "Onboarding freigeben",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:onboarding:execute",
+    "personnel:lifecycle:onboarding:read",
+    "Onboarding ausführen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:onboarding:close",
+    "personnel:lifecycle:onboarding:read",
+    "Onboarding abschließen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:offboarding:prepare",
+    "personnel:lifecycle:offboarding:confidential:read",
+    "Offboarding vorbereiten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:offboarding:communication:release",
+    "personnel:lifecycle:offboarding:confidential:read",
+    "Offboarding-Kommunikation freigeben",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:offboarding:information:confirm",
+    "personnel:lifecycle:offboarding:confidential:read",
+    "Mitarbeiterinformation bestätigen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:offboarding:execute",
+    "personnel:lifecycle:offboarding:confidential:read",
+    "Offboarding aktivieren",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:offboarding:close",
+    "personnel:lifecycle:offboarding:confidential:read",
+    "Offboarding abschließen oder abbrechen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:packages:write",
+    "personnel:lifecycle:packages:read",
+    "Lifecycle-Pakete bearbeiten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:packages:publish",
+    "personnel:lifecycle:packages:write",
+    "Lifecycle-Pakete veröffentlichen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:operational:update",
+    "personnel:lifecycle:operational:read",
+    "Lifecycle-Aufgaben bearbeiten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:audit:confidential:read",
+    "personnel:lifecycle:audit:read",
+    "Vertrauliche Lifecycle-Zugriffsspur lesen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:training:manage",
+    "personnel:lifecycle:interfaces:training:read",
+    "Schulungsschnittstellen verwalten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:training:dispatch",
+    "personnel:lifecycle:interfaces:training:read",
+    "Schulungsschnittstellen versenden",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:training:reconcile",
+    "personnel:lifecycle:interfaces:training:read",
+    "Schulungsschnittstellen rückmelden",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:asset:manage",
+    "personnel:lifecycle:interfaces:asset:read",
+    "Arbeitsmittelschnittstellen verwalten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:asset:dispatch",
+    "personnel:lifecycle:interfaces:asset:read",
+    "Arbeitsmittelschnittstellen versenden",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:asset:reconcile",
+    "personnel:lifecycle:interfaces:asset:read",
+    "Arbeitsmittelschnittstellen rückmelden",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:access:manage",
+    "personnel:lifecycle:interfaces:access:read",
+    "Zugangsschnittstellen verwalten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:access:dispatch",
+    "personnel:lifecycle:interfaces:access:read",
+    "Zugangsschnittstellen versenden",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:interfaces:access:reconcile",
+    "personnel:lifecycle:interfaces:access:read",
+    "Zugangsschnittstellen rückmelden",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:deadlines:manage",
+    "personnel:lifecycle:automation:deadlines:read",
+    "Fristregeln verwalten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:deadlines:recalculate",
+    "personnel:lifecycle:automation:deadlines:read",
+    "Fristen neu berechnen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:deadlines:reconcile",
+    "personnel:lifecycle:automation:deadlines:read",
+    "Fristberechnungen abgleichen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:substitutions:manage",
+    "personnel:lifecycle:automation:substitutions:read",
+    "Vertretungsregeln verwalten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:substitutions:apply",
+    "personnel:lifecycle:automation:substitutions:read",
+    "Vertretungen anwenden",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:substitutions:reconcile",
+    "personnel:lifecycle:automation:substitutions:read",
+    "Vertretungen abgleichen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:reminders:manage",
+    "personnel:lifecycle:automation:reminders:read",
+    "Erinnerungsregeln verwalten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:reminders:dispatch",
+    "personnel:lifecycle:automation:reminders:read",
+    "Erinnerungen versenden",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:reminders:reconcile",
+    "personnel:lifecycle:automation:reminders:read",
+    "Erinnerungen abgleichen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:escalations:manage",
+    "personnel:lifecycle:automation:escalations:read",
+    "Eskalationsregeln verwalten",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:escalations:trigger",
+    "personnel:lifecycle:automation:escalations:read",
+    "Eskalationen auslösen",
+  ),
+  lifecycleRightsDependency(
+    "personnel:lifecycle:automation:escalations:reconcile",
+    "personnel:lifecycle:automation:escalations:read",
+    "Eskalationen abgleichen",
+  ),
   Object.freeze({
     permissionId: "schedule:write",
     requiredPermissionId: "schedule:read",
@@ -9383,6 +14074,7 @@ const rightsEditorOrganizationalPermissionIds = new Set([
   "personnel:candidates:read", "personnel:applications:write",
   "personnel:workflows:read", "personnel:workflows:draft:write",
   "personnel:workflows:publish", "personnel:workflows:local:supplement",
+  "personnel:lifecycle:operational:read", "personnel:lifecycle:operational:update",
   "work_rules:planning:read",
   "sickness:read", "sickness:manage", "amu:local:manage",
 ]);
@@ -15336,6 +20028,23 @@ function setView(view) {
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   const profileView = state.employeeProfileHost === "team" ? "personnel" : "personnelAdministration";
   if (employeeProfileIsOpen() && view !== profileView) closeEmployeeProfile({ restoreFocus: false });
+  if (view !== "personnelAdministration" && (
+    state.personnelLifecycleEditorCatalog
+    || state.personnelLifecycleEditorCatalogLoaded
+    || state.personnelLifecycleEditorLoading
+    || state.personnelLifecycleEditorDraft
+    || state.personnelLifecycleEditorValidation
+    || state.personnelLifecycleEditorError
+    || elements.personnelLifecycleEditorDialog?.open
+  )) clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
+  if (view !== "personnelAdministration" && (
+    state.personnelLifecycleAutomationCatalog
+    || state.personnelLifecycleAutomationPreview
+    || state.personnelLifecycleAutomationCatalogLoaded
+    || state.personnelLifecycleAutomationPreviewLoaded
+    || state.personnelLifecycleAutomationLoading
+    || state.personnelLifecycleAutomationError
+  )) clearPersonnelLifecycleAutomationState();
   state.currentView = view;
   if (view === "requests") ensureAccessibleManagerRequestTab();
   if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
@@ -18440,6 +23149,101 @@ elements.adminLoginForm?.addEventListener("submit", loginToAdministration);
 elements.adminLoginPersonnelNumber?.addEventListener("input", scheduleAdminLoginBrandingPreview);
 elements.adminLoginPersonnelNumber?.addEventListener("blur", previewAdminLoginBranding);
 elements.portalLogoutButton?.addEventListener("click", logoutPortal);
+elements.openPersonnelLifecycleEditorButton?.addEventListener("click", (event) => {
+  openPersonnelLifecycleEditor(event.currentTarget);
+});
+elements.closePersonnelLifecycleEditorButton?.addEventListener("click", () => {
+  requestClosePersonnelLifecycleEditor();
+});
+elements.personnelLifecycleEditorDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  requestClosePersonnelLifecycleEditor();
+});
+elements.personnelLifecycleEditorDialog?.addEventListener("close", () => {
+  if (state.personnelLifecycleEditorDiscardBypass) {
+    state.personnelLifecycleEditorDiscardBypass = false;
+    return;
+  }
+  if (state.personnelLifecycleEditorDirty
+    && !confirm("Den lokalen O8-Arbeitsentwurf verwerfen? Er wurde nicht gespeichert.")) {
+    elements.personnelLifecycleEditorDialog.showModal();
+    return;
+  }
+  clearPersonnelLifecycleEditorState("", { closeDialog: false, restoreFocus: true });
+});
+elements.personnelLifecycleEditorWorkflowType?.addEventListener("change", (event) => {
+  const draft = state.personnelLifecycleEditorDraft;
+  const catalog = state.personnelLifecycleEditorCatalog;
+  const workflowType = event.currentTarget.value;
+  if (!draft || state.personnelLifecycleEditorValidating
+    || !canWritePersonnelLifecycleEditorDraft()
+    || !catalog?.workflowTypes.includes(workflowType)) return;
+  draft.workflowType = workflowType;
+  const allowedResponsibilities = catalog.enums
+    .responsibilityClassesByWorkflowType[workflowType] || [];
+  draft.steps.forEach((step) => {
+    if (!allowedResponsibilities.includes(step.responsibilityClass)) {
+      step.responsibilityClass = "";
+    }
+  });
+  markPersonnelLifecycleEditorDirty();
+  renderPersonnelLifecycleEditor();
+});
+elements.personnelLifecycleEditorWorkflowCode?.addEventListener("input", (event) => {
+  setPersonnelLifecycleEditorDraftField("workflowCode", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorDraftTitle?.addEventListener("input", (event) => {
+  setPersonnelLifecycleEditorDraftField("title", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorDraftDescription?.addEventListener("input", (event) => {
+  setPersonnelLifecycleEditorDraftField("description", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorScopeType?.addEventListener("change", (event) => {
+  setPersonnelLifecycleEditorDraftField("scopeType", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorRequirementKind?.addEventListener("change", (event) => {
+  setPersonnelLifecycleEditorDraftField("requirementKind", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-personnel-lifecycle-editor-step]");
+  if (!button || !state.personnelLifecycleEditorDraft) return;
+  const stepId = button.dataset.personnelLifecycleEditorStep;
+  if (!state.personnelLifecycleEditorDraft.steps.some(({ id }) => id === stepId)) return;
+  state.personnelLifecycleEditorSelectedStepId = stepId;
+  renderPersonnelLifecycleEditorCatalogControls();
+  renderPersonnelLifecycleEditorFlow();
+  renderPersonnelLifecycleEditorInspector();
+});
+elements.personnelLifecycleEditorInspectorForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+});
+elements.personnelLifecycleEditorStepType?.addEventListener("change", (event) => {
+  setPersonnelLifecycleEditorStepField("type", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorStepTitle?.addEventListener("input", (event) => {
+  setPersonnelLifecycleEditorStepField("title", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorStepDescription?.addEventListener("input", (event) => {
+  setPersonnelLifecycleEditorStepField("description", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorResponsibilityClass?.addEventListener("change", (event) => {
+  setPersonnelLifecycleEditorStepField("responsibilityClass", event.currentTarget.value);
+});
+elements.personnelLifecycleEditorStepRequired?.addEventListener("change", (event) => {
+  setPersonnelLifecycleEditorStepField("required", event.currentTarget.value === "true");
+});
+elements.addPersonnelLifecycleEditorStepButton?.addEventListener("click", addPersonnelLifecycleEditorStep);
+elements.movePersonnelLifecycleEditorStepUpButton?.addEventListener("click", () => {
+  movePersonnelLifecycleEditorStep(-1);
+});
+elements.movePersonnelLifecycleEditorStepDownButton?.addEventListener("click", () => {
+  movePersonnelLifecycleEditorStep(1);
+});
+elements.removePersonnelLifecycleEditorStepButton?.addEventListener("click", removePersonnelLifecycleEditorStep);
+elements.resetPersonnelLifecycleEditorButton?.addEventListener("click", resetPersonnelLifecycleEditorDraft);
+elements.validatePersonnelLifecycleEditorButton?.addEventListener("click", () => {
+  validatePersonnelLifecycleEditorDraft().catch(() => {});
+});
 elements.refreshServerDiagnosticsButton?.addEventListener("click", () => refreshServerDiagnostics({ announce: true }));
 elements.serverDiagnostics?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-server-monitor-action]");
@@ -19448,9 +24252,33 @@ elements.personnelWorkflowInstanceStatusFilter?.addEventListener("change", (even
 elements.refreshPersonnelWorkflowInstancesButton?.addEventListener("click", () => (
   loadPersonnelWorkflowInstances({ force: true })
 ));
-elements.refreshPersonnelWorkflowTasksButton?.addEventListener("click", () => (
-  loadPersonnelWorkflowInstances({ force: true })
-));
+elements.refreshPersonnelWorkflowTasksButton?.addEventListener("click", async () => {
+  const loads = [];
+  if (canReadPersonnelWorkflowInstances()) loads.push(loadPersonnelWorkflowInstances({ force: true }));
+  if (canReadLifecycleOnboardingTasks()) {
+    loads.push(loadPersonnelLifecycleOnboardingTasks({ force: true }));
+  }
+  if (canReadLifecycleOffboardingTasks()) {
+    loads.push(loadPersonnelLifecycleOffboardingTasks({ force: true }));
+  }
+  if (canReadLifecycleInterfaces()) {
+    loads.push(loadPersonnelLifecycleInterfacesCatalog({ force: true }));
+  }
+  if (canReadLifecycleAutomationCatalog()) {
+    loads.push(loadPersonnelLifecycleAutomation({ force: true }));
+  }
+  await Promise.all(loads);
+});
+elements.personnelWorkflowTaskList?.addEventListener(
+  "submit",
+  (event) => {
+    if (event.target.closest("[data-personnel-lifecycle-offboarding-task-complete]")) {
+      submitPersonnelLifecycleOffboardingTaskCompletion(event);
+      return;
+    }
+    submitPersonnelLifecycleOnboardingTaskCompletion(event);
+  },
+);
 elements.centralVacationSearch?.addEventListener("input", (event) => {
   state.centralVacationSearch = event.target.value;
   renderCentralVacations();
@@ -19801,6 +24629,65 @@ elements.personnelDirectoryBody?.addEventListener("click", async (event) => {
 });
 
 elements.employeeProfileBackButton?.addEventListener("click", () => closeEmployeeProfile());
+elements.employeeProfileContent?.addEventListener("input", (event) => {
+  if (event.target.closest("[data-employee-offboarding-prepare], [data-employee-offboarding-action]")) {
+    if (state.employeeOffboardingDraft) state.employeeOffboardingDraft.error = "";
+    return;
+  }
+  const closeForm = event.target.closest("[data-employee-onboarding-close-form]");
+  if (closeForm) {
+    const draft = captureEmployeeOnboardingCloseForm(closeForm);
+    const message = closeForm.querySelector("[data-onboarding-close-message]");
+    if (draft && message) {
+      message.textContent = "";
+      message.classList.remove("error");
+    }
+    return;
+  }
+  const form = event.target.closest("[data-employee-onboarding-start-form]");
+  if (!form) return;
+  const draft = captureEmployeeOnboardingStartForm(form);
+  const message = form.querySelector("[data-onboarding-start-message]");
+  if (draft && message) {
+    message.textContent = "";
+    message.classList.remove("error");
+  }
+});
+elements.employeeProfileContent?.addEventListener("change", (event) => {
+  if (event.target.closest("[data-employee-offboarding-prepare], [data-employee-offboarding-action]")) {
+    if (state.employeeOffboardingDraft) state.employeeOffboardingDraft.error = "";
+    return;
+  }
+  const closeForm = event.target.closest("[data-employee-onboarding-close-form]");
+  if (closeForm) {
+    captureEmployeeOnboardingCloseForm(closeForm);
+    return;
+  }
+  const form = event.target.closest("[data-employee-onboarding-start-form]");
+  if (!form) return;
+  captureEmployeeOnboardingStartForm(form);
+  if (event.target.matches("[data-onboarding-family-code]")) {
+    const familyCode = event.target.dataset.onboardingFamilyCode;
+    renderEmployeeProfileContent();
+    [...document.querySelectorAll("[data-onboarding-family-code]")]
+      .find((select) => select.dataset.onboardingFamilyCode === familyCode)?.focus();
+  }
+});
+elements.employeeProfileContent?.addEventListener("submit", (event) => {
+  if (event.target.closest("[data-employee-offboarding-prepare]")) {
+    submitEmployeeOffboardingPreparation(event);
+    return;
+  }
+  if (event.target.closest("[data-employee-offboarding-action]")) {
+    submitEmployeeOffboardingAction(event);
+    return;
+  }
+  if (event.target.closest("[data-employee-onboarding-close-form]")) {
+    submitEmployeeOnboardingClose(event);
+    return;
+  }
+  submitEmployeeOnboardingStart(event);
+});
 document.querySelectorAll("[data-employee-profile-tab]").forEach((button) => {
   button.addEventListener("click", () => setEmployeeProfileTab(button.dataset.employeeProfileTab));
   button.addEventListener("keydown", (event) => {
