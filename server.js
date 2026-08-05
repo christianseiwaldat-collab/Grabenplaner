@@ -351,6 +351,64 @@ const {
   createPersonnelProfileAccessSnapshot,
 } = require("./lib/personnel-profile-access");
 const {
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSION_IDS,
+  PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES,
+} = require("./lib/personnel-lifecycle-case-contract");
+const {
+  PERSONNEL_LIFECYCLE_INTERFACE_PERMISSION_IDS,
+  personnelLifecycleInterfaceCatalog,
+} = require("./lib/personnel-lifecycle-interfaces-contract");
+const {
+  PERSONNEL_LIFECYCLE_AUTOMATION_DEFAULT_POLICY_REGISTRY,
+  PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
+  PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS,
+  PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS,
+  personnelLifecycleAutomationCatalog,
+  previewPersonnelLifecycleAutomation,
+} = require("./lib/personnel-lifecycle-automation-contract");
+const {
+  PERMISSION_IDS: PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS,
+  PERMISSIONS: PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS,
+  PersonnelLifecycleEditorContractError,
+  personnelLifecycleEditorCatalog,
+  validatePersonnelLifecycleEditorDraft,
+} = require("./lib/personnel-lifecycle-editor-contract");
+const {
+  createPersonnelLifecycleCaseAccessSnapshot,
+} = require("./lib/personnel-lifecycle-case-access");
+const {
+  PersonnelLifecycleCaseFoundationError,
+} = require("./lib/personnel-lifecycle-case-foundation");
+const {
+  PersonnelLifecycleOnboardingPreviewError,
+  createPersonnelLifecycleOnboardingPreviewService,
+} = require("./lib/personnel-lifecycle-onboarding-preview");
+const {
+  PERSONNEL_LIFECYCLE_O4_CONTRACT_VERSION,
+  PERSONNEL_LIFECYCLE_ONBOARDING_EXECUTION_ERROR_KINDS,
+  PersonnelLifecycleOnboardingExecutionError,
+  createPersonnelLifecycleOnboardingExecutionService,
+} = require("./lib/personnel-lifecycle-onboarding-execution");
+const {
+  PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS,
+  PersonnelLifecycleOnboardingTaskError,
+  createPersonnelLifecycleOnboardingTaskService,
+} = require("./lib/personnel-lifecycle-onboarding-tasks");
+const {
+  PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS,
+  PersonnelLifecycleOffboardingServiceError,
+  createPersonnelLifecycleOffboardingService,
+} = require("./lib/personnel-lifecycle-offboarding-service");
+const {
+  PERSONNEL_LIFECYCLE_O5_CONTRACT_VERSION,
+  PERSONNEL_LIFECYCLE_OFFBOARDING_FAMILY_DEFINITIONS,
+  PersonnelLifecycleOffboardingContractError,
+} = require("./lib/personnel-lifecycle-offboarding-contract");
+const {
+  previewSha256: personnelLifecycleOnboardingPreviewSha256,
+} = require("./lib/personnel-lifecycle-onboarding-receipt");
+const {
   PERSONNEL_WORKFLOW_ERROR_KINDS,
   PersonnelWorkflowError,
   createPersonnelWorkflowPublicationService,
@@ -359,7 +417,9 @@ const {
 const {
   PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS,
   PersonnelWorkflowInstanceError,
+  completePersonnelLifecycleOnboardingTaskInTransaction,
   createPersonnelWorkflowInstanceService,
+  instantiatePersonnelLifecycleOnboardingInTransaction,
 } = require("./lib/personnel-workflow-instances");
 const {
   OFFICIAL_RETENTION_SOURCES,
@@ -513,6 +573,63 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ, label: "Mitarbeiter-Stammdaten im freigegebenen Bereich lesen", description: "Nur die zusätzlich im Feldrechteprofil freigegebenen Personalstammdaten im fachlich freigegebenen Bereich lesen.", group: "Mitarbeiterprofile", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr"] },
   { id: PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ, label: "Personalakt-Dokumente lesen", description: "Geschützte Dokumentmetadaten ausschließlich über einen persönlichen Personalleitungszugang lesen; nicht an lokale oder technische Rollen delegierbar.", group: "Mitarbeiterprofile", warningLevel: "critical", eligibleRoles: ["hr"] },
   { id: PERSONNEL_PROFILE_PERMISSIONS.DELEGATE, label: "Lokale Mitarbeiterprofil-Rechte freigeben", description: "Kennzeichnet PL+ für die fachrechtgebundene Freigabe lokaler Profilrechte; nicht weiterdelegierbar und ohne eigenen Profildatenzugriff.", group: "Mitarbeiterprofile", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ, label: "Onboarding-Vorschau im Mitarbeiterprofil lesen", description: "Serverseitig aufgelöste Onboarding-Pakete, Startblocker und Zuweisungskandidaten ausschließlich read-only lesen; kein Start- oder Aufgabenrecht.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ, label: "Lifecycle-Pakete lesen", description: "Veröffentlichte Lifecycle-Paketmetadaten für ausdrücklich freigegebene Vorschauen lesen; kein Fallzugriff und keine Paketmutation.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_PREPARE, label: "Onboarding-Fall vorbereiten", description: "Referenztermine, Fallverantwortung und die kontrollierte Paketauflösung vorbereiten; kein Startrecht.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_APPROVE, label: "Onboarding-Fall freigeben", description: "Eine vollständig geprüfte Onboarding-Auflösung ausdrücklich freigeben; kein automatischer Start.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_EXECUTE, label: "Onboarding kontrolliert starten", description: "Alle bestätigten Onboarding-Pakete und Einzelzuweisungen in einem atomaren Vorgang starten.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_CLOSE, label: "Onboarding abschließen", description: "Einen vollständig erledigten Onboarding-Fall nach gesonderter Abschlussprüfung schließen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ, label: "Vertrauliches Offboarding lesen", description: "Die Existenz und die streng vertraulichen Inhalte eines Offboarding-Falls ausschließlich mit persönlich zugewiesenem Fachrecht lesen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_PREPARE, label: "Offboarding vertraulich vorbereiten", description: "Einen Austritt ohne operative Instanzen, Aufgaben, Badges oder Benachrichtigungen intern vorbereiten.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_COMMUNICATION_RELEASE, label: "Offboarding-Kommunikation freigeben", description: "Die vorbereiteten internen Offboarding-Aufgaben als ausdrückliche, atomare Fachaktion freigeben.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_INFORMATION_CONFIRM, label: "Mitarbeiterinformation bestätigen", description: "Die tatsächlich erfolgte persönliche Information mit Zeitpunkt und verantwortlicher Person bestätigen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_EXECUTE, label: "Offboarding kontrolliert aktivieren", description: "Freigegebene Offboarding-Aufgaben erst nach dokumentierter Mitarbeiterinformation aktivieren.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CLOSE, label: "Offboarding abschließen oder abbrechen", description: "Einen vollständig geprüften Offboarding-Fall abschließen oder mit geschützter Nacharbeit terminal abbrechen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PERSONAL_RESTRICTED_READ, label: "Eingeschränkte Lifecycle-Personaldaten lesen", description: "Erforderliche personenbezogene Lifecycle-Daten nur zusammen mit dem Leserecht des konkreten Falltyps lesen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.HR_CONFIDENTIAL_READ, label: "PL-vertrauliche Lifecycle-Daten lesen", description: "PL-vertrauliche Lifecycle-Daten nur zusammen mit dem Leserecht des konkreten Falltyps lesen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_WRITE, label: "Lifecycle-Paketbindung prüfen", description: "Eine konkrete Paketversion fallbezogen unter dem Lifecycle-Vertrag prüfen; keine Workflow-Quelländerung.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_PUBLISH, label: "Lifecycle-Paketbindung freigeben", description: "Die geprüfte Lifecycle-Verwendung einer unveränderten Publikation ausdrücklich freigeben.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ASSIGNMENTS_WRITE, label: "Lifecycle-Aufgaben einzeln zuweisen", description: "Jeden nicht-systemischen Lifecycle-Schritt ausdrücklich einer aktuell berechtigten Person zuweisen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.EXCEPTIONS_APPROVE, label: "Lifecycle-Ausnahmen freigeben", description: "Dokumentierte Ausnahmen mit strukturiertem Grund entscheiden; kein stilles Überspringen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ, label: "Lifecycle-Aufgaben im Bereich lesen", description: "Freigegebene operative Lifecycle-Aufgaben nur im ausdrücklich zugewiesenen Fachbereich lesen.", group: "Onboarding & Offboarding", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE, label: "Lifecycle-Aufgaben im Bereich bearbeiten", description: "Freigegebene operative Lifecycle-Aufgaben nur im ausdrücklich zugewiesenen Fachbereich bearbeiten.", group: "Onboarding & Offboarding", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.AUDIT_READ, label: "Lifecycle-Prüfspur lesen", description: "Allgemeine Lifecycle-Prüfbelege ohne vertraulichen Fallinhalt lesen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.CONFIDENTIAL_AUDIT_READ, label: "Vertrauliche Offboarding-Zugriffsspur lesen", description: "Die getrennte, selbst auditierte Zugriffsspur streng vertraulicher Offboarding-Fälle lesen.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.DELEGATE, label: "Operative Lifecycle-Rechte delegieren", description: "Operative Lifecycle-Rechte fachlich und bereichsgebunden freigeben; erzeugt selbst keinen Fall- oder Datenzugriff.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:training:read", label: "O6-Schulungsschnittstellen lesen", description: "Nur den providerneutralen Schulungsvertrag und dessen gesperrten Zielstatus lesen; kein Schulungsregister und keine Außenwirkung.", group: "Onboarding & Offboarding", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:training:manage", label: "O6-Schulungsziele verwalten", description: "Künftige kundenspezifische Schulungs-Positivlisten verwalten; im O6-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:training:dispatch", label: "O6-Schulungsaufträge übergeben", description: "Künftige ausdrücklich freigegebene Schulungsaufträge übergeben; im O6-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:training:reconcile", label: "O6-Schulungsrückmeldungen klären", description: "Künftige unklare Schulungsrückmeldungen kontrolliert klären; im O6-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:asset:read", label: "O6-Arbeitsmittelschnittstellen lesen", description: "Nur den providerneutralen Arbeitsmittelvertrag und dessen gesperrten Zielstatus lesen; das Leihmodul bleibt getrennt.", group: "Onboarding & Offboarding", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:asset:manage", label: "O6-Arbeitsmittelziele verwalten", description: "Künftige kundenspezifische Arbeitsmittel-Positivlisten verwalten; im O6-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:asset:dispatch", label: "O6-Arbeitsmittelaufträge übergeben", description: "Künftige ausdrücklich freigegebene Arbeitsmittelaufträge übergeben; im O6-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:asset:reconcile", label: "O6-Arbeitsmittelrückmeldungen klären", description: "Künftige unklare Arbeitsmittelrückmeldungen kontrolliert klären; im O6-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:access:read", label: "O6-Zugangsschnittstellen lesen", description: "Nur den providerneutralen Zugangsvertrag und dessen gesperrten Zielstatus lesen; keine Konto- oder Rollenwirkung.", group: "Onboarding & Offboarding", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:access:manage", label: "O6-Zugangsziele verwalten", description: "Künftige kundenspezifische Zugangs-Positivlisten verwalten; im O6-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:access:dispatch", label: "O6-Zugangsaufträge übergeben", description: "Künftige ausdrücklich freigegebene Zugangsaufträge übergeben; im O6-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:lifecycle:interfaces:access:reconcile", label: "O6-Zugangsrückmeldungen klären", description: "Künftige unklare Zugangsrückmeldungen kontrolliert klären; im O6-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.DEADLINES_READ, label: "O7-Fristenvorschau lesen", description: "Nur die gesperrte Vorschau für Fristen und Kalenderregeln lesen; keine Termin- oder Kalenderwirkung.", group: "Onboarding & Offboarding", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.DEADLINES_MANAGE, label: "O7-Fristenregeln verwalten", description: "Künftige versionierte Fristenregeln verwalten; im O7-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.DEADLINES_RECALCULATE, label: "O7-Fristen neu berechnen", description: "Künftige ausdrücklich freigegebene Fristen neu berechnen; im O7-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.DEADLINES_RECONCILE, label: "O7-Fristenabweichungen klären", description: "Künftige unklare Fristenabweichungen kontrolliert klären; im O7-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.SUBSTITUTIONS_READ, label: "O7-Vertretungsvorschau lesen", description: "Nur die gesperrte Vorschau für Vertretung und Verantwortlichkeit lesen; keine Zuweisungswirkung.", group: "Onboarding & Offboarding", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.SUBSTITUTIONS_MANAGE, label: "O7-Vertretungsregeln verwalten", description: "Künftige versionierte Vertretungsregeln verwalten; im O7-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.SUBSTITUTIONS_APPLY, label: "O7-Vertretungen anwenden", description: "Künftige ausdrücklich freigegebene Vertretungen anwenden; im O7-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.SUBSTITUTIONS_RECONCILE, label: "O7-Vertretungsabweichungen klären", description: "Künftige unklare Vertretungsabweichungen kontrolliert klären; im O7-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.REMINDERS_READ, label: "O7-Erinnerungsvorschau lesen", description: "Nur die gesperrte Erinnerungsvorschau lesen; keine interne oder externe Benachrichtigung.", group: "Onboarding & Offboarding", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.REMINDERS_MANAGE, label: "O7-Erinnerungsregeln verwalten", description: "Künftige versionierte Erinnerungsregeln verwalten; im O7-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.REMINDERS_DISPATCH, label: "O7-Erinnerungen versenden", description: "Künftige ausdrücklich freigegebene Erinnerungen versenden; im O7-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.REMINDERS_RECONCILE, label: "O7-Erinnerungsabweichungen klären", description: "Künftige unklare Erinnerungsabweichungen kontrolliert klären; im O7-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.ESCALATIONS_READ, label: "O7-Eskalationsvorschau lesen", description: "Nur die gesperrte Eskalationsvorschau lesen; keine Benachrichtigungs- oder Aufgabenwirkung.", group: "Onboarding & Offboarding", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.ESCALATIONS_MANAGE, label: "O7-Eskalationsregeln verwalten", description: "Künftige versionierte Eskalationsregeln verwalten; im O7-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.ESCALATIONS_TRIGGER, label: "O7-Eskalationen auslösen", description: "Künftige ausdrücklich freigegebene Eskalationen auslösen; im O7-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSIONS.ESCALATIONS_RECONCILE, label: "O7-Eskalationsabweichungen klären", description: "Künftige unklare Eskalationsabweichungen kontrolliert klären; im O7-Minimalumfang technisch gesperrt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.READ, label: "O8-Workflow-Editor lesen", description: "Den gesperrten grafischen Lifecycle-Editor nur für ausdrücklich lesbare Prozessarten öffnen; kein Entwurfs-, Publikations- oder Ausführungsrecht.", group: "Onboarding & Offboarding", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.DRAFT_WRITE, label: "O8-Workflow-Entwürfe bearbeiten", description: "Künftige grafische Lifecycle-Entwürfe bearbeiten; im O8-Minimalumfang ohne Speicherendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.VALIDATE, label: "O8-Workflow-Entwürfe prüfen", description: "Einen flüchtigen grafischen Entwurf serverseitig und nebenwirkungsfrei prüfen; keine Speicherung oder Freigabe.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.REVIEW, label: "O8-Workflow-Entwürfe fachlich prüfen", description: "Künftige versionierte Entwürfe fachlich prüfen; im O8-Minimalumfang ohne Prüfmutation.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.PUBLISH, label: "O8-Workflow-Versionen veröffentlichen", description: "Künftige geprüfte Editorversionen veröffentlichen; im O8-Minimalumfang technisch gesperrt und ohne Instanzstart.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.ARCHIVE, label: "O8-Workflow-Versionen archivieren", description: "Künftige Veröffentlichungen additiv archivieren; im O8-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "personnel:candidates:read", label: "Bewerbungen im freigegebenen Bereich lesen", description: "Datensparsame Bewerber- und Bewerbungsdaten ausschließlich in einem von PL+ fachlich freigegebenen Standort oder einer freigegebenen Abteilung lesen.", group: "Bewerbungen & Preboarding", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:applications:write", label: "Bewerbungen im freigegebenen Bereich bearbeiten", description: "Strukturierte Bewerbungsdaten und Status ausschließlich im von PL+ freigegebenen Bereich bearbeiten; keine Kandidatenstammdaten, vertraulichen PL-Felder oder Umwandlung.", group: "Bewerbungen & Preboarding", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:candidates:write", label: "Bewerber zentral anlegen und bearbeiten", description: "Kandidatenstammdaten und neue Bewerbungen unternehmensweit verwalten.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
@@ -581,6 +698,10 @@ const personnelLifecyclePermissionIds = new Set([
   ...Object.values(PERSONNEL_LIFECYCLE_PERMISSIONS),
   ...PERSONNEL_WORKFLOW_PERMISSION_IDS,
   ...PERSONNEL_PROFILE_PERMISSION_IDS,
+  ...PERSONNEL_LIFECYCLE_CASE_PERMISSION_IDS,
+  ...PERSONNEL_LIFECYCLE_INTERFACE_PERMISSION_IDS,
+  ...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
+  ...PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS,
 ]);
 const protectedAmuPermissionIds = new Set(["amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit"]);
 const protectedAmuRoleIds = new Set(["hr", "admin", "it_admin", "developer"]);
@@ -751,6 +872,120 @@ function assertPortalPermissionDependencies(permissions) {
     PERSONNEL_PROFILE_PERMISSIONS.READ,
     "Personalakt-Dokumente können nur zusammen mit dem Profil-Leserecht gelesen werden.",
   );
+  for (const permission of [
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_PREPARE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_APPROVE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_EXECUTE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_CLOSE,
+  ]) {
+    requirePermission(
+      permission,
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
+      "Onboarding-Aktionen setzen das ausdrückliche Onboarding-Leserecht voraus.",
+    );
+  }
+  for (const permission of [
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_PREPARE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_COMMUNICATION_RELEASE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_INFORMATION_CONFIRM,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_EXECUTE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CLOSE,
+  ]) {
+    requirePermission(
+      permission,
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
+      "Vertrauliche Offboarding-Aktionen setzen das eigenständige vertrauliche Leserecht voraus.",
+    );
+  }
+  requirePermission(
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_WRITE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ,
+    "Lifecycle-Pakete können nur zusammen mit dem Paket-Leserecht bearbeitet werden.",
+  );
+  requirePermission(
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_PUBLISH,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_WRITE,
+    "Lifecycle-Pakete können nur nach freigegebener Bearbeitung veröffentlicht werden.",
+  );
+  requirePermission(
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ,
+    "Operative Lifecycle-Aufgaben können nur zusammen mit dem operativen Leserecht bearbeitet werden.",
+  );
+  requirePermission(
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.CONFIDENTIAL_AUDIT_READ,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.AUDIT_READ,
+    "Die vertrauliche Lifecycle-Zugriffsspur setzt das allgemeine Lifecycle-Auditrecht voraus.",
+  );
+  for (const permission of [
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ASSIGNMENTS_WRITE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.EXCEPTIONS_APPROVE,
+  ]) {
+    if (projected.has(permission)
+      && !projected.has(PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ)
+      && !projected.has(PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ)) {
+      throw httpError(
+        400,
+        "Lifecycle-Zuweisungen und Ausnahmen setzen mindestens einen ausdrücklich lesbaren Falltyp voraus.",
+        "PORTAL_PERMISSION_DEPENDENCY",
+      );
+    }
+  }
+  for (const domain of ["training", "asset", "access"]) {
+    const readPermission = `personnel:lifecycle:interfaces:${domain}:read`;
+    for (const capability of ["manage", "dispatch", "reconcile"]) {
+      requirePermission(
+        `personnel:lifecycle:interfaces:${domain}:${capability}`,
+        readPermission,
+        "O6-Schnittstellenaktionen setzen das ausdrückliche Leserecht derselben Domäne voraus.",
+      );
+    }
+  }
+  const automationCapabilitiesByDomain = Object.freeze({
+    deadlines: ["manage", "recalculate", "reconcile"],
+    substitutions: ["manage", "apply", "reconcile"],
+    reminders: ["manage", "dispatch", "reconcile"],
+    escalations: ["manage", "trigger", "reconcile"],
+  });
+  for (const [domain, capabilities] of Object.entries(automationCapabilitiesByDomain)) {
+    const readPermission = PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS[domain];
+    for (const capability of capabilities) {
+      requirePermission(
+        `personnel:lifecycle:automation:${domain}:${capability}`,
+        readPermission,
+        "O7-Automationsaktionen setzen das ausdrückliche Leserecht derselben Domäne voraus.",
+      );
+    }
+  }
+  for (const [permission, prerequisite, message] of [
+    [
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.DRAFT_WRITE,
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.READ,
+      "O8-Workflow-Entwürfe können nur zusammen mit dem Editor-Leserecht bearbeitet werden.",
+    ],
+    [
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.VALIDATE,
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.DRAFT_WRITE,
+      "O8-Workflow-Entwürfe können nur mit dem zugehörigen Entwurfsrecht geprüft werden.",
+    ],
+    [
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.REVIEW,
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.VALIDATE,
+      "Die fachliche O8-Prüfung setzt die technische Entwurfsprüfung voraus.",
+    ],
+    [
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.PUBLISH,
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.REVIEW,
+      "Eine O8-Veröffentlichung setzt die fachliche Prüfung voraus.",
+    ],
+    [
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.ARCHIVE,
+      PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.PUBLISH,
+      "Eine O8-Archivierung setzt das Veröffentlichungsrecht voraus.",
+    ],
+  ]) {
+    requirePermission(permission, prerequisite, message);
+  }
 }
 
 const portalDashboardPermissionDetails = Object.freeze([
@@ -794,6 +1029,30 @@ const portalGlobalPermissionIds = new Set([
   "personnel:workflows:review", "personnel:workflows:confidential:read",
   "personnel:workflows:confidential:write", "personnel:workflows:delegate",
   PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ, PERSONNEL_PROFILE_PERMISSIONS.DELEGATE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_PREPARE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_APPROVE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_EXECUTE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_CLOSE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_PREPARE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_COMMUNICATION_RELEASE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_INFORMATION_CONFIRM,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_EXECUTE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CLOSE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PERSONAL_RESTRICTED_READ,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.HR_CONFIDENTIAL_READ,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_WRITE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_PUBLISH,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ASSIGNMENTS_WRITE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.EXCEPTIONS_APPROVE,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.AUDIT_READ,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.CONFIDENTIAL_AUDIT_READ,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.DELEGATE,
+  ...PERSONNEL_LIFECYCLE_INTERFACE_PERMISSION_IDS,
+  ...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
+  ...PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS,
   "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
   "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
@@ -2140,6 +2399,23 @@ function protectJson(value, context) {
   return requireAmuStorage().protectRecord(JSON.stringify(value), context);
 }
 
+function parseProtectedOffboardingJson(value, context) {
+  try {
+    const text = requireAmuStorage().unprotectRecord(value, context);
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("invalid offboarding payload");
+    }
+    return parsed;
+  } catch (error) {
+    const integrityError = new Error(
+      "Geschützte Offboarding-Daten konnten nicht sicher entschlüsselt werden.",
+    );
+    integrityError.code = error?.code || "PERSONNEL_LIFECYCLE_OFFBOARDING_INTEGRITY_FAILED";
+    throw integrityError;
+  }
+}
+
 let personnelLifecycleServiceInstance = null;
 
 function requirePersonnelLifecycleService() {
@@ -2172,6 +2448,77 @@ function requirePersonnelWorkflowInstanceService() {
     );
   }
   return personnelWorkflowInstanceServiceInstance;
+}
+
+let personnelLifecycleOnboardingPreviewServiceInstance = null;
+
+function requirePersonnelLifecycleOnboardingPreviewService() {
+  if (!personnelLifecycleOnboardingPreviewServiceInstance) {
+    personnelLifecycleOnboardingPreviewServiceInstance =
+      createPersonnelLifecycleOnboardingPreviewService(customProcessRepository, {
+        canPreviewRecipient({ scope, recipient } = {}) {
+          return personnelLifecycleOnboardingRecipientEligible(recipient, scope);
+        },
+      });
+  }
+  return personnelLifecycleOnboardingPreviewServiceInstance;
+}
+
+let personnelLifecycleOnboardingExecutionServiceInstance = null;
+
+function requirePersonnelLifecycleOnboardingExecutionService() {
+  if (!personnelLifecycleOnboardingExecutionServiceInstance) {
+    personnelLifecycleOnboardingExecutionServiceInstance =
+      createPersonnelLifecycleOnboardingExecutionService(customProcessRepository, {
+        instantiatePersonnelLifecycleOnboardingInTransaction,
+        protectJson,
+        parseProtectedJson,
+        canAssignRecipient({ scope, recipient } = {}) {
+          return personnelLifecycleOnboardingRecipientEligible(recipient, scope);
+        },
+      });
+  }
+  return personnelLifecycleOnboardingExecutionServiceInstance;
+}
+
+let personnelLifecycleOnboardingTaskServiceInstance = null;
+
+function requirePersonnelLifecycleOnboardingTaskService() {
+  if (!personnelLifecycleOnboardingTaskServiceInstance) {
+    personnelLifecycleOnboardingTaskServiceInstance =
+      createPersonnelLifecycleOnboardingTaskService(customProcessRepository, {
+        completePersonnelLifecycleOnboardingTaskInTransaction,
+        protectJson,
+        parseProtectedJson,
+      });
+  }
+  return personnelLifecycleOnboardingTaskServiceInstance;
+}
+
+let personnelLifecycleOffboardingServiceInstance = null;
+
+function requirePersonnelLifecycleOffboardingService() {
+  if (!personnelLifecycleOffboardingServiceInstance) {
+    personnelLifecycleOffboardingServiceInstance =
+      createPersonnelLifecycleOffboardingService(customProcessRepository, {
+        protectJson,
+        parseProtectedJson: parseProtectedOffboardingJson,
+        canAssignRecipient({
+          recipient,
+          scope,
+          subjectEmployeeNumber,
+          recipientClass,
+        } = {}) {
+          return personnelLifecycleOffboardingRecipientEligible(
+            recipient,
+            scope,
+            subjectEmployeeNumber,
+            recipientClass,
+          );
+        },
+      });
+  }
+  return personnelLifecycleOffboardingServiceInstance;
 }
 
 let governanceStoreInstance = null;
@@ -8206,6 +8553,7 @@ function manageablePortalPermissionsForActor(actor) {
       !permission.startsWith("personnel:candidates:")
       && !permission.startsWith("personnel:workflows:")
       && !permission.startsWith("personnel:profiles:")
+      && !permission.startsWith("personnel:lifecycle:")
       && permission !== "personnel:applications:write"
     )));
   }
@@ -20408,6 +20756,28 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
   const storage = requireAmuStorage();
   const protectedRows = inspection?.protected || {};
   let verified = 0;
+  const onboardingProtectedGroups = [
+    [protectedRows.personnelEmploymentEpisodes || [], "personnel-employment-episode"],
+    [protectedRows.personnelLifecycleCases || [], "personnel-lifecycle-case"],
+    [protectedRows.personnelLifecycleReferenceDates || [], "personnel-lifecycle-reference-dates"],
+    [protectedRows.personnelLifecycleCaseEvents || [], "personnel-lifecycle-case-event"],
+  ];
+  for (const [rows, namespace] of onboardingProtectedGroups) {
+    for (const row of rows) {
+      if (!row.protected_payload) throw new Error(`missing protected ${namespace} payload`);
+      const payload = storage.unprotectRecord(row.protected_payload, {
+        namespace,
+        recordId: String(row.id || ""),
+        field: "payload",
+        employeeNumber: String(row.employee_number || ""),
+      });
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error(`invalid protected ${namespace} payload`);
+      }
+      verified += 1;
+    }
+  }
   for (const profile of protectedRows.personnelProfiles || []) {
     if (!profile.protected_payload) throw new Error("missing protected personnel profile payload");
     const payload = storage.unprotectRecord(
@@ -27615,6 +27985,8 @@ const PERSONNEL_LIFECYCLE_SCOPED_DELEGABLE_PERMISSIONS = Object.freeze([
   PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE,
   PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH,
   PERSONNEL_WORKFLOW_PERMISSIONS.LOCAL_SUPPLEMENT,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ,
+  PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE,
   ...PERSONNEL_PROFILE_SCOPED_PERMISSIONS,
 ]);
 
@@ -32896,11 +33268,19 @@ function requirePersonnelLifecycleAccess(request, { action = "read" } = {}) {
   }
 }
 
-const PERSONNEL_PROFILE_TABS = new Set(["overview", "master_org", "documents"]);
+const PERSONNEL_PROFILE_TABS = new Set([
+  "overview",
+  "master_org",
+  "documents",
+  "onboarding",
+  "offboarding",
+]);
 const PERSONNEL_PROFILE_TAB_CAPABILITIES = Object.freeze({
   overview: "canReadOverview",
   master_org: "canReadMasterOrg",
   documents: "canReadDocuments",
+  onboarding: "canReadOnboardingPreview",
+  offboarding: "canReadOffboardingConfidential",
 });
 const PERSONNEL_PROFILE_MASTER_FIELD_ALLOWLIST = Object.freeze([
   "identity.firstName",
@@ -32950,6 +33330,58 @@ function personnelProfileFoundationAvailable(session, profileAccess) {
   return false;
 }
 
+function personnelLifecycleOnboardingProfileAccessForSession(session = {}) {
+  const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+  const permissions = new Set(Array.isArray(session?.permissions) ? session.permissions : []);
+  const canRead = lifecycleAccess.central === true
+    && lifecycleAccess.canReadOnboarding === true
+    && lifecycleAccess.canReadPackages === true
+    && permissions.has("personnel:central:read");
+  return Object.freeze({
+    lifecycleAccess,
+    canRead,
+    canStart: canRead
+      && lifecycleAccess.canPrepareOnboarding === true
+      && lifecycleAccess.canApproveOnboarding === true
+      && lifecycleAccess.canExecuteOnboarding === true
+      && lifecycleAccess.canWritePackages === true
+      && lifecycleAccess.canPublishPackages === true
+      && lifecycleAccess.canWriteAssignments === true,
+    canClose: canRead
+      && lifecycleAccess.canReadOperational === true
+      && lifecycleAccess.canUpdateOperational === true
+      && lifecycleAccess.canCloseOnboarding === true,
+  });
+}
+
+function personnelLifecycleOffboardingProfileAccessForSession(session = {}) {
+  const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+  const permissions = new Set(Array.isArray(session?.permissions) ? session.permissions : []);
+  const canRead = lifecycleAccess.namedActor === true
+    && lifecycleAccess.central === true
+    && lifecycleAccess.canReadOffboardingConfidential === true
+    && permissions.has("personnel:central:read");
+  return Object.freeze({
+    lifecycleAccess,
+    canRead,
+    canPrepare: canRead
+      && lifecycleAccess.canPrepareOffboarding === true
+      && lifecycleAccess.canReadPackages === true
+      && lifecycleAccess.canWriteAssignments === true,
+    canApproveException: canRead && lifecycleAccess.canApproveExceptions === true,
+    canReleaseCommunication: canRead
+      && lifecycleAccess.canReleaseOffboardingCommunication === true
+      && lifecycleAccess.canReadPackages === true
+      && lifecycleAccess.canWriteAssignments === true,
+    canConfirmInformation: canRead
+      && lifecycleAccess.canConfirmOffboardingInformation === true,
+    canExecute: canRead && lifecycleAccess.canExecuteOffboarding === true,
+    canClose: canRead && lifecycleAccess.canCloseOffboarding === true,
+    canReadConfidentialAudit: canRead
+      && lifecycleAccess.canReadConfidentialAudit === true,
+  });
+}
+
 function createPersonnelProfileRosterAccess(session, featureEnabled) {
   const profileAccess = createPersonnelProfileAccessSnapshot(session || {});
   const available = featureEnabled === true
@@ -32994,6 +33426,509 @@ function requirePersonnelProfileAccess(request) {
   }
 }
 
+function requirePersonnelLifecycleOnboardingProfileAccess(request) {
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, [
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ,
+    ]);
+    const onboardingAccess = personnelLifecycleOnboardingProfileAccessForSession(session);
+    if (!onboardingAccess.canRead) {
+      throw httpError(
+        403,
+        "Die Onboarding-Vorschau ist für diesen Zugang nicht verfügbar.",
+        "PERSONNEL_LIFECYCLE_ONBOARDING_PREVIEW_ACCESS_DENIED",
+      );
+    }
+    return Object.freeze({ session, ...onboardingAccess });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_ONBOARDING_PREVIEW_ACCESS_DENIED",
+        [
+          PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
+          PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ,
+        ].join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+function requirePersonnelLifecycleOffboardingProfileAccess(request) {
+  const requiredPermissions = [
+    "personnel:central:read",
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
+  ];
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions);
+    const offboardingAccess = personnelLifecycleOffboardingProfileAccessForSession(session);
+    if (!offboardingAccess.canRead
+      || !requiredPermissions.every((permission) => session.permissions?.includes(permission))) {
+      throw httpError(
+        403,
+        "Der vertrauliche Offboarding-Bereich ist für diesen Zugang nicht verfügbar.",
+        "PERSONNEL_LIFECYCLE_OFFBOARDING_ACCESS_DENIED",
+      );
+    }
+    return Object.freeze({ session, ...offboardingAccess });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_OFFBOARDING_ACCESS_DENIED",
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
+      );
+    }
+    throw error;
+  }
+}
+
+function requirePersonnelLifecycleOnboardingStartAccess(request) {
+  const requiredPermissions = [
+    "personnel:central:read",
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_PREPARE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_APPROVE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_EXECUTE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_WRITE,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_PUBLISH,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ASSIGNMENTS_WRITE,
+  ];
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions, { csrf: true });
+    const onboardingAccess = personnelLifecycleOnboardingProfileAccessForSession(session);
+    if (onboardingAccess.canStart !== true
+      || !requiredPermissions.every((permission) => session.permissions?.includes(permission))) {
+      throw httpError(
+        403,
+        "Fuer den kontrollierten Onboarding-Start fehlen getrennte Fachrechte.",
+        "PERSONNEL_LIFECYCLE_ONBOARDING_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({ session, ...onboardingAccess });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_ONBOARDING_PERMISSION_REQUIRED",
+        requiredPermissions.join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+function requirePersonnelLifecycleOnboardingTaskAccess(
+  request,
+  { write = false, close = false } = {},
+) {
+  const requiredPermissions = [PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ];
+  if (write || close) {
+    requiredPermissions.push(PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE);
+  }
+  if (close) {
+    requiredPermissions.push(
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_CLOSE,
+    );
+  }
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions, {
+      csrf: write || close,
+    });
+    const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+    const allowed = lifecycleAccess.namedActor === true
+      && lifecycleAccess.canReadOperational === true
+      && (!write || lifecycleAccess.canUpdateOperational === true)
+      && (!close || (lifecycleAccess.central === true
+        && lifecycleAccess.canReadOnboarding === true
+        && lifecycleAccess.canCloseOnboarding === true))
+      && requiredPermissions.every((permission) => session.permissions?.includes(permission));
+    if (!allowed) {
+      throw httpError(
+        403,
+        close
+          ? "Fuer den kontrollierten Onboarding-Abschluss fehlen getrennte Fachrechte."
+          : "Fuer Lifecycle-Onboarding-Aufgaben fehlen die operativen Fachrechte.",
+        close
+          ? "PERSONNEL_LIFECYCLE_ONBOARDING_CLOSE_PERMISSION_REQUIRED"
+          : "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({ session, lifecycleAccess });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_PERMISSION_REQUIRED",
+        requiredPermissions.join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+const PERSONNEL_LIFECYCLE_OFFBOARDING_ACTION_ACCESS = Object.freeze({
+  prepare: Object.freeze({
+    permissions: Object.freeze([
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_PREPARE,
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ,
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ASSIGNMENTS_WRITE,
+    ]),
+    capability: "canPrepare",
+  }),
+  timeCriticalApprove: Object.freeze({
+    permissions: Object.freeze([
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.EXCEPTIONS_APPROVE,
+    ]),
+    capability: "canApproveException",
+  }),
+  communicationRelease: Object.freeze({
+    permissions: Object.freeze([
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_COMMUNICATION_RELEASE,
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ,
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ASSIGNMENTS_WRITE,
+    ]),
+    capability: "canReleaseCommunication",
+  }),
+  informationConfirm: Object.freeze({
+    permissions: Object.freeze([
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_INFORMATION_CONFIRM,
+    ]),
+    capability: "canConfirmInformation",
+  }),
+  activate: Object.freeze({
+    permissions: Object.freeze([
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_EXECUTE,
+    ]),
+    capability: "canExecute",
+  }),
+  cancel: Object.freeze({
+    permissions: Object.freeze([
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CLOSE,
+    ]),
+    capability: "canClose",
+  }),
+  close: Object.freeze({
+    permissions: Object.freeze([
+      PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CLOSE,
+    ]),
+    capability: "canClose",
+  }),
+});
+
+function requirePersonnelLifecycleOffboardingActionAccess(request, action) {
+  const definition = PERSONNEL_LIFECYCLE_OFFBOARDING_ACTION_ACCESS[action];
+  if (!definition) throw new TypeError(`Unbekannte Offboarding-Aktion: ${action}`);
+  const requiredPermissions = [
+    "personnel:central:read",
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
+    ...definition.permissions,
+  ];
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions, { csrf: true });
+    const offboardingAccess = personnelLifecycleOffboardingProfileAccessForSession(session);
+    const cancellationPreflightAllowed = action !== "cancel"
+      || offboardingAccess.lifecycleAccess?.canPrepareOffboarding === true
+      || offboardingAccess.lifecycleAccess?.canReleaseOffboardingCommunication === true;
+    if (offboardingAccess[definition.capability] !== true
+      || !cancellationPreflightAllowed
+      || !requiredPermissions.every((permission) => session.permissions?.includes(permission))) {
+      throw httpError(
+        403,
+        "Für diese vertrauliche Offboarding-Aktion fehlen getrennte Fachrechte.",
+        "PERSONNEL_LIFECYCLE_OFFBOARDING_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({ session, ...offboardingAccess });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_OFFBOARDING_PERMISSION_REQUIRED",
+        requiredPermissions.slice(1).join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+function requirePersonnelLifecycleOffboardingTaskAccess(request, { write = false } = {}) {
+  const requiredPermissions = [PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ];
+  if (write) requiredPermissions.push(PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE);
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions, { csrf: write });
+    const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+    if (lifecycleAccess.namedActor !== true
+      || lifecycleAccess.canReadOperational !== true
+      || (write && lifecycleAccess.canUpdateOperational !== true)
+      || !requiredPermissions.every((permission) => session.permissions?.includes(permission))) {
+      throw httpError(
+        403,
+        "Für freigegebene Offboarding-Aufgaben fehlen die operativen Fachrechte.",
+        "PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({ session, lifecycleAccess });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_PERMISSION_REQUIRED",
+        requiredPermissions.join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+const PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS = Object.freeze({
+  training: "personnel:lifecycle:interfaces:training:read",
+  asset: "personnel:lifecycle:interfaces:asset:read",
+  access: "personnel:lifecycle:interfaces:access:read",
+});
+
+function requirePersonnelLifecycleInterfaceCatalogAccess(request) {
+  const requiredPermissions = Object.values(PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS);
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions);
+    const domainIds = Object.entries(PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS)
+      .filter(([, permission]) => session.permissions?.includes(permission))
+      .map(([domain]) => domain);
+    if (isLocalSystemSession(session) || !domainIds.length) {
+      throw httpError(
+        403,
+        "Der O6-Schnittstellenkatalog ist für diesen Zugang nicht verfügbar.",
+        "PERSONNEL_LIFECYCLE_INTERFACE_CATALOG_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({ session, domainIds: Object.freeze(domainIds) });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_INTERFACE_CATALOG_PERMISSION_REQUIRED",
+        requiredPermissions.join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+function personnelLifecycleAutomationPersonalCentralSession(session, lifecycleAccess) {
+  return session?.sessionKind === "employee"
+    && session?.isEmployee === true
+    && !isLocalSystemSession(session)
+    && lifecycleAccess?.namedActor === true
+    && lifecycleAccess?.central === true;
+}
+
+function requirePersonnelLifecycleAutomationCatalogAccess(request) {
+  const requiredPermissions = Object.values(PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS);
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions);
+    const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+    const domainIds = Object.entries(PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS)
+      .filter(([, permission]) => session.permissions?.includes(permission))
+      .map(([domain]) => domain);
+    if (!personnelLifecycleAutomationPersonalCentralSession(session, lifecycleAccess)
+      || !domainIds.length) {
+      throw httpError(
+        403,
+        "Der O7-Automationskatalog ist für diesen Zugang nicht verfügbar.",
+        "PERSONNEL_LIFECYCLE_AUTOMATION_CATALOG_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({
+      session,
+      lifecycleAccess,
+      domainIds: Object.freeze(domainIds),
+    });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_AUTOMATION_CATALOG_PERMISSION_REQUIRED",
+        requiredPermissions.join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+function requirePersonnelLifecycleAutomationPreviewAccess(request) {
+  const requiredPermissions = Object.freeze([
+    ...Object.values(PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS),
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ,
+  ]);
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions);
+    const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+    if (!personnelLifecycleAutomationPersonalCentralSession(session, lifecycleAccess)
+      || lifecycleAccess.canReadOperational !== true
+      || !requiredPermissions.every((permission) => session.permissions?.includes(permission))) {
+      throw httpError(
+        403,
+        "Für die O7-Automationsvorschau fehlen die vollständigen Fachrechte.",
+        "PERSONNEL_LIFECYCLE_AUTOMATION_PREVIEW_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({ session, lifecycleAccess });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_AUTOMATION_PREVIEW_PERMISSION_REQUIRED",
+        requiredPermissions.join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+const PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSIONS = Object.freeze({
+  onboarding: Object.freeze([
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
+  ]),
+  offboarding: Object.freeze([
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
+    PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.HR_CONFIDENTIAL_READ,
+  ]),
+});
+
+function personnelLifecycleEditorPersonalCentralSession(session, lifecycleAccess) {
+  return session?.sessionKind === "employee"
+    && session?.isEmployee === true
+    && session?.active !== false
+    && session?.serviceAccount !== true
+    && session?.sharedAccount !== true
+    && !isLocalSystemSession(session)
+    && lifecycleAccess?.namedActor === true
+    && lifecycleAccess?.central === true;
+}
+
+function personnelLifecycleEditorAllowedWorkflowTypes(session, lifecycleAccess) {
+  const permissions = new Set(Array.isArray(session?.permissions) ? session.permissions : []);
+  const allowed = [];
+  if (PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSIONS.onboarding
+    .every((permission) => permissions.has(permission))
+    && lifecycleAccess?.canReadOnboarding === true) {
+    allowed.push("onboarding");
+  }
+  if (PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSIONS.offboarding
+    .every((permission) => permissions.has(permission))
+    && lifecycleAccess?.canReadOffboardingConfidential === true
+    && lifecycleAccess?.canReadHrConfidential === true) {
+    allowed.push("offboarding");
+  }
+  return Object.freeze(allowed);
+}
+
+function requirePersonnelLifecycleEditorCatalogAccess(request) {
+  const requiredPermission = PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.READ;
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, [requiredPermission]);
+    const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+    const workflowTypes = personnelLifecycleEditorAllowedWorkflowTypes(session, lifecycleAccess);
+    if (!personnelLifecycleEditorPersonalCentralSession(session, lifecycleAccess)
+      || !session.permissions?.includes(requiredPermission)
+      || !workflowTypes.length) {
+      throw httpError(
+        403,
+        "Der O8-Workflow-Editor ist für diesen Zugang nicht verfügbar.",
+        "PERSONNEL_LIFECYCLE_EDITOR_CATALOG_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({ session, lifecycleAccess, workflowTypes });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_EDITOR_CATALOG_PERMISSION_REQUIRED",
+        requiredPermission,
+      );
+    }
+    throw error;
+  }
+}
+
+function personnelLifecycleEditorSubmittedWorkflowType(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "";
+  const descriptor = Object.getOwnPropertyDescriptor(body, "workflowType");
+  if (!descriptor || !("value" in descriptor) || typeof descriptor.value !== "string") return "";
+  return descriptor.value.trim().toLowerCase();
+}
+
+function requirePersonnelLifecycleEditorValidateAccess(request) {
+  const requiredPermissions = Object.freeze([
+    PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.READ,
+    PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.DRAFT_WRITE,
+    PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.VALIDATE,
+  ]);
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions, { csrf: true });
+    const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+    const workflowTypes = personnelLifecycleEditorAllowedWorkflowTypes(session, lifecycleAccess);
+    if (!personnelLifecycleEditorPersonalCentralSession(session, lifecycleAccess)
+      || !requiredPermissions.every((permission) => session.permissions?.includes(permission))) {
+      throw httpError(
+        403,
+        "Für die O8-Entwurfsprüfung fehlen die vollständigen Fachrechte.",
+        "PERSONNEL_LIFECYCLE_EDITOR_VALIDATE_PERMISSION_REQUIRED",
+      );
+    }
+    const submittedWorkflowType = personnelLifecycleEditorSubmittedWorkflowType(request.body);
+    if (["onboarding", "offboarding"].includes(submittedWorkflowType)
+      && !workflowTypes.includes(submittedWorkflowType)) {
+      throw httpError(
+        403,
+        "Für diese Lifecycle-Prozessart fehlt das getrennte Quellrecht.",
+        "PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSION_REQUIRED",
+      );
+    }
+    return Object.freeze({
+      session,
+      lifecycleAccess,
+      workflowTypes,
+      submittedWorkflowType,
+    });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_EDITOR_VALIDATE_PERMISSION_REQUIRED",
+        requiredPermissions.join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
 function personnelProfileCanReadMasterProjection(accessContext) {
   return accessContext.profileAccess.localSystem
     || accessContext.profileAccess.scoped
@@ -33015,18 +33950,47 @@ function personnelProfilePreflightCapability(accessContext, tab) {
     return accessContext.profileAccess.canReadMaster === true
       && personnelProfileCanReadMasterProjection(accessContext);
   }
+  if (tab === "onboarding") {
+    return personnelLifecycleOnboardingProfileAccessForSession(
+      accessContext.session,
+    ).canRead === true;
+  }
+  if (tab === "offboarding") {
+    return personnelLifecycleOffboardingProfileAccessForSession(
+      accessContext.session,
+    ).canRead === true;
+  }
   return tab === "documents"
     && accessContext.profileAccess.canReadDocuments === true
     && personnelProfileCanReadDocumentProjection(accessContext);
 }
 
 function personnelProfileCapabilities(accessContext, row) {
+  const onboardingAccess = personnelLifecycleOnboardingProfileAccessForSession(
+    accessContext.session,
+  );
+  const offboardingAccess = personnelLifecycleOffboardingProfileAccessForSession(
+    accessContext.session,
+  );
   return Object.freeze({
     canReadOverview: accessContext.profileAccess.canReadSubject(row) === true,
     canReadMasterOrg: accessContext.profileAccess.canReadMasterSubject(row) === true
       && personnelProfileCanReadMasterProjection(accessContext),
     canReadDocuments: accessContext.profileAccess.canReadDocumentsSubject(row) === true
       && personnelProfileCanReadDocumentProjection(accessContext),
+    canReadOnboardingPreview: onboardingAccess.canRead === true,
+    canStartOnboarding: onboardingAccess.canStart === true,
+    canCloseOnboarding: onboardingAccess.canClose === true,
+    canReadOffboardingConfidential: offboardingAccess.canRead === true,
+    canPrepareOffboarding: offboardingAccess.canPrepare === true,
+    canApproveOffboardingException: offboardingAccess.canApproveException === true,
+    canReleaseOffboardingCommunication:
+      offboardingAccess.canReleaseCommunication === true,
+    canConfirmOffboardingInformation: offboardingAccess.canConfirmInformation === true,
+    canExecuteOffboarding: offboardingAccess.canExecute === true,
+    canCloseOffboarding: offboardingAccess.canClose === true,
+    canReadOffboardingConfidentialAudit:
+      offboardingAccess.canReadConfidentialAudit === true,
   });
 }
 
@@ -33035,9 +33999,11 @@ function personnelProfileTabs(capabilities) {
     overview: Object.freeze({ available: capabilities.canReadOverview === true }),
     masterData: Object.freeze({ available: capabilities.canReadMasterOrg === true }),
     documents: Object.freeze({ available: capabilities.canReadDocuments === true }),
-    onboarding: Object.freeze({ available: false }),
+    onboarding: Object.freeze({ available: capabilities.canReadOnboardingPreview === true }),
     training: Object.freeze({ available: false }),
-    offboarding: Object.freeze({ available: false }),
+    offboarding: Object.freeze({
+      available: capabilities.canReadOffboardingConfidential === true,
+    }),
     history: Object.freeze({ available: false }),
   });
 }
@@ -33062,6 +34028,75 @@ function personnelProfileSubjectProjection(row) {
         name: row.department_name === null ? null : String(row.department_name),
       }),
     }),
+  });
+}
+
+async function personnelLifecycleOnboardingExecutionProjection(
+  employeeNumber,
+  onboardingPreview,
+  onboardingAccess,
+) {
+  const activeCase = await customProcessRepository.currentEpisodeOnboardingCaseForEmployee({
+    employeeNumber,
+  });
+  let activeCaseProjection = null;
+  if (activeCase) {
+    const caseId = String(activeCase.id || "");
+    const progress = await customProcessRepository.lifecycleCaseProgress({ caseId });
+    if (!caseId || !progress || progress.case_id !== caseId) {
+      throw httpError(
+        503,
+        "Der aktive Onboarding-Fall konnte nicht sicher geprueft werden.",
+        "PERSONNEL_LIFECYCLE_ONBOARDING_INTEGRITY_FAILED",
+      );
+    }
+    activeCaseProjection = Object.freeze({
+      caseId,
+      state: String(activeCase.state || ""),
+      createdAt: String(activeCase.created_at || ""),
+      startedAt: String(activeCase.updated_at || activeCase.created_at || ""),
+      completedAt: ["completed", "cancelled"].includes(String(activeCase.state || ""))
+        ? String(activeCase.updated_at || "")
+        : null,
+      packageCount: Number(progress.package_count || 0),
+      taskCount: Number(progress.total_step_count || 0),
+      completedTaskCount: Number(progress.completed_step_count || 0),
+      closeAvailable: String(activeCase.state || "") === "active"
+        && onboardingAccess.canClose === true
+        && Number(progress.package_count || 0) > 0
+        && Number(progress.package_count || 0) === Number(progress.linked_run_count || 0)
+        && Number(progress.assignment_count || 0) === Number(progress.linked_assignment_count || 0)
+        && Number(progress.total_step_count || 0) > 0
+        && Number(progress.completed_step_count || 0) === Number(progress.total_step_count || 0)
+        && Number(progress.skipped_step_count || 0) === 0
+        && Number(progress.linked_run_count || 0) > 0
+        && Number(progress.linked_run_count || 0) === Number(progress.resolved_run_count || 0),
+    });
+  }
+  const resolvableCodes = new Set([
+    "onboarding_execution_deferred_until_o4",
+    "assignment_selection_required",
+    "m4_publication_review_required",
+    "required_package_family_unmapped",
+  ]);
+  const hardBlocker = (onboardingPreview.blockers || []).some(({ code }) => (
+    !resolvableCodes.has(code)
+  ));
+  const mandatoryCompanyPackages = onboardingPreview.packageResolution.packages.filter((entry) => (
+    entry.scope?.type === "company"
+      && entry.requirementKind === "mandatory"
+      && entry.authorityLevel === "central"
+  ));
+  return Object.freeze({
+    contractVersion: PERSONNEL_LIFECYCLE_O4_CONTRACT_VERSION,
+    mode: "controlled_onboarding_start",
+    previewSha256: personnelLifecycleOnboardingPreviewSha256(onboardingPreview),
+    formAvailable: onboardingAccess.canStart === true
+      && activeCaseProjection === null
+      && !hardBlocker
+      && mandatoryCompanyPackages.length >= 2,
+    requiredConfirmation: "START_ONBOARDING",
+    activeCase: activeCaseProjection,
   });
 }
 
@@ -33207,6 +34242,114 @@ function personnelWorkflowRecipientAccess(recipient) {
     explicitScopes,
     permissionScopes: parsePortalPermissionScopes(recipient?.permission_scopes),
   });
+}
+
+function personnelLifecycleOnboardingRecipientEligible(recipient, scope) {
+  if (!recipient || ["it_admin", "developer", "local"].includes(recipient.role)
+    || !customProcessPortalUserInScope(recipient, scope)) return false;
+  const permissionState = effectivePortalPermissionState(
+    recipient.employee_number,
+    recipient.role,
+    recipient.role_permissions,
+    recipient.granted_permissions,
+    recipient.denied_permissions,
+  );
+  const explicitScopes = portalAccessScopesForPrincipal({
+    employeeNumber: recipient.employee_number,
+    role: recipient.role,
+    homeLocationId: recipient.home_location_id,
+    preferredDepartmentId: recipient.preferred_department_id,
+    scopesValue: recipient.access_scopes,
+  });
+  const access = createPersonnelLifecycleCaseAccessSnapshot({
+    actorId: recipient.employee_number,
+    role: recipient.role,
+    sessionKind: "employee",
+    active: true,
+    permissions: permissionState.effectivePermissions,
+    explicitScopes,
+    permissionScopes: parsePortalPermissionScopes(recipient.permission_scopes),
+  });
+  const context = {
+    caseType: "onboarding",
+    operationalReleased: true,
+    scope,
+  };
+  if (access.central === true) {
+    return access.canReadOperational === true && access.canUpdateOperational === true;
+  }
+  return access.canReadOperationalScope(context) === true
+    && access.canUpdateOperationalScope(context) === true;
+}
+
+function personnelLifecycleOffboardingRecipientEligible(
+  recipient,
+  scope,
+  subjectEmployeeNumber,
+  recipientClass,
+) {
+  if (!recipient || recipient.role === "local"
+    || String(recipient.employee_number || "") === String(subjectEmployeeNumber || "")
+    || !customProcessPortalUserInScope(recipient, scope)) return false;
+  const permissionState = effectivePortalPermissionState(
+    recipient.employee_number,
+    recipient.role,
+    recipient.role_permissions,
+    recipient.granted_permissions,
+    recipient.denied_permissions,
+  );
+  const explicitScopes = portalAccessScopesForPrincipal({
+    employeeNumber: recipient.employee_number,
+    role: recipient.role,
+    homeLocationId: recipient.home_location_id,
+    preferredDepartmentId: recipient.preferred_department_id,
+    scopesValue: recipient.access_scopes,
+  });
+  const access = createPersonnelLifecycleCaseAccessSnapshot({
+    actorId: recipient.employee_number,
+    role: recipient.role,
+    sessionKind: "employee",
+    active: true,
+    permissions: permissionState.effectivePermissions,
+    explicitScopes,
+    permissionScopes: parsePortalPermissionScopes(recipient.permission_scopes),
+  });
+  if (access.canReadOperational !== true || access.canUpdateOperational !== true) return false;
+  const rolesByRecipientClass = {
+    [PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES.LEADERSHIP]: new Set([
+      "manager",
+      "department_manager",
+      "hr",
+      "admin",
+      "developer",
+    ]),
+    [PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES.IT_SECURITY]: new Set([
+      "it_admin",
+      "developer",
+    ]),
+    [PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES.ASSET_CUSTODIAN]: new Set([
+      "manager",
+      "department_manager",
+      "admin",
+      "it_admin",
+      "developer",
+    ]),
+    [PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES.PAYROLL]: new Set([
+      "hr",
+      "admin",
+      "developer",
+    ]),
+  };
+  const eligibleRoles = rolesByRecipientClass[String(recipientClass || "")];
+  if (!eligibleRoles?.has(recipient.role)) return false;
+  if (access.central === true) return true;
+  const context = {
+    caseType: "offboarding",
+    operationalReleased: true,
+    scope,
+  };
+  return access.canReadOperationalScope(context) === true
+    && access.canUpdateOperationalScope(context) === true;
 }
 
 function personnelWorkflowInstanceAccessForSession(session, workflowAccess) {
@@ -33364,6 +34507,93 @@ function personnelWorkflowRouteError(error) {
       400,
       "Die Workflow-Version verweist auf einen ungültigen Bereich oder verletzt eine gespeicherte Regel.",
       "PERSONNEL_WORKFLOW_REFERENCE_INVALID",
+    );
+  }
+  throw error;
+}
+
+function personnelLifecycleOnboardingRouteError(error) {
+  if (error instanceof PersonnelLifecycleOnboardingExecutionError) {
+    const status = error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_EXECUTION_ERROR_KINDS.FORBIDDEN
+      ? 403
+      : error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_EXECUTION_ERROR_KINDS.NOT_FOUND
+        ? 404
+        : error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_EXECUTION_ERROR_KINDS.CONFLICT
+          ? 409
+          : error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_EXECUTION_ERROR_KINDS.INTEGRITY
+            ? 503
+            : 400;
+    throw httpError(status, error.message, error.code);
+  }
+  if (error instanceof PersonnelWorkflowInstanceError) {
+    personnelWorkflowRouteError(error);
+  }
+  if ([
+    "PERSISTENCE_FOREIGN_KEY_VIOLATION",
+    "PERSISTENCE_NOT_NULL_VIOLATION",
+    "PERSISTENCE_CHECK_VIOLATION",
+  ].includes(error?.code)) {
+    throw httpError(
+      409,
+      "Die Onboarding-Grundlage hat sich geaendert. Bitte neu laden.",
+      "PERSONNEL_LIFECYCLE_ONBOARDING_PREVIEW_STALE",
+    );
+  }
+  throw error;
+}
+
+function personnelLifecycleOnboardingTaskRouteError(error) {
+  if (error instanceof PersonnelLifecycleOnboardingTaskError) {
+    const status = error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.FORBIDDEN
+      ? 403
+      : error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.NOT_FOUND
+        ? 404
+        : error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.CONFLICT
+          ? 409
+          : error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.INTEGRITY
+            ? 503
+            : 400;
+    throw httpError(status, error.message, error.code);
+  }
+  if (error instanceof PersonnelWorkflowInstanceError) {
+    personnelWorkflowRouteError(error);
+  }
+  throw error;
+}
+
+function personnelLifecycleOffboardingRouteError(error) {
+  if (error instanceof PersonnelLifecycleOffboardingContractError) {
+    throw httpError(400, error.message, error.code);
+  }
+  if (error instanceof PersonnelLifecycleOffboardingServiceError) {
+    const status = error.kind === PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN
+      ? 403
+      : error.kind === PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND
+        ? 404
+        : error.kind === PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.CONFLICT
+          ? 409
+          : error.kind === PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.INTEGRITY
+            ? 503
+            : 400;
+    throw httpError(status, error.message, error.code);
+  }
+  if (["PERSISTENCE_UNIQUE_VIOLATION", "PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"]
+    .includes(error?.code)) {
+    throw httpError(
+      409,
+      "Der Offboarding-Stand wurde parallel geändert. Bitte neu laden.",
+      "PERSONNEL_LIFECYCLE_OFFBOARDING_CONCURRENT_CHANGE",
+    );
+  }
+  if ([
+    "PERSISTENCE_FOREIGN_KEY_VIOLATION",
+    "PERSISTENCE_NOT_NULL_VIOLATION",
+    "PERSISTENCE_CHECK_VIOLATION",
+  ].includes(error?.code)) {
+    throw httpError(
+      409,
+      "Die geschützte Offboarding-Grundlage hat sich geändert. Bitte neu laden.",
+      "PERSONNEL_LIFECYCLE_OFFBOARDING_REFERENCE_CONFLICT",
     );
   }
   throw error;
@@ -33681,9 +34911,556 @@ function auditPersonnelLifecycleScopedNotFound(accessContext, request, error) {
   }
 }
 
+const PERSONNEL_LIFECYCLE_OFFBOARDING_FAMILY_TITLES = Object.freeze({
+  hr_contract_end: "Vertragsende und Personaladministration",
+  communication_release_information: "Kommunikationsfreigabe und Information",
+  accounts_permissions: "Konten und Berechtigungen",
+  work_access_assets: "Arbeitszugänge und Betriebsmittel",
+  handover_open_responsibilities: "Übergabe und offene Verantwortungen",
+  closing_documents_follow_up: "Abschlussdokumente und Nachbearbeitung",
+});
+
+function personnelLifecycleOffboardingSubjectScope(subject) {
+  if (!subject || subject.subject_type !== "employee"
+    || subject.employee_active !== 1
+    || !subject.location_id
+    || subject.location_active !== 1) {
+    throw personnelProfileNotFound();
+  }
+  const departmentId = subject.department_id === null
+    || subject.department_id === undefined
+    ? null
+    : Number(subject.department_id);
+  if (departmentId !== null) {
+    if (!Number.isSafeInteger(departmentId) || departmentId < 1
+      || subject.department_active !== 1
+      || String(subject.department_location_id || "") !== String(subject.location_id)) {
+      throw httpError(
+        503,
+        "Der Organisationsbereich des Offboardings ist widersprüchlich.",
+        "PERSONNEL_LIFECYCLE_OFFBOARDING_SCOPE_INTEGRITY_FAILED",
+      );
+    }
+  }
+  return Object.freeze({
+    type: departmentId === null ? "location" : "department",
+    locationId: String(subject.location_id),
+    departmentId,
+  });
+}
+
+function personnelLifecycleOffboardingCandidatePublicValue(row) {
+  const actorId = String(row?.employee_number || "").trim();
+  const displayName = String(row?.full_name || actorId).trim();
+  const role = String(row?.role || "").trim();
+  const roleLabel = builtinPortalRoles.find(({ id }) => id === role)?.name || role;
+  if (!actorId || !displayName || !roleLabel) return null;
+  return Object.freeze({ actorId, displayName, roleLabel });
+}
+
+async function personnelLifecycleOffboardingPreparationPackages(employeeNumber, scope) {
+  const recipients = await customProcessRepository.listRecipientCandidates();
+  if (!Array.isArray(recipients)) {
+    throw httpError(
+      503,
+      "Die Offboarding-Empfängerliste konnte nicht sicher geprüft werden.",
+      "PERSONNEL_LIFECYCLE_OFFBOARDING_RECIPIENT_INTEGRITY_FAILED",
+    );
+  }
+  return Object.freeze(PERSONNEL_LIFECYCLE_OFFBOARDING_FAMILY_DEFINITIONS.map((definition) => {
+    const candidates = recipients.flatMap((recipient) => {
+      if (!personnelLifecycleOffboardingRecipientEligible(
+        recipient,
+        scope,
+        employeeNumber,
+        definition.recipientClass,
+      )) return [];
+      const candidate = personnelLifecycleOffboardingCandidatePublicValue(recipient);
+      return candidate ? [candidate] : [];
+    }).sort((left, right) => left.displayName.localeCompare(
+      right.displayName,
+      "de-AT",
+      { sensitivity: "base" },
+    ) || left.actorId.localeCompare(right.actorId));
+    return Object.freeze({
+      familyCode: definition.familyCode,
+      title: PERSONNEL_LIFECYCLE_OFFBOARDING_FAMILY_TITLES[definition.familyCode],
+      recipientClass: definition.recipientClass,
+      candidates: Object.freeze(candidates),
+    });
+  }));
+}
+
+function personnelLifecycleOffboardingAllowedActions(projection, accessContext) {
+  const state = projection.state;
+  const lifecycleAccess = accessContext.lifecycleAccess;
+  const timeCritical = projection.urgency?.mode === "time_critical";
+  const approved = projection.urgency?.approved === true;
+  const allComplete = projection.families.every(({ runtimeStatus }) => (
+    runtimeStatus === "complete"
+  ));
+  return Object.freeze({
+    approveTimeCritical: state === "internally_prepared"
+      && timeCritical
+      && !approved
+      && accessContext.canApproveException === true,
+    releaseCommunication: state === "internally_prepared"
+      && (!timeCritical || approved)
+      && accessContext.canReleaseCommunication === true,
+    confirmInformation: state === "communication_released"
+      && accessContext.canConfirmInformation === true,
+    activate: state === "employee_informed" && accessContext.canExecute === true,
+    cancel: [
+      "internally_prepared",
+      "communication_released",
+      "employee_informed",
+      "active",
+    ].includes(state)
+      && accessContext.canClose === true
+      && (state === "internally_prepared"
+        ? lifecycleAccess.canPrepareOffboarding === true
+        : lifecycleAccess.canReleaseOffboardingCommunication === true),
+    close: state === "active" && allComplete && accessContext.canClose === true,
+  });
+}
+
+function personnelLifecycleOffboardingProfileCase(
+  projection,
+  accessContext,
+  expectedEmployeeNumber,
+) {
+  const confidential = projection.case;
+  if (!confidential
+    || confidential.employeeNumber !== expectedEmployeeNumber
+    || !Array.isArray(projection.families)
+    || projection.families.length !== PERSONNEL_LIFECYCLE_OFFBOARDING_FAMILY_DEFINITIONS.length) {
+    throw httpError(
+      503,
+      "Die vertrauliche Offboarding-Projektion ist widersprüchlich.",
+      "PERSONNEL_LIFECYCLE_OFFBOARDING_PROJECTION_INTEGRITY_FAILED",
+    );
+  }
+  const candidatesByFamily = new Map(
+    projection.families.map(({ familyCode, candidates }) => [familyCode, candidates]),
+  );
+  const packages = projection.families.map((family) => {
+    const assignee = (candidatesByFamily.get(family.familyCode) || [])
+      .find(({ actorId }) => actorId === family.assigneeActorId);
+    return Object.freeze({
+      familyCode: family.familyCode,
+      title: family.title,
+      recipientClass: family.recipientClass,
+      assigneeActorId: family.assigneeActorId,
+      assigneeDisplayName: assignee?.displayName || family.assigneeActorId,
+      orderId: family.orderId,
+      status: family.runtimeStatus,
+      dueAt: null,
+    });
+  });
+  return Object.freeze({
+    caseId: confidential.caseId,
+    employeeNumber: confidential.employeeNumber,
+    state: projection.state,
+    revision: projection.revision,
+    responsibleActorId: projection.responsibleActorId,
+    createdAt: projection.createdAt,
+    updatedAt: projection.updatedAt,
+    referenceTimes: Object.freeze({
+      plannedExitAt: confidential.plannedExitAt,
+      lastWorkingDay: confidential.lastWorkingDay,
+      legalExitDate: confidential.legalExitDate,
+      accessBlockAt: confidential.accessBlockAt,
+    }),
+    urgency: Object.freeze({
+      mode: projection.urgency.mode,
+      exceptionReasonCode: projection.urgency.exceptionReason?.code || null,
+      followUpDueAt: projection.urgency.followUpDueAt || null,
+      approved: projection.urgency.approved === true,
+    }),
+    confidential: Object.freeze({
+      exitReasonCode: confidential.exitReasonCode,
+      exitReasonNote: confidential.exitReasonNote,
+      hrNote: confidential.hrNote || "",
+      documentReferenceIds: Object.freeze([...(confidential.documentReferenceIds || [])]),
+    }),
+    packages: Object.freeze(packages),
+    allowedActions: personnelLifecycleOffboardingAllowedActions(projection, accessContext),
+  });
+}
+
+function setPersonnelLifecycleOffboardingNoStore(response) {
+  response.setHeader("Cache-Control", "no-store");
+  response.setHeader("Pragma", "no-cache");
+}
+
+function sendPersonnelLifecycleOffboardingJson(response, payload, status = 200) {
+  setPersonnelLifecycleOffboardingNoStore(response);
+  response.statusCode = status;
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.removeHeader("ETag");
+  response.end(JSON.stringify(payload));
+}
+
+function sendPersonnelLifecycleAutomationJson(response, payload) {
+  setPersonnelLifecycleOffboardingNoStore(response);
+  response.statusCode = 200;
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.removeHeader("ETag");
+  response.end(JSON.stringify(payload));
+}
+
+function sendPersonnelLifecycleEditorJson(response, payload, status = 200) {
+  setPersonnelLifecycleOffboardingNoStore(response);
+  response.statusCode = status;
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.removeHeader("ETag");
+  response.end(JSON.stringify(payload));
+}
+
+function personnelLifecycleEditorRouteError(error) {
+  if (error instanceof PersonnelLifecycleEditorContractError) {
+    throw httpError(
+      400,
+      "Der O8-Workflow-Entwurf ist strukturell ungültig.",
+      error.code || "O8_VALUE_INVALID",
+    );
+  }
+  throw error;
+}
+
+function personnelLifecycleAutomationCanonicalScope(value) {
+  const locationId = String(value?.locationId ?? value?.location_id ?? "").trim();
+  const rawDepartmentId = value?.departmentId ?? value?.department_id ?? null;
+  const hasDepartment = rawDepartmentId !== null
+    && rawDepartmentId !== undefined
+    && rawDepartmentId !== ""
+    && rawDepartmentId !== 0
+    && rawDepartmentId !== "0";
+  const departmentId = hasDepartment ? Number(rawDepartmentId) : null;
+  if (!locationId || locationId.length > 80 || locationId.includes("\0")
+    || (hasDepartment && (!Number.isSafeInteger(departmentId) || departmentId < 1))) {
+    throw httpError(
+      503,
+      "Der Organisationsbereich der O7-Aufgabenvorschau ist widersprüchlich.",
+      "PERSONNEL_LIFECYCLE_AUTOMATION_SCOPE_INTEGRITY_FAILED",
+    );
+  }
+  return Object.freeze(hasDepartment
+    ? { type: "department", id: String(departmentId) }
+    : { type: "location", id: locationId });
+}
+
+function personnelLifecycleAutomationOnboardingTask(item) {
+  const runId = String(item?.runId || "").trim();
+  const stepId = String(item?.stepId || "").trim();
+  const title = String(item?.step?.title || "").trim();
+  if (!runId || !stepId || !title) {
+    throw httpError(
+      503,
+      "Die freigegebene Onboarding-Aufgabe ist für O7 widersprüchlich.",
+      "PERSONNEL_LIFECYCLE_AUTOMATION_TASK_INTEGRITY_FAILED",
+    );
+  }
+  return Object.freeze({
+    source: "onboarding",
+    runId,
+    processVersionId: null,
+    stepId,
+    title,
+    status: "active",
+    scope: personnelLifecycleAutomationCanonicalScope(item.scope),
+    referenceKind: null,
+    referenceDate: null,
+    responsibilityState: "unknown",
+    policyBinding: null,
+  });
+}
+
+function personnelLifecycleAutomationOffboardingTask(item) {
+  const projected = personnelLifecycleOffboardingTaskProjection(item);
+  const status = String(projected.status || "").trim();
+  if (!["pending", "active"].includes(status)) {
+    throw httpError(
+      503,
+      "Die freigegebene Offboarding-Aufgabe ist für O7 widersprüchlich.",
+      "PERSONNEL_LIFECYCLE_AUTOMATION_TASK_INTEGRITY_FAILED",
+    );
+  }
+  return Object.freeze({
+    source: "offboarding",
+    runId: projected.runId,
+    processVersionId: null,
+    stepId: projected.stepId,
+    title: projected.title,
+    status,
+    scope: personnelLifecycleAutomationCanonicalScope(projected),
+    referenceKind: null,
+    referenceDate: null,
+    responsibilityState: "unknown",
+    policyBinding: null,
+  });
+}
+
+function personnelLifecycleOffboardingBody(request, forbiddenFields = []) {
+  const body = request.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(body))
+    || forbiddenFields.some((field) => Object.hasOwn(body, field))) {
+    throw httpError(
+      400,
+      "Der vertrauliche Offboarding-Auftrag ist ungültig.",
+      "PERSONNEL_LIFECYCLE_OFFBOARDING_INPUT_INVALID",
+    );
+  }
+  return body;
+}
+
+function personnelLifecycleOffboardingTaskCompletionBody(request) {
+  const body = personnelLifecycleOffboardingBody(request, [
+    "actorId",
+    "employeeNumber",
+    "responsibleActorId",
+    "caseId",
+    "runId",
+    "stepId",
+  ]);
+  const keys = Reflect.ownKeys(body);
+  if (!Object.hasOwn(body, "operationId")
+    || !Object.hasOwn(body, "action")
+    || keys.some((key) => !["operationId", "action", "evidenceReference"].includes(key))
+    || (Object.hasOwn(body, "evidenceReference") && body.evidenceReference !== null)) {
+    throw httpError(
+      400,
+      "O5 erlaubt keinen Nachweistext oder freien Abschlussinhalt.",
+      "PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_INPUT_INVALID",
+    );
+  }
+  return Object.freeze({ operationId: body.operationId, action: body.action });
+}
+
+function personnelLifecycleOffboardingTaskProjection(item) {
+  const runId = String(item?.runId || "").trim();
+  const stepId = String(item?.stepId || "").trim();
+  const task = item?.task;
+  const definition = PERSONNEL_LIFECYCLE_OFFBOARDING_FAMILY_DEFINITIONS.find(
+    (entry) => entry.stepId === stepId,
+  );
+  if (!runId || !stepId || !definition || !task
+    || typeof task !== "object" || Array.isArray(task)) {
+    throw httpError(
+      503,
+      "Die freigegebene Offboarding-Aufgabe ist widersprüchlich.",
+      "PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_INTEGRITY_FAILED",
+    );
+  }
+  const title = String(
+    task.title
+      || task.action
+      || task.payrollAction
+      || PERSONNEL_LIFECYCLE_OFFBOARDING_FAMILY_TITLES[definition.familyCode]
+      || "Offboarding-Auftrag",
+  ).trim();
+  return Object.freeze({
+    runId,
+    stepId,
+    projection: definition.projection,
+    title,
+    ...task,
+  });
+}
+
+async function handlePersonnelLifecycleOffboardingCaseAction(
+  request,
+  response,
+  { action, serviceMethod },
+) {
+  const accessContext = requirePersonnelLifecycleOffboardingActionAccess(request, action);
+  setPersonnelLifecycleOffboardingNoStore(response);
+  const body = personnelLifecycleOffboardingBody(request, [
+    "actorId",
+    "employeeNumber",
+    "responsibleActorId",
+    "caseId",
+  ]);
+  try {
+    const result = await requirePersonnelLifecycleOffboardingService()[serviceMethod](
+      portalActorId(accessContext.session),
+      { ...body, caseId: request.params.caseId },
+      { access: accessContext.lifecycleAccess },
+    );
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    sendPersonnelLifecycleOffboardingJson(response, { offboardingCase: result });
+  } catch (error) {
+    if (error instanceof PersonnelLifecycleOffboardingServiceError
+      && [
+        PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN,
+        PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND,
+      ].includes(error.kind)) {
+      auditPersonnelLifecycleAccessDenied(
+        accessContext.session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
+      );
+    }
+    personnelLifecycleOffboardingRouteError(error);
+  }
+}
+
+function personnelLifecycleOffboardingPreparationFromFamilies(families, available) {
+  return Object.freeze({
+    available: available === true
+      && families.every(({ candidates }) => candidates.length > 0),
+    packages: Object.freeze(families.map((family) => Object.freeze({
+      familyCode: family.familyCode,
+      title: PERSONNEL_LIFECYCLE_OFFBOARDING_FAMILY_TITLES[family.familyCode]
+        || family.title,
+      recipientClass: family.recipientClass,
+      candidates: Object.freeze([...(family.candidates || [])]),
+    }))),
+  });
+}
+
+app.get("/api/portal/v1/personnel-lifecycle/interfaces/catalog", (request, response) => {
+  const accessContext = requirePersonnelLifecycleInterfaceCatalogAccess(request);
+  const catalog = personnelLifecycleInterfaceCatalog(accessContext.domainIds);
+  auditPortal(
+    portalActorId(accessContext.session),
+    "personnel-lifecycle.interfaces.catalog.view",
+    "personnel_lifecycle_interface_contract",
+    catalog.contractVersion,
+    JSON.stringify({ domains: catalog.domains.map(({ id }) => id) }),
+  );
+  response.status(200);
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.setHeader("Cache-Control", "no-store");
+  response.setHeader("Pragma", "no-cache");
+  response.end(JSON.stringify(catalog));
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/automation/catalog", (request, response) => {
+  const accessContext = requirePersonnelLifecycleAutomationCatalogAccess(request);
+  const catalog = personnelLifecycleAutomationCatalog(accessContext.domainIds);
+  auditPortal(
+    portalActorId(accessContext.session),
+    "personnel-lifecycle.automation.catalog.view",
+    "personnel_lifecycle_automation_contract",
+    catalog.contractVersion,
+    JSON.stringify({ domains: catalog.domains.map(({ id }) => id) }),
+  );
+  sendPersonnelLifecycleAutomationJson(response, catalog);
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/editor/catalog", (request, response) => {
+  const accessContext = requirePersonnelLifecycleEditorCatalogAccess(request);
+  const catalog = personnelLifecycleEditorCatalog(accessContext.workflowTypes);
+  auditPortal(
+    portalActorId(accessContext.session),
+    "personnel-lifecycle.editor.catalog.view",
+    "personnel_lifecycle_editor_contract",
+    catalog.contractVersion,
+    JSON.stringify({ workflowTypes: catalog.workflowTypes }),
+  );
+  sendPersonnelLifecycleEditorJson(response, catalog);
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/editor/validate", (request, response) => {
+  const accessContext = requirePersonnelLifecycleEditorValidateAccess(request);
+  let validation;
+  try {
+    validation = validatePersonnelLifecycleEditorDraft(request.body);
+  } catch (error) {
+    personnelLifecycleEditorRouteError(error);
+  }
+  const workflowType = String(validation?.draft?.workflowType || "").trim().toLowerCase();
+  if (!accessContext.workflowTypes.includes(workflowType)) {
+    auditPersonnelLifecycleAccessDenied(
+      accessContext.session,
+      request,
+      "PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSION_REQUIRED",
+      PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSIONS[workflowType]?.join("|") || "workflowType",
+    );
+    throw httpError(
+      403,
+      "Für diese Lifecycle-Prozessart fehlt das getrennte Quellrecht.",
+      "PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSION_REQUIRED",
+    );
+  }
+  auditPortal(
+    portalActorId(accessContext.session),
+    "personnel-lifecycle.editor.draft.validate",
+    "personnel_lifecycle_editor_contract",
+    validation.contractVersion,
+    JSON.stringify({
+      blockerCount: Array.isArray(validation.blockers) ? validation.blockers.length : 0,
+    }),
+  );
+  sendPersonnelLifecycleEditorJson(response, validation);
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/automation/preview", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAutomationPreviewAccess(request);
+  const actorId = portalActorId(accessContext.session);
+  const tasks = [];
+  const includedSources = [];
+
+  if (accessContext.lifecycleAccess.canReadOnboarding === true) {
+    try {
+      const result = await requirePersonnelLifecycleOnboardingTaskService().listActiveTasks(
+        actorId,
+        { access: accessContext.lifecycleAccess },
+      );
+      tasks.push(...result.items.map(personnelLifecycleAutomationOnboardingTask));
+      includedSources.push("onboarding");
+    } catch (error) {
+      personnelLifecycleOnboardingTaskRouteError(error);
+    }
+  }
+
+  if (accessContext.lifecycleAccess.canReadOffboardingConfidential === true) {
+    try {
+      const result = await requirePersonnelLifecycleOffboardingService().listTasks(
+        actorId,
+        { access: accessContext.lifecycleAccess },
+      );
+      tasks.push(...result.items.map(personnelLifecycleAutomationOffboardingTask));
+      includedSources.push("offboarding");
+    } catch (error) {
+      personnelLifecycleOffboardingRouteError(error);
+    }
+  }
+
+  let preview;
+  try {
+    preview = previewPersonnelLifecycleAutomation({
+      asOf: new Date().toISOString(),
+      policyRegistry: PERSONNEL_LIFECYCLE_AUTOMATION_DEFAULT_POLICY_REGISTRY,
+      tasks,
+    });
+  } catch {
+    throw httpError(
+      503,
+      "Die O7-Automationsvorschau konnte nicht sicher erzeugt werden.",
+      "PERSONNEL_LIFECYCLE_AUTOMATION_PREVIEW_INTEGRITY_FAILED",
+    );
+  }
+  auditPortal(
+    actorId,
+    "personnel-lifecycle.automation.preview.view",
+    "personnel_lifecycle_automation_contract",
+    preview.contractVersion,
+    JSON.stringify({ sources: includedSources }),
+  );
+  sendPersonnelLifecycleAutomationJson(response, preview);
+});
+
 app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", async (request, response) => {
-  const accessContext = requirePersonnelProfileAccess(request);
   const tab = String(request.query.tab || "overview").trim().toLowerCase();
+  const accessContext = tab === "onboarding"
+    ? requirePersonnelLifecycleOnboardingProfileAccess(request)
+    : tab === "offboarding"
+      ? requirePersonnelLifecycleOffboardingProfileAccess(request)
+      : requirePersonnelProfileAccess(request);
   if (!PERSONNEL_PROFILE_TABS.has(tab)) {
     throw httpError(
       400,
@@ -33712,6 +35489,162 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
       "Die Personalnummer ist ungültig.",
       "PERSONNEL_PROFILE_EMPLOYEE_NUMBER_INVALID",
     );
+  }
+  if (tab === "onboarding") {
+    const row = await organizationPersonnelRepository
+      .getEmployeeProfileOverviewProjection(employeeNumber);
+    if (!row) {
+      auditPersonnelRecordDenied(
+        accessContext.session,
+        employeeNumber,
+        request,
+        "EMPLOYEE_NOT_FOUND",
+      );
+      throw personnelProfileNotFound();
+    }
+    const profileAccessContext = Object.freeze({
+      session: accessContext.session,
+      recordAccess: personnelRecordAccess(accessContext.session),
+      profileAccess: createPersonnelProfileAccessSnapshot(accessContext.session),
+    });
+    const capabilities = personnelProfileCapabilities(profileAccessContext, row);
+    if (capabilities.canReadOnboardingPreview !== true) {
+      throw httpError(
+        403,
+        "Die Onboarding-Vorschau ist für diesen Zugang nicht verfügbar.",
+        "PERSONNEL_LIFECYCLE_ONBOARDING_PREVIEW_ACCESS_DENIED",
+      );
+    }
+    let onboardingPreview;
+    try {
+      onboardingPreview = await requirePersonnelLifecycleOnboardingPreviewService().preview({
+        employeeNumber,
+      });
+    } catch (error) {
+      if (error instanceof PersonnelLifecycleOnboardingPreviewError
+        || error instanceof PersonnelLifecycleCaseFoundationError
+        || (error instanceof PersonnelWorkflowError
+          && error.kind === PERSONNEL_WORKFLOW_ERROR_KINDS.INTEGRITY)) {
+        throw httpError(
+          503,
+          "Die Onboarding-Vorschau konnte nicht sicher geprüft werden.",
+          error.code || "PERSONNEL_LIFECYCLE_ONBOARDING_PREVIEW_INTEGRITY_FAILED",
+        );
+      }
+      throw error;
+    }
+    const projection = personnelProfileBaseProjection(row, capabilities);
+    const onboardingExecution = await personnelLifecycleOnboardingExecutionProjection(
+      employeeNumber,
+      onboardingPreview,
+      accessContext,
+    );
+    auditPortal(
+      portalActorId(accessContext.session),
+      "personnel-lifecycle.onboarding-preview.view",
+      "employee",
+      employeeNumber,
+      JSON.stringify({
+        packages: onboardingPreview.assignmentPreview.packageCount,
+        steps: onboardingPreview.assignmentPreview.stepCount,
+        blockers: onboardingPreview.blockers.map(({ code }) => code),
+      }),
+    );
+    return response.json({
+      profile: projection.profile,
+      onboardingPreview,
+      onboardingExecution,
+      tabs: projection.tabs,
+      capabilities: projection.capabilities,
+    });
+  }
+  if (tab === "offboarding") {
+    setPersonnelLifecycleOffboardingNoStore(response);
+    const row = await organizationPersonnelRepository
+      .getEmployeeProfileOverviewProjection(employeeNumber);
+    if (!row) throw personnelProfileNotFound();
+    const subject = await customProcessRepository.personnelWorkflowEmployeeSubject({
+      employeeNumber,
+    });
+    const scope = personnelLifecycleOffboardingSubjectScope(subject);
+    const profileAccessContext = Object.freeze({
+      session: accessContext.session,
+      recordAccess: personnelRecordAccess(accessContext.session),
+      profileAccess: createPersonnelProfileAccessSnapshot(accessContext.session),
+    });
+    const capabilities = personnelProfileCapabilities(profileAccessContext, row);
+    if (capabilities.canReadOffboardingConfidential !== true) {
+      throw httpError(
+        403,
+        "Der vertrauliche Offboarding-Bereich ist für diesen Zugang nicht verfügbar.",
+        "PERSONNEL_LIFECYCLE_OFFBOARDING_ACCESS_DENIED",
+      );
+    }
+    const [currentEpisodeCase, latestEpisode] = await Promise.all([
+      customProcessRepository.currentEpisodeOffboardingCaseForEmployee({ employeeNumber }),
+      customProcessRepository.employmentEpisodeForEmployee({ employeeNumber }),
+    ]);
+    let caseProjection = null;
+    let preparationFamilies;
+    if (currentEpisodeCase?.id) {
+      try {
+        const confidentialProjection = await requirePersonnelLifecycleOffboardingService()
+          .readProjection(
+            portalActorId(accessContext.session),
+            currentEpisodeCase.id,
+            { access: accessContext.lifecycleAccess },
+          );
+        caseProjection = personnelLifecycleOffboardingProfileCase(
+          confidentialProjection,
+          accessContext,
+          employeeNumber,
+        );
+        preparationFamilies = confidentialProjection.families;
+      } catch (error) {
+        personnelLifecycleOffboardingRouteError(error);
+      }
+    } else {
+      const latestEpisodeState = latestEpisode?.state === undefined
+        ? null
+        : String(latestEpisode.state);
+      if (latestEpisodeState === "exit_in_progress") {
+        throw httpError(
+          503,
+          "Der vertrauliche Offboarding-Episodenbezug ist unvollständig.",
+          "PERSONNEL_LIFECYCLE_OFFBOARDING_EPISODE_INTEGRITY_FAILED",
+        );
+      }
+      if (latestEpisodeState !== null
+        && !["employment_active", "employment_ended"].includes(latestEpisodeState)) {
+        throw httpError(
+          503,
+          "Der vertrauliche Offboarding-Episodenzustand ist ungültig.",
+          "PERSONNEL_LIFECYCLE_OFFBOARDING_EPISODE_INTEGRITY_FAILED",
+        );
+      }
+      preparationFamilies = await personnelLifecycleOffboardingPreparationPackages(
+        employeeNumber,
+        scope,
+      );
+    }
+    const preparationAvailable = caseProjection === null
+      && capabilities.canPrepareOffboarding === true
+      && (!latestEpisode || latestEpisode.state === "employment_active");
+    const projection = personnelProfileBaseProjection(row, capabilities);
+    return sendPersonnelLifecycleOffboardingJson(response, {
+      profile: projection.profile,
+      offboarding: {
+        contractVersion: PERSONNEL_LIFECYCLE_O5_CONTRACT_VERSION,
+        mode: "confidential_offboarding",
+        case: caseProjection,
+        preparation: personnelLifecycleOffboardingPreparationFromFamilies(
+          preparationFamilies,
+          preparationAvailable,
+        ),
+      },
+      tabs: projection.tabs,
+      capabilities: projection.capabilities,
+    });
   }
   const { row, capabilities } = await loadPersonnelProfileSubject(
     accessContext,
@@ -33767,6 +35700,293 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
     employeeNumber,
   );
   response.json(projection);
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/onboarding-starts", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleOnboardingStartAccess(request);
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  if (!employeeNumber || employeeNumber.includes("\0")) {
+    throw httpError(
+      400,
+      "Die Personalnummer ist ungueltig.",
+      "PERSONNEL_LIFECYCLE_ONBOARDING_EMPLOYEE_INVALID",
+    );
+  }
+  const body = request.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.hasOwn(body, "employeeNumber")) {
+    throw httpError(
+      400,
+      "Der Onboarding-Auftrag ist ungueltig.",
+      "PERSONNEL_LIFECYCLE_ONBOARDING_INPUT_INVALID",
+    );
+  }
+  try {
+    const result = await requirePersonnelLifecycleOnboardingExecutionService().start(
+      { ...body, employeeNumber },
+      {
+        access: accessContext.lifecycleAccess,
+        actorId: portalActorId(accessContext.session),
+      },
+    );
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    response.status(result.replayed ? 200 : 201).json({ onboardingExecution: result });
+  } catch (error) {
+    if (error instanceof PersonnelLifecycleOnboardingExecutionError
+      && error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_EXECUTION_ERROR_KINDS.FORBIDDEN) {
+      auditPersonnelLifecycleAccessDenied(
+        accessContext.session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_EXECUTE,
+      );
+    }
+    personnelLifecycleOnboardingRouteError(error);
+  }
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/onboarding/tasks", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleOnboardingTaskAccess(request);
+  try {
+    const result = await requirePersonnelLifecycleOnboardingTaskService().listActiveTasks(
+      portalActorId(accessContext.session),
+      { access: accessContext.lifecycleAccess },
+    );
+    response.json({
+      tasks: result.items,
+      capabilities: {
+        canReadOnboardingTasks: true,
+        canCompleteOnboardingTasks: accessContext.lifecycleAccess.canUpdateOperational === true,
+      },
+    });
+  } catch (error) {
+    if (error instanceof PersonnelLifecycleOnboardingTaskError
+      && [
+        PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.FORBIDDEN,
+        PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.NOT_FOUND,
+      ].includes(error.kind)) {
+      auditPersonnelLifecycleAccessDenied(
+        accessContext.session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ,
+      );
+    }
+    personnelLifecycleOnboardingTaskRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/onboarding/tasks/:runId/:stepId/complete", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleOnboardingTaskAccess(request, { write: true });
+  try {
+    const result = await requirePersonnelLifecycleOnboardingTaskService().completeTask(
+      portalActorId(accessContext.session),
+      request.params.runId,
+      request.params.stepId,
+      request.body,
+      { access: accessContext.lifecycleAccess },
+    );
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    response.json({ onboardingTask: result });
+  } catch (error) {
+    if (error instanceof PersonnelLifecycleOnboardingTaskError
+      && [
+        PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.FORBIDDEN,
+        PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.NOT_FOUND,
+      ].includes(error.kind)) {
+      auditPersonnelLifecycleAccessDenied(
+        accessContext.session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE,
+      );
+    }
+    personnelLifecycleOnboardingTaskRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/onboarding/cases/:caseId/close", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleOnboardingTaskAccess(request, {
+    write: true,
+    close: true,
+  });
+  try {
+    const result = await requirePersonnelLifecycleOnboardingTaskService().closeCase(
+      portalActorId(accessContext.session),
+      request.params.caseId,
+      request.body,
+      { access: accessContext.lifecycleAccess },
+    );
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    response.json({ onboardingCase: result });
+  } catch (error) {
+    if (error instanceof PersonnelLifecycleOnboardingTaskError
+      && [
+        PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.FORBIDDEN,
+        PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.NOT_FOUND,
+      ].includes(error.kind)) {
+      auditPersonnelLifecycleAccessDenied(
+        accessContext.session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_CLOSE,
+      );
+    }
+    personnelLifecycleOnboardingTaskRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/offboarding-preparations", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleOffboardingActionAccess(request, "prepare");
+  setPersonnelLifecycleOffboardingNoStore(response);
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  if (!employeeNumber || employeeNumber.includes("\0")) {
+    throw httpError(
+      400,
+      "Die Personalnummer ist ungültig.",
+      "PERSONNEL_LIFECYCLE_OFFBOARDING_EMPLOYEE_INVALID",
+    );
+  }
+  const body = personnelLifecycleOffboardingBody(request, [
+    "actorId",
+    "employeeNumber",
+    "responsibleActorId",
+    "caseId",
+  ]);
+  const actorId = portalActorId(accessContext.session);
+  try {
+    const result = await requirePersonnelLifecycleOffboardingService().prepare(
+      actorId,
+      { ...body, employeeNumber, responsibleActorId: actorId },
+      { access: accessContext.lifecycleAccess },
+    );
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    sendPersonnelLifecycleOffboardingJson(
+      response,
+      { offboardingCase: result },
+      result.replayed ? 200 : 201,
+    );
+  } catch (error) {
+    if (error instanceof PersonnelLifecycleOffboardingServiceError
+      && [
+        PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN,
+        PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND,
+      ].includes(error.kind)) {
+      auditPersonnelLifecycleAccessDenied(
+        accessContext.session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_PREPARE,
+      );
+    }
+    personnelLifecycleOffboardingRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/offboarding/cases/:caseId/time-critical-approvals", async (request, response) => {
+  await handlePersonnelLifecycleOffboardingCaseAction(request, response, {
+    action: "timeCriticalApprove",
+    serviceMethod: "timeCriticalApprove",
+  });
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/offboarding/cases/:caseId/communication-releases", async (request, response) => {
+  await handlePersonnelLifecycleOffboardingCaseAction(request, response, {
+    action: "communicationRelease",
+    serviceMethod: "releaseCommunication",
+  });
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/offboarding/cases/:caseId/information-confirmations", async (request, response) => {
+  await handlePersonnelLifecycleOffboardingCaseAction(request, response, {
+    action: "informationConfirm",
+    serviceMethod: "confirmInformation",
+  });
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/offboarding/cases/:caseId/activations", async (request, response) => {
+  await handlePersonnelLifecycleOffboardingCaseAction(request, response, {
+    action: "activate",
+    serviceMethod: "activate",
+  });
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/offboarding/cases/:caseId/cancellations", async (request, response) => {
+  await handlePersonnelLifecycleOffboardingCaseAction(request, response, {
+    action: "cancel",
+    serviceMethod: "cancel",
+  });
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/offboarding/cases/:caseId/closures", async (request, response) => {
+  await handlePersonnelLifecycleOffboardingCaseAction(request, response, {
+    action: "close",
+    serviceMethod: "close",
+  });
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/offboarding/tasks", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleOffboardingTaskAccess(request);
+  setPersonnelLifecycleOffboardingNoStore(response);
+  try {
+    const result = await requirePersonnelLifecycleOffboardingService().listTasks(
+      portalActorId(accessContext.session),
+      { access: accessContext.lifecycleAccess },
+    );
+    sendPersonnelLifecycleOffboardingJson(response, {
+      tasks: result.items.map(personnelLifecycleOffboardingTaskProjection),
+      capabilities: {
+        canReadOffboardingTasks: true,
+        canCompleteOffboardingTasks:
+          accessContext.lifecycleAccess.canUpdateOperational === true,
+      },
+    });
+  } catch (error) {
+    if (error instanceof PersonnelLifecycleOffboardingServiceError
+      && [
+        PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN,
+        PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND,
+      ].includes(error.kind)) {
+      auditPersonnelLifecycleAccessDenied(
+        accessContext.session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ,
+      );
+    }
+    personnelLifecycleOffboardingRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/offboarding/tasks/:runId/:stepId/completions", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleOffboardingTaskAccess(request, { write: true });
+  setPersonnelLifecycleOffboardingNoStore(response);
+  const body = personnelLifecycleOffboardingTaskCompletionBody(request);
+  try {
+    const result = await requirePersonnelLifecycleOffboardingService().completeTask(
+      portalActorId(accessContext.session),
+      request.params.runId,
+      request.params.stepId,
+      body,
+      { access: accessContext.lifecycleAccess },
+    );
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    sendPersonnelLifecycleOffboardingJson(response, { offboardingTask: result });
+  } catch (error) {
+    if (error instanceof PersonnelLifecycleOffboardingServiceError
+      && [
+        PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN,
+        PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND,
+      ].includes(error.kind)) {
+      auditPersonnelLifecycleAccessDenied(
+        accessContext.session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE,
+      );
+    }
+    personnelLifecycleOffboardingRouteError(error);
+  }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/workflows", async (request, response) => {
@@ -40923,6 +43143,10 @@ app.use((error, request, response, _next) => {
   if (status >= 500) payload.code = "INTERNAL_ERROR";
   else if (error.code) payload.code = error.code;
   if (status < 500 && error.details && typeof error.details === "object") payload.details = error.details;
+  if (request.path.startsWith("/api/portal/v1/personnel-lifecycle/editor/")) {
+    sendPersonnelLifecycleEditorJson(response, payload, status);
+    return;
+  }
   response.status(status).json(payload);
 });
 

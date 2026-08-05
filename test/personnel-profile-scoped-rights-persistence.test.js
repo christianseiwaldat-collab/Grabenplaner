@@ -9,8 +9,10 @@ const {
 const {
   PERSONNEL_LIFECYCLE_LEGACY_SCOPED_RIGHTS_TABLE_DEFINITION,
   PERSONNEL_LIFECYCLE_M4_SCOPED_RIGHTS_TABLE_DEFINITION,
+  PERSONNEL_LIFECYCLE_OPERATIONAL_SCOPED_RIGHTS_MIGRATION_ID,
   PERSONNEL_LIFECYCLE_SCOPED_RIGHTS_TRIGGER_DEFINITIONS,
   PERSONNEL_PROFILE_SCOPED_RIGHTS_MIGRATION_ID,
+  PERSONNEL_PROFILE_SCOPED_RIGHTS_TABLE_DEFINITION,
   inspectSqlitePersonnelLifecycleScopedRightsRows,
   inspectSqlitePersonnelLifecycleScopedRightsSchema,
 } = require("../lib/persistence/sqlite/operations/personnel-lifecycle-schema");
@@ -172,6 +174,63 @@ test("M7 Profilrechte: M4-Scopezeilen werden nach genau einem Backup verlustfrei
     assert.equal(repeated.personnelProfileScopedRightsMigrationRequired, false);
     assert.equal(repeated.personnelLifecycleScopedRightsMigrationRequired, false);
     assert.deepEqual(backups, [before]);
+  } finally {
+    database.close();
+  }
+});
+
+test("O4 Betriebsrechte: M7-Scopezeilen werden verlustfrei erweitert und Betriebsrechte speicherbar", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  const backups = [];
+  try {
+    runMigrations(database);
+    const fixture = insertFixture(database, "o4-operational");
+    installHistoricalScopedRightsTable(
+      database,
+      PERSONNEL_PROFILE_SCOPED_RIGHTS_TABLE_DEFINITION,
+    );
+    database.prepare("DELETE FROM schema_migrations WHERE id = ?")
+      .run(PERSONNEL_LIFECYCLE_OPERATIONAL_SCOPED_RIGHTS_MIGRATION_ID);
+    insertDirectGrant(database, fixture.employeeNumber, "personnel:profiles:read");
+    database.prepare(`
+      INSERT INTO portal_permission_scope_grants (
+        employee_number, permission, location_id, department_id, approved_by
+      ) VALUES (?, 'personnel:profiles:read', ?, 0, 'pl-plus')
+    `).run(fixture.employeeNumber, fixture.locationId);
+    const before = database.prepare(`
+      SELECT employee_number, permission, location_id, department_id, approved_by
+      FROM portal_permission_scope_grants
+    `).all();
+
+    const result = runMigrations(database, {
+      databaseExistedBeforeOpen: true,
+      onBackup: () => backups.push("backup"),
+    });
+
+    assert.equal(result.personnelLifecycleOperationalScopedRightsMigrationRequired, true);
+    assert.deepEqual(backups, ["backup"]);
+    assert.deepEqual(database.prepare(`
+      SELECT employee_number, permission, location_id, department_id, approved_by
+      FROM portal_permission_scope_grants
+    `).all(), before);
+    for (const permission of [
+      "personnel:lifecycle:operational:read",
+      "personnel:lifecycle:operational:update",
+    ]) {
+      insertDirectGrant(database, fixture.employeeNumber, permission);
+      database.prepare(`
+        INSERT INTO portal_permission_scope_grants (
+          employee_number, permission, location_id, department_id, approved_by
+        ) VALUES (?, ?, ?, 0, 'pl-plus')
+      `).run(fixture.employeeNumber, permission, fixture.locationId);
+    }
+    assert.equal(database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM portal_permission_scope_grants
+      WHERE permission LIKE 'personnel:lifecycle:operational:%'
+    `).get().count, 2);
+    assert.equal(inspectSqlitePersonnelLifecycleScopedRightsSchema(database).valid, true);
+    assert.equal(inspectSqlitePersonnelLifecycleScopedRightsRows(database).valid, true);
   } finally {
     database.close();
   }

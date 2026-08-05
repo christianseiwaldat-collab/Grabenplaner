@@ -44,18 +44,27 @@ test("M5-UI zeigt Workflow-Instanzen und Aufgaben ausschließlich read-only", ()
   ]) assert.match(`${workflow}\n${tasks}`, new RegExp(`id="${id}"`));
   assert.doesNotMatch(`${workflow}\n${tasks}`, /<form\b|type="submit"|Prozess starten|Workflow starten|Aufgabe abschließen/i);
   assert.match(workflow, /übernimmt keine bestehenden Läufe automatisch/);
-  assert.match(tasks, /keine Frist- oder Eskalationsautomatik/);
+  assert.match(tasks, /Fristen und Eskalationen werden nicht automatisiert/);
 });
 
 test("M5-Aufgabenzugang nutzt nur Workflow-Leserecht und Server-Capability", () => {
   const access = between(
     app,
-    "function canOpenWorkflowCenter()",
-    "function canOpenPersonnelAdministrationView()",
+    "function canReadPersonnelWorkflowInstances()",
+    "function canReadLifecycleOnboardingTasks()",
   );
   assert.match(access, /hasGovernancePermission\("personnel:workflows:read"\)/);
   assert.match(access, /personnelWorkflowInstanceCapabilities\.canRead !== false/);
+  assert.match(access, /return canReadPersonnelWorkflowInstances\(\) \|\| canReadPersonnelLifecycleEditorCatalog\(\)/);
   assert.doesNotMatch(access, /processes:write|personnel:central:read|canReadCentralPersonnel/);
+
+  const taskAccess = between(
+    app,
+    "function canReadPersonnelTasks()",
+    "const PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS",
+  );
+  assert.match(taskAccess, /return canReadPersonnelWorkflowInstances\(\)/);
+  assert.doesNotMatch(taskAccess, /canOpenWorkflowCenter|canReadPersonnelLifecycleEditorCatalog/);
 
   const capabilities = between(
     app,
@@ -75,21 +84,33 @@ test("M5-Liste lädt ausschließlich den geschützten GET-Endpunkt", () => {
   const loader = between(
     app,
     "async function loadPersonnelWorkflowInstances(",
-    "function renderPersonnelAdministration()",
+    "function clearPersonnelLifecycleOnboardingTaskState(",
   );
   assert.match(loader, /api\("\/api\/portal\/v1\/personnel-lifecycle\/workflow-instances"\)/);
   assert.doesNotMatch(loader, /method:\s*"(?:POST|PUT|PATCH|DELETE)"/);
   assert.doesNotMatch(loader, /result\?\.items/);
   assert.match(loader, /if \(!personnelLifecycleFoundationEnabled\(\)[\s\S]*?!hasGovernancePermission\("personnel:workflows:read"\)\) \{[\s\S]*?während des Ladens entzogen/);
-  assert.match(app, /if \(\["workflows", "tasks"\]\.includes\(normalized\)\)/);
+  assert.match(
+    app,
+    /normalized === "workflows" \|\| normalized === "tasks"[\s\S]{0,100}canReadPersonnelWorkflowInstances\(\)/,
+  );
 });
 
 test("M5-Renderer verwendet eine Positivliste ohne Fachobjekt- oder Belegdaten", () => {
-  const rendering = between(
+  const normalization = between(
     app,
     "function defaultPersonnelWorkflowInstanceCapabilities()",
-    "function renderPersonnelAdministration()",
+    "function normalizePersonnelLifecycleOnboardingTaskCapabilities(",
   );
+  const rendering = `${normalization}\n${between(
+    app,
+    "function personnelWorkflowStepCount(",
+    "function renderPersonnelLifecycleOnboardingTasksMarkup(",
+  )}\n${between(
+    app,
+    "function renderPersonnelWorkflowInstanceOverview(",
+    "function clearPersonnelWorkflowInstanceState(",
+  )}`;
   for (const forbidden of [
     "candidateId",
     "applicationId",
@@ -158,10 +179,10 @@ test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten
     /"lib\/persistence\/sqlite\/operations\/personnel-workflow-instance-schema\.js"/,
   );
   for (const expected of [
-    "PHASE_4_EXPECTED_STATEMENT_COUNT = 950",
-    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 926",
-    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 853",
-    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 848",
-    "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 102",
+    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1013",
+    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 989",
+    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 916",
+    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 907",
+    "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 106",
   ]) assert.match(persistenceAudit, new RegExp(expected));
 });

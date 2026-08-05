@@ -8,6 +8,15 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
 const { createAmuStorage } = require("../lib/amu-storage");
+const {
+  PERSONNEL_LIFECYCLE_INTERFACE_PERMISSION_IDS,
+} = require("../lib/personnel-lifecycle-interfaces-contract");
+const {
+  PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
+} = require("../lib/personnel-lifecycle-automation-contract");
+const {
+  PERMISSION_IDS: PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS,
+} = require("../lib/personnel-lifecycle-editor-contract");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-portal-test-"));
 const databasePath = path.join(testRoot, "legacy.db");
@@ -1135,6 +1144,32 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       "personnel:profiles:master:read",
       "personnel:profiles:documents:read",
       "personnel:profiles:delegate",
+      "personnel:lifecycle:onboarding:read",
+      "personnel:lifecycle:onboarding:prepare",
+      "personnel:lifecycle:onboarding:approve",
+      "personnel:lifecycle:onboarding:execute",
+      "personnel:lifecycle:onboarding:close",
+      "personnel:lifecycle:offboarding:confidential:read",
+      "personnel:lifecycle:offboarding:prepare",
+      "personnel:lifecycle:offboarding:communication:release",
+      "personnel:lifecycle:offboarding:information:confirm",
+      "personnel:lifecycle:offboarding:execute",
+      "personnel:lifecycle:offboarding:close",
+      "personnel:lifecycle:personal:read",
+      "personnel:lifecycle:hr-confidential:read",
+      "personnel:lifecycle:packages:read",
+      "personnel:lifecycle:packages:write",
+      "personnel:lifecycle:packages:publish",
+      "personnel:lifecycle:assignments:write",
+      "personnel:lifecycle:exceptions:approve",
+      "personnel:lifecycle:operational:read",
+      "personnel:lifecycle:operational:update",
+      "personnel:lifecycle:audit:read",
+      "personnel:lifecycle:audit:confidential:read",
+      "personnel:lifecycle:delegate",
+      ...PERSONNEL_LIFECYCLE_INTERFACE_PERMISSION_IDS,
+      ...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
+      ...PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS,
     ]);
     assert.ok(itAdminRightsPayload.catalog
       .filter((permission) => !personnelLifecyclePermissionIds.has(permission.id))
@@ -1148,6 +1183,14 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
         .map((permission) => permission.id)),
       personnelLifecyclePermissionIds,
     );
+    for (const permissionId of [
+      "personnel:lifecycle:onboarding:read",
+      "personnel:lifecycle:packages:read",
+    ]) {
+      const permission = rightsPayload.catalog.find((entry) => entry.id === permissionId);
+      assert.deepEqual(permission.eligibleRoles, ["hr", "admin", "it_admin", "developer"]);
+      assert.equal(permission.editable, false);
+    }
     assert.ok(itAdminRightsPayload.users.some((user) => user.employeeNumber === "102" && user.manageable));
     const diagnosticsReadPermission = itAdminRightsPayload.catalog.find((permission) => permission.id === "system:diagnostics:read");
     const diagnosticsTechnicalPermission = itAdminRightsPayload.catalog.find((permission) => permission.id === "system:diagnostics:technical");

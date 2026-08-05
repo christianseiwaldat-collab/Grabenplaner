@@ -36,16 +36,37 @@ test("M6-Grundgerüst bettet das Mitarbeiterprofil in Mitarbeitende ein", () => 
   assert.doesNotMatch(profile, /<form\b|type="submit"|data-(?:save|delete|create)-/i);
 });
 
-test("M6-Profilzugang ist Feature-, HR- und Zentralzugriffs-gebunden", () => {
-  const access = between(
+test("M6/O3-Profilzugang trennt Standardprofil und explizite Onboarding-Lesevorschau", () => {
+  const standardAccess = between(
+    app,
+    "function canOpenStandardEmployeeProfileFoundation()",
+    "function canReadEmployeeOnboardingPreview()",
+  );
+  assert.match(standardAccess, /!personnelLifecycleFoundationEnabled\(\)/);
+  assert.match(standardAccess, /!state\.portalStatus\?\.portalEnabled/);
+  assert.match(standardAccess, /state\.portalSession\?\.user\?\.role === "hr"/);
+  assert.match(standardAccess, /canReadCentralPersonnel\(\)/);
+  assert.match(standardAccess, /hasGovernancePermission\("personnel:profiles:read"\)/);
+
+  const onboardingAccess = between(
+    app,
+    "function canReadEmployeeOnboardingPreview()",
+    "function canOpenEmployeeProfileFoundation()",
+  );
+  assert.match(onboardingAccess, /!personnelLifecycleFoundationEnabled\(\)/);
+  assert.match(onboardingAccess, /!state\.portalStatus\?\.portalEnabled/);
+  assert.match(onboardingAccess, /canReadCentralPersonnel\(\)/);
+  assert.match(onboardingAccess, /hasGovernancePermission\("personnel:lifecycle:onboarding:read"\)/);
+  assert.match(onboardingAccess, /hasGovernancePermission\("personnel:lifecycle:packages:read"\)/);
+  assert.doesNotMatch(onboardingAccess, /role === "hr"|personnel:profiles:read/);
+
+  const combinedAccess = between(
     app,
     "function canOpenEmployeeProfileFoundation()",
-    "function canReadCandidatePreboarding()",
+    "function canOpenTeamEmployeeProfileFoundation",
   );
-  assert.match(access, /!personnelLifecycleFoundationEnabled\(\)/);
-  assert.match(access, /!state\.portalStatus\?\.portalEnabled/);
-  assert.match(access, /state\.portalSession\?\.user\?\.role === "hr"/);
-  assert.match(access, /canReadCentralPersonnel\(\)/);
+  assert.match(combinedAccess, /canOpenStandardEmployeeProfileFoundation\(\)[\s\S]*?canReadEmployeeOnboardingPreview\(\)/);
+  assert.match(combinedAccess, /canReadEmployeeOffboardingConfidential\(\)/);
 
   const directory = between(app, "function renderPersonnelDirectory()", "const EMPLOYEE_PROFILE_TABS");
   assert.match(directory, /canOpenEmployeeProfileFoundation\(\)/);
