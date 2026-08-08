@@ -262,6 +262,39 @@ test("SMTP-Versand nutzt TLS-Zeitlimits und nur den neutralen Nachrichtentext", 
   });
 });
 
+test("Filialbestellungen verwenden nur den abgeleiteten Grabenplaner-No-Reply-Absender", async () => {
+  let mail;
+  const adapter = createExternalNotificationAdapter({
+    configuration: { email: enabledSmtp("branch_order") },
+    smtpTransport: {
+      async sendMail(value) {
+        mail = value;
+        return { accepted: true };
+      },
+    },
+  });
+
+  await adapter.sendBranchOrder({
+    sender: "fil18-noreply@grabenplaner.eu",
+    recipient: "lager@example.test",
+    replyTo: "fil18@example.test",
+    subject: "Filialbestellung",
+    text: "Testbestellung",
+  });
+  assert.equal(mail.from, "fil18-noreply@grabenplaner.eu");
+  assert.equal(mail.replyTo, "fil18@example.test");
+  await assert.rejects(
+    adapter.sendBranchOrder({
+      sender: "frei-waehlbar@example.test",
+      recipient: "lager@example.test",
+      replyTo: "fil18@example.test",
+      subject: "Filialbestellung",
+      text: "Testbestellung",
+    }),
+    { code: "EXTERNAL_NOTIFICATION_SENDER_INVALID" },
+  );
+});
+
 test("Leihbelege werden nur per SMTP und als PDF-Anhang versendet", async () => {
   let mail;
   const pdf = Buffer.from("%PDF-1.7\nTest");

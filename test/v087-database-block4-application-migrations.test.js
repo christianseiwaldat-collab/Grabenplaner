@@ -166,8 +166,8 @@ function createSyntheticRunnerAdapter(database, invokedOperationIds) {
 
 test("Block 4/7: application migration stages are provider-neutral and deterministic", () => {
   assert.equal(APPLICATION_MIGRATION_MANIFEST.id, "grabenplaner.application");
-  assert.equal(APPLICATION_MIGRATION_MANIFEST.migrations.length, 9);
-  assert.equal(new Set(APPLICATION_MIGRATION_OPERATION_IDS).size, 9);
+  assert.equal(APPLICATION_MIGRATION_MANIFEST.migrations.length, 10);
+  assert.equal(new Set(APPLICATION_MIGRATION_OPERATION_IDS).size, 10);
   assert.equal(APPLICATION_MIGRATION_OPERATION_CONTEXT_VERSION, 1);
   assert.equal(APPLICATION_MIGRATION_RUNTIME_CONTEXT_KEY, "applicationMigrations");
   assert.match(APPLICATION_MIGRATION_MANIFEST.fingerprint, /^[a-f0-9]{64}$/);
@@ -267,7 +267,7 @@ test("Block 4/7: every application operation has one executable SQLite handler",
   );
 });
 
-test("Block 4/7: all nine SQLite bindings run synchronously on an empty fixture", async () => {
+test("Block 4/7: all ten SQLite bindings run synchronously on an empty fixture", async () => {
   const database = openSqliteLegacyDatabase(":memory:");
   const invokedOperationIds = [];
   const context = syntheticApplicationMigrationContext(database);
@@ -304,6 +304,7 @@ test("Block 4/7: all nine SQLite bindings run synchronously on an empty fixture"
       "schema_migrations",
       "locations",
       "system_center_trust_metrics",
+      "branch_orders",
     ]) {
       assert.equal(
         database.prepare(

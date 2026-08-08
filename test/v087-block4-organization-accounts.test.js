@@ -36,6 +36,7 @@ const LOAN_ID = "v087-block4-organization-loan";
 const ALLOWED_PERMISSIONS = [
   "loans:overview:read",
   "schedule:location:view",
+  "branch_orders:submit",
 ];
 
 let baseUrl;

@@ -81,6 +81,11 @@ const portalState = {
   pendingLoanConfirmations: [],
   activeLoanConfirmation: null,
   loanConfirmationLoading: false,
+  branchOrderCatalog: null,
+  branchOrderSettings: null,
+  branchOrderSettingsDraft: null,
+  branchOrderHistory: [],
+  branchOrderSettingsLoading: false,
 };
 
 const optionNames = {
@@ -151,6 +156,7 @@ const el = Object.fromEntries([
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
+  "branchOrdersTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
@@ -185,6 +191,7 @@ const el = Object.fromEntries([
   "dateRangeDialog", "dateRangeForm", "dateRangeDialogTitle", "dateRangeStartText", "dateRangeEndText", "dateRangePreviousMonth", "dateRangeMonthLabel", "dateRangeNextMonth", "dateRangeCalendarGrid", "dateRangeOpenEnd", "dateRangeMessage", "dateRangeClose", "dateRangeCancel", "dateRangeApply",
   "sicknessRecoveryDialog", "sicknessRecoveryForm", "sicknessRecoveryTitle", "sicknessRecoveryCaseId", "sicknessRecoveryDate", "sicknessRecoveryMessage", "sicknessRecoveryClose", "sicknessRecoveryCancel", "sicknessRecoverySubmit",
   "emailSettingsCard", "emailSettingsSummary", "notificationPreferencesForm", "notificationTargetList", "notificationChannelSelection", "notificationPreferencesSaveButton", "notificationEarliestTime", "notificationQuietHoursBadge", "notificationQuietHoursHint", "emailSettingsMessage", "emailCategoryList",
+  "branchOrderSettingsCard", "branchOrderSettingsSummary", "branchOrderSettingsMessage", "branchOrderSettingsWorkspace", "refreshBranchOrderSettings", "saveBranchOrderSettings", "refreshBranchOrderHistory", "branchOrderHistoryList",
 ].map((id) => [id, document.querySelector(`#${id}`)]));
 
 function mondayOf(value) {
@@ -398,6 +405,17 @@ function loanCapabilityEnabled() {
   ].includes(permission));
 }
 
+function branchOrderCapabilityEnabled(user = portalUser()) {
+  return isOrganizationAccount(user)
+    && user?.accountType === "branch"
+    && (user?.permissions || []).includes("branch_orders:submit");
+}
+
+function branchOrderManagementEnabled(user = portalUser()) {
+  return !isOrganizationAccount(user)
+    && (user?.permissions || []).includes("branch_orders:manage");
+}
+
 function applyPortalCapabilities() {
   const timeTrackingEnabled = timeTrackingCapabilityEnabled();
   el.timeTrackingTab?.classList.toggle("hidden", !timeTrackingEnabled);
@@ -409,6 +427,9 @@ function applyPortalCapabilities() {
   el.loanTab?.classList.toggle("hidden", !loansEnabled);
   el.leadershipLoanShortcut?.classList.toggle("hidden", !loansEnabled);
   if (!loansEnabled && portalState.activeTab === "loan") setTab(defaultPortalTab());
+  const branchOrdersEnabled = branchOrderCapabilityEnabled();
+  el.branchOrdersTab?.classList.toggle("hidden", !branchOrdersEnabled);
+  if (!branchOrdersEnabled && portalState.activeTab === "branchOrders") setTab(defaultPortalTab());
 }
 
 function portalUser() {
@@ -518,6 +539,7 @@ function portalTabAllowed(tab, user = portalUser()) {
   const permissions = user?.permissions || [];
   if (tab === "settings") return true;
   if (tab === "schedule") return scheduleCapabilityEnabled(user);
+  if (tab === "branchOrders") return branchOrderCapabilityEnabled(user);
   if (tab === "leadershipMore") return !isOrganizationAccount(user);
   if (tab === "timeTracking") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (tab === "timeOff") return permissions.includes("own_vacation:request");
@@ -945,6 +967,7 @@ function defaultPortalTab(user = portalUser()) {
   if (portalTabAllowed("timeTracking", user)) return "timeTracking";
   if (portalTabAllowed("schedule", user)) return "schedule";
   if (portalTabAllowed("loan", user)) return "loan";
+  if (portalTabAllowed("branchOrders", user)) return "branchOrders";
   return "settings";
 }
 
@@ -997,6 +1020,7 @@ async function loadPortalData() {
   if (hasPortalPermission("own_privacy_requests:read")) requests.push(loadPrivacyRequests());
   if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
   if (loanCapabilityEnabled()) requests.push(loadLoanModule());
+  if (branchOrderCapabilityEnabled()) requests.push(loadBranchOrderCatalog());
   await Promise.allSettled(requests);
 }
 
@@ -1182,6 +1206,7 @@ function applySelfServiceVisibility() {
   el.timeOffTab?.classList.toggle("hidden", !portalTabAllowed("timeOff"));
   el.vacationTab?.classList.toggle("hidden", !portalTabAllowed("vacation"));
   el.historyTab?.classList.toggle("hidden", !portalTabAllowed("history"));
+  el.branchOrdersTab?.classList.toggle("hidden", !portalTabAllowed("branchOrders"));
   el.amuTab?.classList.toggle("hidden", !portalTabAllowed("amu"));
   el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
   if (!portalTabAllowed("processTasks")) {
@@ -1193,6 +1218,7 @@ function applySelfServiceVisibility() {
   el.leadershipProcessTasksShortcut?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
   el.notificationsButton?.classList.toggle("hidden", isOrganizationAccount());
   el.emailSettingsCard?.classList.toggle("hidden", !personalEmailSettingsAvailable());
+  el.branchOrderSettingsCard?.classList.toggle("hidden", !branchOrderManagementEnabled());
   if (!hasPortalPermission("own_time_record:read")) {
     el.timeRecordStatementsPanel?.classList.add("hidden");
   }
@@ -1310,6 +1336,7 @@ function setTab(tab) {
   el.vacationView.classList.toggle("active", tab === "vacation");
   el.historyView.classList.toggle("active", tab === "history");
   el.loanView?.classList.toggle("active", tab === "loan");
+  el.branchOrdersView?.classList.toggle("active", tab === "branchOrders");
   el.amuView.classList.toggle("active", tab === "amu");
   el.processTasksView?.classList.toggle("active", tab === "processTasks");
   el.leadershipTeamView?.classList.toggle("active", tab === "leadershipTeam");
@@ -1320,6 +1347,7 @@ function setTab(tab) {
     if (hasPortalPermission("own_time:read")) loadWifiAutomation();
     if (hasPortalPermission("own_privacy_requests:read")) loadPrivacyRequests();
     if (personalEmailSettingsAvailable()) loadEmailSettings();
+    if (branchOrderManagementEnabled()) Promise.allSettled([loadBranchOrderSettings(), loadBranchOrderHistory()]);
   }
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
   if (tab === "vacation") {
@@ -1328,12 +1356,252 @@ function setTab(tab) {
   }
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
   if (tab === "loan") loadLoanModule();
+  if (tab === "branchOrders") loadBranchOrderCatalog();
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
   if (tab === "processTasks") loadProcessTasks();
   if (tab === "leadershipTeam") loadLeadershipOverview();
   if (tab === "leadershipApprovals") {
     document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item.dataset.leadershipKind === portalState.leadershipKind));
     loadLeadershipApprovals();
+  }
+}
+
+function branchOrderStatusText(status) {
+  return {
+    sent: "E-Mail-Übergabe abgeschlossen",
+    partial: "Teilweise übergeben",
+    failed: "E-Mail-Übergabe fehlgeschlagen",
+    pending: "E-Mail-Übergabe offen",
+  }[status] || "Status unbekannt";
+}
+
+function branchOrderTimestampText(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? String(value || "")
+    : date.toLocaleString("de-AT", { dateStyle: "short", timeStyle: "short" });
+}
+
+function renderBranchOrderCatalog() {
+  const catalog = portalState.branchOrderCatalog;
+  if (!catalog || !el.branchOrderGroups) return;
+  el.branchOrderWeek.textContent = `KW ${catalog.calendarWeek} · Woche ab ${dateText(catalog.weekStart)} · serverseitig festgelegt · Versand als ${catalog.senderEmail || "Filialkonto-No-Reply"}`;
+  const selectedEmployee = el.branchOrderEmployee.value;
+  el.branchOrderEmployee.innerHTML = [
+    '<option value="">Bitte Teammitglied auswählen</option>',
+    ...(catalog.employees || []).map((employee) => (
+      `<option value="${esc(employee.employeeNumber)}">${esc(employee.fullName)} · MA-Nr. ${esc(employee.employeeNumber)}</option>`
+    )),
+  ].join("");
+  if ((catalog.employees || []).some((employee) => employee.employeeNumber === selectedEmployee)) {
+    el.branchOrderEmployee.value = selectedEmployee;
+  }
+  const groups = Array.isArray(catalog.groups) ? catalog.groups : [];
+  el.branchOrderGroups.innerHTML = groups.length ? groups.map((group) => {
+    const deliveryReady = group.deliveryReady === true;
+    const items = Array.isArray(group.items) ? group.items : [];
+    return `<section class="branch-order-group" data-branch-order-group="${esc(group.id)}">
+      <div class="branch-order-group-heading"><div><h2>${esc(group.title)}</h2>${group.hint ? `<p>${esc(group.hint)}</p>` : ""}</div><span class="branch-order-delivery-state ${deliveryReady ? "ready" : "missing"}">${deliveryReady ? "Versand bereit" : "E-Mail-Ziel fehlt"}</span></div>
+      <div class="branch-order-item-list">${items.length ? items.map((item) => `<article class="branch-order-item" data-branch-order-item="${esc(item.id)}">
+        <label class="branch-order-item-select"><input data-branch-order-select type="checkbox" ${deliveryReady ? "" : "disabled"} /><span><strong>${esc(item.title)}</strong><small>${deliveryReady ? "Menge bei Auswahl erfassen" : "Vor Versand muss die Filialleitung ein E-Mail-Ziel einrichten."}</small></span></label>
+        <div class="branch-order-line-fields"><label><span>Menge</span><input data-branch-order-quantity type="number" min="0.001" max="100000" step="0.001" value="1" disabled /></label><span class="branch-order-unit">${esc(item.unit)}</span><label class="branch-order-note-field"><span>Bemerkung</span><input data-branch-order-note maxlength="500" placeholder="Optional" disabled /></label></div>
+      </article>`).join("") : '<p class="empty-state">Diese Warengruppe enthält noch keine Positionen.</p>'}</div>
+    </section>`;
+  }).join("") : '<p class="empty-state">Für diesen Standort sind noch keine Bestellpositionen eingerichtet.</p>';
+  const available = groups.some((group) => group.deliveryReady && (group.items || []).length);
+  el.branchOrderSubmit.disabled = !available || !(catalog.employees || []).length;
+}
+
+async function loadBranchOrderCatalog() {
+  if (!branchOrderCapabilityEnabled()) return;
+  try {
+    const catalog = await api("/api/portal/v1/branch-orders/catalog");
+    portalState.branchOrderCatalog = catalog;
+    renderBranchOrderCatalog();
+  } catch (error) {
+    el.branchOrderGroups.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+    message(el.branchOrderMessage, error.message, true);
+  }
+}
+
+async function submitBranchOrder(event) {
+  event.preventDefault();
+  const employeeNumber = String(el.branchOrderEmployee.value || "").trim();
+  const selected = [...el.branchOrderGroups.querySelectorAll("[data-branch-order-select]:checked")];
+  if (!employeeNumber) {
+    message(el.branchOrderMessage, "Bitte das Teammitglied mit Name und Personalnummer auswählen.", true);
+    return;
+  }
+  if (!selected.length) {
+    message(el.branchOrderMessage, "Bitte mindestens eine Bestellposition auswählen.", true);
+    return;
+  }
+  const items = selected.map((checkbox) => {
+    const row = checkbox.closest("[data-branch-order-item]");
+    return {
+      itemId: row?.dataset.branchOrderItem || "",
+      quantity: row?.querySelector("[data-branch-order-quantity]")?.value || "",
+      note: row?.querySelector("[data-branch-order-note]")?.value || "",
+    };
+  });
+  el.branchOrderSubmit.disabled = true;
+  message(el.branchOrderMessage, "");
+  try {
+    const result = await api("/api/portal/v1/branch-orders", {
+      method: "POST",
+      body: JSON.stringify({ employeeNumber, items }),
+    });
+    await loadBranchOrderCatalog();
+    message(
+      el.branchOrderMessage,
+      result.order?.status === "sent"
+        ? `Bestellung wurde gespeichert und als ${result.order?.senderEmail || "Filialkonto-No-Reply"} an die hinterlegten Stellen übergeben.`
+        : "Bestellung wurde gespeichert; die E-Mail-Übergabe ist im Bestellverlauf als fehlgeschlagen dokumentiert.",
+      result.order?.status !== "sent",
+    );
+  } catch (error) {
+    message(el.branchOrderMessage, error.message, true);
+  } finally {
+    if (portalState.branchOrderCatalog) {
+      const hasItems = portalState.branchOrderCatalog.groups?.some((group) => group.deliveryReady && group.items?.length);
+      el.branchOrderSubmit.disabled = !hasItems || !(portalState.branchOrderCatalog.employees || []).length;
+    }
+  }
+}
+
+function branchOrderClientId(prefix) {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return `${prefix}-${uuid || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function clonedBranchOrderConfiguration(configuration = {}) {
+  return {
+    recipients: (configuration.recipients || []).map((recipient) => ({
+      id: recipient.id,
+      email: recipient.email || "",
+      replyToEmail: recipient.replyToEmail || "",
+      subjectTemplate: recipient.subjectTemplate || "",
+      bodyTemplate: recipient.bodyTemplate || "",
+    })),
+    groups: (configuration.groups || []).map((group) => ({
+      id: group.id,
+      recipientId: group.recipientId || "",
+      title: group.title || "",
+      hint: group.hint || "",
+      items: (group.items || []).map((item) => ({
+        id: item.id,
+        title: item.title || "",
+        unit: item.unit || "Stück",
+      })),
+    })),
+  };
+}
+
+function renderBranchOrderSettings() {
+  const settings = portalState.branchOrderSettings;
+  const draft = portalState.branchOrderSettingsDraft;
+  if (!settings || !draft || !el.branchOrderSettingsWorkspace) return;
+  const units = settings.configuration?.units || ["Stück"];
+  const emailDelivery = settings.emailDelivery || {};
+  el.branchOrderSettingsSummary.textContent = emailDelivery.available
+    ? "E-Mail-Übergabe ist technisch freigeschaltet."
+    : "E-Mail-Übergabe ist noch nicht technisch freigeschaltet.";
+  const recipientOptions = (selected) => [
+    `<option value="" ${selected ? "" : "selected"}>Kein E-Mail-Ziel</option>`,
+    ...draft.recipients.map((recipient) => (
+      `<option value="${esc(recipient.id)}" ${recipient.id === selected ? "selected" : ""}>${esc(recipient.email || "Neue Zieladresse")}</option>`
+    )),
+  ].join("");
+  const recipientRows = draft.recipients.length ? draft.recipients.map((recipient) => `<article class="branch-order-recipient-editor" data-branch-order-recipient="${esc(recipient.id)}">
+    <div class="branch-order-editor-heading"><strong>E-Mail-Ziel</strong><button class="text-button danger-button" type="button" data-branch-order-remove-recipient="${esc(recipient.id)}">Entfernen</button></div>
+    <div class="branch-order-editor-grid"><label><span>Zieladresse</span><input data-branch-order-settings-field="recipient-email" value="${esc(recipient.email)}" maxlength="320" inputmode="email" /></label><label><span>Antwortadresse</span><input data-branch-order-settings-field="recipient-reply-to" value="${esc(recipient.replyToEmail)}" maxlength="320" inputmode="email" /><small>Wird im verpflichtenden Antwort-Hinweis genannt.</small></label></div>
+    <label><span>E-Mail-Betreff</span><input data-branch-order-settings-field="recipient-subject" value="${esc(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNumber}}, {{items}}.</small></label>
+    <label><span>E-Mail-Text</span><textarea data-branch-order-settings-field="recipient-body" rows="6" maxlength="8000">${esc(recipient.bodyTemplate)}</textarea><small>Der Hinweis zur nicht möglichen Antwort und die Antwortadresse werden automatisch ergänzt.</small></label>
+  </article>`).join("") : '<p class="empty-state">Noch kein E-Mail-Ziel angelegt.</p>';
+  const groupRows = draft.groups.length ? draft.groups.map((group) => `<article class="branch-order-group-editor" data-branch-order-group-editor="${esc(group.id)}">
+    <div class="branch-order-editor-heading"><strong>Warengruppe</strong><button class="text-button danger-button" type="button" data-branch-order-remove-group="${esc(group.id)}">Entfernen</button></div>
+    <div class="branch-order-editor-grid"><label><span>Bezeichnung</span><input data-branch-order-settings-field="group-title" value="${esc(group.title)}" maxlength="120" /></label><label><span>E-Mail-Ziel</span><select data-branch-order-settings-field="group-recipient">${recipientOptions(group.recipientId)}</select></label></div>
+    <label><span>Hinweis im Bestellformular</span><input data-branch-order-settings-field="group-hint" value="${esc(group.hint)}" maxlength="400" /></label>
+    <div class="branch-order-settings-items">${group.items.length ? group.items.map((item) => `<div class="branch-order-settings-item" data-branch-order-item-editor="${esc(item.id)}"><label><span>Position</span><input data-branch-order-settings-field="item-title" value="${esc(item.title)}" maxlength="180" /></label><label><span>Einheit</span><select data-branch-order-settings-field="item-unit">${units.map((unit) => `<option value="${esc(unit)}" ${unit === item.unit ? "selected" : ""}>${esc(unit)}</option>`).join("")}</select></label><button class="text-button danger-button" type="button" data-branch-order-remove-item="${esc(item.id)}">Entfernen</button></div>`).join("") : '<p class="empty-state">Noch keine Position angelegt.</p>'}</div>
+    <button class="text-button" type="button" data-branch-order-add-item="${esc(group.id)}">+ Position hinzufügen</button>
+  </article>`).join("") : '<p class="empty-state">Noch keine Warengruppe angelegt.</p>';
+  el.branchOrderSettingsWorkspace.innerHTML = `<section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>E-Mail-Ziele</h2><p>Jedes Ziel erhält einen eigenen Betreff, Text und eine frei bearbeitbare Antwortadresse.</p></div><button class="text-button" type="button" data-branch-order-add-recipient>+ E-Mail-Ziel</button></div>${recipientRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Warengruppen und Positionen</h2><p>Einheiten werden pro Position festgelegt.</p></div><button class="text-button" type="button" data-branch-order-add-group>+ Warengruppe</button></div>${groupRows}</section>`;
+}
+
+function branchOrderDraftRecipient(id) {
+  return portalState.branchOrderSettingsDraft?.recipients.find((recipient) => recipient.id === id) || null;
+}
+
+function branchOrderDraftGroup(id) {
+  return portalState.branchOrderSettingsDraft?.groups.find((group) => group.id === id) || null;
+}
+
+function branchOrderDraftItem(id) {
+  for (const group of portalState.branchOrderSettingsDraft?.groups || []) {
+    const item = group.items.find((entry) => entry.id === id);
+    if (item) return item;
+  }
+  return null;
+}
+
+async function loadBranchOrderSettings() {
+  if (!branchOrderManagementEnabled() || portalState.branchOrderSettingsLoading) return;
+  portalState.branchOrderSettingsLoading = true;
+  try {
+    const settings = await api("/api/portal/v1/branch-orders/settings");
+    portalState.branchOrderSettings = settings;
+    portalState.branchOrderSettingsDraft = clonedBranchOrderConfiguration(settings.configuration);
+    renderBranchOrderSettings();
+    message(el.branchOrderSettingsMessage, "");
+  } catch (error) {
+    message(el.branchOrderSettingsMessage, error.message, true);
+  } finally {
+    portalState.branchOrderSettingsLoading = false;
+  }
+}
+
+function renderBranchOrderHistory() {
+  if (!el.branchOrderHistoryList) return;
+  const orders = portalState.branchOrderHistory || [];
+  el.branchOrderHistoryList.innerHTML = orders.length ? orders.map((order) => `<article class="branch-order-history-entry">
+    <div><strong>KW ${Number(order.calendarWeek)} · ${esc(order.selectedEmployeeName)} · MA-Nr. ${esc(order.selectedEmployeeNumber)}</strong><small>${esc(branchOrderTimestampText(order.submittedAt))} · ${esc(branchOrderStatusText(order.status))}</small></div>
+    <small>Erfasst über ${esc(order.submittedByLogin || "Filialkonto")}${order.deliveries?.[0]?.senderEmail ? ` · Absender ${esc(order.deliveries[0].senderEmail)}` : ""}</small>
+    <ul>${(order.lines || []).map((line) => `<li>${esc(line.groupTitle)} · ${esc(line.itemTitle)}: ${esc(Number(line.quantity).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${esc(line.unit)}${line.note ? ` · ${esc(line.note)}` : ""}</li>`).join("")}</ul>
+  </article>`).join("") : '<p class="empty-state">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
+}
+
+async function loadBranchOrderHistory() {
+  if (!branchOrderManagementEnabled()) return;
+  try {
+    const result = await api("/api/portal/v1/branch-orders/history?limit=50");
+    portalState.branchOrderHistory = result.orders || [];
+    renderBranchOrderHistory();
+  } catch (error) {
+    el.branchOrderHistoryList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+  }
+}
+
+async function saveBranchOrderSettings() {
+  const draft = portalState.branchOrderSettingsDraft;
+  if (!branchOrderManagementEnabled() || !draft) return;
+  el.saveBranchOrderSettings.disabled = true;
+  message(el.branchOrderSettingsMessage, "");
+  try {
+    const result = await api("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        locationId: portalState.branchOrderSettings?.locationId || portalUser()?.homeLocationId || "",
+        configuration: draft,
+      }),
+    });
+    portalState.branchOrderSettings = result;
+    portalState.branchOrderSettingsDraft = clonedBranchOrderConfiguration(result.configuration);
+    renderBranchOrderSettings();
+    message(el.branchOrderSettingsMessage, "Bestellkonfiguration wurde gespeichert.");
+  } catch (error) {
+    message(el.branchOrderSettingsMessage, error.message, true);
+  } finally {
+    el.saveBranchOrderSettings.disabled = false;
   }
 }
 
@@ -4989,6 +5257,105 @@ document.querySelectorAll("[data-more-tab]").forEach((button) => button.addEvent
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
+el.branchOrderRefresh?.addEventListener("click", loadBranchOrderCatalog);
+el.branchOrderForm?.addEventListener("submit", submitBranchOrder);
+el.branchOrderGroups?.addEventListener("change", (event) => {
+  const checkbox = event.target.closest("[data-branch-order-select]");
+  if (!checkbox) return;
+  const row = checkbox.closest("[data-branch-order-item]");
+  row?.querySelectorAll("[data-branch-order-quantity], [data-branch-order-note]")
+    .forEach((field) => { field.disabled = !checkbox.checked; });
+});
+el.refreshBranchOrderSettings?.addEventListener("click", loadBranchOrderSettings);
+el.saveBranchOrderSettings?.addEventListener("click", saveBranchOrderSettings);
+el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);
+function updateBranchOrderSettingsDraft(event) {
+  const field = event.target.closest("[data-branch-order-settings-field]");
+  if (!field || !portalState.branchOrderSettingsDraft) return;
+  const key = field.dataset.branchOrderSettingsField;
+  const recipient = field.closest("[data-branch-order-recipient]");
+  const group = field.closest("[data-branch-order-group-editor]");
+  const item = field.closest("[data-branch-order-item-editor]");
+  if (recipient) {
+    const target = branchOrderDraftRecipient(recipient.dataset.branchOrderRecipient);
+    if (!target) return;
+    if (key === "recipient-email") target.email = field.value;
+    if (key === "recipient-reply-to") target.replyToEmail = field.value;
+    if (key === "recipient-subject") target.subjectTemplate = field.value;
+    if (key === "recipient-body") target.bodyTemplate = field.value;
+    return;
+  }
+  if (item) {
+    const target = branchOrderDraftItem(item.dataset.branchOrderItemEditor);
+    if (!target) return;
+    if (key === "item-title") target.title = field.value;
+    if (key === "item-unit") target.unit = field.value;
+    return;
+  }
+  if (group) {
+    const target = branchOrderDraftGroup(group.dataset.branchOrderGroupEditor);
+    if (!target) return;
+    if (key === "group-title") target.title = field.value;
+    if (key === "group-hint") target.hint = field.value;
+    if (key === "group-recipient") target.recipientId = field.value;
+  }
+}
+el.branchOrderSettingsWorkspace?.addEventListener("input", updateBranchOrderSettingsDraft);
+el.branchOrderSettingsWorkspace?.addEventListener("change", updateBranchOrderSettingsDraft);
+el.branchOrderSettingsWorkspace?.addEventListener("click", (event) => {
+  const draft = portalState.branchOrderSettingsDraft;
+  if (!draft) return;
+  if (event.target.closest("[data-branch-order-add-recipient]")) {
+    const defaults = portalState.branchOrderSettings?.configuration?.templateDefaults || {};
+    draft.recipients.push({
+      id: branchOrderClientId("recipient"),
+      email: "",
+      replyToEmail: "",
+      subjectTemplate: defaults.subjectTemplate || "Filialbestellung {{locationName}} · KW {{calendarWeek}}",
+      bodyTemplate: defaults.bodyTemplate || "{{items}}",
+    });
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeRecipient = event.target.closest("[data-branch-order-remove-recipient]");
+  if (removeRecipient) {
+    const id = removeRecipient.dataset.branchOrderRemoveRecipient;
+    draft.recipients = draft.recipients.filter((recipient) => recipient.id !== id);
+    draft.groups.forEach((group) => { if (group.recipientId === id) group.recipientId = ""; });
+    renderBranchOrderSettings();
+    return;
+  }
+  if (event.target.closest("[data-branch-order-add-group]")) {
+    draft.groups.push({
+      id: branchOrderClientId("group"),
+      recipientId: draft.recipients[0]?.id || "",
+      title: "Neue Warengruppe",
+      hint: "",
+      items: [],
+    });
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeGroup = event.target.closest("[data-branch-order-remove-group]");
+  if (removeGroup) {
+    draft.groups = draft.groups.filter((group) => group.id !== removeGroup.dataset.branchOrderRemoveGroup);
+    renderBranchOrderSettings();
+    return;
+  }
+  const addItem = event.target.closest("[data-branch-order-add-item]");
+  if (addItem) {
+    const group = branchOrderDraftGroup(addItem.dataset.branchOrderAddItem);
+    if (group) group.items.push({ id: branchOrderClientId("item"), title: "Neue Position", unit: "Stück" });
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeItem = event.target.closest("[data-branch-order-remove-item]");
+  if (removeItem) {
+    const id = removeItem.dataset.branchOrderRemoveItem;
+    draft.groups.forEach((group) => { group.items = group.items.filter((item) => item.id !== id); });
+    renderBranchOrderSettings();
+  }
+});
 el.loanRefresh?.addEventListener("click", loadLoanModule);
 el.loanOverviewSearch?.addEventListener("input", renderLoanOverview);
 [["issue", el.loanIssuePhotos], ["issue", el.loanIssueCamera], ["return", el.loanReturnPhotos], ["return", el.loanReturnCamera]]
