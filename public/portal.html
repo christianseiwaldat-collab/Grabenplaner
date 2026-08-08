@@ -41,6 +41,7 @@
           <button id="vacationTab" data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
           <button id="historyTab" data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
           <button class="hidden" id="loanTab" data-tab="loan" type="button" role="tab" aria-selected="false" aria-controls="loanView" tabindex="-1">Leihe</button>
+          <button class="hidden" id="branchOrdersTab" data-tab="branchOrders" type="button" role="tab" aria-selected="false" aria-controls="branchOrdersView" tabindex="-1">Filialbestellung</button>
           <button id="amuTab" data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
@@ -154,6 +155,19 @@
                   </section>
                   <p class="message hidden notification-settings-message" id="emailSettingsMessage" role="status" aria-live="polite"></p>
                 </form>
+              </div>
+            </details>
+            <details class="portal-card portal-settings-section hidden" id="branchOrderSettingsCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Filialleitung</span><strong>Filialbestellungen verwalten</strong><small id="branchOrderSettingsSummary">Konfiguration wird geladen.</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <p>Warengruppen, einzelne Positionen, Einheiten, E-Mail-Ziele und Vorlagen gelten nur für den zugewiesenen Standort. Der Antwort-Hinweis wird bei jeder Nachricht verpflichtend ergänzt.</p>
+                <p class="message hidden" id="branchOrderSettingsMessage" role="status" aria-live="polite"></p>
+                <div class="branch-order-settings-workspace" id="branchOrderSettingsWorkspace"><p class="empty-state">Konfiguration wird geladen.</p></div>
+                <div class="portal-settings-actions"><button class="text-button" id="refreshBranchOrderSettings" type="button">Aktualisieren</button><button class="primary" id="saveBranchOrderSettings" type="button">Bestellkonfiguration speichern</button></div>
+                <section class="branch-order-history" aria-labelledby="branchOrderHistoryTitle"><div class="list-heading"><h2 id="branchOrderHistoryTitle">Bestellverlauf</h2><button class="text-button" id="refreshBranchOrderHistory" type="button">Verlauf aktualisieren</button></div><div id="branchOrderHistoryList"><p class="empty-state">Bestellverlauf wird geladen.</p></div></section>
               </div>
             </details>
             <details class="portal-card portal-settings-section portal-settings-password">
@@ -370,6 +384,16 @@
               <div class="loan-list" id="loanList"><p class="empty-state">Leihen werden geladen.</p></div>
             </section>
           </div>
+        </section>
+
+        <section class="portal-view branch-orders-view" id="branchOrdersView" role="tabpanel" aria-labelledby="branchOrdersTab">
+          <div class="view-heading branch-orders-heading"><div><span class="eyebrow">Standortbestellung</span><h1>Filialbestellung</h1><p id="branchOrderWeek">Kalenderwoche wird serverseitig ermittelt.</p></div><button class="text-button" id="branchOrderRefresh" type="button">Aktualisieren</button></div>
+          <form class="portal-card branch-order-form" id="branchOrderForm">
+            <label class="branch-order-employee-field"><span>Bestellung für</span><select id="branchOrderEmployee" required><option value="">Teammitglied wird geladen.</option></select><small>Name und Personalnummer werden mit der Bestellung gespeichert.</small></label>
+            <div class="branch-order-group-list" id="branchOrderGroups"><p class="empty-state">Bestellpositionen werden geladen.</p></div>
+            <p class="message hidden" id="branchOrderMessage" role="status" aria-live="polite"></p>
+            <div class="branch-order-submit-row"><small>Die Kalenderwoche wird nicht eingegeben und kann nicht überschrieben werden.</small><button class="primary" id="branchOrderSubmit" type="submit">Bestellung senden</button></div>
+          </form>
         </section>
 
         <section class="portal-view" id="amuView" role="tabpanel">

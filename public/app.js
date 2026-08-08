@@ -399,7 +399,7 @@ const elements = Object.fromEntries(
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
-    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
+    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
@@ -13910,6 +13910,21 @@ function organizationAccountLocationOptions(selected = "") {
   ).join("");
 }
 
+function syncOrganizationAccountPermissionControls() {
+  if (!elements.organizationAccountType) return;
+  const branchAccount = elements.organizationAccountType.value === "branch";
+  [elements.organizationAccountLoanOverview, elements.organizationAccountScheduleView].forEach((input) => {
+    if (!input) return;
+    if (branchAccount) input.checked = true;
+    input.disabled = branchAccount;
+  });
+  if (elements.organizationAccountBranchOrders) {
+    elements.organizationAccountBranchOrders.checked = branchAccount;
+    elements.organizationAccountBranchOrders.disabled = true;
+  }
+  elements.organizationAccountBranchOrdersRow?.classList.toggle("hidden", !branchAccount);
+}
+
 function resetOrganizationAccountForm() {
   if (!elements.organizationAccountForm) return;
   elements.organizationAccountForm.reset();
@@ -13924,7 +13939,9 @@ function resetOrganizationAccountForm() {
   elements.organizationAccountPassword.value = "";
   elements.organizationAccountPassword.minLength = Number(state.portalStatus?.passwordMinLength || 6);
   elements.organizationAccountLoanOverview.checked = true;
-  elements.organizationAccountScheduleView.checked = false;
+  elements.organizationAccountScheduleView.checked = true;
+  elements.organizationAccountBranchOrders.checked = true;
+  syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = true;
   elements.organizationAccountCancel.classList.add("hidden");
   elements.organizationAccountSubmit.textContent = "Konto anlegen";
@@ -13942,6 +13959,7 @@ function renderOrganizationAccounts() {
     const functions = [
       account.permissions?.includes("loans:overview:read") ? "Leihübersicht" : "",
       account.permissions?.includes("schedule:location:view") ? "Dienstplanansicht" : "",
+      account.permissions?.includes("branch_orders:submit") ? "Filialbestellung" : "",
     ].filter(Boolean).join(" · ");
     const status = !account.active
       ? "Inaktiv"
@@ -13996,6 +14014,8 @@ function editOrganizationAccount(accountId) {
   elements.organizationAccountPassword.value = "";
   elements.organizationAccountLoanOverview.checked = account.permissions?.includes("loans:overview:read") === true;
   elements.organizationAccountScheduleView.checked = account.permissions?.includes("schedule:location:view") === true;
+  elements.organizationAccountBranchOrders.checked = account.permissions?.includes("branch_orders:submit") === true;
+  syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = account.active === true;
   elements.organizationAccountCancel.classList.remove("hidden");
   elements.organizationAccountSubmit.textContent = "Konto speichern";
@@ -14009,6 +14029,7 @@ async function saveOrganizationAccount(event) {
   const permissions = [
     elements.organizationAccountLoanOverview.checked ? "loans:overview:read" : "",
     elements.organizationAccountScheduleView.checked ? "schedule:location:view" : "",
+    elements.organizationAccountBranchOrders.checked ? "branch_orders:submit" : "",
   ].filter(Boolean);
   const body = {
     loginName: elements.organizationAccountLoginName.value,
@@ -23319,6 +23340,7 @@ elements.portalUserList?.addEventListener("change", (event) => {
 });
 elements.organizationAccountForm?.addEventListener("submit", saveOrganizationAccount);
 elements.organizationAccountCancel?.addEventListener("click", resetOrganizationAccountForm);
+elements.organizationAccountType?.addEventListener("change", syncOrganizationAccountPermissionControls);
 elements.organizationAccountList?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-organization-account]");
   if (!row) return;

@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.91.0 Beta · Filialzugänge und nachvollziehbare Filialbestellungen
+
+- Aktive Filialkonten erhalten die feste, standortgebundene Lesebasis für offene Leihen sowie vergangene, aktuelle und kommende Dienstplanwochen. Diese Ansichten bleiben ohne Bearbeitungs-, Ausgabe- oder Rücknahmerechte.
+- Das Filialkonto erhält den Hauptmenüpunkt „Filialbestellung“. Die Bestellung bindet Name und Personalnummer an die serverseitig bestimmte Kalenderwoche, sichert Positionen, Mengen, Einheiten, Absender, E-Mail-Momentaufnahmen und Zustellstatus revisionsfähig.
+- Filialleitungen verwalten am eigenen Standort Warengruppen, Einzelpositionen, Einheiten, E-Mail-Ziele, Antwortadressen und Vorlagen. Der Antwort-Hinweis ist für jede ausgehende Nachricht verpflichtend.
+- Bestellungen versenden ausschließlich als aus dem aktiven Filialkonto abgeleitete Adresse nach dem Muster `filXX-noreply@grabenplaner.eu`; die FL kann diese Absenderadresse nicht verändern. Der Versand bleibt an den bestehenden Scaleway-TEM-/SMTP-Freigabeschaltern und an das Ereignis `branch_order` gebunden.
+- Das SQLite-Schema ist als additive Anwendungsmigration ergänzt. Versandfehler bleiben mit der Bestellung und ihrem Zustellstatus nachvollziehbar erhalten.
+
 ## v0.90.7 Beta · Recovery-Smoke für On- und Offboarding korrigiert
 
 - Der isolierte Recovery-App-Smoke erkennt und bereinigt jetzt sämtliche geschützten O2–O5-On-/Offboarding-Falldaten, Paketstände, Aufgabenbindungen und verknüpften Workflow-Läufe aus seiner temporären Wiederherstellungsdatenbank.
