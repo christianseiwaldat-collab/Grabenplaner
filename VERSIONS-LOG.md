@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.90.6 Beta · Mitarbeiterprofil und persönliche Lifecycle-Aufgaben
+
+- Die geschützte Developer-Rolle erreicht Mitarbeiterprofile einschließlich Übersicht, Stammdaten, Personalakte, Onboarding und Offboarding vollständig. Nachgelagerte HR-only-Sperren gelten für diese geschützte Rolle nicht.
+- Eine ausdrücklich benannte Mitarbeiterin oder ein ausdrücklich benannter Mitarbeiter kann die eigene Onboarding-Aufgabe in Personalverwaltung → Personalaufgaben sehen. Die Karte zeigt nur die einzuarbeitende Person, den eigenen Schritt und den Status; Abschluss, Bindung und Audit bleiben serverseitig geprüft.
+- Für Offboarding kann eine ausdrücklich als Betriebsmittelverantwortung zugewiesene Mitarbeiterin oder ein ausdrücklich zugewiesener Mitarbeiter die eigene Minimalaufgabe erst nach Kommunikationsfreigabe sehen und abschließen. Vertrauliche Falldaten und allgemeine Personalakten bleiben geschlossen.
+
 ## v0.90.5 Beta · Vollständiger Developer-Zugang
 
 - Die geschützte Developer-Rolle erhält automatisch alle bekannten Anwendungsberechtigungen, einschließlich Mitarbeiterprofile, On- und Offboarding, Arbeitszeitregeln und Personal-Workflows.

@@ -29,6 +29,8 @@ const {
   inspectSqlitePersonnelLifecycleOnboardingSchema,
 } = require("../lib/persistence/sqlite/operations/personnel-lifecycle-onboarding-schema");
 const {
+  PERSONNEL_LIFECYCLE_OFFBOARDING_ASSIGNED_EMPLOYEE_MIGRATION_ID,
+  PERSONNEL_LIFECYCLE_OFFBOARDING_ASSIGNMENT_TRIGGER_NAME,
   PERSONNEL_LIFECYCLE_OFFBOARDING_INDEX_DEFINITIONS,
   PERSONNEL_LIFECYCLE_OFFBOARDING_MIGRATION_ID,
   PERSONNEL_LIFECYCLE_OFFBOARDING_TABLE_NAMES,
@@ -240,6 +242,45 @@ test("O5-Startup repariert leeren Triggerdrift erst nach Sicherung", () => {
     assert.equal(inspectSqlitePersonnelLifecycleOnboardingRows(database).valid, true);
     assert.equal(inspectSqlitePersonnelLifecycleOffboardingSchema(database).valid, true);
     assert.equal(inspectSqlitePersonnelLifecycleOffboardingRows(database).valid, true);
+  } finally {
+    database.close();
+  }
+});
+
+test("O5-Startup aktualisiert persoenliche Betriebsmittelaufgaben ohne Falldatenumbau", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  const backups = [];
+  try {
+    runMigrations(database);
+    insertLegacyFixture(database);
+    const before = legacyFixtureSnapshot(database);
+    database.exec(`
+      DROP TRIGGER ${PERSONNEL_LIFECYCLE_OFFBOARDING_ASSIGNMENT_TRIGGER_NAME};
+      CREATE TRIGGER ${PERSONNEL_LIFECYCLE_OFFBOARDING_ASSIGNMENT_TRIGGER_NAME}
+      BEFORE INSERT ON personnel_lifecycle_case_assignments
+      BEGIN
+        SELECT RAISE(ABORT, 'legacy O5 assignment trigger');
+      END;
+    `);
+    database.prepare("DELETE FROM schema_migrations WHERE id = ?")
+      .run(PERSONNEL_LIFECYCLE_OFFBOARDING_ASSIGNED_EMPLOYEE_MIGRATION_ID);
+    assert.equal(inspectSqlitePersonnelLifecycleOffboardingSchema(database).valid, false);
+
+    const result = runMigrations(database, {
+      databaseExistedBeforeOpen: true,
+      onBackup: (label) => backups.push(label),
+    });
+
+    assert.equal(result.personnelLifecycleOffboardingAssignedEmployeeMigrationId,
+      PERSONNEL_LIFECYCLE_OFFBOARDING_ASSIGNED_EMPLOYEE_MIGRATION_ID);
+    assert.equal(result.personnelLifecycleOffboardingAssignedEmployeeMigrationRequired, true);
+    assert.deepEqual(backups, ["pre-migration"]);
+    assert.deepEqual(legacyFixtureSnapshot(database), before);
+    assert.equal(inspectSqlitePersonnelLifecycleOffboardingSchema(database).valid, true);
+    assert.equal(inspectSqlitePersonnelLifecycleOffboardingRows(database).valid, true);
+    assert.equal(database.prepare(`
+      SELECT COUNT(*) AS count FROM schema_migrations WHERE id = ?
+    `).get(PERSONNEL_LIFECYCLE_OFFBOARDING_ASSIGNED_EMPLOYEE_MIGRATION_ID).count, 1);
   } finally {
     database.close();
   }

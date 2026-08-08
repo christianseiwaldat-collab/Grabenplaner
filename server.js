@@ -2466,8 +2466,8 @@ function requirePersonnelLifecycleOnboardingPreviewService() {
   if (!personnelLifecycleOnboardingPreviewServiceInstance) {
     personnelLifecycleOnboardingPreviewServiceInstance =
       createPersonnelLifecycleOnboardingPreviewService(customProcessRepository, {
-        canPreviewRecipient({ scope, recipient } = {}) {
-          return personnelLifecycleOnboardingRecipientEligible(recipient, scope);
+        canPreviewRecipient({ scope, recipient, step } = {}) {
+          return personnelLifecycleOnboardingRecipientEligible(recipient, scope, step);
         },
       });
   }
@@ -2483,8 +2483,8 @@ function requirePersonnelLifecycleOnboardingExecutionService() {
         instantiatePersonnelLifecycleOnboardingInTransaction,
         protectJson,
         parseProtectedJson,
-        canAssignRecipient({ scope, recipient } = {}) {
-          return personnelLifecycleOnboardingRecipientEligible(recipient, scope);
+        canAssignRecipient({ scope, recipient, step } = {}) {
+          return personnelLifecycleOnboardingRecipientEligible(recipient, scope, step);
         },
       });
   }
@@ -33331,7 +33331,7 @@ const PERSONNEL_PROFILE_MASTER_FIELD_ALLOWLIST = Object.freeze([
 
 function personnelProfileFoundationAvailable(session, profileAccess) {
   if (profileAccess.localSystem) return true;
-  if (profileAccess.personalHr) {
+  if (profileAccess.personalHr || profileAccess.personalDeveloper) {
     return session.permissions?.includes("personnel:central:read") === true;
   }
   if (profileAccess.scoped) {
@@ -33537,10 +33537,45 @@ function requirePersonnelLifecycleOnboardingStartAccess(request) {
   }
 }
 
+function requirePersonnelLifecycleAssignedTaskAccess(request, { write = false } = {}) {
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requireEmployeePortalSession(request);
+    if (session.mustChangePassword) {
+      throw httpError(
+        428,
+        "Bitte zuerst das persönliche Startpasswort ändern.",
+        "PORTAL_PASSWORD_CHANGE_REQUIRED",
+      );
+    }
+    if (write) assertPortalCsrf(request);
+    const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
+    if (lifecycleAccess.namedActor !== true || lifecycleAccess.personalEmployee !== true) {
+      throw httpError(
+        403,
+        "Lifecycle-Aufgaben sind nur über einen persönlichen Mitarbeiterzugang verfügbar.",
+        "PERSONNEL_LIFECYCLE_ASSIGNED_TASK_SESSION_REQUIRED",
+      );
+    }
+    return Object.freeze({ session, lifecycleAccess });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_ASSIGNED_TASK_SESSION_REQUIRED",
+        "personal-assignment",
+      );
+    }
+    throw error;
+  }
+}
+
 function requirePersonnelLifecycleOnboardingTaskAccess(
   request,
   { write = false, close = false } = {},
 ) {
+  if (!close) return requirePersonnelLifecycleAssignedTaskAccess(request, { write });
   const requiredPermissions = [PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ];
   if (write || close) {
     requiredPermissions.push(PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE);
@@ -33677,34 +33712,7 @@ function requirePersonnelLifecycleOffboardingActionAccess(request, action) {
 }
 
 function requirePersonnelLifecycleOffboardingTaskAccess(request, { write = false } = {}) {
-  const requiredPermissions = [PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ];
-  if (write) requiredPermissions.push(PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE);
-  let session = portalSessionFromRequest(request);
-  try {
-    session = requirePortalAnyPermissionOrLocal(request, requiredPermissions, { csrf: write });
-    const lifecycleAccess = createPersonnelLifecycleCaseAccessSnapshot(session);
-    if (lifecycleAccess.namedActor !== true
-      || lifecycleAccess.canReadOperational !== true
-      || (write && lifecycleAccess.canUpdateOperational !== true)
-      || !requiredPermissions.every((permission) => session.permissions?.includes(permission))) {
-      throw httpError(
-        403,
-        "Für freigegebene Offboarding-Aufgaben fehlen die operativen Fachrechte.",
-        "PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_PERMISSION_REQUIRED",
-      );
-    }
-    return Object.freeze({ session, lifecycleAccess });
-  } catch (error) {
-    if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
-        session,
-        request,
-        error.code || "PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_PERMISSION_REQUIRED",
-        requiredPermissions.join("|"),
-      );
-    }
-    throw error;
-  }
+  return requirePersonnelLifecycleAssignedTaskAccess(request, { write });
 }
 
 const PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS = Object.freeze({
@@ -33942,14 +33950,14 @@ function requirePersonnelLifecycleEditorValidateAccess(request) {
 function personnelProfileCanReadMasterProjection(accessContext) {
   return accessContext.profileAccess.localSystem
     || accessContext.profileAccess.scoped
-    || (accessContext.profileAccess.personalHr
+    || ((accessContext.profileAccess.personalHr || accessContext.profileAccess.personalDeveloper)
       && actorCanReadPersonnelSensitiveData(accessContext.session)
       && accessContext.recordAccess.canReadSensitive === true);
 }
 
 function personnelProfileCanReadDocumentProjection(accessContext) {
   return accessContext.profileAccess.localSystem
-    || (accessContext.profileAccess.personalHr
+    || ((accessContext.profileAccess.personalHr || accessContext.profileAccess.personalDeveloper)
       && actorCanReadPersonnelSensitiveData(accessContext.session)
       && accessContext.recordAccess.canReadDocuments === true);
 }
@@ -34254,9 +34262,19 @@ function personnelWorkflowRecipientAccess(recipient) {
   });
 }
 
-function personnelLifecycleOnboardingRecipientEligible(recipient, scope) {
+function personnelLifecycleOnboardingRecipientEligible(recipient, scope, step = {}) {
   if (!recipient || ["it_admin", "developer", "local"].includes(recipient.role)
     || !customProcessPortalUserInScope(recipient, scope)) return false;
+  const responsibilityType = String(
+    step?.responsibilityType ?? step?.responsibility?.type ?? "",
+  );
+  const responsibilityReference = String(
+    step?.responsibilityReference ?? step?.responsibility?.reference ?? "",
+  );
+  const explicitlyAssignedEmployee = recipient.role === "employee"
+    && responsibilityType === "employee"
+    && responsibilityReference === String(recipient.employee_number || "");
+  if (explicitlyAssignedEmployee) return true;
   const permissionState = effectivePortalPermissionState(
     recipient.employee_number,
     recipient.role,
@@ -34275,6 +34293,7 @@ function personnelLifecycleOnboardingRecipientEligible(recipient, scope) {
     actorId: recipient.employee_number,
     role: recipient.role,
     sessionKind: "employee",
+    isEmployee: true,
     active: true,
     permissions: permissionState.effectivePermissions,
     explicitScopes,
@@ -34319,12 +34338,12 @@ function personnelLifecycleOffboardingRecipientEligible(
     actorId: recipient.employee_number,
     role: recipient.role,
     sessionKind: "employee",
+    isEmployee: true,
     active: true,
     permissions: permissionState.effectivePermissions,
     explicitScopes,
     permissionScopes: parsePortalPermissionScopes(recipient.permission_scopes),
   });
-  if (access.canReadOperational !== true || access.canUpdateOperational !== true) return false;
   const rolesByRecipientClass = {
     [PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES.LEADERSHIP]: new Set([
       "manager",
@@ -34338,6 +34357,7 @@ function personnelLifecycleOffboardingRecipientEligible(
       "developer",
     ]),
     [PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES.ASSET_CUSTODIAN]: new Set([
+      "employee",
       "manager",
       "department_manager",
       "admin",
@@ -34352,6 +34372,11 @@ function personnelLifecycleOffboardingRecipientEligible(
   };
   const eligibleRoles = rolesByRecipientClass[String(recipientClass || "")];
   if (!eligibleRoles?.has(recipient.role)) return false;
+  if (recipient.role === "employee"
+    && recipientClass === PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES.ASSET_CUSTODIAN) {
+    return true;
+  }
+  if (access.canReadOperational !== true || access.canUpdateOperational !== true) return false;
   if (access.central === true) return true;
   const context = {
     caseType: "offboarding",
@@ -35766,7 +35791,7 @@ app.get("/api/portal/v1/personnel-lifecycle/onboarding/tasks", async (request, r
       tasks: result.items,
       capabilities: {
         canReadOnboardingTasks: true,
-        canCompleteOnboardingTasks: accessContext.lifecycleAccess.canUpdateOperational === true,
+        canCompleteOnboardingTasks: true,
       },
     });
   } catch (error) {
@@ -35779,7 +35804,7 @@ app.get("/api/portal/v1/personnel-lifecycle/onboarding/tasks", async (request, r
         accessContext.session,
         request,
         error.code,
-        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ,
+        "personal-assignment",
       );
     }
     personnelLifecycleOnboardingTaskRouteError(error);
@@ -35808,7 +35833,7 @@ app.post("/api/portal/v1/personnel-lifecycle/onboarding/tasks/:runId/:stepId/com
         accessContext.session,
         request,
         error.code,
-        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE,
+        "personal-assignment",
       );
     }
     personnelLifecycleOnboardingTaskRouteError(error);
@@ -35947,8 +35972,7 @@ app.get("/api/portal/v1/personnel-lifecycle/offboarding/tasks", async (request, 
       tasks: result.items.map(personnelLifecycleOffboardingTaskProjection),
       capabilities: {
         canReadOffboardingTasks: true,
-        canCompleteOffboardingTasks:
-          accessContext.lifecycleAccess.canUpdateOperational === true,
+        canCompleteOffboardingTasks: true,
       },
     });
   } catch (error) {
@@ -35961,7 +35985,7 @@ app.get("/api/portal/v1/personnel-lifecycle/offboarding/tasks", async (request, 
         accessContext.session,
         request,
         error.code,
-        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ,
+        "personal-assignment",
       );
     }
     personnelLifecycleOffboardingRouteError(error);
@@ -35992,7 +36016,7 @@ app.post("/api/portal/v1/personnel-lifecycle/offboarding/tasks/:runId/:stepId/co
         accessContext.session,
         request,
         error.code,
-        PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE,
+        "personal-assignment",
       );
     }
     personnelLifecycleOffboardingRouteError(error);

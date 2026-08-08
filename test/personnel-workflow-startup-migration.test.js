@@ -22,6 +22,8 @@ const {
   inspectSqlitePersonnelWorkflowSchema,
 } = require("../lib/persistence/sqlite/operations/personnel-workflow-schema");
 const {
+  PERSONNEL_WORKFLOW_INSTANCE_ASSIGNED_EMPLOYEE_MIGRATION_ID,
+  PERSONNEL_WORKFLOW_INSTANCE_ASSIGNED_EMPLOYEE_TRIGGER_NAME,
   PERSONNEL_WORKFLOW_INSTANCE_MIGRATION_ID,
   PERSONNEL_WORKFLOW_INSTANCE_TABLE_NAMES,
   PERSONNEL_WORKFLOW_INSTANCE_TRIGGER_DEFINITIONS,
@@ -800,6 +802,59 @@ test("Personalmodul M5 Startup: Sidecar-Schema wird additiv ohne Legacy-Backfill
     });
     assert.equal(rerun.personnelWorkflowInstanceMigrationRequired, false);
     assert.deepEqual(backups, ["pre-migration"]);
+  } finally {
+    database.close();
+  }
+});
+
+test("Personalmodul M5 Startup: persoenlich zugewiesene O4-Aufgaben aktualisieren nur ihren Trigger", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  const backups = [];
+  try {
+    runMigrations(database);
+    const fixture = insertPersonnelWorkflowInstance(database, "assigned-employee-trigger");
+    const before = database.prepare(`
+      SELECT run_id, step_id, employee_number, responsibility_type,
+             responsibility_reference, assigned_by, assigned_at, receipt_sha256
+      FROM custom_process_run_step_assignments
+      WHERE run_id = ?
+    `).all(fixture.run_id).map((row) => ({ ...row }));
+    database.exec(`
+      DROP TRIGGER ${PERSONNEL_WORKFLOW_INSTANCE_ASSIGNED_EMPLOYEE_TRIGGER_NAME};
+      CREATE TRIGGER ${PERSONNEL_WORKFLOW_INSTANCE_ASSIGNED_EMPLOYEE_TRIGGER_NAME}
+      BEFORE INSERT ON custom_process_run_step_assignments
+      BEGIN
+        SELECT RAISE(ABORT, 'legacy workflow assignment trigger');
+      END;
+    `);
+    database.prepare("DELETE FROM schema_migrations WHERE id = ?")
+      .run(PERSONNEL_WORKFLOW_INSTANCE_ASSIGNED_EMPLOYEE_MIGRATION_ID);
+    assert.equal(inspectSqlitePersonnelWorkflowInstanceSchema(database).valid, false);
+    assert.deepEqual(inspectSqlitePersonnelWorkflowInstanceSchema(database).issues, [
+      `trigger-invalid:${PERSONNEL_WORKFLOW_INSTANCE_ASSIGNED_EMPLOYEE_TRIGGER_NAME}`,
+    ]);
+
+    const result = runMigrations(database, {
+      databaseExistedBeforeOpen: true,
+      onBackup: (label) => backups.push(label),
+    });
+
+    assert.equal(result.personnelWorkflowInstanceAssignedEmployeeMigrationId,
+      PERSONNEL_WORKFLOW_INSTANCE_ASSIGNED_EMPLOYEE_MIGRATION_ID);
+    assert.equal(result.personnelWorkflowInstanceAssignedEmployeeMigrationRequired, true);
+    assert.equal(result.personnelWorkflowInstanceMigrationRequired, false);
+    assert.deepEqual(backups, ["pre-migration"]);
+    assert.equal(inspectSqlitePersonnelWorkflowInstanceSchema(database).valid, true);
+    assert.deepEqual(inspectSqlitePersonnelWorkflowInstanceRows(database).issues, []);
+    assert.deepEqual(database.prepare(`
+      SELECT run_id, step_id, employee_number, responsibility_type,
+             responsibility_reference, assigned_by, assigned_at, receipt_sha256
+      FROM custom_process_run_step_assignments
+      WHERE run_id = ?
+    `).all(fixture.run_id).map((row) => ({ ...row })), before);
+    assert.equal(database.prepare(`
+      SELECT COUNT(*) AS count FROM schema_migrations WHERE id = ?
+    `).get(PERSONNEL_WORKFLOW_INSTANCE_ASSIGNED_EMPLOYEE_MIGRATION_ID).count, 1);
   } finally {
     database.close();
   }

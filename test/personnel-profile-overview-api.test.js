@@ -493,7 +493,6 @@ test("M7 Mitarbeiterprofil: tabweise positive Projektionen und bestehende Objekt
   for (const [label, deniedCase] of Object.entries({
     admin: { auth: sessions.admin, code: "PERSONNEL_PROFILE_ACCESS_DENIED" },
     it: { auth: sessions.it, code: "PORTAL_PERMISSION_DENIED" },
-    developer: { auth: sessions.developer, code: "PERSONNEL_PROFILE_ACCESS_DENIED" },
     planner: { auth: sessions.planner, code: "PORTAL_PERMISSION_DENIED" },
     employee: { auth: sessions.employee, code: "PORTAL_PERMISSION_DENIED" },
   })) {
@@ -531,29 +530,6 @@ test("M7 Mitarbeiterprofil: tabweise positive Projektionen und bestehende Objekt
       ACTORS.hr.employeeNumber,
     );
   }
-  const developerOnboardingDenied = await request(`${PROFILE_ROUTE}?tab=onboarding`, {
-    auth: sessions.developer,
-  });
-  assert.equal(developerOnboardingDenied.response.status, 403);
-  assert.equal(developerOnboardingDenied.payload.code, "PORTAL_PERMISSION_DENIED");
-  insertGrant.run(
-    ACTORS.developer.employeeNumber,
-    "personnel:lifecycle:onboarding:read",
-    ACTORS.hr.employeeNumber,
-  );
-  const developerMissingPackageRight = await request(`${PROFILE_ROUTE}?tab=onboarding`, {
-    auth: sessions.developer,
-  });
-  assert.equal(developerMissingPackageRight.response.status, 403);
-  assert.equal(
-    developerMissingPackageRight.payload.code,
-    "PERSONNEL_LIFECYCLE_ONBOARDING_PREVIEW_ACCESS_DENIED",
-  );
-  insertGrant.run(
-    ACTORS.developer.employeeNumber,
-    "personnel:lifecycle:packages:read",
-    ACTORS.hr.employeeNumber,
-  );
   const lifecycleTables = [
     "personnel_employment_episodes",
     "personnel_lifecycle_cases",
@@ -573,30 +549,32 @@ test("M7 Mitarbeiterprofil: tabweise positive Projektionen und bestehende Objekt
   assert.equal(developerOnboarding.response.status, 200, developerOnboarding.text);
   assert.deepEqual(developerOnboarding.payload.profile, expectedProfile(departmentId));
   assert.deepEqual(developerOnboarding.payload.tabs, {
-    overview: { available: false },
-    masterData: { available: false },
-    documents: { available: false },
+    overview: { available: true },
+    masterData: { available: true },
+    documents: { available: true },
     onboarding: { available: true },
     training: { available: false },
-    offboarding: { available: false },
+    offboarding: { available: true },
     history: { available: false },
   });
-  assert.deepEqual(developerOnboarding.payload.capabilities, {
-    canReadOverview: false,
-    canReadMasterOrg: false,
-    canReadDocuments: false,
-    canReadOnboardingPreview: true,
-    canStartOnboarding: false,
-    canCloseOnboarding: false,
-    canReadOffboardingConfidential: false,
-    canPrepareOffboarding: false,
-    canApproveOffboardingException: false,
-    canReleaseOffboardingCommunication: false,
-    canConfirmOffboardingInformation: false,
-    canExecuteOffboarding: false,
-    canCloseOffboarding: false,
-    canReadOffboardingConfidentialAudit: false,
-  });
+  for (const capability of [
+    "canReadOverview",
+    "canReadMasterOrg",
+    "canReadDocuments",
+    "canReadOnboardingPreview",
+    "canStartOnboarding",
+    "canCloseOnboarding",
+    "canReadOffboardingConfidential",
+    "canPrepareOffboarding",
+    "canApproveOffboardingException",
+    "canReleaseOffboardingCommunication",
+    "canConfirmOffboardingInformation",
+    "canExecuteOffboarding",
+    "canCloseOffboarding",
+    "canReadOffboardingConfidentialAudit",
+  ]) {
+    assert.equal(developerOnboarding.payload.capabilities[capability], true, capability);
+  }
   const preview = developerOnboarding.payload.onboardingPreview;
   assert.equal(preview.contractVersion, "o3-v0.1");
   assert.equal(preview.mode, "read_only_onboarding_profile_preview");
@@ -668,11 +646,16 @@ test("M7 Mitarbeiterprofil: tabweise positive Projektionen und bestehende Objekt
     steps: 3,
     blockers: preview.blockers.map(({ code }) => code),
   });
-  const developerOverviewStillDenied = await request(`${PROFILE_ROUTE}?tab=overview`, {
+  const developerOverview = await request(`${PROFILE_ROUTE}?tab=overview`, {
     auth: sessions.developer,
   });
-  assert.equal(developerOverviewStillDenied.response.status, 403);
-  assert.equal(developerOverviewStillDenied.payload.code, "PERSONNEL_PROFILE_ACCESS_DENIED");
+  assert.equal(developerOverview.response.status, 200, developerOverview.text);
+  assert.deepEqual(developerOverview.payload.profile, expectedProfile(departmentId));
+  assert.equal(developerOverview.payload.capabilities.canReadOverview, true);
+  assert.equal(developerOverview.payload.capabilities.canReadMasterOrg, true);
+  assert.equal(developerOverview.payload.capabilities.canReadDocuments, true);
+  assert.equal(developerOverview.payload.capabilities.canReadOnboardingPreview, true);
+  assert.equal(developerOverview.payload.capabilities.canReadOffboardingConfidential, true);
   const hrOnboardingWithoutExplicitRights = await request(`${PROFILE_ROUTE}?tab=onboarding`, {
     auth: sessions.hr,
   });

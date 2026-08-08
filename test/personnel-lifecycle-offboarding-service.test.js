@@ -685,6 +685,7 @@ function accessFor(actorId, overrides = {}) {
   return {
     actorId,
     namedActor: true,
+    personalEmployee: true,
     central: true,
     canReadOffboardingConfidential: true,
     canPrepareOffboarding: true,
@@ -975,6 +976,10 @@ test("Release erzeugt atomar sechs pending O5-Runs und oeffnet nur read-only Min
   const list = await h.service.listTasks(firstAssignment.assignee_actor_id, {
     access: accessFor(firstAssignment.assignee_actor_id, {
       canReadOffboardingConfidential: false,
+      canReadOperational: false,
+      canUpdateOperational: false,
+      canReadOperationalScope: async () => false,
+      canUpdateOperationalScope: async () => false,
     }),
   });
   assert.equal(list.items.length, 1);

@@ -993,7 +993,8 @@ function personnelLifecycleFoundationEnabled() {
 function canOpenStandardEmployeeProfileFoundation() {
   if (!personnelLifecycleFoundationEnabled()) return false;
   if (!state.portalStatus?.portalEnabled) return true;
-  return state.portalSession?.user?.role === "hr"
+  const role = state.portalSession?.user?.role;
+  return (role === "hr" || role === "developer")
     && canReadCentralPersonnel()
     && hasGovernancePermission("personnel:profiles:read");
 }
@@ -1106,15 +1107,20 @@ function canOpenWorkflowCenter() {
   return canReadPersonnelWorkflowInstances() || canReadPersonnelLifecycleEditorCatalog();
 }
 
+function canAccessAssignedPersonnelLifecycleTasks() {
+  if (!personnelLifecycleFoundationEnabled()) return false;
+  if (!state.portalStatus?.portalEnabled) return true;
+  const user = state.portalSession?.user;
+  return user?.isEmployee === true && user?.mustChangePassword !== true;
+}
+
 function canReadLifecycleOnboardingTasks() {
-  return personnelLifecycleFoundationEnabled()
-    && hasGovernancePermission("personnel:lifecycle:operational:read")
+  return canAccessAssignedPersonnelLifecycleTasks()
     && state.personnelLifecycleOnboardingTaskCapabilities.canRead !== false;
 }
 
 function canReadLifecycleOffboardingTasks() {
-  return personnelLifecycleFoundationEnabled()
-    && hasGovernancePermission("personnel:lifecycle:operational:read")
+  return canAccessAssignedPersonnelLifecycleTasks()
     && state.personnelLifecycleOffboardingTaskCapabilities.canRead !== false;
 }
 
@@ -10053,6 +10059,7 @@ function requiredPersonnelLifecycleOnboardingTaskText(value, label, maximum = 16
 function normalizePersonnelLifecycleOnboardingTask(value) {
   const task = personnelWorkflowObject(value);
   const step = personnelWorkflowObject(task.step);
+  const subject = personnelWorkflowObject(task.subject);
   const scope = personnelWorkflowObject(task.scope);
   const scopeType = String(scope.type || "").trim();
   const locationId = String(scope.locationId || "").trim();
@@ -10079,6 +10086,18 @@ function normalizePersonnelLifecycleOnboardingTask(value) {
     workflowCode: requiredPersonnelLifecycleOnboardingTaskText(task.workflowCode, "Der Workflow-Code", 120),
     workflowTitle: requiredPersonnelLifecycleOnboardingTaskText(task.workflowTitle, "Der Workflow-Titel", 200),
     title: requiredPersonnelLifecycleOnboardingTaskText(step.title, "Der Aufgabentitel", 200),
+    subject: {
+      displayName: requiredPersonnelLifecycleOnboardingTaskText(
+        subject.displayName,
+        "Der Name der zugeordneten Person",
+        200,
+      ),
+      employeeNumber: requiredPersonnelLifecycleOnboardingTaskText(
+        subject.employeeNumber,
+        "Die Personalnummer der zugeordneten Person",
+        120,
+      ),
+    },
     position,
     activatedAt,
     scope: { type: scopeType, locationId, departmentId },
@@ -11420,7 +11439,7 @@ function renderPersonnelLifecycleOnboardingTasksMarkup() {
   if (!state.personnelLifecycleOnboardingTasks.length) return "";
   const canComplete = state.personnelLifecycleOnboardingTaskCapabilities.canComplete === true;
   return `<section class="personnel-lifecycle-onboarding-task-group" aria-labelledby="personnelLifecycleOnboardingTasksTitle">
-    <header><div><span class="eyebrow">O4 · kontrollierte Ausführung</span><h3 id="personnelLifecycleOnboardingTasksTitle">Eigene Onboarding-Aufgaben</h3><p>Nur die aktuell persönlich zugewiesene Aufgabe im wirksamen Fachbereich wird angezeigt.</p></div><span class="status-badge warning">Keine Automatik</span></header>
+    <header><div><span class="eyebrow">O4 · kontrollierte Ausführung</span><h3 id="personnelLifecycleOnboardingTasksTitle">Eigene Onboarding-Aufgaben</h3><p>Nur die aktuell persönlich zugewiesene Aufgabe und die zu schulende Person werden angezeigt.</p></div><span class="status-badge warning">Keine Automatik</span></header>
     <div class="personnel-lifecycle-onboarding-task-list">${state.personnelLifecycleOnboardingTasks.map((task) => {
       const key = personnelLifecycleOnboardingTaskKey(task);
       const pending = state.personnelLifecycleOnboardingTaskPending === key;
@@ -11428,7 +11447,7 @@ function renderPersonnelLifecycleOnboardingTasksMarkup() {
         ? `Standort ${task.scope.locationId} · Abteilung ${task.scope.departmentId}`
         : `Standort ${task.scope.locationId}`;
       return `<article class="personnel-workflow-task-card personnel-lifecycle-onboarding-task-card">
-        <div><span class="eyebrow">Schritt ${task.position} · ${escapeHtml(task.workflowCode)}</span><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.workflowTitle)} · ${escapeHtml(scopeLabel)}</p><small>Aktiv seit ${escapeHtml(personnelWorkflowTimestamp(task.activatedAt))}</small></div>
+        <div><span class="eyebrow">Schritt ${task.position} · ${escapeHtml(task.workflowCode)}</span><h3>${escapeHtml(task.title)}</h3><p><strong>Einschulung für:</strong> ${escapeHtml(task.subject.displayName)} · Personalnummer ${escapeHtml(task.subject.employeeNumber)}</p><p>${escapeHtml(task.workflowTitle)} · ${escapeHtml(scopeLabel)}</p><small>Aktiv seit ${escapeHtml(personnelWorkflowTimestamp(task.activatedAt))}</small></div>
         ${canComplete ? `<form data-personnel-lifecycle-onboarding-task-complete data-run-id="${escapeHtmlAttribute(task.runId)}" data-step-id="${escapeHtmlAttribute(task.stepId)}">
           <label><input type="checkbox" required data-onboarding-task-confirm${pending ? " disabled" : ""}><span>Ich bestätige, dass diese Aufgabe tatsächlich erledigt ist.</span></label>
           <button type="submit" class="primary-button"${pending ? " disabled" : ""}>${pending ? "Wird sicher bestätigt …" : "Erledigung bestätigen"}</button>
@@ -12605,8 +12624,7 @@ function clearPersonnelLifecycleOnboardingTaskState(message = "") {
 }
 
 async function loadPersonnelLifecycleOnboardingTasks({ force = false } = {}) {
-  if (!personnelLifecycleFoundationEnabled()
-    || !hasGovernancePermission("personnel:lifecycle:operational:read")
+  if (!canAccessAssignedPersonnelLifecycleTasks()
     || state.personnelLifecycleOnboardingTasksLoading) return;
   if (state.personnelLifecycleOnboardingTasksLoaded && !force) {
     renderPersonnelWorkflowInstanceOverview();
@@ -12617,8 +12635,7 @@ async function loadPersonnelLifecycleOnboardingTasks({ force = false } = {}) {
   renderPersonnelWorkflowInstanceOverview();
   try {
     const result = await api("/api/portal/v1/personnel-lifecycle/onboarding/tasks");
-    if (!personnelLifecycleFoundationEnabled()
-      || !hasGovernancePermission("personnel:lifecycle:operational:read")) {
+    if (!canAccessAssignedPersonnelLifecycleTasks()) {
       clearPersonnelLifecycleOnboardingTaskState(
         "Der Onboarding-Aufgabenzugriff wurde während des Ladens entzogen.",
       );
@@ -12725,8 +12742,7 @@ function clearPersonnelLifecycleOffboardingTaskState(message = "") {
 }
 
 async function loadPersonnelLifecycleOffboardingTasks({ force = false } = {}) {
-  if (!personnelLifecycleFoundationEnabled()
-    || !hasGovernancePermission("personnel:lifecycle:operational:read")
+  if (!canAccessAssignedPersonnelLifecycleTasks()
     || state.personnelLifecycleOffboardingTasksLoading) return;
   if (state.personnelLifecycleOffboardingTasksLoaded && !force) {
     renderPersonnelWorkflowInstanceOverview();
@@ -12737,8 +12753,7 @@ async function loadPersonnelLifecycleOffboardingTasks({ force = false } = {}) {
   renderPersonnelWorkflowInstanceOverview();
   try {
     const result = await api("/api/portal/v1/personnel-lifecycle/offboarding/tasks");
-    if (!personnelLifecycleFoundationEnabled()
-      || !hasGovernancePermission("personnel:lifecycle:operational:read")) {
+    if (!canAccessAssignedPersonnelLifecycleTasks()) {
       clearPersonnelLifecycleOffboardingTaskState(
         "Der Offboarding-Aufgabenzugriff wurde während des Ladens entzogen.",
       );

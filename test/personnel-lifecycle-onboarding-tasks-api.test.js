@@ -43,6 +43,7 @@ const CLOSER_B = "O4-TASKS-CLOSER-B";
 const OUTSIDER = "O4-TASKS-OUTSIDER";
 const PRIVATE_MARKER = "O4-TASKS-PRIVATE-MARKER-MUST-NOT-LEAK";
 const TASKS_ROUTE = "/api/portal/v1/personnel-lifecycle/onboarding/tasks";
+const OVERVIEW_PROFILE_ROUTE = `/api/portal/v1/personnel-lifecycle/employees/${SUBJECT}/profile?tab=overview`;
 const PROFILE_ROUTE = `/api/portal/v1/personnel-lifecycle/employees/${SUBJECT}/profile?tab=onboarding`;
 const START_ROUTE = `/api/portal/v1/personnel-lifecycle/employees/${SUBJECT}/onboarding-starts`;
 const START_PERMISSIONS = Object.freeze([
@@ -442,7 +443,7 @@ function createFixture() {
 
   const sessions = {
     developer: createEmployeeSession(DEVELOPER, "developer"),
-    recipientA: createEmployeeSession(RECIPIENT_A, "hr"),
+    recipientA: createEmployeeSession(RECIPIENT_A, "employee"),
     recipientB: createEmployeeSession(RECIPIENT_B, "hr"),
     closerB: createEmployeeSession(CLOSER_B, "hr"),
     outsider: createEmployeeSession(OUTSIDER, "employee"),
@@ -450,10 +451,8 @@ function createFixture() {
   for (const permission of START_PERMISSIONS) grantPermission(DEVELOPER, permission);
   grantPermission(DEVELOPER, P.OPERATIONAL_READ);
   grantPermission(DEVELOPER, P.OPERATIONAL_UPDATE);
-  for (const recipient of [RECIPIENT_A, RECIPIENT_B]) {
-    grantPermission(recipient, P.OPERATIONAL_READ);
-    grantPermission(recipient, P.OPERATIONAL_UPDATE);
-  }
+  grantPermission(RECIPIENT_B, P.OPERATIONAL_READ);
+  grantPermission(RECIPIENT_B, P.OPERATIONAL_UPDATE);
   for (const permission of CLOSE_PERMISSIONS) grantPermission(CLOSER_B, permission);
   for (const publication of PUBLICATIONS) insertPublication(publication);
   enablePersonnelLifecycle();
@@ -477,6 +476,9 @@ test.after(async () => {
 
 test("O4 Aufgaben- und Abschluss-API bleibt actor-, scope-, rechte- und replay-sicher", async (t) => {
   const sessions = createFixture();
+  const overviewProfile = await request(OVERVIEW_PROFILE_ROUTE, { auth: sessions.developer });
+  assert.equal(overviewProfile.response.status, 200, overviewProfile.text);
+  assert.equal(overviewProfile.payload.capabilities.canReadOverview, true);
   const profile = await request(PROFILE_ROUTE, { auth: sessions.developer });
   assert.equal(profile.response.status, 200, profile.text);
   const started = await request(START_ROUTE, {
@@ -488,9 +490,8 @@ test("O4 Aufgaben- und Abschluss-API bleibt actor-, scope-, rechte- und replay-s
   const caseId = started.payload.onboardingExecution.caseId;
   db.prepare(`
     UPDATE portal_users SET role = 'department_manager', updated_at = CURRENT_TIMESTAMP
-    WHERE employee_number IN (?, ?)
-  `).run(RECIPIENT_A, RECIPIENT_B);
-  setScopedOperationalPermissions(RECIPIENT_A, LOCATION, DEPARTMENT);
+    WHERE employee_number = ?
+  `).run(RECIPIENT_B);
   setScopedOperationalPermissions(RECIPIENT_B, LOCATION, DEPARTMENT);
   const startSnapshot = businessSnapshot(caseId);
   assert.equal(startSnapshot.caseState, "active");
@@ -500,14 +501,15 @@ test("O4 Aufgaben- und Abschluss-API bleibt actor-, scope-, rechte- und replay-s
   let taskA;
   let taskB;
 
-  await t.test("GET erzwingt Recht, eigene Zuweisung und exakten Abteilungsscope", async () => {
+  await t.test("GET zeigt normalen Mitarbeitenden ausschließlich ihre exakte Zuweisung", async () => {
     const unauthenticated = await request(TASKS_ROUTE);
     assertError(unauthenticated, 401, "PORTAL_LOGIN_REQUIRED");
     assertBusinessUnchanged(startSnapshot, caseId, "GET ohne Sitzung");
 
-    const noRights = await request(TASKS_ROUTE, { auth: sessions.outsider });
-    assertError(noRights, 403, "PORTAL_PERMISSION_DENIED");
-    assertBusinessUnchanged(startSnapshot, caseId, "GET ohne operational:read");
+    const noAssignment = await request(TASKS_ROUTE, { auth: sessions.outsider });
+    assert.equal(noAssignment.response.status, 200, noAssignment.text);
+    assert.deepEqual(noAssignment.payload.tasks, []);
+    assertBusinessUnchanged(startSnapshot, caseId, "GET ohne persönliche Zuweisung");
 
     const listedA = await request(TASKS_ROUTE, { auth: sessions.recipientA });
     assert.equal(listedA.response.status, 200, listedA.text);
@@ -518,12 +520,15 @@ test("O4 Aufgaben- und Abschluss-API bleibt actor-, scope-, rechte- und replay-s
     assert.equal(listedA.payload.tasks.length, 1);
     [taskA] = listedA.payload.tasks;
     assert.equal(taskA.workflowCode, PUBLICATIONS[0].workflowCode);
+    assert.deepEqual(taskA.subject, {
+      employeeNumber: SUBJECT,
+      displayName: "O4 Aufgaben Zielperson",
+    });
     assert.deepEqual(taskA.scope, {
       type: "department",
       locationId: LOCATION,
       departmentId: DEPARTMENT,
     });
-    assert.equal(JSON.stringify(listedA.payload).includes(SUBJECT), false);
     assert.equal(JSON.stringify(listedA.payload).includes(PRIVATE_MARKER), false);
 
     const listedB = await request(TASKS_ROUTE, { auth: sessions.recipientB });
@@ -533,26 +538,10 @@ test("O4 Aufgaben- und Abschluss-API bleibt actor-, scope-, rechte- und replay-s
     assert.equal(taskB.workflowCode, PUBLICATIONS[1].workflowCode);
     assert.notEqual(taskA.runId, taskB.runId);
 
-    setScopedOperationalPermissions(RECIPIENT_A, OTHER_LOCATION, OTHER_DEPARTMENT);
-    const wrongScope = await request(TASKS_ROUTE, { auth: sessions.recipientA });
-    assertError(wrongScope, 404, "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_NOT_FOUND", [taskA.runId]);
-    assertBusinessUnchanged(startSnapshot, caseId, "GET im fremden Scope");
-    setScopedOperationalPermissions(RECIPIENT_A, LOCATION, DEPARTMENT);
   });
 
-  await t.test("Aufgabenabschluss sperrt fehlende Rechte, CSRF, Actor-IDOR und Scope-IDOR", async () => {
+  await t.test("Aufgabenabschluss bleibt an CSRF und die persönliche Zuweisung gebunden", async () => {
     const baseline = businessSnapshot(caseId);
-    denyPermission(RECIPIENT_A, P.OPERATIONAL_UPDATE);
-    const denied = await request(completeRoute(taskA), {
-      method: "POST",
-      auth: sessions.recipientA,
-      body: { operationId: operationId(10), action: "complete" },
-    });
-    restorePermission(RECIPIENT_A, P.OPERATIONAL_UPDATE);
-    assertError(denied, 403, "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_PERMISSION_REQUIRED",
-      [operationId(10)]);
-    assertBusinessUnchanged(baseline, caseId, "Abschluss ohne operational:update");
-
     const wrongCsrf = await request(completeRoute(taskA), {
       method: "POST",
       auth: sessions.recipientA,
@@ -569,16 +558,6 @@ test("O4 Aufgaben- und Abschluss-API bleibt actor-, scope-, rechte- und replay-s
     });
     assertError(actorIdor, 404, "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_NOT_FOUND", [taskB.runId]);
     assertBusinessUnchanged(baseline, caseId, "Abschluss einer fremden Zuweisung");
-
-    setScopedOperationalPermissions(RECIPIENT_A, OTHER_LOCATION, OTHER_DEPARTMENT);
-    const scopeIdor = await request(completeRoute(taskA), {
-      method: "POST",
-      auth: sessions.recipientA,
-      body: { operationId: operationId(13), action: "complete" },
-    });
-    assertError(scopeIdor, 404, "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_NOT_FOUND", [taskA.runId]);
-    assertBusinessUnchanged(baseline, caseId, "Abschluss im fremden Scope");
-    setScopedOperationalPermissions(RECIPIENT_A, LOCATION, DEPARTMENT);
   });
 
   await t.test("skip, not_applicable, Ausnahme und Evidence bleiben ueber HTTP fail-closed", async () => {
@@ -609,14 +588,23 @@ test("O4 Aufgaben- und Abschluss-API bleibt actor-, scope-, rechte- und replay-s
   await t.test("Fallabschluss erzwingt zentrale Rechte, CSRF, IDOR, Bestaetigung und Vollstaendigkeit", async () => {
     const baseline = businessSnapshot(caseId);
     const closeBody = { operationId: operationId(30), confirmation: "CLOSE_ONBOARDING" };
-    const missingCloseRight = await request(closeRoute(caseId), {
+    const developerCanClose = await request(closeRoute(caseId), {
       method: "POST",
       auth: sessions.developer,
       body: closeBody,
     });
-    assertError(missingCloseRight, 403, "PERSONNEL_LIFECYCLE_ONBOARDING_CLOSE_PERMISSION_REQUIRED",
+    assertError(developerCanClose, 409, "PERSONNEL_LIFECYCLE_ONBOARDING_CLOSE_INCOMPLETE",
       [caseId, closeBody.operationId]);
-    assertBusinessUnchanged(baseline, caseId, "Fallabschluss ohne onboarding:close");
+    assertBusinessUnchanged(baseline, caseId, "Developer-Fallabschluss mit offenen Aufgaben");
+
+    const missingCloseRight = await request(closeRoute(caseId), {
+      method: "POST",
+      auth: sessions.recipientA,
+      body: { ...closeBody, operationId: operationId(301) },
+    });
+    assertError(missingCloseRight, 403, "PORTAL_PERMISSION_DENIED",
+      [caseId, operationId(301)]);
+    assertBusinessUnchanged(baseline, caseId, "Fallabschluss ohne zentrale Rechte");
 
     const wrongCsrf = await request(closeRoute(caseId), {
       method: "POST",
