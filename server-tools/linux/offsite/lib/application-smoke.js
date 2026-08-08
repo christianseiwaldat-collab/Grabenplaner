@@ -34,6 +34,15 @@ const PROTECTED_COLUMNS = new Set([
   "outbound_notification_jobs.protected_payload",
   "payroll_handoff_events.payload_json",
   "payroll_handoffs.payload_json",
+  "personnel_employment_episodes.protected_payload",
+  "personnel_lifecycle_case_events.protected_payload",
+  "personnel_lifecycle_case_reference_dates.protected_payload",
+  "personnel_lifecycle_cases.protected_payload",
+  "personnel_lifecycle_offboarding_operations.protected_result_payload",
+  "personnel_lifecycle_offboarding_package_version_archives.protected_payload",
+  "personnel_lifecycle_offboarding_package_versions.protected_snapshot",
+  "personnel_lifecycle_offboarding_run_terminations.protected_payload",
+  "personnel_lifecycle_offboarding_runtime_steps.protected_payload",
   "personnel_record_document_versions.protected_payload",
   "personnel_record_documents.protected_payload",
   "personnel_sensitive_records.protected_payload",
@@ -53,6 +62,24 @@ const EMPTY_ONLY_LEGACY_COLUMNS = new Set([
 const PROTECTED_ROW_TABLES = Object.freeze([
   "custom_process_run_step_assignments",
   "custom_process_run_bindings",
+  "personnel_lifecycle_offboarding_assignment_bindings",
+  "personnel_lifecycle_case_assignment_bindings",
+  "personnel_lifecycle_offboarding_runtime_steps",
+  "personnel_lifecycle_offboarding_run_terminations",
+  "personnel_lifecycle_case_package_runs",
+  "personnel_lifecycle_offboarding_package_runs",
+  "personnel_lifecycle_onboarding_operations",
+  "personnel_lifecycle_offboarding_operations",
+  "personnel_lifecycle_case_assignments",
+  "personnel_lifecycle_case_package_bindings",
+  "personnel_lifecycle_offboarding_package_bindings",
+  "personnel_lifecycle_case_reference_dates",
+  "personnel_lifecycle_case_events",
+  "personnel_lifecycle_confidential_access_events",
+  "personnel_lifecycle_offboarding_package_version_archives",
+  "personnel_lifecycle_offboarding_package_versions",
+  "personnel_lifecycle_cases",
+  "personnel_employment_episodes",
   "candidate_events",
   "candidate_document_versions",
   "candidate_documents",
@@ -91,7 +118,9 @@ const PROTECTED_DELETE_TRIGGERS = Object.freeze({
   trg_candidate_events_immutable_delete: "candidate_events",
   trg_custom_process_run_assignments_immutable_delete: "custom_process_run_step_assignments",
   trg_custom_process_run_bindings_immutable_delete: "custom_process_run_bindings",
+  trg_custom_process_run_steps_o5_delete_blocked: "custom_process_run_steps",
   trg_custom_process_run_steps_personnel_protected_delete: "custom_process_run_steps",
+  trg_custom_process_runs_o5_delete_blocked: "custom_process_runs",
   trg_custom_process_runs_personnel_protected_delete: "custom_process_runs",
   trg_loan_document_deliveries_immutable_delete: "loan_document_deliveries",
   trg_loan_documents_immutable_delete: "loan_documents",
@@ -99,6 +128,31 @@ const PROTECTED_DELETE_TRIGGERS = Object.freeze({
   trg_loan_photos_immutable_delete: "loan_photos",
   trg_payroll_handoff_events_immutable_delete: "payroll_handoff_events",
   trg_payroll_handoffs_immutable_delete: "payroll_handoffs",
+  trg_personnel_employment_episodes_o2_delete_blocked: "personnel_employment_episodes",
+  trg_personnel_employment_episodes_o4_immutable_delete: "personnel_employment_episodes",
+  trg_personnel_lifecycle_case_assignments_o2_delete_blocked: "personnel_lifecycle_case_assignments",
+  trg_personnel_lifecycle_case_assignment_bindings_o4_immutable_delete: "personnel_lifecycle_case_assignment_bindings",
+  trg_personnel_lifecycle_case_assignments_o4_immutable_delete: "personnel_lifecycle_case_assignments",
+  trg_personnel_lifecycle_case_events_o2_delete_blocked: "personnel_lifecycle_case_events",
+  trg_personnel_lifecycle_case_events_o4_immutable_delete: "personnel_lifecycle_case_events",
+  trg_personnel_lifecycle_case_package_bindings_o2_delete_blocked: "personnel_lifecycle_case_package_bindings",
+  trg_personnel_lifecycle_case_package_bindings_o4_immutable_delete: "personnel_lifecycle_case_package_bindings",
+  trg_personnel_lifecycle_case_package_runs_o4_immutable_delete: "personnel_lifecycle_case_package_runs",
+  trg_personnel_lifecycle_case_reference_dates_o2_delete_blocked: "personnel_lifecycle_case_reference_dates",
+  trg_personnel_lifecycle_case_reference_dates_o4_immutable_delete: "personnel_lifecycle_case_reference_dates",
+  trg_personnel_lifecycle_cases_o2_delete_blocked: "personnel_lifecycle_cases",
+  trg_personnel_lifecycle_cases_o4_delete_blocked: "personnel_lifecycle_cases",
+  trg_personnel_lifecycle_confidential_access_events_o2_delete_blocked: "personnel_lifecycle_confidential_access_events",
+  trg_personnel_lifecycle_confidential_access_events_o5_immutable_delete: "personnel_lifecycle_confidential_access_events",
+  trg_personnel_lifecycle_offboarding_assignment_bindings_o5_immutable_delete: "personnel_lifecycle_offboarding_assignment_bindings",
+  trg_personnel_lifecycle_offboarding_operations_o5_immutable_delete: "personnel_lifecycle_offboarding_operations",
+  trg_personnel_lifecycle_offboarding_package_bindings_o5_immutable_delete: "personnel_lifecycle_offboarding_package_bindings",
+  trg_personnel_lifecycle_offboarding_package_runs_o5_immutable_delete: "personnel_lifecycle_offboarding_package_runs",
+  trg_personnel_lifecycle_offboarding_package_version_archives_o5_immutable_delete: "personnel_lifecycle_offboarding_package_version_archives",
+  trg_personnel_lifecycle_offboarding_package_versions_o5_immutable_delete: "personnel_lifecycle_offboarding_package_versions",
+  trg_personnel_lifecycle_offboarding_run_terminations_o5_immutable_delete: "personnel_lifecycle_offboarding_run_terminations",
+  trg_personnel_lifecycle_offboarding_runtime_steps_o5_immutable_delete: "personnel_lifecycle_offboarding_runtime_steps",
+  trg_personnel_lifecycle_onboarding_operations_o4_immutable_delete: "personnel_lifecycle_onboarding_operations",
   trg_personnel_record_document_events_immutable_delete: "personnel_record_document_events",
   trg_personnel_record_document_versions_immutable_delete: "personnel_record_document_versions",
   trg_personnel_record_documents_no_delete: "personnel_record_documents",
@@ -113,6 +167,10 @@ const PROTECTED_DELETE_TRIGGERS = Object.freeze({
 const PERSONNEL_WORKFLOW_SHARED_ROW_TABLES = Object.freeze([
   "custom_process_run_steps",
   "custom_process_runs",
+]);
+const PERSONNEL_LIFECYCLE_WORKFLOW_RUN_LINK_TABLES = Object.freeze([
+  "personnel_lifecycle_case_package_runs",
+  "personnel_lifecycle_offboarding_package_runs",
 ]);
 const REASONS = new Set([
   "CHILD_EXITED",
@@ -232,6 +290,39 @@ function tableColumns(database, table) {
     .map((column) => String(column.name || "")));
 }
 
+function lifecycleWorkflowRunIds(database, tableSet) {
+  const linkTables = PERSONNEL_LIFECYCLE_WORKFLOW_RUN_LINK_TABLES.filter((table) => tableSet.has(table));
+  if (!linkTables.length) return Object.freeze([]);
+  for (const table of ["custom_process_runs", "custom_process_run_steps", ...linkTables]) {
+    if (!tableSet.has(table) || !tableColumns(database, table).has(table === "custom_process_runs" ? "id" : "run_id")) {
+      throw new Error("SMOKE_PRECONDITION_FAILED");
+    }
+  }
+  const runIds = new Set();
+  for (const table of linkTables) {
+    const missingRun = database.prepare(`
+      SELECT 1 AS present
+      FROM ${quoteIdentifier(table)} lifecycle_link
+      LEFT JOIN custom_process_runs run ON run.id = lifecycle_link.run_id
+      WHERE run.id IS NULL OR TRIM(COALESCE(lifecycle_link.run_id, '')) = ''
+      LIMIT 1
+    `).get();
+    if (missingRun) throw new Error("SMOKE_PRECONDITION_FAILED");
+    for (const row of database.prepare(`
+      SELECT DISTINCT run_id
+      FROM ${quoteIdentifier(table)}
+      ORDER BY run_id
+    `).all()) runIds.add(String(row.run_id));
+  }
+  return Object.freeze([...runIds]);
+}
+
+function deleteWorkflowRowsByRunId(database, table, runIds) {
+  if (!runIds.length) return;
+  const placeholders = runIds.map(() => "?").join(", ");
+  database.prepare(`DELETE FROM ${quoteIdentifier(table)} WHERE run_id IN (${placeholders})`).run(...runIds);
+}
+
 function sanitizeSmokeDatabase(databaseFile = DATABASE) {
   assertRegular(databaseFile, 16 * 1024 * 1024 * 1024);
   const database = new DatabaseSync(databaseFile);
@@ -243,6 +334,10 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
       ORDER BY name
     `).all().map((row) => String(row.name || ""));
     const tableSet = new Set(tables);
+    const lifecycleRunIds = lifecycleWorkflowRunIds(database, tableSet);
+    const lifecycleRunExclusion = lifecycleRunIds.length
+      ? `AND run.id NOT IN (${lifecycleRunIds.map(() => "?").join(", ")})`
+      : "";
     const observedProtectedColumns = new Set();
     for (const table of tables) {
       for (const column of tableColumns(database, table)) {
@@ -327,8 +422,9 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
         LEFT JOIN custom_process_run_bindings binding ON binding.run_id = run.id
         WHERE run.trigger_type = 'personnel_manual'
           AND binding.run_id IS NULL
+          ${lifecycleRunExclusion}
         LIMIT 1
-      `).get();
+      `).get(...lifecycleRunIds);
       if (invalidBinding || orphanPersonnelRun) {
         throw new Error("SMOKE_PRECONDITION_FAILED");
       }
@@ -337,8 +433,9 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
       && database.prepare(`
         SELECT 1 AS present FROM custom_process_runs
         WHERE trigger_type = 'personnel_manual'
+          ${lifecycleRunExclusion}
         LIMIT 1
-      `).get()) {
+      `).get(...lifecycleRunIds)) {
       throw new Error("SMOKE_PRECONDITION_FAILED");
     }
 
@@ -356,6 +453,17 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
       `);
       database.exec("DELETE FROM custom_process_run_bindings");
       database.exec("DELETE FROM custom_process_runs WHERE trigger_type = 'personnel_manual'");
+    }
+    if (lifecycleRunIds.length) {
+      for (const table of [
+        "custom_process_run_step_assignments",
+        "custom_process_run_bindings",
+        "custom_process_run_steps",
+      ]) {
+        if (tableSet.has(table)) deleteWorkflowRowsByRunId(database, table, lifecycleRunIds);
+      }
+      const placeholders = lifecycleRunIds.map(() => "?").join(", ");
+      database.prepare(`DELETE FROM custom_process_runs WHERE id IN (${placeholders})`).run(...lifecycleRunIds);
     }
     for (const table of PROTECTED_ROW_TABLES) {
       if (tableSet.has(table)) database.exec(`DELETE FROM ${quoteIdentifier(table)}`);

@@ -31,6 +31,9 @@ const {
 } = require(path.join(
   root, "server-tools/linux/offsite/lib/application-smoke.js",
 ));
+const {
+  ensureSqliteApplicationSchema,
+} = require(path.join(root, "lib/persistence/sqlite/operations/application-schema.js"));
 const broker = require(path.join(root, "server-tools/linux/offsite/lib/assurance-control-broker.js"));
 const history = require(path.join(root, "server-tools/linux/offsite/lib/assurance-history.js"));
 
@@ -868,6 +871,206 @@ test("application smoke sanitizes v0.89 personnel lifecycle rows and bound candi
       "candidate_applications",
       "candidates",
     ]) assert.equal(PROTECTED_ROW_TABLES.includes(table), true, table);
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
+  } finally {
+    if (database) database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("application smoke accepts the complete O2 through O5 lifecycle schema", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-lifecycle-schema-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  let database = new DatabaseSync(databaseFile);
+  try {
+    database.exec("PRAGMA foreign_keys=ON");
+    ensureSqliteApplicationSchema(database);
+  } finally {
+    database.close();
+    database = null;
+  }
+
+  try {
+    assert.equal(sanitizeSmokeDatabase(databaseFile), true);
+    database = new DatabaseSync(databaseFile, { readOnly: true });
+    for (const column of [
+      "personnel_employment_episodes.protected_payload",
+      "personnel_lifecycle_cases.protected_payload",
+      "personnel_lifecycle_case_reference_dates.protected_payload",
+      "personnel_lifecycle_case_events.protected_payload",
+      "personnel_lifecycle_offboarding_operations.protected_result_payload",
+      "personnel_lifecycle_offboarding_package_versions.protected_snapshot",
+      "personnel_lifecycle_offboarding_package_version_archives.protected_payload",
+      "personnel_lifecycle_offboarding_runtime_steps.protected_payload",
+      "personnel_lifecycle_offboarding_run_terminations.protected_payload",
+    ]) assert.equal(PROTECTED_COLUMNS.has(column), true, column);
+    for (const table of [
+      "personnel_employment_episodes",
+      "personnel_lifecycle_cases",
+      "personnel_lifecycle_case_reference_dates",
+      "personnel_lifecycle_case_package_bindings",
+      "personnel_lifecycle_case_package_runs",
+      "personnel_lifecycle_case_assignments",
+      "personnel_lifecycle_case_assignment_bindings",
+      "personnel_lifecycle_case_events",
+      "personnel_lifecycle_confidential_access_events",
+      "personnel_lifecycle_onboarding_operations",
+      "personnel_lifecycle_offboarding_package_versions",
+      "personnel_lifecycle_offboarding_package_version_archives",
+      "personnel_lifecycle_offboarding_operations",
+      "personnel_lifecycle_offboarding_package_bindings",
+      "personnel_lifecycle_offboarding_package_runs",
+      "personnel_lifecycle_offboarding_runtime_steps",
+      "personnel_lifecycle_offboarding_assignment_bindings",
+      "personnel_lifecycle_offboarding_run_terminations",
+    ]) assert.equal(PROTECTED_ROW_TABLES.includes(table), true, table);
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
+  } finally {
+    if (database) database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("application smoke accepts and clears the prior O2 lifecycle delete guards", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-lifecycle-o2-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  const tableColumns = new Map([
+    ["personnel_employment_episodes", "id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL"],
+    ["personnel_lifecycle_cases", "id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL"],
+    ["personnel_lifecycle_case_reference_dates", "id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL"],
+    ["personnel_lifecycle_case_package_bindings", "id TEXT PRIMARY KEY"],
+    ["personnel_lifecycle_case_assignments", "id TEXT PRIMARY KEY"],
+    ["personnel_lifecycle_case_events", "id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL"],
+    ["personnel_lifecycle_confidential_access_events", "id TEXT PRIMARY KEY"],
+  ]);
+  let database = new DatabaseSync(databaseFile);
+  try {
+    for (const [table, columns] of tableColumns) {
+      database.exec(`CREATE TABLE ${table} (${columns})`);
+      database.exec(`
+        CREATE TRIGGER trg_${table}_o2_delete_blocked
+        BEFORE DELETE ON ${table}
+        BEGIN SELECT RAISE(ABORT, 'personnel lifecycle O2 persistence is read-only'); END;
+      `);
+      const protectedColumn = columns.includes("protected_payload") ? ", protected_payload" : "";
+      const protectedValue = protectedColumn ? ", 'enc:v2:lifecycle'" : "";
+      database.exec(`INSERT INTO ${table} (id${protectedColumn}) VALUES ('${table}'${protectedValue})`);
+    }
+  } finally {
+    database.close();
+    database = null;
+  }
+
+  try {
+    assert.equal(sanitizeSmokeDatabase(databaseFile), true);
+    database = new DatabaseSync(databaseFile, { readOnly: true });
+    for (const table of tableColumns.keys()) {
+      assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
+    }
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
+  } finally {
+    if (database) database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("application smoke removes O2 through O5 lifecycle rows and their linked workflow runs", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-lifecycle-rows-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  let database = new DatabaseSync(databaseFile);
+  const lifecycleTables = [
+    "personnel_employment_episodes",
+    "personnel_lifecycle_cases",
+    "personnel_lifecycle_case_reference_dates",
+    "personnel_lifecycle_case_package_bindings",
+    "personnel_lifecycle_case_assignments",
+    "personnel_lifecycle_case_assignment_bindings",
+    "personnel_lifecycle_case_events",
+    "personnel_lifecycle_confidential_access_events",
+    "personnel_lifecycle_onboarding_operations",
+    "personnel_lifecycle_offboarding_package_versions",
+    "personnel_lifecycle_offboarding_package_version_archives",
+    "personnel_lifecycle_offboarding_operations",
+    "personnel_lifecycle_offboarding_package_bindings",
+    "personnel_lifecycle_offboarding_runtime_steps",
+    "personnel_lifecycle_offboarding_assignment_bindings",
+    "personnel_lifecycle_offboarding_run_terminations",
+  ];
+  try {
+    database.exec(`
+      CREATE TABLE custom_process_runs (id TEXT PRIMARY KEY, trigger_type TEXT NOT NULL);
+      CREATE TABLE custom_process_run_steps (run_id TEXT NOT NULL, step_id TEXT NOT NULL);
+      CREATE TABLE custom_process_run_bindings (run_id TEXT PRIMARY KEY);
+      CREATE TABLE custom_process_run_step_assignments (run_id TEXT NOT NULL);
+      CREATE TABLE personnel_employment_episodes (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_cases (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_case_reference_dates (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_case_package_bindings (id TEXT PRIMARY KEY);
+      CREATE TABLE personnel_lifecycle_case_package_runs (package_binding_id TEXT PRIMARY KEY, run_id TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_case_assignments (id TEXT PRIMARY KEY);
+      CREATE TABLE personnel_lifecycle_case_assignment_bindings (id TEXT PRIMARY KEY);
+      CREATE TABLE personnel_lifecycle_case_events (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_confidential_access_events (id TEXT PRIMARY KEY);
+      CREATE TABLE personnel_lifecycle_onboarding_operations (id TEXT PRIMARY KEY);
+      CREATE TABLE personnel_lifecycle_offboarding_package_versions (id TEXT PRIMARY KEY, protected_snapshot TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_offboarding_package_version_archives (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_offboarding_operations (id TEXT PRIMARY KEY, protected_result_payload TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_offboarding_package_bindings (id TEXT PRIMARY KEY);
+      CREATE TABLE personnel_lifecycle_offboarding_package_runs (package_binding_id TEXT PRIMARY KEY, run_id TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_offboarding_runtime_steps (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, protected_payload TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_offboarding_assignment_bindings (id TEXT PRIMARY KEY, run_id TEXT NOT NULL);
+      CREATE TABLE personnel_lifecycle_offboarding_run_terminations (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, protected_payload TEXT NOT NULL);
+
+      INSERT INTO custom_process_runs VALUES ('onboarding-run', 'personnel_manual');
+      INSERT INTO custom_process_runs VALUES ('offboarding-run', 'personnel_manual');
+      INSERT INTO custom_process_runs VALUES ('operational-run', 'manual');
+      INSERT INTO custom_process_run_steps VALUES ('onboarding-run', 'onboarding-step');
+      INSERT INTO custom_process_run_steps VALUES ('offboarding-run', 'offboarding-step');
+      INSERT INTO custom_process_run_steps VALUES ('operational-run', 'operational-step');
+      INSERT INTO personnel_employment_episodes VALUES ('episode', 'enc:v2:episode');
+      INSERT INTO personnel_lifecycle_cases VALUES ('case', 'enc:v2:case');
+      INSERT INTO personnel_lifecycle_case_reference_dates VALUES ('reference', 'enc:v2:reference');
+      INSERT INTO personnel_lifecycle_case_package_bindings VALUES ('case-package');
+      INSERT INTO personnel_lifecycle_case_package_runs VALUES ('case-package', 'onboarding-run');
+      INSERT INTO personnel_lifecycle_case_assignments VALUES ('case-assignment');
+      INSERT INTO personnel_lifecycle_case_assignment_bindings VALUES ('case-assignment-binding');
+      INSERT INTO personnel_lifecycle_case_events VALUES ('case-event', 'enc:v2:case-event');
+      INSERT INTO personnel_lifecycle_confidential_access_events VALUES ('confidential-event');
+      INSERT INTO personnel_lifecycle_onboarding_operations VALUES ('onboarding-operation');
+      INSERT INTO personnel_lifecycle_offboarding_package_versions VALUES ('offboarding-version', 'enc:v2:version');
+      INSERT INTO personnel_lifecycle_offboarding_package_version_archives VALUES ('offboarding-archive', 'enc:v2:archive');
+      INSERT INTO personnel_lifecycle_offboarding_operations VALUES ('offboarding-operation', 'enc:v2:operation');
+      INSERT INTO personnel_lifecycle_offboarding_package_bindings VALUES ('offboarding-package');
+      INSERT INTO personnel_lifecycle_offboarding_package_runs VALUES ('offboarding-package', 'offboarding-run');
+      INSERT INTO personnel_lifecycle_offboarding_runtime_steps VALUES ('offboarding-step', 'offboarding-run', 'enc:v2:step');
+      INSERT INTO personnel_lifecycle_offboarding_assignment_bindings VALUES ('offboarding-assignment', 'offboarding-run');
+      INSERT INTO personnel_lifecycle_offboarding_run_terminations VALUES ('offboarding-termination', 'offboarding-run', 'enc:v2:termination');
+    `);
+  } finally {
+    database.close();
+    database = null;
+  }
+
+  try {
+    assert.equal(sanitizeSmokeDatabase(databaseFile), true);
+    database = new DatabaseSync(databaseFile, { readOnly: true });
+    for (const table of lifecycleTables.concat([
+      "personnel_lifecycle_case_package_runs",
+      "personnel_lifecycle_offboarding_package_runs",
+    ])) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
+    assert.deepEqual(
+      database.prepare("SELECT id, trigger_type FROM custom_process_runs ORDER BY id").all()
+        .map((row) => ({ ...row })),
+      [{ id: "operational-run", trigger_type: "manual" }],
+    );
+    assert.deepEqual(
+      database.prepare("SELECT run_id, step_id FROM custom_process_run_steps").all()
+        .map((row) => ({ ...row })),
+      [{ run_id: "operational-run", step_id: "operational-step" }],
+    );
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
     assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
   } finally {

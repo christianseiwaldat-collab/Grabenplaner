@@ -114,7 +114,7 @@ function withCleanGitSnapshot(callback) {
   }
 }
 
-test("v0.90.6 keeps every managed Linux byte contract platform-stable", () => {
+test("v0.90.7 keeps every managed Linux byte contract platform-stable", () => {
   const runtimeSchema = JSON.parse(read("server-tools/linux/runtime-schema.json"));
   const offsiteSchema = JSON.parse(read("server-tools/linux/offsite/module-schema.json"));
   const expectedCrlf = new Set([
@@ -174,7 +174,7 @@ test("hardening stays separate from the current core runtime and binds its exact
   const result = JSON.parse(verification.stdout);
   assert.equal(result.deploymentSchemaVersion, 4);
   assert.equal(result.fingerprint, "9457dcb880f64709e071b6645acf0ff548ce4c1c00b321d5894f47d9258b876e");
-  assert.equal(result.offsiteModule.fingerprint, "fb94d52f77f5530663586c297fcf778cccb43106fd20a29c026e2214364e8e06");
+  assert.equal(result.offsiteModule.fingerprint, "a8f7ee3d03034ffbcfcc7e4b8eddb0308f32c49e0ce2bf1f7db185dd151eb1a3");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
@@ -323,12 +323,12 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
       "-OutputDirectory", outputRoot,
     ], { encoding: "utf8", timeout: 120_000 });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.6-beta-linux-x64.zip")));
-    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.6-beta-linux-x64.zip.sha256")));
+    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.7-beta-linux-x64.zip")));
+    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.7-beta-linux-x64.zip.sha256")));
   });
 });
 
-test("v0.90.6 Linux package builder rejects a clean but stale-EOL worktree", {
+test("v0.90.7 Linux package builder rejects a clean but stale-EOL worktree", {
   skip: process.platform !== "win32" ? "PowerShell-Paketbau wird im Windows-Job geprueft." : false,
 }, () => {
   withCleanGitSnapshot((snapshotRoot, outputRoot) => {
@@ -358,7 +358,7 @@ test("v0.90.6 Linux package builder rejects a clean but stale-EOL worktree", {
     ], { encoding: "utf8", timeout: 120_000 });
     assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.match(`${result.stdout}\n${result.stderr}`, /unzulaessige LF-Bytes/);
-    assert.equal(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.6-beta-linux-x64.zip")), false);
+    assert.equal(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.7-beta-linux-x64.zip")), false);
   });
 });
 

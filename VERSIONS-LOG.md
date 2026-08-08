@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.90.7 Beta · Recovery-Smoke für On- und Offboarding korrigiert
+
+- Der isolierte Recovery-App-Smoke erkennt und bereinigt jetzt sämtliche geschützten O2–O5-On-/Offboarding-Falldaten, Paketstände, Aufgabenbindungen und verknüpften Workflow-Läufe aus seiner temporären Wiederherstellungsdatenbank.
+- Alle bekannten unveränderlichen Löschschutz-Trigger dieser Bereiche werden ausschließlich anhand ihrer festen Namen und Tabellen kurzzeitig gelöst und anschließend SQL-identisch wiederhergestellt. Unbekannte geschützte Spalten, Trigger, Teilstrukturen oder verwaiste Workflow-Bezüge stoppen den Nachweis weiterhin fail-closed.
+- Produktive Daten und Fachfunktionen bleiben unverändert. Der Hotfix stellt den vollständigen, datensparsamen Wiederherstellungsnachweis für den bereits freigegebenen Personal-Lifecycle wieder her.
+
 ## v0.90.6 Beta · Mitarbeiterprofil und persönliche Lifecycle-Aufgaben
 
 - Die geschützte Developer-Rolle erreicht Mitarbeiterprofile einschließlich Übersicht, Stammdaten, Personalakte, Onboarding und Offboarding vollständig. Nachgelagerte HR-only-Sperren gelten für diese geschützte Rolle nicht.
