@@ -127,6 +127,8 @@ test("M7 Profilrechte: PL liest global, PL+ delegiert nur mit eigener Capability
 
 test("M7 Profilrechte: Developer hat globalen Vollzugriff, andere technische Rollen nicht", () => {
   const developer = createPersonnelProfileAccessSnapshot(personalSession("developer"));
+  assert.equal(developer.personalEmployee, true);
+  assert.equal(developer.personalDeveloper, true);
   assert.deepEqual(developer.capabilities, {
     canReadProfiles: true,
     canReadMaster: true,

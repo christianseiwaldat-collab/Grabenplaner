@@ -26,7 +26,9 @@ test("O4-Aufgabenzugang bleibt vom allgemeinen Workflow-Center getrennt", () => 
     "function canOpenWorkflowCenter()",
     "function canOpenPersonnelAdministrationView()",
   );
-  assert.match(access, /personnel:lifecycle:operational:read/);
+  assert.match(access, /function canAccessAssignedPersonnelLifecycleTasks\(\)/);
+  assert.match(access, /user\?\.isEmployee === true/);
+  assert.match(access, /user\?\.mustChangePassword !== true/);
   assert.match(access, /personnelLifecycleOnboardingTaskCapabilities\.canRead !== false/);
   assert.match(access, /return canReadPersonnelWorkflowInstances\(\)[\s\S]*?canReadLifecycleOnboardingTasks\(\)/);
   assert.doesNotMatch(
@@ -55,6 +57,10 @@ test("O4-Aufgabenprojektion kopiert nur die feste Positivliste und sperrt ungül
         activatedAt: "2026-08-03T09:00:00.000Z",
         description: "must-not-pass",
       },
+      subject: {
+        displayName: "Synthetische Zielperson",
+        employeeNumber: "O4-SUBJECT",
+      },
       scope: { type: "department", locationId: "L-O4", departmentId: 91 },
       employeeNumber: "must-not-pass",
       protectedPayload: "must-not-pass",
@@ -76,8 +82,12 @@ test("O4-Aufgabenprojektion kopiert nur die feste Positivliste und sperrt ungül
   const result = JSON.parse(JSON.stringify(sandbox.result));
   assert.deepEqual(Object.keys(result.task), [
     "caseId", "runId", "stepId", "workflowCode", "workflowTitle",
-    "title", "position", "activatedAt", "scope",
+    "title", "subject", "position", "activatedAt", "scope",
   ]);
+  assert.deepEqual(result.task.subject, {
+    displayName: "Synthetische Zielperson",
+    employeeNumber: "O4-SUBJECT",
+  });
   assert.deepEqual(result.capabilities, { canRead: true, canComplete: true });
   assert.equal(JSON.stringify(result).includes("must-not-pass"), false);
 
@@ -96,6 +106,8 @@ test("O4-Aufgaben-UI verlangt eine ausdrückliche Erledigungsbestätigung", () =
   );
   assert.match(taskUi, /data-personnel-lifecycle-onboarding-task-complete/);
   assert.match(taskUi, /data-onboarding-task-confirm/);
+  assert.match(taskUi, /task\.subject\.displayName/);
+  assert.match(taskUi, /task\.subject\.employeeNumber/);
   assert.match(taskUi, /type="checkbox" required/);
   assert.match(taskUi, /Erledigung bestätigen/);
   assert.match(taskUi, /canComplete === true/);

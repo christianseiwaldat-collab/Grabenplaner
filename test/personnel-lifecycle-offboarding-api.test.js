@@ -209,7 +209,7 @@ function preparationBody(profile, index, { timeCritical = false } = {}) {
     hrNote: `${CONFIDENTIAL_MARKER}: vertraulicher PL-Vermerk`,
     documentReferenceIds: ["O5-API-DOC-001"],
     assignments: profile.offboarding.preparation.packages.map((entry) => {
-      const assigneeActorId = entry.familyCode === "accounts_permissions"
+      const assigneeActorId = entry.familyCode === "work_access_assets"
         ? IT_ASSIGNEE
         : DEVELOPER;
       assert.equal(
@@ -286,12 +286,10 @@ function createFixture() {
 
   const sessions = {
     developer: createEmployeeSession(DEVELOPER, "developer"),
-    it: createEmployeeSession(IT_ASSIGNEE, "it_admin"),
+    it: createEmployeeSession(IT_ASSIGNEE, "employee"),
     outsider: createEmployeeSession(OUTSIDER, "employee"),
   };
   for (const permission of DEVELOPER_PERMISSIONS) grantPermission(DEVELOPER, permission);
-  grantPermission(IT_ASSIGNEE, P.OPERATIONAL_READ);
-  grantPermission(IT_ASSIGNEE, P.OPERATIONAL_UPDATE);
   enablePersonnelLifecycle();
   return sessions;
 }
@@ -331,11 +329,11 @@ test("O5-HTTP-Vertrag bleibt vertraulich, actor-gebunden und vollständig kontro
     assert.equal(initialProfile.offboarding.case, null);
     assert.equal(initialProfile.offboarding.preparation.available, true);
     assert.equal(initialProfile.offboarding.preparation.packages.length, 6);
-    const itFamily = initialProfile.offboarding.preparation.packages
-      .find(({ familyCode }) => familyCode === "accounts_permissions");
+    const assetFamily = initialProfile.offboarding.preparation.packages
+      .find(({ familyCode }) => familyCode === "work_access_assets");
     const payrollFamily = initialProfile.offboarding.preparation.packages
       .find(({ familyCode }) => familyCode === "hr_contract_end");
-    assert.equal(itFamily.candidates.some(({ actorId }) => actorId === IT_ASSIGNEE), true);
+    assert.equal(assetFamily.candidates.some(({ actorId }) => actorId === IT_ASSIGNEE), true);
     assert.equal(payrollFamily.candidates.some(({ actorId }) => actorId === IT_ASSIGNEE), false);
     assert.equal(loaded.text.includes(CONFIDENTIAL_MARKER), false);
 
@@ -501,8 +499,9 @@ test("O5-HTTP-Vertrag bleibt vertraulich, actor-gebunden und vollständig kontro
       genericAssignments: 0,
     });
 
-    const noRight = await request(TASKS_ROUTE, { auth: sessions.outsider });
-    assertError(noRight, 403, "PORTAL_PERMISSION_DENIED");
+    const noAssignment = await request(TASKS_ROUTE, { auth: sessions.outsider });
+    assert.equal(noAssignment.response.status, 200, noAssignment.text);
+    assert.deepEqual(noAssignment.payload.tasks, []);
     const listed = await request(TASKS_ROUTE, { auth: sessions.it });
     assert.equal(listed.response.status, 200, listed.text);
     assertNoStoreWithoutEtag(listed);
@@ -512,7 +511,7 @@ test("O5-HTTP-Vertrag bleibt vertraulich, actor-gebunden und vollständig kontro
     });
     assert.equal(listed.payload.tasks.length, 1);
     [itTask] = listed.payload.tasks;
-    assert.equal(itTask.projection, "it_security_task");
+    assert.equal(itTask.projection, "asset_task");
     assert.equal(itTask.status, "pending");
     assert.equal(listed.text.includes(CONFIDENTIAL_MARKER), false);
     for (const forbiddenField of [

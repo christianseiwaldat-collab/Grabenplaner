@@ -44,7 +44,7 @@ test("M6/O3-Profilzugang trennt Standardprofil und explizite Onboarding-Lesevors
   );
   assert.match(standardAccess, /!personnelLifecycleFoundationEnabled\(\)/);
   assert.match(standardAccess, /!state\.portalStatus\?\.portalEnabled/);
-  assert.match(standardAccess, /state\.portalSession\?\.user\?\.role === "hr"/);
+  assert.match(standardAccess, /role === "hr" \|\| role === "developer"/);
   assert.match(standardAccess, /canReadCentralPersonnel\(\)/);
   assert.match(standardAccess, /hasGovernancePermission\("personnel:profiles:read"\)/);
 

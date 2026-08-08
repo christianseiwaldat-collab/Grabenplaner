@@ -79,6 +79,7 @@ function accessFixture(actorId = ACTOR, overrides = {}) {
   return {
     actorId,
     namedActor: true,
+    personalEmployee: true,
     canReadOperational: true,
     canUpdateOperational: true,
     canCloseOnboarding: true,
@@ -516,7 +517,10 @@ test("O4-Aufgabenliste zeigt nur die exakt zugewiesene aktive Aufgabe und bleibt
     assert.deepEqual(listed.items[0].scope, {
       type: "department", locationId: LOCATION, departmentId: DEPARTMENT,
     });
-    assert.equal(JSON.stringify(listed).includes(EMPLOYEE), false);
+    assert.deepEqual(listed.items[0].subject, {
+      employeeNumber: EMPLOYEE,
+      displayName: "O4 Zielperson",
+    });
 
     assert.deepEqual(
       await service.listActiveTasks(OTHER, { access: accessFixture(OTHER) }),
@@ -538,30 +542,23 @@ test("O4-Aufgabenliste zeigt nur die exakt zugewiesene aktive Aufgabe und bleibt
   }
 });
 
-test("O4-Aufgaben erzwingen operational:read/update und den exakten Scope", async () => {
+test("O4-Aufgaben verlangen eine persönliche, exakt zugewiesene Sitzung statt operativer Fachrechte", async () => {
   const context = await createFixture();
   try {
     const service = createService(context);
+    const withoutOperationalRights = await service.listActiveTasks(ACTOR, {
+      access: accessFixture(ACTOR, {
+        canReadOperational: false,
+        canUpdateOperational: false,
+        canReadOperationalScope: () => false,
+        canUpdateOperationalScope: () => false,
+      }),
+    });
+    assert.equal(withoutOperationalRights.items.length, 1);
     await assert.rejects(
       service.listActiveTasks(ACTOR, {
-        access: accessFixture(ACTOR, { canReadOperational: false }),
+        access: accessFixture(ACTOR, { personalEmployee: false }),
       }),
-      (error) => error.code === "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_NOT_FOUND",
-    );
-    await assert.rejects(
-      service.listActiveTasks(ACTOR, {
-        access: accessFixture(ACTOR, { canReadOperationalScope: () => false }),
-      }),
-      (error) => error.code === "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_NOT_FOUND",
-    );
-    await assert.rejects(
-      service.completeTask(
-        ACTOR,
-        RUN_ID,
-        STEP_ID,
-        { operationId: TASK_OPERATION_ID, action: "complete" },
-        { access: accessFixture(ACTOR, { canUpdateOperational: false }) },
-      ),
       (error) => error.code === "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_PERMISSION_REQUIRED"
         && error.kind === "forbidden",
     );
