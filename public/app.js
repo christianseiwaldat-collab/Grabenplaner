@@ -80,6 +80,12 @@ const state = {
   loanManagementLocationId: "",
   loanManagementStatus: "open",
   loanManagementLoading: false,
+  loanOverviewColumns: null,
+  loanOverviewColumnsLoading: false,
+  loanOverviewColumnsLocationId: "",
+  loanOverviewColumnsRequestId: 0,
+  branchAccountPasswordTargets: [],
+  branchAccountPasswordLoading: false,
   loanSettings: null,
   loanSettingsLoading: false,
   locationDashboard: null,
@@ -378,7 +384,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -986,6 +992,23 @@ function canManageLoanSettings() {
     && ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role || "");
 }
 
+function canManageBranchLoanOverview() {
+  if (state.portalStatus?.installationFeatures?.loans === false) return false;
+  if (!state.portalStatus?.portalEnabled) return true;
+  return state.portalSession?.user?.permissions?.includes("loans:branch-overview:manage") === true;
+}
+
+function canManageBranchOrders() {
+  if (state.portalStatus?.installationFeatures?.branchOrders === false) return false;
+  if (!state.portalStatus?.portalEnabled) return true;
+  return state.portalSession?.user?.permissions?.includes("branch_orders:manage") === true;
+}
+
+function canManageBranchAccountPasswords() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  return state.portalSession?.user?.permissions?.includes("organization_accounts:password:manage") === true;
+}
+
 function personnelLifecycleFoundationEnabled() {
   return state.portalStatus?.installationFeatures?.personnelLifecycle === true;
 }
@@ -1479,6 +1502,9 @@ function applyRoleVisibility() {
   const requestReadAccess = canReadManagerRequests() && features.requests !== false;
   const loanManagementAccess = canReadLoanManagement();
   const loanSettingsAccess = canManageLoanSettings();
+  const branchLoanOverviewManagementAccess = canManageBranchLoanOverview();
+  const branchOrderManagementAccess = canManageBranchOrders();
+  const branchAccountPasswordManagementAccess = canManageBranchAccountPasswords();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
@@ -1504,6 +1530,9 @@ function applyRoleVisibility() {
   elements.addVacationButton?.classList.toggle("hidden", !approvedAbsenceWriteAccess);
   elements.vacationApprovedEntryHint?.classList.toggle("hidden", !isLocationPlannerSession());
   elements.loanManagementNavButton?.classList.toggle("hidden", !loanManagementAccess);
+  elements.branchOrdersManagementNavButton?.classList.toggle("hidden", !branchOrderManagementAccess);
+  elements.loanOverviewSettingsButton?.classList.toggle("hidden", !branchLoanOverviewManagementAccess);
+  elements.branchAccountPasswordButton?.classList.toggle("hidden", !branchAccountPasswordManagementAccess);
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
@@ -2200,6 +2229,221 @@ function renderLoanManagementFilters() {
   ).join("");
   elements.loanManagementLocation.value = current;
   elements.loanManagementStatus.value = state.loanManagementStatus;
+}
+
+const branchLoanOverviewColumnCatalog = Object.freeze([
+  { id: "borrowerName", label: "Mitarbeiter/in", description: "Immer sichtbar", required: true },
+  { id: "employeeNumber", label: "Personalnummer", description: "Zuordnung im Filialkonto" },
+  { id: "description", label: "Gerät / Modell", description: "Artikelbezeichnung" },
+  { id: "articleNumber", label: "Artikel-/Inventarnummer", description: "Interne Artikelreferenz" },
+  { id: "serialNumber", label: "Seriennummer", description: "Gerätekennung" },
+  { id: "dueDate", label: "Geplante Rückgabe", description: "Ohne Bearbeitungsmöglichkeit" },
+]);
+
+function selectedLoanOverviewColumnsLocationId() {
+  const locations = activeLocations();
+  const candidates = [
+    state.loanOverviewColumnsLocationId,
+    state.loanManagementLocationId,
+    state.portalSession?.user?.homeLocationId,
+    locations[0]?.id,
+  ].map((value) => String(value || "").trim());
+  return candidates.find((locationId) => locations.some((location) => location.id === locationId)) || "";
+}
+
+function renderLoanOverviewColumnsLocationOptions() {
+  if (!elements.loanOverviewColumnsLocation) return;
+  const locations = activeLocations();
+  const selected = selectedLoanOverviewColumnsLocationId();
+  state.loanOverviewColumnsLocationId = selected;
+  elements.loanOverviewColumnsLocation.innerHTML = locations.map((location) => (
+    `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`
+  )).join("");
+  elements.loanOverviewColumnsLocation.value = selected;
+}
+
+function renderLoanOverviewColumns() {
+  if (!elements.loanOverviewColumnsOptions) return;
+  const selected = new Set(state.loanOverviewColumns?.columns || ["borrowerName"]);
+  elements.loanOverviewColumnsOptions.innerHTML = branchLoanOverviewColumnCatalog.map((column) => `
+    <label class="loan-overview-column-option">
+      <input type="checkbox" data-loan-overview-column="${escapeHtml(column.id)}" ${selected.has(column.id) ? "checked" : ""} ${column.required ? "disabled" : ""} />
+      <span><strong>${escapeHtml(column.label)}</strong><small>${escapeHtml(column.description)}</small></span>
+    </label>
+  `).join("");
+  if (elements.loanOverviewColumnsSaveButton) {
+    elements.loanOverviewColumnsSaveButton.disabled = state.loanOverviewColumnsLoading || !state.loanOverviewColumns;
+  }
+}
+
+async function loadLoanOverviewColumns(locationId = state.loanOverviewColumnsLocationId) {
+  const normalizedLocationId = String(locationId || "").trim();
+  if (!canManageBranchLoanOverview() || !normalizedLocationId) return null;
+  const requestId = ++state.loanOverviewColumnsRequestId;
+  state.loanOverviewColumnsLoading = true;
+  state.loanOverviewColumns = null;
+  if (elements.loanOverviewColumnsMessage) {
+    elements.loanOverviewColumnsMessage.classList.add("hidden");
+    elements.loanOverviewColumnsMessage.textContent = "";
+  }
+  renderLoanOverviewColumns();
+  try {
+    const payload = await api(`/api/portal/v1/loans/branch-overview-settings?locationId=${encodeURIComponent(normalizedLocationId)}`);
+    if (requestId !== state.loanOverviewColumnsRequestId) return null;
+    state.loanOverviewColumns = payload;
+    return payload;
+  } catch (error) {
+    if (requestId !== state.loanOverviewColumnsRequestId) return null;
+    if (elements.loanOverviewColumnsMessage) {
+      elements.loanOverviewColumnsMessage.textContent = error.message;
+      elements.loanOverviewColumnsMessage.classList.remove("hidden");
+    }
+    return null;
+  } finally {
+    if (requestId === state.loanOverviewColumnsRequestId) {
+      state.loanOverviewColumnsLoading = false;
+      renderLoanOverviewColumns();
+    }
+  }
+}
+
+async function openLoanOverviewColumnsDialog() {
+  if (!canManageBranchLoanOverview()) return;
+  renderLoanOverviewColumnsLocationOptions();
+  if (!state.loanOverviewColumnsLocationId) {
+    showToast("Für die Filialkonto-Leihansicht ist kein freigegebener Standort vorhanden.", true);
+    return;
+  }
+  if (!elements.loanOverviewColumnsDialog.open) elements.loanOverviewColumnsDialog.showModal();
+  await loadLoanOverviewColumns(state.loanOverviewColumnsLocationId);
+}
+
+async function saveLoanOverviewColumns(event) {
+  event.preventDefault();
+  const locationId = String(elements.loanOverviewColumnsLocation?.value || "").trim();
+  if (!locationId) return;
+  const saveButton = elements.loanOverviewColumnsSaveButton;
+  const columns = ["borrowerName", ...[...document.querySelectorAll("[data-loan-overview-column]:checked")]
+    .map((input) => input.dataset.loanOverviewColumn)
+    .filter((column) => column && column !== "borrowerName")];
+  if (saveButton) saveButton.disabled = true;
+  if (elements.loanOverviewColumnsMessage) {
+    elements.loanOverviewColumnsMessage.textContent = "Wird gespeichert …";
+    elements.loanOverviewColumnsMessage.classList.remove("hidden");
+  }
+  try {
+    const payload = await api("/api/portal/v1/loans/branch-overview-settings", {
+      method: "PUT",
+      body: JSON.stringify({ locationId, columns }),
+    });
+    state.loanOverviewColumns = payload;
+    state.loanOverviewColumnsLocationId = payload.location?.id || locationId;
+    renderLoanOverviewColumns();
+    if (elements.loanOverviewColumnsMessage) elements.loanOverviewColumnsMessage.textContent = "Gespeichert.";
+    showToast("Die Filialkonto-Leihansicht wurde gespeichert.");
+  } catch (error) {
+    if (elements.loanOverviewColumnsMessage) elements.loanOverviewColumnsMessage.textContent = error.message;
+  } finally {
+    if (saveButton) saveButton.disabled = false;
+  }
+}
+
+function renderBranchAccountPasswordTargets() {
+  if (!elements.branchAccountPasswordAccount) return;
+  const accounts = state.branchAccountPasswordTargets || [];
+  if (state.branchAccountPasswordLoading) {
+    elements.branchAccountPasswordAccount.innerHTML = '<option value="">Filialkonten werden geladen …</option>';
+  } else if (!accounts.length) {
+    elements.branchAccountPasswordAccount.innerHTML = '<option value="">Kein aktives Filialkonto im zugewiesenen Standort</option>';
+  } else {
+    elements.branchAccountPasswordAccount.innerHTML = accounts.map((account) => {
+      const location = account.scopes?.map((scope) => scope.locationId).filter(Boolean).join(", ") || "";
+      const status = account.locked ? " · gesperrt (wird beim Zurücksetzen entsperrt)" : "";
+      return `<option value="${escapeHtml(account.id)}">${escapeHtml(account.loginName)} · ${escapeHtml(account.displayName)}${escapeHtml(location ? ` · ${location}` : "")}${escapeHtml(status)}</option>`;
+    }).join("");
+  }
+  elements.branchAccountPasswordAccount.disabled = state.branchAccountPasswordLoading || !accounts.length;
+  if (elements.branchAccountPasswordSaveButton) {
+    elements.branchAccountPasswordSaveButton.disabled = state.branchAccountPasswordLoading || !accounts.length;
+  }
+}
+
+async function loadBranchAccountPasswordTargets() {
+  if (!canManageBranchAccountPasswords()) return [];
+  state.branchAccountPasswordLoading = true;
+  renderBranchAccountPasswordTargets();
+  try {
+    const payload = await api("/api/portal/v1/branch-accounts/passwords");
+    state.branchAccountPasswordTargets = payload.accounts || [];
+    return state.branchAccountPasswordTargets;
+  } catch (error) {
+    state.branchAccountPasswordTargets = [];
+    if (elements.branchAccountPasswordMessage) {
+      elements.branchAccountPasswordMessage.textContent = error.message;
+      elements.branchAccountPasswordMessage.classList.remove("hidden");
+    }
+    return [];
+  } finally {
+    state.branchAccountPasswordLoading = false;
+    renderBranchAccountPasswordTargets();
+  }
+}
+
+async function openBranchAccountPasswordDialog() {
+  if (!canManageBranchAccountPasswords()) return;
+  [elements.branchAccountPasswordNew, elements.branchAccountPasswordRepeat].forEach((input) => {
+    if (input) {
+      input.value = "";
+      input.minLength = Number(state.portalStatus?.passwordMinLength || 6);
+    }
+  });
+  if (elements.branchAccountPasswordMessage) {
+    elements.branchAccountPasswordMessage.textContent = "";
+    elements.branchAccountPasswordMessage.classList.add("hidden");
+  }
+  if (!elements.branchAccountPasswordDialog.open) elements.branchAccountPasswordDialog.showModal();
+  await loadBranchAccountPasswordTargets();
+}
+
+async function saveBranchAccountPassword(event) {
+  event.preventDefault();
+  const accountId = String(elements.branchAccountPasswordAccount?.value || "").trim();
+  const password = elements.branchAccountPasswordNew?.value || "";
+  const repeat = elements.branchAccountPasswordRepeat?.value || "";
+  if (!accountId) return;
+  if (password !== repeat) {
+    if (elements.branchAccountPasswordMessage) {
+      elements.branchAccountPasswordMessage.textContent = "Die beiden Passwörter stimmen nicht überein.";
+      elements.branchAccountPasswordMessage.classList.remove("hidden");
+    }
+    return;
+  }
+  const saveButton = elements.branchAccountPasswordSaveButton;
+  if (saveButton) saveButton.disabled = true;
+  if (elements.branchAccountPasswordMessage) {
+    elements.branchAccountPasswordMessage.textContent = "Passwort wird neu vergeben …";
+    elements.branchAccountPasswordMessage.classList.remove("hidden");
+  }
+  try {
+    const payload = await api(`/api/portal/v1/branch-accounts/${encodeURIComponent(accountId)}/password`, {
+      method: "PUT",
+      body: JSON.stringify({ password }),
+    });
+    state.branchAccountPasswordTargets = state.branchAccountPasswordTargets.map((account) => (
+      account.id === payload.account?.id ? payload.account : account
+    ));
+    elements.branchAccountPasswordNew.value = "";
+    elements.branchAccountPasswordRepeat.value = "";
+    renderBranchAccountPasswordTargets();
+    if (elements.branchAccountPasswordMessage) {
+      elements.branchAccountPasswordMessage.textContent = "Passwort neu vergeben; bestehende Filialkonto-Sitzungen wurden beendet.";
+    }
+    showToast("Das Filialkonto-Passwort wurde neu vergeben.");
+  } catch (error) {
+    if (elements.branchAccountPasswordMessage) elements.branchAccountPasswordMessage.textContent = error.message;
+  } finally {
+    if (saveButton) saveButton.disabled = false;
+  }
 }
 
 function renderLoanSettings() {
@@ -23489,6 +23733,14 @@ elements.personnelFieldRightsMatrix?.addEventListener("change", (event) => {
 });
 elements.savePersonnelFieldRightsButton?.addEventListener("click", savePersonnelFieldRights);
 elements.loanManagementRefresh?.addEventListener("click", loadLoanManagement);
+elements.loanOverviewSettingsButton?.addEventListener("click", openLoanOverviewColumnsDialog);
+elements.loanOverviewColumnsLocation?.addEventListener("change", () => {
+  state.loanOverviewColumnsLocationId = elements.loanOverviewColumnsLocation.value;
+  loadLoanOverviewColumns(state.loanOverviewColumnsLocationId);
+});
+elements.loanOverviewColumnsForm?.addEventListener("submit", saveLoanOverviewColumns);
+elements.branchAccountPasswordButton?.addEventListener("click", openBranchAccountPasswordDialog);
+elements.branchAccountPasswordForm?.addEventListener("submit", saveBranchAccountPassword);
 elements.loanManagementLocation?.addEventListener("change", () => {
   state.loanManagementLocationId = elements.loanManagementLocation.value;
   loadLoanManagement();

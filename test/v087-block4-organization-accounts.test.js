@@ -485,7 +485,24 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
         newPassword: ACTIVE_PASSWORD,
       },
     });
-    assert.equal(changedPassword.response.status, 200, JSON.stringify(changedPassword.payload));
+    assert.equal(changedPassword.response.status, 403, JSON.stringify(changedPassword.payload));
+    assert.equal(changedPassword.payload.code, "PORTAL_ORGANIZATION_PASSWORD_MANAGED");
+
+    const resetByAdministration = await requestJson(
+      `/api/portal/v1/organization-accounts/${encodeURIComponent(organizationAccountId)}`,
+      {
+        method: "PUT",
+        session: hrSession,
+        body: organizationAccountInput({ password: ACTIVE_PASSWORD }),
+      },
+    );
+    assert.equal(resetByAdministration.response.status, 200, JSON.stringify(resetByAdministration.payload));
+    const activeLogin = await requestJson("/api/portal/v1/auth/login", {
+      method: "POST",
+      body: { loginName: ORGANIZATION_LOGIN, password: ACTIVE_PASSWORD },
+    });
+    assert.equal(activeLogin.response.status, 200, JSON.stringify(activeLogin.payload));
+    organizationSession = responseSession(activeLogin.response);
     assert.equal(
       db.prepare("SELECT must_change_password FROM portal_organization_accounts WHERE id = ?")
         .get(organizationAccountId).must_change_password,
