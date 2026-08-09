@@ -340,6 +340,11 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     assert.equal(settings.response.status, 200, JSON.stringify(settings.payload));
     assert.equal(settings.payload.locationId, LOCATION);
     const configuration = settings.payload.configuration;
+    const recipient = configuration.recipients[0];
+    assert.ok(recipient);
+    assert.equal(recipient.replyToEmail, recipient.email);
+    const originalRecipientEmail = recipient.email;
+    recipient.email = "test-filialbestellung@example.test";
     for (const recipient of configuration.recipients) recipient.replyToEmail = "antworten@grabenplaner.eu";
     const warehouse = configuration.groups.find((group) => group.title === "Lager");
     warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS40").unit = "Karton";
@@ -352,6 +357,18 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     assert.equal(saved.payload.configuration.groups
       .find((group) => group.title === "Lager").items
       .find((item) => item.title === "Fotodrucker: Mediaset DS40").unit, "Karton");
+    assert.ok(saved.payload.configuration.recipients
+      .some((entry) => entry.email === "test-filialbestellung@example.test"));
+    const recipientToRestore = saved.payload.configuration.recipients
+      .find((entry) => entry.email === "test-filialbestellung@example.test");
+    assert.ok(recipientToRestore);
+    recipientToRestore.email = originalRecipientEmail;
+    const restored = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: managerSession,
+      body: { locationId: LOCATION, configuration: saved.payload.configuration },
+    });
+    assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
 
     const otherManager = createEmployeeSession(OTHER_MANAGER);
     const denied = await requestJson(`/api/portal/v1/branch-orders/settings?locationId=${LOCATION}`, { session: otherManager });

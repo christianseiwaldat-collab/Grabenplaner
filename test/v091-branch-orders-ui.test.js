@@ -14,6 +14,7 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   const styles = read("public/portal.css");
   const admin = read("public/index.html");
   const adminScript = read("public/app.js");
+  const adminStyles = read("public/styles.css");
 
   assert.match(html, /id="branchOrdersTab"/);
   assert.match(html, /id="branchOrdersView"/);
@@ -31,11 +32,15 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(script, /catalog\.senderEmail/);
   assert.match(script, /\/api\/portal\/v1\/branch-orders\/settings/);
   assert.match(script, /\/api\/portal\/v1\/branch-orders\/history/);
+  assert.match(script, /function captureBranchOrderSettingsDraft/);
   assert.match(script, /passwordSettingsCard.*isOrganizationAccount/s);
   assert.match(script, /loanOverviewColumnCatalog/);
   assert.match(script, /borrowerName/);
   assert.match(admin, /id="organizationAccountBranchOrders"/);
   assert.match(admin, /id="branchOrdersManagementNavButton"/);
+  assert.match(admin, /id="branchOrdersView"/);
+  assert.match(admin, /branchOrdersManagementNavButton[^>]*data-view="branchOrders"/);
+  assert.doesNotMatch(admin, /branchOrdersManagementNavButton[^>]*href=/);
   assert.match(admin, /id="loanOverviewSettingsButton"/);
   assert.match(admin, /id="branchAccountPasswordButton"/);
   assert.match(admin, /id="branchAccountPasswordDialog"/);
@@ -43,6 +48,9 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminScript, /organization_accounts:password:manage/);
   assert.match(adminScript, /\/api\/portal\/v1\/branch-accounts\/passwords/);
   assert.match(adminScript, /isEmployee === false/);
+  assert.match(adminScript, /function saveBranchOrdersManagement/);
+  assert.match(adminScript, /captureBranchOrdersManagementDraft/);
+  assert.match(adminStyles, /branch-orders-management-toolbar/);
   assert.match(styles, /branch-organization-account/);
   assert.match(styles, /body\.branch-organization-account \.portal-header \{ position:fixed/);
   assert.match(styles, /body\.branch-organization-account main \{ width:auto; min-height:100vh; margin:0 0 0 230px/);

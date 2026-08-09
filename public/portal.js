@@ -1639,7 +1639,7 @@ async function loadBranchOrderHistory() {
 }
 
 async function saveBranchOrderSettings() {
-  const draft = portalState.branchOrderSettingsDraft;
+  const draft = captureBranchOrderSettingsDraft();
   if (!branchOrderManagementEnabled() || !draft) return;
   el.saveBranchOrderSettings.disabled = true;
   message(el.branchOrderSettingsMessage, "");
@@ -5407,6 +5407,11 @@ function updateBranchOrderSettingsDraft(event) {
     if (key === "group-hint") target.hint = field.value;
     if (key === "group-recipient") target.recipientId = field.value;
   }
+}
+function captureBranchOrderSettingsDraft() {
+  el.branchOrderSettingsWorkspace?.querySelectorAll("[data-branch-order-settings-field]")
+    .forEach((field) => updateBranchOrderSettingsDraft({ target: field }));
+  return portalState.branchOrderSettingsDraft;
 }
 el.branchOrderSettingsWorkspace?.addEventListener("input", updateBranchOrderSettingsDraft);
 el.branchOrderSettingsWorkspace?.addEventListener("change", updateBranchOrderSettingsDraft);
