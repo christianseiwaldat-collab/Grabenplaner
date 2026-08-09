@@ -32730,6 +32730,40 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
   });
 });
 
+app.get("/api/portal/v1/location-dashboard/vacations", async (request, response) => {
+  const session = requirePortalSession(request, ORGANIZATION_SCHEDULE_PERMISSION);
+  if (session.sessionKind !== "organization" || session.accountType !== "branch") {
+    throw httpError(
+      403,
+      "Die reduzierte Urlaubsansicht ist nur für aktivierte Filialkonten verfügbar.",
+      "PORTAL_BRANCH_ACCOUNT_REQUIRED",
+    );
+  }
+  const locationId = normalizeLocationId(
+    String(request.query.locationId || session.homeLocationId || "").trim(),
+  );
+  assertSessionContextScope(session, { locationId });
+  const location = await validateLocationExists(locationId);
+  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  const weekEnd = addDays(weekStart, 6);
+  const vacations = (await planningSettingsRepository.listLocationDashboardVacations({
+    locationId,
+    weekStart,
+    weekEnd,
+  })).map((entry) => ({
+    employeeName: entry.employee_name,
+    dateFrom: entry.date_from,
+    dateTo: entry.date_to,
+  }));
+  response.json({
+    location: { id: location.id, name: location.name },
+    weekStart,
+    weekEnd,
+    calendarWeek: getIsoWeek(weekStart),
+    vacations,
+  });
+});
+
 app.get(["/api/portal/v1/me/absence-history", "/api/portal/v1/me/absence-requests"], async (request, response) => {
   const session = requirePortalSession(request, "own_vacation:read");
   response.json({ items: await absenceHistoryForEmployee(session.employeeNumber) });

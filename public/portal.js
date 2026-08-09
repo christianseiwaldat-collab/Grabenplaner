@@ -86,6 +86,8 @@ const portalState = {
   branchOrderSettingsDraft: null,
   branchOrderHistory: [],
   branchOrderSettingsLoading: false,
+  branchVacationWeekStart: mondayOf(new Date()),
+  branchVacationLoading: false,
 };
 
 const optionNames = {
@@ -157,6 +159,7 @@ const el = Object.fromEntries([
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
   "branchOrdersTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit",
+  "branchVacationTab", "branchVacationView", "branchVacationPrevious", "branchVacationCurrent", "branchVacationNext", "branchVacationWeek", "branchVacationList", "branchVacationMessage",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
@@ -411,6 +414,12 @@ function branchOrderCapabilityEnabled(user = portalUser()) {
     && (user?.permissions || []).includes("branch_orders:submit");
 }
 
+function branchVacationCapabilityEnabled(user = portalUser()) {
+  return isOrganizationAccount(user)
+    && user?.accountType === "branch"
+    && (user?.permissions || []).includes("schedule:location:view");
+}
+
 function branchOrderManagementEnabled(user = portalUser()) {
   return !isOrganizationAccount(user)
     && (user?.permissions || []).includes("branch_orders:manage");
@@ -430,6 +439,9 @@ function applyPortalCapabilities() {
   const branchOrdersEnabled = branchOrderCapabilityEnabled();
   el.branchOrdersTab?.classList.toggle("hidden", !branchOrdersEnabled);
   if (!branchOrdersEnabled && portalState.activeTab === "branchOrders") setTab(defaultPortalTab());
+  const branchVacationEnabled = branchVacationCapabilityEnabled();
+  el.branchVacationTab?.classList.toggle("hidden", !branchVacationEnabled);
+  if (!branchVacationEnabled && portalState.activeTab === "branchVacation") setTab(defaultPortalTab());
 }
 
 function portalUser() {
@@ -540,6 +552,7 @@ function portalTabAllowed(tab, user = portalUser()) {
   if (tab === "settings") return true;
   if (tab === "schedule") return scheduleCapabilityEnabled(user);
   if (tab === "branchOrders") return branchOrderCapabilityEnabled(user);
+  if (tab === "branchVacation") return branchVacationCapabilityEnabled(user);
   if (tab === "leadershipMore") return !isOrganizationAccount(user);
   if (tab === "timeTracking") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (tab === "timeOff") return permissions.includes("own_vacation:request");
@@ -662,7 +675,7 @@ function applyMobileLeadershipLayout() {
   navigation.classList.toggle("mobile-personal", compactMobile);
   navigation.classList.toggle("mobile-leadership", compactMobile && isLeadershipUser());
   el.portalSettingsShortcut?.classList.toggle("hidden", !compactMobile);
-  const regularTabs = ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu"];
+  const regularTabs = ["settings", "schedule", "branchVacation", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactMobile) {
     document.querySelectorAll("[data-tab]").forEach((button) => button.classList.remove("mobile-navigation-hidden"));
@@ -1011,6 +1024,7 @@ async function loadPortalData() {
   const requests = [];
   if (!isOrganizationAccount()) requests.push(loadPortalHome(), loadNotifications());
   if (portalTabAllowed("schedule")) requests.push(loadSchedule());
+  if (portalTabAllowed("branchVacation")) requests.push(loadBranchVacationOverview());
   if (portalTabAllowed("vacation")) requests.push(loadVacationRequests(), loadApprovedVacations());
   if (portalTabAllowed("timeOff")) requests.push(loadTimeOffRequests());
   if (portalTabAllowed("history")) requests.push(loadAbsenceHistory());
@@ -1170,6 +1184,7 @@ function showLogin(error = "") {
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
   portalState.session = null;
+  document.body.classList.remove("branch-organization-account");
   clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
   portalState.processTasksOwnerFingerprint = "";
   el.portalLogin.classList.remove("hidden");
@@ -1207,6 +1222,7 @@ function applySelfServiceVisibility() {
   el.vacationTab?.classList.toggle("hidden", !portalTabAllowed("vacation"));
   el.historyTab?.classList.toggle("hidden", !portalTabAllowed("history"));
   el.branchOrdersTab?.classList.toggle("hidden", !portalTabAllowed("branchOrders"));
+  el.branchVacationTab?.classList.toggle("hidden", !portalTabAllowed("branchVacation"));
   el.amuTab?.classList.toggle("hidden", !portalTabAllowed("amu"));
   el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
   if (!portalTabAllowed("processTasks")) {
@@ -1242,6 +1258,10 @@ function showPortal(session) {
   const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
     || processTaskActorFingerprint(portalUser());
   portalState.session = session;
+  document.body.classList.toggle(
+    "branch-organization-account",
+    isOrganizationAccount(session?.user) && session?.user?.accountType === "branch",
+  );
   const nextProcessTaskOwner = processTaskActorFingerprint(session?.user);
   if (previousProcessTaskOwner !== nextProcessTaskOwner) {
     clearProcessTaskState({
@@ -1337,6 +1357,7 @@ function setTab(tab) {
   el.historyView.classList.toggle("active", tab === "history");
   el.loanView?.classList.toggle("active", tab === "loan");
   el.branchOrdersView?.classList.toggle("active", tab === "branchOrders");
+  el.branchVacationView?.classList.toggle("active", tab === "branchVacation");
   el.amuView.classList.toggle("active", tab === "amu");
   el.processTasksView?.classList.toggle("active", tab === "processTasks");
   el.leadershipTeamView?.classList.toggle("active", tab === "leadershipTeam");
@@ -1357,6 +1378,7 @@ function setTab(tab) {
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
   if (tab === "loan") loadLoanModule();
   if (tab === "branchOrders") loadBranchOrderCatalog();
+  if (tab === "branchVacation") loadBranchVacationOverview();
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
   if (tab === "processTasks") loadProcessTasks();
   if (tab === "leadershipTeam") loadLeadershipOverview();
@@ -1629,6 +1651,37 @@ async function loadSchedule() {
       ${!shifts.length && !options.length ? '<span class="empty-day">Kein Eintrag</span>' : ""}
     </article>`;
   }).join("");
+}
+
+function branchVacationDateRangeText(entry) {
+  const start = dateText(entry.dateFrom);
+  const end = dateText(entry.dateTo);
+  return entry.dateFrom === entry.dateTo ? start : `${start} – ${end}`;
+}
+
+function renderBranchVacationOverview(data) {
+  if (!el.branchVacationList) return;
+  el.branchVacationWeek.textContent = `${data.location?.name || "Standort"} · KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
+  const vacations = Array.isArray(data.vacations) ? data.vacations : [];
+  el.branchVacationList.innerHTML = vacations.length
+    ? vacations.map((entry) => `<article class="branch-vacation-entry"><div><strong>${esc(entry.employeeName)}</strong><span>Urlaub</span></div><time>${esc(branchVacationDateRangeText(entry))}</time></article>`).join("")
+    : '<p class="empty-state">Für diese Kalenderwoche sind keine genehmigten Urlaubszeiträume eingetragen.</p>';
+}
+
+async function loadBranchVacationOverview() {
+  if (!branchVacationCapabilityEnabled() || portalState.branchVacationLoading) return;
+  portalState.branchVacationLoading = true;
+  message(el.branchVacationMessage, "");
+  try {
+    const data = await api(`/api/portal/v1/location-dashboard/vacations?week=${portalState.branchVacationWeekStart}`);
+    portalState.branchVacationWeekStart = data.weekStart;
+    renderBranchVacationOverview(data);
+  } catch (error) {
+    if (el.branchVacationList) el.branchVacationList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+    message(el.branchVacationMessage, error.message, true);
+  } finally {
+    portalState.branchVacationLoading = false;
+  }
 }
 
 const timeEntryLabels = {
@@ -5257,6 +5310,9 @@ document.querySelectorAll("[data-more-tab]").forEach((button) => button.addEvent
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
+el.branchVacationPrevious?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, -7); loadBranchVacationOverview(); });
+el.branchVacationNext?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, 7); loadBranchVacationOverview(); });
+el.branchVacationCurrent?.addEventListener("click", () => { portalState.branchVacationWeekStart = mondayOf(new Date()); loadBranchVacationOverview(); });
 el.branchOrderRefresh?.addEventListener("click", loadBranchOrderCatalog);
 el.branchOrderForm?.addEventListener("submit", submitBranchOrder);
 el.branchOrderGroups?.addEventListener("change", (event) => {

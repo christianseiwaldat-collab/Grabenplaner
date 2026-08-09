@@ -33,6 +33,7 @@
         <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
           <button data-tab="settings" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Einstellungen</button>
           <button class="active" id="scheduleTab" data-tab="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView">Dienstplan</button>
+          <button class="hidden" id="branchVacationTab" data-tab="branchVacation" type="button" role="tab" aria-selected="false" aria-controls="branchVacationView" tabindex="-1">Urlaubsplanung</button>
           <button class="hidden" id="timeTrackingTab" data-tab="timeTracking" type="button" role="tab" aria-selected="false" aria-controls="timeTrackingView" tabindex="-1">Zeit</button>
           <button class="hidden leadership-tab" id="leadershipTeamTab" data-tab="leadershipTeam" data-mobile-module="presence" type="button" role="tab" aria-selected="false" aria-controls="leadershipTeamView" tabindex="-1">Team</button>
           <button class="hidden leadership-tab" id="leadershipApprovalsTab" data-tab="leadershipApprovals" data-mobile-module="approvals" type="button" role="tab" aria-selected="false" aria-controls="leadershipApprovalsView" tabindex="-1">Freigaben</button>
@@ -186,6 +187,11 @@
         <section class="portal-view active" id="scheduleView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
           <div class="schedule-grid" id="scheduleGrid"></div>
+        </section>
+
+        <section class="portal-view branch-vacation-view" id="branchVacationView" role="tabpanel" aria-labelledby="branchVacationTab">
+          <div class="view-heading"><div><span class="eyebrow">Standortübersicht</span><h1>Urlaubsplanung</h1><p id="branchVacationWeek">Kalenderwoche wird geladen.</p></div><div class="week-controls"><button id="branchVacationPrevious" type="button" aria-label="Vorherige Woche">←</button><button id="branchVacationCurrent" type="button">Diese Woche</button><button id="branchVacationNext" type="button" aria-label="Nächste Woche">→</button></div></div>
+          <section class="portal-card branch-vacation-card"><p>Nur genehmigte Urlaubszeiträume des zugewiesenen Standorts. Diese Ansicht ist nicht bearbeitbar.</p><div class="branch-vacation-list" id="branchVacationList"><p class="empty-state">Urlaubsplanung wird geladen.</p></div><p class="message hidden" id="branchVacationMessage" role="status" aria-live="polite"></p></section>
         </section>
 
         <section class="portal-view" id="timeTrackingView" role="tabpanel" aria-labelledby="timeTrackingTab">
