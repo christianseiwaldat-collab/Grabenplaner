@@ -35,7 +35,7 @@ Die Verantwortungsgrenzen sind verbindlich:
   bindet jedes Anwendungsstatement genau einmal an sein SQLite-SQL und erzeugt
   die deckungsgleiche PostgreSQL-Plan-Fixture.
 
-Der Stand umfasst 1013 Statementverträge in 23 Fachbereichen. Die
+Der Stand umfasst 1015 Statementverträge in 23 Fachbereichen. Die
 Klassifikation beschreibt ausschließlich die bekannte SQLite-Syntax und ist
 kein Nachweis, dass unverändertes SQL auf einem anderen Provider ausführbar
 wäre:
@@ -43,19 +43,19 @@ wäre:
 | Klassifikation | Anzahl | Bedeutung |
 | --- | ---: | --- |
 | geprüfte SQLite-Baseline | 24 | keine vom aktuellen, konservativen Scanner erkannte SQLite-Besonderheit; kein Portabilitätsversprechen |
-| benannte SQLite-Dialektvariante | 989 | mindestens ein explizites SQLite-Merkmal |
+| benannte SQLite-Dialektvariante | 991 | mindestens ein explizites SQLite-Merkmal |
 | ungebundene oder doppelte Statements | 0 | Block-4-Gate |
 
 Als Dialektmerkmale werden unter anderem Upserts, `INSERT OR IGNORE`,
 `COLLATE NOCASE`, SQLite-Datums- und JSON-Funktionen, `julianday()`,
 `RETURNING`, `GLOB`, `AUTOINCREMENT`, SQLite-Katalogzugriffe und
-`RAISE(ABORT)` geführt. 916 der 989 Varianten verwenden die in der
+`RAISE(ABORT)` geführt. 918 der 991 Varianten verwenden die in der
 SQLite-Anbindung benannten Dollar-Parameter wie `$employeeNumber`; sie sind ein
 explizites Dialektmerkmal und werden deshalb nie als SQLite-Baseline
 ausgewiesen. Neue Merkmale müssen vor ihrer Aufnahme eindeutig klassifiziert
 werden.
 
-Die PostgreSQL-Fixture besitzt für alle 1013 Statement-IDs denselben Eigentümer
+Die PostgreSQL-Fixture besitzt für alle 1015 Statement-IDs denselben Eigentümer
 und dieselbe SQLite-Ausgangsklassifikation. Das ist lediglich eine
 deckungsgleiche Arbeitsliste, keine Aussage über PostgreSQL-Kompatibilität. Sie
 enthält absichtlich kein SQL, keinen ausführbaren Handler und keinen Treiber.
@@ -92,7 +92,7 @@ Asynchrone Nachläufer, nicht registrierte Rohoperationen sowie eigene `BEGIN`-,
 
 Das providerneutrale
 [`Anwendungsmanifest`](../lib/persistence/migrations/application-manifest.js)
-beschreibt neun bestehende Startstufen:
+beschreibt zehn bestehende Startstufen:
 
 1. kanonisches Anwendungsschema;
 2. startkritische Kompatibilitätsmigrationen;
@@ -103,13 +103,14 @@ beschreibt neun bestehende Startstufen:
 7. Organisations- und Kostenstellenschema;
 8. optionales synthetisches Demoprofil;
 9. System-Center-Schema.
+10. Schema für Filialbestellungen.
 
 Die
 [`SQLite-Bindungen`](../lib/persistence/sqlite/migrations/application-bindings.js)
 stellen für jede Operations-ID einen direkten synchronen Handler sowie einen
 reproduzierbaren Implementierungs-Fingerprint bereit. Dieser bindet den Wrapper,
 die direkt zugeordnete Operationsdatei und deren vollständigen lokalen
-Abhängigkeitsabschluss im Repository. Alle neun Handler werden in
+Abhängigkeitsabschluss im Repository. Alle zehn Handler werden in
 Manifestreihenfolge gegen einen leeren, rein synthetischen SQLite-Stand
 ausgeführt. Die deckungsgleiche PostgreSQL-Migrations-Fixture ist
 `contract-only`, nicht ausführbar und enthält weder Modulpfad noch SQL.
@@ -128,11 +129,11 @@ behauptet diese Aktivierung nicht.
 
 Die Block-4-Tests prüfen:
 
-- vollständige und eindeutige Bindung aller 1013 Statements;
+- vollständige und eindeutige Bindung aller 1015 Statements;
 - strikte Trennung zwischen konservativer SQLite-Baseline und erkannten
   SQLite-Dialektvarianten;
 - vollständige, nicht ausführbare PostgreSQL-Statement-Fixture;
-- vollständige SQLite- und PostgreSQL-Planabdeckung aller neun realen
+- vollständige SQLite- und PostgreSQL-Planabdeckung aller zehn realen
   Migrationsoperationen;
 - Neuaufbau, Upgrade, No-op und Rollback;
 - verlustfreie synthetische historische SQLite-Fixture;
@@ -140,7 +141,7 @@ Die Block-4-Tests prüfen:
 - gesperrte Transaktionssteuerung und gesperrte Async-Nachläufer;
 - Manifest- und Implementierungs-Fingerprint-Drift, lückenhafte Historie und
   nicht reversible Ziele;
-- synchrone Aufrufkonvention aller neun realen SQLite-Bindungen;
+- synchrone Aufrufkonvention aller zehn realen SQLite-Bindungen;
 - unveränderte Phase-3-Gates und weiterhin fehlende PostgreSQL-Abhängigkeiten.
 
 Sämtliche Fixtures sind synthetisch und enthalten keine Produktiv- oder
@@ -165,18 +166,18 @@ Nonprod-Live-Tests gegen PostgreSQL wurden erfolgreich ausgeführt. PostgreSQL
 bleibt dennoch in Produkt- und Serverkonfiguration deaktiviert; der
 produktive Datenbankpfad ist weiterhin ausschließlich SQLite.
 
-Der ergänzte PostgreSQL-Dialektplan ist nicht ausführbar und umfasst alle 1013
+Der ergänzte PostgreSQL-Dialektplan ist nicht ausführbar und umfasst alle 1015
 Anwendungsstatements:
 
-- Compiler v2 erzeugt 907 Syntaxkandidaten (`portable-generated`);
+- Compiler v2 erzeugt 909 Syntaxkandidaten (`portable-generated`);
 - 106 Einträge bleiben `requires-override`;
-- 0 von 1013 bilden einen ausführbaren Vollanwendungskatalog.
+- 0 von 1015 bilden einen ausführbaren Vollanwendungskatalog.
 
 Die generierten Einträge bleiben Kandidaten mit nachvollziehbarer Provenienz,
 Parameterbindung und SQL-Fingerprint; sie sind nicht pauschal live geprüft.
 Der Katalogvertrag fordert für einen für die Vollanwendung ausführbaren
-Katalog 1013 akzeptierte Live- und Paritätsnachweise. Der aktuelle Stand ist
-0/1013; deshalb bleiben selbst 1013 strukturell vollständige Deklarationen ohne
+Katalog 1015 akzeptierte Live- und Paritätsnachweise. Der aktuelle Stand ist
+0/1015; deshalb bleiben selbst 1015 strukturell vollständige Deklarationen ohne
 diese Receipts geschlossen und können nicht `applicationExecutable: true`
 werden.
 
@@ -201,7 +202,7 @@ Die vier Slices umfassen zusammen genau neun fachlich live geprüfte
 Statements. Alle vier tragen `development-contract`, deklarieren
 `fullApplicationCatalog: false` und bleiben
 `applicationExecutable: false` sowie `productActivation: false`. Diese
-Teilnachweise verändern den Vollanwendungsstand 0/1013 nicht und sind keine
+Teilnachweise verändern den Vollanwendungsstand 0/1015 nicht und sind keine
 Produkt- oder Supportfreigabe. Ihre Quellvertrags-Fingerprints binden den
 kanonischen SQLite-SQL-Text an ID, Operation, Parameterarten,
 Nullability/Optionalität sowie Ergebnisarten und -reihenfolge. SQL- oder
@@ -245,7 +246,7 @@ Treibertypen und `RETURNING`, Compiler-JSON-Bindungen, Constraint-SQLSTATEs,
 Rollback/Read-only/Serializable, parallele Transaktionen, einen echten
 `40P01`-Deadlock und einen echten `57014`-Statement-Timeout.
 
-Der PostgreSQL-Anwendungsmigrationsstand bleibt 0/9; keine der neun
+Der PostgreSQL-Anwendungsmigrationsstand bleibt 0/10; keine der zehn
 Anwendungsmigrationen ist implementiert.
 Datenübernahme, vollständige fachliche Parität und Lasttests bleiben offen.
 Der technische Provider-Zwischenstand ist in
@@ -289,7 +290,7 @@ Import und Maintenance akzeptiert. Beim aktiven Start werden R1-/M4-Zeilen erst
 nach dem vorhandenen Pre-Migration-Sicherungspunkt verlustfrei in das erweiterte
 Schema übernommen; partielle Tabellen, Trigger oder widersprüchliche Zeilen
 scheitern geschlossen. Die fünf ergänzten, typisierten Statements sind
-im 1013er Providerplan enthalten; sie ändern weder den PostgreSQL-Stand 0/1013
+im 1015er Providerplan enthalten; sie ändern weder den PostgreSQL-Stand 0/1015
 noch die deaktivierte PostgreSQL-Produktfreigabe.
 
 Die bestehende Mitarbeitertabelle erhält zusätzlich zwei kanonische
@@ -299,7 +300,7 @@ TAB, CR und LF bei INSERT und UPDATE. Nach der Schemaanlage prüfen SQLite-Start
 und read-only Importinspektion auch Bestandszeilen; ein Konflikt stoppt mit
 `EMPLOYEE_PRINCIPAL_RESERVED` und wird weder automatisch umbenannt noch
 gelöscht. Diese Härtung ist keine neue fachliche Anwendungsmigrationsstufe und
-ändert den PostgreSQL-Anwendungsmigrationsstand 0/9 nicht.
+ändert den PostgreSQL-Anwendungsmigrationsstand 0/10 nicht.
 
 Die additive M4-Publikationsschicht ergänzt drei weitere typisierte Statements
 zum Lesen, Veröffentlichen und Archivieren unveränderbarer Workflow-Versionen.
@@ -312,7 +313,7 @@ Der Compiler klassifiziert alle drei als `portable-generated`; sie erhöhten den
 damaligen M4-Vollanwendungsplan auf 928 Statements und 826 Syntaxkandidaten.
 Am M4-Abschluss blieb der PostgreSQL-Stand ohne Live- und Paritätsreceipts
 0/928; eine
-PostgreSQL-Anwendungsmigration wird dadurch nicht implementiert (weiterhin 0/9).
+PostgreSQL-Anwendungsmigration wird dadurch nicht implementiert (weiterhin 0/10).
 
 Die additive M5-Instanzschicht ergänzt darauf aufbauend elf typisierte
 Statements für Publikationslookup, Subjektprüfung, idempotente Run-Bindung,
@@ -322,14 +323,14 @@ Aktivschritt-Liste. Der Compiler klassifiziert zehn davon als
 `requires-override`. Damit umfasste der damalige geschlossene
 Vollanwendungsplan 939 Statements, 837 Syntaxkandidaten und 102 Overrides.
 Ohne Live- und Paritätsreceipts blieb der PostgreSQL-Stand 0/939; die
-PostgreSQL-Anwendungsmigrationen blieben unverändert bei 0/9.
+PostgreSQL-Anwendungsmigrationen blieben unverändert bei 0/10.
 
 Die additive M6-Dokument- und Profilpersistenz ergänzt weitere elf typisierte
 Statements. Der Compiler klassifiziert alle elf als `portable-generated`.
 Damit umfasste der damalige geschlossene Vollanwendungsplan 950 Statements,
 848 Syntaxkandidaten und weiterhin 102 Overrides. Ohne akzeptierte Live- und
 Paritätsreceipts blieb der PostgreSQL-Stand 0/950; die
-PostgreSQL-Anwendungsmigrationen blieben unverändert bei 0/9.
+PostgreSQL-Anwendungsmigrationen blieben unverändert bei 0/10.
 
 Die additive O1–O4-Onboarding-Fallausführung ergänzt darauf aufbauend 21
 weitere typisierte Statements. Der Compiler klassifiziert 19 davon als
@@ -337,13 +338,13 @@ weitere typisierte Statements. Der Compiler klassifiziert 19 davon als
 `requires-override`. Damit umfasste der damalige geschlossene
 Vollanwendungsplan 971 Statements, 867 Syntaxkandidaten und 104 Overrides.
 Ohne akzeptierte Live- und Paritätsreceipts blieb der PostgreSQL-Stand 0/971;
-die PostgreSQL-Anwendungsmigrationen blieben unverändert bei 0/9.
+die PostgreSQL-Anwendungsmigrationen blieben unverändert bei 0/10.
 
 Die additive O5-Offboarding-Fallausführung ergänzt darauf aufbauend 42 weitere
 typisierte Statements. Der Compiler klassifiziert 40 davon als
 `portable-generated`; zwei Einträge benötigen einen ausdrücklichen
 `requires-override`. Damit umfasst der aktuelle geschlossene
-Vollanwendungsplan 1013 Statements, 907 Syntaxkandidaten und 106 Overrides.
+Vollanwendungsplan 1015 Statements, 909 Syntaxkandidaten und 106 Overrides.
 Ohne akzeptierte Live- und Paritätsreceipts bleibt der PostgreSQL-Stand
-0/1013; die PostgreSQL-Anwendungsmigrationen bleiben unverändert bei 0/9. Dies
+0/1015; die PostgreSQL-Anwendungsmigrationen bleiben unverändert bei 0/10. Dies
 ist keine Produkt- oder PostgreSQL-Freigabe.

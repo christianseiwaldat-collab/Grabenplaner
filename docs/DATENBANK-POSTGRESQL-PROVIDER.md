@@ -45,7 +45,7 @@ Die Implementierung ist insbesondere kein Nachweis für:
 | [`lib/persistence/postgresql/provider.js`](../lib/persistence/postgresql/provider.js) | Poolinjektion, Parameter- und Ergebnisnormalisierung, Fehlerabbildung, Transaktionen und Poollebenszyklus |
 | [`lib/persistence/postgresql/pool.js`](../lib/persistence/postgresql/pool.js) | ausschließlich experimenteller Öffnungspfad mit Profil-Gate |
 | [`lib/persistence/postgresql/dialect-compiler.js`](../lib/persistence/postgresql/dialect-compiler.js) | Compiler v2 für konservative PostgreSQL-Syntaxkandidaten, benannte Parameterbindungen und weiterhin geschlossene Overrides |
-| [`lib/persistence/postgresql/catalog-contract.js`](../lib/persistence/postgresql/catalog-contract.js) | fail-closed Katalogvertrag für Provenienz, Teil-Slices und das geschlossene 1013er-Acceptance-Gate |
+| [`lib/persistence/postgresql/catalog-contract.js`](../lib/persistence/postgresql/catalog-contract.js) | fail-closed Katalogvertrag für Provenienz, Teil-Slices und das geschlossene 1015er-Acceptance-Gate |
 | [`lib/persistence/postgresql/ui-preferences-catalog.js`](../lib/persistence/postgresql/ui-preferences-catalog.js) | eigenständiger ausführbarer `development-contract`-Teilslice für genau vier UI-Präferenzstatements |
 | [`lib/persistence/postgresql/planning-settings-catalog.js`](../lib/persistence/postgresql/planning-settings-catalog.js) | eigenständiger ausführbarer `development-contract`-Teilslice für genau zwei Planning-Settings-Statements |
 | [`lib/persistence/postgresql/organization-departments-catalog.js`](../lib/persistence/postgresql/organization-departments-catalog.js) | eigenständiger ausführbarer `development-contract`-Teilslice für genau zwei Abteilungsstatements |
@@ -64,7 +64,7 @@ Die Implementierung ist insbesondere kein Nachweis für:
 | [`lib/persistence/postgresql/operations/monitor.js`](../lib/persistence/postgresql/operations/monitor.js) | read-only PostgreSQL-Metriken und fail-closed Capability-Evidence-Bindung |
 | [`lib/persistence/contract.js`](../lib/persistence/contract.js) | gemeinsame Providerfassade, gebundener Transaktionsexecutor und capability-gesteuerte Parallelität |
 | [`test/v087-database-block5-postgresql-provider.test.js`](../test/v087-database-block5-postgresql-provider.test.js) | synthetische Provider-, Transaktions-, Fehler- und Pooltests |
-| [`test/v087-database-block5-postgresql-catalog-contract.test.js`](../test/v087-database-block5-postgresql-catalog-contract.test.js) | Katalog-, Provenienz-, Teil-Slice- und 0/1013-Acceptance-Gates |
+| [`test/v087-database-block5-postgresql-catalog-contract.test.js`](../test/v087-database-block5-postgresql-catalog-contract.test.js) | Katalog-, Provenienz-, Teil-Slice- und 0/1015-Acceptance-Gates |
 | [`test/v087-database-block5-postgresql-ui-preferences.test.js`](../test/v087-database-block5-postgresql-ui-preferences.test.js) | realer Dual-Provider-Nachweis für den 4/4-UI-Präferenzslice |
 | [`test/v087-database-block5-postgresql-planning-settings.test.js`](../test/v087-database-block5-postgresql-planning-settings.test.js) | realer Dual-Provider-Nachweis für den 2/2-Planning-Settings-Slice |
 | [`test/v087-database-block5-postgresql-organization-departments.test.js`](../test/v087-database-block5-postgresql-organization-departments.test.js) | realer Dual-Provider-Nachweis für den 2/2-Organization-Departments-Slice |
@@ -92,13 +92,13 @@ Weder `server.js` noch die produktive Providerkonfiguration dürfen diesen
 ### 2.1 Dialektplan, Katalog-Gate und ausführbare Teil-Slices
 
 Der PostgreSQL-Dialektcompiler liegt in Version 2 vor. Der weiterhin
-nicht ausführbare Gesamtplan umfasst alle 1013 Anwendungsstatements:
+nicht ausführbare Gesamtplan umfasst alle 1015 Anwendungsstatements:
 
-- 907 Einträge sind generierte PostgreSQL-Syntaxkandidaten
+- 909 Einträge sind generierte PostgreSQL-Syntaxkandidaten
   (`portable-generated`);
 - 106 Einträge benötigen weiterhin eine ausdrückliche
   `requires-override`-Implementierung;
-- 0 von 1013 Einträgen bilden einen freigegebenen, für die Anwendung
+- 0 von 1015 Einträgen bilden einen freigegebenen, für die Anwendung
   ausführbaren Vollkatalog.
 
 Ein generierter Syntaxkandidat ist weder ein Live-Nachweis noch automatisch
@@ -107,9 +107,9 @@ streng beschriebene JSON-Parameterbindungen; Provenienz, Parameterbindung und
 SQL-Fingerprint bleiben je Eintrag nachvollziehbar.
 
 Der zentrale Katalogvertrag hält die Acceptance-Grenze geschlossen. Für einen
-für die Vollanwendung ausführbaren Katalog sind 1013 akzeptierte Live- und
-Paritätsnachweise erforderlich; aktuell liegen 0/1013 vor. Deshalb kann selbst
-ein strukturell vollständiger Katalog mit 1013 Deklarationen heute nicht
+für die Vollanwendung ausführbaren Katalog sind 1015 akzeptierte Live- und
+Paritätsnachweise erforderlich; aktuell liegen 0/1015 vor. Deshalb kann selbst
+ein strukturell vollständiger Katalog mit 1015 Deklarationen heute nicht
 `applicationExecutable: true` werden.
 
 Davon getrennt existieren vier bewusst kleine, auf einem realen
@@ -139,7 +139,7 @@ nur innerhalb dieser
 Entwicklungsgrenze ausführbar und deklariert
 `fullApplicationCatalog: false`. Der daraus gebildete Teilkatalog bleibt
 `applicationExecutable: false` und `productActivation: false`. Auch die
-Abdeckungen 4/4, 2/2, 2/2 und 1/1 verändern den Vollanwendungsstand von 0/1013
+Abdeckungen 4/4, 2/2, 2/2 und 1/1 verändern den Vollanwendungsstand von 0/1015
 nicht und aktivieren keinen PostgreSQL-Produktpfad.
 
 Jeder der vier Slices pinnt zusätzlich einen Quellvertrags-Fingerprint. Er
@@ -511,7 +511,7 @@ installationsbezogene Gates.
 | --- | --- | --- | --- |
 | Provideroberfläche und keine Raw-Handles | Vertrags- und Providertests | vollständige Repository-Parität | Regression und Architekturaudit |
 | Parameter, Array-Zeilen und Werttypen | Fake-Pool plus reale Nonprod-Prüfung der aktuell verwendeten Vertragsarten; Feldname und Feldreihenfolge scheitern bei Abweichung geschlossen | vollständige Paritätsprüfung aller Anwendungsspalten | produktionsnahe Datenstichprobe |
-| SQL-Katalog | Compiler-v2-Plan mit 907 Syntaxkandidaten und 106 Overrides; geschlossener 0/1013-Acceptance-Vertrag; gepinnte Quellvertrags-Fingerprints aus SQL plus vollständigem Statementvertrag; widersprüchliches `RETURNING` scheitert geschlossen; vier reale Teil-Slices mit zusammen neun Statements: UI-Präferenzen 4/4, Planning Settings 2/2, Organization Departments 2/2 und System Center 1/1 | alle 1013 Anwendungsstatements mit geprüftem PostgreSQL-SQL und je einem akzeptierten Live-/Paritätsnachweis | vollständiger Funktionslauf |
+| SQL-Katalog | Compiler-v2-Plan mit 909 Syntaxkandidaten und 106 Overrides; geschlossener 0/1015-Acceptance-Vertrag; gepinnte Quellvertrags-Fingerprints aus SQL plus vollständigem Statementvertrag; widersprüchliches `RETURNING` scheitert geschlossen; vier reale Teil-Slices mit zusammen neun Statements: UI-Präferenzen 4/4, Planning Settings 2/2, Organization Departments 2/2 und System Center 1/1 | alle 1015 Anwendungsstatements mit geprüftem PostgreSQL-SQL und je einem akzeptierten Live-/Paritätsnachweis | vollständiger Funktionslauf |
 | Schema und Nullability | dokumentiertes Gate für den schwächeren SQLite-Vertrag von `TEXT PRIMARY KEY` ohne `NOT NULL` | explizite Ableitung und Prüfung jeder PostgreSQL-Nullability aus dem Fachvertrag | Migrations- und historische Paritätsabnahme |
 | Transaktionsmodi | alle vier `BEGIN`-Varianten synthetisch sowie reale Read-only-, Rollback- und Serializable-Prüfung | vollständige fachliche Transaktionsparität | fachliche Parität |
 | Parallelität | zwei Fake-Pool-Clients und zwei gleichzeitig aktive reale Transaktionen | Konkurrenz-, Lock- und Lasttest mit Anwendungspfaden | separate Mehrinstanzentscheidung |
@@ -523,7 +523,7 @@ installationsbezogene Gates.
 | TLS | Policy-, URL- und Loopback-Negativtests | echte Zertifikats- und Hostnamenprüfung | Secret-/Zertifikatsbetrieb abgenommen |
 | Secret-Redaktion | Fehler mit eingebetteten Testsecrets | Log-, Status- und Crashdump-Prüfung | Rotation und Incident-Prozess |
 | Rollen | vier statisch getrennte Rollen; der Migrationsadapter prüft eine echte getrennte Loginrolle, `current_user = session_user`, Schemaeigentum, unprivilegierte Rollenflags und fehlende Rollenmitgliedschaften fail-closed | Rechte-Negativtests mit den übrigen drei echten Betriebsrollen | betriebliche Rollenverantwortung |
-| Migrationen | generischer Adapter mit Session-Lock vor genau einer serialisierbaren Schreibtransaktion und selbst gehashten versionierten SQL-Artefakten; Rebuild, Präfix-Upgrade, No-op, synthetischer Rollback, atomarer Fehlerabbruch, Parallelität, Allowlist und Drift real geprüft; Anwendungsmigrationen weiterhin 0/9 | deklarative Bindung und Nachweis aller neun Anwendungsmigrationen einschließlich historischem Bestand | reproduzierbarer Cutover- und Rückkehrplan |
+| Migrationen | generischer Adapter mit Session-Lock vor genau einer serialisierbaren Schreibtransaktion und selbst gehashten versionierten SQL-Artefakten; Rebuild, Präfix-Upgrade, No-op, synthetischer Rollback, atomarer Fehlerabbruch, Parallelität, Allowlist und Drift real geprüft; Anwendungsmigrationen weiterhin 0/10 | deklarative Bindung und Nachweis aller zehn Anwendungsmigrationen einschließlich historischem Bestand | reproduzierbarer Cutover- und Rückkehrplan |
 | Backup-Bundle und Dump | Bundle v2, exportierter Snapshot, Custom-Dump, Dokumentbindung, Manipulations-/Partial-/Link-Negativtests | produktive Quiesce-Verdrahtung, Zeitplan, Retention und Offsite | freigegebener installierter Backupbetrieb passend zum RPO |
 | Restore | synthetische Negativtests plus realer PostgreSQL-18.4-Restore-E2E 1/1 lokal und extern in CI grün | Vollanwendungs-Restore auf realitätsnaher Datenmenge | gemessenes RTO und freigegebener Wiederanlaufplan |
 | Monitoring | read-only Abfrage, exakter Resultatvertrag und Evidence-Zustände getestet | System-Center-, Alarmierungs- und Operations-Rollenintegration | betrieblich verantwortete Grenzwerte und Eskalation |
@@ -572,7 +572,7 @@ Supportfreigabe. Diese bleibt an die Betriebs-, Recovery- und Support-Gates von
 Phase 6 gebunden.
 
 Block 6 ersetzt diese Phase-5-Abnahme nicht. Die Akzeptanzstände bleiben
-0/1013 für den Vollanwendungskatalog und 0/9 für die Anwendungsmigrationen.
+0/1015 für den Vollanwendungskatalog und 0/10 für die Anwendungsmigrationen.
 
 ## 9. Was die aktuellen Tests ausdrücklich nicht beweisen
 
@@ -605,13 +605,13 @@ der noch nicht vorhandenen PostgreSQL-Vollanwendung.
 
 Alle vier bleiben `development-contract`-Slices mit
 `applicationExecutable: false`, `fullApplicationCatalog: false` und
-`productActivation: false`; der Katalogvertrag verhindert bei 0/1013
+`productActivation: false`; der Katalogvertrag verhindert bei 0/1015
 Acceptance-Nachweisen weiterhin jeden für die Vollanwendung ausführbaren
 Katalog. Der generische Migrationsadapter beweist zusätzlich seinen
 Transaktions-, Ledger- und Parallelitätsvertrag, aber keine der neun
 Anwendungsmigrationen. Diese Teilnachweise beweisen weiterhin nicht:
 
-- dass der nicht ausführbare Gesamtplan oder alle 907 generierten
+- dass der nicht ausführbare Gesamtplan oder alle 909 generierten
   Syntaxkandidaten einen vollständigen PostgreSQL-Anwendungskatalog bilden;
 - dass ein realer PostgreSQL-Server alle Dialektvarianten akzeptiert;
 - dass sämtliche Anwendungsspalten und historischen Werte ohne server- oder
@@ -631,9 +631,9 @@ Anwendungsmigrationen. Diese Teilnachweise beweisen weiterhin nicht:
 - dass mehrere Grabenplaner-Instanzen gemeinsam betrieben werden dürfen.
 
 Diese Grenzen müssen in Testberichten und Abnahmeaussagen sichtbar bleiben.
-Der PostgreSQL-Anwendungsmigrationsstand bleibt 0/9; keine der neun
+Der PostgreSQL-Anwendungsmigrationsstand bleibt 0/10; keine der zehn
 Anwendungsmigrationen ist implementiert. Der Vollanwendungskatalog bleibt
-0/1013.
+0/1015.
 
 ## 10. Ausdrückliche Nichtziele und Stop-Regeln
 

@@ -58,9 +58,9 @@
               <button class="nav-item nav-module-route hidden" data-view="loans" id="loanManagementNavButton">
                 <span class="nav-symbol">▣</span><span>Leihverwaltung</span><strong class="nav-count hidden" id="loanManagementNavCount">0</strong>
               </button>
-              <a class="nav-item nav-module-route hidden" id="branchOrdersManagementNavButton" href="/portal.html?tab=settings&amp;section=branch-orders">
+              <button class="nav-item nav-module-route hidden" id="branchOrdersManagementNavButton" type="button" data-view="branchOrders">
                 <span class="nav-symbol">▤</span><span>Filialbestellungen</span>
-              </a>
+              </button>
               <div class="nav-submodule">
                 <div class="nav-branch">
                   <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-controls="planningNavChildren" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
@@ -1108,6 +1108,27 @@
           </section>
           <section class="loan-management-summary" id="loanManagementSummary" aria-label="Zusammenfassung"></section>
           <section class="loan-management-list" id="loanManagementList" aria-live="polite"><p class="settings-note">Leihvorgänge werden geladen.</p></section>
+        </section>
+
+        <section id="branchOrdersView" class="view branch-orders-management-view">
+          <header class="topbar branch-orders-management-topbar">
+            <div><span class="eyebrow">Standort &amp; Übergabe</span><h1>Filialbestellungen</h1><p class="subtitle">Bestellpositionen, Einheiten, E-Mail-Ziele und Vorlagen direkt im Desktop-Grabenplaner verwalten.</p></div>
+            <div class="branch-orders-management-header-actions">
+              <button class="secondary-button" id="branchOrdersManagementRefresh" type="button">Aktualisieren</button>
+              <button class="primary-button" id="branchOrdersManagementSave" type="button">Bestellkonfiguration speichern</button>
+              <div class="page-theme-switch" role="group" aria-label="Darstellung der Filialbestellungen"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+            </div>
+          </header>
+          <section class="branch-orders-management-toolbar card">
+            <label class="field"><span>Standort</span><select id="branchOrdersManagementLocation"><option value="">Standort wird geladen.</option></select></label>
+            <p id="branchOrdersManagementEmailStatus">Bestellkonfiguration wird geladen.</p>
+          </section>
+          <p class="branch-orders-management-message hidden" id="branchOrdersManagementMessage" role="status" aria-live="polite"></p>
+          <section class="branch-orders-management-workspace" id="branchOrdersManagementWorkspace" aria-live="polite"><p class="settings-note">Bestellkonfiguration wird geladen.</p></section>
+          <section class="branch-orders-management-history card" aria-labelledby="branchOrdersManagementHistoryTitle">
+            <div class="branch-orders-management-section-heading"><div><span class="eyebrow">Nachweis</span><h2 id="branchOrdersManagementHistoryTitle">Bestellverlauf</h2><p>Erfasst Zeitpunkt, Filialkonto, ausgewählte Person und Mengen.</p></div></div>
+            <div class="branch-orders-management-history-list" id="branchOrdersManagementHistory"><p class="settings-note">Bestellverlauf wird geladen.</p></div>
+          </section>
         </section>
 
         <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
