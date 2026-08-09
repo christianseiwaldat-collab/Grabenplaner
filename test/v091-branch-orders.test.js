@@ -157,6 +157,11 @@ function insertReadOnlyFixtures() {
     `).run(EMPLOYEE, LOCATION, date);
   }
   db.prepare(`
+    INSERT INTO week_options
+      (employee_number, group_id, week_start, date_from, date_to, option_type, note, all_day)
+    VALUES (?, 'v091-vacation', '2031-03-10', '2031-03-10', '2031-03-14', 'vacation', 'nicht für Filialkonto', 1)
+  `).run(EMPLOYEE);
+  db.prepare(`
     INSERT INTO articles (article_number, description, source_provider, active, created_by, updated_by)
     VALUES ('910018', 'V091 Testkamera', 'manual', 1, 'test', 'test')
   `).run();
@@ -238,15 +243,39 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
       "branch_orders:submit",
     ]));
     organizationSession = responseSession(login.response);
-    const changed = await requestJson("/api/portal/v1/me/password", {
+    const selfChangeDenied = await requestJson("/api/portal/v1/me/password", {
       method: "PUT",
       session: organizationSession,
       body: { currentPassword: INITIAL_PASSWORD, newPassword: ACTIVE_PASSWORD },
     });
-    assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
+    assert.equal(selfChangeDenied.response.status, 403, JSON.stringify(selfChangeDenied.payload));
+    assert.equal(selfChangeDenied.payload.code, "PORTAL_ORGANIZATION_PASSWORD_MANAGED");
+
+    const passwordTargets = await requestJson("/api/portal/v1/branch-accounts/passwords", {
+      session: managerSession,
+    });
+    assert.equal(passwordTargets.response.status, 200, JSON.stringify(passwordTargets.payload));
+    assert.deepEqual(passwordTargets.payload.accounts.map((account) => account.loginName), [ORGANIZATION_LOGIN]);
+    const reset = await requestJson(`/api/portal/v1/branch-accounts/${encodeURIComponent(accountId)}/password`, {
+      method: "PUT",
+      session: managerSession,
+      body: { password: ACTIVE_PASSWORD },
+    });
+    assert.equal(reset.response.status, 200, JSON.stringify(reset.payload));
+    assert.equal(reset.payload.account.loginName, ORGANIZATION_LOGIN);
+    const revoked = await requestJson("/api/portal/v1/session", { session: organizationSession });
+    assert.equal(revoked.response.status, 200, JSON.stringify(revoked.payload));
+    assert.equal(revoked.payload.authenticated, false);
+
+    const activeLogin = await requestJson("/api/portal/v1/auth/login", {
+      method: "POST",
+      body: { loginName: ORGANIZATION_LOGIN, password: ACTIVE_PASSWORD },
+    });
+    assert.equal(activeLogin.response.status, 200, JSON.stringify(activeLogin.payload));
+    organizationSession = responseSession(activeLogin.response);
   });
 
-  await t.test("vergangene, aktuelle und kommende KW bleiben lesbar; Leihansicht bleibt datensparsam", async () => {
+  await t.test("vergangene, aktuelle und kommende KW bleiben lesbar; Leih- und Urlaubsansicht bleiben datensparsam", async () => {
     for (const week of ["2031-03-03", "2031-03-10", "2031-03-17"]) {
       const result = await requestJson(`/api/portal/v1/location-dashboard/schedule?week=${week}`, {
         session: organizationSession,
@@ -255,9 +284,38 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
       assert.equal(result.payload.weekStart, week);
       assert.equal(JSON.stringify(result.payload).includes("nicht für Filialkonto"), false);
     }
+    const vacations = await requestJson("/api/portal/v1/location-dashboard/vacations?week=2031-03-10", {
+      session: organizationSession,
+    });
+    assert.equal(vacations.response.status, 200, JSON.stringify(vacations.payload));
+    assert.deepEqual(vacations.payload.vacations, [{
+      employeeName: "Max",
+      dateFrom: "2031-03-10",
+      dateTo: "2031-03-14",
+    }]);
+    assert.equal(JSON.stringify(vacations.payload).includes("nicht für Filialkonto"), false);
+    assert.equal(JSON.stringify(vacations.payload).includes(EMPLOYEE), false);
+    const wrongLocation = await requestJson("/api/portal/v1/location-dashboard/vacations?week=2031-03-10&locationId=19", {
+      session: organizationSession,
+    });
+    assert.equal(wrongLocation.response.status, 403, JSON.stringify(wrongLocation.payload));
+    const employeeSession = createEmployeeSession(EMPLOYEE);
+    const employeeDenied = await requestJson("/api/portal/v1/location-dashboard/vacations?week=2031-03-10", {
+      session: employeeSession,
+    });
+    assert.equal(employeeDenied.response.status, 403, JSON.stringify(employeeDenied.payload));
+    const scheduleEditDenied = await requestJson("/api/schedule-note", {
+      method: "PUT",
+      session: organizationSession,
+      body: { locationId: LOCATION, weekStart: "2031-03-10", note: "nicht erlaubt" },
+    });
+    assert.equal(scheduleEditDenied.response.status, 403, JSON.stringify(scheduleEditDenied.payload));
     const loans = await requestJson("/api/portal/v1/loans/open-overview", { session: organizationSession });
     assert.equal(loans.response.status, 200, JSON.stringify(loans.payload));
     assert.equal(loans.payload.items.length, 1);
+    assert.deepEqual(loans.payload.columns, ["borrowerName", "description", "articleNumber", "serialNumber", "dueDate"]);
+    assert.equal(loans.payload.items[0].borrowerName, "Max");
+    assert.equal(Object.hasOwn(loans.payload.items[0], "employeeNumber"), false);
     assert.equal(JSON.stringify(loans.payload).includes("intern"), false);
   });
 
@@ -282,6 +340,11 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     assert.equal(settings.response.status, 200, JSON.stringify(settings.payload));
     assert.equal(settings.payload.locationId, LOCATION);
     const configuration = settings.payload.configuration;
+    const recipient = configuration.recipients[0];
+    assert.ok(recipient);
+    assert.equal(recipient.replyToEmail, recipient.email);
+    const originalRecipientEmail = recipient.email;
+    recipient.email = "test-filialbestellung@example.test";
     for (const recipient of configuration.recipients) recipient.replyToEmail = "antworten@grabenplaner.eu";
     const warehouse = configuration.groups.find((group) => group.title === "Lager");
     warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS40").unit = "Karton";
@@ -294,12 +357,55 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     assert.equal(saved.payload.configuration.groups
       .find((group) => group.title === "Lager").items
       .find((item) => item.title === "Fotodrucker: Mediaset DS40").unit, "Karton");
+    assert.ok(saved.payload.configuration.recipients
+      .some((entry) => entry.email === "test-filialbestellung@example.test"));
+    const recipientToRestore = saved.payload.configuration.recipients
+      .find((entry) => entry.email === "test-filialbestellung@example.test");
+    assert.ok(recipientToRestore);
+    recipientToRestore.email = originalRecipientEmail;
+    const restored = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: managerSession,
+      body: { locationId: LOCATION, configuration: saved.payload.configuration },
+    });
+    assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
 
     const otherManager = createEmployeeSession(OTHER_MANAGER);
     const denied = await requestJson(`/api/portal/v1/branch-orders/settings?locationId=${LOCATION}`, { session: otherManager });
     assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
     const accountDenied = await requestJson("/api/portal/v1/branch-orders/settings", { session: organizationSession });
     assert.equal(accountDenied.response.status, 403, JSON.stringify(accountDenied.payload));
+
+    const loanColumns = await requestJson("/api/portal/v1/loans/branch-overview-settings", { session: managerSession });
+    assert.equal(loanColumns.response.status, 200, JSON.stringify(loanColumns.payload));
+    assert.deepEqual(loanColumns.payload.columns, ["borrowerName", "description", "articleNumber", "serialNumber", "dueDate"]);
+    const savedLoanColumns = await requestJson("/api/portal/v1/loans/branch-overview-settings", {
+      method: "PUT",
+      session: managerSession,
+      body: { locationId: LOCATION, columns: ["employeeNumber", "description", "dueDate"] },
+    });
+    assert.equal(savedLoanColumns.response.status, 200, JSON.stringify(savedLoanColumns.payload));
+    assert.deepEqual(savedLoanColumns.payload.columns, ["borrowerName", "employeeNumber", "description", "dueDate"]);
+    const configuredOverview = await requestJson("/api/portal/v1/loans/open-overview", { session: organizationSession });
+    assert.equal(configuredOverview.response.status, 200, JSON.stringify(configuredOverview.payload));
+    assert.deepEqual(configuredOverview.payload.columns, ["borrowerName", "employeeNumber", "description", "dueDate"]);
+    assert.equal(configuredOverview.payload.items[0].borrowerName, "Max");
+    assert.equal(configuredOverview.payload.items[0].employeeNumber, EMPLOYEE);
+    assert.equal(Object.hasOwn(configuredOverview.payload.items[0], "serialNumber"), false);
+
+    const personalOverview = await requestJson("/api/portal/v1/loans/open-overview", {
+      session: createEmployeeSession(EMPLOYEE),
+    });
+    assert.equal(personalOverview.response.status, 200, JSON.stringify(personalOverview.payload));
+    assert.equal(Object.hasOwn(personalOverview.payload.items[0], "borrowerName"), false);
+    assert.equal(Object.hasOwn(personalOverview.payload.items[0], "employeeNumber"), false);
+
+    const passwordResetDenied = await requestJson(`/api/portal/v1/branch-accounts/${encodeURIComponent(accountId)}/password`, {
+      method: "PUT",
+      session: otherManager,
+      body: { password: "NichtErlaubt-v091!" },
+    });
+    assert.equal(passwordResetDenied.response.status, 403, JSON.stringify(passwordResetDenied.payload));
   });
 
   await t.test("Bestellung ignoriert eine übermittelte KW, speichert Momentaufnahmen und versendet über den freigegebenen Absender", async () => {

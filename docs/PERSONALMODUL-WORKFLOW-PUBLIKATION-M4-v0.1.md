@@ -76,7 +76,7 @@ Ein fehlender M4-Stand ist migrationsfähig. Eine leere abweichende M4-Struktur 
 
 Die Read-only-Importprüfung unterscheidet `pre-m4-compatible`, `m4` und `invalid`. Altstände ohne M4 bleiben zulässig. Partielle Tabellen, fehlende Schutztrigger, ungültige Scope-Bezüge, Lücken in der Versionsfolge sowie manipulierte Snapshot- oder Beleg-Hashes sperren den Import. Die geprüfte Quelldatei wird nicht verändert.
 
-SQLite bleibt der einzige Produktprovider. Der PostgreSQL-Katalog bildet die drei neuen Repository-Statements ausschließlich als `contract-only` ab; die neun Anwendungsmigrationsstufen bleiben dort weiterhin 0/9 umgesetzt.
+SQLite bleibt der einzige Produktprovider. Der PostgreSQL-Katalog bildet die drei neuen Repository-Statements ausschließlich als `contract-only` ab; die zehn Anwendungsmigrationsstufen bleiben dort weiterhin 0/10 umgesetzt.
 
 ## 6. API
 

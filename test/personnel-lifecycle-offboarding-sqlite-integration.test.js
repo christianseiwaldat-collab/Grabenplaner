@@ -74,6 +74,7 @@ function accessFor(actorId) {
   return {
     actorId,
     namedActor: true,
+    personalEmployee: true,
     central: true,
     canReadOffboardingConfidential: true,
     canPrepareOffboarding: true,

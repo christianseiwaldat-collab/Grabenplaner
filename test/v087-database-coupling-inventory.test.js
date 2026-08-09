@@ -277,8 +277,8 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     BASELINE.productionTotals.directNodeSqliteImport,
   );
 
-  // Die kanonischen Personalmodul-Schemaoperationen sind explizit als SQLite-Phase-3-Dateien klassifiziert.
-  assert.equal(report.summary.productionDirectFiles, 56);
+  // Die kanonischen Personalmodul- und Filialbestellungs-Schemaoperationen sind explizit als SQLite-Phase-3-Dateien klassifiziert.
+  assert.equal(report.summary.productionDirectFiles, 57);
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 1);
   assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 3);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
@@ -384,7 +384,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1013);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1015);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -401,7 +401,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1013,
+    requiredReceiptCount: 1015,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -479,7 +479,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     roleBoundaryEnforced: true,
     ledgerAccessFromArtifacts: "rejected",
     applicationMigrationsImplemented: 0,
-    expectedApplicationMigrationCount: 9,
+    expectedApplicationMigrationCount: 10,
     productActivation: false,
   });
   assert.equal(report.phase5Progress.executableMigrationBindingCount, 0);
@@ -546,26 +546,26 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   assert.match(phase3, /direkte `db\.exec`-Aufrufe in `server\.js` \| 0/);
   assert.match(phase3, /lokal mit Node 22\.13\.0/);
   assert.match(phase4, /Status:\*\* Block 4\/7 abgeschlossen/);
-  assert.match(phase4, /1013 Statementvertr/);
+  assert.match(phase4, /1015 Statementvertr/);
   assert.match(phase4, /SQLite-Baseline \| 24/);
-  assert.match(phase4, /SQLite-Dialektvariante \| 989/);
-  assert.match(phase4, /916[\s\S]{0,100}Dollar-Parameter/i);
+  assert.match(phase4, /SQLite-Dialektvariante \| 991/);
+  assert.match(phase4, /918[\s\S]{0,100}Dollar-Parameter/i);
   assert.match(phase4, /`contract-only`/);
   assert.match(phase4, /Implementierungs-Fingerprint/);
   assert.match(phase4, /`mapped-not-ledger-activated`/);
   assert.match(phase4, /`genericAdapterCompatible: false`/);
   assert.match(phase4, /Phase-5-Zwischenstand/);
   assert.match(phase4, /Phase 5[\s\S]{0,80}begonnen[\s\S]{0,80}in Bearbeitung/i);
-  assert.match(phase4, /907 Syntaxkandidaten \(`portable-generated`\)/);
+  assert.match(phase4, /909 Syntaxkandidaten \(`portable-generated`\)/);
   assert.match(phase4, /106[^\r\n]*`requires-override`/);
   assert.match(
     phase4,
-    /PostgreSQL-Anwendungsmigrationsstand bleibt 0\/9[\s\S]{0,80}keine der neun[\s\S]{0,40}Anwendungsmigrationen ist implementiert/i,
+    /PostgreSQL-Anwendungsmigrationsstand bleibt 0\/10[\s\S]{0,80}keine der zehn[\s\S]{0,40}Anwendungsmigrationen ist implementiert/i,
   );
   assert.match(phase5, /nicht produktiven Status/i);
   assert.match(phase5, /`development-contract`/);
   assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1013/);
+  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1015/);
   assert.match(phase5, /`applicationExecutable: false`/);
   assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
   assert.match(strategy, /Block 3[\s\S]{0,100}abgeschlossen/i);
@@ -577,11 +577,11 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   );
   assert.match(
     strategy,
-    /1013 Anwendungsstatements:[\s\S]{0,60}907[\s\S]{0,100}`portable-generated`[\s\S]{0,60}106[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1013[\s\S]{0,100}Vollanwendungskatalog/i,
+    /1015 Anwendungsstatements:[\s\S]{0,60}909[\s\S]{0,100}`portable-generated`[\s\S]{0,60}106[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1015[\s\S]{0,100}Vollanwendungskatalog/i,
   );
   assert.match(
     strategy,
-    /PostgreSQL-Migrationsstand bleibt 0\/9[\s\S]{0,60}keine Anwendungsmigration ist[\s\S]{0,30}implementiert/i,
+    /PostgreSQL-Migrationsstand bleibt 0\/10[\s\S]{0,60}keine Anwendungsmigration ist[\s\S]{0,30}implementiert/i,
   );
   assert.match(strategy, /Datenbank-Kopplungsinventar/);
   assert.match(ciWorkflow, /sqlite-provider-node-minimum:/);

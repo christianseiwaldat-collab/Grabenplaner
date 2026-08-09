@@ -370,7 +370,7 @@ test("O7 Katalog und Vorschau bleiben rechtegetrennt, quellenminimiert und wirku
     );
   });
 
-  await t.test("alle 16 Rechte sind katalogisiert, rollenberechtigt und ohne Built-in-Autogrant", async () => {
+  await t.test("alle 16 Rechte sind katalogisiert; nur developer erhält sie automatisch", async () => {
     const roles = await request("/api/portal/v1/roles");
     assert.equal(roles.response.status, 200, roles.text);
     const entries = (roles.payload?.catalog || []).filter(({ id }) => (
@@ -379,13 +379,13 @@ test("O7 Katalog und Vorschau bleiben rechtegetrennt, quellenminimiert und wirku
     assert.deepEqual(entries.map(({ id }) => id).sort(), [...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS].sort());
     for (const entry of entries) assert.deepEqual(entry.eligibleRoles, ELIGIBLE_ROLES, entry.id);
     for (const role of (roles.payload?.roles || []).filter(({ builtin }) => builtin)) {
-      assert.deepEqual(
-        (role.permissions || []).filter((permission) => (
-          PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS.includes(permission)
-        )),
-        [],
-        `Built-in-Rolle ${role.id} besitzt O7-Autogrants.`,
-      );
+      const automaticPermissions = (role.permissions || []).filter((permission) => (
+        PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS.includes(permission)
+      )).sort();
+      const expectedPermissions = role.id === "developer"
+        ? [...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS].sort()
+        : [];
+      assert.deepEqual(automaticPermissions, expectedPermissions, role.id);
     }
   });
 
