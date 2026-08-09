@@ -4581,7 +4581,7 @@ function mobileSessionPrincipal(row) {
     personnelFieldPermissions: parsePersonnelFieldPermissionProjection(
       row.personnel_field_permissions,
     ),
-    mustChangePassword: false,
+    mustChangePassword: Boolean(row.must_change_password),
     expiresAt: row.access_expires_at,
     refreshExpiresAt: row.refresh_expires_at,
   };

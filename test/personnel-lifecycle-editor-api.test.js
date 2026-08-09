@@ -143,7 +143,7 @@ function createFixtures() {
     ["O8-OFF-INCOMPLETE", "hr"],
     ["O8-BOTH", "admin"],
     ["O8-VALID-ON", "hr"],
-    ["O8-VALID-OFF", "developer"],
+    ["O8-VALID-OFF", "hr"],
   ]);
   const result = {};
   for (const [employeeNumber, role] of definitions) {
@@ -290,7 +290,6 @@ test("O8-Katalog verlangt persönliche zentrale Rechte und filtert Quelltypen", 
   for (const principal of [
     "O8-HR-ROLE",
     "O8-IT-ROLE",
-    "O8-DEV-ROLE",
     "O8-NO-SOURCE",
     "O8-ACTIONS",
     "O8-MANAGER",
@@ -314,6 +313,11 @@ test("O8-Katalog verlangt persönliche zentrale Rechte und filtert Quelltypen", 
     process.env.GRABENPLANER_FORCE_PORTAL = previousForcePortal;
   }
 
+  const developer = await request(CATALOG_ROUTE, { auth: sessions["O8-DEV-ROLE"] });
+  assert.equal(developer.response.status, 200, developer.text);
+  assertNoStore(developer);
+  assert.deepEqual(developer.payload.workflowTypes, ["onboarding", "offboarding"]);
+
   const onboarding = await request(CATALOG_ROUTE, { auth: sessions["O8-ONBOARDING"] });
   assert.equal(onboarding.response.status, 200, onboarding.text);
   assertNoStore(onboarding);
@@ -330,7 +334,7 @@ test("O8-Katalog verlangt persönliche zentrale Rechte und filtert Quelltypen", 
   assert.deepEqual(both.payload.workflowTypes, ["onboarding", "offboarding"]);
 });
 
-test("alle sechs O8-Rechte sind katalogisiert, rollenberechtigt und ohne Autogrant", async () => {
+test("alle sechs O8-Rechte sind katalogisiert; nur developer erhält sie automatisch", async () => {
   const result = await request("/api/portal/v1/roles");
   assert.equal(result.response.status, 200, result.text);
   const entries = (result.payload?.catalog || []).filter(({ id }) => (
@@ -339,11 +343,11 @@ test("alle sechs O8-Rechte sind katalogisiert, rollenberechtigt und ohne Autogra
   assert.deepEqual(entries.map(({ id }) => id).sort(), [...EDITOR_PERMISSION_IDS].sort());
   for (const entry of entries) assert.deepEqual(entry.eligibleRoles, ELIGIBLE_ROLES, entry.id);
   for (const role of (result.payload?.roles || []).filter(({ builtin }) => builtin)) {
-    assert.deepEqual(
-      (role.permissions || []).filter((permission) => EDITOR_PERMISSION_IDS.includes(permission)),
-      [],
-      `Built-in-Rolle ${role.id} besitzt O8-Autogrants.`,
-    );
+    const automaticPermissions = (role.permissions || [])
+      .filter((permission) => EDITOR_PERMISSION_IDS.includes(permission))
+      .sort();
+    const expectedPermissions = role.id === "developer" ? [...EDITOR_PERMISSION_IDS].sort() : [];
+    assert.deepEqual(automaticPermissions, expectedPermissions, role.id);
   }
 });
 
