@@ -35,6 +35,8 @@ const LOCATION = "o4-api-location";
 const DEPARTMENT = 9941;
 const SUBJECT = "O4-API-SUBJECT";
 const DEVELOPER = "O4-API-DEV";
+const OPERATOR = "O4-API-HR-OPERATOR";
+const NO_RIGHTS = "O4-API-HR-NO-RIGHTS";
 const RECIPIENT_A = "O4-API-HR-A";
 const RECIPIENT_B = "O4-API-HR-B";
 const PRIVATE_MARKER = "O4-API-PRIVATE-DESCRIPTION-MUST-NOT-LEAK";
@@ -285,10 +287,14 @@ function createFixture() {
   `);
   insertEmployee.run(SUBJECT, "O4 API Zielperson", "Ziel", LOCATION, DEPARTMENT);
   insertEmployee.run(DEVELOPER, "O4 API Developer", "Dev", LOCATION, DEPARTMENT);
+  insertEmployee.run(OPERATOR, "O4 API Personaloperator", "Operator", LOCATION, DEPARTMENT);
+  insertEmployee.run(NO_RIGHTS, "O4 API Personal ohne Rechte", "Ohne Rechte", LOCATION, DEPARTMENT);
   insertEmployee.run(RECIPIENT_A, "O4 API Personal A", "HR A", LOCATION, DEPARTMENT);
   insertEmployee.run(RECIPIENT_B, "O4 API Personal B", "HR B", LOCATION, DEPARTMENT);
 
-  const auth = createEmployeeSession(DEVELOPER, "developer");
+  const developerAuth = createEmployeeSession(DEVELOPER, "developer");
+  const operatorAuth = createEmployeeSession(OPERATOR, "hr");
+  const noRightsAuth = createEmployeeSession(NO_RIGHTS, "hr");
   createEmployeeSession(RECIPIENT_A, "hr");
   createEmployeeSession(RECIPIENT_B, "hr");
   const grant = db.prepare(`
@@ -300,42 +306,43 @@ function createFixture() {
     grant.run(recipient, P.OPERATIONAL_READ, DEVELOPER);
     grant.run(recipient, P.OPERATIONAL_UPDATE, DEVELOPER);
   }
+  grantEmployeePermissions(OPERATOR, START_PERMISSIONS);
   for (const publication of PUBLICATIONS) insertPublication(publication);
   enablePersonnelLifecycle();
-  return auth;
+  return { developerAuth, operatorAuth, noRightsAuth };
 }
 
-function grantDeveloperStartPermissions() {
+function grantEmployeePermissions(employeeNumber, permissions) {
   const grant = db.prepare(`
     INSERT OR IGNORE INTO portal_permission_grants (
       employee_number, permission, granted_by
     ) VALUES (?, ?, ?)
   `);
-  for (const permission of START_PERMISSIONS) grant.run(DEVELOPER, permission, DEVELOPER);
+  for (const permission of permissions) grant.run(employeeNumber, permission, DEVELOPER);
 }
 
-function denyDeveloperPermission(permission) {
+function denyEmployeePermission(employeeNumber, permission) {
   db.prepare(`
     INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
     VALUES (?, ?, ?)
-  `).run(DEVELOPER, permission, DEVELOPER);
+  `).run(employeeNumber, permission, DEVELOPER);
 }
 
-function restoreDeveloperPermission(permission) {
+function restoreEmployeePermission(employeeNumber, permission) {
   db.prepare(`
     DELETE FROM portal_permission_denials
     WHERE employee_number = ? AND permission = ?
-  `).run(DEVELOPER, permission);
+  `).run(employeeNumber, permission);
 }
 
-function bodyFor(profileResponse, requestedOperationId) {
+function bodyFor(profileResponse, requestedOperationId, responsibleActorId = DEVELOPER) {
   const packages = [...profileResponse.onboardingPreview.packageResolution.packages]
     .sort((left, right) => left.publicationId.localeCompare(right.publicationId));
   const familyCodes = ["personnel_administration", "base_security_privacy"];
   return {
     operationId: requestedOperationId,
     expectedPreviewSha256: profileResponse.onboardingExecution.previewSha256,
-    responsibleActorId: DEVELOPER,
+    responsibleActorId,
     confirmation: "START_ONBOARDING",
     confirmations: {
       responsibility: true,
@@ -416,7 +423,7 @@ test.after(async () => {
 });
 
 test("O4 Onboarding-Start-API erzwingt Rechte, Vertrag, Atomizitaet und Idempotenz", async () => {
-  const auth = createFixture();
+  const { developerAuth: auth, operatorAuth, noRightsAuth } = createFixture();
   const lifecycleBaseline = countsFor(LIFECYCLE_TABLES);
   const externalBaseline = countsFor(EXTERNAL_SIDE_EFFECT_TABLES);
   assert.equal(db.prepare(`
@@ -429,14 +436,13 @@ test("O4 Onboarding-Start-API erzwingt Rechte, Vertrag, Atomizitaet und Idempote
       AND scope_type = 'company'
   `).get(...PUBLICATIONS.map(({ publicationId }) => publicationId)).count, 2);
 
-  const noDomainRights = await request(PROFILE_ROUTE, { auth });
+  const noDomainRights = await request(PROFILE_ROUTE, { auth: noRightsAuth });
   assertMinimalError(noDomainRights, {
     status: 403,
     code: "PORTAL_PERMISSION_DENIED",
   });
   assertNoLifecycleWrites(lifecycleBaseline, "GET ohne explizite Fachrechte");
 
-  grantDeveloperStartPermissions();
   const fullProfile = await request(PROFILE_ROUTE, { auth });
   assert.equal(fullProfile.response.status, 200, fullProfile.text);
   assert.equal(fullProfile.payload.capabilities.canReadOnboardingPreview, true);
@@ -459,11 +465,11 @@ test("O4 Onboarding-Start-API erzwingt Rechte, Vertrag, Atomizitaet und Idempote
     true,
   );
   assert.equal(JSON.stringify(fullProfile.payload).includes(PRIVATE_MARKER), false);
-  const validBody = bodyFor(fullProfile.payload, operationId(100));
+  const operatorValidBody = bodyFor(fullProfile.payload, operationId(100), OPERATOR);
 
   for (const [index, permission] of START_PERMISSIONS.entries()) {
-    denyDeveloperPermission(permission);
-    const restrictedProfile = await request(PROFILE_ROUTE, { auth });
+    denyEmployeePermission(OPERATOR, permission);
+    const restrictedProfile = await request(PROFILE_ROUTE, { auth: operatorAuth });
     if (PROFILE_READ_PERMISSIONS.has(permission)) {
       assertMinimalError(restrictedProfile, {
         status: 403,
@@ -477,8 +483,8 @@ test("O4 Onboarding-Start-API erzwingt Rechte, Vertrag, Atomizitaet und Idempote
     }
     const deniedStart = await request(START_ROUTE, {
       method: "POST",
-      auth,
-      body: { ...validBody, operationId: operationId(index + 1) },
+      auth: operatorAuth,
+      body: { ...operatorValidBody, operationId: operationId(index + 1) },
     });
     assertMinimalError(deniedStart, {
       status: 403,
@@ -487,7 +493,7 @@ test("O4 Onboarding-Start-API erzwingt Rechte, Vertrag, Atomizitaet und Idempote
     });
     assertNoLifecycleWrites(lifecycleBaseline, `fehlendes Recht ${permission}`);
     assertNoExternalSideEffects(externalBaseline, `fehlendes Recht ${permission}`);
-    restoreDeveloperPermission(permission);
+    restoreEmployeePermission(OPERATOR, permission);
   }
 
   const refreshedProfile = await request(PROFILE_ROUTE, { auth });

@@ -21,12 +21,13 @@ test("v0.87: Persönliche Einstellungen sind geschlossen, Benachrichtigungen erg
   )?.[0] || "";
   const detailTags = [...settingsView.matchAll(/<details\b[^>]*>/g)].map((match) => match[0]);
 
-  assert.equal(detailTags.length, 6);
+  assert.equal(detailTags.length, 7);
   assert.equal(detailTags.every((tag) => !/\sopen(?:\s|=|>)/.test(tag)), true);
   assert.doesNotMatch(portalHtml, /Verifizierte Empfänger|sicknessNotificationPreferencesCard/);
   assert.doesNotMatch(moreView, /Externe Benachrichtigungen|emailSettingsCard/);
   assert.match(settingsView, /id="emailSettingsCard"[\s\S]*Externe Benachrichtigungen/);
   assert.doesNotMatch(settingsView.match(/<details[^>]+id="emailSettingsCard"[^>]*>/)?.[0] || "", /\bhidden\b/);
+  assert.match(settingsView, /<details class="portal-card portal-settings-section hidden" id="branchOrderSettingsCard"/);
 
   const passwordSection = settingsView.indexOf('class="portal-card portal-settings-section portal-settings-password"');
   const emailSection = settingsView.indexOf('id="emailSettingsCard"');

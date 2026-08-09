@@ -183,7 +183,7 @@ Der abgeschlossene lokale Schlusslauf vom 3. August 2026 ergab:
 - Personal-Lifecycle-, Profil-, Portal- und Sicherheitsverbund O1 bis O5: 254/254 erfolgreich,
 - vollständige serielle Projektsuite: 1.864 Tests, davon 1.824 erfolgreich, 40 bewusst übersprungen und 0 fehlgeschlagen,
 - Persistenz-Coupling-Audit: erfolgreich, 0 unklassifizierte Dateien, 0 Phasengrenzverletzungen und 0 rohe Fachzugriffe,
-- PostgreSQL-Vertrag: 1.013 katalogisierte Statements, 907 portable und 106 weiterhin fail-closed übersteuerte Statements; produktive Vollanwendung 0/1.013,
+- PostgreSQL-Vertrag: 1.015 katalogisierte Statements, 909 portable und 106 weiterhin fail-closed übersteuerte Statements; produktive Vollanwendung 0/1.015,
 - Syntaxprüfung und `git diff --check`: erfolgreich.
 
 Für die interaktive Browserprüfung wurde eine isolierte, synthetische Loopback-Testinstanz gestartet. In der aktuellen Codex-Sitzung war jedoch kein steuerbarer Browser verbunden. Deshalb wird die interaktive Desktop-/320-Pixel-Browserabnahme ausdrücklich nicht als durchgeführt bezeichnet. Die automatisierten UI-, Rechteverlust- und 320-Pixel-Grenztests sind im grünen Teststand enthalten.

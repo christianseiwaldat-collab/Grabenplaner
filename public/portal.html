@@ -26,13 +26,14 @@
     <div class="portal-app hidden" id="portalApp">
       <header class="portal-header">
         <div class="portal-brand"><img id="portalLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" /><div><strong>Grabenplaner</strong><span>Mitarbeiterportal</span></div></div>
-        <div class="portal-user"><div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button><button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Persönliche Einstellungen öffnen">Einstellungen</button><button class="text-button header-action" id="logoutButton" type="button">Abmelden</button></div>
+        <div class="portal-user"><div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button><button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Persönliche Einstellungen öffnen">Einstellungen</button><button class="text-button header-action" id="logoutButton" type="button">Abmelden</button></div>
       </header>
 
       <main>
         <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
           <button data-tab="settings" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Einstellungen</button>
           <button class="active" id="scheduleTab" data-tab="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView">Dienstplan</button>
+          <button class="hidden" id="branchVacationTab" data-tab="branchVacation" type="button" role="tab" aria-selected="false" aria-controls="branchVacationView" tabindex="-1">Urlaubsplanung</button>
           <button class="hidden" id="timeTrackingTab" data-tab="timeTracking" type="button" role="tab" aria-selected="false" aria-controls="timeTrackingView" tabindex="-1">Zeit</button>
           <button class="hidden leadership-tab" id="leadershipTeamTab" data-tab="leadershipTeam" data-mobile-module="presence" type="button" role="tab" aria-selected="false" aria-controls="leadershipTeamView" tabindex="-1">Team</button>
           <button class="hidden leadership-tab" id="leadershipApprovalsTab" data-tab="leadershipApprovals" data-mobile-module="approvals" type="button" role="tab" aria-selected="false" aria-controls="leadershipApprovalsView" tabindex="-1">Freigaben</button>
@@ -42,6 +43,7 @@
           <button id="historyTab" data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
           <button class="hidden" id="loanTab" data-tab="loan" type="button" role="tab" aria-selected="false" aria-controls="loanView" tabindex="-1">Leihe</button>
           <button class="hidden" id="branchOrdersTab" data-tab="branchOrders" type="button" role="tab" aria-selected="false" aria-controls="branchOrdersView" tabindex="-1">Filialbestellung</button>
+          <button class="hidden" id="branchOrderSettingsTab" data-tab="settings" data-settings-focus="branch-orders" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Bestellverwaltung</button>
           <button id="amuTab" data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
@@ -170,7 +172,7 @@
                 <section class="branch-order-history" aria-labelledby="branchOrderHistoryTitle"><div class="list-heading"><h2 id="branchOrderHistoryTitle">Bestellverlauf</h2><button class="text-button" id="refreshBranchOrderHistory" type="button">Verlauf aktualisieren</button></div><div id="branchOrderHistoryList"><p class="empty-state">Bestellverlauf wird geladen.</p></div></section>
               </div>
             </details>
-            <details class="portal-card portal-settings-section portal-settings-password">
+            <details class="portal-card portal-settings-section portal-settings-password" id="passwordSettingsCard">
               <summary class="portal-settings-summary">
                 <span><span class="eyebrow">Sicherheit</span><strong>Passwort ändern</strong><small>Persönliches Passwort sicher aktualisieren</small></span>
                 <span class="portal-settings-chevron" aria-hidden="true"></span>
@@ -186,6 +188,11 @@
         <section class="portal-view active" id="scheduleView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
           <div class="schedule-grid" id="scheduleGrid"></div>
+        </section>
+
+        <section class="portal-view branch-vacation-view" id="branchVacationView" role="tabpanel" aria-labelledby="branchVacationTab">
+          <div class="view-heading"><div><span class="eyebrow">Standortübersicht</span><h1>Urlaubsplanung</h1><p id="branchVacationWeek">Kalenderwoche wird geladen.</p></div><div class="week-controls"><button id="branchVacationPrevious" type="button" aria-label="Vorherige Woche">←</button><button id="branchVacationCurrent" type="button">Diese Woche</button><button id="branchVacationNext" type="button" aria-label="Nächste Woche">→</button></div></div>
+          <section class="portal-card branch-vacation-card"><p>Nur genehmigte Urlaubszeiträume des zugewiesenen Standorts. Diese Ansicht ist nicht bearbeitbar.</p><div class="branch-vacation-list" id="branchVacationList"><p class="empty-state">Urlaubsplanung wird geladen.</p></div><p class="message hidden" id="branchVacationMessage" role="status" aria-live="polite"></p></section>
         </section>
 
         <section class="portal-view" id="timeTrackingView" role="tabpanel" aria-labelledby="timeTrackingTab">
@@ -341,12 +348,12 @@
           <div class="loan-layout" id="loanWorkspace">
             <section class="portal-card loan-open-overview-card" id="loanOpenOverview">
               <div class="loan-list-heading">
-                <div><span class="eyebrow">Direktübersicht</span><h2>Offene Leihen am Standort</h2><p>Gerätestatus ohne Personen-, Beleg- oder interne Vorgangsdaten.</p></div>
+                <div><span class="eyebrow">Direktübersicht</span><h2>Offene Leihen am Standort</h2><p id="loanOverviewDescription">Gerätestatus ohne Personen-, Beleg- oder interne Vorgangsdaten.</p></div>
                 <label id="loanOverviewSearchField" class="loan-overview-search hidden"><span>Gerät suchen</span><input id="loanOverviewSearch" type="search" inputmode="search" autocomplete="off" placeholder="Gerät, Modell, Nummer oder Seriennummer" /></label>
               </div>
               <div class="loan-overview-table-wrap">
                 <table class="loan-overview-table">
-                  <thead><tr><th>Gerät / Modell</th><th>Artikel-/Inventarnr.</th><th>Seriennr.</th><th>Geplante Rückgabe</th></tr></thead>
+                  <thead><tr id="loanOverviewTableHeader"><th>Gerät / Modell</th><th>Artikel-/Inventarnr.</th><th>Seriennr.</th><th>Geplante Rückgabe</th></tr></thead>
                   <tbody id="loanOverviewTableBody"><tr><td colspan="4">Offene Leihen werden geladen.</td></tr></tbody>
                 </table>
               </div>
