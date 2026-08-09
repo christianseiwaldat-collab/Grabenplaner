@@ -157,6 +157,11 @@ function insertReadOnlyFixtures() {
     `).run(EMPLOYEE, LOCATION, date);
   }
   db.prepare(`
+    INSERT INTO week_options
+      (employee_number, group_id, week_start, date_from, date_to, option_type, note, all_day)
+    VALUES (?, 'v091-vacation', '2031-03-10', '2031-03-10', '2031-03-14', 'vacation', 'nicht für Filialkonto', 1)
+  `).run(EMPLOYEE);
+  db.prepare(`
     INSERT INTO articles (article_number, description, source_provider, active, created_by, updated_by)
     VALUES ('910018', 'V091 Testkamera', 'manual', 1, 'test', 'test')
   `).run();
@@ -246,7 +251,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   });
 
-  await t.test("vergangene, aktuelle und kommende KW bleiben lesbar; Leihansicht bleibt datensparsam", async () => {
+  await t.test("vergangene, aktuelle und kommende KW bleiben lesbar; Leih- und Urlaubsansicht bleiben datensparsam", async () => {
     for (const week of ["2031-03-03", "2031-03-10", "2031-03-17"]) {
       const result = await requestJson(`/api/portal/v1/location-dashboard/schedule?week=${week}`, {
         session: organizationSession,
@@ -255,6 +260,32 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
       assert.equal(result.payload.weekStart, week);
       assert.equal(JSON.stringify(result.payload).includes("nicht für Filialkonto"), false);
     }
+    const vacations = await requestJson("/api/portal/v1/location-dashboard/vacations?week=2031-03-10", {
+      session: organizationSession,
+    });
+    assert.equal(vacations.response.status, 200, JSON.stringify(vacations.payload));
+    assert.deepEqual(vacations.payload.vacations, [{
+      employeeName: "Max",
+      dateFrom: "2031-03-10",
+      dateTo: "2031-03-14",
+    }]);
+    assert.equal(JSON.stringify(vacations.payload).includes("nicht für Filialkonto"), false);
+    assert.equal(JSON.stringify(vacations.payload).includes(EMPLOYEE), false);
+    const wrongLocation = await requestJson("/api/portal/v1/location-dashboard/vacations?week=2031-03-10&locationId=19", {
+      session: organizationSession,
+    });
+    assert.equal(wrongLocation.response.status, 403, JSON.stringify(wrongLocation.payload));
+    const employeeSession = createEmployeeSession(EMPLOYEE);
+    const employeeDenied = await requestJson("/api/portal/v1/location-dashboard/vacations?week=2031-03-10", {
+      session: employeeSession,
+    });
+    assert.equal(employeeDenied.response.status, 403, JSON.stringify(employeeDenied.payload));
+    const scheduleEditDenied = await requestJson("/api/schedule-note", {
+      method: "PUT",
+      session: organizationSession,
+      body: { locationId: LOCATION, weekStart: "2031-03-10", note: "nicht erlaubt" },
+    });
+    assert.equal(scheduleEditDenied.response.status, 403, JSON.stringify(scheduleEditDenied.payload));
     const loans = await requestJson("/api/portal/v1/loans/open-overview", { session: organizationSession });
     assert.equal(loans.response.status, 200, JSON.stringify(loans.payload));
     assert.equal(loans.payload.items.length, 1);

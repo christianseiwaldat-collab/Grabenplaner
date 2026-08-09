@@ -1752,11 +1752,9 @@ async function bootstrapApplication() {
         showLoginGate();
         return;
       }
-      if (session.user?.mustChangePassword) {
-        window.location.replace("/portal.html");
-        return;
-      }
-      if (session.user?.role === "employee") {
+      if (session.user?.mustChangePassword
+        || session.user?.role === "employee"
+        || session.user?.isEmployee === false) {
         window.location.replace("/portal.html");
         return;
       }
@@ -1782,7 +1780,9 @@ async function loginToAdministration(event) {
         password: elements.adminLoginPassword.value,
       }),
     });
-    if (result.user?.role === "employee" || result.user?.mustChangePassword) {
+    if (result.user?.role === "employee"
+      || result.user?.mustChangePassword
+      || result.user?.isEmployee === false) {
       window.location.replace("/portal.html");
       return;
     }

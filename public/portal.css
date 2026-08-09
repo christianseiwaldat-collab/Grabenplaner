@@ -698,6 +698,21 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 .branch-order-history-entry ul { margin:0; padding-left:19px; color:var(--muted); font-size:13px; }
 .danger-button { color:#a33d35 !important; }
 
+.branch-vacation-card { display:grid; gap:14px; padding:20px; }
+.branch-vacation-card > p { margin:0; }
+.branch-vacation-list { display:grid; gap:9px; }
+.branch-vacation-entry { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 14px; border:1px solid var(--line); border-radius:12px; background:var(--panel-soft, #f5f8f6); }
+.branch-vacation-entry strong,.branch-vacation-entry span { display:block; }
+.branch-vacation-entry span,.branch-vacation-entry time { color:var(--muted); font-size:12px; }
+.branch-vacation-entry time { text-align:right; font-weight:750; }
+
+@media (min-width:901px) {
+  body.branch-organization-account main { width:min(1320px,calc(100% - 30px)); display:grid; grid-template-columns:220px minmax(0,1fr); gap:20px; align-items:start; }
+  body.branch-organization-account .portal-tabs { position:sticky; top:94px; display:grid; gap:4px; margin:0; padding:7px; }
+  body.branch-organization-account .portal-tabs button { min-height:46px; text-align:left; }
+  body.branch-organization-account .portal-view { grid-column:2; min-width:0; }
+}
+
 @media (max-width:720px) {
   .branch-orders-heading { align-items:stretch; }
   .branch-orders-heading .text-button { align-self:flex-start; }
@@ -707,4 +722,6 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
   .branch-order-submit-row .primary,.branch-order-editor-heading > .text-button { width:100%; }
   .branch-order-editor-grid,.branch-order-settings-item { grid-template-columns:1fr; }
   .branch-order-settings-item .danger-button { justify-self:start; }
+  .branch-vacation-entry { align-items:flex-start; flex-direction:column; gap:5px; }
+  .branch-vacation-entry time { text-align:left; }
 }
