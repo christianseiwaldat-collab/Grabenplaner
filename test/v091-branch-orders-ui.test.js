@@ -39,6 +39,7 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(admin, /id="organizationAccountBranchOrders"/);
   assert.match(admin, /id="branchOrdersManagementNavButton"/);
   assert.match(admin, /id="branchOrdersView"/);
+  assert.match(admin, /id="branchOrdersManagementSaveInline"[^>]*>Bestellkonfiguration speichern/);
   assert.match(admin, /branchOrdersManagementNavButton[^>]*data-view="branchOrders"/);
   assert.doesNotMatch(admin, /branchOrdersManagementNavButton[^>]*href=/);
   assert.match(admin, /id="loanOverviewSettingsButton"/);
@@ -50,7 +51,10 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminScript, /isEmployee === false/);
   assert.match(adminScript, /function saveBranchOrdersManagement/);
   assert.match(adminScript, /captureBranchOrdersManagementDraft/);
+  assert.match(adminScript, /branchOrdersManagementSaveInline\?\.addEventListener\("click", saveBranchOrdersManagement\)/);
+  assert.match(adminScript, /\[elements\.branchOrdersManagementSave, elements\.branchOrdersManagementSaveInline\]/);
   assert.match(adminStyles, /branch-orders-management-toolbar/);
+  assert.match(adminStyles, /grid-template-columns:minmax\(240px,\.7fr\) 1fr auto/);
   assert.match(styles, /branch-organization-account/);
   assert.match(styles, /body\.branch-organization-account \.portal-header \{ position:fixed/);
   assert.match(styles, /body\.branch-organization-account main \{ width:auto; min-height:100vh; margin:0 0 0 230px/);
