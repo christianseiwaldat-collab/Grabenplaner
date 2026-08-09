@@ -17,10 +17,12 @@ test("Block 4 UI: Filial- und Terminalkonten werden getrennt von Beschäftigten 
   assert.match(html, /id="organizationAccountLocation"/);
   assert.match(html, /id="organizationAccountLoanOverview"/);
   assert.match(html, /id="organizationAccountScheduleView"/);
+  assert.match(html, /id="organizationAccountBranchOrders"/);
 
   assert.match(script, /api\("\/api\/portal\/v1\/organization-accounts"\)/);
   assert.match(script, /"loans:overview:read"/);
   assert.match(script, /"schedule:location:view"/);
+  assert.match(script, /"branch_orders:submit"/);
   assert.match(script, /loadOrganizationAccounts\(\)/);
 });
 

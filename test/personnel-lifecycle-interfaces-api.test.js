@@ -407,7 +407,7 @@ test("O6 Schnittstellenkatalog bleibt rechtegetrennt, datensparsam und ohne Auss
     }
   });
 
-  await t.test("alle zwolf reservierten Rechte sind katalogisiert, aber keine Built-in-Rolle erhaelt sie", async () => {
+  await t.test("alle zwolf reservierten Rechte sind katalogisiert; nur developer erhält sie automatisch", async () => {
     const roles = await request("/api/portal/v1/roles");
     assert.equal(roles.response.status, 200, roles.text);
     const entries = (roles.payload?.catalog || [])
@@ -419,7 +419,8 @@ test("O6 Schnittstellenkatalog bleibt rechtegetrennt, datensparsam und ohne Auss
     for (const role of (roles.payload?.roles || []).filter(({ builtin }) => builtin)) {
       const automaticO6Rights = (role.permissions || [])
         .filter((permission) => O6_PERMISSION_IDS.includes(permission));
-      assert.deepEqual(automaticO6Rights, [], `Built-in-Rolle ${role.id} besitzt O6-Autogrants.`);
+      const expectedPermissions = role.id === "developer" ? [...O6_PERMISSION_IDS].sort() : [];
+      assert.deepEqual(automaticO6Rights.sort(), expectedPermissions, role.id);
     }
   });
 

@@ -112,6 +112,7 @@ function taskAccess(actorId, overrides = {}) {
   return {
     actorId,
     namedActor: true,
+    personalEmployee: true,
     canReadOperational: true,
     canUpdateOperational: true,
     canCloseOnboarding: true,
