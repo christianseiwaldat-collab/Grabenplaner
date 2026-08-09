@@ -341,7 +341,7 @@ Prüfstand am 3. August 2026:
 - **57 von 57 Tests einschließlich Portal-Fundament erfolgreich**,
 - **31 von 31 M5-/O4- bis O7-UI-Regressionstests erfolgreich**,
 - **309 von 309 Tests der gesamten Personal-Lifecycle-Kette erfolgreich** und
-- Kopplungsaudit erfolgreich: **1013 von 1013 Statements erfasst, 0 Verstöße**.
+- Kopplungsaudit erfolgreich: **1015 von 1015 Statements erfasst, 0 Verstöße**.
 
 Die allgemeine Vollregression ist ebenfalls abgeschlossen: **1972 Tests gesamt, 1932 erfolgreich, 40 bewusst übersprungen und 0 fehlgeschlagen**; Laufzeit **311284 ms**.
 

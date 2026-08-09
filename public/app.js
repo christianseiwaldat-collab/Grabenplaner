@@ -80,6 +80,20 @@ const state = {
   loanManagementLocationId: "",
   loanManagementStatus: "open",
   loanManagementLoading: false,
+  branchOrdersManagement: null,
+  branchOrdersManagementDraft: null,
+  branchOrdersManagementHistory: [],
+  branchOrdersManagementLocationId: "",
+  branchOrdersManagementLoading: false,
+  branchOrdersManagementSaving: false,
+  branchOrdersManagementRequestId: 0,
+  branchOrdersManagementError: "",
+  loanOverviewColumns: null,
+  loanOverviewColumnsLoading: false,
+  loanOverviewColumnsLocationId: "",
+  loanOverviewColumnsRequestId: 0,
+  branchAccountPasswordTargets: [],
+  branchAccountPasswordLoading: false,
   loanSettings: null,
   loanSettingsLoading: false,
   locationDashboard: null,
@@ -96,6 +110,7 @@ const state = {
     personnelAdministration: "light",
     personnel: "light",
     loans: "light",
+    branchOrders: "light",
     rightsDashboard: "light",
     settings: "light",
   },
@@ -378,7 +393,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -399,7 +414,7 @@ const elements = Object.fromEntries(
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
-    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
+    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
@@ -986,6 +1001,23 @@ function canManageLoanSettings() {
     && ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role || "");
 }
 
+function canManageBranchLoanOverview() {
+  if (state.portalStatus?.installationFeatures?.loans === false) return false;
+  if (!state.portalStatus?.portalEnabled) return true;
+  return state.portalSession?.user?.permissions?.includes("loans:branch-overview:manage") === true;
+}
+
+function canManageBranchOrders() {
+  if (state.portalStatus?.installationFeatures?.branchOrders === false) return false;
+  if (!state.portalStatus?.portalEnabled) return true;
+  return state.portalSession?.user?.permissions?.includes("branch_orders:manage") === true;
+}
+
+function canManageBranchAccountPasswords() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  return state.portalSession?.user?.permissions?.includes("organization_accounts:password:manage") === true;
+}
+
 function personnelLifecycleFoundationEnabled() {
   return state.portalStatus?.installationFeatures?.personnelLifecycle === true;
 }
@@ -1479,6 +1511,9 @@ function applyRoleVisibility() {
   const requestReadAccess = canReadManagerRequests() && features.requests !== false;
   const loanManagementAccess = canReadLoanManagement();
   const loanSettingsAccess = canManageLoanSettings();
+  const branchLoanOverviewManagementAccess = canManageBranchLoanOverview();
+  const branchOrderManagementAccess = canManageBranchOrders();
+  const branchAccountPasswordManagementAccess = canManageBranchAccountPasswords();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
@@ -1504,6 +1539,9 @@ function applyRoleVisibility() {
   elements.addVacationButton?.classList.toggle("hidden", !approvedAbsenceWriteAccess);
   elements.vacationApprovedEntryHint?.classList.toggle("hidden", !isLocationPlannerSession());
   elements.loanManagementNavButton?.classList.toggle("hidden", !loanManagementAccess);
+  elements.branchOrdersManagementNavButton?.classList.toggle("hidden", !branchOrderManagementAccess);
+  elements.loanOverviewSettingsButton?.classList.toggle("hidden", !branchLoanOverviewManagementAccess);
+  elements.branchAccountPasswordButton?.classList.toggle("hidden", !branchAccountPasswordManagementAccess);
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
@@ -1733,6 +1771,7 @@ function applyRoleVisibility() {
   if (!requestReadAccess && state.currentView === "requests") setView("planning");
   if (!timeReadAccess && state.currentView === "timeTracking") setView("planning");
   if (!loanManagementAccess && state.currentView === "loans") setView("planning");
+  if (!branchOrderManagementAccess && state.currentView === "branchOrders") setView("planning");
   renderSidebarSession();
 }
 
@@ -1752,11 +1791,9 @@ async function bootstrapApplication() {
         showLoginGate();
         return;
       }
-      if (session.user?.mustChangePassword) {
-        window.location.replace("/portal.html");
-        return;
-      }
-      if (session.user?.role === "employee") {
+      if (session.user?.mustChangePassword
+        || session.user?.role === "employee"
+        || session.user?.isEmployee === false) {
         window.location.replace("/portal.html");
         return;
       }
@@ -1782,7 +1819,9 @@ async function loginToAdministration(event) {
         password: elements.adminLoginPassword.value,
       }),
     });
-    if (result.user?.role === "employee" || result.user?.mustChangePassword) {
+    if (result.user?.role === "employee"
+      || result.user?.mustChangePassword
+      || result.user?.isEmployee === false) {
       window.location.replace("/portal.html");
       return;
     }
@@ -2002,6 +2041,7 @@ async function loadAll() {
       loadRequestBlackouts();
     }
     if (canReadLoanManagement()) loadLoanManagement();
+    if (canManageBranchOrders() && state.currentView === "branchOrders") loadBranchOrdersManagement();
   } catch (error) {
     showToast(error.message, true);
   }
@@ -2021,6 +2061,7 @@ function render() {
   renderEmployees();
   renderLocations();
   renderLoanManagementFilters();
+  renderBranchOrdersManagement();
   renderPositions();
   renderSettings();
 }
@@ -2202,6 +2243,517 @@ function renderLoanManagementFilters() {
   elements.loanManagementStatus.value = state.loanManagementStatus;
 }
 
+function clonedBranchOrdersManagementConfiguration(configuration = {}) {
+  return {
+    recipients: (configuration.recipients || []).map((recipient) => ({
+      id: String(recipient.id || ""),
+      email: String(recipient.email || ""),
+      replyToEmail: String(recipient.replyToEmail || ""),
+      subjectTemplate: String(recipient.subjectTemplate || ""),
+      bodyTemplate: String(recipient.bodyTemplate || ""),
+    })),
+    groups: (configuration.groups || []).map((group) => ({
+      id: String(group.id || ""),
+      recipientId: String(group.recipientId || ""),
+      title: String(group.title || ""),
+      hint: String(group.hint || ""),
+      items: (group.items || []).map((item) => ({
+        id: String(item.id || ""),
+        title: String(item.title || ""),
+        unit: String(item.unit || "Stück"),
+      })),
+    })),
+  };
+}
+
+function branchOrdersManagementLocations() {
+  const locations = activeLocations();
+  if (state.portalStatus?.portalEnabled !== true) return locations;
+  const user = state.portalSession?.user || {};
+  if (user.role === "developer") return locations;
+  const allowedLocationIds = new Set([
+    user.homeLocationId,
+    ...(user.scopes || []).map((scope) => scope?.locationId),
+  ].map((value) => String(value || "").trim()).filter(Boolean));
+  return locations.filter((location) => allowedLocationIds.has(String(location.id)));
+}
+
+function selectedBranchOrdersManagementLocationId() {
+  const locations = branchOrdersManagementLocations();
+  const candidates = [
+    state.branchOrdersManagementLocationId,
+    state.locationId,
+    state.portalSession?.user?.homeLocationId,
+    locations[0]?.id,
+  ].map((value) => String(value || "").trim());
+  return candidates.find((locationId) => locations.some((location) => String(location.id) === locationId)) || "";
+}
+
+function branchOrdersManagementClientId(prefix) {
+  const random = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${random}`;
+}
+
+function branchOrdersManagementTimestamp(value) {
+  const date = new Date(value || "");
+  return Number.isNaN(date.getTime()) ? "Zeitpunkt unbekannt" : date.toLocaleString("de-AT", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function setBranchOrdersManagementMessage(text = "", error = false) {
+  if (!elements.branchOrdersManagementMessage) return;
+  elements.branchOrdersManagementMessage.textContent = text;
+  elements.branchOrdersManagementMessage.classList.toggle("hidden", !text);
+  elements.branchOrdersManagementMessage.classList.toggle("error", Boolean(text) && error);
+}
+
+function renderBranchOrdersManagementHistory() {
+  if (!elements.branchOrdersManagementHistory) return;
+  const selectedLocationId = selectedBranchOrdersManagementLocationId();
+  const history = state.branchOrdersManagementHistory || [];
+  if (!selectedLocationId) {
+    elements.branchOrdersManagementHistory.innerHTML = '<p class="settings-note">Kein freigegebener Standort für Filialbestellungen vorhanden.</p>';
+    return;
+  }
+  elements.branchOrdersManagementHistory.innerHTML = history.length ? history.map((order) => `
+    <article class="branch-orders-management-history-entry">
+      <div><strong>KW ${Number(order.calendarWeek || 0)} · ${escapeHtml(order.selectedEmployeeName || "Teammitglied")} · MA-Nr. ${escapeHtml(order.selectedEmployeeNumber || "–")}</strong><small>${escapeHtml(branchOrdersManagementTimestamp(order.submittedAt))} · ${escapeHtml(order.status || "gespeichert")}</small></div>
+      <ul>${(order.lines || []).map((line) => `<li>${escapeHtml(line.groupTitle || "Warengruppe")} · ${escapeHtml(line.itemTitle || "Position")}: ${escapeHtml(Number(line.quantity || 0).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${escapeHtml(line.unit || "")}</li>`).join("")}</ul>
+    </article>
+  `).join("") : '<p class="settings-note">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
+}
+
+function renderBranchOrdersManagement() {
+  if (!elements.branchOrdersView) return;
+  const locations = branchOrdersManagementLocations();
+  const selectedLocationId = selectedBranchOrdersManagementLocationId();
+  state.branchOrdersManagementLocationId = selectedLocationId;
+  if (elements.branchOrdersManagementLocation) {
+    elements.branchOrdersManagementLocation.innerHTML = locations.length
+      ? locations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("")
+      : '<option value="">Kein Standort freigegeben</option>';
+    elements.branchOrdersManagementLocation.value = selectedLocationId;
+    elements.branchOrdersManagementLocation.disabled = !locations.length || state.branchOrdersManagementLoading;
+  }
+  const settings = state.branchOrdersManagement;
+  const matchingSettings = settings && String(settings.locationId || "") === selectedLocationId ? settings : null;
+  const draft = matchingSettings ? state.branchOrdersManagementDraft : null;
+  const emailDelivery = matchingSettings?.emailDelivery || {};
+  if (elements.branchOrdersManagementEmailStatus) {
+    elements.branchOrdersManagementEmailStatus.textContent = !selectedLocationId
+      ? "Kein freigegebener Standort."
+      : state.branchOrdersManagementLoading
+        ? "Bestellkonfiguration wird geladen …"
+        : emailDelivery.available
+          ? "E-Mail-Übergabe ist technisch freigeschaltet."
+          : "Konfiguration kann gespeichert werden; die E-Mail-Übergabe ist technisch noch nicht freigeschaltet.";
+  }
+  if (elements.branchOrdersManagementSave) {
+    elements.branchOrdersManagementSave.disabled = !draft || state.branchOrdersManagementSaving || state.branchOrdersManagementLoading;
+  }
+  if (!elements.branchOrdersManagementWorkspace) return;
+  if (!selectedLocationId) {
+    elements.branchOrdersManagementWorkspace.innerHTML = '<p class="branch-orders-management-empty error">Für die Bestellverwaltung ist kein Standort freigegeben.</p>';
+    renderBranchOrdersManagementHistory();
+    return;
+  }
+  if (!draft) {
+    const text = state.branchOrdersManagementError || "Bestellkonfiguration wird geladen.";
+    elements.branchOrdersManagementWorkspace.innerHTML = `<p class="branch-orders-management-empty ${state.branchOrdersManagementError ? "error" : ""}">${escapeHtml(text)}</p>`;
+    renderBranchOrdersManagementHistory();
+    return;
+  }
+  const units = matchingSettings?.configuration?.units || ["Stück"];
+  const recipientOptions = (selectedRecipientId) => [
+    `<option value="" ${selectedRecipientId ? "" : "selected"}>Kein E-Mail-Ziel</option>`,
+    ...draft.recipients.map((recipient) => `<option value="${escapeHtml(recipient.id)}" ${recipient.id === selectedRecipientId ? "selected" : ""}>${escapeHtml(recipient.email || "Neue Zieladresse")}</option>`),
+  ].join("");
+  const recipientRows = draft.recipients.length ? draft.recipients.map((recipient) => `
+    <article class="branch-orders-management-recipient" data-branch-orders-management-recipient="${escapeHtml(recipient.id)}">
+      <header><div><span class="eyebrow">E-Mail-Ziel</span><h2>${escapeHtml(recipient.email || "Neue Zieladresse")}</h2></div><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-recipient" data-branch-orders-management-id="${escapeHtml(recipient.id)}">Entfernen</button></header>
+      <div class="branch-orders-management-fields two-columns"><label class="field"><span>Zieladresse</span><input type="email" data-branch-orders-management-field="recipient-email" value="${escapeHtml(recipient.email)}" maxlength="320" autocomplete="email" /></label><label class="field"><span>Antwortadresse</span><input type="email" data-branch-orders-management-field="recipient-reply-to" value="${escapeHtml(recipient.replyToEmail)}" maxlength="320" autocomplete="email" /><small>Wird im verpflichtenden No-Reply-Hinweis genannt.</small></label></div>
+      <label class="field"><span>E-Mail-Betreff</span><input data-branch-orders-management-field="recipient-subject" value="${escapeHtml(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNumber}}, {{items}}.</small></label>
+      <label class="field"><span>E-Mail-Text</span><textarea data-branch-orders-management-field="recipient-body" rows="6" maxlength="8000">${escapeHtml(recipient.bodyTemplate)}</textarea><small>No-Reply-Hinweis und Antwortadresse werden serverseitig ergänzt.</small></label>
+    </article>
+  `).join("") : '<p class="settings-note">Noch kein E-Mail-Ziel angelegt.</p>';
+  const groupRows = draft.groups.length ? draft.groups.map((group) => `
+    <article class="branch-orders-management-group" data-branch-orders-management-group="${escapeHtml(group.id)}">
+      <header><div><span class="eyebrow">Warengruppe</span><h2>${escapeHtml(group.title || "Neue Warengruppe")}</h2></div><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Entfernen</button></header>
+      <div class="branch-orders-management-fields two-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="group-title" value="${escapeHtml(group.title)}" maxlength="120" /></label><label class="field"><span>E-Mail-Ziel</span><select data-branch-orders-management-field="group-recipient">${recipientOptions(group.recipientId)}</select></label></div>
+      <label class="field"><span>Hinweis im Bestellformular</span><input data-branch-orders-management-field="group-hint" value="${escapeHtml(group.hint)}" maxlength="400" /></label>
+      <div class="branch-orders-management-items">${group.items.length ? group.items.map((item) => `
+        <div class="branch-orders-management-item" data-branch-orders-management-item="${escapeHtml(item.id)}"><label class="field"><span>Position</span><input data-branch-orders-management-field="item-title" value="${escapeHtml(item.title)}" maxlength="180" /></label><label class="field"><span>Einheit</span><select data-branch-orders-management-field="item-unit">${units.map((unit) => `<option value="${escapeHtml(unit)}" ${unit === item.unit ? "selected" : ""}>${escapeHtml(unit)}</option>`).join("")}</select></label><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-item" data-branch-orders-management-id="${escapeHtml(item.id)}">Entfernen</button></div>
+      `).join("") : '<p class="settings-note">Noch keine Position angelegt.</p>'}</div>
+      <button class="text-button" type="button" data-branch-orders-management-action="add-item" data-branch-orders-management-id="${escapeHtml(group.id)}">+ Position hinzufügen</button>
+    </article>
+  `).join("") : '<p class="settings-note">Noch keine Warengruppe angelegt.</p>';
+  elements.branchOrdersManagementWorkspace.innerHTML = `
+    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</section>
+    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Warengruppen und Positionen</h2><p>DS40, DS80 und DS620 bleiben getrennte Positionen; die Einheit wird je Position festgelegt.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Warengruppe</button></div>${groupRows}</section>`;
+  renderBranchOrdersManagementHistory();
+}
+
+async function loadBranchOrdersManagement(locationId = selectedBranchOrdersManagementLocationId()) {
+  if (!canManageBranchOrders()) return;
+  const normalizedLocationId = String(locationId || "").trim();
+  state.branchOrdersManagementLocationId = normalizedLocationId;
+  if (!normalizedLocationId) {
+    state.branchOrdersManagement = null;
+    state.branchOrdersManagementDraft = null;
+    state.branchOrdersManagementHistory = [];
+    state.branchOrdersManagementError = "Für die Bestellverwaltung ist kein Standort freigegeben.";
+    renderBranchOrdersManagement();
+    return;
+  }
+  const requestId = ++state.branchOrdersManagementRequestId;
+  state.branchOrdersManagementLoading = true;
+  state.branchOrdersManagementError = "";
+  renderBranchOrdersManagement();
+  try {
+    const query = `locationId=${encodeURIComponent(normalizedLocationId)}`;
+    const [settings, history] = await Promise.all([
+      api(`/api/portal/v1/branch-orders/settings?${query}`),
+      api(`/api/portal/v1/branch-orders/history?${query}&limit=50`),
+    ]);
+    if (requestId !== state.branchOrdersManagementRequestId) return;
+    state.branchOrdersManagement = settings;
+    state.branchOrdersManagementDraft = clonedBranchOrdersManagementConfiguration(settings.configuration);
+    state.branchOrdersManagementHistory = history.orders || [];
+  } catch (error) {
+    if (requestId !== state.branchOrdersManagementRequestId) return;
+    state.branchOrdersManagement = null;
+    state.branchOrdersManagementDraft = null;
+    state.branchOrdersManagementHistory = [];
+    state.branchOrdersManagementError = error.message;
+  } finally {
+    if (requestId === state.branchOrdersManagementRequestId) {
+      state.branchOrdersManagementLoading = false;
+      renderBranchOrdersManagement();
+    }
+  }
+}
+
+function updateBranchOrdersManagementDraftFromField(field) {
+  const draft = state.branchOrdersManagementDraft;
+  if (!draft || !field) return;
+  const key = field.dataset.branchOrdersManagementField;
+  const recipient = field.closest("[data-branch-orders-management-recipient]");
+  const item = field.closest("[data-branch-orders-management-item]");
+  const group = field.closest("[data-branch-orders-management-group]");
+  if (recipient) {
+    const target = draft.recipients.find((entry) => entry.id === recipient.dataset.branchOrdersManagementRecipient);
+    if (!target) return;
+    if (key === "recipient-email") target.email = field.value;
+    if (key === "recipient-reply-to") target.replyToEmail = field.value;
+    if (key === "recipient-subject") target.subjectTemplate = field.value;
+    if (key === "recipient-body") target.bodyTemplate = field.value;
+    return;
+  }
+  if (item) {
+    const target = draft.groups.flatMap((entry) => entry.items).find((entry) => entry.id === item.dataset.branchOrdersManagementItem);
+    if (!target) return;
+    if (key === "item-title") target.title = field.value;
+    if (key === "item-unit") target.unit = field.value;
+    return;
+  }
+  if (group) {
+    const target = draft.groups.find((entry) => entry.id === group.dataset.branchOrdersManagementGroup);
+    if (!target) return;
+    if (key === "group-title") target.title = field.value;
+    if (key === "group-hint") target.hint = field.value;
+    if (key === "group-recipient") target.recipientId = field.value;
+  }
+}
+
+function captureBranchOrdersManagementDraft() {
+  elements.branchOrdersManagementWorkspace?.querySelectorAll("[data-branch-orders-management-field]")
+    .forEach((field) => updateBranchOrdersManagementDraftFromField(field));
+  return state.branchOrdersManagementDraft;
+}
+
+async function saveBranchOrdersManagement() {
+  const locationId = selectedBranchOrdersManagementLocationId();
+  const draft = captureBranchOrdersManagementDraft();
+  if (!locationId || !draft || state.branchOrdersManagementSaving) return;
+  state.branchOrdersManagementSaving = true;
+  setBranchOrdersManagementMessage("Bestellkonfiguration wird gespeichert …");
+  renderBranchOrdersManagement();
+  try {
+    const result = await api("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      body: JSON.stringify({ locationId, configuration: draft }),
+    });
+    state.branchOrdersManagement = result;
+    state.branchOrdersManagementDraft = clonedBranchOrdersManagementConfiguration(result.configuration);
+    const history = await api(`/api/portal/v1/branch-orders/history?locationId=${encodeURIComponent(locationId)}&limit=50`);
+    state.branchOrdersManagementHistory = history.orders || [];
+    setBranchOrdersManagementMessage("Bestellkonfiguration wurde gespeichert.");
+    showToast("Filialbestellkonfiguration wurde gespeichert.");
+  } catch (error) {
+    setBranchOrdersManagementMessage(error.message, true);
+    showToast(error.message, true);
+  } finally {
+    state.branchOrdersManagementSaving = false;
+    renderBranchOrdersManagement();
+  }
+}
+
+function handleBranchOrdersManagementAction(event) {
+  const button = event.target.closest("[data-branch-orders-management-action]");
+  if (!button) return;
+  const draft = captureBranchOrdersManagementDraft();
+  if (!draft) return;
+  const action = button.dataset.branchOrdersManagementAction;
+  const id = button.dataset.branchOrdersManagementId || "";
+  if (action === "add-recipient") {
+    const defaults = state.branchOrdersManagement?.configuration?.templateDefaults || {};
+    draft.recipients.push({
+      id: branchOrdersManagementClientId("recipient"),
+      email: "",
+      replyToEmail: "",
+      subjectTemplate: defaults.subjectTemplate || "Filialbestellung {{locationName}} · KW {{calendarWeek}}",
+      bodyTemplate: defaults.bodyTemplate || "{{items}}",
+    });
+  } else if (action === "remove-recipient") {
+    draft.recipients = draft.recipients.filter((recipient) => recipient.id !== id);
+    draft.groups.forEach((group) => { if (group.recipientId === id) group.recipientId = ""; });
+  } else if (action === "add-group") {
+    draft.groups.push({
+      id: branchOrdersManagementClientId("group"),
+      recipientId: draft.recipients[0]?.id || "",
+      title: "Neue Warengruppe",
+      hint: "",
+      items: [],
+    });
+  } else if (action === "remove-group") {
+    draft.groups = draft.groups.filter((group) => group.id !== id);
+  } else if (action === "add-item") {
+    const group = draft.groups.find((entry) => entry.id === id);
+    if (group) group.items.push({ id: branchOrdersManagementClientId("item"), title: "Neue Position", unit: "Stück" });
+  } else if (action === "remove-item") {
+    draft.groups.forEach((group) => { group.items = group.items.filter((item) => item.id !== id); });
+  }
+  renderBranchOrdersManagement();
+}
+
+const branchLoanOverviewColumnCatalog = Object.freeze([
+  { id: "borrowerName", label: "Mitarbeiter/in", description: "Immer sichtbar", required: true },
+  { id: "employeeNumber", label: "Personalnummer", description: "Zuordnung im Filialkonto" },
+  { id: "description", label: "Gerät / Modell", description: "Artikelbezeichnung" },
+  { id: "articleNumber", label: "Artikel-/Inventarnummer", description: "Interne Artikelreferenz" },
+  { id: "serialNumber", label: "Seriennummer", description: "Gerätekennung" },
+  { id: "dueDate", label: "Geplante Rückgabe", description: "Ohne Bearbeitungsmöglichkeit" },
+]);
+
+function selectedLoanOverviewColumnsLocationId() {
+  const locations = activeLocations();
+  const candidates = [
+    state.loanOverviewColumnsLocationId,
+    state.loanManagementLocationId,
+    state.portalSession?.user?.homeLocationId,
+    locations[0]?.id,
+  ].map((value) => String(value || "").trim());
+  return candidates.find((locationId) => locations.some((location) => location.id === locationId)) || "";
+}
+
+function renderLoanOverviewColumnsLocationOptions() {
+  if (!elements.loanOverviewColumnsLocation) return;
+  const locations = activeLocations();
+  const selected = selectedLoanOverviewColumnsLocationId();
+  state.loanOverviewColumnsLocationId = selected;
+  elements.loanOverviewColumnsLocation.innerHTML = locations.map((location) => (
+    `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`
+  )).join("");
+  elements.loanOverviewColumnsLocation.value = selected;
+}
+
+function renderLoanOverviewColumns() {
+  if (!elements.loanOverviewColumnsOptions) return;
+  const selected = new Set(state.loanOverviewColumns?.columns || ["borrowerName"]);
+  elements.loanOverviewColumnsOptions.innerHTML = branchLoanOverviewColumnCatalog.map((column) => `
+    <label class="loan-overview-column-option">
+      <input type="checkbox" data-loan-overview-column="${escapeHtml(column.id)}" ${selected.has(column.id) ? "checked" : ""} ${column.required ? "disabled" : ""} />
+      <span><strong>${escapeHtml(column.label)}</strong><small>${escapeHtml(column.description)}</small></span>
+    </label>
+  `).join("");
+  if (elements.loanOverviewColumnsSaveButton) {
+    elements.loanOverviewColumnsSaveButton.disabled = state.loanOverviewColumnsLoading || !state.loanOverviewColumns;
+  }
+}
+
+async function loadLoanOverviewColumns(locationId = state.loanOverviewColumnsLocationId) {
+  const normalizedLocationId = String(locationId || "").trim();
+  if (!canManageBranchLoanOverview() || !normalizedLocationId) return null;
+  const requestId = ++state.loanOverviewColumnsRequestId;
+  state.loanOverviewColumnsLoading = true;
+  state.loanOverviewColumns = null;
+  if (elements.loanOverviewColumnsMessage) {
+    elements.loanOverviewColumnsMessage.classList.add("hidden");
+    elements.loanOverviewColumnsMessage.textContent = "";
+  }
+  renderLoanOverviewColumns();
+  try {
+    const payload = await api(`/api/portal/v1/loans/branch-overview-settings?locationId=${encodeURIComponent(normalizedLocationId)}`);
+    if (requestId !== state.loanOverviewColumnsRequestId) return null;
+    state.loanOverviewColumns = payload;
+    return payload;
+  } catch (error) {
+    if (requestId !== state.loanOverviewColumnsRequestId) return null;
+    if (elements.loanOverviewColumnsMessage) {
+      elements.loanOverviewColumnsMessage.textContent = error.message;
+      elements.loanOverviewColumnsMessage.classList.remove("hidden");
+    }
+    return null;
+  } finally {
+    if (requestId === state.loanOverviewColumnsRequestId) {
+      state.loanOverviewColumnsLoading = false;
+      renderLoanOverviewColumns();
+    }
+  }
+}
+
+async function openLoanOverviewColumnsDialog() {
+  if (!canManageBranchLoanOverview()) return;
+  renderLoanOverviewColumnsLocationOptions();
+  if (!state.loanOverviewColumnsLocationId) {
+    showToast("Für die Filialkonto-Leihansicht ist kein freigegebener Standort vorhanden.", true);
+    return;
+  }
+  if (!elements.loanOverviewColumnsDialog.open) elements.loanOverviewColumnsDialog.showModal();
+  await loadLoanOverviewColumns(state.loanOverviewColumnsLocationId);
+}
+
+async function saveLoanOverviewColumns(event) {
+  event.preventDefault();
+  const locationId = String(elements.loanOverviewColumnsLocation?.value || "").trim();
+  if (!locationId) return;
+  const saveButton = elements.loanOverviewColumnsSaveButton;
+  const columns = ["borrowerName", ...[...document.querySelectorAll("[data-loan-overview-column]:checked")]
+    .map((input) => input.dataset.loanOverviewColumn)
+    .filter((column) => column && column !== "borrowerName")];
+  if (saveButton) saveButton.disabled = true;
+  if (elements.loanOverviewColumnsMessage) {
+    elements.loanOverviewColumnsMessage.textContent = "Wird gespeichert …";
+    elements.loanOverviewColumnsMessage.classList.remove("hidden");
+  }
+  try {
+    const payload = await api("/api/portal/v1/loans/branch-overview-settings", {
+      method: "PUT",
+      body: JSON.stringify({ locationId, columns }),
+    });
+    state.loanOverviewColumns = payload;
+    state.loanOverviewColumnsLocationId = payload.location?.id || locationId;
+    renderLoanOverviewColumns();
+    if (elements.loanOverviewColumnsMessage) elements.loanOverviewColumnsMessage.textContent = "Gespeichert.";
+    showToast("Die Filialkonto-Leihansicht wurde gespeichert.");
+  } catch (error) {
+    if (elements.loanOverviewColumnsMessage) elements.loanOverviewColumnsMessage.textContent = error.message;
+  } finally {
+    if (saveButton) saveButton.disabled = false;
+  }
+}
+
+function renderBranchAccountPasswordTargets() {
+  if (!elements.branchAccountPasswordAccount) return;
+  const accounts = state.branchAccountPasswordTargets || [];
+  if (state.branchAccountPasswordLoading) {
+    elements.branchAccountPasswordAccount.innerHTML = '<option value="">Filialkonten werden geladen …</option>';
+  } else if (!accounts.length) {
+    elements.branchAccountPasswordAccount.innerHTML = '<option value="">Kein aktives Filialkonto im zugewiesenen Standort</option>';
+  } else {
+    elements.branchAccountPasswordAccount.innerHTML = accounts.map((account) => {
+      const location = account.scopes?.map((scope) => scope.locationId).filter(Boolean).join(", ") || "";
+      const status = account.locked ? " · gesperrt (wird beim Zurücksetzen entsperrt)" : "";
+      return `<option value="${escapeHtml(account.id)}">${escapeHtml(account.loginName)} · ${escapeHtml(account.displayName)}${escapeHtml(location ? ` · ${location}` : "")}${escapeHtml(status)}</option>`;
+    }).join("");
+  }
+  elements.branchAccountPasswordAccount.disabled = state.branchAccountPasswordLoading || !accounts.length;
+  if (elements.branchAccountPasswordSaveButton) {
+    elements.branchAccountPasswordSaveButton.disabled = state.branchAccountPasswordLoading || !accounts.length;
+  }
+}
+
+async function loadBranchAccountPasswordTargets() {
+  if (!canManageBranchAccountPasswords()) return [];
+  state.branchAccountPasswordLoading = true;
+  renderBranchAccountPasswordTargets();
+  try {
+    const payload = await api("/api/portal/v1/branch-accounts/passwords");
+    state.branchAccountPasswordTargets = payload.accounts || [];
+    return state.branchAccountPasswordTargets;
+  } catch (error) {
+    state.branchAccountPasswordTargets = [];
+    if (elements.branchAccountPasswordMessage) {
+      elements.branchAccountPasswordMessage.textContent = error.message;
+      elements.branchAccountPasswordMessage.classList.remove("hidden");
+    }
+    return [];
+  } finally {
+    state.branchAccountPasswordLoading = false;
+    renderBranchAccountPasswordTargets();
+  }
+}
+
+async function openBranchAccountPasswordDialog() {
+  if (!canManageBranchAccountPasswords()) return;
+  [elements.branchAccountPasswordNew, elements.branchAccountPasswordRepeat].forEach((input) => {
+    if (input) {
+      input.value = "";
+      input.minLength = Number(state.portalStatus?.passwordMinLength || 6);
+    }
+  });
+  if (elements.branchAccountPasswordMessage) {
+    elements.branchAccountPasswordMessage.textContent = "";
+    elements.branchAccountPasswordMessage.classList.add("hidden");
+  }
+  if (!elements.branchAccountPasswordDialog.open) elements.branchAccountPasswordDialog.showModal();
+  await loadBranchAccountPasswordTargets();
+}
+
+async function saveBranchAccountPassword(event) {
+  event.preventDefault();
+  const accountId = String(elements.branchAccountPasswordAccount?.value || "").trim();
+  const password = elements.branchAccountPasswordNew?.value || "";
+  const repeat = elements.branchAccountPasswordRepeat?.value || "";
+  if (!accountId) return;
+  if (password !== repeat) {
+    if (elements.branchAccountPasswordMessage) {
+      elements.branchAccountPasswordMessage.textContent = "Die beiden Passwörter stimmen nicht überein.";
+      elements.branchAccountPasswordMessage.classList.remove("hidden");
+    }
+    return;
+  }
+  const saveButton = elements.branchAccountPasswordSaveButton;
+  if (saveButton) saveButton.disabled = true;
+  if (elements.branchAccountPasswordMessage) {
+    elements.branchAccountPasswordMessage.textContent = "Passwort wird neu vergeben …";
+    elements.branchAccountPasswordMessage.classList.remove("hidden");
+  }
+  try {
+    const payload = await api(`/api/portal/v1/branch-accounts/${encodeURIComponent(accountId)}/password`, {
+      method: "PUT",
+      body: JSON.stringify({ password }),
+    });
+    state.branchAccountPasswordTargets = state.branchAccountPasswordTargets.map((account) => (
+      account.id === payload.account?.id ? payload.account : account
+    ));
+    elements.branchAccountPasswordNew.value = "";
+    elements.branchAccountPasswordRepeat.value = "";
+    renderBranchAccountPasswordTargets();
+    if (elements.branchAccountPasswordMessage) {
+      elements.branchAccountPasswordMessage.textContent = "Passwort neu vergeben; bestehende Filialkonto-Sitzungen wurden beendet.";
+    }
+    showToast("Das Filialkonto-Passwort wurde neu vergeben.");
+  } catch (error) {
+    if (elements.branchAccountPasswordMessage) elements.branchAccountPasswordMessage.textContent = error.message;
+  } finally {
+    if (saveButton) saveButton.disabled = false;
+  }
+}
+
 function renderLoanSettings() {
   if (!elements.loanSettingsList) return;
   const settings = state.loanSettings?.locations || [];
@@ -2320,11 +2872,12 @@ function applyNavigationGroupState(key, visible = true) {
 function renderContextNavigation() {
   const locations = activeLocations();
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
-  const filialViewActive = ["personnel", "planning", "vacations", "loans"].includes(state.currentView);
+  const filialViewActive = ["personnel", "planning", "vacations", "loans", "branchOrders"].includes(state.currentView);
   elements.filialManagementNav?.classList.toggle("contains-active", filialViewActive);
   applyNavigationGroupState("filialManagement", true);
   setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
   setNavigationCurrent(elements.loanManagementNavButton, state.currentView === "loans");
+  setNavigationCurrent(elements.branchOrdersManagementNavButton, state.currentView === "branchOrders");
   setNavigationCurrent(elements.planningNavButton, state.currentView === "planning");
   setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations");
   const planningContexts = locations.flatMap((location) => departmentOnly
@@ -13910,6 +14463,21 @@ function organizationAccountLocationOptions(selected = "") {
   ).join("");
 }
 
+function syncOrganizationAccountPermissionControls() {
+  if (!elements.organizationAccountType) return;
+  const branchAccount = elements.organizationAccountType.value === "branch";
+  [elements.organizationAccountLoanOverview, elements.organizationAccountScheduleView].forEach((input) => {
+    if (!input) return;
+    if (branchAccount) input.checked = true;
+    input.disabled = branchAccount;
+  });
+  if (elements.organizationAccountBranchOrders) {
+    elements.organizationAccountBranchOrders.checked = branchAccount;
+    elements.organizationAccountBranchOrders.disabled = true;
+  }
+  elements.organizationAccountBranchOrdersRow?.classList.toggle("hidden", !branchAccount);
+}
+
 function resetOrganizationAccountForm() {
   if (!elements.organizationAccountForm) return;
   elements.organizationAccountForm.reset();
@@ -13924,7 +14492,9 @@ function resetOrganizationAccountForm() {
   elements.organizationAccountPassword.value = "";
   elements.organizationAccountPassword.minLength = Number(state.portalStatus?.passwordMinLength || 6);
   elements.organizationAccountLoanOverview.checked = true;
-  elements.organizationAccountScheduleView.checked = false;
+  elements.organizationAccountScheduleView.checked = true;
+  elements.organizationAccountBranchOrders.checked = true;
+  syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = true;
   elements.organizationAccountCancel.classList.add("hidden");
   elements.organizationAccountSubmit.textContent = "Konto anlegen";
@@ -13942,6 +14512,7 @@ function renderOrganizationAccounts() {
     const functions = [
       account.permissions?.includes("loans:overview:read") ? "Leihübersicht" : "",
       account.permissions?.includes("schedule:location:view") ? "Dienstplanansicht" : "",
+      account.permissions?.includes("branch_orders:submit") ? "Filialbestellung" : "",
     ].filter(Boolean).join(" · ");
     const status = !account.active
       ? "Inaktiv"
@@ -13996,6 +14567,8 @@ function editOrganizationAccount(accountId) {
   elements.organizationAccountPassword.value = "";
   elements.organizationAccountLoanOverview.checked = account.permissions?.includes("loans:overview:read") === true;
   elements.organizationAccountScheduleView.checked = account.permissions?.includes("schedule:location:view") === true;
+  elements.organizationAccountBranchOrders.checked = account.permissions?.includes("branch_orders:submit") === true;
+  syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = account.active === true;
   elements.organizationAccountCancel.classList.remove("hidden");
   elements.organizationAccountSubmit.textContent = "Konto speichern";
@@ -14009,6 +14582,7 @@ async function saveOrganizationAccount(event) {
   const permissions = [
     elements.organizationAccountLoanOverview.checked ? "loans:overview:read" : "",
     elements.organizationAccountScheduleView.checked ? "schedule:location:view" : "",
+    elements.organizationAccountBranchOrders.checked ? "branch_orders:submit" : "",
   ].filter(Boolean);
   const body = {
     loginName: elements.organizationAccountLoginName.value,
@@ -20040,6 +20614,7 @@ function setView(view) {
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
     || (view === "loans" && !canReadLoanManagement())
+    || (view === "branchOrders" && !canManageBranchOrders())
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   const profileView = state.employeeProfileHost === "team" ? "personnel" : "personnelAdministration";
   if (employeeProfileIsOpen() && view !== profileView) closeEmployeeProfile({ restoreFocus: false });
@@ -20079,6 +20654,7 @@ function setView(view) {
   elements.personnelAdministrationView?.classList.toggle("active", view === "personnelAdministration");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.loansView?.classList.toggle("active", view === "loans");
+  elements.branchOrdersView?.classList.toggle("active", view === "branchOrders");
   elements.rightsDashboardView?.classList.toggle("active", view === "rightsDashboard");
   elements.settingsView.classList.toggle("active", view === "settings");
   applyActivePageAppearance();
@@ -20089,6 +20665,7 @@ function setView(view) {
   }
   if (view === "requests") loadManagerVacationRequests();
   if (view === "loans") loadLoanManagement();
+  if (view === "branchOrders") loadBranchOrdersManagement();
   if (view === "rightsDashboard") loadRightsDashboard();
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
@@ -20101,7 +20678,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "personnel", "loans", "rightsDashboard", "settings"].includes(requestedView)) return;
+  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) return;
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -23319,6 +23896,7 @@ elements.portalUserList?.addEventListener("change", (event) => {
 });
 elements.organizationAccountForm?.addEventListener("submit", saveOrganizationAccount);
 elements.organizationAccountCancel?.addEventListener("click", resetOrganizationAccountForm);
+elements.organizationAccountType?.addEventListener("change", syncOrganizationAccountPermissionControls);
 elements.organizationAccountList?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-organization-account]");
   if (!row) return;
@@ -23467,6 +24045,30 @@ elements.personnelFieldRightsMatrix?.addEventListener("change", (event) => {
 });
 elements.savePersonnelFieldRightsButton?.addEventListener("click", savePersonnelFieldRights);
 elements.loanManagementRefresh?.addEventListener("click", loadLoanManagement);
+elements.branchOrdersManagementRefresh?.addEventListener("click", () => loadBranchOrdersManagement());
+elements.branchOrdersManagementSave?.addEventListener("click", saveBranchOrdersManagement);
+elements.branchOrdersManagementLocation?.addEventListener("change", () => {
+  state.branchOrdersManagementLocationId = elements.branchOrdersManagementLocation.value;
+  setBranchOrdersManagementMessage("");
+  loadBranchOrdersManagement(state.branchOrdersManagementLocationId);
+});
+elements.branchOrdersManagementWorkspace?.addEventListener("input", (event) => {
+  const field = event.target.closest?.("[data-branch-orders-management-field]");
+  if (field) updateBranchOrdersManagementDraftFromField(field);
+});
+elements.branchOrdersManagementWorkspace?.addEventListener("change", (event) => {
+  const field = event.target.closest?.("[data-branch-orders-management-field]");
+  if (field) updateBranchOrdersManagementDraftFromField(field);
+});
+elements.branchOrdersManagementWorkspace?.addEventListener("click", handleBranchOrdersManagementAction);
+elements.loanOverviewSettingsButton?.addEventListener("click", openLoanOverviewColumnsDialog);
+elements.loanOverviewColumnsLocation?.addEventListener("change", () => {
+  state.loanOverviewColumnsLocationId = elements.loanOverviewColumnsLocation.value;
+  loadLoanOverviewColumns(state.loanOverviewColumnsLocationId);
+});
+elements.loanOverviewColumnsForm?.addEventListener("submit", saveLoanOverviewColumns);
+elements.branchAccountPasswordButton?.addEventListener("click", openBranchAccountPasswordDialog);
+elements.branchAccountPasswordForm?.addEventListener("submit", saveBranchAccountPassword);
 elements.loanManagementLocation?.addEventListener("change", () => {
   state.loanManagementLocationId = elements.loanManagementLocation.value;
   loadLoanManagement();

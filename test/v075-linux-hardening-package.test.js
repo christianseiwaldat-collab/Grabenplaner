@@ -323,8 +323,10 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
       "-OutputDirectory", outputRoot,
     ], { encoding: "utf8", timeout: 120_000 });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.7-beta-linux-x64.zip")));
-    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.90.7-beta-linux-x64.zip.sha256")));
+    const packageVersion = JSON.parse(fs.readFileSync(path.join(snapshotRoot, "package.json"), "utf8")).version;
+    const packageName = `Grabenplaner-Server-v${packageVersion}-linux-x64.zip`;
+    assert.ok(fs.existsSync(path.join(outputRoot, packageName)));
+    assert.ok(fs.existsSync(path.join(outputRoot, `${packageName}.sha256`)));
   });
 });
 

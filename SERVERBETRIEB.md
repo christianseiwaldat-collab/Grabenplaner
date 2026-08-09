@@ -494,11 +494,14 @@ GRABENPLANER_EMAIL_PROVIDER=scaleway-tem
 GRABENPLANER_EMAIL_FROM=Grabenplaner <benachrichtigung@grabenplaner.eu>
 GRABENPLANER_SCALEWAY_TEM_PROJECT_ID=<Scaleway-Projekt-ID>
 GRABENPLANER_SCALEWAY_TEM_SECRET_KEY=<eingeschränkter TEM-API-Schlüssel>
+GRABENPLANER_EMAIL_SENDER_APPROVED=0
 GRABENPLANER_EMAIL_DISPATCH_ENABLED=0
 GRABENPLANER_EMAIL_ALLOWED_EVENTS=
 ```
 
 Solange `GRABENPLANER_EMAIL_DISPATCH_ENABLED=0` oder die Ereignisliste leer ist, kann keine Transaktionsmail versendet oder eingereiht werden. Grabenplaner richtet kein eingehendes Postfach und keine Antwortadresse ein. Die konkreten Ereignisse, Empfängerregeln und Inhalte werden separat freigegeben.
+
+Filialbestellungen verwenden keinen durch die Filialleitung frei wählbaren Absender. Die Anwendung leitet ihn ausschließlich aus dem aktiven Filialkonto ab, zum Beispiel `fil18-noreply@grabenplaner.eu`. Die Versanddomain `grabenplaner.eu` muss im gewählten Provider verifiziert sein. Für diesen Vorgang ist zusätzlich `GRABENPLANER_EMAIL_SENDER_APPROVED=1`, `GRABENPLANER_EMAIL_DISPATCH_ENABLED=1` und die eng begrenzte Positivliste `GRABENPLANER_EMAIL_ALLOWED_EVENTS=branch_order` erforderlich. Zieladresse, Antwortadresse und Vorlage bleiben je Ziel durch die berechtigte Filialleitung konfigurierbar.
 
 E-Mail kann über einen vorhandenen HTTPS-Benachrichtigungsdienst angebunden werden:
 
