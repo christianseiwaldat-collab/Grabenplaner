@@ -3431,8 +3431,9 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display
 .loan-management-empty.error { color:var(--danger); }
 .branch-orders-management-topbar { align-items:flex-start; }
 .branch-orders-management-header-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:9px; }
-.branch-orders-management-toolbar { display:grid; grid-template-columns:minmax(240px,.7fr) 1fr; align-items:end; gap:13px; margin:18px 0 12px; padding:17px 19px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.76); }
+.branch-orders-management-toolbar { display:grid; grid-template-columns:minmax(240px,.7fr) 1fr auto; align-items:end; gap:13px; margin:18px 0 12px; padding:17px 19px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.76); }
 .branch-orders-management-toolbar > p { align-self:center; justify-self:end; margin:0; color:var(--muted); font-size:10px; font-weight:750; text-align:right; }
+.branch-orders-management-toolbar > .primary-button { align-self:center; justify-self:end; white-space:nowrap; }
 .branch-orders-management-message { margin:0 0 12px; padding:11px 13px; border:1px solid #78b9a0; border-radius:12px; color:var(--success-ink,#245a46); background:var(--success-surface,#e5f5ee); font-size:10px; font-weight:750; }
 .branch-orders-management-message.error { color:var(--danger-ink,#9b3327); border-color:#e6a095; background:var(--danger-surface,#fce9e6); }
 .branch-orders-management-workspace { display:grid; gap:14px; }
@@ -3504,7 +3505,7 @@ html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { 
   .loan-management-toolbar,.loan-management-body,.loan-setting-fields,.branch-orders-management-toolbar,.branch-orders-management-fields.two-columns,.branch-orders-management-item { grid-template-columns:1fr; }
   .loan-photo-attachment { align-items:flex-start; flex-direction:column; }
   .loan-photo-attachment nav { justify-content:flex-start; width:100%; }
-  .loan-management-toolbar > p,.loan-management-dates,.branch-orders-management-toolbar > p { justify-self:start; justify-items:start; text-align:left; }
+  .loan-management-toolbar > p,.loan-management-dates,.branch-orders-management-toolbar > p,.branch-orders-management-toolbar > .primary-button { justify-self:start; justify-items:start; text-align:left; }
   .loan-management-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .f18-migration-form,.f18-migration-mappings { grid-template-columns:1fr; }
   .f18-migration-mappings > :is(h3,p) { grid-column:auto; }
