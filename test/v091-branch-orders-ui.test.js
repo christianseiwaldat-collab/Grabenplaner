@@ -22,6 +22,8 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(html, /id="branchOrderEmployee"/);
   assert.match(html, /id="branchOrderSettingsCard"/);
   assert.match(html, /id="branchOrderHistoryList"/);
+  assert.match(html, /id="passwordSettingsCard"/);
+  assert.doesNotMatch(html, /branchPasswordShortcut/);
   assert.match(script, /function branchOrderCapabilityEnabled/);
   assert.match(script, /function branchVacationCapabilityEnabled/);
   assert.match(script, /\/api\/portal\/v1\/branch-orders\/catalog/);
@@ -29,8 +31,19 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(script, /catalog\.senderEmail/);
   assert.match(script, /\/api\/portal\/v1\/branch-orders\/settings/);
   assert.match(script, /\/api\/portal\/v1\/branch-orders\/history/);
+  assert.match(script, /passwordSettingsCard.*isOrganizationAccount/s);
+  assert.match(script, /loanOverviewColumnCatalog/);
+  assert.match(script, /borrowerName/);
   assert.match(admin, /id="organizationAccountBranchOrders"/);
+  assert.match(admin, /id="branchOrdersManagementNavButton"/);
+  assert.match(admin, /id="loanOverviewSettingsButton"/);
+  assert.match(admin, /id="branchAccountPasswordButton"/);
+  assert.match(admin, /id="branchAccountPasswordDialog"/);
   assert.match(adminScript, /"branch_orders:submit"/);
+  assert.match(adminScript, /organization_accounts:password:manage/);
+  assert.match(adminScript, /\/api\/portal\/v1\/branch-accounts\/passwords/);
   assert.match(adminScript, /isEmployee === false/);
   assert.match(styles, /branch-organization-account/);
+  assert.match(styles, /body\.branch-organization-account \.portal-header \{ position:fixed/);
+  assert.match(styles, /body\.branch-organization-account main \{ width:auto; min-height:100vh; margin:0 0 0 230px/);
 });

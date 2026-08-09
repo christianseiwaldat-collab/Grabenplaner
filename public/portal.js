@@ -70,6 +70,7 @@ const portalState = {
   timeOffArchive: false,
   loanStatus: null,
   loanOverviewItems: [],
+  loanOverviewColumns: [],
   loanOverviewSearchEnabled: false,
   loans: [],
   loanTeamMembers: [],
@@ -104,6 +105,23 @@ const optionNames = {
 };
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const LOAN_OVERVIEW_SEARCH_THRESHOLD = 10;
+const loanOverviewColumnCatalog = Object.freeze([
+  { id: "borrowerName", label: "Mitarbeiter/in", fallback: "–" },
+  { id: "employeeNumber", label: "Personalnummer", fallback: "–" },
+  { id: "description", label: "Gerät / Modell", fallback: "Gerät ohne Bezeichnung" },
+  { id: "articleNumber", label: "Artikel-/Inventarnr.", fallback: "–" },
+  { id: "serialNumber", label: "Seriennr.", fallback: "–" },
+  { id: "dueDate", label: "Geplante Rückgabe", fallback: "Nicht festgelegt" },
+]);
+const loanOverviewColumnById = new Map(loanOverviewColumnCatalog.map((column) => [column.id, column]));
+const defaultLoanOverviewColumnIds = Object.freeze(["description", "articleNumber", "serialNumber", "dueDate"]);
+
+function normalizedLoanOverviewColumns(value) {
+  const requested = Array.isArray(value) ? value.map(String) : [];
+  const result = [...new Set(requested)].filter((id) => loanOverviewColumnById.has(id));
+  return result.length ? result : [...defaultLoanOverviewColumnIds];
+}
+
 const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", not_required: "AUM nicht erforderlich", recovered: "Wieder arbeitsfähig", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
 const privacyRequestStatusLabels = {
   received: "Eingelangt",
@@ -150,15 +168,15 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
-  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
+  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
-  "loanOpenOverview", "loanOverviewSearchField", "loanOverviewSearch", "loanOverviewTableBody", "loanPersonalOverview",
+  "loanOpenOverview", "loanOverviewDescription", "loanOverviewSearchField", "loanOverviewSearch", "loanOverviewTableHeader", "loanOverviewTableBody", "loanPersonalOverview",
   "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoPolicy", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
   "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoPolicy", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
-  "branchOrdersTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit",
+  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit",
   "branchVacationTab", "branchVacationView", "branchVacationPrevious", "branchVacationCurrent", "branchVacationNext", "branchVacationWeek", "branchVacationList", "branchVacationMessage",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
@@ -439,6 +457,7 @@ function applyPortalCapabilities() {
   const branchOrdersEnabled = branchOrderCapabilityEnabled();
   el.branchOrdersTab?.classList.toggle("hidden", !branchOrdersEnabled);
   if (!branchOrdersEnabled && portalState.activeTab === "branchOrders") setTab(defaultPortalTab());
+  el.branchOrderSettingsTab?.classList.toggle("hidden", !branchOrderManagementEnabled());
   const branchVacationEnabled = branchVacationCapabilityEnabled();
   el.branchVacationTab?.classList.toggle("hidden", !branchVacationEnabled);
   if (!branchVacationEnabled && portalState.activeTab === "branchVacation") setTab(defaultPortalTab());
@@ -929,6 +948,19 @@ function requestedPortalTab() {
   return normalizedPortalTab(new URLSearchParams(location.search).get("tab")) || storedPortalTab();
 }
 
+function requestedPortalSettingsSection() {
+  const section = new URLSearchParams(location.search).get("section");
+  return section === "branch-orders" ? section : "";
+}
+
+function focusPortalSettingsSection(section = requestedPortalSettingsSection()) {
+  if (section !== "branch-orders") return;
+  const target = el.branchOrderSettingsCard;
+  if (!target || target.classList.contains("hidden")) return;
+  target.open = true;
+  requestAnimationFrame(() => target.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
 function rememberPortalTab(tab) {
   const normalized = normalizedPortalTab(tab);
   if (!normalized) return;
@@ -1222,6 +1254,7 @@ function applySelfServiceVisibility() {
   el.vacationTab?.classList.toggle("hidden", !portalTabAllowed("vacation"));
   el.historyTab?.classList.toggle("hidden", !portalTabAllowed("history"));
   el.branchOrdersTab?.classList.toggle("hidden", !portalTabAllowed("branchOrders"));
+  el.branchOrderSettingsTab?.classList.toggle("hidden", !branchOrderManagementEnabled());
   el.branchVacationTab?.classList.toggle("hidden", !portalTabAllowed("branchVacation"));
   el.amuTab?.classList.toggle("hidden", !portalTabAllowed("amu"));
   el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
@@ -1235,6 +1268,7 @@ function applySelfServiceVisibility() {
   el.notificationsButton?.classList.toggle("hidden", isOrganizationAccount());
   el.emailSettingsCard?.classList.toggle("hidden", !personalEmailSettingsAvailable());
   el.branchOrderSettingsCard?.classList.toggle("hidden", !branchOrderManagementEnabled());
+  el.passwordSettingsCard?.classList.toggle("hidden", isOrganizationAccount());
   if (!hasPortalPermission("own_time_record:read")) {
     el.timeRecordStatementsPanel?.classList.add("hidden");
   }
@@ -1369,6 +1403,7 @@ function setTab(tab) {
     if (hasPortalPermission("own_privacy_requests:read")) loadPrivacyRequests();
     if (personalEmailSettingsAvailable()) loadEmailSettings();
     if (branchOrderManagementEnabled()) Promise.allSettled([loadBranchOrderSettings(), loadBranchOrderHistory()]);
+    focusPortalSettingsSection();
   }
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
   if (tab === "vacation") {
@@ -4690,21 +4725,31 @@ function loanConditionText(condition) {
 }
 
 function renderLoanOverview() {
-  if (!el.loanOverviewTableBody) return;
+  if (!el.loanOverviewTableBody || !el.loanOverviewTableHeader) return;
+  const columns = normalizedLoanOverviewColumns(portalState.loanOverviewColumns);
   const query = String(el.loanOverviewSearch?.value || "").trim().toLocaleLowerCase("de-AT");
-  const items = portalState.loanOverviewItems.filter((item) => !query || [
-    item.description,
-    item.articleNumber,
-    item.serialNumber,
-  ].some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(query)));
+  const items = portalState.loanOverviewItems.filter((item) => !query || columns
+    .some((columnId) => String(item[columnId] || "").toLocaleLowerCase("de-AT").includes(query)));
+  el.loanOverviewTableHeader.innerHTML = columns.map((columnId) => {
+    const column = loanOverviewColumnById.get(columnId);
+    return `<th>${esc(column?.label || "")}</th>`;
+  }).join("");
+  if (el.loanOverviewDescription) {
+    el.loanOverviewDescription.textContent = columns.includes("borrowerName")
+      ? "Name und die von der Filialleitung freigegebenen Gerätedaten. Notizen, Fotos, Belege und Bearbeitungsfunktionen bleiben ausgeschlossen."
+      : "Gerätestatus ohne Personen-, Beleg- oder interne Vorgangsdaten.";
+  }
   el.loanOverviewTableBody.innerHTML = items.length ? items.map((item) => `
     <tr>
-      <td>${esc(item.description || "Gerät ohne Bezeichnung")}</td>
-      <td>${esc(item.articleNumber || "–")}</td>
-      <td>${esc(item.serialNumber || "–")}</td>
-      <td>${item.dueDate ? esc(dateText(item.dueDate)) : "Nicht festgelegt"}</td>
+      ${columns.map((columnId) => {
+        const column = loanOverviewColumnById.get(columnId);
+        const value = columnId === "dueDate" && item.dueDate
+          ? dateText(item.dueDate)
+          : item[columnId] || column?.fallback || "–";
+        return `<td>${esc(value)}</td>`;
+      }).join("")}
     </tr>
-  `).join("") : `<tr><td class="loan-overview-empty" colspan="4">${
+  `).join("") : `<tr><td class="loan-overview-empty" colspan="${columns.length}">${
     query ? "Kein offenes Gerät entspricht dieser Suche." : "Am Standort sind derzeit keine Geräte als ausgeliehen erfasst."
   }</td></tr>`;
 }
@@ -4712,6 +4757,7 @@ function renderLoanOverview() {
 async function loadLoanOverview() {
   if (portalState.loanStatus?.permissions?.overviewRead !== true) {
     portalState.loanOverviewItems = [];
+    portalState.loanOverviewColumns = [];
     portalState.loanOverviewSearchEnabled = false;
     el.loanOpenOverview?.classList.add("hidden");
     return;
@@ -4723,6 +4769,7 @@ async function loadLoanOverview() {
   try {
     const result = await api(`/api/portal/v1/loans/open-overview?${parameters}`);
     portalState.loanOverviewItems = Array.isArray(result.items) ? result.items : [];
+    portalState.loanOverviewColumns = normalizedLoanOverviewColumns(result.columns);
     const searchEnabled = result.searchEnabled === true
       && portalState.loanOverviewItems.length > LOAN_OVERVIEW_SEARCH_THRESHOLD;
     portalState.loanOverviewSearchEnabled = searchEnabled;
@@ -4731,9 +4778,11 @@ async function loadLoanOverview() {
     renderLoanOverview();
   } catch (error) {
     portalState.loanOverviewItems = [];
+    portalState.loanOverviewColumns = [];
     portalState.loanOverviewSearchEnabled = false;
     el.loanOverviewSearchField?.classList.add("hidden");
-    el.loanOverviewTableBody.innerHTML = `<tr><td class="loan-overview-empty" colspan="4">${esc(error.message)}</td></tr>`;
+    renderLoanOverview();
+    el.loanOverviewTableBody.innerHTML = `<tr><td class="loan-overview-empty" colspan="${defaultLoanOverviewColumnIds.length}">${esc(error.message)}</td></tr>`;
   }
 }
 
@@ -5205,6 +5254,9 @@ document.addEventListener("click", (event) => {
 });
 document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => {
   if (el.passwordDialog.dataset.required !== "true") el.passwordDialog.close();
+}));
+document.querySelectorAll("[data-settings-focus]").forEach((button) => button.addEventListener("click", () => {
+  window.setTimeout(() => focusPortalSettingsSection(button.dataset.settingsFocus), 0);
 }));
 document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
 document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {

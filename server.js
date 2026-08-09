@@ -476,9 +476,32 @@ const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
 const LOAN_OVERVIEW_PERMISSION = "loans:overview:read";
+const LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION = "loans:branch-overview:manage";
+const branchLoanOverviewColumnIds = Object.freeze([
+  "borrowerName",
+  "employeeNumber",
+  "description",
+  "articleNumber",
+  "serialNumber",
+  "dueDate",
+]);
+const defaultBranchLoanOverviewColumns = Object.freeze([
+  "borrowerName",
+  "description",
+  "articleNumber",
+  "serialNumber",
+  "dueDate",
+]);
+const defaultPersonalLoanOverviewColumns = Object.freeze([
+  "description",
+  "articleNumber",
+  "serialNumber",
+  "dueDate",
+]);
 const ORGANIZATION_SCHEDULE_PERMISSION = "schedule:location:view";
 const BRANCH_ORDER_SUBMIT_PERMISSION = "branch_orders:submit";
 const BRANCH_ORDER_MANAGE_PERMISSION = "branch_orders:manage";
+const BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION = "organization_accounts:password:manage";
 const branchOrganizationAccountBasePermissions = Object.freeze([
   LOAN_OVERVIEW_PERMISSION,
   ORGANIZATION_SCHEDULE_PERMISSION,
@@ -488,7 +511,7 @@ const organizationAccountPermissionCatalog = Object.freeze([
   {
     id: LOAN_OVERVIEW_PERMISSION,
     label: "Offene Leihen am Standort ansehen",
-    description: "Datensparsame Geräteübersicht ohne Personen, Notizen, Fotos, Belege oder Bearbeitungsrechte.",
+    description: "Standortgebundene Geräteübersicht ohne Notizen, Fotos, Belege oder Bearbeitungsrechte; sichtbare Spalten werden durch die Filialleitung festgelegt.",
   },
   {
     id: ORGANIZATION_SCHEDULE_PERMISSION,
@@ -685,8 +708,10 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "loans:location:read", label: "Leihvorgänge des Bereichs lesen", description: "Offene und abgeschlossene Leihvorgänge im zugewiesenen Standort lesen.", group: "Leihe", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
   { id: "loans:location:manage", label: "Leihvorgänge des Bereichs bearbeiten", description: "Ausgaben, Rücknahmen und Korrekturen im zugewiesenen Standort bearbeiten.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
   { id: "loans:documents:read", label: "Leihdokumente des Bereichs lesen", description: "Ausgabe- und Rücknahmebelege im zugewiesenen Standort öffnen.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
+  { id: LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION, label: "Leihansicht des Filialkontos festlegen", description: "Sichtbare Spalten der reinen Filialkonto-Übersicht im zugewiesenen Standort festlegen; keine Leih-, Foto-, Beleg- oder Personaldatenbearbeitung.", group: "Leihe", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "loans:settings", label: "Leihmodul und Artikelquelle verwalten", description: "Standortfreigaben und externe Artikelkataloge konfigurieren.", group: "Leihe", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele und Vorlagen für den ausdrücklich zugewiesenen Standort verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
+  { id: BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION, label: "Passwort eines Filialkontos neu vergeben", description: "Passwort ausschließlich für aktive Filialkonten im zugewiesenen Standort zurücksetzen; beendet bestehende Filialkonto-Sitzungen.", group: "Zugänge & Rechte", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
   { id: "integrations:profiles:write", label: "Import- und Exportprofile verwalten", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -1440,7 +1465,9 @@ addBuiltinRolePermissions("manager", [
   "loans:location:read",
   "loans:location:manage",
   "loans:documents:read",
+  LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
   BRANCH_ORDER_MANAGE_PERMISSION,
+  BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION,
 ]);
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -1450,6 +1477,10 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "loans:settings",
   ]);
 }
+addBuiltinRolePermissions("developer", [
+  LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
+  BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION,
+]);
 for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
 }
@@ -4155,7 +4186,7 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
     explicitScopes: scopes,
     permissionScopes: [],
     scopes,
-    mustChangePassword: Boolean(organizationSession.must_change_password),
+    mustChangePassword: false,
     expiresAt: organizationSession.expires_at,
   };
 }
@@ -4550,7 +4581,7 @@ function mobileSessionPrincipal(row) {
     personnelFieldPermissions: parsePersonnelFieldPermissionProjection(
       row.personnel_field_permissions,
     ),
-    mustChangePassword: Boolean(row.must_change_password),
+    mustChangePassword: false,
     expiresAt: row.access_expires_at,
     refreshExpiresAt: row.refresh_expires_at,
   };
@@ -28867,7 +28898,7 @@ app.post("/api/portal/v1/organization-accounts", async (request, response) => {
       accountType: input.accountType,
       passwordHash,
       active: input.active,
-      mustChangePassword: Boolean(password),
+      mustChangePassword: false,
       passwordChanged: Boolean(password),
       actor: actorId,
     });
@@ -28964,6 +28995,97 @@ app.post("/api/portal/v1/organization-accounts/:accountId/unlock", async (reques
       "portal_organization_account", accountId);
   });
   response.json({ accounts: await organizationAccountsForAdmin() });
+});
+
+function branchAccountPasswordManager(request, { mutation = false } = {}) {
+  const session = requirePortalAnyPermissionOrLocal(request, [BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION], {
+    csrf: mutation,
+  });
+  if (!isLocalSystemSession(session) && (session.sessionKind === "organization" || session.isEmployee === false)) {
+    throw httpError(
+      403,
+      "Das Passwort eines Filialkontos kann nur über einen persönlichen Filialleitungszugang neu vergeben werden.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
+  return session;
+}
+
+function organizationAccountScopes(row) {
+  return portalAccessScopesForPrincipal({
+    role: "organization_account",
+    scopesValue: row?.scopes_json,
+  });
+}
+
+function assertManagedBranchAccountPasswordScope(session, row) {
+  if (!row || row.account_type !== "branch") {
+    throw httpError(404, "Das Filialkonto wurde nicht gefunden.", "PORTAL_ORGANIZATION_ACCOUNT_NOT_FOUND");
+  }
+  const scopes = organizationAccountScopes(row);
+  if (!scopes.length) {
+    throw httpError(403, "Dem Filialkonto ist kein gültiger Standort zugewiesen.", "PORTAL_SCOPE_DENIED");
+  }
+  if (!isLocalSystemSession(session)) {
+    for (const scope of scopes) assertSessionContextScope(session, { locationId: scope.locationId });
+  }
+  return scopes;
+}
+
+function publicManagedBranchAccountPasswordTarget(row, scopes = organizationAccountScopes(row)) {
+  return {
+    id: row.id,
+    loginName: row.login_name,
+    displayName: row.display_name,
+    active: Boolean(row.active),
+    passwordConfigured: Boolean(String(row.password_hash || "").trim()),
+    locked: Boolean(row.locked_until && new Date(row.locked_until) > new Date()),
+    scopes,
+  };
+}
+
+async function managedBranchAccountPasswordTargets(session) {
+  const rows = await organizationPersonnelRepository.listOrganizationAccounts();
+  return rows.flatMap((row) => {
+    if (row.account_type !== "branch" || !row.active) return [];
+    try {
+      const scopes = assertManagedBranchAccountPasswordScope(session, row);
+      return [publicManagedBranchAccountPasswordTarget(row, scopes)];
+    } catch {
+      return [];
+    }
+  });
+}
+
+app.get("/api/portal/v1/branch-accounts/passwords", async (request, response) => {
+  const session = branchAccountPasswordManager(request);
+  response.json({ accounts: await managedBranchAccountPasswordTargets(session) });
+});
+
+app.put("/api/portal/v1/branch-accounts/:accountId/password", async (request, response) => {
+  const session = branchAccountPasswordManager(request, { mutation: true });
+  const accountId = String(request.params.accountId || "").trim();
+  const account = await organizationPersonnelRepository.getOrganizationAccount(accountId);
+  const scopes = assertManagedBranchAccountPasswordScope(session, account);
+  if (!account.active) {
+    throw httpError(409, "Das Filialkonto ist deaktiviert und kann nicht neu angemeldet werden.", "PORTAL_ORGANIZATION_ACCOUNT_INACTIVE");
+  }
+  const password = String(request.body?.password || "");
+  const passwordHash = await hashPortalPassword(password);
+  const actorId = portalActorId(session);
+  await organizationPersonnelRepository.transaction(async (organization) => {
+    await organization.updateOrganizationAccountPassword(accountId, passwordHash, actorId);
+    await organization.revokeOrganizationSessions(accountId);
+    await organization.insertAudit(actorId, "portal.organization-account.password.reset",
+      "portal_organization_account", accountId, JSON.stringify({
+        loginName: account.login_name,
+        scopes,
+      }));
+  });
+  const stored = await organizationPersonnelRepository.getOrganizationAccount(accountId);
+  response.json({
+    account: publicManagedBranchAccountPasswordTarget(stored, scopes),
+  });
 });
 
 function branchOrderHttpError(error) {
@@ -29505,6 +29627,68 @@ function loanLocationSettingRow(locationId) {
   return loanModuleRepository.getLocationSetting({ locationId });
 }
 
+function parsedBranchLoanOverviewColumns(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizedBranchLoanOverviewColumns(value) {
+  const configured = parsedBranchLoanOverviewColumns(value);
+  if (!configured) return [...defaultBranchLoanOverviewColumns];
+  const selected = new Set(configured
+    .map((column) => String(column || "").trim())
+    .filter((column) => branchLoanOverviewColumnIds.includes(column)));
+  return branchLoanOverviewColumnIds.filter((column) => (
+    column === "borrowerName" || selected.has(column)
+  ));
+}
+
+function requestedBranchLoanOverviewColumns(value) {
+  if (!Array.isArray(value)) {
+    throw httpError(
+      400,
+      "Bitte die sichtbaren Spalten der Filialkonto-Leihansicht angeben.",
+      "LOAN_BRANCH_OVERVIEW_COLUMNS_INVALID",
+    );
+  }
+  const invalid = value.some((column) => (
+    typeof column !== "string" || !branchLoanOverviewColumnIds.includes(column.trim())
+  ));
+  if (invalid) {
+    throw httpError(
+      400,
+      "Die Auswahl enthÃ¤lt eine nicht unterstÃ¼tzte Leihspalte.",
+      "LOAN_BRANCH_OVERVIEW_COLUMNS_INVALID",
+    );
+  }
+  return normalizedBranchLoanOverviewColumns(value);
+}
+
+function loanOverviewColumnsForSession(session, setting) {
+  if (session?.sessionKind === "organization" && session?.accountType === "branch") {
+    return normalizedBranchLoanOverviewColumns(setting?.branch_overview_columns);
+  }
+  return [...defaultPersonalLoanOverviewColumns];
+}
+
+function publicLoanOverviewItem(row, columns) {
+  const values = {
+    borrowerName: row.borrower_nickname || row.borrower_full_name || "",
+    employeeNumber: row.borrower_employee_number || "",
+    description: row.description_snapshot,
+    articleNumber: row.article_number,
+    serialNumber: row.serial_number || "",
+    dueDate: row.due_date || null,
+  };
+  return Object.fromEntries(columns.map((column) => [column, values[column]]));
+}
+
 function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
   if (!row) return null;
   const result = {
@@ -29524,6 +29708,9 @@ function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
     photoPdf: {
       outputMode: row.photo_pdf_output_mode === "blackwhite" ? "blackwhite" : "grayscale",
       originalRetention: row.photo_original_retention === "delete" ? "delete" : "retain",
+    },
+    branchOverview: {
+      columns: normalizedBranchLoanOverviewColumns(row.branch_overview_columns),
     },
     updatedBy: row.updated_by || "",
     updatedAt: row.updated_at || null,
@@ -29558,6 +29745,7 @@ async function loanLocationForSession(session, input = {}) {
       "loans:location:read",
       "loans:location:manage",
       "loans:settings",
+      LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
     ].includes(permission));
   if (canUseManagedLocation) {
     assertSessionContextScope(session, { locationId });
@@ -29713,6 +29901,7 @@ app.get("/api/portal/v1/loans/status", async (request, response) => {
       locationManage: session.permissions.includes("loans:location:manage"),
       documentsRead: session.permissions.includes("loans:documents:read"),
       settings: session.permissions.includes("loans:settings"),
+      branchOverviewManage: session.permissions.includes(LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION),
     },
   });
 });
@@ -29720,14 +29909,10 @@ app.get("/api/portal/v1/loans/status", async (request, response) => {
 app.get("/api/portal/v1/loans/open-overview", async (request, response) => {
   const session = requirePortalSession(request, LOAN_OVERVIEW_PERMISSION);
   const setting = await enabledLoanLocationForSession(session, request.query);
+  const columns = loanOverviewColumnsForSession(session, setting);
   const items = (await loanModuleRepository.listOpenOverviewItems({
     locationId: setting.location_id,
-  })).map((item) => ({
-    articleNumber: item.article_number,
-    description: item.description_snapshot,
-    serialNumber: item.serial_number || "",
-    dueDate: item.due_date || null,
-  }));
+  })).map((item) => publicLoanOverviewItem(item, columns));
   const searchThreshold = 10;
   response.json({
     location: {
@@ -29737,7 +29922,58 @@ app.get("/api/portal/v1/loans/open-overview", async (request, response) => {
     total: items.length,
     searchThreshold,
     searchEnabled: items.length > searchThreshold,
+    columns,
     items,
+  });
+});
+
+function branchLoanOverviewSettingsActor(request, { mutation = false } = {}) {
+  const session = requirePortalAnyPermissionOrLocal(request, [LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION], {
+    csrf: mutation,
+  });
+  if (!isLocalSystemSession(session) && (session.sessionKind === "organization" || session.isEmployee === false)) {
+    throw httpError(
+      403,
+      "Die Anzeigeeinstellungen benÃ¶tigen einen persÃ¶nlichen Filialleitungszugang.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
+  return session;
+}
+
+function publicBranchLoanOverviewLocation(row) {
+  return {
+    id: row.location_id,
+    name: row.location_name,
+  };
+}
+
+app.get("/api/portal/v1/loans/branch-overview-settings", async (request, response) => {
+  const session = branchLoanOverviewSettingsActor(request);
+  const locationId = await loanLocationForSession(session, request.query);
+  const setting = await loanLocationSettingRow(locationId);
+  response.json({
+    location: publicBranchLoanOverviewLocation(setting),
+    columns: normalizedBranchLoanOverviewColumns(setting?.branch_overview_columns),
+  });
+});
+
+app.put("/api/portal/v1/loans/branch-overview-settings", async (request, response) => {
+  const session = branchLoanOverviewSettingsActor(request, { mutation: true });
+  const locationId = await loanLocationForSession(session, request.body || {});
+  const columns = requestedBranchLoanOverviewColumns(request.body?.columns);
+  await loanModuleRepository.updateBranchOverviewColumns({
+    locationId,
+    branchOverviewColumns: JSON.stringify(columns),
+    actorEmployeeNumber: portalActorId(session),
+  });
+  auditPortal(portalActorId(session), "loan.branch-overview.columns.update", "location", locationId, JSON.stringify({
+    columns,
+  }));
+  const setting = await loanLocationSettingRow(locationId);
+  response.json({
+    location: publicBranchLoanOverviewLocation(setting),
+    columns: normalizedBranchLoanOverviewColumns(setting?.branch_overview_columns),
   });
 });
 
@@ -29818,6 +30054,18 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
     );
   }
   const currentSetting = await loanLocationSettingRow(locationId);
+  const branchOverviewInput = request.body?.branchOverview;
+  if (branchOverviewInput !== undefined
+    && (!branchOverviewInput || typeof branchOverviewInput !== "object" || Array.isArray(branchOverviewInput))) {
+    throw httpError(
+      400,
+      "Die Einstellungen der Filialkonto-Leihansicht sind ungÃ¼ltig.",
+      "LOAN_BRANCH_OVERVIEW_SETTINGS_INVALID",
+    );
+  }
+  const branchOverviewColumns = branchOverviewInput?.columns === undefined
+    ? normalizedBranchLoanOverviewColumns(currentSetting?.branch_overview_columns)
+    : requestedBranchLoanOverviewColumns(branchOverviewInput.columns);
   const photoPdfInput = request.body?.photoPdf;
   if (photoPdfInput !== undefined
     && (!photoPdfInput || typeof photoPdfInput !== "object" || Array.isArray(photoPdfInput))) {
@@ -29864,6 +30112,7 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
     documentRecipientEmail: documentEmailEnabled ? documentRecipientEmail : "",
     photoPdfOutputMode,
     photoOriginalRetention,
+    branchOverviewColumns: JSON.stringify(branchOverviewColumns),
     actorEmployeeNumber: actor.employeeNumber,
   });
   auditPortal(actor.employeeNumber, "loan.settings.update", "location", locationId, JSON.stringify({
@@ -29876,6 +30125,7 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
     documentRecipientEmail: documentEmailEnabled ? documentRecipientEmail : "",
     photoPdfOutputMode,
     photoOriginalRetention,
+    branchOverviewColumns,
   }));
   response.json({
     location: publicLoanLocationSetting(await loanLocationSettingRow(locationId), { includeConfiguration: true }),
@@ -32647,28 +32897,28 @@ app.get("/api/mobile/v1/me/schedule", async (request, response) => {
 app.put("/api/portal/v1/me/password", async (request, response) => {
   const session = requirePortalSession(request);
   assertPortalCsrf(request);
-  const organizationAccount = session.sessionKind === "organization";
-  const current = organizationAccount
-    ? await organizationPersonnelRepository.getOrganizationAccount(session.accountId)
-    : await organizationPersonnelRepository.getPortalUserAccountProjection(
-      session.employeeNumber,
+  if (session.sessionKind === "organization" || session.isEmployee === false) {
+    throw httpError(
+      403,
+      "Das Passwort eines Filialkontos wird durch die zuständige Filialleitung oder den Developer neu vergeben.",
+      "PORTAL_ORGANIZATION_PASSWORD_MANAGED",
     );
+  }
+  const current = await organizationPersonnelRepository.getPortalUserAccountProjection(
+    session.employeeNumber,
+  );
   if (!await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
     throw httpError(401, "Das bisherige Passwort ist nicht korrekt.");
   }
   const passwordHash = await hashPortalPassword(request.body.newPassword);
   await organizationPersonnelRepository.transaction(async (organization) => {
-    if (organizationAccount) {
-      await organization.updateOrganizationAccountPassword(session.accountId, passwordHash);
-    } else {
-      await organization.updatePortalUserPassword(session.employeeNumber, passwordHash);
-      await organization.revokeMobileSessions(session.employeeNumber, "password_changed");
-    }
+    await organization.updatePortalUserPassword(session.employeeNumber, passwordHash);
+    await organization.revokeMobileSessions(session.employeeNumber, "password_changed");
     await organization.insertAudit(
       portalActorId(session),
       "portal.password.change",
-      organizationAccount ? "portal_organization_account" : "portal_user",
-      session.accountId || session.employeeNumber,
+      "portal_user",
+      session.employeeNumber,
     );
   });
   response.json({ ok: true });

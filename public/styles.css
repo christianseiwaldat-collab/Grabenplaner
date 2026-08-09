@@ -3371,6 +3371,14 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display
 .loan-management-topbar { align-items:flex-start; }
 .loan-management-header-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:9px; }
 .loan-management-header-actions .primary-button { display:inline-flex; align-items:center; min-height:42px; text-decoration:none; }
+.loan-overview-columns-modal,.branch-account-password-modal { width:min(620px,calc(100vw - 28px)); }
+.loan-overview-column-options { display:grid; gap:8px; margin:16px 0; padding:0; border:0; }
+.loan-overview-column-options legend { margin-bottom:8px; color:var(--ink); font-size:12px; font-weight:850; }
+.loan-overview-column-option { display:flex; align-items:flex-start; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface-soft); cursor:pointer; }
+.loan-overview-column-option input { flex:0 0 auto; margin-top:2px; }
+.loan-overview-column-option span { display:grid; gap:2px; }
+.loan-overview-column-option strong { font-size:11px; }
+.loan-overview-column-option small { color:var(--muted); font-size:9px; }
 .loan-management-toolbar { display:grid; grid-template-columns:minmax(220px,.7fr) minmax(220px,.7fr) 1fr; align-items:end; gap:13px; margin:18px 0; padding:17px 19px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.76); }
 .loan-management-toolbar > p { align-self:center; justify-self:end; margin:0; color:var(--muted); font-size:10px; font-weight:750; }
 .loan-management-summary { display:grid; grid-template-columns:repeat(5,minmax(120px,1fr)); gap:10px; margin-bottom:15px; }

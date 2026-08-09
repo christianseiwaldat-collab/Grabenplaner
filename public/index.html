@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.91.1 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.91.2 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -58,6 +58,9 @@
               <button class="nav-item nav-module-route hidden" data-view="loans" id="loanManagementNavButton">
                 <span class="nav-symbol">▣</span><span>Leihverwaltung</span><strong class="nav-count hidden" id="loanManagementNavCount">0</strong>
               </button>
+              <a class="nav-item nav-module-route hidden" id="branchOrdersManagementNavButton" href="/portal.html?tab=settings&amp;section=branch-orders">
+                <span class="nav-symbol">▤</span><span>Filialbestellungen</span>
+              </a>
               <div class="nav-submodule">
                 <div class="nav-branch">
                   <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-controls="planningNavChildren" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
@@ -1092,6 +1095,8 @@
             <div><span class="eyebrow">Artikel &amp; Verantwortung</span><h1>Leihverwaltung</h1><p class="subtitle">Offene Ausgaben, Rücknahmen, Belege und Fälligkeiten je Standort im Blick behalten.</p></div>
             <div class="loan-management-header-actions">
               <button class="secondary-button" id="loanManagementRefresh" type="button">Aktualisieren</button>
+              <button class="secondary-button hidden" id="loanOverviewSettingsButton" type="button">Filialansicht</button>
+              <button class="secondary-button hidden" id="branchAccountPasswordButton" type="button">Filialkonto-Passwort</button>
               <a class="primary-button" id="loanManagementPortalLink" href="/portal.html?tab=loan" target="_blank" rel="noopener">Leihe öffnen</a>
               <div class="page-theme-switch" role="group" aria-label="Darstellung der Leihverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
             </div>
@@ -1539,10 +1544,10 @@
                   <label class="field"><span>Bezeichnung</span><input id="organizationAccountDisplayName" maxlength="100" placeholder="z. B. Filiale Nordpark" required /></label>
                   <label class="field"><span>Kontotyp</span><select id="organizationAccountType"><option value="branch">Filialkonto</option><option value="terminal">Terminalkonto</option></select></label>
                   <label class="field"><span>Filiale</span><select id="organizationAccountLocation" required></select></label>
-                  <label class="field"><span>Neues Startpasswort</span><span class="password-field"><input id="organizationAccountPassword" type="password" autocomplete="new-password" placeholder="Beim Bearbeiten optional" /><button class="password-toggle" type="button" data-password-toggle="organizationAccountPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+                  <label class="field"><span>Passwort neu vergeben</span><span class="password-field"><input id="organizationAccountPassword" type="password" autocomplete="new-password" placeholder="Beim Bearbeiten optional" /><button class="password-toggle" type="button" data-password-toggle="organizationAccountPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
                 </div>
                 <div class="organization-account-permissions" aria-label="Freigegebene Filialfunktionen">
-                  <label class="switch-row"><span><strong>Offene Leihen ansehen</strong><small>Nur Gerät, Artikel-/Inventarnummer, Seriennummer und geplante Rückgabe.</small></span><input id="organizationAccountLoanOverview" type="checkbox" checked /></label>
+                  <label class="switch-row"><span><strong>Offene Leihen ansehen</strong><small>Name der ausleihenden Person sowie die in der Leihverwaltung für das Filialkonto freigegebenen Gerätedaten.</small></span><input id="organizationAccountLoanOverview" type="checkbox" checked /></label>
                   <label class="switch-row"><span><strong>Dienstplan des Standorts ansehen</strong><small>Reduzierte Ansicht ohne Bearbeitungs-, Personal- oder Abwesenheitsfunktionen; alle vergangenen, aktuelle und kommende Kalenderwochen sind nur lesbar.</small></span><input id="organizationAccountScheduleView" type="checkbox" checked /></label>
                   <label class="switch-row" id="organizationAccountBranchOrdersRow"><span><strong>Filialbestellungen erfassen</strong><small>Grundansicht für Filialkonten: Person auswählen, Mengen erfassen und E-Mail-Übergabe dokumentieren.</small></span><input id="organizationAccountBranchOrders" type="checkbox" checked /></label>
                   <label class="switch-row"><span><strong>Konto aktiv</strong><small>Deaktivieren beendet bestehende Sitzungen sofort.</small></span><input id="organizationAccountActive" type="checkbox" checked /></label>
@@ -1977,7 +1982,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.91.1 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.91.2 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -2740,6 +2745,64 @@
 
         <p class="offsite-folder-dialog-status" id="offsiteFolderDialogStatus" role="status" aria-live="polite"></p>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="offsiteFolderManagementModal">Schließen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal loan-overview-columns-modal" id="loanOverviewColumnsDialog" aria-labelledby="loanOverviewColumnsTitle" aria-describedby="loanOverviewColumnsDescription">
+      <form id="loanOverviewColumnsForm">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">Filialkonto · Leihe</span>
+            <h2 id="loanOverviewColumnsTitle">Sichtbare Leihdaten</h2>
+            <p id="loanOverviewColumnsDescription">Der Name der ausleihenden Person ist im Filialkonto immer sichtbar. Weitere Spalten werden nur für den gewählten Standort freigegeben.</p>
+          </div>
+          <button type="button" class="close-button" data-close="loanOverviewColumnsDialog" aria-label="Dialog schließen">×</button>
+        </div>
+        <label class="field">
+          <span>Filiale</span>
+          <select id="loanOverviewColumnsLocation" required></select>
+        </label>
+        <fieldset class="loan-overview-column-options">
+          <legend>Sichtbare Spalten</legend>
+          <div id="loanOverviewColumnsOptions"><p class="settings-note">Einstellungen werden geladen.</p></div>
+        </fieldset>
+        <p class="settings-note hidden" id="loanOverviewColumnsMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions">
+          <span></span><span></span>
+          <button class="secondary-button" type="button" data-close="loanOverviewColumnsDialog">Abbrechen</button>
+          <button class="primary-button" type="submit" id="loanOverviewColumnsSaveButton">Speichern</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal branch-account-password-modal" id="branchAccountPasswordDialog" aria-labelledby="branchAccountPasswordTitle" aria-describedby="branchAccountPasswordDescription">
+      <form id="branchAccountPasswordForm">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">Filialkonto · Zugang</span>
+            <h2 id="branchAccountPasswordTitle">Passwort neu vergeben</h2>
+            <p id="branchAccountPasswordDescription">Nur aktive Filialkonten des zugewiesenen Standorts. Das Filialkonto kann sein Passwort nicht selbst ändern.</p>
+          </div>
+          <button type="button" class="close-button" data-close="branchAccountPasswordDialog" aria-label="Dialog schließen">×</button>
+        </div>
+        <label class="field">
+          <span>Filialkonto</span>
+          <select id="branchAccountPasswordAccount" required></select>
+        </label>
+        <label class="field">
+          <span>Neues Passwort</span>
+          <span class="password-field"><input id="branchAccountPasswordNew" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordNew" aria-label="Passwort anzeigen">Anzeigen</button></span>
+        </label>
+        <label class="field">
+          <span>Passwort wiederholen</span>
+          <span class="password-field"><input id="branchAccountPasswordRepeat" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span>
+        </label>
+        <p class="settings-note hidden" id="branchAccountPasswordMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions">
+          <span></span><span></span>
+          <button class="secondary-button" type="button" data-close="branchAccountPasswordDialog">Abbrechen</button>
+          <button class="primary-button" type="submit" id="branchAccountPasswordSaveButton">Passwort neu vergeben</button>
+        </div>
       </form>
     </dialog>
 
