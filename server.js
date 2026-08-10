@@ -1584,11 +1584,6 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "collective_agreements:assign",
   ]);
 }
-addBuiltinRolePermissions(
-  "developer",
-  delegablePortalPermissionCatalog.map((permission) => permission.id),
-);
-
 // Die geschuetzte Developer-Rolle ist der technische Eigentuerzugang der
 // Installation. Sie erhaelt jede bekannte App-Berechtigung direkt aus dem
 // Katalog, damit neue Personal-, Lifecycle- und Regelrechte nicht versehentlich

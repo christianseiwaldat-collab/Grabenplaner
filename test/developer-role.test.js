@@ -12,7 +12,7 @@ test("Developer-Rolle erhält dauerhaft den vollständigen bekannten App-Rechtek
   assert.match(serverSource, /if \(String\(role \|\| ""\) === "developer"\) return true/);
   assert.match(
     serverSource,
-    /addBuiltinRolePermissions\(\s*"developer",\s*delegablePortalPermissionCatalog\.map\(\(permission\) => permission\.id\)/,
+    /addBuiltinRolePermissions\(\s*"developer",\s*\[\s*\.\.\.delegablePortalPermissionCatalog\.map\(\(permission\) => permission\.id\),\s*\.\.\.portalGlobalPermissionIds,\s*\]\s*\)/,
   );
   assert.doesNotMatch(
     serverSource,

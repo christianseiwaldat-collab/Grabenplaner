@@ -195,7 +195,7 @@ test("Rechtevergabe erzwingt Abhängigkeiten und trennt technische Verwaltung vo
 
   const builtinRoles = between(server, "const builtinPortalRoles = [", "const adminPortalRole");
   assert.doesNotMatch(builtinRoles, /SALES_ANALYTICS_PERMISSIONS|sales:analytics:/);
-  assert.match(server, /addBuiltinRolePermissions\(\s*"developer",\s*delegablePortalPermissionCatalog\.map/);
+  assert.match(server, /addBuiltinRolePermissions\(\s*"developer",\s*\[\s*\.\.\.delegablePortalPermissionCatalog\.map\(\(permission\) => permission\.id\),\s*\.\.\.portalGlobalPermissionIds,\s*\]\s*\)/);
   assert.doesNotMatch(server, /addBuiltinRolePermissions\(\s*"(?:it_admin|admin|hr)",\s*delegablePortalPermissionCatalog\.map/);
 });
 
