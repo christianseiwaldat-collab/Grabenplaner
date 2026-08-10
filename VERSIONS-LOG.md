@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.0 Beta · Verkaufsverwaltung und Verkaufsanalysen
+
+- Der feste Desktop-Hauptbereich `Verkaufsverwaltung` startet mit `Verkaufsanalysen`; er ist kein optionales Installationsmodul und erhält keine separate mobile Fachansicht.
+- Aggregierte TradeFoto-Statistikberichte lassen sich kontrolliert aus PDF-Dateien einlesen. Filiale, Zeiträume, Warengruppen und Kennzahlen bleiben vor der unveränderlichen Übernahme prüf- und bestätigungspflichtig; bildbasierte Berichte verwenden einen lokalen OCR-Vorschlag.
+- Das Berichtsarchiv wertet auch frei gewählte Zeiträume, etwa 17 Tage, ohne künstliche Wochen- oder Monatsumdeutung gemeinsam aus und erkennt Überschneidungen sowie Datenlücken.
+- Verkaufsdaten werden ausschließlich serverseitig und fail-closed projiziert. Technische Verwaltungsrollen erhalten dadurch keinen automatischen Verkaufsdatenzugriff; die geschützte Developer-Rolle behält ihren vollständigen Anwendungskatalog.
+- Die bestehende v0.91.5-Funktion für Filialbestellungs-PDFs und PL+-Freigaben bleibt vollständig enthalten.
+
 ## v0.91.5 Beta · Filialbestellungs-PDFs und PL+-Freigabe
 
 - Jede neu erfasste Filialbestellung erhält ein kompaktes, textbasiertes Vektor-PDF. Der unveränderbare Bestellbeleg wird mit Dateiname, Prüfsumme und Erstellzeit gespeichert und kann im Filialkonto sowie in der PL+-Verwaltung geöffnet oder heruntergeladen werden.

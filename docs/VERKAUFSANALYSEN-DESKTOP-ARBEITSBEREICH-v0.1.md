@@ -3,7 +3,7 @@
 **Stand:** 03.08.2026<br>
 **Arbeitsblock:** 8 – Desktop-Oberfläche für Verkaufsanalysen<br>
 **Produktbereich:** Verkaufsverwaltung > Verkaufsanalysen<br>
-**Status:** Entwicklungsstand im separaten Verkaufsverwaltungs-Worktree; nicht veröffentlicht oder ausgerollt
+**Historischer Status am 03.08.2026:** Entwicklungsstand im separaten Verkaufsverwaltungs-Worktree; nicht veröffentlicht oder ausgerollt
 
 ## 1. Ziel und Einordnung
 

@@ -2,7 +2,7 @@
 
 Stand: 03.08.2026<br>
 Arbeitsstand: Block 9 im separaten Feature-Worktree umgesetzt und lokal geprüft<br>
-Freigabestatus: nicht committed, nicht veröffentlicht und nicht auf dem VPS ausgerollt
+Historischer Freigabestatus am 03.08.2026: nicht committed, nicht veröffentlicht und nicht auf dem VPS ausgerollt
 
 ## 1. Zweck und feste Grenzen
 

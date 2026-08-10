@@ -3,7 +3,7 @@
 **Stand:** 10.08.2026<br>
 **Arbeitsblock:** 10 – PDF-Berichtsarchiv und zeitraumübergreifende Analyse<br>
 **Produktbereich:** Verkaufsverwaltung > Verkaufsanalysen<br>
-**Status:** Entwicklungsstand im separaten Verkaufsverwaltungs-Worktree; nicht veröffentlicht oder ausgerollt
+**Historischer Status am 10.08.2026 vor Release:** Entwicklungsstand im separaten Verkaufsverwaltungs-Worktree; nicht veröffentlicht oder ausgerollt
 
 ## 1. Ziel und Einordnung
 

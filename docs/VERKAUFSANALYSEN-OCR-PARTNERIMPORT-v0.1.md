@@ -3,7 +3,7 @@
 **Stand:** 03.08.2026<br>
 **Arbeitsblock:** 7 – OCR-Partnerimport für TradeFoto-PDF-Statistiken<br>
 **Produktbereich:** Verkaufsverwaltung > Verkaufsanalysen<br>
-**Status:** Entwicklungsstand im separaten Verkaufsverwaltungs-Worktree; nicht ausgerollt
+**Historischer Status am 03.08.2026:** Entwicklungsstand im separaten Verkaufsverwaltungs-Worktree; nicht ausgerollt
 
 ## 1. Ziel und Einordnung
 

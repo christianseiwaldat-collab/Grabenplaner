@@ -2,7 +2,7 @@
 
 **Stand:** 03.08.2026<br>
 **Arbeitsblock:** 6 – TradeFoto-PDF-Statistiken<br>
-**Implementierungsstatus:** im separaten Feature-Worktree umgesetzt und geprüft, noch nicht veröffentlicht oder am VPS ausgerollt
+**Historischer Implementierungsstatus am 03.08.2026:** im separaten Feature-Worktree umgesetzt und geprüft, noch nicht veröffentlicht oder am VPS ausgerollt
 
 ## 1. Ziel und Einordnung
 
