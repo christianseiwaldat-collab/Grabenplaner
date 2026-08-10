@@ -83,6 +83,7 @@ const portalState = {
   activeLoanConfirmation: null,
   loanConfirmationLoading: false,
   branchOrderCatalog: null,
+  branchOrderPortalHistory: [],
   branchOrderSettings: null,
   branchOrderSettingsDraft: null,
   branchOrderHistory: [],
@@ -176,7 +177,7 @@ const el = Object.fromEntries([
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
-  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit",
+  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList",
   "branchVacationTab", "branchVacationView", "branchVacationPrevious", "branchVacationCurrent", "branchVacationNext", "branchVacationWeek", "branchVacationList", "branchVacationMessage",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
@@ -427,9 +428,10 @@ function loanCapabilityEnabled() {
 }
 
 function branchOrderCapabilityEnabled(user = portalUser()) {
-  return isOrganizationAccount(user)
-    && user?.accountType === "branch"
-    && (user?.permissions || []).includes("branch_orders:submit");
+  const canSubmit = (user?.permissions || []).includes("branch_orders:submit");
+  if (!canSubmit) return false;
+  if (isOrganizationAccount(user)) return user?.accountType === "branch";
+  return user?.isEmployee !== false && Boolean(String(user?.homeLocationId || "").trim());
 }
 
 function branchVacationCapabilityEnabled(user = portalUser()) {
@@ -440,6 +442,7 @@ function branchVacationCapabilityEnabled(user = portalUser()) {
 
 function branchOrderManagementEnabled(user = portalUser()) {
   return !isOrganizationAccount(user)
+    && ["hr", "admin", "it_admin", "developer"].includes(user?.role)
     && (user?.permissions || []).includes("branch_orders:manage");
 }
 
@@ -1066,7 +1069,7 @@ async function loadPortalData() {
   if (hasPortalPermission("own_privacy_requests:read")) requests.push(loadPrivacyRequests());
   if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
   if (loanCapabilityEnabled()) requests.push(loadLoanModule());
-  if (branchOrderCapabilityEnabled()) requests.push(loadBranchOrderCatalog());
+  if (branchOrderCapabilityEnabled()) requests.push(loadBranchOrderCatalog(), loadBranchOrderPortalHistory());
   await Promise.allSettled(requests);
 }
 
@@ -1412,7 +1415,7 @@ function setTab(tab) {
   }
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
   if (tab === "loan") loadLoanModule();
-  if (tab === "branchOrders") loadBranchOrderCatalog();
+  if (tab === "branchOrders") Promise.allSettled([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]);
   if (tab === "branchVacation") loadBranchVacationOverview();
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
   if (tab === "processTasks") loadProcessTasks();
@@ -1442,17 +1445,22 @@ function branchOrderTimestampText(value) {
 function renderBranchOrderCatalog() {
   const catalog = portalState.branchOrderCatalog;
   if (!catalog || !el.branchOrderGroups) return;
-  el.branchOrderWeek.textContent = `KW ${catalog.calendarWeek} · Woche ab ${dateText(catalog.weekStart)} · serverseitig festgelegt · Versand als ${catalog.senderEmail || "Filialkonto-No-Reply"}`;
-  const selectedEmployee = el.branchOrderEmployee.value;
+  el.branchOrderWeek.textContent = `KW ${catalog.calendarWeek} · Woche ab ${dateText(catalog.weekStart)}`;
+  const selfSubmission = catalog.submissionMode === "self";
+  const employees = Array.isArray(catalog.employees) ? catalog.employees : [];
+  const selectedEmployee = selfSubmission
+    ? String(employees[0]?.employeeNumber || "")
+    : el.branchOrderEmployee.value;
   el.branchOrderEmployee.innerHTML = [
-    '<option value="">Bitte Teammitglied auswählen</option>',
-    ...(catalog.employees || []).map((employee) => (
+    selfSubmission ? "" : '<option value="">Bitte Teammitglied auswählen</option>',
+    ...employees.map((employee) => (
       `<option value="${esc(employee.employeeNumber)}">${esc(employee.fullName)} · MA-Nr. ${esc(employee.employeeNumber)}</option>`
     )),
   ].join("");
-  if ((catalog.employees || []).some((employee) => employee.employeeNumber === selectedEmployee)) {
+  if (employees.some((employee) => employee.employeeNumber === selectedEmployee)) {
     el.branchOrderEmployee.value = selectedEmployee;
   }
+  el.branchOrderEmployee.disabled = selfSubmission || !employees.length;
   const groups = Array.isArray(catalog.groups) ? catalog.groups : [];
   el.branchOrderGroups.innerHTML = groups.length ? groups.map((group) => {
     const deliveryReady = group.deliveryReady === true;
@@ -1460,13 +1468,13 @@ function renderBranchOrderCatalog() {
     return `<section class="branch-order-group" data-branch-order-group="${esc(group.id)}">
       <div class="branch-order-group-heading"><div><h2>${esc(group.title)}</h2>${group.hint ? `<p>${esc(group.hint)}</p>` : ""}</div><span class="branch-order-delivery-state ${deliveryReady ? "ready" : "missing"}">${deliveryReady ? "Versand bereit" : "E-Mail-Ziel fehlt"}</span></div>
       <div class="branch-order-item-list">${items.length ? items.map((item) => `<article class="branch-order-item" data-branch-order-item="${esc(item.id)}">
-        <label class="branch-order-item-select"><input data-branch-order-select type="checkbox" ${deliveryReady ? "" : "disabled"} /><span><strong>${esc(item.title)}</strong><small>${deliveryReady ? "Menge bei Auswahl erfassen" : "Vor Versand muss die Filialleitung ein E-Mail-Ziel einrichten."}</small></span></label>
-        <div class="branch-order-line-fields"><label><span>Menge</span><input data-branch-order-quantity type="number" min="0.001" max="100000" step="0.001" value="1" disabled /></label><span class="branch-order-unit">${esc(item.unit)}</span><label class="branch-order-note-field"><span>Bemerkung</span><input data-branch-order-note maxlength="500" placeholder="Optional" disabled /></label></div>
+        <label class="branch-order-item-select"><span><strong>${esc(item.title)}</strong>${deliveryReady ? "" : "<small>Vor Versand muss PL+ ein E-Mail-Ziel einrichten.</small>"}</span><input data-branch-order-select type="checkbox" ${deliveryReady ? "" : "disabled"} /></label>
+        <div class="branch-order-line-fields"><label><span>Menge</span><input data-branch-order-quantity type="number" min="1" max="100000" step="1" inputmode="numeric" value="1" disabled /></label><span class="branch-order-unit">${esc(item.unit)}</span><label class="branch-order-note-field"><span>Bemerkung</span><input data-branch-order-note maxlength="500" disabled /></label></div>
       </article>`).join("") : '<p class="empty-state">Diese Warengruppe enthält noch keine Positionen.</p>'}</div>
     </section>`;
   }).join("") : '<p class="empty-state">Für diesen Standort sind noch keine Bestellpositionen eingerichtet.</p>';
   const available = groups.some((group) => group.deliveryReady && (group.items || []).length);
-  el.branchOrderSubmit.disabled = !available || !(catalog.employees || []).length;
+  el.branchOrderSubmit.disabled = !available || !employees.length;
 }
 
 async function loadBranchOrderCatalog() {
@@ -1478,6 +1486,37 @@ async function loadBranchOrderCatalog() {
   } catch (error) {
     el.branchOrderGroups.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
     message(el.branchOrderMessage, error.message, true);
+  }
+}
+
+function branchOrderPdfHref(order, { download = false } = {}) {
+  const id = String(order?.id || "").trim();
+  if (!id) return "";
+  return `/api/portal/v1/branch-orders/${encodeURIComponent(id)}/pdf${download ? "?download=1" : ""}`;
+}
+
+function renderBranchOrderPortalHistory() {
+  if (!el.branchOrderPortalHistoryList) return;
+  const orders = portalState.branchOrderPortalHistory || [];
+  el.branchOrderPortalHistoryList.innerHTML = orders.length ? orders.map((order) => {
+    const openPdf = branchOrderPdfHref(order);
+    const downloadPdf = branchOrderPdfHref(order, { download: true });
+    return `<article class="branch-order-history-entry">
+      <div><strong>KW ${Number(order.calendarWeek)} · ${esc(order.selectedEmployeeName)} · MA-Nr. ${esc(order.selectedEmployeeNumber)}</strong><small>${esc(branchOrderTimestampText(order.submittedAt))} · ${esc(branchOrderStatusText(order.status))}</small></div>
+      <ul>${(order.lines || []).map((line) => `<li>${esc(line.groupTitle)} · ${esc(line.itemTitle)}: ${esc(Number(line.quantity).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${esc(line.unit)}${line.note ? ` · ${esc(line.note)}` : ""}</li>`).join("")}</ul>
+      <nav class="branch-order-history-actions"><a class="text-button" href="${esc(openPdf)}" target="_blank" rel="noopener">PDF öffnen</a><a class="text-button" href="${esc(downloadPdf)}">Herunterladen</a></nav>
+    </article>`;
+  }).join("") : '<p class="empty-state">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
+}
+
+async function loadBranchOrderPortalHistory() {
+  if (!branchOrderCapabilityEnabled()) return;
+  try {
+    const result = await api("/api/portal/v1/branch-orders/history?limit=50");
+    portalState.branchOrderPortalHistory = result.orders || [];
+    renderBranchOrderPortalHistory();
+  } catch (error) {
+    el.branchOrderPortalHistoryList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
   }
 }
 
@@ -1495,12 +1534,18 @@ async function submitBranchOrder(event) {
   }
   const items = selected.map((checkbox) => {
     const row = checkbox.closest("[data-branch-order-item]");
+    const quantity = Number(row?.querySelector("[data-branch-order-quantity]")?.value || "");
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) return null;
     return {
       itemId: row?.dataset.branchOrderItem || "",
-      quantity: row?.querySelector("[data-branch-order-quantity]")?.value || "",
+      quantity,
       note: row?.querySelector("[data-branch-order-note]")?.value || "",
     };
   });
+  if (items.some((item) => item === null)) {
+    message(el.branchOrderMessage, "Die Bestellmenge muss eine ganze Zahl zwischen 1 und 100000 sein.", true);
+    return;
+  }
   el.branchOrderSubmit.disabled = true;
   message(el.branchOrderMessage, "");
   try {
@@ -1508,11 +1553,11 @@ async function submitBranchOrder(event) {
       method: "POST",
       body: JSON.stringify({ employeeNumber, items }),
     });
-    await loadBranchOrderCatalog();
+    await Promise.all([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]);
     message(
       el.branchOrderMessage,
       result.order?.status === "sent"
-        ? `Bestellung wurde gespeichert und als ${result.order?.senderEmail || "Filialkonto-No-Reply"} an die hinterlegten Stellen übergeben.`
+        ? "Bestellung wurde gespeichert und an die hinterlegten Stellen übergeben."
         : "Bestellung wurde gespeichert; die E-Mail-Übergabe ist im Bestellverlauf als fehlgeschlagen dokumentiert.",
       result.order?.status !== "sent",
     );
@@ -1521,7 +1566,7 @@ async function submitBranchOrder(event) {
   } finally {
     if (portalState.branchOrderCatalog) {
       const hasItems = portalState.branchOrderCatalog.groups?.some((group) => group.deliveryReady && group.items?.length);
-      el.branchOrderSubmit.disabled = !hasItems || !(portalState.branchOrderCatalog.employees || []).length;
+       el.branchOrderSubmit.disabled = !hasItems || !(portalState.branchOrderCatalog.employees || []).length;
     }
   }
 }
@@ -1620,11 +1665,16 @@ async function loadBranchOrderSettings() {
 function renderBranchOrderHistory() {
   if (!el.branchOrderHistoryList) return;
   const orders = portalState.branchOrderHistory || [];
-  el.branchOrderHistoryList.innerHTML = orders.length ? orders.map((order) => `<article class="branch-order-history-entry">
+  el.branchOrderHistoryList.innerHTML = orders.length ? orders.map((order) => {
+    const openPdf = branchOrderPdfHref(order);
+    const downloadPdf = branchOrderPdfHref(order, { download: true });
+    return `<article class="branch-order-history-entry">
     <div><strong>KW ${Number(order.calendarWeek)} · ${esc(order.selectedEmployeeName)} · MA-Nr. ${esc(order.selectedEmployeeNumber)}</strong><small>${esc(branchOrderTimestampText(order.submittedAt))} · ${esc(branchOrderStatusText(order.status))}</small></div>
     <small>Erfasst über ${esc(order.submittedByLogin || "Filialkonto")}${order.deliveries?.[0]?.senderEmail ? ` · Absender ${esc(order.deliveries[0].senderEmail)}` : ""}</small>
     <ul>${(order.lines || []).map((line) => `<li>${esc(line.groupTitle)} · ${esc(line.itemTitle)}: ${esc(Number(line.quantity).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${esc(line.unit)}${line.note ? ` · ${esc(line.note)}` : ""}</li>`).join("")}</ul>
-  </article>`).join("") : '<p class="empty-state">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
+    <nav class="branch-order-history-actions"><a class="text-button" href="${esc(openPdf)}" target="_blank" rel="noopener">PDF öffnen</a><a class="text-button" href="${esc(downloadPdf)}">Herunterladen</a></nav>
+  </article>`;
+  }).join("") : '<p class="empty-state">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
 }
 
 async function loadBranchOrderHistory() {
@@ -5365,8 +5415,8 @@ el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayO
 el.branchVacationPrevious?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, -7); loadBranchVacationOverview(); });
 el.branchVacationNext?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, 7); loadBranchVacationOverview(); });
 el.branchVacationCurrent?.addEventListener("click", () => { portalState.branchVacationWeekStart = mondayOf(new Date()); loadBranchVacationOverview(); });
-el.branchOrderRefresh?.addEventListener("click", loadBranchOrderCatalog);
-el.branchOrderForm?.addEventListener("submit", submitBranchOrder);
+  el.branchOrderRefresh?.addEventListener("click", () => Promise.allSettled([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]));
+  el.branchOrderForm?.addEventListener("submit", submitBranchOrder);
 el.branchOrderGroups?.addEventListener("change", (event) => {
   const checkbox = event.target.closest("[data-branch-order-select]");
   if (!checkbox) return;
@@ -5376,7 +5426,8 @@ el.branchOrderGroups?.addEventListener("change", (event) => {
 });
 el.refreshBranchOrderSettings?.addEventListener("click", loadBranchOrderSettings);
 el.saveBranchOrderSettings?.addEventListener("click", saveBranchOrderSettings);
-el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);
+  el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);
+  el.branchOrderPortalHistoryRefresh?.addEventListener("click", loadBranchOrderPortalHistory);
 function updateBranchOrderSettingsDraft(event) {
   const field = event.target.closest("[data-branch-order-settings-field]");
   if (!field || !portalState.branchOrderSettingsDraft) return;

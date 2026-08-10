@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.91.5 Beta · Filialbestellungs-PDFs und PL+-Freigabe
+
+- Jede neu erfasste Filialbestellung erhält ein kompaktes, textbasiertes Vektor-PDF. Der unveränderbare Bestellbeleg wird mit Dateiname, Prüfsumme und Erstellzeit gespeichert und kann im Filialkonto sowie in der PL+-Verwaltung geöffnet oder heruntergeladen werden.
+- PL+ verwaltet die Filialbestellungs-Konfiguration pro Standort. Das delegierbare Einzelrecht für die eigene Bestellung kann zusätzlich gezielt einem persönlichen Mitarbeitendenzugang, etwa einer Mitarbeiterin am eigenen Standort, zugewiesen werden. Persönliche Zugänge sehen nur ihre eigenen Aufträge; Ziel- und Antwortadressen bleiben geschlossen.
+- Die mobile Bestellerfassung verwendet eine platzsparende Auswahl rechts, klare Ganzzahlmengen und reduzierte Hinweistexte. Mengen werden auch serverseitig ausschließlich als positive ganze Zahlen akzeptiert.
+- Der Linux-Runtime-, Offsite- und Host-Hardening-Vertrag bleibt unverändert; das Update ist ein reguläres Schema-4-Anwendungsupdate.
+
 ## v0.91.0 Beta · Filialzugänge und nachvollziehbare Filialbestellungen
 
 - Aktive Filialkonten erhalten die feste, standortgebundene Lesebasis für offene Leihen sowie vergangene, aktuelle und kommende Dienstplanwochen. Diese Ansichten bleiben ohne Bearbeitungs-, Ausgabe- oder Rücknahmerechte.

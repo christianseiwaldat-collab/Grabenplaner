@@ -2,9 +2,9 @@
 
 Grabenplaner bündelt Dienstplanung, Abwesenheiten, Personalorganisation, Zeiterfassung und ein mobiles Mitarbeiterportal in einer Anwendung.
 
-**v0.91.4 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
+**v0.91.5 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
 
-[Server-Release v0.91.4 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.91.4-beta) · [Serverbetrieb](SERVERBETRIEB.md) · [Sicherheit](SECURITY.md)
+[Letzter GitHub-Server-Release v0.91.4 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.91.4-beta) · [Serverbetrieb](SERVERBETRIEB.md) · [Sicherheit](SECURITY.md)
 
 ## Produktstatus
 

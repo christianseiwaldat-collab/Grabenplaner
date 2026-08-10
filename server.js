@@ -505,7 +505,6 @@ const BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION = "organization_accounts:passwor
 const branchOrganizationAccountBasePermissions = Object.freeze([
   LOAN_OVERVIEW_PERMISSION,
   ORGANIZATION_SCHEDULE_PERMISSION,
-  BRANCH_ORDER_SUBMIT_PERMISSION,
 ]);
 const organizationAccountPermissionCatalog = Object.freeze([
   {
@@ -710,7 +709,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "loans:documents:read", label: "Leihdokumente des Bereichs lesen", description: "Ausgabe- und Rücknahmebelege im zugewiesenen Standort öffnen.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
   { id: LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION, label: "Leihansicht des Filialkontos festlegen", description: "Sichtbare Spalten der reinen Filialkonto-Übersicht im zugewiesenen Standort festlegen; keine Leih-, Foto-, Beleg- oder Personaldatenbearbeitung.", group: "Leihe", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "loans:settings", label: "Leihmodul und Artikelquelle verwalten", description: "Standortfreigaben und externe Artikelkataloge konfigurieren.", group: "Leihe", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
-  { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele und Vorlagen für den ausdrücklich zugewiesenen Standort verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
+  { id: BRANCH_ORDER_SUBMIT_PERMISSION, label: "Filialbestellungen für die eigene Filiale erfassen", description: "Erlaubt einer persönlich freigeschalteten Person Bestellungen ausschließlich für sich selbst und ihre Stammfiliale zu erfassen.", group: "Filialbestellungen", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["employee", "location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION, label: "Passwort eines Filialkontos neu vergeben", description: "Passwort ausschließlich für aktive Filialkonten im zugewiesenen Standort zurücksetzen; beendet bestehende Filialkonto-Sitzungen.", group: "Zugänge & Rechte", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -1466,7 +1466,6 @@ addBuiltinRolePermissions("manager", [
   "loans:location:manage",
   "loans:documents:read",
   LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
-  BRANCH_ORDER_MANAGE_PERMISSION,
   BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION,
 ]);
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
@@ -1475,11 +1474,13 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "loans:location:manage",
     "loans:documents:read",
     "loans:settings",
+    BRANCH_ORDER_MANAGE_PERMISSION,
   ]);
 }
 addBuiltinRolePermissions("developer", [
   LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
   BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION,
+  BRANCH_ORDER_SUBMIT_PERMISSION,
 ]);
 for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
@@ -29093,23 +29094,49 @@ function branchOrderHttpError(error) {
   return httpError(error.status || 400, error.message, error.code || "BRANCH_ORDER_INVALID");
 }
 
-function requireBranchOrderOrganizationSession(request) {
-  const session = requirePortalSession(request, BRANCH_ORDER_SUBMIT_PERMISSION);
+function branchOrderSubmissionContext(session) {
   if (session.sessionKind !== "organization" || session.accountType !== "branch") {
+    if (session.sessionKind === "employee" && session.isEmployee !== false) {
+      const locationId = normalizeLocationId(session.homeLocationId);
+      if (!locationId || !String(session.employeeNumber || "").trim()) {
+        throw httpError(
+          403,
+          "Für persönliche Filialbestellungen muss eine aktive Stammfiliale hinterlegt sein.",
+          "BRANCH_ORDER_PERSONAL_LOCATION_REQUIRED",
+        );
+      }
+      return {
+        session,
+        locationId,
+        submissionMode: "self",
+        selectedEmployeeNumber: String(session.employeeNumber),
+      };
+    }
     throw httpError(
       403,
-      "Filialbestellungen können nur über ein aktiviertes Filialkonto erfasst werden.",
-      "PORTAL_ORGANIZATION_ACCOUNT_REQUIRED",
+      "Filialbestellungen können nur über ein aktiviertes Filialkonto oder einen persönlich freigeschalteten Mitarbeiterzugang erfasst werden.",
+      "PORTAL_BRANCH_ORDER_ACCOUNT_REQUIRED",
     );
   }
   const locationId = normalizeLocationId(session.homeLocationId);
   assertSessionContextScope(session, { locationId });
-  return { session, locationId };
+  return { session, locationId, submissionMode: "branch", selectedEmployeeNumber: "" };
 }
 
-function branchOrderSenderEmail(session) {
-  const loginName = normalizedOrganizationAccountLoginName(session?.loginName);
-  return `${loginName}-noreply@grabenplaner.eu`;
+function requireBranchOrderSubmissionSession(request) {
+  return branchOrderSubmissionContext(requirePortalSession(request, BRANCH_ORDER_SUBMIT_PERMISSION));
+}
+
+function branchOrderSenderEmail(session, locationId) {
+  if (session?.sessionKind === "organization") {
+    const loginName = normalizedOrganizationAccountLoginName(session?.loginName);
+    return `${loginName}-noreply@grabenplaner.eu`;
+  }
+  const safeLocationId = String(locationId || "").trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  if (!safeLocationId) {
+    throw httpError(403, "Für die Filialbestellung fehlt ein gültiger Standort.", "BRANCH_ORDER_PERSONAL_LOCATION_REQUIRED");
+  }
+  return `fil${safeLocationId}-noreply@grabenplaner.eu`;
 }
 
 async function branchOrderManagementLocation(session, input = {}) {
@@ -29120,10 +29147,43 @@ async function branchOrderManagementLocation(session, input = {}) {
       "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
     );
   }
+  if (!isLocalSystemSession(session) && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
+    throw httpError(
+      403,
+      "Die Filialbestell-Einstellungen stehen ausschließlich Personalleitung und höheren Rollen zur Verfügung.",
+      "BRANCH_ORDER_MANAGEMENT_ROLE_DENIED",
+    );
+  }
   const locationId = normalizeLocationId(input.locationId || session.homeLocationId || "");
   assertSessionContextScope(session, { locationId });
   await validateActiveLocationExists(locationId);
   return locationId;
+}
+
+async function branchOrderHistoryAccess(request, input = {}) {
+  const session = requirePortalSession(request);
+  if (session.permissions?.includes(BRANCH_ORDER_MANAGE_PERMISSION)) {
+    return {
+      session,
+      locationId: await branchOrderManagementLocation(session, input),
+      audience: "management",
+      selectedEmployeeNumber: "",
+    };
+  }
+  if (session.permissions?.includes(BRANCH_ORDER_SUBMIT_PERMISSION)) {
+    const context = branchOrderSubmissionContext(session);
+    return {
+      ...context,
+      audience: context.submissionMode === "self" ? "personal" : "branch",
+    };
+  }
+  throw httpError(403, "Für den Bestellverlauf fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+}
+
+function publicBranchOrderHistory(order) {
+  const safeLines = (order.lines || []).map(({ recipientEmail: _recipientEmail, ...line }) => line);
+  const { deliveries: _deliveries, ...safeOrder } = order;
+  return { ...safeOrder, lines: safeLines };
 }
 
 function branchOrderEmailStatus() {
@@ -29135,15 +29195,20 @@ function branchOrderEmailStatus() {
 }
 
 app.get("/api/portal/v1/branch-orders/catalog", async (request, response) => {
-  const { session, locationId } = requireBranchOrderOrganizationSession(request);
+  const context = requireBranchOrderSubmissionSession(request);
+  const { session, locationId } = context;
   try {
     const catalog = sqliteBranchOrderOperations.catalogSnapshot(locationId);
     const weekStart = currentWeekStart();
     response.json({
       ...catalog,
+      employees: context.submissionMode === "self"
+        ? catalog.employees.filter((employee) => employee.employeeNumber === context.selectedEmployeeNumber)
+        : catalog.employees,
       weekStart,
       calendarWeek: getIsoWeek(weekStart),
-      senderEmail: branchOrderSenderEmail(session),
+      submissionMode: context.submissionMode,
+      senderEmail: branchOrderSenderEmail(session, locationId),
     });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -29151,19 +29216,20 @@ app.get("/api/portal/v1/branch-orders/catalog", async (request, response) => {
 });
 
 app.post("/api/portal/v1/branch-orders", async (request, response) => {
-  const { session, locationId } = requireBranchOrderOrganizationSession(request);
+  const context = requireBranchOrderSubmissionSession(request);
+  const { session, locationId } = context;
   assertPortalCsrf(request);
   const weekStart = currentWeekStart();
-  const senderEmail = branchOrderSenderEmail(session);
+  const senderEmail = branchOrderSenderEmail(session, locationId);
   let order;
   try {
-    order = sqliteBranchOrderOperations.createOrder(locationId, {
-      selectedEmployeeNumber: request.body?.employeeNumber,
+    order = await sqliteBranchOrderOperations.createOrder(locationId, {
+      selectedEmployeeNumber: context.selectedEmployeeNumber || request.body?.employeeNumber,
       items: request.body?.items,
       weekStart,
       calendarWeek: getIsoWeek(weekStart),
       submittedAt: new Date().toISOString(),
-      submittedByAccountId: session.accountId,
+      submittedByAccountId: session.accountId || `employee:${session.employeeNumber}`,
       submittedByLogin: session.loginName,
       senderEmail,
     });
@@ -29207,6 +29273,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
       senderEmail,
       submittedAt: order.submittedAt,
       status: deliverySummary.status,
+      pdf: order.pdf,
     },
     delivery: deliverySummary,
   });
@@ -29252,13 +29319,41 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
 });
 
 app.get("/api/portal/v1/branch-orders/history", async (request, response) => {
-  const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
-  const locationId = await branchOrderManagementLocation(session, request.query || {});
+  const access = await branchOrderHistoryAccess(request, request.query || {});
   try {
+    const orders = sqliteBranchOrderOperations.history(
+      access.locationId,
+      Number(request.query?.limit || 50),
+      { selectedEmployeeNumber: access.selectedEmployeeNumber },
+    );
     response.json({
-      locationId,
-      orders: sqliteBranchOrderOperations.history(locationId, Number(request.query?.limit || 50)),
+      locationId: access.locationId,
+      orders: access.audience === "management" ? orders : orders.map(publicBranchOrderHistory),
     });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
+app.get("/api/portal/v1/branch-orders/:orderId/pdf", async (request, response) => {
+  const access = await branchOrderHistoryAccess(request, request.query || {});
+  try {
+    const pdf = await sqliteBranchOrderOperations.orderPdf(access.locationId, request.params.orderId, {
+      selectedEmployeeNumber: access.selectedEmployeeNumber,
+    });
+    const download = String(request.query?.download || "") === "1";
+    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader(
+      "Content-Disposition",
+      download
+        ? contentDispositionHeader(pdf.filename)
+        : contentDispositionHeader(pdf.filename).replace(/^attachment;/, "inline;"),
+    );
+    response.setHeader("Content-Length", String(pdf.content.length));
+    response.setHeader("Cache-Control", "private, no-store, max-age=0");
+    response.setHeader("Pragma", "no-cache");
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.send(pdf.content);
   } catch (error) {
     throw branchOrderHttpError(error);
   }

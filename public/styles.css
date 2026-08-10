@@ -3452,6 +3452,8 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display
 .branch-orders-management-history-entry strong { font-size:11px; }
 .branch-orders-management-history-entry small,.branch-orders-management-history-entry li { color:var(--muted); font-size:9px; }
 .branch-orders-management-history-entry ul { display:grid; gap:3px; margin:0; padding-left:18px; }
+.branch-orders-management-history-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.branch-orders-management-history-actions a { min-width:0; text-decoration:none; }
 .branch-orders-management-empty { margin:0; padding:35px; border:1px dashed var(--line); border-radius:16px; color:var(--muted); background:var(--surface); text-align:center; }
 .branch-orders-management-empty.error { color:var(--danger); }
 .loan-settings-list { display:grid; gap:13px; margin-top:14px; }
@@ -3506,6 +3508,7 @@ html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { 
   .loan-photo-attachment { align-items:flex-start; flex-direction:column; }
   .loan-photo-attachment nav { justify-content:flex-start; width:100%; }
   .loan-management-toolbar > p,.loan-management-dates,.branch-orders-management-toolbar > p,.branch-orders-management-toolbar > .primary-button { justify-self:start; justify-items:start; text-align:left; }
+  .branch-orders-management-history-actions > a { flex:1 1 150px; justify-content:center; }
   .loan-management-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .f18-migration-form,.f18-migration-mappings { grid-template-columns:1fr; }
   .f18-migration-mappings > :is(h3,p) { grid-column:auto; }

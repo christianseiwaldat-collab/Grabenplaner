@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.91.4 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.91.5 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -1112,7 +1112,7 @@
 
         <section id="branchOrdersView" class="view branch-orders-management-view">
           <header class="topbar branch-orders-management-topbar">
-            <div><span class="eyebrow">Standort &amp; Übergabe</span><h1>Filialbestellungen</h1><p class="subtitle">Bestellpositionen, Einheiten, E-Mail-Ziele und Vorlagen direkt im Desktop-Grabenplaner verwalten.</p></div>
+            <div><span class="eyebrow">PL+ · Standort &amp; Übergabe</span><h1>Filialbestellungen</h1><p class="subtitle">Bestellpositionen, Einheiten, E-Mail-Ziele, Vorlagen und PDF-Nachweise direkt im Desktop-Grabenplaner verwalten.</p></div>
             <div class="branch-orders-management-header-actions">
               <button class="secondary-button" id="branchOrdersManagementRefresh" type="button">Aktualisieren</button>
               <button class="primary-button" id="branchOrdersManagementSave" type="button">Bestellkonfiguration speichern</button>
@@ -1571,7 +1571,7 @@
                 <div class="organization-account-permissions" aria-label="Freigegebene Filialfunktionen">
                   <label class="switch-row"><span><strong>Offene Leihen ansehen</strong><small>Name der ausleihenden Person sowie die in der Leihverwaltung für das Filialkonto freigegebenen Gerätedaten.</small></span><input id="organizationAccountLoanOverview" type="checkbox" checked /></label>
                   <label class="switch-row"><span><strong>Dienstplan des Standorts ansehen</strong><small>Reduzierte Ansicht ohne Bearbeitungs-, Personal- oder Abwesenheitsfunktionen; alle vergangenen, aktuelle und kommende Kalenderwochen sind nur lesbar.</small></span><input id="organizationAccountScheduleView" type="checkbox" checked /></label>
-                  <label class="switch-row" id="organizationAccountBranchOrdersRow"><span><strong>Filialbestellungen erfassen</strong><small>Grundansicht für Filialkonten: Person auswählen, Mengen erfassen und E-Mail-Übergabe dokumentieren.</small></span><input id="organizationAccountBranchOrders" type="checkbox" checked /></label>
+                  <label class="switch-row" id="organizationAccountBranchOrdersRow"><span><strong>Filialbestellungen erfassen</strong><small>Optional für dieses Filialkonto: Person auswählen, Mengen erfassen und E-Mail-Übergabe dokumentieren.</small></span><input id="organizationAccountBranchOrders" type="checkbox" /></label>
                   <label class="switch-row"><span><strong>Konto aktiv</strong><small>Deaktivieren beendet bestehende Sitzungen sofort.</small></span><input id="organizationAccountActive" type="checkbox" checked /></label>
                 </div>
                 <div class="form-actions-inline">
@@ -2004,7 +2004,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.91.4 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.91.5 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
