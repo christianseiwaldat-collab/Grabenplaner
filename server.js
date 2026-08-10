@@ -7,6 +7,28 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const net = require("node:net");
 const { promisify } = require("node:util");
+const {
+  SALES_ANALYTICS_PERMISSIONS,
+  SALES_ANALYTICS_PERMISSION_IDS,
+  buildSalesAnalyticsProjection,
+} = require("./lib/sales-analytics-access");
+const {
+  TRADEFOTO_REPORT_EXTRACTIONS,
+  TRADEFOTO_REPORT_MAX_BYTES,
+  TRADEFOTO_REPORT_SOURCE_SYSTEM,
+  TradeFotoReportError,
+  inspectTradeFotoReportBuffer,
+  reviewTradeFotoOcrPreview,
+} = require("./lib/sales-analytics-tradefoto-report");
+const {
+  inspectTradeFotoOcrReportBuffer,
+} = require("./lib/sales-analytics-tradefoto-ocr");
+const {
+  SalesAnalyticsReportSeriesError,
+  aggregateSalesAnalyticsReportSeries,
+  classifySalesAnalyticsReportArchive,
+  normalizeSalesAnalyticsReportSeriesIds,
+} = require("./lib/sales-analytics-report-series");
 const { createAmuStorage, syncEncryptedFilesBackup, verifyBackupReferences } = require("./lib/amu-storage");
 const { prepareAmuDocument } = require("./lib/amu-processing");
 const { evaluateAumEvidence } = require("./lib/amu-identity-check");
@@ -603,6 +625,13 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "personnel:central:write", label: "Zentrale Personalzuordnungen bearbeiten", description: "Kostenstellen und filialunabhängige Beschäftigte unternehmensweit verwalten.", group: "Personalverwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "cost_centers:read", label: "Kostenstellen lesen", group: "Personalverwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "cost_centers:write", label: "Kostenstellen verwalten", description: "Kostenstellen anlegen, ändern und archivieren.", group: "Personalverwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: SALES_ANALYTICS_PERMISSIONS.ACCESS, label: "Verkaufsanalysen öffnen", description: "Öffnet ausschließlich den geschützten Desktop-Arbeitsbereich und gewährt allein noch keine Verkaufsdaten.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ANALYTICS_PERMISSIONS.LOCATION_READ, label: "Verkaufsdaten zugewiesener Filialen lesen", description: "Umsatz- und Artikelauswertungen ausschließlich für vollständig zugewiesene Standorte; reine Abteilungsbereiche reichen nicht aus.", group: "Verkaufsverwaltung", warningLevel: "high", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ANALYTICS_PERMISSIONS.COMPANY_READ, label: "Verkaufsdaten der Gesamtfirma lesen", description: "Standortübergreifende Unternehmensauswertungen für alle sicher zugeordneten Filialen; Onlineshops bleiben ein eigenes Zusatzrecht.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ANALYTICS_PERMISSIONS.ONLINE_READ, label: "Onlineshop-Verkaufsdaten lesen", description: "Getrennte Onlineshop-Projektion; wird weder durch Filial- noch durch Gesamtfirmenrechte automatisch freigegeben.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ANALYTICS_PERMISSIONS.INVENTORY_READ, label: "Bestandsdaten in Verkaufsanalysen lesen", description: "Bestand, bestellt und im Zulauf nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "high", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", description: "Wirtschaftlich sensible Kosten- und Rohertragswerte nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", description: "TradeFoto-Statistikberichte prüfen, einer freigegebenen Filiale zuordnen und nach ausdrücklicher Bestätigung unveränderlich übernehmen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
   { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true },
   { id: "locations:operational:write", label: "Eigenen Standort betrieblich pflegen", description: "Öffnungszeiten und Mindestbesetzung ausschließlich in zugewiesenen Standorten bearbeiten; keine Neuanlage, Deaktivierung, Kostenstellen- oder Zeiterfassungseinstellungen.", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
@@ -835,6 +864,9 @@ function portalPermissionRoleRestrictionError(permissions) {
   if (restricted.length && restricted.every((permission) => protectedAmuPermissionIds.has(permission))) {
     return httpError(403, "Geschützte AUM-Rechte dürfen nur Personalleitung und höheren Rollen zugewiesen werden.", "AMU_PERMISSION_ROLE_RESTRICTED");
   }
+  if (restricted.length && restricted.every((permission) => SALES_ANALYTICS_PERMISSION_IDS.includes(permission))) {
+    return httpError(403, "Verkaufsanalyse-Rechte dürfen nur dafür vorgesehenen kaufmännischen Rollen zugewiesen werden.", "SALES_ANALYTICS_PERMISSION_ROLE_RESTRICTED");
+  }
   return httpError(403, "Diese Personalakt-Rechte sind für die gewählte App-Rolle nicht zulässig.", "PORTAL_PERMISSION_ROLE_RESTRICTED");
 }
 
@@ -850,6 +882,36 @@ function assertPortalPermissionDependencies(permissions) {
       throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
     }
   };
+  const requireAnyPermission = (permission, dependencies, message) => {
+    if (projected.has(permission) && !dependencies.some((dependency) => projected.has(dependency))) {
+      throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
+    }
+  };
+  for (const permission of SALES_ANALYTICS_PERMISSION_IDS.filter(
+    (permission) => permission !== SALES_ANALYTICS_PERMISSIONS.ACCESS,
+  )) {
+    requirePermission(
+      permission,
+      SALES_ANALYTICS_PERMISSIONS.ACCESS,
+      "Verkaufsdatenrechte können nur zusammen mit dem Zugang zu Verkaufsanalysen vergeben werden.",
+    );
+  }
+  for (const permission of [
+    SALES_ANALYTICS_PERMISSIONS.INVENTORY_READ,
+    SALES_ANALYTICS_PERMISSIONS.MARGIN_READ,
+    SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE,
+  ]) {
+    requireAnyPermission(
+      permission,
+      [SALES_ANALYTICS_PERMISSIONS.LOCATION_READ, SALES_ANALYTICS_PERMISSIONS.COMPANY_READ],
+      "Bestands-, Kosten- und Rohertragsrechte benötigen eine wirksame Filial- oder Gesamtfirmenprojektion.",
+    );
+  }
+  requirePermission(
+    SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE,
+    SALES_ANALYTICS_PERMISSIONS.MARGIN_READ,
+    "Der PDF-Statistikimport benötigt wegen der enthaltenen Rohertragswerte zusätzlich das Rohertragsrecht.",
+  );
   requirePermission(
     "personnel:applications:write",
     "personnel:candidates:read",
@@ -1069,6 +1131,13 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: "own_sickness:read", label: "Eigene Krankmeldungen lesen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "notifications:settings", label: "Persoenlichen Schlafmodus fuer externe Benachrichtigungen aendern", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "amu:local:manage", label: "AUM im eigenen Filialbereich öffnen und prüfen", description: "Standortgebundenes Fachrecht der zuständigen Leitung; individuelle Zuweisungen und Entzüge werden berücksichtigt.", group: "AUM", warningLevel: "critical", scopeBehavior: "organizational" },
+  { id: SALES_ANALYTICS_PERMISSIONS.ACCESS, label: "Verkaufsanalysen öffnen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
+  { id: SALES_ANALYTICS_PERMISSIONS.LOCATION_READ, label: "Verkaufsdaten zugewiesener Filialen lesen", group: "Verkaufsverwaltung", warningLevel: "high", scopeBehavior: "organizational" },
+  { id: SALES_ANALYTICS_PERMISSIONS.COMPANY_READ, label: "Verkaufsdaten der Gesamtfirma lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
+  { id: SALES_ANALYTICS_PERMISSIONS.ONLINE_READ, label: "Onlineshop-Verkaufsdaten lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
+  { id: SALES_ANALYTICS_PERMISSIONS.INVENTORY_READ, label: "Bestandsdaten in Verkaufsanalysen lesen", group: "Verkaufsverwaltung", warningLevel: "high", scopeBehavior: "organizational" },
+  { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
+  { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
   { id: "wifi:settings", label: "WLAN-Zeitvorschläge verwalten", group: "Zeit & Abwesenheit", scopeBehavior: "global" },
   { id: "users:write", label: "Portal-Zugänge verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
   { id: "roles:read", label: "App-Rollen lesen", group: "Zugänge & Rechte", scopeBehavior: "global" },
@@ -1515,6 +1584,10 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "collective_agreements:assign",
   ]);
 }
+addBuiltinRolePermissions(
+  "developer",
+  delegablePortalPermissionCatalog.map((permission) => permission.id),
+);
 
 // Die geschuetzte Developer-Rolle ist der technische Eigentuerzugang der
 // Installation. Sie erhaelt jede bekannte App-Berechtigung direkt aus dem
@@ -1958,6 +2031,7 @@ const {
   planningSettings: planningSettingsRepository,
   portalAccess: portalAccessRepository,
   runtimeRecovery: runtimeRecoveryRepository,
+  salesAnalytics: salesAnalyticsRepository,
   sicknessAmuManagement: sicknessAmuManagementRepository,
   systemCenterMetrics: systemCenterMetricsRepository,
   timeTracking: timeTrackingRepository,
@@ -4219,6 +4293,7 @@ function publicPortalUser(session) {
       grantedPermissions: session.grantedPermissions || [],
       deniedPermissions: [],
       scopes: session.scopes || [],
+      salesAnalytics: buildSalesAnalyticsProjection(session),
       mustChangePassword: session.mustChangePassword,
       personnelRecordAccess: {
         available: false,
@@ -4250,6 +4325,7 @@ function publicPortalUser(session) {
     grantedPermissions: session.grantedPermissions || [],
     deniedPermissions: session.deniedPermissions || [],
     scopes: session.scopes || [],
+    salesAnalytics: buildSalesAnalyticsProjection(session),
     mustChangePassword: session.mustChangePassword,
     personnelRecordAccess: {
       available: recordAccess.canReadSensitive || recordAccess.canReadPhone
@@ -19381,6 +19457,585 @@ app.delete("/api/integrations/personnel-import/sessions/:id", (request, response
   const actor = integrationActor(request, "employees:import");
   integrationCache.delete(request.params.id, actor.employeeNumber);
   response.status(204).end();
+});
+
+function salesAnalyticsRequestContext(request, { importManagement = false, csrf = false } = {}) {
+  const session = requirePortalSession(request, SALES_ANALYTICS_PERMISSIONS.ACCESS);
+  if (csrf) assertPortalCsrf(request);
+  const projection = buildSalesAnalyticsProjection(session);
+  if (!projection.workspace) {
+    throw httpError(403, "Der Arbeitsbereich Verkaufsanalysen ist nicht freigegeben.", "SALES_ANALYTICS_ACCESS_DENIED");
+  }
+  if (importManagement && !projection.importManagement) {
+    throw httpError(
+      403,
+      "Für den PDF-Statistikimport werden ein freigegebener Filialbereich, das Rohertragsrecht und das Importrecht benötigt.",
+      "SALES_ANALYTICS_IMPORT_DENIED",
+    );
+  }
+  return { session, projection };
+}
+
+async function salesAnalyticsLocations(projection) {
+  if (!projection.company && !projection.locationIds.length) return [];
+  const allowedIds = new Set(projection.locationIds.map(String));
+  return (await getLocations(false))
+    .filter((location) => projection.company || allowedIds.has(String(location.id)))
+    .map((location) => ({
+      id: String(location.id),
+      name: String(location.name || location.label || location.id),
+      active: Boolean(location.active),
+    }));
+}
+
+function assertSalesAnalyticsLocation(projection, locationId) {
+  const id = String(locationId || "").trim();
+  if (!id || (!projection.company && !projection.locationIds.includes(id))) {
+    throw httpError(403, "Diese Filiale ist für Verkaufsanalysen nicht freigegeben.", "SALES_ANALYTICS_LOCATION_DENIED");
+  }
+  return id;
+}
+
+function tradeFotoReportHttpError(error) {
+  if (!(error instanceof TradeFotoReportError)) return error;
+  const messages = {
+    TRADEFOTO_REPORT_FILE_SIZE_INVALID: "Die PDF-Datei ist leer oder größer als 15 MB.",
+    TRADEFOTO_REPORT_PDF_INVALID: "Die Datei ist keine lesbare PDF-Statistik.",
+    TRADEFOTO_REPORT_PASSWORD_PROTECTED: "Eine passwortgeschützte PDF kann derzeit nicht geprüft werden.",
+    TRADEFOTO_REPORT_PAGE_COUNT_INVALID: "Die PDF enthält zu viele oder keine auswertbaren Seiten.",
+    TRADEFOTO_REPORT_COMPLEXITY_LIMIT: "Die PDF enthält mehr Text- oder Zeileninhalt als sicher verarbeitet werden kann.",
+    TRADEFOTO_REPORT_TEXT_LAYER_REQUIRED: "Diese PDF besitzt keine ausreichend verlässliche Textschicht.",
+    TRADEFOTO_REPORT_PAGE_HEADER_MISMATCH: "Die Seiten der PDF gehören nicht eindeutig zum selben TradeFoto-Bericht.",
+    TRADEFOTO_REPORT_PRODUCT_GROUPS_MISSING: "In der PDF wurden keine Warengruppenzeilen gefunden.",
+    TRADEFOTO_REPORT_PRODUCT_GROUP_DUPLICATE: "Eine Warengruppe kommt im Bericht mehrfach vor und muss geprüft werden.",
+    TRADEFOTO_REPORT_DATE_INVALID: "Ein Berichtsdatum konnte nicht sicher gelesen werden.",
+    TRADEFOTO_REPORT_OCR_UNAVAILABLE: "Die lokale OCR ist auf diesem Server derzeit nicht verfügbar.",
+    TRADEFOTO_REPORT_OCR_BUSY: "Die lokale OCR ist ausgelastet. Bitte den Import in Kürze erneut starten.",
+    TRADEFOTO_REPORT_OCR_TIMEOUT: "Die lokale OCR hat das Zeitlimit für eine Seite erreicht.",
+    TRADEFOTO_REPORT_OCR_PAGE_COUNT_INVALID: "Die Raster-PDF enthält zu viele oder keine auswertbaren Seiten.",
+    TRADEFOTO_REPORT_OCR_WORD_LIMIT: "Die Raster-PDF enthält mehr OCR-Inhalt als sicher verarbeitet werden kann.",
+    TRADEFOTO_REPORT_OCR_RECOGNITION_INCOMPLETE: "Die OCR-Vorschläge konnten nicht sicher als TradeFoto-Statistik strukturiert werden.",
+    TRADEFOTO_REPORT_OCR_REVIEW_INVALID: "Die korrigierten OCR-Werte sind unvollständig oder stimmen nicht mit der Berichtssumme überein.",
+    TRADEFOTO_REPORT_OCR_FAILED: "Die lokale OCR konnte diese PDF nicht verarbeiten.",
+  };
+  const status = [
+    "TRADEFOTO_REPORT_FILE_SIZE_INVALID",
+    "TRADEFOTO_REPORT_COMPLEXITY_LIMIT",
+  ].includes(error.code)
+    ? 413
+    : error.code === "TRADEFOTO_REPORT_OCR_BUSY"
+      ? 429
+      : [
+        "TRADEFOTO_REPORT_OCR_UNAVAILABLE",
+        "TRADEFOTO_REPORT_OCR_TIMEOUT",
+        "TRADEFOTO_REPORT_OCR_FAILED",
+      ].includes(error.code)
+        ? 503
+        : 422;
+  const result = httpError(
+    status,
+    messages[error.code] || "Die TradeFoto-Statistik konnte nicht sicher gelesen werden.",
+    error.code,
+  );
+  result.details = error.details;
+  return result;
+}
+
+function publicSalesAnalyticsReport(row, archive = null) {
+  const report = {
+    id: row.id,
+    sourceSystem: row.sourceSystem,
+    sourceFileSha256: row.sourceFileSha256,
+    parserVersion: row.parserVersion,
+    extraction: row.extraction,
+    reviewMethod: row.reviewMethod,
+    reportKind: row.reportKind,
+    externalBranchId: row.externalBranchId,
+    locationId: row.locationId,
+    currency: row.currency,
+    periods: {
+      period: { start: row.periodStart, end: row.periodEnd },
+      comparison: { start: row.comparisonStart, end: row.comparisonEnd },
+      yearToDate: { start: row.yearToDateStart, end: row.periodEnd },
+      yearToDateComparison: { start: row.yearToDateComparisonStart, end: row.comparisonEnd },
+    },
+    generatedOn: row.generatedOn,
+    pageCount: row.pageCount,
+    productGroupCount: row.productGroupCount,
+    issueCount: row.issueCount,
+    reconciliationStatus: row.reconciliationStatus,
+    importedAt: row.importedAt,
+  };
+  if (archive) report.archive = archive;
+  return report;
+}
+
+function publicSalesAnalyticsMetric(row, grossMargin) {
+  const metric = {
+    quantity: { current: row.currentQuantity, comparison: row.comparisonQuantity },
+    netRevenue: { current: row.currentNetRevenue, comparison: row.comparisonNetRevenue },
+    customerCount: { current: row.currentCustomerCount, comparison: row.comparisonCustomerCount },
+    revenuePerCustomer: {
+      current: row.currentRevenuePerCustomer,
+      comparison: row.comparisonRevenuePerCustomer,
+    },
+  };
+  if (grossMargin) {
+    metric.grossMargin = {
+      current: row.currentGrossMargin,
+      comparison: row.comparisonGrossMargin,
+    };
+  }
+  return metric;
+}
+
+function publicSalesAnalyticsReportBundle(bundle, projection) {
+  const productGroups = new Map();
+  for (const row of bundle.productGroupMetrics) {
+    const id = String(row.externalProductGroupId);
+    if (!productGroups.has(id)) {
+      productGroups.set(id, {
+        externalProductGroupId: id,
+        label: row.productGroupLabel,
+        source: { page: row.sourcePage, ordinate: row.sourceOrdinate },
+        horizons: {},
+      });
+    }
+    productGroups.get(id).horizons[row.horizon] = publicSalesAnalyticsMetric(
+      row,
+      projection.grossMargin,
+    );
+  }
+  const totals = {};
+  for (const row of bundle.totals) {
+    totals[row.horizon] = publicSalesAnalyticsMetric(row, projection.grossMargin);
+  }
+  return {
+    report: publicSalesAnalyticsReport(bundle.report),
+    productGroups: [...productGroups.values()],
+    totals,
+    rights: {
+      grossMargin: projection.grossMargin,
+    },
+  };
+}
+
+async function listProjectedSalesAnalyticsReports(projection, locationId, limit) {
+  if (locationId) {
+    assertSalesAnalyticsLocation(projection, locationId);
+    return salesAnalyticsRepository.listReports({ locationId, limit });
+  }
+  if (projection.company) return salesAnalyticsRepository.listReports({ limit });
+  if (!projection.locationIds.length) return [];
+  const rows = (await Promise.all(projection.locationIds.map((id) => (
+    salesAnalyticsRepository.listReports({ locationId: id, limit })
+  )))).flat();
+  return rows
+    .sort((left, right) => String(right.periodEnd).localeCompare(String(left.periodEnd))
+      || String(right.importedAt).localeCompare(String(left.importedAt)))
+    .slice(0, limit);
+}
+
+function salesAnalyticsArchiveProjection(rows) {
+  const archiveByReportId = classifySalesAnalyticsReportArchive(rows);
+  return rows.map((row) => publicSalesAnalyticsReport(row, archiveByReportId[row.id]));
+}
+
+function salesReportSeriesHttpError(error) {
+  if (!(error instanceof SalesAnalyticsReportSeriesError)) return error;
+  const messages = {
+    SALES_ANALYTICS_REPORT_SERIES_SELECTION_INVALID: "Bitte zwischen einem und 24 unterschiedliche PDF-Berichte auswählen.",
+    SALES_ANALYTICS_REPORT_SERIES_REPORT_INVALID: "Mindestens ein ausgewählter PDF-Bericht ist für eine gemeinsame Auswertung unvollständig.",
+    SALES_ANALYTICS_REPORT_SERIES_DATE_INVALID: "Mindestens ein Berichtszeitraum ist ungültig.",
+    SALES_ANALYTICS_REPORT_SERIES_VALUE_INVALID: "Mindestens eine Berichtskennzahl kann nicht verlustfrei zusammengeführt werden.",
+    SALES_ANALYTICS_REPORT_SERIES_MIXED_LOCATION: "Eine gemeinsame Auswertung ist nur innerhalb derselben GP-Filiale zulässig.",
+    SALES_ANALYTICS_REPORT_SERIES_MIXED_SOURCE: "Die ausgewählten Berichte gehören nicht zur selben Berichtsart, Quelle oder Währung.",
+    SALES_ANALYTICS_REPORT_SERIES_OVERLAP: "Die ausgewählten Berichtszeiträume überschneiden sich und werden deshalb nicht zusammengerechnet.",
+    SALES_ANALYTICS_REPORT_SERIES_COMPARISON_OVERLAP: "Die Vergleichszeiträume der ausgewählten Berichte überschneiden sich und werden deshalb nicht zusammengerechnet.",
+  };
+  const status = [
+    "SALES_ANALYTICS_REPORT_SERIES_OVERLAP",
+    "SALES_ANALYTICS_REPORT_SERIES_COMPARISON_OVERLAP",
+  ].includes(error.code) ? 409 : 422;
+  return httpError(
+    status,
+    messages[error.code] || "Die PDF-Berichte können nicht sicher gemeinsam ausgewertet werden.",
+    error.code,
+  );
+}
+
+app.get("/api/sales-analytics/report-import/context", async (request, response) => {
+  const { session, projection } = salesAnalyticsRequestContext(request, { importManagement: true });
+  const locations = await salesAnalyticsLocations(projection);
+  const allowedLocationIds = new Set(locations.map((location) => location.id));
+  const mappings = (await salesAnalyticsRepository.listActiveBranchMappings(
+    TRADEFOTO_REPORT_SOURCE_SYSTEM,
+  )).filter((mapping) => allowedLocationIds.has(String(mapping.locationId)));
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json({
+    adapter: {
+      id: "tradefoto_pdf_report",
+      accepts: ["application/pdf"],
+      maximumBytes: TRADEFOTO_REPORT_MAX_BYTES,
+      originalRetained: false,
+      extraction: "text_layout_with_local_ocr_review",
+    },
+    locations,
+    mappings,
+    currencies: [{ id: "EUR", label: "EUR – Euro" }],
+    rights: buildSalesAnalyticsProjection(session),
+  });
+});
+
+app.post("/api/sales-analytics/report-import/inspect", express.raw({
+  type: ["application/pdf", "application/octet-stream"],
+  limit: "15mb",
+}), async (request, response) => {
+  const { session } = salesAnalyticsRequestContext(request, { importManagement: true, csrf: true });
+  let fileName = String(request.get("X-Import-Filename") || "TradeFoto-Statistik.pdf");
+  try { fileName = decodeURIComponent(fileName); } catch {}
+  let preview;
+  try {
+    preview = await inspectTradeFotoReportBuffer(request.body, { fileName });
+  } catch (error) {
+    if (error instanceof TradeFotoReportError
+      && error.code === "TRADEFOTO_REPORT_TEXT_LAYER_REQUIRED") {
+      try {
+        preview = await inspectTradeFotoOcrReportBuffer(request.body, { fileName });
+      } catch (ocrFailure) {
+        throw tradeFotoReportHttpError(ocrFailure);
+      }
+    } else {
+      throw tradeFotoReportHttpError(error);
+    }
+  }
+  integrationCache.deleteKind(session.employeeNumber, "sales-report-preview");
+  const previewSession = integrationCache.create(
+    session.employeeNumber,
+    "sales-report-preview",
+    preview,
+  );
+  auditPortal(
+    session.employeeNumber,
+    "sales.report.pdf.inspect",
+    "sales_report_preview",
+    previewSession.id,
+    JSON.stringify({
+      sourceFileSha256: preview.source.contentSha256,
+      pageCount: preview.source.pageCount,
+      productGroupCount: preview.productGroups.length,
+      externalBranchId: preview.report.externalBranchId,
+      periodStart: preview.report.periods.period.start,
+      periodEnd: preview.report.periods.period.end,
+      reconciliationStatus: preview.reconciliation.status,
+      extraction: preview.source.extraction,
+      ocrReviewed: preview.source.ocrReviewed,
+      originalRetained: false,
+    }),
+  );
+  response.setHeader("Cache-Control", "private, no-store");
+  response.status(201).json({
+    previewId: previewSession.id,
+    expiresAt: previewSession.expiresAt,
+    preview,
+  });
+});
+
+function auditSalesReportImportRejection(session, entry, preview, locationId, reasonCode) {
+  const safeReasonCode = String(reasonCode || "SALES_ANALYTICS_REPORT_IMPORT_FAILED")
+    .replace(/[^A-Za-z0-9._:-]/g, "")
+    .slice(0, 100) || "SALES_ANALYTICS_REPORT_IMPORT_FAILED";
+  const sourceFileSha256 = /^[a-f0-9]{64}$/.test(String(preview?.source?.contentSha256 || ""))
+    ? preview.source.contentSha256
+    : null;
+  auditPortal(
+    session.employeeNumber,
+    "sales.report.pdf.rejected",
+    "sales_report_import",
+    String(entry?.id || sourceFileSha256 || "").slice(0, 120),
+    JSON.stringify({
+      reasonCode: safeReasonCode,
+      sourceFileSha256,
+      locationId: String(locationId || "").slice(0, 80) || null,
+      externalBranchId: String(preview?.report?.externalBranchId || "").slice(0, 80) || null,
+      periodStart: preview?.report?.periods?.period?.start || null,
+      periodEnd: preview?.report?.periods?.period?.end || null,
+      extraction: preview?.source?.extraction || null,
+      originalRetained: false,
+    }),
+  );
+}
+
+app.post("/api/sales-analytics/report-import/apply", async (request, response) => {
+  const { session, projection } = salesAnalyticsRequestContext(
+    request,
+    { importManagement: true, csrf: true },
+  );
+  const entry = integrationCache.get(
+    request.body?.previewId,
+    session.employeeNumber,
+    "sales-report-preview",
+  );
+  const locationId = assertSalesAnalyticsLocation(projection, request.body?.locationId);
+  const locations = await salesAnalyticsLocations(projection);
+  if (!locations.some((location) => location.id === locationId)) {
+    throw httpError(403, "Diese aktive Filiale ist für den Import nicht verfügbar.", "SALES_ANALYTICS_LOCATION_DENIED");
+  }
+  if (String(request.body?.currency || "").toUpperCase() !== "EUR") {
+    auditSalesReportImportRejection(
+      session,
+      entry,
+      entry.value,
+      locationId,
+      "SALES_ANALYTICS_CURRENCY_CONFIRMATION_REQUIRED",
+    );
+    throw httpError(422, "Die Währung muss für diesen Bericht ausdrücklich als EUR bestätigt werden.", "SALES_ANALYTICS_CURRENCY_CONFIRMATION_REQUIRED");
+  }
+  let confirmedPreview = entry.value;
+  try {
+    if (confirmedPreview.source.extraction === TRADEFOTO_REPORT_EXTRACTIONS.OCR) {
+      confirmedPreview = reviewTradeFotoOcrPreview(
+        confirmedPreview,
+        request.body?.ocrReview,
+      );
+    } else if (request.body?.ocrReview !== undefined) {
+      throw new TradeFotoReportError("TRADEFOTO_REPORT_OCR_REVIEW_INVALID", {
+        reason: "not_ocr_preview",
+      });
+    }
+  } catch (error) {
+    auditSalesReportImportRejection(
+      session,
+      entry,
+      confirmedPreview,
+      locationId,
+      error?.code || "TRADEFOTO_REPORT_OCR_REVIEW_INVALID",
+    );
+    throw tradeFotoReportHttpError(error);
+  }
+  let result;
+  try {
+    result = await salesAnalyticsRepository.recordConfirmedTradeFotoReport({
+      preview: confirmedPreview,
+      locationId,
+      currency: "EUR",
+      confirmed: request.body?.confirmed === true,
+      actor: session.employeeNumber,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error?.operation === "tradefoto-branch-mapping-conflict") {
+      auditSalesReportImportRejection(
+        session,
+        entry,
+        confirmedPreview,
+        locationId,
+        "SALES_ANALYTICS_BRANCH_MAPPING_CONFLICT",
+      );
+      throw httpError(
+        409,
+        "Die TradeFoto-Filialkennung ist bereits einer anderen GP-Filiale zugeordnet.",
+        "SALES_ANALYTICS_BRANCH_MAPPING_CONFLICT",
+      );
+    }
+    if ([
+      "tradefoto-report-period-conflict",
+      "tradefoto-report-reuse-conflict",
+    ].includes(error?.operation)) {
+      const periodConflict = error.operation === "tradefoto-report-period-conflict";
+      const errorCode = periodConflict
+        ? "SALES_ANALYTICS_REPORT_PERIOD_CONFLICT"
+        : "SALES_ANALYTICS_REPORT_REUSE_CONFLICT";
+      auditSalesReportImportRejection(
+        session,
+        entry,
+        confirmedPreview,
+        locationId,
+        errorCode,
+      );
+      integrationCache.delete(entry.id, session.employeeNumber);
+      throw httpError(
+        409,
+        periodConflict
+          ? "Für diese TradeFoto-Filiale und diesen Berichtszeitraum ist bereits ein Bericht gespeichert. Ein zweiter Datenstand wird nicht stillschweigend angelegt."
+          : "Diese PDF wurde bereits mit einer anderen bestätigten Zuordnung oder Berichtsgrundlage übernommen.",
+        errorCode,
+      );
+    }
+    if (error?.code === "PERSISTENCE_STATEMENT_INVALID") {
+      auditSalesReportImportRejection(
+        session,
+        entry,
+        confirmedPreview,
+        locationId,
+        "SALES_ANALYTICS_REPORT_CONFIRMATION_REQUIRED",
+      );
+      throw httpError(
+        422,
+        "Der Bericht kann erst nach vollständiger Prüfung und Bestätigung übernommen werden.",
+        "SALES_ANALYTICS_REPORT_CONFIRMATION_REQUIRED",
+      );
+    }
+    auditSalesReportImportRejection(
+      session,
+      entry,
+      confirmedPreview,
+      locationId,
+      error?.code || error?.operation || "SALES_ANALYTICS_REPORT_IMPORT_FAILED",
+    );
+    throw error;
+  }
+  integrationCache.delete(entry.id, session.employeeNumber);
+  auditPortal(
+    session.employeeNumber,
+    result.created ? "sales.report.pdf.import" : "sales.report.pdf.reuse",
+    "sales_aggregate_report",
+    result.report.id,
+    JSON.stringify({
+      sourceFileSha256: result.report.sourceFileSha256,
+      locationId: result.report.locationId,
+      externalBranchId: result.report.externalBranchId,
+      currency: result.report.currency,
+      productGroupCount: result.report.productGroupCount,
+      reconciliationStatus: result.report.reconciliationStatus,
+      extraction: result.report.extraction,
+      reviewMethod: result.report.reviewMethod,
+      originalRetained: false,
+    }),
+  );
+  response.status(result.created ? 201 : 200).json({
+    created: result.created,
+    report: publicSalesAnalyticsReport(result.report),
+  });
+});
+
+app.delete("/api/sales-analytics/report-import/sessions/:id", (request, response) => {
+  const { session } = salesAnalyticsRequestContext(request, { importManagement: true, csrf: true });
+  integrationCache.delete(request.params.id, session.employeeNumber);
+  response.status(204).end();
+});
+
+app.get("/api/sales-analytics/reports", async (request, response) => {
+  const { projection } = salesAnalyticsRequestContext(request);
+  const limit = Math.min(200, Math.max(1, Math.trunc(Number(request.query.limit || 100) || 100)));
+  const locationId = String(request.query.locationId || "").trim();
+  const reports = await listProjectedSalesAnalyticsReports(projection, locationId, limit);
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json({
+    reports: salesAnalyticsArchiveProjection(reports),
+    rights: { grossMargin: projection.grossMargin },
+  });
+});
+
+app.post("/api/sales-analytics/report-series/analyze", async (request, response) => {
+  const { session, projection } = salesAnalyticsRequestContext(request, { csrf: true });
+  let reportIds;
+  try {
+    const body = request.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)
+      || Object.keys(body).length !== 1
+      || !Object.hasOwn(body, "reportIds")) {
+      throw new SalesAnalyticsReportSeriesError(
+        "SALES_ANALYTICS_REPORT_SERIES_SELECTION_INVALID",
+      );
+    }
+    reportIds = normalizeSalesAnalyticsReportSeriesIds(body.reportIds);
+  } catch (error) {
+    auditPortal(
+      session.employeeNumber,
+      "sales.report.series.rejected",
+      "sales_report_series",
+      "",
+      JSON.stringify({
+        reasonCode: String(error?.code || "SALES_ANALYTICS_REPORT_SERIES_SELECTION_INVALID")
+          .replace(/[^A-Za-z0-9._:-]/g, "").slice(0, 100),
+        reportCount: Array.isArray(request.body?.reportIds) ? request.body.reportIds.length : 0,
+      }),
+    );
+    throw salesReportSeriesHttpError(error);
+  }
+
+  const bundles = [];
+  for (const reportId of reportIds) {
+    const bundle = await salesAnalyticsRepository.getReportBundle(reportId);
+    if (!bundle) {
+      auditPortal(
+        session.employeeNumber,
+        "sales.report.series.rejected",
+        "sales_report_series",
+        "",
+        JSON.stringify({
+          reasonCode: "SALES_ANALYTICS_REPORT_NOT_FOUND",
+          reportCount: reportIds.length,
+        }),
+      );
+      throw httpError(
+        404,
+        "Mindestens ein ausgewählter Statistikbericht wurde nicht gefunden.",
+        "SALES_ANALYTICS_REPORT_NOT_FOUND",
+      );
+    }
+    try {
+      assertSalesAnalyticsLocation(projection, bundle.report.locationId);
+    } catch (error) {
+      auditPortal(
+        session.employeeNumber,
+        "sales.report.series.rejected",
+        "sales_report_series",
+        "",
+        JSON.stringify({
+          reasonCode: "SALES_ANALYTICS_LOCATION_DENIED",
+          reportCount: reportIds.length,
+        }),
+      );
+      throw error;
+    }
+    bundles.push(publicSalesAnalyticsReportBundle(bundle, projection));
+  }
+
+  let series;
+  try {
+    series = aggregateSalesAnalyticsReportSeries(bundles);
+  } catch (error) {
+    auditPortal(
+      session.employeeNumber,
+      "sales.report.series.rejected",
+      "sales_report_series",
+      "",
+      JSON.stringify({
+        reasonCode: String(error?.code || "SALES_ANALYTICS_REPORT_SERIES_INVALID")
+          .replace(/[^A-Za-z0-9._:-]/g, "").slice(0, 100),
+        reportCount: reportIds.length,
+      }),
+    );
+    throw salesReportSeriesHttpError(error);
+  }
+  auditPortal(
+    session.employeeNumber,
+    "sales.report.series.analyze",
+    "sales_report_series",
+    series.selection.fingerprint,
+    JSON.stringify({
+      locationId: series.selection.locationId,
+      reportCount: series.selection.reportCount,
+      periodStart: series.selection.period.start,
+      periodEnd: series.selection.period.end,
+      coverageDays: series.selection.coverageDays,
+      gapDays: series.selection.gapDays,
+      comparisonAligned: series.selection.comparisonAligned,
+    }),
+  );
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json(series);
+});
+
+app.get("/api/sales-analytics/reports/:id", async (request, response) => {
+  const { projection } = salesAnalyticsRequestContext(request);
+  const bundle = await salesAnalyticsRepository.getReportBundle(request.params.id);
+  if (!bundle) throw httpError(404, "Der Statistikbericht wurde nicht gefunden.", "SALES_ANALYTICS_REPORT_NOT_FOUND");
+  assertSalesAnalyticsLocation(projection, bundle.report.locationId);
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json(publicSalesAnalyticsReportBundle(bundle, projection));
 });
 
 app.get("/api/integrations/profiles", async (request, response) => {

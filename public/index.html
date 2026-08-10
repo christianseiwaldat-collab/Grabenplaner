@@ -124,6 +124,16 @@
               </button>
             </div>
           </section>
+          <section class="nav-module hidden" id="salesAdministrationNav" aria-label="Verkaufsverwaltung">
+            <button type="button" class="nav-module-toggle expanded" id="salesAdministrationToggle" data-nav-toggle="salesAdministration" aria-controls="salesAdministrationNavChildren" aria-expanded="true">
+              <span class="nav-module-chevron" aria-hidden="true"></span><span class="nav-symbol" aria-hidden="true">▤</span><span>Verkaufsverwaltung</span>
+            </button>
+            <div class="nav-module-children" id="salesAdministrationNavChildren">
+              <button class="nav-item nav-module-route hidden" data-view="salesAnalytics" id="salesAnalyticsNavButton">
+                <span class="nav-symbol" aria-hidden="true">⌁</span><span>Verkaufsanalysen</span>
+              </button>
+            </div>
+          </section>
         </nav>
 
         <div class="sidebar-settings-shortcut">
@@ -996,6 +1006,126 @@
             </div>
           </form>
         </dialog>
+
+        <section id="salesAnalyticsView" class="view sales-analytics-view" aria-labelledby="salesAnalyticsTitle">
+          <header class="topbar sales-analytics-topbar">
+            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAnalyticsTitle">Verkaufsanalysen</h1><p class="subtitle">Filial-, Unternehmens- und Onlineshop-Auswertungen in einem geschützten Desktop-Arbeitsbereich.</p></div>
+            <span class="status-badge inactive" id="salesAnalyticsStatusBadge">Berichtsdaten werden geladen</span>
+          </header>
+
+          <div class="sales-analytics-desktop-workspace">
+            <section class="sales-analytics-foundation-card" aria-labelledby="salesAnalyticsFoundationTitle">
+              <div>
+                <span class="eyebrow">Aufgearbeitete TradeFoto-Berichte</span>
+                <h2 id="salesAnalyticsFoundationTitle">TradeFoto-PDF-Statistiken sicher erkennen und auswerten</h2>
+                <p>Der Warengruppenvergleich wird als strukturierter Statistikbericht übernommen. GP erkennt Filiale, Zeiträume, Warengruppen und Kennzahlen; Filialzuordnung und Währung müssen bestätigt werden. Die Original-PDF wird nicht gespeichert, Einzelbons oder Kundenbezüge werden daraus nicht erzeugt.</p>
+              </div>
+              <dl class="sales-analytics-boundaries">
+                <div><dt>Produktstatus</dt><dd>Fest in Grabenplaner integriert</dd></div>
+                <div><dt>Datenzugriff</dt><dd>Fail-closed und serverseitig projiziert</dd></div>
+                <div><dt>Importtyp</dt><dd>Aggregierter Warengruppenbericht</dd></div>
+                <div><dt>Prüfschritt</dt><dd>Filiale, EUR und Berichtssumme bestätigen</dd></div>
+                <div><dt>Darstellung</dt><dd>Desktop für Tabellen und Grafiken</dd></div>
+              </dl>
+            </section>
+
+            <section class="sales-analytics-import-card hidden" id="salesReportImportPanel" aria-labelledby="salesReportImportTitle">
+              <div class="sales-analytics-section-heading">
+                <div><span class="eyebrow">PDF-Berichtsimport</span><h2 id="salesReportImportTitle">TradeFoto-Statistik prüfen</h2><p>Geeignet ist der Bericht „Warengruppenvergleich netto“. Eine vorhandene Textschicht wird direkt gelesen; reine Raster-PDFs werden lokal erkannt und anschließend als vollständig bearbeitbarer OCR-Vorschlag angezeigt.</p></div>
+                <div class="sales-analytics-file-actions">
+                  <label class="secondary-button sales-analytics-file-button" for="salesReportImportFile">PDF auswählen</label>
+                  <input id="salesReportImportFile" type="file" accept="application/pdf,.pdf" />
+                  <button class="primary-button" id="salesReportInspectButton" type="button" disabled>PDF prüfen</button>
+                </div>
+              </div>
+              <p class="inline-message hidden" id="salesReportImportMessage" role="status"></p>
+
+              <div class="sales-report-preview hidden" id="salesReportPreview">
+                <div class="sales-report-preview-head">
+                  <div><span class="eyebrow">Prüfvorschau</span><h3>Erkannter Statistikbericht</h3></div>
+                  <button class="secondary-button" id="salesReportDiscardButton" type="button">Vorschau verwerfen</button>
+                </div>
+                <dl class="sales-report-preview-summary" id="salesReportPreviewSummary"></dl>
+                <section class="sales-report-ocr-review hidden" id="salesReportOcrReview" aria-labelledby="salesReportOcrReviewTitle">
+                  <div class="sales-report-ocr-review-head">
+                    <div><span class="eyebrow">Lokale OCR · menschliche Prüfung</span><h4 id="salesReportOcrReviewTitle">Alle erkannten Angaben prüfen und bei Bedarf korrigieren</h4><p>Der OCR-Vorschlag wird nicht automatisch übernommen. Erst nach Ihrer Bearbeitung werden Pflichtwerte und gedruckte Summen serverseitig erneut geprüft.</p></div>
+                    <span class="status-badge inactive" id="salesReportOcrReviewState">Prüfung erforderlich</span>
+                  </div>
+                  <div class="sales-report-ocr-fields" id="salesReportOcrReportFields"></div>
+                </section>
+                <div class="sales-report-confirmation-grid">
+                  <label><span>GP-Filiale</span><select id="salesReportImportLocation"><option value="">Filiale ausdrücklich zuordnen</option></select></label>
+                  <label><span>Währung</span><select id="salesReportImportCurrency"><option value="">Währung bestätigen</option><option value="EUR">EUR – Euro</option></select></label>
+                </div>
+                <div class="sales-report-issues" id="salesReportPreviewIssues"></div>
+                <div class="sales-report-preview-table-toolbar">
+                  <strong id="salesReportPreviewTableTitle">Erkannte Warengruppen</strong>
+                  <label class="hidden" id="salesReportPreviewHorizonField"><span>OCR-Zeitraum bearbeiten</span><select id="salesReportPreviewHorizon"><option value="period">Berichtszeitraum</option><option value="yearToDate">Jahr bis Berichtsende</option></select></label>
+                </div>
+                <div class="sales-report-preview-table-wrap">
+                  <table class="sales-report-table sales-report-preview-table"><thead id="salesReportPreviewHead"></thead><tbody id="salesReportPreviewBody"></tbody><tfoot id="salesReportPreviewFoot"></tfoot></table>
+                </div>
+                <label class="sales-report-confirmation"><input id="salesReportImportConfirmed" type="checkbox" /><span id="salesReportConfirmationText">Ich bestätige die erkannte TradeFoto-Filiale, die Zuordnung zur gewählten GP-Filiale, EUR als Währung sowie die angezeigten Prüfhilfen.</span></label>
+                <div class="sales-report-preview-actions"><span>Die PDF selbst wird nach der Prüfung nicht gespeichert.</span><button class="primary-button" id="salesReportApplyButton" type="button" disabled>Bericht verbindlich übernehmen</button></div>
+              </div>
+            </section>
+
+            <section class="sales-analytics-filter-shell" aria-label="Analyseauswahl">
+              <label><span>Filiale</span><select id="salesReportLocationFilter"><option value="">Alle freigegebenen Filialberichte</option></select></label>
+              <label><span>Zeitraum schneidet ab</span><input id="salesReportDateFrom" type="date" /></label>
+              <label><span>Zeitraum schneidet bis</span><input id="salesReportDateTo" type="date" /></label>
+              <label><span>Statistikbericht</span><select id="salesReportSelect"><option value="">Noch kein Bericht importiert</option></select></label>
+              <label><span>Auswertung</span><select id="salesReportHorizon"><option value="period">Berichtszeitraum</option><option value="year_to_date">Jahr bis Berichtsende</option></select></label>
+              <button class="secondary-button sales-analytics-filter-reset" id="salesReportResetFilters" type="button">Filter zurücksetzen</button>
+              <p class="sales-analytics-filter-notice hidden" id="salesReportFilterNotice" role="status"></p>
+            </section>
+
+            <section class="sales-analytics-archive" id="salesReportArchive" aria-labelledby="salesReportArchiveTitle">
+              <div class="sales-analytics-surface-heading">
+                <div><span class="eyebrow">PDF-Berichtsarchiv</span><h2 id="salesReportArchiveTitle">Zeiträume sicher zusammenstellen</h2><p>Einzelne Berichte bleiben auch bei Überschneidungen nutzbar. GP rechnet mehrere PDFs nur innerhalb derselben Filiale und nur bei überschneidungsfreien Berichts- und Vergleichszeiträumen zusammen.</p></div>
+                <div class="sales-report-archive-actions">
+                  <button class="secondary-button" id="salesReportSeriesClearButton" type="button" disabled>Auswahl leeren</button>
+                  <button class="primary-button" id="salesReportSeriesAnalyzeButton" type="button" disabled>Auswahl sicher analysieren</button>
+                </div>
+              </div>
+              <p class="sales-report-archive-summary" id="salesReportArchiveSelectionSummary" role="status">Noch keine PDF-Berichte für eine gemeinsame Analyse ausgewählt.</p>
+              <div class="sales-report-coverage-chart hidden" id="salesReportCoverageChart" aria-label="Zeitabdeckung der ausgewählten PDF-Berichte"></div>
+              <div class="sales-report-table-shell">
+                <table class="sales-report-table sales-report-archive-table">
+                  <thead><tr><th scope="col">Auswahl</th><th scope="col">Filiale</th><th scope="col">Berichtszeitraum</th><th scope="col">Tage</th><th scope="col">Vergleichszeitraum</th><th scope="col">Warengruppen</th><th scope="col">Import</th><th scope="col">Archivstatus</th><th scope="col">Ansicht</th></tr></thead>
+                  <tbody id="salesReportArchiveBody"></tbody>
+                </table>
+                <div class="sales-analytics-empty-surface" id="salesReportArchiveEmpty"><strong>Noch keine PDF-Berichte</strong><p>Nach einem bestätigten Import erscheint der Bericht hier als eigenständiger Zeitraum.</p></div>
+              </div>
+            </section>
+
+            <section class="sales-analytics-kpis" id="salesReportKpis" aria-label="Kennzahlen des ausgewählten Berichts">
+              <div class="sales-analytics-empty-kpis"><strong>Noch keine Kennzahlen</strong><span>Wählen Sie einen importierten Statistikbericht aus.</span></div>
+            </section>
+
+            <div class="sales-analytics-surface-grid">
+              <section class="sales-analytics-surface sales-analytics-chart-surface" aria-labelledby="salesAnalyticsChartTitle">
+                <div class="sales-analytics-surface-heading">
+                  <div><span class="eyebrow">Aktuell und Vergleich</span><h2 id="salesAnalyticsChartTitle">Stärkste Warengruppen</h2><p id="salesReportSummary">Noch kein Statistikbericht ausgewählt.</p></div>
+                  <label class="sales-analytics-chart-metric"><span>Diagramm-Kennzahl</span><select id="salesReportChartMetric"><option value="netRevenue">Umsatz netto</option></select></label>
+                </div>
+                <div class="sales-chart-legend" id="salesReportChartLegend" aria-hidden="true"><span class="current">Aktueller Zeitraum</span><span class="comparison">Vergleichszeitraum</span></div>
+                <div class="sales-analytics-chart" id="salesReportChart"><div class="sales-analytics-empty-surface"><strong>Noch keine Berichtsdaten</strong><p>Nach einer bestätigten Übernahme erscheinen hier die stärksten Warengruppen.</p></div></div>
+              </section>
+
+              <section class="sales-analytics-surface sales-analytics-table-surface" aria-labelledby="salesAnalyticsTableTitle">
+                <div class="sales-analytics-surface-heading">
+                  <div><span class="eyebrow">Aktuell und Vergleich im Detail</span><h2 id="salesAnalyticsTableTitle">Warengruppen im Detail</h2><p id="salesReportTableCount">Noch keine Warengruppen ausgewählt.</p></div>
+                  <div class="sales-analytics-table-controls">
+                    <label><span>Warengruppe suchen</span><input id="salesReportGroupSearch" type="search" placeholder="Nummer oder Bezeichnung" autocomplete="off" /></label>
+                    <label><span>Sortierung</span><select id="salesReportTableSort"><option value="netRevenue_desc">Umsatz absteigend</option><option value="change_desc">Umsatzabweichung absteigend</option><option value="quantity_desc">Menge absteigend</option><option value="customers_desc">Kunden absteigend</option><option value="group_asc">Warengruppe aufsteigend</option></select></label>
+                  </div>
+                </div>
+                <div class="sales-report-table-shell"><table class="sales-report-table sales-report-analysis-table"><thead id="salesReportTableHead"></thead><tbody id="salesReportTableBody"></tbody></table><div class="sales-analytics-empty-surface" id="salesReportTableEmpty"><strong>Noch keine Berichtsdaten</strong><p>Wählen Sie einen importierten Statistikbericht aus.</p></div></div>
+              </section>
+            </div>
+          </div>
+        </section>
 
         <section id="personnelView" class="view">
           <header class="settings-header">

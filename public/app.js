@@ -152,6 +152,27 @@ const state = {
   selectedRequest: null,
   selectedSicknessCase: null,
   selectedAmuReport: null,
+  salesAnalytics: {
+    context: null,
+    reports: [],
+    selectedReportId: "",
+    selectedReport: null,
+    locationFilter: "",
+    dateFrom: "",
+    dateTo: "",
+    horizon: "period",
+    chartMetric: "netRevenue",
+    tableSearch: "",
+    tableSort: "netRevenue_desc",
+    archiveSelection: [],
+    reportSeries: null,
+    seriesLoading: false,
+    seriesError: "",
+    previewId: "",
+    preview: null,
+    previewHorizon: "period",
+    loading: false,
+  },
   allEmployees: [],
   personnelDirectory: [],
   costCenters: [],
@@ -393,7 +414,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -444,6 +465,7 @@ const elements = Object.fromEntries(
     "payrollHandoffMonth", "payrollHandoffLocation", "payrollHandoffDepartment", "payrollHandoffPreflightButton", "payrollHandoffCreateButton", "payrollHandoffPreflightResult", "payrollHandoffList", "payrollHandoffProtocolModal", "payrollHandoffProtocolForm", "payrollHandoffProtocolId", "payrollHandoffProtocolSummary", "payrollHandoffProtocolResult", "payrollHandoffProtocolNumber", "payrollHandoffProtocolNote", "payrollHandoffProtocolMessage", "savePayrollHandoffProtocolButton",
     "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportSourceType", "personnelImportFileField", "personnelImportSqlConnectionField", "personnelImportSqlConnection", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultCostCenter", "personnelImportDefaultDepartment", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
     "integrationConnectionModal", "integrationConnectionForm", "integrationConnectionTitle", "integrationConnectionId", "integrationConnectionKind", "integrationConnectionName", "integrationConnectionActive", "integrationConnectionScopeLocations", "integrationConnectionScopeDepartments", "integrationSqlFields", "integrationSqlHost", "integrationSqlPort", "integrationSqlDatabase", "integrationSqlInstance", "integrationSqlSchema", "integrationSqlView", "integrationSqlAllowedColumns", "integrationSqlTls", "integrationSqlTimeout", "integrationSqlRowLimit", "integrationApiFields", "integrationApiEndpoint", "integrationApiAuthentication", "integrationApiKeyHeaderField", "integrationApiKeyHeader", "integrationApiTimeout", "integrationApiRequestLimit", "integrationApiResponseLimit", "integrationCredentialPanel", "integrationCredentialTitle", "integrationCredentialStatus", "integrationSqlCredentials", "integrationApiCredentials", "integrationBearerTokenField", "integrationApiKeyField", "integrationBasicUsernameField", "integrationBasicPasswordField", "integrationCredentialUsername", "integrationCredentialPassword", "integrationCredentialToken", "integrationCredentialApiKey", "integrationCredentialBasicUsername", "integrationCredentialBasicPassword", "integrationConnectionMessage", "deleteIntegrationConnectionButton", "testIntegrationConnectionButton", "saveIntegrationConnectionButton",
+    "salesAnalyticsStatusBadge", "salesReportImportPanel", "salesReportImportFile", "salesReportInspectButton", "salesReportImportMessage", "salesReportPreview", "salesReportPreviewSummary", "salesReportOcrReview", "salesReportOcrReviewState", "salesReportOcrReportFields", "salesReportImportLocation", "salesReportImportCurrency", "salesReportPreviewIssues", "salesReportPreviewTableTitle", "salesReportPreviewHorizonField", "salesReportPreviewHorizon", "salesReportPreviewHead", "salesReportPreviewBody", "salesReportPreviewFoot", "salesReportImportConfirmed", "salesReportConfirmationText", "salesReportDiscardButton", "salesReportApplyButton", "salesReportLocationFilter", "salesReportDateFrom", "salesReportDateTo", "salesReportResetFilters", "salesReportFilterNotice", "salesReportSelect", "salesReportHorizon", "salesReportArchive", "salesReportArchiveBody", "salesReportArchiveEmpty", "salesReportArchiveSelectionSummary", "salesReportCoverageChart", "salesReportSeriesAnalyzeButton", "salesReportSeriesClearButton", "salesReportKpis", "salesReportSummary", "salesReportChartMetric", "salesReportChartLegend", "salesReportChart", "salesReportGroupSearch", "salesReportTableSort", "salesReportTableCount", "salesReportTableHead", "salesReportTableBody", "salesReportTableEmpty",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
 
@@ -851,6 +873,11 @@ function canReadCentralVacations() {
 function hasGovernancePermission(permission) {
   return !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes(permission) === true;
+}
+
+function canAccessSalesAnalytics() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.salesAnalytics?.workspace === true;
 }
 
 function canReadVacationAccounts() {
@@ -1515,10 +1542,13 @@ function applyRoleVisibility() {
   const branchLoanOverviewManagementAccess = canManageBranchLoanOverview();
   const branchOrderManagementAccess = canManageBranchOrders();
   const branchAccountPasswordManagementAccess = canManageBranchAccountPasswords();
+  const salesAnalyticsAccess = canAccessSalesAnalytics();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
+  elements.salesAdministrationNav?.classList.toggle("hidden", !salesAnalyticsAccess);
+  elements.salesAnalyticsNavButton?.classList.toggle("hidden", !salesAnalyticsAccess);
   elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
   elements.candidatePreboardingNavButton?.classList.toggle("hidden", !candidatePreboardingAccess);
   elements.workflowCenterNavButton?.classList.toggle("hidden", !workflowCenterAccess);
@@ -1773,6 +1803,7 @@ function applyRoleVisibility() {
   if (!timeReadAccess && state.currentView === "timeTracking") setView("planning");
   if (!loanManagementAccess && state.currentView === "loans") setView("planning");
   if (!branchOrderManagementAccess && state.currentView === "branchOrders") setView("planning");
+  if (!salesAnalyticsAccess && state.currentView === "salesAnalytics") setView("planning");
   renderSidebarSession();
 }
 
@@ -2855,6 +2886,7 @@ function navigationGroups() {
     planning: { toggle: document.querySelector('[data-nav-toggle="planning"]'), children: elements.planningNavChildren },
     vacations: { toggle: document.querySelector('[data-nav-toggle="vacations"]'), children: elements.vacationNavChildren },
     personnelAdministration: { toggle: elements.personnelAdministrationToggle, children: elements.personnelAdministrationNavChildren },
+    salesAdministration: { toggle: elements.salesAdministrationToggle, children: elements.salesAdministrationNavChildren },
   };
 }
 
@@ -2928,6 +2960,12 @@ function renderContextNavigation() {
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dataRequests");
   setNavigationCurrent(elements.requestsNavButton, state.currentView === "requests");
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
+
+  const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
+  const salesAnalyticsActive = state.currentView === "salesAnalytics";
+  elements.salesAdministrationNav?.classList.toggle("contains-active", salesAnalyticsActive);
+  applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
+  setNavigationCurrent(elements.salesAnalyticsNavButton, salesAnalyticsActive);
 }
 
 function renderHeader() {
@@ -20614,12 +20652,1433 @@ async function deliverPayrollExport() {
   }
 }
 
+function canManageSalesReportImports() {
+  return state.portalSession?.user?.salesAnalytics?.importManagement === true;
+}
+
+function salesAnalyticsLocationName(locationId) {
+  const id = String(locationId || "");
+  const location = state.salesAnalytics.context?.locations?.find((entry) => String(entry.id) === id)
+    || state.locations.find((entry) => String(entry.id) === id);
+  return location?.name || location?.label || `Filiale ${id}`;
+}
+
+function formatSalesDecimal(value, { currency = false, maximumFractionDigits = 2 } = {}) {
+  if (value === null || value === undefined || value === "") return "—";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "—";
+  return new Intl.NumberFormat("de-AT", {
+    minimumFractionDigits: currency ? 2 : 0,
+    maximumFractionDigits,
+    ...(currency ? { style: "currency", currency: "EUR" } : {}),
+  }).format(numeric);
+}
+
+function salesPeriodLabel(period) {
+  if (!period?.start || !period?.end) return "Zeitraum offen";
+  return `${formatDate(period.start)}–${formatDate(period.end)}`;
+}
+
+function setSalesReportMessage(message = "", error = false) {
+  if (!elements.salesReportImportMessage) return;
+  elements.salesReportImportMessage.textContent = message;
+  elements.salesReportImportMessage.classList.toggle("hidden", !message);
+  elements.salesReportImportMessage.classList.toggle("error", Boolean(error));
+}
+
+function replaceSelectOptions(select, options, placeholder, selectedValue = "") {
+  if (!select) return;
+  const fragment = document.createDocumentFragment();
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = placeholder;
+  fragment.append(empty);
+  for (const option of options) {
+    const node = document.createElement("option");
+    node.value = String(option.value);
+    node.textContent = option.label;
+    fragment.append(node);
+  }
+  select.replaceChildren(fragment);
+  select.value = String(selectedValue || "");
+}
+
+function isSalesReportOcrPreview(preview = state.salesAnalytics.preview) {
+  return preview?.source?.extraction === "local_ocr_coordinates";
+}
+
+function salesOcrDecimalUnits(value) {
+  const input = String(value ?? "").replace(/[\u00a0\s]/g, "").trim();
+  let canonical = input;
+  if (!/^-?\d{1,20}\.\d{4}$/.test(canonical)) {
+    if (!/^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,4})?$/.test(input)) return null;
+    const negative = input.startsWith("-");
+    const unsigned = negative ? input.slice(1) : input;
+    const [integerPart, decimalPart = ""] = unsigned.split(",");
+    const integer = integerPart.replace(/\./g, "").replace(/^0+(?=\d)/, "") || "0";
+    const fraction = decimalPart.padEnd(4, "0");
+    const zero = /^0+$/.test(integer) && /^0+$/.test(fraction);
+    canonical = `${negative && !zero ? "-" : ""}${integer}.${fraction}`;
+  }
+  if (!/^-?\d{1,20}\.\d{4}$/.test(canonical)) return null;
+  const [integer, fraction] = canonical.split(".");
+  return BigInt(`${integer}${fraction}`);
+}
+
+function salesOcrReconciliation(preview) {
+  if (!isSalesReportOcrPreview(preview) || !preview?.totals?.horizons) {
+    return preview?.reconciliation?.status || "incomplete";
+  }
+  const checks = [];
+  for (const horizon of ["period", "yearToDate"]) {
+    for (const side of ["current", "comparison"]) {
+      for (const metric of ["quantity", "netRevenue", "grossMargin"]) {
+        const values = preview.productGroups.map((group) => (
+          salesOcrDecimalUnits(group?.horizons?.[horizon]?.[side]?.[metric])
+        ));
+        const reported = salesOcrDecimalUnits(preview.totals.horizons[horizon]?.[side]?.[metric]);
+        if (reported === null || values.some((value) => value === null)) {
+          checks.push("incomplete");
+          continue;
+        }
+        const calculated = values.reduce((sum, value) => sum + value, 0n);
+        const difference = calculated >= reported ? calculated - reported : reported - calculated;
+        const tolerance = metric === "quantity"
+          ? 10000n
+          : BigInt(Math.max(1, preview.productGroups.length)) * 50n;
+        checks.push(difference === 0n ? "match" : difference <= tolerance ? "within_tolerance" : "mismatch");
+      }
+    }
+  }
+  if (checks.includes("mismatch")) return "mismatch";
+  if (checks.includes("incomplete")) return "incomplete";
+  if (checks.includes("within_tolerance")) return "within_tolerance";
+  return "match";
+}
+
+function salesReconciliationLabel(status, ocr = false) {
+  const labels = {
+    match: "stimmt exakt",
+    within_tolerance: "innerhalb Prüftoleranz",
+    mismatch: ocr ? "OCR-Werte stimmen noch nicht" : "stimmt nicht überein",
+    incomplete: ocr ? "OCR-Werte noch unvollständig" : "unvollständig",
+  };
+  return labels[status] || "Prüfung offen";
+}
+
+function salesOcrReviewComplete(preview) {
+  if (!isSalesReportOcrPreview(preview) || !preview?.totals?.horizons) return false;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(String(preview.report?.externalBranchId || ""))) {
+    return false;
+  }
+  const validDate = (value, nullable = false) => {
+    if (nullable && !value) return true;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return false;
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  };
+  if (!validDate(preview.report.generatedOn, true)) return false;
+  const periods = preview.report?.periods || {};
+  for (const key of ["period", "comparison", "yearToDate", "yearToDateComparison"]) {
+    if (!validDate(periods[key]?.start) || !validDate(periods[key]?.end)
+      || periods[key].start > periods[key].end) return false;
+  }
+  if (periods.yearToDate.end !== periods.period.end
+    || periods.yearToDateComparison.end !== periods.comparison.end) return false;
+  const requiredMetricsValid = (horizons) => ["period", "yearToDate"].every((horizon) => (
+    ["current", "comparison"].every((side) => (
+      ["quantity", "netRevenue", "grossMargin", "customerCount"].every(
+        (metric) => salesOcrDecimalUnits(horizons?.[horizon]?.[side]?.[metric]) !== null,
+      )
+      && ([null, ""].includes(horizons?.[horizon]?.[side]?.revenuePerCustomer)
+        || salesOcrDecimalUnits(horizons[horizon][side].revenuePerCustomer) !== null)
+    ))
+  ));
+  const ids = new Set();
+  for (const group of preview.productGroups || []) {
+    if (!/^\d{3,4}$/.test(String(group.externalProductGroupId || ""))
+      || !String(group.label || "").trim()
+      || ids.has(group.externalProductGroupId)
+      || !requiredMetricsValid(group.horizons)) return false;
+    ids.add(group.externalProductGroupId);
+  }
+  return ids.size > 0
+    && requiredMetricsValid(preview.totals.horizons)
+    && ["match", "within_tolerance"].includes(salesOcrReconciliation(preview));
+}
+
+function setSalesOcrPreviewPath(path, value) {
+  const parts = String(path || "").split(".").filter(Boolean);
+  let target = state.salesAnalytics.preview;
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    target = target?.[parts[index]];
+  }
+  if (target && parts.length) target[parts[parts.length - 1]] = value;
+}
+
+function salesOcrInput(value, path, label, { type = "text", maxLength = 32 } = {}) {
+  const input = document.createElement("input");
+  input.type = type;
+  input.value = value ?? "";
+  input.maxLength = maxLength;
+  input.dataset.salesOcrPath = path;
+  input.setAttribute("aria-label", label);
+  input.title = label;
+  if (type === "text" && /Menge|Umsatz|Rohertrag|Kunden/.test(label)) input.inputMode = "decimal";
+  return input;
+}
+
+function salesOcrReviewPayload(preview) {
+  const metricPair = (pair) => ({
+    current: {
+      quantity: pair.current.quantity,
+      netRevenue: pair.current.netRevenue,
+      grossMargin: pair.current.grossMargin,
+      customerCount: pair.current.customerCount,
+      revenuePerCustomer: pair.current.revenuePerCustomer,
+    },
+    comparison: {
+      quantity: pair.comparison.quantity,
+      netRevenue: pair.comparison.netRevenue,
+      grossMargin: pair.comparison.grossMargin,
+      customerCount: pair.comparison.customerCount,
+      revenuePerCustomer: pair.comparison.revenuePerCustomer,
+    },
+  });
+  const horizons = (value) => ({
+    period: metricPair(value.period),
+    yearToDate: metricPair(value.yearToDate),
+  });
+  return {
+    report: {
+      externalBranchId: preview.report.externalBranchId,
+      generatedOn: preview.report.generatedOn,
+      periods: {
+        period: { ...preview.report.periods.period },
+        comparison: { ...preview.report.periods.comparison },
+        yearToDate: { ...preview.report.periods.yearToDate },
+        yearToDateComparison: { ...preview.report.periods.yearToDateComparison },
+      },
+    },
+    productGroups: preview.productGroups.map((group) => ({
+      externalProductGroupId: group.externalProductGroupId,
+      label: group.label,
+      horizons: horizons(group.horizons),
+    })),
+    totals: { horizons: horizons(preview.totals.horizons) },
+  };
+}
+
+function renderSalesReportPreview() {
+  const preview = state.salesAnalytics.preview;
+  elements.salesReportPreview?.classList.toggle("hidden", !preview);
+  if (!preview) {
+    if (elements.salesReportPreviewSummary) elements.salesReportPreviewSummary.replaceChildren();
+    if (elements.salesReportOcrReportFields) elements.salesReportOcrReportFields.replaceChildren();
+    if (elements.salesReportPreviewHead) elements.salesReportPreviewHead.replaceChildren();
+    if (elements.salesReportPreviewBody) elements.salesReportPreviewBody.replaceChildren();
+    if (elements.salesReportPreviewFoot) elements.salesReportPreviewFoot.replaceChildren();
+    return;
+  }
+
+  const ocr = isSalesReportOcrPreview(preview);
+  const reconciliationStatus = salesOcrReconciliation(preview);
+  const summaryItems = [
+    ["file", "Datei", preview.source.fileName],
+    ["extraction", "Erkennung", ocr ? "lokale OCR · bearbeitbar" : "PDF-Textschicht"],
+    ["branch", "TradeFoto-Filiale", preview.report.externalBranchId],
+    ["period", "Zeitraum", salesPeriodLabel(preview.report.periods.period)],
+    ["groups", "Warengruppen", String(preview.productGroups.length)],
+    ["reconciliation", "Summenprüfung", salesReconciliationLabel(reconciliationStatus, ocr)],
+  ];
+  const summary = document.createDocumentFragment();
+  for (const [key, label, value] of summaryItems) {
+    const wrapper = document.createElement("div");
+    const term = document.createElement("dt");
+    const detail = document.createElement("dd");
+    term.textContent = label;
+    detail.textContent = value;
+    detail.dataset.salesSummaryKey = key;
+    wrapper.append(term, detail);
+    summary.append(wrapper);
+  }
+  elements.salesReportPreviewSummary?.replaceChildren(summary);
+
+  elements.salesReportOcrReview?.classList.toggle("hidden", !ocr);
+  elements.salesReportPreviewHorizonField?.classList.toggle("hidden", !ocr);
+  if (elements.salesReportPreviewHorizon) {
+    elements.salesReportPreviewHorizon.value = state.salesAnalytics.previewHorizon;
+  }
+  if (elements.salesReportConfirmationText) {
+    elements.salesReportConfirmationText.textContent = ocr
+      ? "Ich habe jede OCR-Angabe einschließlich Warengruppen, Vergleichswerten und gedruckten Summen geprüft oder korrigiert und bestätige außerdem GP-Filiale sowie EUR."
+      : "Ich bestätige die erkannte TradeFoto-Filiale, die Zuordnung zur gewählten GP-Filiale, EUR als Währung sowie die angezeigten Prüfhilfen.";
+  }
+  if (elements.salesReportOcrReviewState) {
+    const ready = salesOcrReviewComplete(preview);
+    elements.salesReportOcrReviewState.textContent = ready
+      ? "OCR-Werte plausibel"
+      : reconciliationStatus === "mismatch"
+        ? "Summen noch abweichend"
+        : "Prüfung erforderlich";
+    elements.salesReportOcrReviewState.classList.toggle("inactive", !ready);
+  }
+  if (ocr && elements.salesReportOcrReportFields) {
+    const fields = [
+      ["TradeFoto-Filiale", "report.externalBranchId", preview.report.externalBranchId, "text", 80],
+      ["Bericht erzeugt am (optional)", "report.generatedOn", preview.report.generatedOn, "date", 10],
+      ["Berichtszeitraum von", "report.periods.period.start", preview.report.periods.period.start, "date", 10],
+      ["Berichtszeitraum bis", "report.periods.period.end", preview.report.periods.period.end, "date", 10],
+      ["Vergleich von", "report.periods.comparison.start", preview.report.periods.comparison.start, "date", 10],
+      ["Vergleich bis", "report.periods.comparison.end", preview.report.periods.comparison.end, "date", 10],
+      ["Jahr laufend von", "report.periods.yearToDate.start", preview.report.periods.yearToDate.start, "date", 10],
+      ["Jahr laufend bis", "report.periods.yearToDate.end", preview.report.periods.yearToDate.end, "date", 10],
+      ["Vergleichsjahr von", "report.periods.yearToDateComparison.start", preview.report.periods.yearToDateComparison.start, "date", 10],
+      ["Vergleichsjahr bis", "report.periods.yearToDateComparison.end", preview.report.periods.yearToDateComparison.end, "date", 10],
+    ];
+    const fragment = document.createDocumentFragment();
+    for (const [label, path, value, type, maxLength] of fields) {
+      const wrapper = document.createElement("label");
+      const caption = document.createElement("span");
+      caption.textContent = label;
+      wrapper.append(caption, salesOcrInput(value, path, label, { type, maxLength }));
+      fragment.append(wrapper);
+    }
+    elements.salesReportOcrReportFields.replaceChildren(fragment);
+  } else {
+    elements.salesReportOcrReportFields?.replaceChildren();
+  }
+
+  const currentLocation = elements.salesReportImportLocation?.value || "";
+  replaceSelectOptions(
+    elements.salesReportImportLocation,
+    (state.salesAnalytics.context?.locations || []).map((location) => ({
+      value: location.id,
+      label: `${location.name} (${location.id})`,
+    })),
+    "Filiale ausdrücklich zuordnen",
+    currentLocation,
+  );
+  if (!currentLocation) {
+    const existingMapping = state.salesAnalytics.context?.mappings?.find(
+      (mapping) => String(mapping.externalBranchId) === String(preview.report.externalBranchId),
+    );
+    if (existingMapping && elements.salesReportImportLocation) {
+      elements.salesReportImportLocation.value = String(existingMapping.locationId);
+    }
+  }
+
+  const issues = document.createDocumentFragment();
+  const issueMessages = {
+    source_formula_error: "Der Quellbericht enthält mindestens einen TradeFoto-Formelfehler (#Typ!). Die gedruckten Kennzahlen bleiben prüfpflichtig.",
+    local_ocr_review_required: "Die lokale OCR hat nur bearbeitbare Vorschläge erzeugt. Sämtliche Felder und Summen müssen menschlich geprüft werden.",
+    local_ocr_human_reviewed: "Die OCR-Werte wurden menschlich geprüft und bestätigt.",
+    report_total_within_tolerance: "Die Summe der gerundeten Warengruppen weicht geringfügig von der gedruckten Gesamtsumme ab und liegt innerhalb der kontrollierten Toleranz.",
+    report_total_mismatch: "Warengruppen und gedruckte Gesamtsumme stimmen nicht ausreichend überein.",
+    required_metric_missing: "Eine erforderliche Kennzahl konnte nicht sicher gelesen werden.",
+  };
+  for (const issue of preview.issues || []) {
+    const node = document.createElement("div");
+    node.className = `sales-report-issue${issue.severity === "error" ? " error" : ""}`;
+    node.textContent = issueMessages[issue.code] || `Prüfhinweis: ${issue.code}`;
+    issues.append(node);
+  }
+  if (!(preview.issues || []).length) {
+    const node = document.createElement("div");
+    node.className = "sales-report-issue";
+    node.textContent = "Textschicht, Berichtsaufbau und gedruckte Gesamtsummen wurden vollständig erkannt.";
+    issues.append(node);
+  }
+  elements.salesReportPreviewIssues?.replaceChildren(issues);
+
+  const headRow = document.createElement("tr");
+  const headings = ocr
+    ? ["WG", "Bezeichnung", "Menge akt.", "Menge Vgl.", "Umsatz akt.", "Umsatz Vgl.", "Rohertrag akt.", "Rohertrag Vgl.", "Kunden akt.", "Kunden Vgl.", "Umsatz/K. akt.", "Umsatz/K. Vgl."]
+    : ["Warengruppe", "Menge", "Umsatz netto", "Rohertrag", "Kunden"];
+  for (const heading of headings) {
+    const cell = document.createElement("th");
+    cell.textContent = heading;
+    headRow.append(cell);
+  }
+  elements.salesReportPreviewHead?.replaceChildren(headRow);
+
+  const body = document.createDocumentFragment();
+  if (ocr) {
+    const horizon = state.salesAnalytics.previewHorizon;
+    const columns = [
+      ["current", "quantity", "Menge aktuell"],
+      ["comparison", "quantity", "Menge Vergleich"],
+      ["current", "netRevenue", "Umsatz netto aktuell"],
+      ["comparison", "netRevenue", "Umsatz netto Vergleich"],
+      ["current", "grossMargin", "Rohertrag aktuell"],
+      ["comparison", "grossMargin", "Rohertrag Vergleich"],
+      ["current", "customerCount", "Kunden aktuell"],
+      ["comparison", "customerCount", "Kunden Vergleich"],
+      ["current", "revenuePerCustomer", "Umsatz je Kunde aktuell"],
+      ["comparison", "revenuePerCustomer", "Umsatz je Kunde Vergleich"],
+    ];
+    preview.productGroups.forEach((group, groupIndex) => {
+      const row = document.createElement("tr");
+      const idCell = document.createElement("td");
+      idCell.append(salesOcrInput(
+        group.externalProductGroupId,
+        `productGroups.${groupIndex}.externalProductGroupId`,
+        `Warengruppennummer Zeile ${groupIndex + 1}`,
+        { maxLength: 4 },
+      ));
+      const labelCell = document.createElement("td");
+      labelCell.append(salesOcrInput(
+        group.label,
+        `productGroups.${groupIndex}.label`,
+        `Warengruppenbezeichnung Zeile ${groupIndex + 1}`,
+        { maxLength: 240 },
+      ));
+      row.append(idCell, labelCell);
+      for (const [side, metric, label] of columns) {
+        const cell = document.createElement("td");
+        cell.append(salesOcrInput(
+          group.horizons[horizon][side][metric],
+          `productGroups.${groupIndex}.horizons.${horizon}.${side}.${metric}`,
+          `${label}, ${group.externalProductGroupId}`,
+        ));
+        row.append(cell);
+      }
+      body.append(row);
+    });
+    const totalRow = document.createElement("tr");
+    const totalLabel = document.createElement("th");
+    totalLabel.colSpan = 2;
+    totalLabel.scope = "row";
+    totalLabel.textContent = "Gedruckte Summe";
+    totalRow.append(totalLabel);
+    for (const [side, metric, label] of columns) {
+      const cell = document.createElement("td");
+      cell.append(salesOcrInput(
+        preview.totals?.horizons?.[horizon]?.[side]?.[metric],
+        `totals.horizons.${horizon}.${side}.${metric}`,
+        `${label}, gedruckte Summe`,
+      ));
+      totalRow.append(cell);
+    }
+    elements.salesReportPreviewFoot?.replaceChildren(totalRow);
+  } else {
+    for (const group of preview.productGroups) {
+      const metric = group.horizons.period.current;
+      const row = document.createElement("tr");
+      const values = [
+        `${group.externalProductGroupId} · ${group.label}`,
+        formatSalesDecimal(metric.quantity),
+        formatSalesDecimal(metric.netRevenue, { currency: true }),
+        formatSalesDecimal(metric.grossMargin, { currency: true }),
+        formatSalesDecimal(metric.customerCount),
+      ];
+      for (const value of values) {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.append(cell);
+      }
+      body.append(row);
+    }
+    elements.salesReportPreviewFoot?.replaceChildren();
+  }
+  elements.salesReportPreviewBody?.replaceChildren(body);
+  if (elements.salesReportPreviewTableTitle) {
+    elements.salesReportPreviewTableTitle.textContent = ocr
+      ? `OCR-Werte · ${state.salesAnalytics.previewHorizon === "period" ? "Berichtszeitraum" : "Jahr bis Berichtsende"}`
+      : "Erkannte Warengruppen";
+  }
+  updateSalesReportApplyState();
+}
+
+function refreshSalesOcrPreviewFeedback() {
+  const preview = state.salesAnalytics.preview;
+  if (!isSalesReportOcrPreview(preview)) return;
+  const reconciliationStatus = salesOcrReconciliation(preview);
+  const reconciliation = elements.salesReportPreviewSummary?.querySelector(
+    '[data-sales-summary-key="reconciliation"]',
+  );
+  const branch = elements.salesReportPreviewSummary?.querySelector(
+    '[data-sales-summary-key="branch"]',
+  );
+  const period = elements.salesReportPreviewSummary?.querySelector(
+    '[data-sales-summary-key="period"]',
+  );
+  if (reconciliation) reconciliation.textContent = salesReconciliationLabel(reconciliationStatus, true);
+  if (branch) branch.textContent = preview.report.externalBranchId || "—";
+  if (period) period.textContent = salesPeriodLabel(preview.report.periods.period);
+  const ready = salesOcrReviewComplete(preview);
+  if (elements.salesReportOcrReviewState) {
+    elements.salesReportOcrReviewState.textContent = ready
+      ? "OCR-Werte plausibel"
+      : reconciliationStatus === "mismatch"
+        ? "Summen noch abweichend"
+        : "Prüfung erforderlich";
+    elements.salesReportOcrReviewState.classList.toggle("inactive", !ready);
+  }
+  updateSalesReportApplyState();
+}
+
+function updateSalesReportApplyState() {
+  if (!elements.salesReportApplyButton) return;
+  const preview = state.salesAnalytics.preview;
+  const ocr = isSalesReportOcrPreview(preview);
+  const blocked = !preview
+    || !elements.salesReportImportLocation?.value
+    || elements.salesReportImportCurrency?.value !== "EUR"
+    || !elements.salesReportImportConfirmed?.checked
+    || (ocr
+      ? !salesOcrReviewComplete(preview)
+      : preview.issues?.some((issue) => issue.severity === "error")
+        || !["match", "within_tolerance"].includes(preview.reconciliation?.status));
+  elements.salesReportApplyButton.disabled = blocked;
+}
+
+const SALES_ANALYTICS_PUBLIC_METRICS = Object.freeze([
+  Object.freeze({ id: "netRevenue", label: "Umsatz netto", shortLabel: "Umsatz", currency: true }),
+  Object.freeze({ id: "quantity", label: "Menge", shortLabel: "Menge", currency: false }),
+  Object.freeze({ id: "customerCount", label: "Kunden", shortLabel: "Kunden", currency: false }),
+  Object.freeze({ id: "revenuePerCustomer", label: "Umsatz je Kunde", shortLabel: "Umsatz/Kunde", currency: true }),
+]);
+const SALES_ANALYTICS_MARGIN_METRIC = Object.freeze({
+  id: "grossMargin",
+  label: "Rohertrag",
+  shortLabel: "Rohertrag",
+  currency: true,
+});
+
+function salesAnalyticsMetricDefinitions(hasGrossMargin) {
+  const metrics = [...SALES_ANALYTICS_PUBLIC_METRICS];
+  if (hasGrossMargin) metrics.splice(1, 0, SALES_ANALYTICS_MARGIN_METRIC);
+  return metrics;
+}
+
+function salesMetricNumber(metric, metricId, side) {
+  const value = metric?.[metricId]?.[side];
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatSalesMetric(metricDefinition, value) {
+  return formatSalesDecimal(value, {
+    currency: metricDefinition.currency,
+    maximumFractionDigits: metricDefinition.currency ? 2 : 2,
+  });
+}
+
+function salesMetricRelativeChange(current, comparison) {
+  if (!Number.isFinite(current) || !Number.isFinite(comparison) || comparison === 0) return null;
+  return ((current / comparison) - 1) * 100;
+}
+
+function salesMetricChangeClass(current, comparison) {
+  if (!Number.isFinite(current) || !Number.isFinite(comparison) || current === comparison) return "neutral";
+  return current > comparison ? "positive" : "negative";
+}
+
+function formatSalesMetricChange(current, comparison) {
+  if (!Number.isFinite(current) || !Number.isFinite(comparison)) return "Vergleich nicht verfügbar";
+  if (current === comparison) return "±0,0 %";
+  const relative = salesMetricRelativeChange(current, comparison);
+  if (relative === null) return "Kein Prozentvergleich";
+  return `${new Intl.NumberFormat("de-AT", {
+    maximumFractionDigits: 1,
+    signDisplay: "always",
+  }).format(relative)} %`;
+}
+
+function salesAnalyticsPeriods(detail, horizon) {
+  if (!detail?.report?.periods) return { current: null, comparison: null };
+  return horizon === "year_to_date"
+    ? {
+      current: detail.report.periods.yearToDate,
+      comparison: detail.report.periods.yearToDateComparison,
+    }
+    : {
+      current: detail.report.periods.period,
+      comparison: detail.report.periods.comparison,
+    };
+}
+
+const SALES_REPORT_SERIES_MAX_REPORTS = 24;
+
+function salesIsoDayNumber(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (date.getUTCFullYear() !== Number(match[1])
+    || date.getUTCMonth() !== Number(match[2]) - 1
+    || date.getUTCDate() !== Number(match[3])) return null;
+  return Math.trunc(date.getTime() / 86400000);
+}
+
+function salesReportPeriod(report, kind = "period") {
+  const period = report?.periods?.[kind];
+  const startDay = salesIsoDayNumber(period?.start);
+  const endDay = salesIsoDayNumber(period?.end);
+  if (startDay === null || endDay === null || startDay > endDay) return null;
+  return {
+    start: period.start,
+    end: period.end,
+    startDay,
+    endDay,
+    days: endDay - startDay + 1,
+  };
+}
+
+function salesReportIntervalsOverlap(left, right, kind = "period") {
+  const leftPeriod = salesReportPeriod(left, kind);
+  const rightPeriod = salesReportPeriod(right, kind);
+  if (!leftPeriod || !rightPeriod) return true;
+  return leftPeriod.startDay <= rightPeriod.endDay
+    && rightPeriod.startDay <= leftPeriod.endDay;
+}
+
+function selectedSalesAnalyticsReports() {
+  const selectedIds = new Set(state.salesAnalytics.archiveSelection || []);
+  return state.salesAnalytics.reports.filter((report) => selectedIds.has(report.id));
+}
+
+function salesReportSeriesSelectionValidation(reports = selectedSalesAnalyticsReports()) {
+  if (!reports.length) {
+    return { ok: false, code: "empty", message: "Noch keine PDF-Berichte für eine gemeinsame Analyse ausgewählt." };
+  }
+  if (reports.length > SALES_REPORT_SERIES_MAX_REPORTS) {
+    return { ok: false, code: "limit", message: `Höchstens ${SALES_REPORT_SERIES_MAX_REPORTS} PDF-Berichte können gemeinsam analysiert werden.` };
+  }
+  const baseline = reports[0];
+  if (reports.some((report) => String(report.locationId) !== String(baseline.locationId))) {
+    return { ok: false, code: "location", message: "Eine gemeinsame Analyse ist nur innerhalb derselben GP-Filiale möglich." };
+  }
+  if (reports.some((report) => report.sourceSystem !== baseline.sourceSystem
+    || report.reportKind !== baseline.reportKind
+    || report.currency !== baseline.currency)) {
+    return { ok: false, code: "source", message: "Die Auswahl enthält unterschiedliche Berichtsarten, Quellen oder Währungen." };
+  }
+  for (const kind of ["period", "comparison"]) {
+    const sorted = [...reports].sort((left, right) => (
+      (salesReportPeriod(left, kind)?.startDay ?? Number.POSITIVE_INFINITY)
+      - (salesReportPeriod(right, kind)?.startDay ?? Number.POSITIVE_INFINITY)
+    ));
+    if (sorted.some((report) => !salesReportPeriod(report, kind))) {
+      return { ok: false, code: "period", message: "Mindestens ein ausgewählter PDF-Bericht enthält keinen gültigen Zeitraum." };
+    }
+    for (let index = 1; index < sorted.length; index += 1) {
+      if (salesReportIntervalsOverlap(sorted[index - 1], sorted[index], kind)) {
+        return {
+          ok: false,
+          code: kind === "period" ? "overlap" : "comparison_overlap",
+          message: kind === "period"
+            ? "Die ausgewählten Berichtszeiträume überschneiden sich und werden nicht zusammengerechnet."
+            : "Die Vergleichszeiträume überschneiden sich und werden nicht zusammengerechnet.",
+        };
+      }
+    }
+  }
+  const periods = reports.map((report) => salesReportPeriod(report, "period"));
+  const minimum = Math.min(...periods.map((period) => period.startDay));
+  const maximum = Math.max(...periods.map((period) => period.endDay));
+  const coverageDays = periods.reduce((sum, period) => sum + period.days, 0);
+  const spanDays = maximum - minimum + 1;
+  return {
+    ok: true,
+    code: spanDays === coverageDays ? "contiguous" : "gapped",
+    coverageDays,
+    spanDays,
+    gapDays: spanDays - coverageDays,
+    comparisonAligned: reports.every((report) => (
+      salesReportPeriod(report, "period").days === salesReportPeriod(report, "comparison").days
+    )),
+    message: spanDays === coverageDays
+      ? `${reports.length} PDF-Bericht${reports.length === 1 ? "" : "e"} decken ${coverageDays} Tage überschneidungsfrei ab.`
+      : `${reports.length} PDF-Berichte decken ${coverageDays} von ${spanDays} Tagen ab; ${spanDays - coverageDays} Lückentage bleiben sichtbar.`,
+  };
+}
+
+function salesReportDateRangeInvalid() {
+  return Boolean(
+    state.salesAnalytics.dateFrom
+    && state.salesAnalytics.dateTo
+    && state.salesAnalytics.dateFrom > state.salesAnalytics.dateTo
+  );
+}
+
+function filteredSalesAnalyticsReports() {
+  if (salesReportDateRangeInvalid()) return [];
+  return state.salesAnalytics.reports.filter((report) => {
+    const periodStart = String(report.periods?.period?.start || "");
+    const periodEnd = String(report.periods?.period?.end || "");
+    return (!state.salesAnalytics.locationFilter
+        || String(report.locationId) === state.salesAnalytics.locationFilter)
+      && (!state.salesAnalytics.dateFrom || periodEnd >= state.salesAnalytics.dateFrom)
+      && (!state.salesAnalytics.dateTo || periodStart <= state.salesAnalytics.dateTo);
+  });
+}
+
+function renderSalesAnalyticsFilters() {
+  const reports = state.salesAnalytics.reports;
+  const locationIds = [...new Set(reports.map((report) => String(report.locationId)))];
+  replaceSelectOptions(
+    elements.salesReportLocationFilter,
+    locationIds.map((id) => ({ value: id, label: salesAnalyticsLocationName(id) })),
+    "Alle freigegebenen Filialberichte",
+    state.salesAnalytics.locationFilter,
+  );
+  if (elements.salesReportDateFrom) elements.salesReportDateFrom.value = state.salesAnalytics.dateFrom;
+  if (elements.salesReportDateTo) elements.salesReportDateTo.value = state.salesAnalytics.dateTo;
+  const visibleReports = filteredSalesAnalyticsReports();
+  if (!visibleReports.some((report) => report.id === state.salesAnalytics.selectedReportId)) {
+    state.salesAnalytics.selectedReportId = visibleReports[0]?.id || "";
+    state.salesAnalytics.selectedReport = null;
+  }
+  replaceSelectOptions(
+    elements.salesReportSelect,
+    visibleReports.map((report) => ({
+      value: report.id,
+      label: `${salesAnalyticsLocationName(report.locationId)} · ${salesPeriodLabel(report.periods.period)}`,
+    })),
+    visibleReports.length ? "Statistikbericht auswählen" : "Kein passender Statistikbericht",
+    state.salesAnalytics.selectedReportId,
+  );
+  if (elements.salesReportHorizon) elements.salesReportHorizon.value = state.salesAnalytics.horizon;
+  if (elements.salesReportHorizon) elements.salesReportHorizon.disabled = Boolean(state.salesAnalytics.reportSeries);
+  if (elements.salesReportFilterNotice) {
+    const filtered = Boolean(
+      state.salesAnalytics.locationFilter
+      || state.salesAnalytics.dateFrom
+      || state.salesAnalytics.dateTo
+    );
+    elements.salesReportFilterNotice.textContent = salesReportDateRangeInvalid()
+      ? "Das Von-Datum muss vor oder am Bis-Datum liegen."
+      : filtered && !visibleReports.length
+        ? "Für diesen Filter liegen keine freigegebenen Statistikberichte vor."
+        : filtered
+          ? `${visibleReports.length} von ${reports.length} Berichten entsprechen dem Filter.`
+          : "";
+    elements.salesReportFilterNotice.classList.toggle(
+      "hidden",
+      !elements.salesReportFilterNotice.textContent,
+    );
+  }
+}
+
+function salesReportArchiveOverlapCount(report) {
+  if (Number.isSafeInteger(report?.archive?.overlapCount)) return report.archive.overlapCount;
+  return state.salesAnalytics.reports.filter((candidate) => (
+    candidate.id !== report.id
+    && String(candidate.locationId) === String(report.locationId)
+    && candidate.sourceSystem === report.sourceSystem
+    && candidate.reportKind === report.reportKind
+    && candidate.currency === report.currency
+    && salesReportIntervalsOverlap(candidate, report)
+  )).length;
+}
+
+function salesReportArchiveCell(text, className = "") {
+  const cell = document.createElement("td");
+  cell.textContent = text;
+  if (className) cell.className = className;
+  return cell;
+}
+
+function renderSalesReportCoverageTimeline(reports) {
+  if (!elements.salesReportCoverageChart) return;
+  if (!reports.length) {
+    elements.salesReportCoverageChart.replaceChildren();
+    elements.salesReportCoverageChart.classList.add("hidden");
+    return;
+  }
+  const entries = reports
+    .map((report) => ({ report, period: salesReportPeriod(report, "period") }))
+    .filter((entry) => entry.period)
+    .sort((left, right) => left.period.startDay - right.period.startDay);
+  if (!entries.length) {
+    elements.salesReportCoverageChart.replaceChildren();
+    elements.salesReportCoverageChart.classList.add("hidden");
+    return;
+  }
+  const minimum = Math.min(...entries.map((entry) => entry.period.startDay));
+  const maximum = Math.max(...entries.map((entry) => entry.period.endDay));
+  const spanDays = Math.max(1, maximum - minimum + 1);
+  const fragment = document.createDocumentFragment();
+  for (const entry of entries) {
+    const row = document.createElement("div");
+    row.className = "sales-report-coverage-row";
+    const label = document.createElement("span");
+    label.textContent = salesPeriodLabel(entry.report.periods.period);
+    const track = document.createElement("div");
+    track.className = "sales-report-coverage-track";
+    const bar = document.createElement("div");
+    bar.className = `sales-report-coverage-bar${salesReportArchiveOverlapCount(entry.report) ? " overlap" : ""}`;
+    bar.style.left = `${((entry.period.startDay - minimum) / spanDays) * 100}%`;
+    bar.style.width = `${Math.max(1.5, (entry.period.days / spanDays) * 100)}%`;
+    bar.title = `${salesAnalyticsLocationName(entry.report.locationId)} · ${salesPeriodLabel(entry.report.periods.period)} · ${entry.period.days} Tage`;
+    track.append(bar);
+    row.append(label, track);
+    fragment.append(row);
+  }
+  elements.salesReportCoverageChart.replaceChildren(fragment);
+  elements.salesReportCoverageChart.classList.remove("hidden");
+}
+
+function renderSalesReportArchive() {
+  if (!elements.salesReportArchiveBody) return;
+  const reports = filteredSalesAnalyticsReports();
+  const selectedIds = new Set(state.salesAnalytics.archiveSelection || []);
+  const selectedReports = selectedSalesAnalyticsReports();
+  const selectedLocationId = selectedReports[0]?.locationId === undefined
+    ? ""
+    : String(selectedReports[0].locationId);
+  const body = document.createDocumentFragment();
+  for (const report of reports) {
+    const row = document.createElement("tr");
+    const selectionCell = document.createElement("td");
+    const checkbox = document.createElement("input");
+    const selected = selectedIds.has(report.id);
+    checkbox.type = "checkbox";
+    checkbox.checked = selected;
+    checkbox.dataset.salesArchiveReport = report.id;
+    checkbox.setAttribute("aria-label", `${salesPeriodLabel(report.periods.period)} für gemeinsame Analyse auswählen`);
+    checkbox.disabled = !selected && (
+      selectedIds.size >= SALES_REPORT_SERIES_MAX_REPORTS
+      || (selectedLocationId && String(report.locationId) !== selectedLocationId)
+    );
+    if (checkbox.disabled && selectedLocationId && String(report.locationId) !== selectedLocationId) {
+      checkbox.title = "Für eine gemeinsame Analyse muss dieselbe GP-Filiale gewählt bleiben.";
+    }
+    selectionCell.append(checkbox);
+    const period = salesReportPeriod(report, "period");
+    const comparison = salesReportPeriod(report, "comparison");
+    const overlapCount = salesReportArchiveOverlapCount(report);
+    const statusCell = document.createElement("td");
+    const status = document.createElement("span");
+    status.className = `sales-report-archive-status${overlapCount ? " warning" : ""}`;
+    status.textContent = overlapCount
+      ? `Überschneidet ${overlapCount} Bericht${overlapCount === 1 ? "" : "e"}`
+      : "Eigenständiger Zeitraum";
+    statusCell.append(status);
+    const actionCell = document.createElement("td");
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "secondary-button compact";
+    openButton.dataset.salesOpenReport = report.id;
+    openButton.textContent = "Einzeln öffnen";
+    actionCell.append(openButton);
+    row.append(
+      selectionCell,
+      salesReportArchiveCell(salesAnalyticsLocationName(report.locationId)),
+      salesReportArchiveCell(salesPeriodLabel(report.periods.period)),
+      salesReportArchiveCell(period ? String(period.days) : "—", "numeric"),
+      salesReportArchiveCell(comparison ? salesPeriodLabel(report.periods.comparison) : "—"),
+      salesReportArchiveCell(String(report.productGroupCount ?? "—"), "numeric"),
+      salesReportArchiveCell(formatDate(String(report.importedAt || "").slice(0, 10))),
+      statusCell,
+      actionCell,
+    );
+    body.append(row);
+  }
+  elements.salesReportArchiveBody.replaceChildren(body);
+  const archiveTable = elements.salesReportArchiveBody.closest("table");
+  archiveTable?.classList.toggle("hidden", !reports.length);
+  elements.salesReportArchiveEmpty?.classList.toggle("hidden", Boolean(reports.length));
+
+  const validation = salesReportSeriesSelectionValidation(selectedReports);
+  if (elements.salesReportArchiveSelectionSummary) {
+    const comparisonWarning = validation.ok && !validation.comparisonAligned
+      ? " Die Vergleichszeiträume besitzen nicht überall dieselbe Tagesanzahl; GP kennzeichnet den Vergleich entsprechend."
+      : "";
+    elements.salesReportArchiveSelectionSummary.textContent = state.salesAnalytics.seriesLoading
+      ? "Die ausgewählten PDF-Berichte werden serverseitig geprüft und zusammengeführt …"
+      : state.salesAnalytics.seriesError
+        ? state.salesAnalytics.seriesError
+      : state.salesAnalytics.reportSeries
+        ? `${state.salesAnalytics.reportSeries.selection.reportCount} PDF-Berichte werden aktuell als sichere Serienanalyse angezeigt.`
+        : `${validation.message}${comparisonWarning}`;
+    elements.salesReportArchiveSelectionSummary.classList.toggle(
+      "error",
+      Boolean(state.salesAnalytics.seriesError) || (!validation.ok && selectedReports.length > 0),
+    );
+  }
+  if (elements.salesReportSeriesAnalyzeButton) {
+    elements.salesReportSeriesAnalyzeButton.disabled = !validation.ok || state.salesAnalytics.seriesLoading;
+    elements.salesReportSeriesAnalyzeButton.textContent = state.salesAnalytics.seriesLoading
+      ? "Auswahl wird geprüft …"
+      : "Auswahl sicher analysieren";
+  }
+  if (elements.salesReportSeriesClearButton) {
+    elements.salesReportSeriesClearButton.disabled = !selectedReports.length && !state.salesAnalytics.reportSeries;
+  }
+  renderSalesReportCoverageTimeline(selectedReports);
+}
+
+function renderSalesAnalyticsEmpty(container, title, message) {
+  if (!container) return;
+  const empty = document.createElement("div");
+  empty.className = "sales-analytics-empty-surface";
+  const strong = document.createElement("strong");
+  const paragraph = document.createElement("p");
+  strong.textContent = title;
+  paragraph.textContent = message;
+  empty.append(strong, paragraph);
+  container.replaceChildren(empty);
+}
+
+function renderSalesAnalyticsMetricOptions(hasGrossMargin) {
+  const definitions = salesAnalyticsMetricDefinitions(hasGrossMargin);
+  if (!definitions.some((definition) => definition.id === state.salesAnalytics.chartMetric)) {
+    state.salesAnalytics.chartMetric = "netRevenue";
+  }
+  if (elements.salesReportChartMetric) {
+    const options = definitions.map((definition) => {
+      const option = document.createElement("option");
+      option.value = definition.id;
+      option.textContent = definition.label;
+      return option;
+    });
+    elements.salesReportChartMetric.replaceChildren(...options);
+    elements.salesReportChartMetric.value = state.salesAnalytics.chartMetric;
+  }
+  return definitions;
+}
+
+function renderSalesAnalyticsKpis(detail, horizon, hasGrossMargin) {
+  if (!elements.salesReportKpis) return;
+  if (!detail) {
+    const empty = document.createElement("div");
+    empty.className = "sales-analytics-empty-kpis";
+    const strong = document.createElement("strong");
+    const span = document.createElement("span");
+    strong.textContent = "Noch keine Kennzahlen";
+    span.textContent = "Wählen Sie einen importierten Statistikbericht aus.";
+    empty.append(strong, span);
+    elements.salesReportKpis.replaceChildren(empty);
+    return;
+  }
+  const total = detail.totals?.[horizon];
+  const daily = detail.dailyAverages?.[horizon];
+  const cards = salesAnalyticsMetricDefinitions(hasGrossMargin).map((definition, index) => {
+    const current = salesMetricNumber(total, definition.id, "current");
+    const comparison = salesMetricNumber(total, definition.id, "comparison");
+    const card = document.createElement("article");
+    card.className = `sales-analytics-kpi${index === 0 ? " primary" : ""}`;
+    const label = document.createElement("span");
+    const value = document.createElement("strong");
+    const comparisonLine = document.createElement("small");
+    const change = document.createElement("b");
+    label.textContent = definition.label;
+    value.textContent = formatSalesMetric(definition, current);
+    comparisonLine.textContent = `Vergleich: ${formatSalesMetric(definition, comparison)}`;
+    change.className = `sales-metric-change ${salesMetricChangeClass(current, comparison)}`;
+    change.textContent = formatSalesMetricChange(current, comparison);
+    card.append(label, value, comparisonLine, change);
+    const dailyCurrent = salesMetricNumber(daily, definition.id, "current");
+    if (dailyCurrent !== null) {
+      const dailyLine = document.createElement("small");
+      dailyLine.className = "sales-analytics-kpi-daily";
+      dailyLine.textContent = `Ø je Abdeckungstag: ${formatSalesMetric(definition, dailyCurrent)}`;
+      card.append(dailyLine);
+    }
+    return card;
+  });
+  elements.salesReportKpis.replaceChildren(...cards);
+}
+
+function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
+  if (!detail) {
+    renderSalesAnalyticsEmpty(
+      elements.salesReportChart,
+      "Noch keine Berichtsdaten",
+      "Wählen Sie einen importierten Statistikbericht aus.",
+    );
+    return;
+  }
+  const definition = metricDefinitions.find(
+    (entry) => entry.id === state.salesAnalytics.chartMetric,
+  ) || metricDefinitions[0];
+  const groups = [...detail.productGroups]
+    .filter((group) => group.horizons?.[horizon])
+    .map((group) => ({
+      group,
+      current: salesMetricNumber(group.horizons[horizon], definition.id, "current"),
+      comparison: salesMetricNumber(group.horizons[horizon], definition.id, "comparison"),
+    }))
+    .filter((entry) => entry.current !== null || entry.comparison !== null)
+    .sort((left, right) => (right.current ?? Number.NEGATIVE_INFINITY)
+      - (left.current ?? Number.NEGATIVE_INFINITY))
+    .filter((entry) => entry.current !== 0 || entry.comparison !== 0)
+    .slice(0, 12);
+  if (!groups.length) {
+    renderSalesAnalyticsEmpty(
+      elements.salesReportChart,
+      "Keine auswertbaren Kennzahlen",
+      `Für ${definition.label} enthält dieser Bericht keine darstellbaren Warengruppen.`,
+    );
+    return;
+  }
+  const maximum = Math.max(1, ...groups.flatMap((entry) => (
+    [Math.abs(entry.current || 0), Math.abs(entry.comparison || 0)]
+  )));
+  const chart = document.createDocumentFragment();
+  for (const entry of groups) {
+    const row = document.createElement("div");
+    row.className = "sales-chart-row";
+    row.setAttribute(
+      "aria-label",
+      `${entry.group.externalProductGroupId} ${entry.group.label}: aktuell ${formatSalesMetric(definition, entry.current)}, Vergleich ${formatSalesMetric(definition, entry.comparison)}`,
+    );
+    const label = document.createElement("div");
+    label.className = "sales-chart-label";
+    label.textContent = `${entry.group.externalProductGroupId} · ${entry.group.label}`;
+    const comparison = document.createElement("div");
+    comparison.className = "sales-chart-comparison";
+    for (const [side, amount] of [["current", entry.current], ["comparison", entry.comparison]]) {
+      const track = document.createElement("div");
+      track.className = `sales-chart-track ${side}`;
+      const bar = document.createElement("div");
+      bar.className = `sales-chart-bar ${side}${Number(amount) < 0 ? " negative" : ""}`;
+      bar.style.width = `${Math.max(amount === 0 || amount === null ? 0 : 1, (Math.abs(amount || 0) / maximum) * 100)}%`;
+      track.append(bar);
+      comparison.append(track);
+    }
+    const values = document.createElement("div");
+    values.className = "sales-chart-values";
+    for (const [side, amount] of [["current", entry.current], ["comparison", entry.comparison]]) {
+      const value = document.createElement("span");
+      value.className = side;
+      value.textContent = formatSalesMetric(definition, amount);
+      values.append(value);
+    }
+    row.append(label, comparison, values);
+    chart.append(row);
+  }
+  elements.salesReportChart?.replaceChildren(chart);
+}
+
+function salesAnalyticsGroupChange(group, horizon, metricId = "netRevenue") {
+  const metric = group.horizons?.[horizon];
+  const current = salesMetricNumber(metric, metricId, "current");
+  const comparison = salesMetricNumber(metric, metricId, "comparison");
+  const relative = salesMetricRelativeChange(current, comparison);
+  if (relative !== null) return relative;
+  if (current === comparison) return 0;
+  if (comparison === 0 && Number.isFinite(current)) {
+    return current > 0 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+  }
+  return Number.NEGATIVE_INFINITY;
+}
+
+function renderSalesAnalyticsTableOptions(hasGrossMargin) {
+  const definitions = [
+    { value: "netRevenue_desc", label: "Umsatz absteigend" },
+    { value: "change_desc", label: "Umsatzabweichung absteigend" },
+    { value: "quantity_desc", label: "Menge absteigend" },
+    { value: "customers_desc", label: "Kunden absteigend" },
+    ...(hasGrossMargin ? [{ value: "margin_desc", label: "Rohertrag absteigend" }] : []),
+    { value: "group_asc", label: "Warengruppe aufsteigend" },
+  ];
+  if (!definitions.some((entry) => entry.value === state.salesAnalytics.tableSort)) {
+    state.salesAnalytics.tableSort = "netRevenue_desc";
+  }
+  if (elements.salesReportTableSort) {
+    const options = definitions.map((definition) => {
+      const option = document.createElement("option");
+      option.value = definition.value;
+      option.textContent = definition.label;
+      return option;
+    });
+    elements.salesReportTableSort.replaceChildren(...options);
+    elements.salesReportTableSort.value = state.salesAnalytics.tableSort;
+  }
+}
+
+function sortSalesAnalyticsGroups(groups, horizon) {
+  const sorted = [...groups];
+  const descendingMetric = state.salesAnalytics.tableSort === "quantity_desc"
+    ? "quantity"
+    : state.salesAnalytics.tableSort === "customers_desc"
+      ? "customerCount"
+      : state.salesAnalytics.tableSort === "margin_desc"
+        ? "grossMargin"
+        : "netRevenue";
+  sorted.sort((left, right) => {
+    if (state.salesAnalytics.tableSort === "group_asc") {
+      return `${left.externalProductGroupId} ${left.label}`.localeCompare(
+        `${right.externalProductGroupId} ${right.label}`,
+        "de",
+        { numeric: true, sensitivity: "base" },
+      );
+    }
+    const leftValue = state.salesAnalytics.tableSort === "change_desc"
+      ? salesAnalyticsGroupChange(left, horizon)
+      : salesMetricNumber(left.horizons[horizon], descendingMetric, "current");
+    const rightValue = state.salesAnalytics.tableSort === "change_desc"
+      ? salesAnalyticsGroupChange(right, horizon)
+      : salesMetricNumber(right.horizons[horizon], descendingMetric, "current");
+    return (rightValue ?? Number.NEGATIVE_INFINITY) - (leftValue ?? Number.NEGATIVE_INFINITY)
+      || `${left.externalProductGroupId} ${left.label}`.localeCompare(
+        `${right.externalProductGroupId} ${right.label}`,
+        "de",
+        { numeric: true, sensitivity: "base" },
+      );
+  });
+  return sorted;
+}
+
+function salesAnalyticsHeaderCell(text, { rowSpan = 1, colSpan = 1, scope = "col" } = {}) {
+  const cell = document.createElement("th");
+  cell.textContent = text;
+  cell.rowSpan = rowSpan;
+  cell.colSpan = colSpan;
+  cell.scope = scope;
+  return cell;
+}
+
+function renderSalesAnalyticsTable(detail, horizon, hasGrossMargin) {
+  renderSalesAnalyticsTableOptions(hasGrossMargin);
+  if (elements.salesReportGroupSearch) {
+    elements.salesReportGroupSearch.value = state.salesAnalytics.tableSearch;
+  }
+  if (!detail) {
+    elements.salesReportTableHead?.replaceChildren();
+    elements.salesReportTableBody?.replaceChildren();
+    if (elements.salesReportTableCount) {
+      elements.salesReportTableCount.textContent = "Noch keine Warengruppen ausgewählt.";
+    }
+    if (elements.salesReportTableEmpty) {
+      const title = elements.salesReportTableEmpty.querySelector("strong");
+      const message = elements.salesReportTableEmpty.querySelector("p");
+      if (title) title.textContent = "Noch keine Berichtsdaten";
+      if (message) message.textContent = "Wählen Sie einen importierten Statistikbericht aus.";
+      elements.salesReportTableEmpty.classList.remove("hidden");
+    }
+    return;
+  }
+  const periods = salesAnalyticsPeriods(detail, horizon);
+  const topRow = document.createElement("tr");
+  const detailRow = document.createElement("tr");
+  topRow.append(salesAnalyticsHeaderCell("Warengruppe", { rowSpan: 2 }));
+  const groups = [
+    { label: "Menge", columns: 2 },
+    { label: "Umsatz netto", columns: 3 },
+    ...(hasGrossMargin ? [{ label: "Rohertrag", columns: 2 }] : []),
+    { label: "Kunden", columns: 2 },
+    { label: "Umsatz/Kunde", columns: 2 },
+  ];
+  for (const group of groups) {
+    topRow.append(salesAnalyticsHeaderCell(group.label, { colSpan: group.columns, scope: "colgroup" }));
+    detailRow.append(salesAnalyticsHeaderCell("Aktuell"));
+    detailRow.append(salesAnalyticsHeaderCell("Vergleich"));
+    if (group.label === "Umsatz netto") detailRow.append(salesAnalyticsHeaderCell("Abweichung"));
+  }
+  elements.salesReportTableHead?.replaceChildren(topRow, detailRow);
+
+  const normalizedSearch = state.salesAnalytics.tableSearch.trim().toLocaleLowerCase("de");
+  const allGroups = detail.productGroups.filter((group) => group.horizons?.[horizon]);
+  const matchingGroups = allGroups.filter((group) => !normalizedSearch
+    || `${group.externalProductGroupId} ${group.label}`.toLocaleLowerCase("de").includes(normalizedSearch));
+  const sortedGroups = sortSalesAnalyticsGroups(matchingGroups, horizon);
+  if (elements.salesReportTableCount) {
+    const resultLabel = normalizedSearch
+      ? `${sortedGroups.length} von ${allGroups.length} Warengruppen`
+      : `${allGroups.length} Warengruppen`;
+    elements.salesReportTableCount.textContent = `${resultLabel} · Aktuell ${salesPeriodLabel(periods.current)} · Vergleich ${salesPeriodLabel(periods.comparison)}`;
+  }
+  const tableBody = document.createDocumentFragment();
+  for (const group of sortedGroups) {
+    const metric = group.horizons[horizon];
+    const currentRevenue = salesMetricNumber(metric, "netRevenue", "current");
+    const comparisonRevenue = salesMetricNumber(metric, "netRevenue", "comparison");
+    const row = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    const name = document.createElement("strong");
+    const id = document.createElement("span");
+    name.textContent = group.label;
+    id.textContent = group.externalProductGroupId;
+    nameCell.className = "sales-report-group-name";
+    nameCell.append(name, id);
+    row.append(nameCell);
+    const values = [
+      formatSalesDecimal(metric.quantity.current),
+      formatSalesDecimal(metric.quantity.comparison),
+      formatSalesDecimal(metric.netRevenue.current, { currency: true }),
+      formatSalesDecimal(metric.netRevenue.comparison, { currency: true }),
+      formatSalesMetricChange(currentRevenue, comparisonRevenue),
+      ...(hasGrossMargin ? [
+        formatSalesDecimal(metric.grossMargin.current, { currency: true }),
+        formatSalesDecimal(metric.grossMargin.comparison, { currency: true }),
+      ] : []),
+      formatSalesDecimal(metric.customerCount.current),
+      formatSalesDecimal(metric.customerCount.comparison),
+      formatSalesDecimal(metric.revenuePerCustomer.current, { currency: true }),
+      formatSalesDecimal(metric.revenuePerCustomer.comparison, { currency: true }),
+    ];
+    for (const [index, value] of values.entries()) {
+      const cell = document.createElement("td");
+      if (index === 4) {
+        const change = document.createElement("span");
+        change.className = `sales-metric-change compact ${salesMetricChangeClass(currentRevenue, comparisonRevenue)}`;
+        change.textContent = value;
+        cell.append(change);
+      } else {
+        cell.textContent = value;
+      }
+      row.append(cell);
+    }
+    tableBody.append(row);
+  }
+  elements.salesReportTableBody?.replaceChildren(tableBody);
+  const empty = sortedGroups.length === 0;
+  elements.salesReportTableEmpty?.classList.toggle("hidden", !empty);
+  if (empty && elements.salesReportTableEmpty) {
+    const title = elements.salesReportTableEmpty.querySelector("strong");
+    const message = elements.salesReportTableEmpty.querySelector("p");
+    if (title) title.textContent = "Keine passende Warengruppe";
+    if (message) message.textContent = "Ändern Sie den Suchbegriff oder setzen Sie die Filter zurück.";
+  }
+}
+
+function renderSalesAnalyticsReport() {
+  const series = state.salesAnalytics.reportSeries;
+  const detail = series || state.salesAnalytics.selectedReport;
+  const horizon = series ? "period" : state.salesAnalytics.horizon;
+  const hasGrossMargin = detail?.rights?.grossMargin === true;
+  const metricDefinitions = renderSalesAnalyticsMetricOptions(hasGrossMargin);
+  renderSalesAnalyticsKpis(detail, horizon, hasGrossMargin);
+  renderSalesAnalyticsTable(detail, horizon, hasGrossMargin);
+  if (!detail) {
+    renderSalesAnalyticsGraph(null, horizon, metricDefinitions);
+    if (elements.salesReportSummary) {
+      elements.salesReportSummary.textContent = "Noch kein Statistikbericht ausgewählt.";
+    }
+    if (elements.salesReportChartLegend) {
+      elements.salesReportChartLegend.classList.add("hidden");
+    }
+    return;
+  }
+
+  const periods = salesAnalyticsPeriods(detail, horizon);
+  const total = detail.totals?.[horizon];
+  if (elements.salesReportSummary) {
+    elements.salesReportSummary.textContent = series
+      ? `${salesAnalyticsLocationName(series.selection.locationId)} · ${series.selection.reportCount} PDF-Berichte · ${series.selection.coverageDays} Abdeckungstage${series.selection.gapDays ? ` · ${series.selection.gapDays} Lückentage` : ""} · Gesamtumsatz ${formatSalesDecimal(total?.netRevenue?.current, { currency: true })} · Vergleich ${formatSalesDecimal(total?.netRevenue?.comparison, { currency: true })}`
+      : `${salesAnalyticsLocationName(detail.report.locationId)} · ${salesPeriodLabel(periods.current)} · Gesamtumsatz ${formatSalesDecimal(total?.netRevenue?.current, { currency: true })} · Vergleich ${formatSalesDecimal(total?.netRevenue?.comparison, { currency: true })}`;
+  }
+  if (elements.salesReportChartLegend) {
+    const current = document.createElement("span");
+    const comparison = document.createElement("span");
+    current.className = "current";
+    comparison.className = "comparison";
+    current.textContent = series
+      ? `Ausgewählte PDF-Zeiträume · ${salesPeriodLabel(periods.current)}`
+      : `Aktuell · ${salesPeriodLabel(periods.current)}`;
+    comparison.textContent = series
+      ? `Zugehörige Vergleichszeiträume · ${salesPeriodLabel(periods.comparison)}`
+      : `Vergleich · ${salesPeriodLabel(periods.comparison)}`;
+    elements.salesReportChartLegend.replaceChildren(current, comparison);
+    elements.salesReportChartLegend.classList.remove("hidden");
+  }
+  renderSalesAnalyticsGraph(detail, horizon, metricDefinitions);
+}
+
+function renderSalesAnalytics() {
+  const reportCount = state.salesAnalytics.reports.length;
+  elements.salesReportImportPanel?.classList.toggle("hidden", !canManageSalesReportImports());
+  if (elements.salesAnalyticsStatusBadge) {
+    elements.salesAnalyticsStatusBadge.textContent = state.salesAnalytics.loading
+      ? "Berichtsdaten werden geladen"
+      : state.salesAnalytics.reportSeries
+        ? `${state.salesAnalytics.reportSeries.selection.reportCount} PDFs sicher analysiert`
+      : reportCount
+        ? `${reportCount} PDF-Bericht${reportCount === 1 ? "" : "e"} verfügbar`
+        : canManageSalesReportImports()
+          ? "PDF-Berichtsimport bereit"
+          : "Noch keine freigegebenen Berichtsdaten";
+    elements.salesAnalyticsStatusBadge.classList.toggle("inactive", !reportCount);
+  }
+  renderSalesAnalyticsFilters();
+  renderSalesReportArchive();
+  renderSalesReportPreview();
+  renderSalesAnalyticsReport();
+}
+
+async function loadSalesReportDetail(reportId = state.salesAnalytics.selectedReportId) {
+  if (!reportId) {
+    state.salesAnalytics.selectedReport = null;
+    renderSalesAnalyticsReport();
+    return;
+  }
+  const requestedId = reportId;
+  try {
+    const detail = await api(`/api/sales-analytics/reports/${encodeURIComponent(requestedId)}`);
+    if (state.salesAnalytics.selectedReportId !== requestedId) return;
+    state.salesAnalytics.selectedReport = detail;
+    renderSalesAnalyticsReport();
+  } catch (error) {
+    if (state.salesAnalytics.selectedReportId !== requestedId) return;
+    state.salesAnalytics.selectedReport = null;
+    renderSalesAnalyticsReport();
+    showToast(error.message, true);
+  }
+}
+
+async function loadSalesAnalytics({ selectReportId = "" } = {}) {
+  if (!canAccessSalesAnalytics() || state.salesAnalytics.loading) return;
+  state.salesAnalytics.loading = true;
+  renderSalesAnalytics();
+  try {
+    const [reportPayload, context] = await Promise.all([
+      api("/api/sales-analytics/reports?limit=200"),
+      canManageSalesReportImports()
+        ? api("/api/sales-analytics/report-import/context")
+        : Promise.resolve(null),
+    ]);
+    state.salesAnalytics.reports = reportPayload.reports || [];
+    state.salesAnalytics.context = context;
+    const knownReportIds = new Set(state.salesAnalytics.reports.map((report) => report.id));
+    state.salesAnalytics.archiveSelection = selectReportId
+      ? []
+      : state.salesAnalytics.archiveSelection.filter((reportId) => knownReportIds.has(reportId));
+    state.salesAnalytics.reportSeries = null;
+    state.salesAnalytics.seriesError = "";
+    const preferredId = selectReportId || state.salesAnalytics.selectedReportId;
+    state.salesAnalytics.selectedReportId = state.salesAnalytics.reports.some((report) => report.id === preferredId)
+      ? preferredId
+      : state.salesAnalytics.reports[0]?.id || "";
+    state.salesAnalytics.selectedReport = null;
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    state.salesAnalytics.loading = false;
+    renderSalesAnalytics();
+  }
+  await loadSalesReportDetail();
+}
+
+async function inspectSalesReportPdf() {
+  const file = elements.salesReportImportFile?.files?.[0];
+  if (!file) return;
+  elements.salesReportInspectButton.disabled = true;
+  setSalesReportMessage("Textschicht und Berichtssummen werden geprüft; falls nötig folgt die lokale OCR seitenweise …");
+  try {
+    const response = await rawApi("/api/sales-analytics/report-import/inspect", {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type || "application/pdf",
+        "X-Import-Filename": encodeURIComponent(file.name),
+      },
+      body: file,
+    });
+    const payload = await response.json();
+    state.salesAnalytics.previewId = payload.previewId;
+    state.salesAnalytics.preview = payload.preview;
+    state.salesAnalytics.previewHorizon = "period";
+    if (elements.salesReportImportConfirmed) elements.salesReportImportConfirmed.checked = false;
+    if (elements.salesReportImportCurrency) elements.salesReportImportCurrency.value = "";
+    setSalesReportMessage(isSalesReportOcrPreview(payload.preview)
+      ? "Die Raster-PDF wurde lokal erkannt. Bitte alle OCR-Felder und Summen vollständig prüfen oder korrigieren."
+      : "Die Statistik wurde gelesen. Bitte Filiale, EUR und Prüfhilfen bestätigen.");
+    renderSalesReportPreview();
+  } catch (error) {
+    state.salesAnalytics.previewId = "";
+    state.salesAnalytics.preview = null;
+    setSalesReportMessage(error.message, true);
+    renderSalesReportPreview();
+  } finally {
+    elements.salesReportInspectButton.disabled = !elements.salesReportImportFile?.files?.length;
+  }
+}
+
+async function discardSalesReportPreview() {
+  const previewId = state.salesAnalytics.previewId;
+  state.salesAnalytics.previewId = "";
+  state.salesAnalytics.preview = null;
+  state.salesAnalytics.previewHorizon = "period";
+  if (elements.salesReportImportFile) elements.salesReportImportFile.value = "";
+  if (elements.salesReportImportConfirmed) elements.salesReportImportConfirmed.checked = false;
+  setSalesReportMessage("");
+  renderSalesReportPreview();
+  if (!previewId) return;
+  try {
+    await api(`/api/sales-analytics/report-import/sessions/${encodeURIComponent(previewId)}`, { method: "DELETE" });
+  } catch {}
+}
+
+async function applySalesReportPreview() {
+  if (!state.salesAnalytics.previewId || elements.salesReportApplyButton?.disabled) return;
+  elements.salesReportApplyButton.disabled = true;
+  setSalesReportMessage("Der bestätigte Statistikbericht wird unveränderlich übernommen …");
+  try {
+    const requestBody = {
+      previewId: state.salesAnalytics.previewId,
+      locationId: elements.salesReportImportLocation.value,
+      currency: elements.salesReportImportCurrency.value,
+      confirmed: elements.salesReportImportConfirmed.checked,
+    };
+    if (isSalesReportOcrPreview()) {
+      requestBody.ocrReview = salesOcrReviewPayload(state.salesAnalytics.preview);
+    }
+    const result = await api("/api/sales-analytics/report-import/apply", {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+    });
+    state.salesAnalytics.previewId = "";
+    state.salesAnalytics.preview = null;
+    state.salesAnalytics.previewHorizon = "period";
+    if (elements.salesReportImportFile) elements.salesReportImportFile.value = "";
+    setSalesReportMessage(result.created
+      ? "Der Statistikbericht wurde übernommen."
+      : "Dieser identische Statistikbericht war bereits übernommen.");
+    await loadSalesAnalytics({ selectReportId: result.report.id });
+  } catch (error) {
+    setSalesReportMessage(error.message, true);
+    updateSalesReportApplyState();
+  }
+}
+
+function clearSalesReportSeries({ clearSelection = true } = {}) {
+  if (clearSelection) state.salesAnalytics.archiveSelection = [];
+  state.salesAnalytics.reportSeries = null;
+  state.salesAnalytics.seriesError = "";
+  state.salesAnalytics.seriesLoading = false;
+}
+
+async function analyzeSalesReportSeries() {
+  if (state.salesAnalytics.seriesLoading) return;
+  const reports = selectedSalesAnalyticsReports();
+  const validation = salesReportSeriesSelectionValidation(reports);
+  if (!validation.ok) {
+    state.salesAnalytics.seriesError = validation.message;
+    renderSalesAnalytics();
+    return;
+  }
+  state.salesAnalytics.seriesLoading = true;
+  state.salesAnalytics.seriesError = "";
+  state.salesAnalytics.reportSeries = null;
+  renderSalesAnalytics();
+  try {
+    const series = await api("/api/sales-analytics/report-series/analyze", {
+      method: "POST",
+      body: JSON.stringify({ reportIds: reports.map((report) => report.id) }),
+    });
+    state.salesAnalytics.reportSeries = series;
+    state.salesAnalytics.horizon = "period";
+  } catch (error) {
+    state.salesAnalytics.reportSeries = null;
+    state.salesAnalytics.seriesError = error.message;
+    showToast(error.message, true);
+  } finally {
+    state.salesAnalytics.seriesLoading = false;
+    renderSalesAnalytics();
+  }
+}
+
 function setView(view) {
   const features = state.portalStatus?.installationFeatures || {};
   if ((view === "vacations" && features.vacation === false)
     || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
+    || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "branchOrders" && !canManageBranchOrders())
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
@@ -20659,6 +22118,7 @@ function setView(view) {
   elements.timeTrackingView?.classList.toggle("active", view === "timeTracking");
   elements.vacationsView.classList.toggle("active", view === "vacations");
   elements.personnelAdministrationView?.classList.toggle("active", view === "personnelAdministration");
+  elements.salesAnalyticsView?.classList.toggle("active", view === "salesAnalytics");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.loansView?.classList.toggle("active", view === "loans");
   elements.branchOrdersView?.classList.toggle("active", view === "branchOrders");
@@ -20673,6 +22133,7 @@ function setView(view) {
   if (view === "requests") loadManagerVacationRequests();
   if (view === "loans") loadLoanManagement();
   if (view === "branchOrders") loadBranchOrdersManagement();
+  if (view === "salesAnalytics") loadSalesAnalytics();
   if (view === "rightsDashboard") loadRightsDashboard();
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
@@ -20685,7 +22146,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) return;
+  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) return;
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -23708,6 +25169,115 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   if (contextChanged) loadAll();
   closeMobileNavigation({ restoreFocus: false });
 }));
+elements.salesReportImportFile?.addEventListener("change", () => {
+  const file = elements.salesReportImportFile.files?.[0];
+  elements.salesReportInspectButton.disabled = !file;
+  setSalesReportMessage(file ? `${file.name} ist ausgewählt und noch nicht geprüft.` : "");
+});
+elements.salesReportInspectButton?.addEventListener("click", inspectSalesReportPdf);
+elements.salesReportDiscardButton?.addEventListener("click", discardSalesReportPreview);
+elements.salesReportPreview?.addEventListener("input", (event) => {
+  const input = event.target.closest?.("[data-sales-ocr-path]");
+  if (!input || !isSalesReportOcrPreview()) return;
+  setSalesOcrPreviewPath(input.dataset.salesOcrPath, input.value);
+  if (elements.salesReportImportConfirmed) elements.salesReportImportConfirmed.checked = false;
+  refreshSalesOcrPreviewFeedback();
+});
+elements.salesReportPreviewHorizon?.addEventListener("change", () => {
+  state.salesAnalytics.previewHorizon = elements.salesReportPreviewHorizon.value === "yearToDate"
+    ? "yearToDate"
+    : "period";
+  renderSalesReportPreview();
+});
+elements.salesReportImportLocation?.addEventListener("change", updateSalesReportApplyState);
+elements.salesReportImportCurrency?.addEventListener("change", updateSalesReportApplyState);
+elements.salesReportImportConfirmed?.addEventListener("change", updateSalesReportApplyState);
+elements.salesReportApplyButton?.addEventListener("click", applySalesReportPreview);
+elements.salesReportArchiveBody?.addEventListener("change", (event) => {
+  const checkbox = event.target.closest?.("[data-sales-archive-report]");
+  if (!checkbox) return;
+  const reportId = checkbox.dataset.salesArchiveReport;
+  const selected = new Set(state.salesAnalytics.archiveSelection || []);
+  if (checkbox.checked) selected.add(reportId);
+  else selected.delete(reportId);
+  state.salesAnalytics.archiveSelection = [...selected];
+  state.salesAnalytics.reportSeries = null;
+  state.salesAnalytics.seriesError = "";
+  renderSalesAnalytics();
+});
+elements.salesReportArchiveBody?.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-sales-open-report]");
+  if (!button) return;
+  clearSalesReportSeries({ clearSelection: false });
+  state.salesAnalytics.selectedReportId = button.dataset.salesOpenReport;
+  state.salesAnalytics.selectedReport = null;
+  renderSalesAnalytics();
+  loadSalesReportDetail();
+});
+elements.salesReportSeriesAnalyzeButton?.addEventListener("click", analyzeSalesReportSeries);
+elements.salesReportSeriesClearButton?.addEventListener("click", () => {
+  clearSalesReportSeries();
+  renderSalesAnalytics();
+});
+elements.salesReportLocationFilter?.addEventListener("change", () => {
+  state.salesAnalytics.locationFilter = elements.salesReportLocationFilter.value;
+  clearSalesReportSeries();
+  state.salesAnalytics.selectedReport = null;
+  renderSalesAnalyticsFilters();
+  renderSalesAnalyticsReport();
+  loadSalesReportDetail();
+});
+elements.salesReportDateFrom?.addEventListener("change", () => {
+  state.salesAnalytics.dateFrom = elements.salesReportDateFrom.value;
+  clearSalesReportSeries();
+  state.salesAnalytics.selectedReport = null;
+  renderSalesAnalyticsFilters();
+  renderSalesAnalyticsReport();
+  loadSalesReportDetail();
+});
+elements.salesReportDateTo?.addEventListener("change", () => {
+  state.salesAnalytics.dateTo = elements.salesReportDateTo.value;
+  clearSalesReportSeries();
+  state.salesAnalytics.selectedReport = null;
+  renderSalesAnalyticsFilters();
+  renderSalesAnalyticsReport();
+  loadSalesReportDetail();
+});
+elements.salesReportResetFilters?.addEventListener("click", () => {
+  state.salesAnalytics.locationFilter = "";
+  state.salesAnalytics.dateFrom = "";
+  state.salesAnalytics.dateTo = "";
+  clearSalesReportSeries();
+  state.salesAnalytics.selectedReport = null;
+  renderSalesAnalyticsFilters();
+  renderSalesAnalyticsReport();
+  loadSalesReportDetail();
+});
+elements.salesReportSelect?.addEventListener("change", () => {
+  clearSalesReportSeries();
+  state.salesAnalytics.selectedReportId = elements.salesReportSelect.value;
+  state.salesAnalytics.selectedReport = null;
+  renderSalesAnalyticsReport();
+  loadSalesReportDetail();
+});
+elements.salesReportHorizon?.addEventListener("change", () => {
+  state.salesAnalytics.horizon = elements.salesReportHorizon.value === "year_to_date"
+    ? "year_to_date"
+    : "period";
+  renderSalesAnalyticsReport();
+});
+elements.salesReportChartMetric?.addEventListener("change", () => {
+  state.salesAnalytics.chartMetric = elements.salesReportChartMetric.value;
+  renderSalesAnalyticsReport();
+});
+elements.salesReportGroupSearch?.addEventListener("input", () => {
+  state.salesAnalytics.tableSearch = elements.salesReportGroupSearch.value;
+  renderSalesAnalyticsReport();
+});
+elements.salesReportTableSort?.addEventListener("change", () => {
+  state.salesAnalytics.tableSort = elements.salesReportTableSort.value;
+  renderSalesAnalyticsReport();
+});
 elements.mobileNavigationToggle?.addEventListener("click", openMobileNavigation);
 elements.mobileNavigationClose?.addEventListener("click", () => closeMobileNavigation());
 elements.mobileNavigationBackdrop?.addEventListener("click", () => closeMobileNavigation());
