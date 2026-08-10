@@ -30,6 +30,10 @@ const {
   PHASE_5_POSTGRESQL_DRIVER_FILES,
   PHASE_5_POSTGRESQL_FILES,
   PHASE_5_POSTGRESQL_TEST_FILES,
+  SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT,
+  SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT,
+  SALES_ANALYTICS_PERSISTENCE_SLICE_FILES,
+  SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES,
   architectureBoundaryViolationsForText,
   scanRepository,
 } = require("../scripts/audit-persistence-coupling");
@@ -432,6 +436,14 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
   assert.equal(report.summary.phase3SqliteProviderTestFiles, PHASE_3_SQLITE_PROVIDER_TEST_FILES.length);
   assert.equal(report.summary.phase5PostgresqlFiles, PHASE_5_POSTGRESQL_FILES.length);
   assert.equal(report.summary.phase5PostgresqlTestFiles, PHASE_5_POSTGRESQL_TEST_FILES.length);
+  assert.equal(
+    report.summary.salesAnalyticsPersistenceFiles,
+    SALES_ANALYTICS_PERSISTENCE_SLICE_FILES.length,
+  );
+  assert.equal(
+    report.summary.salesAnalyticsPersistenceTestFiles,
+    SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES.length,
+  );
   assert.deepEqual(PHASE_5_POSTGRESQL_DRIVER_FILES, [
     "lib/persistence/postgresql/pool.js",
   ]);
@@ -460,6 +472,19 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     "test/v087-database-block5-postgresql-system-center-metrics.test.js",
     "test/v087-database-block5-postgresql-ui-preferences.test.js",
   ]);
+  assert.deepEqual(SALES_ANALYTICS_PERSISTENCE_SLICE_FILES, [
+    "lib/persistence/postgresql/sales-analytics-catalog.js",
+    "lib/persistence/postgresql/sales-analytics-schema.js",
+    "lib/persistence/repositories/sales-analytics.js",
+    "lib/persistence/sqlite/operations/sales-analytics-schema.js",
+    "lib/persistence/sqlite/sales-analytics-catalog.js",
+    "lib/persistence/statements/sales-analytics.js",
+  ]);
+  assert.deepEqual(SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES, [
+    "test/sales-analytics-persistence-foundation.test.js",
+    "test/sales-analytics-production-hardening.test.js",
+    "test/sales-analytics-tradefoto-report.test.js",
+  ]);
   assert.deepEqual(report.phase3Progress.completedSlices, ["all-runtime-domains"]);
   assert.equal(report.phase3Progress.uiPreferencesRepositoryWiringComplete, true);
   assert.equal(report.phase3Progress.uiPreferencesRoutesAwaited, true);
@@ -480,7 +505,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     report.phase5Progress.compilerVersion,
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1015);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1044);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -498,7 +523,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1015,
+    requiredReceiptCount: 1044,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -557,8 +582,30 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     expectedStatementCount: PHASE_5_EXPECTED_SYSTEM_CENTER_METRICS_STATEMENT_COUNT,
     executableStatementCount: PHASE_5_EXPECTED_SYSTEM_CENTER_METRICS_STATEMENT_COUNT,
   });
+  assert.deepEqual(report.phase5Progress.salesAnalyticsPersistenceSlice, {
+    status: "development-contract",
+    valid: true,
+    standaloneContract: false,
+    sqliteApplicationIntegrated: true,
+    sourceCatalogFingerprintValid: true,
+    sliceFingerprintValid: true,
+    schemaContractValid: true,
+    schemaFingerprintValid: true,
+    repositoryContractValid: true,
+    developmentExecutable: true,
+    executable: true,
+    applicationExecutable: false,
+    fullApplicationCatalog: false,
+    productActivation: false,
+    statementCount: SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT,
+    expectedStatementCount: SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT,
+    executableStatementCount: SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT,
+    schemaStatementCount: SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT,
+    expectedSchemaStatementCount: SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT,
+    applicationWiringReferences: 37,
+  });
   assert.deepEqual(report.phase5Progress.developmentSlices, {
-    sliceCount: 4,
+    sliceCount: 5,
     executableStatementCount: PHASE_5_EXPECTED_DEVELOPMENT_SLICE_STATEMENT_COUNT,
     expectedStatementCount: PHASE_5_EXPECTED_DEVELOPMENT_SLICE_STATEMENT_COUNT,
     applicationExecutable: false,
@@ -581,6 +628,8 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
   });
   assert.deepEqual(report.phase5Progress.missingFiles, []);
   assert.deepEqual(report.phase5Progress.missingTestFiles, []);
+  assert.deepEqual(report.phase5Progress.missingSalesAnalyticsFiles, []);
+  assert.deepEqual(report.phase5Progress.missingSalesAnalyticsTestFiles, []);
   assert.deepEqual(report.phase5Progress.moduleErrors, []);
   assert.deepEqual(report.phaseBoundaryViolations, []);
   assert.deepEqual(report.unknownProduction, []);

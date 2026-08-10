@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -320,10 +321,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1015;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1044;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 24;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 991;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 918;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1020;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 947;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -362,8 +363,92 @@ const PHASE_5_POSTGRESQL_TEST_FILES = Object.freeze([
   "test/v087-database-block5-postgresql-ui-preferences.test.js",
 ]);
 const PHASE_5_POSTGRESQL_TEST_FILE_SET = new Set(PHASE_5_POSTGRESQL_TEST_FILES);
+const SALES_ANALYTICS_PERSISTENCE_SLICE_FILES = Object.freeze([
+  "lib/persistence/postgresql/sales-analytics-catalog.js",
+  "lib/persistence/postgresql/sales-analytics-schema.js",
+  "lib/persistence/repositories/sales-analytics.js",
+  "lib/persistence/sqlite/operations/sales-analytics-schema.js",
+  "lib/persistence/sqlite/sales-analytics-catalog.js",
+  "lib/persistence/statements/sales-analytics.js",
+]);
+const SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET =
+  new Set(SALES_ANALYTICS_PERSISTENCE_SLICE_FILES);
+const SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES = Object.freeze([
+  "test/sales-analytics-persistence-foundation.test.js",
+  "test/sales-analytics-production-hardening.test.js",
+  "test/sales-analytics-tradefoto-report.test.js",
+]);
+const SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILE_SET =
+  new Set(SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES);
+const PHASE_5_POSTGRESQL_RUNTIME_FILE_SET = new Set([
+  ...PHASE_5_POSTGRESQL_FILES,
+  ...SALES_ANALYTICS_PERSISTENCE_SLICE_FILES.filter(
+    (file) => file.startsWith("lib/persistence/postgresql/"),
+  ),
+]);
+const SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_IDS = Object.freeze([
+  "sales-analytics.profiles.list",
+  "sales-analytics.profiles.get",
+  "sales-analytics.profile-revisions.get",
+  "sales-analytics.profile-revisions.list",
+  "sales-analytics.profiles.insert",
+  "sales-analytics.profile-revisions.insert",
+  "sales-analytics.profiles.activate-revision",
+  "sales-analytics.runs.get",
+  "sales-analytics.runs.get-by-idempotency-key",
+  "sales-analytics.runs.list",
+  "sales-analytics.runs.insert",
+  "sales-analytics.staging.insert",
+  "sales-analytics.staging.list",
+  "sales-analytics.staging.purge-expired",
+  "sales-analytics.branch-mapping-heads.get",
+  "sales-analytics.branch-mapping-revisions.get",
+  "sales-analytics.branch-mapping-revisions.list",
+  "sales-analytics.branch-mappings.list-active",
+  "sales-analytics.branch-mapping-heads.insert",
+  "sales-analytics.branch-mapping-revisions.insert",
+  "sales-analytics.branch-mapping-heads.activate-revision",
+  "sales-analytics.reports.get",
+  "sales-analytics.reports.get-by-source-sha256",
+  "sales-analytics.reports.list",
+  "sales-analytics.reports.insert",
+  "sales-analytics.report-product-group-metrics.insert",
+  "sales-analytics.report-product-group-metrics.list",
+  "sales-analytics.report-total-metrics.insert",
+  "sales-analytics.report-total-metrics.list",
+]);
+const SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT =
+  SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_IDS.length;
+const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
+  "profiles",
+  "profile-revisions",
+  "profiles-active-revision-fk",
+  "runs",
+  "runs-profile-index",
+  "staging",
+  "staging-expiry-index",
+  "branch-mapping-heads",
+  "branch-mapping-revisions",
+  "branch-mapping-active-revision-fk",
+  "branch-mapping-location-index",
+  "aggregate-reports",
+  "aggregate-reports-location-index",
+  "report-product-group-metrics",
+  "report-product-group-metrics-index",
+  "report-total-metrics",
+  "immutable-function",
+  "profile-revisions-no-update",
+  "runs-no-update",
+  "staging-no-update",
+  "branch-revisions-no-update",
+  "aggregate-reports-no-update",
+  "report-product-group-metrics-no-update",
+  "report-total-metrics-no-update",
+]);
+const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
+  SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 909;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 938;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 106;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
@@ -394,7 +479,8 @@ const PHASE_5_EXPECTED_DEVELOPMENT_SLICE_STATEMENT_COUNT =
   PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_COUNT
   + PHASE_5_EXPECTED_PLANNING_SETTINGS_STATEMENT_COUNT
   + PHASE_5_EXPECTED_ORGANIZATION_DEPARTMENTS_STATEMENT_COUNT
-  + PHASE_5_EXPECTED_SYSTEM_CENTER_METRICS_STATEMENT_COUNT;
+  + PHASE_5_EXPECTED_SYSTEM_CENTER_METRICS_STATEMENT_COUNT
+  + SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT;
 const PHASE_5_ALLOWED_DEPENDENCIES = Object.freeze(["pg"]);
 const PHASE_5_POSTGRESQL_DRIVER_FILES = Object.freeze([
   "lib/persistence/postgresql/pool.js",
@@ -409,6 +495,16 @@ const PHASE_5_CLASSIFICATION = Object.freeze({
   transactionContext: "pooled client per operation with provider-bound concurrent transaction executors",
   transitionException: "PostgreSQL is executable only through the development-contract gate and remains absent from server.js",
   laterPhase: "5",
+});
+const SALES_ANALYTICS_PERSISTENCE_CLASSIFICATION = Object.freeze({
+  id: "sales-analytics-persistence-pdf-import",
+  scope: "sales-analytics-sqlite-application-and-postgresql-development-slice",
+  owner: "sales-analytics-and-persistence-architecture",
+  targetLayer: "application-wired SQLite PDF-report persistence with provider-neutral contracts",
+  risk: "critical",
+  transactionContext: "explicit repository transactions in the application catalog; PostgreSQL remains separately gated",
+  transitionException: "SQLite application wiring is active only for confirmed aggregate PDF reports; PostgreSQL remains a development contract",
+  laterPhase: "sales-analytics-pdf-import",
 });
 const PHASE_6_POSTGRESQL_OPERATIONS_FILES = Object.freeze([
   "lib/backup-bundle.js",
@@ -1991,6 +2087,7 @@ function architectureBoundaryViolationsForText(file, text) {
   const statementDefinitionFiles = new Set([
     "lib/persistence/contract.js",
     ...PHASE_3_STATEMENT_FILES,
+    "lib/persistence/statements/sales-analytics.js",
   ]);
   const configurationFiles = new Set(["lib/persistence/configuration.js"]);
   const persistenceInternalFiles = new Set([
@@ -1998,6 +2095,7 @@ function architectureBoundaryViolationsForText(file, text) {
     ...PHASE_3_SQLITE_PROVIDER_FILES,
     ...PHASE_4_PERSISTENCE_FILES,
     ...PHASE_5_POSTGRESQL_FILES,
+    ...SALES_ANALYTICS_PERSISTENCE_SLICE_FILES,
     ...PHASE_6_POSTGRESQL_OPERATIONS_FILES,
   ]);
   const phase4MigrationRuntimeFiles = new Set([
@@ -2075,7 +2173,7 @@ function architectureBoundaryViolationsForText(file, text) {
     {
       id: "postgresql-runtime-provider",
       pattern: /\b(?:createPostgres(?:ql)?(?:Persistence)?Provider|Postgres(?:ql)?(?:Persistence)?Provider)\b/g,
-      allowedFiles: PHASE_5_POSTGRESQL_FILE_SET,
+      allowedFiles: PHASE_5_POSTGRESQL_RUNTIME_FILE_SET,
       source: "code",
     },
     {
@@ -2476,6 +2574,7 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
   for (const file of files) {
     if (isPostgresqlRuntimeArtifactPath(file)
       && !PHASE_5_POSTGRESQL_FILE_SET.has(file)
+      && !SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET.has(file)
       && !PHASE_6_POSTGRESQL_OPERATIONS_FILE_SET.has(file)) {
       postgresqlRuntimeArtifacts.push(`file:${file}`);
     }
@@ -2568,6 +2667,12 @@ function inspectPhase5Postgresql(root) {
   const missingTestFiles = PHASE_5_POSTGRESQL_TEST_FILES
     .filter((file) => !fs.existsSync(path.join(root, file)))
     .sort();
+  const missingSalesAnalyticsFiles = SALES_ANALYTICS_PERSISTENCE_SLICE_FILES
+    .filter((file) => !fs.existsSync(path.join(root, file)))
+    .sort();
+  const missingSalesAnalyticsTestFiles = SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES
+    .filter((file) => !fs.existsSync(path.join(root, file)))
+    .sort();
   const moduleErrors = [];
 
   function safeRequire(relativeFile) {
@@ -2606,6 +2711,27 @@ function inspectPhase5Postgresql(root) {
   );
   const uiPreferencesCatalog = safeRequire(
     "lib/persistence/postgresql/ui-preferences-catalog.js",
+  );
+  const salesAnalyticsPostgresqlCatalog = safeRequire(
+    "lib/persistence/postgresql/sales-analytics-catalog.js",
+  );
+  const salesAnalyticsPostgresqlSchema = safeRequire(
+    "lib/persistence/postgresql/sales-analytics-schema.js",
+  );
+  const salesAnalyticsRepository = safeRequire(
+    "lib/persistence/repositories/sales-analytics.js",
+  );
+  const salesAnalyticsSqliteCatalog = safeRequire(
+    "lib/persistence/sqlite/sales-analytics-catalog.js",
+  );
+  const salesAnalyticsSqliteSchema = safeRequire(
+    "lib/persistence/sqlite/operations/sales-analytics-schema.js",
+  );
+  const salesAnalyticsStatements = safeRequire(
+    "lib/persistence/statements/sales-analytics.js",
+  );
+  const sqliteApplicationCatalog = safeRequire(
+    "lib/persistence/sqlite/application-catalog.js",
   );
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const serverText = fs.readFileSync(path.join(root, "server.js"), "utf8");
@@ -2657,6 +2783,16 @@ function inspectPhase5Postgresql(root) {
     "lib/persistence/postgresql/system-center-metrics-catalog.js",
     systemCenterMetricsCatalog,
     "createPostgresqlSystemCenterMetricsOldestIntervalKeysSlice",
+  );
+  const salesAnalyticsPersistenceSlice = createDevelopmentSlice(
+    "lib/persistence/postgresql/sales-analytics-catalog.js",
+    salesAnalyticsPostgresqlCatalog,
+    "createPostgresqlSalesAnalyticsPersistenceSlice",
+  );
+  const salesAnalyticsSchemaContract = createDevelopmentSlice(
+    "lib/persistence/postgresql/sales-analytics-schema.js",
+    salesAnalyticsPostgresqlSchema,
+    "createPostgresqlSalesAnalyticsSchemaContract",
   );
 
   let migrationAdapter = null;
@@ -2772,6 +2908,253 @@ function inspectPhase5Postgresql(root) {
     };
   }
 
+  function inspectSalesAnalyticsPersistenceSlice() {
+    const sourceCatalog = Array.isArray(
+      salesAnalyticsSqliteCatalog?.SQLITE_SALES_ANALYTICS_CATALOG,
+    )
+      ? salesAnalyticsSqliteCatalog.SQLITE_SALES_ANALYTICS_CATALOG
+      : [];
+    const sourceStatements = salesAnalyticsStatements?.SALES_ANALYTICS_PERSISTENCE_STATEMENTS
+      ? Object.values(salesAnalyticsStatements.SALES_ANALYTICS_PERSISTENCE_STATEMENTS)
+      : [];
+    const entries = Array.isArray(salesAnalyticsPersistenceSlice?.entries)
+      ? salesAnalyticsPersistenceSlice.entries
+      : [];
+    const provenance = Array.isArray(salesAnalyticsPersistenceSlice?.provenance)
+      ? salesAnalyticsPersistenceSlice.provenance
+      : [];
+    const schemaStatements = Array.isArray(salesAnalyticsSchemaContract?.statements)
+      ? salesAnalyticsSchemaContract.statements
+      : [];
+    const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
+    const schemaName = "grabenplaner_audit";
+    const salesRelations = [
+      "sales_import_profiles",
+      "sales_import_profile_revisions",
+      "sales_import_runs",
+      "sales_import_staging_records",
+      "sales_branch_mapping_heads",
+      "sales_branch_mapping_revisions",
+      "sales_aggregate_reports",
+      "sales_report_product_group_metrics",
+      "sales_report_total_metrics",
+    ];
+    const fieldSnapshot = (fields, preserveOrder) => {
+      const names = preserveOrder ? Object.keys(fields || {}) : Object.keys(fields || {}).sort();
+      return names.map((name) => ({ name, ...fields[name] }));
+    };
+    const sourceCatalogSnapshot = sourceCatalog.map(({ statement, sql, returning }) => ({
+      statement: {
+        id: statement?.id,
+        operation: statement?.operation,
+        parameters: fieldSnapshot(statement?.parameters, false),
+        columns: fieldSnapshot(statement?.columns, true),
+      },
+      sql,
+      returning,
+    }));
+    const sourceCatalogFingerprint = sha256(JSON.stringify(sourceCatalogSnapshot));
+    const qualifyRelations = (sql) => {
+      let qualified = sql;
+      for (const relation of salesRelations) {
+        qualified = qualified.replace(
+          new RegExp(`\\b${relation}\\b`, "g"),
+          `"${schemaName}"."${relation}"`,
+        );
+      }
+      return qualified;
+    };
+    const entriesValid = entries.length === SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT
+      && provenance.length === entries.length
+      && entries.every((entry, index) => {
+        const sourceEntry = sourceCatalog[index];
+        const sourceStatement = sourceStatements[index];
+        const proof = provenance[index];
+        if (!sourceEntry || sourceEntry.statement !== sourceStatement
+          || entry?.statement !== sourceStatement
+          || !Object.isFrozen(entry)
+          || typeof entry.sql !== "string"
+          || !entry.sql.includes(`"${schemaName}".`)
+          || !Array.isArray(entry.parameterOrder)
+          || !Object.isFrozen(entry.parameterOrder)
+          || JSON.stringify(entry.parameterOrder)
+            !== JSON.stringify(Object.keys(sourceStatement.parameters).sort())
+          || !Array.isArray(entry.parameterBindings)
+          || !Object.isFrozen(entry.parameterBindings)
+          || typeof entry.returning !== "boolean"
+          || entry.returning !== sourceEntry.returning
+          || !proof
+          || !Object.isFrozen(proof)
+          || proof.statementId !== sourceStatement.id
+          || proof.sourceSqlFingerprint !== sha256(sourceEntry.sql)
+          || !/^[a-f0-9]{64}$/.test(String(proof.qualifiedSqlFingerprint || ""))
+          || proof.compiledSqlFingerprint !== sha256(entry.sql)
+          || !Array.isArray(proof.coveredFeatures)) {
+          return false;
+        }
+        try {
+          const qualifiedSql = qualifyRelations(sourceEntry.sql);
+          const compiled = compiler?.compilePostgresqlDialectEntry?.({
+            statement: sourceStatement,
+            sql: qualifiedSql,
+            returning: sourceEntry.returning,
+          });
+          return compiled?.strategy === "portable-generated"
+            && compiled.compiledSql === entry.sql
+            && proof.qualifiedSqlFingerprint === sha256(qualifiedSql)
+            && proof.compiledSqlFingerprint === compiled.compiledSqlFingerprint
+            && JSON.stringify(proof.coveredFeatures)
+              === JSON.stringify(compiled.coveredFeatures);
+        } catch {
+          return false;
+        }
+      });
+    const statementIds = sourceStatements.map((statement) => statement?.id);
+    const statementContractValid = (
+      sourceStatements.length === SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT
+      && sourceCatalog.length === SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT
+      && JSON.stringify(statementIds)
+        === JSON.stringify(SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_IDS)
+      && new Set(statementIds).size === statementIds.length
+    );
+    const sourceCatalogFingerprintValid = Boolean(
+      /^[a-f0-9]{64}$/.test(sourceCatalogFingerprint)
+      && salesAnalyticsPersistenceSlice?.sourceCatalogFingerprint
+        === sourceCatalogFingerprint
+    );
+    const sliceFingerprintValid = Boolean(
+      /^[a-f0-9]{64}$/.test(String(salesAnalyticsPersistenceSlice?.fingerprint || ""))
+      && salesAnalyticsPersistenceSlice.fingerprint === sha256(JSON.stringify({
+        sliceId: salesAnalyticsPersistenceSlice.sliceId,
+        schemaName: salesAnalyticsPersistenceSlice.schemaName,
+        sourceCatalogFingerprint: salesAnalyticsPersistenceSlice.sourceCatalogFingerprint,
+        entries: provenance,
+      }))
+    );
+    const schemaIds = schemaStatements.map((statement) => statement?.id);
+    const schemaFingerprintValid = Boolean(
+      /^[a-f0-9]{64}$/.test(String(salesAnalyticsSchemaContract?.fingerprint || ""))
+      && salesAnalyticsSchemaContract.fingerprint === sha256(JSON.stringify({
+        contractVersion: salesAnalyticsSchemaContract.contractVersion,
+        schemaName: salesAnalyticsSchemaContract.schemaName,
+        statements: schemaStatements,
+      }))
+    );
+    const schemaSql = schemaStatements.map((statement) => statement?.sql || "").join("\n");
+    const schemaContractValid = Boolean(
+      salesAnalyticsSchemaContract
+      && salesAnalyticsSchemaContract.contractVersion === 3
+      && salesAnalyticsSchemaContract.status === "development-contract"
+      && salesAnalyticsSchemaContract.executable === true
+      && salesAnalyticsSchemaContract.applicationExecutable === false
+      && salesAnalyticsSchemaContract.productActivation === false
+      && Object.isFrozen(salesAnalyticsSchemaContract)
+      && Object.isFrozen(schemaStatements)
+      && schemaStatements.length === SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT
+      && JSON.stringify(schemaIds)
+        === JSON.stringify(SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS)
+      && new Set(schemaIds).size === schemaIds.length
+      && schemaStatements.every((statement) => (
+        Object.isFrozen(statement)
+        && typeof statement.sql === "string"
+        && statement.sql.includes(`"${schemaName}".`)
+      ))
+      && /\bJSONB\b/.test(schemaSql)
+      && /\bTIMESTAMPTZ\b/.test(schemaSql)
+      && /sales_reject_immutable_mutation/.test(schemaSql)
+      && schemaSql.includes(`"${schemaName}"."locations"`)
+      && !/\bCREATE\s+SCHEMA\b/i.test(schemaSql)
+      && schemaFingerprintValid
+    );
+    const applicationBoundaryFiles = [
+      "server.js",
+      "lib/persistence/application-repositories.js",
+      "lib/persistence/sqlite/application-catalog.js",
+      "lib/persistence/sqlite/operations/application-schema.js",
+    ];
+    const applicationBoundaryPatterns = [
+      /sales-analytics-(?:catalog|schema)/g,
+      /createSalesAnalyticsPersistenceRepository/g,
+      /ensureSqliteSalesAnalyticsSchema/g,
+      /SALES_ANALYTICS_PERSISTENCE_STATEMENTS/g,
+      /SQLITE_SALES_ANALYTICS_CATALOG/g,
+    ];
+    const applicationSourceReferences = applicationBoundaryFiles.reduce((total, relativeFile) => {
+      if (!fs.existsSync(path.join(root, relativeFile))) return total;
+      const text = fs.readFileSync(path.join(root, relativeFile), "utf8");
+      return total + applicationBoundaryPatterns.reduce(
+        (fileTotal, pattern) => fileTotal + [...text.matchAll(pattern)].length,
+        0,
+      );
+    }, 0);
+    const applicationCatalogStatementReferences = Array.isArray(
+      sqliteApplicationCatalog?.SQLITE_APPLICATION_CATALOG,
+    )
+      ? sqliteApplicationCatalog.SQLITE_APPLICATION_CATALOG.filter(
+        (entry) => String(entry?.statement?.id || "").startsWith("sales-analytics."),
+      ).length
+      : -1;
+    const applicationWiringReferences = applicationSourceReferences
+      + Math.max(0, applicationCatalogStatementReferences);
+    const repositoryContractValid = Boolean(
+      typeof salesAnalyticsRepository?.createSalesAnalyticsPersistenceRepository === "function"
+      && typeof salesAnalyticsSqliteSchema?.ensureSqliteSalesAnalyticsSchema === "function"
+    );
+    const valid = Boolean(
+      salesAnalyticsPersistenceSlice
+      && salesAnalyticsPersistenceSlice.sliceId === "sales-analytics-persistence"
+      && salesAnalyticsPersistenceSlice.status === "development-contract"
+      && salesAnalyticsPersistenceSlice.developmentExecutable === true
+      && salesAnalyticsPersistenceSlice.executable === true
+      && salesAnalyticsPersistenceSlice.applicationExecutable === false
+      && salesAnalyticsPersistenceSlice.fullApplicationCatalog === false
+      && salesAnalyticsPersistenceSlice.productActivation === false
+      && salesAnalyticsPersistenceSlice.schemaName === schemaName
+      && Object.isFrozen(salesAnalyticsPersistenceSlice)
+      && Object.isFrozen(entries)
+      && Object.isFrozen(provenance)
+      && statementContractValid
+      && entriesValid
+      && sourceCatalogFingerprintValid
+      && sliceFingerprintValid
+      && schemaContractValid
+      && repositoryContractValid
+      && applicationCatalogStatementReferences
+        === SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT
+      && applicationSourceReferences >= 6
+      && applicationWiringReferences
+        >= SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT + 6
+      && missingSalesAnalyticsFiles.length === 0
+      && missingSalesAnalyticsTestFiles.length === 0
+    );
+    return {
+      valid,
+      report: {
+        status: salesAnalyticsPersistenceSlice?.status || "",
+        valid,
+        standaloneContract: false,
+        sqliteApplicationIntegrated: applicationCatalogStatementReferences
+          === SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT,
+        sourceCatalogFingerprintValid,
+        sliceFingerprintValid,
+        schemaContractValid,
+        schemaFingerprintValid,
+        repositoryContractValid,
+        developmentExecutable: salesAnalyticsPersistenceSlice?.developmentExecutable === true,
+        executable: salesAnalyticsPersistenceSlice?.executable === true,
+        applicationExecutable: salesAnalyticsPersistenceSlice?.applicationExecutable ?? null,
+        fullApplicationCatalog: salesAnalyticsPersistenceSlice?.fullApplicationCatalog ?? null,
+        productActivation: salesAnalyticsPersistenceSlice?.productActivation ?? null,
+        statementCount: entries.length,
+        expectedStatementCount: SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT,
+        executableStatementCount: entriesValid ? entries.length : 0,
+        schemaStatementCount: schemaStatements.length,
+        expectedSchemaStatementCount: SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT,
+        applicationWiringReferences,
+      },
+    };
+  }
+
   const uiPreferencesProgress = inspectDevelopmentSlice({
     relativeFile: "lib/persistence/postgresql/ui-preferences-catalog.js",
     slice: uiPreferencesSlice,
@@ -2802,11 +3185,13 @@ function inspectPhase5Postgresql(root) {
     featureProperty: "coveredFeatures",
     semanticResolutionsRequired: true,
   });
+  const salesAnalyticsPersistenceProgress = inspectSalesAnalyticsPersistenceSlice();
   const developmentSliceStatementCount = [
     uiPreferencesProgress,
     planningSettingsProgress,
     organizationDepartmentsProgress,
     systemCenterMetricsProgress,
+    salesAnalyticsPersistenceProgress,
   ].reduce(
     (total, progress) => total + progress.report.executableStatementCount,
     0,
@@ -2966,6 +3351,7 @@ function inspectPhase5Postgresql(root) {
     && planningSettingsProgress.valid
     && organizationDepartmentsProgress.valid
     && systemCenterMetricsProgress.valid
+    && salesAnalyticsPersistenceProgress.valid
     && developmentSliceStatementCount
       === PHASE_5_EXPECTED_DEVELOPMENT_SLICE_STATEMENT_COUNT
     && migrationAdapterValid
@@ -3004,8 +3390,9 @@ function inspectPhase5Postgresql(root) {
     planningSettingsSlice: planningSettingsProgress.report,
     organizationDepartmentsSlice: organizationDepartmentsProgress.report,
     systemCenterMetricsSlice: systemCenterMetricsProgress.report,
+    salesAnalyticsPersistenceSlice: salesAnalyticsPersistenceProgress.report,
     developmentSlices: {
-      sliceCount: 4,
+      sliceCount: 5,
       executableStatementCount: developmentSliceStatementCount,
       expectedStatementCount: PHASE_5_EXPECTED_DEVELOPMENT_SLICE_STATEMENT_COUNT,
       applicationExecutable: false,
@@ -3036,6 +3423,8 @@ function inspectPhase5Postgresql(root) {
     executableMigrationBindingCount: 0,
     missingFiles,
     missingTestFiles,
+    missingSalesAnalyticsFiles,
+    missingSalesAnalyticsTestFiles,
     moduleErrors,
   };
 }
@@ -3315,7 +3704,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
       || PHASE_3_SQLITE_PROVIDER_TEST_FILE_SET.has(file)
       || PHASE_4_PERSISTENCE_TEST_FILE_SET.has(file)
     )),
-    ...PHASE_6_POSTGRESQL_OPERATIONS_FILES.filter((file) => (
+    ...SALES_ANALYTICS_PERSISTENCE_SLICE_FILES.filter((file) => (
       directGroups.entries.has(file)
       || indirectGroups.entries.has(file)
       || PHASE_2_CONTRACT_FILE_SET.has(file)
@@ -3323,12 +3712,29 @@ function scanRepository(root = REPOSITORY_ROOT) {
       || PHASE_4_PERSISTENCE_FILE_SET.has(file)
       || PHASE_5_POSTGRESQL_FILE_SET.has(file)
     )),
+    ...SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES.filter((file) => (
+      baselineTests.has(file)
+      || PHASE_2_CONTRACT_TEST_FILE_SET.has(file)
+      || PHASE_3_SQLITE_PROVIDER_TEST_FILE_SET.has(file)
+      || PHASE_4_PERSISTENCE_TEST_FILE_SET.has(file)
+      || PHASE_5_POSTGRESQL_TEST_FILE_SET.has(file)
+    )),
+    ...PHASE_6_POSTGRESQL_OPERATIONS_FILES.filter((file) => (
+      directGroups.entries.has(file)
+      || indirectGroups.entries.has(file)
+      || PHASE_2_CONTRACT_FILE_SET.has(file)
+      || PHASE_3_SQLITE_PROVIDER_FILE_SET.has(file)
+      || PHASE_4_PERSISTENCE_FILE_SET.has(file)
+      || PHASE_5_POSTGRESQL_FILE_SET.has(file)
+      || SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET.has(file)
+    )),
     ...PHASE_6_POSTGRESQL_OPERATIONS_TEST_FILES.filter((file) => (
       baselineTests.has(file)
       || PHASE_2_CONTRACT_TEST_FILE_SET.has(file)
       || PHASE_3_SQLITE_PROVIDER_TEST_FILE_SET.has(file)
       || PHASE_4_PERSISTENCE_TEST_FILE_SET.has(file)
       || PHASE_5_POSTGRESQL_TEST_FILE_SET.has(file)
+      || SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILE_SET.has(file)
     )),
   ].sort();
   const files = [...new Set(SCAN_ROOTS.flatMap((entry) => listFiles(root, entry)))]
@@ -3348,9 +3754,11 @@ function scanRepository(root = REPOSITORY_ROOT) {
               ? PHASE_4_CLASSIFICATION
               : (PHASE_5_POSTGRESQL_TEST_FILE_SET.has(file)
                 ? PHASE_5_CLASSIFICATION
-                : (PHASE_6_POSTGRESQL_OPERATIONS_TEST_FILE_SET.has(file)
-                  ? PHASE_6_CLASSIFICATION
-                  : null))))))
+                : (SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILE_SET.has(file)
+                  ? SALES_ANALYTICS_PERSISTENCE_CLASSIFICATION
+                  : (PHASE_6_POSTGRESQL_OPERATIONS_TEST_FILE_SET.has(file)
+                    ? PHASE_6_CLASSIFICATION
+                    : null)))))))
       : (directGroups.entries.get(file)
         || indirectGroups.entries.get(file)
         || (PHASE_2_CONTRACT_FILE_SET.has(file)
@@ -3361,9 +3769,11 @@ function scanRepository(root = REPOSITORY_ROOT) {
               ? PHASE_4_CLASSIFICATION
               : (PHASE_5_POSTGRESQL_FILE_SET.has(file)
                 ? PHASE_5_CLASSIFICATION
-                : (PHASE_6_POSTGRESQL_OPERATIONS_FILE_SET.has(file)
-                  ? PHASE_6_CLASSIFICATION
-                  : null))))));
+                : (SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET.has(file)
+                  ? SALES_ANALYTICS_PERSISTENCE_CLASSIFICATION
+                  : (PHASE_6_POSTGRESQL_OPERATIONS_FILE_SET.has(file)
+                    ? PHASE_6_CLASSIFICATION
+                    : null)))))));
     const text = fs.readFileSync(path.join(root, file), "utf8");
     const scanned = scanText(file, text, classification);
     const direct = hasDiscovery(scanned.counts, "directDiscovery");
@@ -3380,6 +3790,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     && !PHASE_3_SQLITE_PROVIDER_FILE_SET.has(record.file)
     && !PHASE_4_PERSISTENCE_FILE_SET.has(record.file)
     && !PHASE_5_POSTGRESQL_FILE_SET.has(record.file)
+    && !SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET.has(record.file)
     && !PHASE_6_POSTGRESQL_OPERATIONS_FILE_SET.has(record.file)
     && (record.indirect || indirectGroups.entries.has(record.file)));
   const allTestCandidates = records.filter((record) => record.isTest && record.direct);
@@ -3388,6 +3799,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     && !PHASE_3_SQLITE_PROVIDER_TEST_FILE_SET.has(record.file)
     && !PHASE_4_PERSISTENCE_TEST_FILE_SET.has(record.file)
     && !PHASE_5_POSTGRESQL_TEST_FILE_SET.has(record.file)
+    && !SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILE_SET.has(record.file)
     && !PHASE_6_POSTGRESQL_OPERATIONS_TEST_FILE_SET.has(record.file)
   ));
   const productionTotals = Object.fromEntries(SIGNALS
@@ -3401,6 +3813,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
       !PHASE_3_SQLITE_PROVIDER_FILE_SET.has(record.file)
       && !PHASE_4_PERSISTENCE_FILE_SET.has(record.file)
       && !PHASE_5_POSTGRESQL_FILE_SET.has(record.file)
+      && !SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET.has(record.file)
       && !PHASE_6_POSTGRESQL_OPERATIONS_FILE_SET.has(record.file)
     ));
   const legacyProductionTotals = Object.fromEntries(SIGNALS
@@ -3602,6 +4015,16 @@ function scanRepository(root = REPOSITORY_ROOT) {
   if (phase5Progress.missingTestFiles.length) {
     errors.push(`Fehlende Phase-5-PostgreSQL-Testdatei: ${phase5Progress.missingTestFiles.join(", ")}`);
   }
+  if (phase5Progress.missingSalesAnalyticsFiles.length) {
+    errors.push(`Fehlende Sales-Analytics-Persistenzdatei: ${
+      phase5Progress.missingSalesAnalyticsFiles.join(", ")
+    }`);
+  }
+  if (phase5Progress.missingSalesAnalyticsTestFiles.length) {
+    errors.push(`Fehlende Sales-Analytics-Persistenztestdatei: ${
+      phase5Progress.missingSalesAnalyticsTestFiles.join(", ")
+    }`);
+  }
   if (phase5Progress.moduleErrors.length) {
     errors.push(`Phase-5-Module konnten nicht sicher geladen werden: ${
       phase5Progress.moduleErrors.map((entry) => entry.file).join(", ")
@@ -3720,6 +4143,12 @@ function scanRepository(root = REPOSITORY_ROOT) {
       phase4PersistenceTestFiles: PHASE_4_PERSISTENCE_TEST_FILES.length - phase4Progress.missingTestFiles.length,
       phase5PostgresqlFiles: PHASE_5_POSTGRESQL_FILES.length - phase5Progress.missingFiles.length,
       phase5PostgresqlTestFiles: PHASE_5_POSTGRESQL_TEST_FILES.length - phase5Progress.missingTestFiles.length,
+      salesAnalyticsPersistenceFiles:
+        SALES_ANALYTICS_PERSISTENCE_SLICE_FILES.length
+        - phase5Progress.missingSalesAnalyticsFiles.length,
+      salesAnalyticsPersistenceTestFiles:
+        SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES.length
+        - phase5Progress.missingSalesAnalyticsTestFiles.length,
       phase6PostgresqlOperationsFiles:
         PHASE_6_POSTGRESQL_OPERATIONS_FILES.length - phase6Progress.missingFiles.length,
       phase6PostgresqlOperationsTestFiles:
@@ -3783,6 +4212,8 @@ function formatSummary(report) {
     `PostgreSQL-Planungseinstellungen: ${report.phase5Progress.planningSettingsSlice.executableStatementCount}/${report.phase5Progress.planningSettingsSlice.expectedStatementCount} ausfuehrbar, Status=${report.phase5Progress.planningSettingsSlice.status || "fehlt"}, Vollanwendung=${report.phase5Progress.planningSettingsSlice.fullApplicationCatalog}`,
     `PostgreSQL-Abteilungen: ${report.phase5Progress.organizationDepartmentsSlice.executableStatementCount}/${report.phase5Progress.organizationDepartmentsSlice.expectedStatementCount} ausfuehrbar, Status=${report.phase5Progress.organizationDepartmentsSlice.status || "fehlt"}, Vollanwendung=${report.phase5Progress.organizationDepartmentsSlice.fullApplicationCatalog}`,
     `PostgreSQL-System-Center-Metriken: ${report.phase5Progress.systemCenterMetricsSlice.executableStatementCount}/${report.phase5Progress.systemCenterMetricsSlice.expectedStatementCount} ausfuehrbar, Status=${report.phase5Progress.systemCenterMetricsSlice.status || "fehlt"}, Vollanwendung=${report.phase5Progress.systemCenterMetricsSlice.fullApplicationCatalog}`,
+    `Sales-Analytics-Persistenzslice: ${report.phase5Progress.salesAnalyticsPersistenceSlice.executableStatementCount}/${report.phase5Progress.salesAnalyticsPersistenceSlice.expectedStatementCount} Statements, DDL=${report.phase5Progress.salesAnalyticsPersistenceSlice.schemaStatementCount}/${report.phase5Progress.salesAnalyticsPersistenceSlice.expectedSchemaStatementCount}, Anwendungsverdrahtungen=${report.phase5Progress.salesAnalyticsPersistenceSlice.applicationWiringReferences}`,
+    `Sales-Analytics-Persistenzdateien: ${report.summary.salesAnalyticsPersistenceFiles}, Tests: ${report.summary.salesAnalyticsPersistenceTestFiles}, Produktivaktivierung=${report.phase5Progress.salesAnalyticsPersistenceSlice.productActivation}`,
     `PostgreSQL-Development-Slices: ${report.phase5Progress.developmentSlices.sliceCount} Slices, ${report.phase5Progress.developmentSlices.executableStatementCount}/${report.phase5Progress.developmentSlices.expectedStatementCount} Statements, Anwendungsfreigabe=${report.phase5Progress.developmentSlices.applicationExecutable}`,
     `PostgreSQL-Migrationsadapter: Status=${report.phase5Progress.migrationAdapter.status || "fehlt"}, gueltig=${report.phase5Progress.migrationAdapter.valid}, Session-Lock vor SERIALIZABLE=${report.phase5Progress.migrationAdapter.sessionAdvisoryLockBeforeSerializableTransaction}, Artefakte=${report.phase5Progress.migrationAdapter.artifactExecution || "fehlt"}, Rollenpruefung=${report.phase5Progress.migrationAdapter.roleBoundaryEnforced}, Ledgerzugriff=${report.phase5Progress.migrationAdapter.ledgerAccessFromArtifacts || "unbekannt"}, Anwendungsmigrationen=${report.phase5Progress.migrationAdapter.applicationMigrationsImplemented}/${report.phase5Progress.migrationAdapter.expectedApplicationMigrationCount}, Produktivaktivierung=${report.phase5Progress.migrationAdapter.productActivation}`,
     `Phase 6: ${report.phase6Progress.status}; Operations-Grundlage=${report.phase6Progress.operationsFoundationStatus}; Produktivaktivierung=${report.phase6Progress.productionActivation}; Cutover=${report.phase6Progress.cutoverImplemented}`,
@@ -3837,6 +4268,10 @@ module.exports = {
   PHASE_5_POSTGRESQL_DRIVER_FILES,
   PHASE_5_POSTGRESQL_FILES,
   PHASE_5_POSTGRESQL_TEST_FILES,
+  SALES_ANALYTICS_EXPECTED_PERSISTENCE_STATEMENT_COUNT,
+  SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT,
+  SALES_ANALYTICS_PERSISTENCE_SLICE_FILES,
+  SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES,
   PHASE_6_POSTGRESQL_OPERATIONS_FILES,
   PHASE_6_POSTGRESQL_OPERATIONS_TEST_FILES,
   PRODUCTION_DIRECT_GROUPS,
