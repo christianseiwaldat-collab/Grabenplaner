@@ -1010,7 +1010,8 @@ function canManageBranchLoanOverview() {
 function canManageBranchOrders() {
   if (state.portalStatus?.installationFeatures?.branchOrders === false) return false;
   if (!state.portalStatus?.portalEnabled) return true;
-  return state.portalSession?.user?.permissions?.includes("branch_orders:manage") === true;
+  return ["hr", "admin", "it_admin", "developer"].includes(state.portalSession?.user?.role)
+    && state.portalSession?.user?.permissions?.includes("branch_orders:manage") === true;
 }
 
 function canManageBranchAccountPasswords() {
@@ -2318,12 +2319,17 @@ function renderBranchOrdersManagementHistory() {
     elements.branchOrdersManagementHistory.innerHTML = '<p class="settings-note">Kein freigegebener Standort für Filialbestellungen vorhanden.</p>';
     return;
   }
-  elements.branchOrdersManagementHistory.innerHTML = history.length ? history.map((order) => `
+  elements.branchOrdersManagementHistory.innerHTML = history.length ? history.map((order) => {
+    const orderId = encodeURIComponent(String(order.id || ""));
+    const pdfBase = `/api/portal/v1/branch-orders/${orderId}/pdf`;
+    return `
     <article class="branch-orders-management-history-entry">
       <div><strong>KW ${Number(order.calendarWeek || 0)} · ${escapeHtml(order.selectedEmployeeName || "Teammitglied")} · MA-Nr. ${escapeHtml(order.selectedEmployeeNumber || "–")}</strong><small>${escapeHtml(branchOrdersManagementTimestamp(order.submittedAt))} · ${escapeHtml(order.status || "gespeichert")}</small></div>
       <ul>${(order.lines || []).map((line) => `<li>${escapeHtml(line.groupTitle || "Warengruppe")} · ${escapeHtml(line.itemTitle || "Position")}: ${escapeHtml(Number(line.quantity || 0).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${escapeHtml(line.unit || "")}</li>`).join("")}</ul>
+      <nav class="branch-orders-management-history-actions"><a class="secondary-button" href="${escapeHtml(pdfBase)}" target="_blank" rel="noopener">PDF öffnen</a><a class="secondary-button" href="${escapeHtml(`${pdfBase}?download=1`)}">Herunterladen</a></nav>
     </article>
-  `).join("") : '<p class="settings-note">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
+  `;
+  }).join("") : '<p class="settings-note">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
 }
 
 function renderBranchOrdersManagement() {
@@ -14473,8 +14479,8 @@ function syncOrganizationAccountPermissionControls() {
     input.disabled = branchAccount;
   });
   if (elements.organizationAccountBranchOrders) {
-    elements.organizationAccountBranchOrders.checked = branchAccount;
-    elements.organizationAccountBranchOrders.disabled = true;
+    if (!branchAccount) elements.organizationAccountBranchOrders.checked = false;
+    elements.organizationAccountBranchOrders.disabled = !branchAccount;
   }
   elements.organizationAccountBranchOrdersRow?.classList.toggle("hidden", !branchAccount);
 }
@@ -14494,7 +14500,7 @@ function resetOrganizationAccountForm() {
   elements.organizationAccountPassword.minLength = Number(state.portalStatus?.passwordMinLength || 6);
   elements.organizationAccountLoanOverview.checked = true;
   elements.organizationAccountScheduleView.checked = true;
-  elements.organizationAccountBranchOrders.checked = true;
+  elements.organizationAccountBranchOrders.checked = false;
   syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = true;
   elements.organizationAccountCancel.classList.add("hidden");

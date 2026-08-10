@@ -161,11 +161,11 @@
             </details>
             <details class="portal-card portal-settings-section hidden" id="branchOrderSettingsCard">
               <summary class="portal-settings-summary">
-                <span><span class="eyebrow">Filialleitung</span><strong>Filialbestellungen verwalten</strong><small id="branchOrderSettingsSummary">Konfiguration wird geladen.</small></span>
+                <span><span class="eyebrow">PL+</span><strong>Filialbestellungen verwalten</strong><small id="branchOrderSettingsSummary">Konfiguration wird geladen.</small></span>
                 <span class="portal-settings-chevron" aria-hidden="true"></span>
               </summary>
               <div class="portal-settings-content">
-                <p>Warengruppen, einzelne Positionen, Einheiten, E-Mail-Ziele und Vorlagen gelten nur für den zugewiesenen Standort. Der Antwort-Hinweis wird bei jeder Nachricht verpflichtend ergänzt.</p>
+                <p>Warengruppen, einzelne Positionen, Einheiten, E-Mail-Ziele und Vorlagen gelten nur für den zugewiesenen Standort. Der Antwort-Hinweis wird bei jeder Nachricht verpflichtend ergänzt. Zugriff nur für PL+.</p>
                 <p class="message hidden" id="branchOrderSettingsMessage" role="status" aria-live="polite"></p>
                 <div class="branch-order-settings-workspace" id="branchOrderSettingsWorkspace"><p class="empty-state">Konfiguration wird geladen.</p></div>
                 <div class="portal-settings-actions"><button class="text-button" id="refreshBranchOrderSettings" type="button">Aktualisieren</button><button class="primary" id="saveBranchOrderSettings" type="button">Bestellkonfiguration speichern</button></div>
@@ -394,13 +394,17 @@
         </section>
 
         <section class="portal-view branch-orders-view" id="branchOrdersView" role="tabpanel" aria-labelledby="branchOrdersTab">
-          <div class="view-heading branch-orders-heading"><div><span class="eyebrow">Standortbestellung</span><h1>Filialbestellung</h1><p id="branchOrderWeek">Kalenderwoche wird serverseitig ermittelt.</p></div><button class="text-button" id="branchOrderRefresh" type="button">Aktualisieren</button></div>
+          <div class="view-heading branch-orders-heading"><div><span class="eyebrow">Standortbestellung</span><h1>Filialbestellung</h1><p id="branchOrderWeek">Kalenderwoche wird ermittelt.</p></div><button class="text-button" id="branchOrderRefresh" type="button">Aktualisieren</button></div>
           <form class="portal-card branch-order-form" id="branchOrderForm">
             <label class="branch-order-employee-field"><span>Bestellung für</span><select id="branchOrderEmployee" required><option value="">Teammitglied wird geladen.</option></select><small>Name und Personalnummer werden mit der Bestellung gespeichert.</small></label>
             <div class="branch-order-group-list" id="branchOrderGroups"><p class="empty-state">Bestellpositionen werden geladen.</p></div>
             <p class="message hidden" id="branchOrderMessage" role="status" aria-live="polite"></p>
             <div class="branch-order-submit-row"><small>Die Kalenderwoche wird nicht eingegeben und kann nicht überschrieben werden.</small><button class="primary" id="branchOrderSubmit" type="submit">Bestellung senden</button></div>
           </form>
+          <section class="portal-card branch-order-portal-history" aria-labelledby="branchOrderPortalHistoryTitle">
+            <div class="list-heading"><div><span class="eyebrow">Nachweis</span><h2 id="branchOrderPortalHistoryTitle">Vergangene Bestellungen</h2></div><button class="text-button" id="branchOrderPortalHistoryRefresh" type="button">Aktualisieren</button></div>
+            <div id="branchOrderPortalHistoryList"><p class="empty-state">Bestellverlauf wird geladen.</p></div>
+          </section>
         </section>
 
         <section class="portal-view" id="amuView" role="tabpanel">
