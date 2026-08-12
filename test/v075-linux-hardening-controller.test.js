@@ -20,7 +20,11 @@ function section(start, end) {
 
 test("v0.75 controller defaults to a read-only audit and exposes explicit transaction commands", () => {
   assert.match(controller, /local command="\$\{1:-audit\}"/);
-  for (const command of ["audit", "plan", "apply", "confirm", "rollback", "rollback-pending"]) {
+  for (const command of [
+    "audit", "plan", "apply", "confirm",
+    "maintenance-plan", "maintenance-adopt", "maintenance-confirm", "maintenance-cancel", "maintenance-revoke",
+    "rollback", "rollback-pending",
+  ]) {
     assert.match(controller, new RegExp(`\\n    ${command.replace("-", "\\-")}\\)`));
   }
   const audit = section("audit_command", "plan_command");
@@ -150,7 +154,7 @@ test("v0.75 requires admin key, sudo and a newly opened second SSH session", () 
   assert.match(controller, /ssh_connection_is_independent "\$SESSION_CONNECTION_FINGERPRINT" "\$first_connection"/);
   assert.match(controller, /eigenstaendige neue SSH-Verbindung/);
   assert.match(controller, /policy_validate_transaction "\$first_connection"/);
-  assert.match(controller, /policy_validate_session "\$client_ip" "\$@"/);
+  assert.match(controller, /policy_validate_session "\$SESSION_CLIENT_IP" "\$@"/);
   assert.match(controller, /SESSION_FINGERPRINT/);
   assert.match(controller, /"\$SESSION_FINGERPRINT" != "\$first_session"/);
   assert.match(controller, /policy_validate_transaction "\$first_session"/);
@@ -158,6 +162,23 @@ test("v0.75 requires admin key, sudo and a newly opened second SSH session", () 
   assert.match(controller, /"\$tty_epoch" -gt "\$confirmation_not_before_epoch"/);
   assert.match(controller, /transactionId":"%s"/);
   assert.match(controller, /\^\[0-9a-f\]\{64\}\$/);
+});
+
+test("hardening v2 adopts SSH maintenance policy without changing UFW and confirms over Tailscale", () => {
+  const adopt = section("maintenance_adopt_command", "maintenance_confirm_command");
+  const confirm = section("maintenance_confirm_command", "maintenance_cancel_command");
+  assert.match(adopt, /validate_effective_maintenance_ufw_policy/);
+  assert.match(adopt, /current_ufw_added_sha256/);
+  assert.match(controller, /ufwChanged":false/);
+  assert.doesNotMatch(adopt, /\bufw\s+(?:allow|delete|reset|enable|disable|reload|default|logging)\b/);
+  assert.match(confirm, /session_uses_maintenance_interface/);
+  assert.match(confirm, /Tailscale-SSH-Schnittstelle/);
+  assert.match(confirm, /ssh_connection_is_independent/);
+  assert.match(confirm, /current_ufw_hash.*MAINTENANCE_UFW_ADDED_SHA256/s);
+  assert.match(controller, /validateMaintenanceSources/);
+  assert.match(controller, /validateSshInterfaces/);
+  assert.match(controller, /ACTIVE_MAINTENANCE_POLICY_FILE/);
+  assert.match(controller, /aktive SSH-Wartungspolicy muss vor einem Host-Rollback/);
 });
 
 test("v0.75 keeps backups and hashes root-only and public status redacted", () => {

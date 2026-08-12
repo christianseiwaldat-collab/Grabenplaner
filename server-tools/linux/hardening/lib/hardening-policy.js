@@ -4,8 +4,12 @@ const net = require("node:net");
 
 const MAX_PORT = 65_535;
 const MAX_ALLOWED_SOURCES = 64;
+const MAX_MAINTENANCE_SOURCES = 16;
+const MAX_SSH_INTERFACES = 4;
 const TRANSACTION_ID_PATTERN = /^[0-9a-f]{64}$/;
 const ADMIN_USERNAME_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
+const SSH_INTERFACE_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,14}$/;
+const APPROVED_SSH_INTERFACES = new Set(["tailscale0"]);
 
 function requireStrictText(value, label) {
   if (typeof value !== "string" || value.length === 0 || value.trim() !== value
@@ -109,6 +113,35 @@ function validateAllowedSources(allowedSources, options = {}) {
   return Object.freeze(parsed);
 }
 
+function validateMaintenanceSources(sources, options = {}) {
+  if (!Array.isArray(sources) || sources.length > MAX_MAINTENANCE_SOURCES
+    || (options.requireNonEmpty === true && sources.length === 0)) {
+    throw new TypeError("Maintenance sources are invalid.");
+  }
+  const parsed = validateAllowedSources(sources);
+  if (parsed.some((source) => source.prefixLength !== source.bits)) {
+    throw new TypeError("Maintenance sources must be exact host addresses.");
+  }
+  return parsed;
+}
+
+function validateSshInterfaces(interfaces, options = {}) {
+  if (!Array.isArray(interfaces) || interfaces.length > MAX_SSH_INTERFACES
+    || (options.requireNonEmpty === true && interfaces.length === 0)) {
+    throw new TypeError("SSH interfaces are invalid.");
+  }
+  const unique = new Set();
+  for (const value of interfaces) {
+    const interfaceName = requireStrictText(value, "SSH interface");
+    if (!SSH_INTERFACE_PATTERN.test(interfaceName) || !APPROVED_SSH_INTERFACES.has(interfaceName)
+      || unique.has(interfaceName)) {
+      throw new TypeError("SSH interfaces are invalid.");
+    }
+    unique.add(interfaceName);
+  }
+  return Object.freeze([...unique]);
+}
+
 function canonicalSource(input) {
   if (["any", "anywhere", "0.0.0.0/0", "::/0"].includes(String(input).toLowerCase())) return "any";
   if (String(input).includes("/")) {
@@ -157,7 +190,7 @@ function requireSafeMultiline(value, label) {
   return value;
 }
 
-function classifyInboundGrant({ selector, source, destination }, sshPort, allowedSourceKeys) {
+function classifyInboundGrant({ selector, source, destination, interfaceName = null }, sshPort, allowedSourceKeys, allowedInterfaces) {
   if (!selector) throw new TypeError("UFW rule is invalid.");
   const protectedPorts = [sshPort, 80, 443, 3000];
   if (!selectorCanAffectTcp(selector, protectedPorts)) return null;
@@ -171,8 +204,14 @@ function classifyInboundGrant({ selector, source, destination }, sshPort, allowe
   }
   const sourceKey = canonicalSource(source || "any");
   if (resolvedPort === 80 || resolvedPort === 443) {
-    if (sourceKey !== "any") throw new TypeError("UFW web rule is invalid.");
+    if (sourceKey !== "any" || interfaceName !== null) throw new TypeError("UFW web rule is invalid.");
     return `web:${resolvedPort}`;
+  }
+  if (resolvedPort === sshPort && interfaceName !== null) {
+    if (sourceKey !== "any" || !allowedInterfaces.has(interfaceName)) {
+      throw new TypeError("UFW SSH interface grant is not allowed.");
+    }
+    return `ssh-interface:${interfaceName}`;
   }
   if (resolvedPort === sshPort && allowedSourceKeys.has(sourceKey)) return `ssh:${sourceKey}`;
   throw new TypeError("UFW inbound grant is not allowed.");
@@ -189,6 +228,7 @@ function configuredRuleDetails(ruleTokens, actionIndex) {
   const protoIndex = indexExactlyOnce(ruleTokens, "proto");
   const fromIndex = indexExactlyOnce(ruleTokens, "from");
   const toIndex = indexExactlyOnce(ruleTokens, "to");
+  const interfaceIndex = indexExactlyOnce(ruleTokens, "on");
   const protocol = protoIndex >= 0 ? ruleTokens[protoIndex + 1] : null;
   if (protoIndex >= 0 && !["tcp", "udp"].includes(protocol)) throw new TypeError("UFW rule is invalid.");
   let portToken = portIndex >= 0 ? ruleTokens[portIndex + 1] : null;
@@ -202,10 +242,11 @@ function configuredRuleDetails(ruleTokens, actionIndex) {
     selector: parsePortSelector(portToken, protocol),
     source: fromIndex >= 0 ? ruleTokens[fromIndex + 1] : "any",
     destination: toIndex >= 0 ? ruleTokens[toIndex + 1] : "any",
+    interfaceName: interfaceIndex >= 0 ? ruleTokens[interfaceIndex + 1] : null,
   });
 }
 
-function analyzeAddedRules(output, sshPort, allowedSourceKeys) {
+function analyzeAddedRules(output, sshPort, allowedSourceKeys, allowedInterfaces) {
   const found = new Set();
   const foreign = [];
   for (const rawLine of requireSafeMultiline(output, "UFW added rules").split(/\r?\n/)) {
@@ -250,7 +291,10 @@ function analyzeAddedRules(output, sshPort, allowedSourceKeys) {
       // public web ports or the internal app port. They are never inferred.
       throw new TypeError("UFW opaque inbound grant is invalid.");
     }
-    const classification = classifyInboundGrant(details, sshPort, allowedSourceKeys);
+    if (details.interfaceName !== null && !SSH_INTERFACE_PATTERN.test(details.interfaceName || "")) {
+      throw new TypeError("UFW interface is invalid.");
+    }
+    const classification = classifyInboundGrant(details, sshPort, allowedSourceKeys, allowedInterfaces);
     if (classification === null) { foreign.push(signature); continue; }
     if (found.has(classification)) throw new TypeError("Duplicate UFW grant is invalid.");
     found.add(classification);
@@ -274,7 +318,7 @@ function validateUfwDefaultPolicies(output) {
   }
 }
 
-function analyzeStatusRules(output, sshPort, allowedSourceKeys, requireComplete) {
+function analyzeStatusRules(output, sshPort, allowedSourceKeys, allowedInterfaces, requireComplete) {
   const status = requireSafeMultiline(output, "UFW status");
   const active = /^Status:\s+active$/m.test(status);
   // UFW 0.36.2 reports "disabled (routed)" when kernel forwarding is
@@ -290,51 +334,72 @@ function analyzeStatusRules(output, sshPort, allowedSourceKeys, requireComplete)
   if (!active) return Object.freeze({ found, routedDisabled: false });
   for (const rawLine of status.split(/\r?\n/)) {
     const line = rawLine.replace(/\s+\(v6\)/g, "").trim();
-    const match = /^(\S+)\s+(ALLOW|LIMIT|DENY|REJECT)\s+(IN|OUT|FWD)\s+(.+?)(?:\s+#.*)?$/.exec(line);
+    const match = /^(\S+)(?:\s+on\s+([a-zA-Z0-9][a-zA-Z0-9_.:-]{0,14}))?\s+(ALLOW|LIMIT|DENY|REJECT)\s+(IN|OUT|FWD)\s+(.+?)(?:\s+#.*)?$/.exec(line);
     if (!match) continue;
-    if (match[3] === "OUT") continue;
+    if (match[4] === "OUT") continue;
     const selector = parsePortSelector(match[1], null);
-    if (match[2] === "DENY" || match[2] === "REJECT") {
+    if (match[3] === "DENY" || match[3] === "REJECT") {
       if (!selector || selectorCanAffectTcp(selector, [sshPort, 80, 443])) {
         throw new TypeError("Conflicting UFW rule is invalid.");
       }
       continue;
     }
     if (!selector) throw new TypeError("UFW opaque effective grant is invalid.");
-    if (match[2] === "LIMIT") {
+    if (match[3] === "LIMIT") {
       if (selectorCanAffectTcp(selector, [sshPort, 80, 443, 3000])) {
         throw new TypeError("UFW limited effective grant is invalid.");
       }
       continue;
     }
-    if (match[3] !== "IN" || match[2] !== "ALLOW") throw new TypeError("UFW effective grant is invalid.");
-    const source = match[4].trim().split(/\s+/)[0];
+    if (match[4] !== "IN" || match[3] !== "ALLOW") throw new TypeError("UFW effective grant is invalid.");
+    const source = match[5].trim().split(/\s+/)[0];
     const classification = classifyInboundGrant({
       selector,
       source,
       destination: "any",
-    }, sshPort, allowedSourceKeys);
+      interfaceName: match[2] || null,
+    }, sshPort, allowedSourceKeys, allowedInterfaces);
     if (classification !== null) found.add(classification);
   }
   return Object.freeze({ found, routedDisabled: defaultMatch?.[1] === "disabled" });
 }
 
-function validateUfwPolicy({ addedRules, status, sshPort, allowedSources, requireComplete = false, baselineAddedRules = null, ufwDefaults = null }) {
+function validateUfwPolicy({
+  addedRules,
+  status,
+  sshPort,
+  allowedSources,
+  maintenanceSources = [],
+  allowedSshInterfaces = [],
+  requireComplete = false,
+  baselineAddedRules = null,
+  ufwDefaults = null,
+}) {
   const port = parsePort(sshPort);
   const sources = validateAllowedSources(allowedSources, { requireNonEmpty: true });
-  const allowedSourceKeys = new Set(sources.map((source) => (
+  const maintenance = validateMaintenanceSources(maintenanceSources);
+  const interfaces = validateSshInterfaces(allowedSshInterfaces);
+  const allSources = [...sources, ...maintenance];
+  const allowedSourceKeys = new Set(allSources.map((source) => (
     `${source.family}:${source.prefixLength}:${source.network.toString(16)}`
   )));
-  const addedAnalysis = analyzeAddedRules(addedRules, port, allowedSourceKeys);
+  if (allowedSourceKeys.size !== allSources.length) throw new TypeError("SSH sources are duplicated across policies.");
+  const allowedInterfaces = new Set(interfaces);
+  const addedAnalysis = analyzeAddedRules(addedRules, port, allowedSourceKeys, allowedInterfaces);
   const added = addedAnalysis.managed;
-  const effectiveAnalysis = analyzeStatusRules(status, port, allowedSourceKeys, requireComplete);
+  const effectiveAnalysis = analyzeStatusRules(status, port, allowedSourceKeys, allowedInterfaces, requireComplete);
   const effective = effectiveAnalysis.found;
   if (requireComplete && effectiveAnalysis.routedDisabled) validateUfwDefaultPolicies(ufwDefaults);
-  const expected = new Set(["web:80", "web:443", ...[...allowedSourceKeys].map((source) => `ssh:${source}`)]);
+  const expected = new Set([
+    "web:80",
+    "web:443",
+    ...[...allowedSourceKeys].map((source) => `ssh:${source}`),
+    ...[...allowedInterfaces].map((interfaceName) => `ssh-interface:${interfaceName}`),
+  ]);
   for (const rule of added) if (!expected.has(rule)) throw new TypeError("UFW configured rule is invalid.");
   for (const rule of effective) if (!expected.has(rule) || !added.has(rule)) throw new TypeError("UFW effective rule is invalid.");
   if (baselineAddedRules !== null) {
-    const baseline = analyzeAddedRules(baselineAddedRules, port, allowedSourceKeys);
+    const baseline = analyzeAddedRules(baselineAddedRules, port, allowedSourceKeys, allowedInterfaces);
     if (baseline.foreign.length !== addedAnalysis.foreign.length
       || baseline.foreign.some((rule, index) => rule !== addedAnalysis.foreign[index])
       || [...baseline.managed].some((rule) => !added.has(rule))) {
@@ -575,7 +640,9 @@ module.exports = {
   parsePort,
   runCli,
   validateAllowedSources,
+  validateMaintenanceSources,
   validateJournaldConfiguration,
+  validateSshInterfaces,
   validateUfwPolicy,
   validateSession,
 };

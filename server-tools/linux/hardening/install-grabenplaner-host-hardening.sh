@@ -12,19 +12,54 @@ source "$SOURCE_MODULE_ROOT/lib/hardening-common.sh"
 readonly SYSTEMD_ROOT="/etc/systemd/system"
 readonly HARDENING_UNINSTALL_COMMAND="/usr/local/sbin/grabenplaner-host-security-uninstall"
 readonly ACTIVE_TRANSACTION_FILE="$HARDENING_STATE_ROOT/active-transaction"
+readonly PENDING_MAINTENANCE_POLICY_FILE="$HARDENING_STATE_ROOT/pending-maintenance-policy"
 
 SOURCE_CONTRACT_FILE=""
 STAGED_CONTRACT_FILE=""
 STAGED_MODULE_ROOT=""
 FRESH_MODULE=0
 MODULE_VERIFIED=0
+PREDECESSOR_EXPECTED=0
+UPGRADE_ACTIVE_POLICY=0
+UPGRADE_TIMER_SUSPENDED=0
+UPGRADE_SWAP_STARTED=0
+UPGRADE_COMMITTED=0
+OLD_MODULE_ROOT=""
+OLD_CONTRACT_FILE=""
+FAILED_MODULE_ROOT=""
 
 cleanup() {
   local exit_code=$?
   local unit_pair source_name unit_name link_pair link_name link_target
+  if [[ $exit_code -ne 0 && $UPGRADE_ACTIVE_POLICY -eq 1 && $UPGRADE_COMMITTED -eq 0 ]]; then
+    set +e
+    systemctl stop "$HARDENING_AUDIT_SERVICE" >/dev/null 2>&1
+    if [[ $UPGRADE_SWAP_STARTED -eq 1 && -n "$OLD_MODULE_ROOT" \
+      && -d "$OLD_MODULE_ROOT" && ! -L "$OLD_MODULE_ROOT" ]]; then
+      if [[ -d "$HARDENING_MODULE_ROOT" && ! -L "$HARDENING_MODULE_ROOT" ]]; then
+        FAILED_MODULE_ROOT="$(mktemp -d /opt/grabenplaner-hardening/.module.failed.XXXXXXXX)"
+        rmdir -- "$FAILED_MODULE_ROOT"
+        mv -- "$HARDENING_MODULE_ROOT" "$FAILED_MODULE_ROOT"
+      fi
+      mv -- "$OLD_MODULE_ROOT" "$HARDENING_MODULE_ROOT"
+      OLD_MODULE_ROOT=""
+      if [[ -n "$OLD_CONTRACT_FILE" && -f "$OLD_CONTRACT_FILE" ]]; then
+        hardening_atomic_install "$OLD_CONTRACT_FILE" "$HARDENING_INSTALLED_CONTRACT" 0600
+      fi
+      hardening_assert_installed_contract >/dev/null 2>&1
+    fi
+    systemctl daemon-reload >/dev/null 2>&1
+    if [[ $UPGRADE_TIMER_SUSPENDED -eq 1 ]]; then
+      systemctl enable --now "$HARDENING_AUDIT_TIMER" >/dev/null 2>&1
+      systemctl start "$HARDENING_AUDIT_SERVICE" >/dev/null 2>&1
+    fi
+    [[ -z "$FAILED_MODULE_ROOT" || ! -e "$FAILED_MODULE_ROOT" ]] || rm -rf -- "$FAILED_MODULE_ROOT"
+    set -e
+  fi
   [[ -z "$SOURCE_CONTRACT_FILE" || ! -e "$SOURCE_CONTRACT_FILE" ]] || rm -f -- "$SOURCE_CONTRACT_FILE"
   [[ -z "$STAGED_CONTRACT_FILE" || ! -e "$STAGED_CONTRACT_FILE" ]] || rm -f -- "$STAGED_CONTRACT_FILE"
   [[ -z "$STAGED_MODULE_ROOT" || ! -e "$STAGED_MODULE_ROOT" ]] || rm -rf -- "$STAGED_MODULE_ROOT"
+  [[ -z "$OLD_CONTRACT_FILE" || ! -e "$OLD_CONTRACT_FILE" ]] || rm -f -- "$OLD_CONTRACT_FILE"
   if [[ $exit_code -ne 0 && $FRESH_MODULE -eq 1 && $MODULE_VERIFIED -eq 0 \
     && "$HARDENING_MODULE_ROOT" == "/opt/grabenplaner-hardening/module" ]]; then
     if command -v systemctl >/dev/null 2>&1; then
@@ -66,11 +101,13 @@ trap cleanup EXIT
 usage() {
   cat <<'EOF'
 Verwendung:
-  sudo ./install-grabenplaner-host-hardening.sh
+  sudo ./install-grabenplaner-host-hardening.sh [--upgrade-active-policy]
 
 Installiert ausschliesslich das versionierte Hardening-Werkzeug. Bestehende
 SSH-, Firewall-, APT-, Kernel- und Journal-Einstellungen werden dabei nicht
 veraendert. Aktiviert wird nur der taegliche, lesende Sicherheits-Audit.
+Mit --upgrade-active-policy darf ein vertraglich geprueftes reines
+Policy-/Audit-Upgrade eine bestaetigte Host-Transaktion unveraendert weiterverwenden.
 EOF
 }
 
@@ -139,14 +176,8 @@ preflight_existing_installation() {
     [[ "$module_present" == true && "$receipt_present" == true ]] \
       || hardening_die "Eine unvollstaendige Hardening-Vorgaengerinstallation wurde gefunden."
     hardening_assert_installed_contract
-    "$node" -e '
-      const fs = require("node:fs");
-      const installed = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-      const source = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-      if (JSON.stringify(installed) !== JSON.stringify(source)) process.exit(1);
-    ' "$HARDENING_INSTALLED_CONTRACT" "$SOURCE_CONTRACT_FILE" \
-      || hardening_die "Das installierte Hardening-Modul weicht vom freigegebenen Quellvertrag ab."
     predecessor_expected=true
+    PREDECESSOR_EXPECTED=1
   fi
 
   preflight_existing_unit grabenplaner-host-security-audit.service.in "$HARDENING_AUDIT_SERVICE" "$predecessor_expected"
@@ -156,6 +187,66 @@ preflight_existing_installation() {
   preflight_existing_link "$HARDENING_MODULE_ROOT/grabenplaner-host-security.sh" "$HARDENING_COMMAND" "$predecessor_expected"
   preflight_existing_link "$HARDENING_MODULE_ROOT/test-grabenplaner-host-hardening.sh" "$HARDENING_AUDIT_COMMAND" "$predecessor_expected"
   preflight_existing_link "$HARDENING_MODULE_ROOT/uninstall-grabenplaner-host-hardening.sh" "$HARDENING_UNINSTALL_COMMAND" "$predecessor_expected"
+}
+
+preflight_active_policy_upgrade() {
+  local active_id transaction_directory state
+  [[ $UPGRADE_ACTIVE_POLICY -eq 1 ]] || return 0
+  [[ -f "$ACTIVE_TRANSACTION_FILE" && ! -L "$ACTIVE_TRANSACTION_FILE" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$ACTIVE_TRANSACTION_FILE")" == "0:0:600:1" ]] \
+    || hardening_die "Fuer das Policy-Upgrade fehlt eine sichere aktive Host-Transaktion."
+  IFS= read -r active_id <"$ACTIVE_TRANSACTION_FILE"
+  [[ "$active_id" =~ ^[0-9a-f]{64}$ ]] || hardening_die "Die aktive Host-Transaktions-ID ist ungueltig."
+  transaction_directory="$HARDENING_TRANSACTION_ROOT/$active_id"
+  [[ -d "$transaction_directory" && ! -L "$transaction_directory" \
+    && "$(stat -c '%u:%g:%a' -- "$transaction_directory")" == "0:0:700" \
+    && -f "$transaction_directory/state.json" && ! -L "$transaction_directory/state.json" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$transaction_directory/state.json")" == "0:0:600:1" ]] \
+    || hardening_die "Die aktive Host-Transaktion ist fuer ein Policy-Upgrade unsicher."
+  state="$($node -e '
+    const fs = require("node:fs");
+    const value = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    if (value?.format !== "grabenplaner-host-security-transaction" || value?.schemaVersion !== 1
+      || value?.state !== "confirmed") process.exit(1);
+    process.stdout.write(value.state);
+  ' "$transaction_directory/state.json")" \
+    || hardening_die "Die aktive Host-Transaktion ist nicht bestaetigt."
+  [[ "$state" == confirmed ]] || hardening_die "Die aktive Host-Transaktion ist nicht bestaetigt."
+  [[ ! -e "$PENDING_MAINTENANCE_POLICY_FILE" && ! -L "$PENDING_MAINTENANCE_POLICY_FILE" ]] \
+    || hardening_die "Eine SSH-Wartungspolicy wartet noch auf Bestaetigung."
+  ! systemctl is-enabled --quiet "$HARDENING_ROLLBACK_TIMER" 2>/dev/null \
+    || hardening_die "Der Rollback-Timer ist waehrend des Policy-Upgrades unerwartet aktiv."
+}
+
+preflight_policy_only_contract_delta() {
+  "$node" - "$HARDENING_INSTALLED_CONTRACT" "$SOURCE_CONTRACT_FILE" <<'NODE' >/dev/null \
+    || hardening_die "Das aktive Modul darf nur durch die freigegebene Policy-/Audit-Erweiterung ersetzt werden."
+const fs = require("node:fs");
+const previous = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const next = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+const allowedChanges = new Set([
+  "grabenplaner-host-security.sh",
+  "install-grabenplaner-host-hardening.sh",
+  "lib/hardening-contract.js",
+  "lib/hardening-policy.js",
+  "module-schema.json",
+  "test-grabenplaner-host-hardening.sh",
+]);
+if (previous?.format !== "grabenplaner-linux-hardening-installed-contract"
+  || next?.format !== previous.format || previous.schemaVersion !== 1 || next.schemaVersion !== 1
+  || previous.moduleVersion !== 1 || next.moduleVersion !== 2
+  || !Array.isArray(previous.files) || !Array.isArray(next.files)) process.exit(1);
+const before = new Map(previous.files.map((item) => [item.path, item.sha256]));
+const after = new Map(next.files.map((item) => [item.path, item.sha256]));
+if (before.size !== previous.files.length || after.size !== next.files.length || before.size !== after.size) process.exit(1);
+for (const [file, hash] of before) {
+  if (!after.has(file)) process.exit(1);
+  if (hash !== after.get(file) && !allowedChanges.has(file)) process.exit(1);
+}
+for (const file of allowedChanges) {
+  if (!before.has(file) || !after.has(file)) process.exit(1);
+}
+NODE
 }
 
 verify_initial_status() {
@@ -210,14 +301,16 @@ copy_manifested_module() {
   ' "$contract_file")
 }
 
-[[ $# -eq 0 ]] || {
+if [[ $# -eq 1 && "$1" == "--upgrade-active-policy" ]]; then
+  UPGRADE_ACTIVE_POLICY=1
+elif [[ $# -ne 0 ]]; then
   if [[ $# -eq 1 && "$1" == "--help" ]]; then
     usage
     exit 0
   fi
   usage >&2
   exit 2
-}
+fi
 
 hardening_require_root
 hardening_validate_os
@@ -241,9 +334,18 @@ hardening_acquire_controller_lock fail-fast 0 \
   || hardening_die "Eine andere Host-Sicherheitsoperation ist bereits aktiv."
 [[ ! -e "$HARDENING_PENDING_FILE" && ! -L "$HARDENING_PENDING_FILE" ]] \
   || hardening_die "Eine Hardening-Transaktion ist noch offen; die Installation bleibt unveraendert."
-[[ ! -e "$ACTIVE_TRANSACTION_FILE" && ! -L "$ACTIVE_TRANSACTION_FILE" ]] \
-  || hardening_die "Aktives Host-Hardening muss vor einer Modulinstallation mit dem installierten Controller zurueckgerollt werden."
+if [[ $UPGRADE_ACTIVE_POLICY -eq 0 ]]; then
+  [[ ! -e "$ACTIVE_TRANSACTION_FILE" && ! -L "$ACTIVE_TRANSACTION_FILE" ]] \
+    || hardening_die "Aktives Host-Hardening erfordert fuer ein reines Modulupgrade --upgrade-active-policy."
+else
+  [[ -e "$ACTIVE_TRANSACTION_FILE" && ! -L "$ACTIVE_TRANSACTION_FILE" ]] \
+    || hardening_die "--upgrade-active-policy ist nur mit einer aktiven bestaetigten Host-Transaktion zulaessig."
+fi
 preflight_existing_installation
+if [[ $UPGRADE_ACTIVE_POLICY -eq 1 ]]; then
+  [[ $PREDECESSOR_EXPECTED -eq 1 ]] || hardening_die "Ein Policy-Upgrade erfordert ein verifiziert installiertes Vorgaengermodul."
+  preflight_active_policy_upgrade
+fi
 hardening_secure_roots
 
 STAGED_MODULE_ROOT="$(mktemp -d /opt/grabenplaner-hardening/.module.XXXXXXXX)"
@@ -267,16 +369,42 @@ if [[ -e "$HARDENING_MODULE_ROOT" || -L "$HARDENING_MODULE_ROOT" ]]; then
   [[ -d "$HARDENING_MODULE_ROOT" && ! -L "$HARDENING_MODULE_ROOT" ]] \
     || hardening_die "Die vorhandene Hardening-Modulwurzel ist unsicher."
   hardening_assert_installed_contract
-  "$node" -e '
+  if "$node" -e '
     const fs = require("node:fs");
     const installed = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const source = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
     if (JSON.stringify(installed) !== JSON.stringify(source)) process.exit(1);
-  ' "$HARDENING_INSTALLED_CONTRACT" "$SOURCE_CONTRACT_FILE" \
-    || hardening_die "Ein anderes Hardening-Modul ist bereits installiert; zuerst bewusst deinstallieren."
-  rm -rf -- "$STAGED_MODULE_ROOT"
-  STAGED_MODULE_ROOT=""
+  ' "$HARDENING_INSTALLED_CONTRACT" "$SOURCE_CONTRACT_FILE"; then
+    rm -rf -- "$STAGED_MODULE_ROOT"
+    STAGED_MODULE_ROOT=""
+  else
+    [[ $UPGRADE_ACTIVE_POLICY -eq 1 ]] \
+      || hardening_die "Ein anderes Hardening-Modul ist bereits installiert; ein aktives Modulupgrade muss explizit freigegeben werden."
+    preflight_policy_only_contract_delta
+    systemctl is-enabled --quiet "$HARDENING_AUDIT_TIMER" \
+      && systemctl is-active --quiet "$HARDENING_AUDIT_TIMER" \
+      || hardening_die "Der bestehende Host-Sicherheitsaudit-Timer ist vor dem Upgrade nicht gesund."
+    systemctl disable --now "$HARDENING_AUDIT_TIMER"
+    UPGRADE_TIMER_SUSPENDED=1
+    systemctl stop "$HARDENING_AUDIT_SERVICE" >/dev/null 2>&1 || true
+    if systemctl is-active --quiet "$HARDENING_AUDIT_SERVICE"; then
+      hardening_die "Der laufende Host-Sicherheitsaudit konnte vor dem Upgrade nicht beendet werden."
+    fi
+
+    OLD_CONTRACT_FILE="$(mktemp)"
+    install -o root -g root -m 0600 -- "$HARDENING_INSTALLED_CONTRACT" "$OLD_CONTRACT_FILE"
+    OLD_MODULE_ROOT="$(mktemp -d /opt/grabenplaner-hardening/.module.previous.XXXXXXXX)"
+    rmdir -- "$OLD_MODULE_ROOT"
+    UPGRADE_SWAP_STARTED=1
+    mv -- "$HARDENING_MODULE_ROOT" "$OLD_MODULE_ROOT"
+    mv -- "$STAGED_MODULE_ROOT" "$HARDENING_MODULE_ROOT"
+    STAGED_MODULE_ROOT=""
+    hardening_atomic_install "$SOURCE_CONTRACT_FILE" "$HARDENING_INSTALLED_CONTRACT" 0600
+    hardening_assert_installed_contract
+  fi
 else
+  [[ $UPGRADE_ACTIVE_POLICY -eq 0 ]] \
+    || hardening_die "--upgrade-active-policy darf keine frische Modulinstallation ausloesen."
   mv -- "$STAGED_MODULE_ROOT" "$HARDENING_MODULE_ROOT"
   STAGED_MODULE_ROOT=""
   FRESH_MODULE=1
@@ -312,5 +440,13 @@ verify_initial_status
 
 hardening_assert_installed_contract
 MODULE_VERIFIED=1
+if [[ $UPGRADE_SWAP_STARTED -eq 1 ]]; then
+  [[ -n "$OLD_MODULE_ROOT" && -d "$OLD_MODULE_ROOT" && ! -L "$OLD_MODULE_ROOT" ]] \
+    || hardening_die "Der Vorgaengermodulstand fehlt vor dem Upgrade-Abschluss."
+  sync
+  UPGRADE_COMMITTED=1
+  rm -rf -- "$OLD_MODULE_ROOT"
+  OLD_MODULE_ROOT=""
+fi
 hardening_info "Hardening-Werkzeuge installiert; Host-Richtlinien wurden nicht veraendert."
 hardening_info "Aktiv ist ausschliesslich der taegliche, lesende Sicherheits-Audit."

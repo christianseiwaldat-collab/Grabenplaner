@@ -1,7 +1,7 @@
 {
   "format": "grabenplaner-linux-hardening-module-contract",
   "schemaVersion": 1,
-  "moduleVersion": 1,
+  "moduleVersion": 2,
   "activationPolicy": "explicit-root-two-session",
   "managedArtifacts": [
     "server-tools/linux/hardening/grabenplaner-host-security.sh",
