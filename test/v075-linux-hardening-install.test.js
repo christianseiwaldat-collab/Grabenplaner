@@ -52,10 +52,10 @@ test("v0.75 hardening installer validates then copies only contract artifacts", 
   assert.match(installer, /\*\) mode=0644/);
   assert.match(installer, /JSON\.stringify\(installed\) !== JSON\.stringify\(source\)/);
   assert.match(installer, /preflight_policy_only_contract_delta/);
-  assert.match(installer, /previous\.moduleVersion !== 1 \|\| next\.moduleVersion !== 2/);
+  assert.match(installer, /!\[1, 2\]\.includes\(previous\.moduleVersion\) \|\| next\.moduleVersion !== 3/);
 });
 
-test("hardening v2 documents the non-mutating active-policy upgrade and Tailscale confirmation", () => {
+test("hardening v3 documents the non-mutating active-policy upgrade and Tailscale confirmation", () => {
   const install = serverDocumentation.indexOf("install-grabenplaner-host-hardening.sh --upgrade-active-policy");
   const audit = serverDocumentation.indexOf("grabenplaner-host-security audit", install);
   const plan = serverDocumentation.indexOf("maintenance-plan", audit);
@@ -94,7 +94,7 @@ test("v0.75 installer and uninstaller hold the shared controller lock across sta
   assert.doesNotMatch(uninstaller, /flock\s+--unlock|flock\s+-u/);
 });
 
-test("hardening v2 installer permits only an explicit policy-only upgrade for a confirmed active transaction", () => {
+test("hardening v3 installer permits only an explicit policy-only upgrade for a confirmed active transaction", () => {
   const lock = installer.indexOf("hardening_acquire_controller_lock");
   const pending = installer.indexOf('[[ ! -e "$HARDENING_PENDING_FILE"', lock);
   const active = installer.indexOf('[[ ! -e "$ACTIVE_TRANSACTION_FILE"', lock);

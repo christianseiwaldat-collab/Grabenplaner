@@ -136,7 +136,7 @@ sudo bash server-tools/linux/hardening/install-grabenplaner-host-hardening.sh
 sudo grabenplaner-host-security audit
 ```
 
-Ein App-Update ersetzt ein bereits unter `/opt/grabenplaner-hardening/module` installiertes Sicherheitsmodul absichtlich nicht. Weicht dessen kryptografischer Vertragsfingerprint vom neuen Paket ab, ist deshalb eine explizite Modulwartung erforderlich. Modulversion 2 erlaubt eine eng begrenzte Policy-/Audit-Aktualisierung bei bestaetigter Hosttransaktion, ohne SSH-, UFW-, APT-, Kernel- oder Journalregeln zu veraendern. Der Installer akzeptiert dabei ausschliesslich den geprueften Versionssprung 1 auf 2 und verweigert Abweichungen an Templates, Units, gemeinsamem Sicherheitscode oder Uninstaller:
+Ein App-Update ersetzt ein bereits unter `/opt/grabenplaner-hardening/module` installiertes Sicherheitsmodul absichtlich nicht. Weicht dessen kryptografischer Vertragsfingerprint vom neuen Paket ab, ist deshalb eine explizite Modulwartung erforderlich. Modulversion 3 erlaubt eine eng begrenzte Policy-/Audit-Aktualisierung bei bestaetigter Hosttransaktion, ohne SSH-, UFW-, APT-, Kernel- oder Journalregeln zu veraendern. Der Installer akzeptiert dabei ausschliesslich den geprueften Versionssprung von Modulversion 1 oder 2 auf 3 und verweigert Abweichungen an Templates, Units, gemeinsamem Sicherheitscode oder Uninstaller:
 
 ```bash
 # Keine regulaere oder Wartungspolicy-Transaktion darf noch ausstehen:

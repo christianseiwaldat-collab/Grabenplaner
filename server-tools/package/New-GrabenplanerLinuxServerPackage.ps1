@@ -424,7 +424,7 @@ try {
     $expectedHardeningSchemaKeys = @('activationPolicy', 'format', 'managedArtifacts', 'moduleVersion', 'schemaVersion')
     if (($hardeningSchemaKeys -join "`0") -cne ($expectedHardeningSchemaKeys -join "`0") -or
         [string]$hardeningSchema.format -cne 'grabenplaner-linux-hardening-module-contract' -or
-        [int]$hardeningSchema.schemaVersion -ne 1 -or [int]$hardeningSchema.moduleVersion -ne 2 -or
+        [int]$hardeningSchema.schemaVersion -ne 1 -or [int]$hardeningSchema.moduleVersion -ne 3 -or
         [string]$hardeningSchema.activationPolicy -cne 'explicit-root-two-session') {
         throw 'Der separate Hardening-Modulvertrag wird nicht unterstuetzt.'
     }
