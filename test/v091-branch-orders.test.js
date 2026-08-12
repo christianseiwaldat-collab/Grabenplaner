@@ -49,7 +49,7 @@ const LOCATION = "18";
 const OTHER_LOCATION = "19";
 const HR = "v091hr";
 const MANAGER = "252";
-const EMPLOYEE = "v091ma";
+const EMPLOYEE = "275";
 const OTHER_MANAGER = "v091other";
 const ORGANIZATION_LOGIN = "fil18";
 const INITIAL_PASSWORD = "Filialkonto-v091!";
@@ -149,6 +149,16 @@ async function requestJson(route, { method = "GET", session = null, body } = {})
   return { response, payload };
 }
 
+async function requestBinary(route, { method = "GET", session = null } = {}) {
+  const headers = {};
+  if (session?.cookie) headers.Cookie = session.cookie;
+  if (![
+    "GET", "HEAD", "OPTIONS",
+  ].includes(method) && session?.csrf) headers["X-CSRF-Token"] = session.csrf;
+  const response = await fetch(`${baseUrl}${route}`, { method, headers });
+  return { response, content: Buffer.from(await response.arrayBuffer()) };
+}
+
 function insertReadOnlyFixtures() {
   for (const date of ["2031-03-03", "2031-03-10", "2031-03-17"]) {
     db.prepare(`
@@ -185,7 +195,7 @@ test.before(() => {
   ensureLocation(OTHER_LOCATION, "Andere Filiale");
   ensureEmployee(HR, "Herta Personal", LOCATION, "hr");
   ensureEmployee(MANAGER, "Mara Filialleitung", LOCATION, "manager");
-  ensureEmployee(EMPLOYEE, "Max Mitarbeiter", LOCATION, "employee");
+  ensureEmployee(EMPLOYEE, "Marie-Theres", LOCATION, "employee");
   ensureEmployee(OTHER_MANAGER, "Olaf Andere", OTHER_LOCATION, "manager");
   insertReadOnlyFixtures();
   hrSession = createEmployeeSession(HR);
@@ -205,11 +215,11 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
-test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestellungen", async (t) => {
+test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", async (t) => {
   let accountId;
   let catalog;
 
-  await t.test("Filialkonto erhält die drei Basisansichten auch aus einem alten leeren Grant-Satz", async () => {
+  await t.test("Filialkonto erhält die zwei Basisansichten; Filialbestellung wird durch PL+ einzeln aktiviert", async () => {
     const created = await requestJson("/api/portal/v1/organization-accounts", {
       method: "POST",
       session: hrSession,
@@ -228,7 +238,6 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     assert.deepEqual(new Set(created.payload.account.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
-      "branch_orders:submit",
     ]));
 
     db.prepare("DELETE FROM portal_organization_account_permissions WHERE account_id = ?").run(accountId);
@@ -240,7 +249,6 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     assert.deepEqual(new Set(login.payload.user.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
-      "branch_orders:submit",
     ]));
     organizationSession = responseSession(login.response);
     const selfChangeDenied = await requestJson("/api/portal/v1/me/password", {
@@ -272,7 +280,36 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
       body: { loginName: ORGANIZATION_LOGIN, password: ACTIVE_PASSWORD },
     });
     assert.equal(activeLogin.response.status, 200, JSON.stringify(activeLogin.payload));
-    organizationSession = responseSession(activeLogin.response);
+    assert.deepEqual(new Set(activeLogin.payload.user.permissions), new Set([
+      "loans:overview:read",
+      "schedule:location:view",
+    ]));
+
+    const activated = await requestJson(`/api/portal/v1/organization-accounts/${encodeURIComponent(accountId)}`, {
+      method: "PUT",
+      session: hrSession,
+      body: {
+        loginName: ORGANIZATION_LOGIN,
+        displayName: "Filiale 18",
+        accountType: "branch",
+        active: true,
+        permissions: ["branch_orders:submit"],
+        scopes: [{ locationId: LOCATION }],
+      },
+    });
+    assert.equal(activated.response.status, 200, JSON.stringify(activated.payload));
+    assert.deepEqual(new Set(activated.payload.account.permissions), new Set([
+      "loans:overview:read",
+      "schedule:location:view",
+      "branch_orders:submit",
+    ]));
+
+    const activatedLogin = await requestJson("/api/portal/v1/auth/login", {
+      method: "POST",
+      body: { loginName: ORGANIZATION_LOGIN, password: ACTIVE_PASSWORD },
+    });
+    assert.equal(activatedLogin.response.status, 200, JSON.stringify(activatedLogin.payload));
+    organizationSession = responseSession(activatedLogin.response);
   });
 
   await t.test("vergangene, aktuelle und kommende KW bleiben lesbar; Leih- und Urlaubsansicht bleiben datensparsam", async () => {
@@ -289,7 +326,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     });
     assert.equal(vacations.response.status, 200, JSON.stringify(vacations.payload));
     assert.deepEqual(vacations.payload.vacations, [{
-      employeeName: "Max",
+      employeeName: "Marie-Theres",
       dateFrom: "2031-03-10",
       dateTo: "2031-03-14",
     }]);
@@ -314,7 +351,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     assert.equal(loans.response.status, 200, JSON.stringify(loans.payload));
     assert.equal(loans.payload.items.length, 1);
     assert.deepEqual(loans.payload.columns, ["borrowerName", "description", "articleNumber", "serialNumber", "dueDate"]);
-    assert.equal(loans.payload.items[0].borrowerName, "Max");
+    assert.equal(loans.payload.items[0].borrowerName, "Marie-Theres");
     assert.equal(Object.hasOwn(loans.payload.items[0], "employeeNumber"), false);
     assert.equal(JSON.stringify(loans.payload).includes("intern"), false);
   });
@@ -335,8 +372,10 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     );
   });
 
-  await t.test("die Filialleitung 252 konfiguriert Einheiten, Antwortadresse und Vorlagen nur im eigenen Standort", async () => {
-    const settings = await requestJson("/api/portal/v1/branch-orders/settings", { session: managerSession });
+  await t.test("nur PL+ konfiguriert Einheiten, Antwortadresse und Vorlagen", async () => {
+    const managerDenied = await requestJson("/api/portal/v1/branch-orders/settings", { session: managerSession });
+    assert.equal(managerDenied.response.status, 403, JSON.stringify(managerDenied.payload));
+    const settings = await requestJson("/api/portal/v1/branch-orders/settings", { session: hrSession });
     assert.equal(settings.response.status, 200, JSON.stringify(settings.payload));
     assert.equal(settings.payload.locationId, LOCATION);
     const configuration = settings.payload.configuration;
@@ -350,7 +389,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS40").unit = "Karton";
     const saved = await requestJson("/api/portal/v1/branch-orders/settings", {
       method: "PUT",
-      session: managerSession,
+      session: hrSession,
       body: { locationId: LOCATION, configuration },
     });
     assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
@@ -365,7 +404,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     recipientToRestore.email = originalRecipientEmail;
     const restored = await requestJson("/api/portal/v1/branch-orders/settings", {
       method: "PUT",
-      session: managerSession,
+      session: hrSession,
       body: { locationId: LOCATION, configuration: saved.payload.configuration },
     });
     assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
@@ -389,7 +428,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     const configuredOverview = await requestJson("/api/portal/v1/loans/open-overview", { session: organizationSession });
     assert.equal(configuredOverview.response.status, 200, JSON.stringify(configuredOverview.payload));
     assert.deepEqual(configuredOverview.payload.columns, ["borrowerName", "employeeNumber", "description", "dueDate"]);
-    assert.equal(configuredOverview.payload.items[0].borrowerName, "Max");
+    assert.equal(configuredOverview.payload.items[0].borrowerName, "Marie-Theres");
     assert.equal(configuredOverview.payload.items[0].employeeNumber, EMPLOYEE);
     assert.equal(Object.hasOwn(configuredOverview.payload.items[0], "serialNumber"), false);
 
@@ -415,6 +454,13 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
     const warehouse = catalog.groups.find((group) => group.title === "Lager");
     const ds40 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
     const ds620 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS620");
+    const decimal = await requestJson("/api/portal/v1/branch-orders", {
+      method: "POST",
+      session: organizationSession,
+      body: { employeeNumber: EMPLOYEE, items: [{ itemId: ds620.id, quantity: 1.5 }] },
+    });
+    assert.equal(decimal.response.status, 400, JSON.stringify(decimal.payload));
+    assert.equal(decimal.payload.code, "BRANCH_ORDER_QUANTITY_INVALID");
     const order = await requestJson("/api/portal/v1/branch-orders", {
       method: "POST",
       session: organizationSession,
@@ -423,13 +469,15 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
         calendarWeek: 1,
         items: [
           { itemId: ds40.id, quantity: 2 },
-          { itemId: ds620.id, quantity: 1.5, note: "Dringend" },
+          { itemId: ds620.id, quantity: 3, note: "Dringend" },
         ],
       },
     });
     assert.equal(order.response.status, 201, JSON.stringify(order.payload));
     assert.equal(order.payload.order.calendarWeek, catalog.calendarWeek);
     assert.equal(order.payload.order.status, "sent");
+    assert.match(order.payload.order.pdf.filename, /^Filialbestellung-18-KW\d{2}-.+\.pdf$/);
+    assert.match(order.payload.order.pdf.sha256, /^[a-f0-9]{64}$/);
     assert.equal(sentMails.length, 1);
     assert.equal(sentMails[0].from, "fil18-noreply@grabenplaner.eu");
     assert.equal(sentMails[0].to, "lager@lamprechter.com");
@@ -452,11 +500,92 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, Filialleitung verwaltet Bestel
       sender_email: "fil18-noreply@grabenplaner.eu",
     });
 
-    const history = await requestJson("/api/portal/v1/branch-orders/history?limit=10", { session: managerSession });
+    const history = await requestJson("/api/portal/v1/branch-orders/history?limit=10", { session: hrSession });
     assert.equal(history.response.status, 200, JSON.stringify(history.payload));
     assert.equal(history.payload.orders[0].status, "sent");
     assert.equal(history.payload.orders[0].selectedEmployeeNumber, EMPLOYEE);
     assert.equal(history.payload.orders[0].lines.length, 2);
+    assert.equal(history.payload.orders[0].pdfAvailable, true);
+
+    const branchHistory = await requestJson("/api/portal/v1/branch-orders/history?limit=10", { session: organizationSession });
+    assert.equal(branchHistory.response.status, 200, JSON.stringify(branchHistory.payload));
+    assert.equal(branchHistory.payload.orders[0].deliveries, undefined);
+    assert.equal(JSON.stringify(branchHistory.payload).includes("lager@lamprechter.com"), false);
+
+    const pdf = await requestBinary(`/api/portal/v1/branch-orders/${encodeURIComponent(order.payload.order.id)}/pdf`, {
+      session: organizationSession,
+    });
+    assert.equal(pdf.response.status, 200);
+    assert.match(pdf.response.headers.get("content-type") || "", /^application\/pdf/);
+    assert.match(pdf.response.headers.get("content-disposition") || "", /^inline;/);
+    assert.equal(pdf.content.subarray(0, 5).toString("ascii"), "%PDF-");
+    assert.ok(pdf.content.length > 1000 && pdf.content.length <= 512 * 1024);
+    const storedPdf = db.prepare(`
+      SELECT pdf_content AS content, pdf_sha256 AS sha256, pdf_filename AS filename
+      FROM branch_orders WHERE id = ?
+    `).get(order.payload.order.id);
+    assert.equal(Buffer.compare(Buffer.from(storedPdf.content), pdf.content), 0);
+    assert.equal(storedPdf.sha256, order.payload.order.pdf.sha256);
+    assert.equal(storedPdf.filename, order.payload.order.pdf.filename);
+  });
+
+  await t.test("PL+ kann Marie-Theres (275) für persönliche Filialbestellungen freischalten", async () => {
+    const beforeGrant = await requestJson("/api/portal/v1/branch-orders/catalog", {
+      session: createEmployeeSession(EMPLOYEE),
+    });
+    assert.equal(beforeGrant.response.status, 403, JSON.stringify(beforeGrant.payload));
+
+    const granted = await requestJson(`/api/portal/v1/rights/${encodeURIComponent(EMPLOYEE)}`, {
+      method: "PUT",
+      session: hrSession,
+      body: {
+        grantedPermissions: ["branch_orders:submit"],
+        deniedPermissions: [],
+        scopes: [],
+      },
+    });
+    assert.equal(granted.response.status, 200, JSON.stringify(granted.payload));
+    assert.ok(granted.payload.users
+      .find((user) => user.employeeNumber === EMPLOYEE)?.effectivePermissions
+      .includes("branch_orders:submit"));
+
+    const personalSession = createEmployeeSession(EMPLOYEE);
+    const personalCatalog = await requestJson("/api/portal/v1/branch-orders/catalog", { session: personalSession });
+    assert.equal(personalCatalog.response.status, 200, JSON.stringify(personalCatalog.payload));
+    assert.equal(personalCatalog.payload.submissionMode, "self");
+    assert.equal(personalCatalog.payload.senderEmail, "fil18-noreply@grabenplaner.eu");
+    assert.deepEqual(personalCatalog.payload.employees, [{
+      employeeNumber: EMPLOYEE,
+      fullName: "Marie-Theres",
+    }]);
+    const personalSettings = await requestJson("/api/portal/v1/branch-orders/settings", { session: personalSession });
+    assert.equal(personalSettings.response.status, 403, JSON.stringify(personalSettings.payload));
+
+    const warehouse = personalCatalog.payload.groups.find((group) => group.title === "Lager");
+    const ds80 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS80");
+    const personalOrder = await requestJson("/api/portal/v1/branch-orders", {
+      method: "POST",
+      session: personalSession,
+      body: {
+        employeeNumber: OTHER_MANAGER,
+        items: [{ itemId: ds80.id, quantity: 1 }],
+      },
+    });
+    assert.equal(personalOrder.response.status, 201, JSON.stringify(personalOrder.payload));
+    assert.equal(personalOrder.payload.order.selectedEmployeeNumber, EMPLOYEE);
+    assert.equal(personalOrder.payload.order.senderEmail, "fil18-noreply@grabenplaner.eu");
+
+    const personalHistory = await requestJson("/api/portal/v1/branch-orders/history?limit=10", { session: personalSession });
+    assert.equal(personalHistory.response.status, 200, JSON.stringify(personalHistory.payload));
+    assert.ok(personalHistory.payload.orders.length >= 1);
+    assert.ok(personalHistory.payload.orders.every((order) => order.selectedEmployeeNumber === EMPLOYEE));
+    assert.equal(JSON.stringify(personalHistory.payload).includes("lager@lamprechter.com"), false);
+    const personalPdf = await requestBinary(`/api/portal/v1/branch-orders/${encodeURIComponent(personalOrder.payload.order.id)}/pdf?download=1`, {
+      session: personalSession,
+    });
+    assert.equal(personalPdf.response.status, 200);
+    assert.match(personalPdf.response.headers.get("content-disposition") || "", /^attachment;/);
+    assert.equal(personalPdf.content.subarray(0, 5).toString("ascii"), "%PDF-");
   });
 
   await t.test("ein Versandfehler verliert die Bestellung nicht und wird im Verlauf markiert", async () => {
