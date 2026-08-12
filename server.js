@@ -527,11 +527,13 @@ const defaultPersonalLoanOverviewColumns = Object.freeze([
 const ORGANIZATION_SCHEDULE_PERMISSION = "schedule:location:view";
 const BRANCH_ORDER_SUBMIT_PERMISSION = "branch_orders:submit";
 const BRANCH_ORDER_MANAGE_PERMISSION = "branch_orders:manage";
+const BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION = "branch_portal:display:manage";
 const STAFF_ASSIGNMENTS_MANAGE_PERMISSION = "staff_assignments:manage";
 const BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION = "organization_accounts:password:manage";
 const branchOrganizationAccountBasePermissions = Object.freeze([
   LOAN_OVERVIEW_PERMISSION,
   ORGANIZATION_SCHEDULE_PERMISSION,
+  BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
 ]);
 const organizationAccountPermissionCatalog = Object.freeze([
   {
@@ -548,6 +550,12 @@ const organizationAccountPermissionCatalog = Object.freeze([
     id: BRANCH_ORDER_SUBMIT_PERMISSION,
     label: "Filialbestellungen erfassen",
     description: "Standortgebundene Bestellung mit Personenauswahl, Mengen und dokumentierter E-Mail-Übergabe.",
+    accountTypes: ["branch"],
+  },
+  {
+    id: BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
+    label: "Filialkonto-Anzeige festlegen",
+    description: "Dienstplanansicht, mobile Tagesausblendung und automatisches Speichern der Filialbestellung für den zugewiesenen Standort festlegen.",
     accountTypes: ["branch"],
   },
 ]);
@@ -746,6 +754,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "loans:settings", label: "Leihmodul und Artikelquelle verwalten", description: "Standortfreigaben und externe Artikelkataloge konfigurieren.", group: "Leihe", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ORDER_SUBMIT_PERMISSION, label: "Filialbestellungen für die eigene Filiale erfassen", description: "Erlaubt einer persönlich freigeschalteten Person Bestellungen ausschließlich für sich selbst und ihre Stammfiliale zu erfassen.", group: "Filialbestellungen", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["employee", "location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION, label: "Anzeige des Filialkontos festlegen", description: "Dienstplanansicht, mobile Tagesausblendung und automatisches Speichern für den zugewiesenen Standort einstellen.", group: "Filialkonto", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION, label: "Passwort eines Filialkontos neu vergeben", description: "Passwort ausschließlich für aktive Filialkonten im zugewiesenen Standort zurücksetzen; beendet bestehende Filialkonto-Sitzungen.", group: "Zugänge & Rechte", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -1542,6 +1551,7 @@ addBuiltinRolePermissions("manager", [
   "loans:documents:read",
   LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
   BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION,
+  BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
 ]);
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -1563,7 +1573,7 @@ for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
 }
 for (const roleId of ["manager", "hr", "admin", "developer"]) {
-  addBuiltinRolePermissions(roleId, [STAFF_ASSIGNMENTS_MANAGE_PERMISSION]);
+  addBuiltinRolePermissions(roleId, [STAFF_ASSIGNMENTS_MANAGE_PERMISSION, BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION]);
 }
 for (const roleId of ["hr", "admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -30612,6 +30622,29 @@ async function branchOrderManagementLocation(session, input = {}) {
   return locationId;
 }
 
+async function branchPortalDisplaySettingsLocation(session, input = {}) {
+  if (!session.permissions?.includes(BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION)) {
+    throw httpError(403, "Für die Filialkonto-Einstellungen fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (session.sessionKind === "organization" || session.isEmployee === false) {
+    if (session.accountType !== "branch") {
+      throw httpError(403, "Die Filialkonto-Einstellungen sind nur für Filialkonten verfügbar.", "PORTAL_BRANCH_ACCOUNT_REQUIRED");
+    }
+    const locationId = normalizeLocationId(session.homeLocationId);
+    assertSessionContextScope(session, { locationId });
+    await validateActiveLocationExists(locationId);
+    return locationId;
+  }
+  const eligible = new Set(["department_manager", "manager", "hr", "admin", "developer"]);
+  if (!isLocalSystemSession(session) && !eligible.has(session.role)) {
+    throw httpError(403, "Die Filialkonto-Einstellungen benötigen eine berechtigte Filial-, Abteilungs- oder Personalleitung.", "BRANCH_PORTAL_SETTINGS_ROLE_DENIED");
+  }
+  const locationId = normalizeLocationId(input.locationId || session.homeLocationId || "");
+  assertSessionContextScope(session, { locationId });
+  await validateActiveLocationExists(locationId);
+  return locationId;
+}
+
 async function branchOrderHistoryAccess(request, input = {}) {
   const session = requirePortalSession(request);
   if (session.permissions?.includes(BRANCH_ORDER_MANAGE_PERMISSION)) {
@@ -34578,6 +34611,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     area: shift.area || "",
     departmentName: shift.department_name || "",
     employeeName: shift.nickname || shift.full_name,
+    employeeColor: /^#[0-9a-f]{6}$/i.test(String(shift.color || "")) ? shift.color : "",
   }));
   response.json({
     location: { id: location.id, name: location.name },
@@ -34585,6 +34619,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     weekEnd,
     calendarWeek: getIsoWeek(weekStart),
     shifts,
+    displaySettings: sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId),
   });
 });
 
@@ -40151,6 +40186,41 @@ app.post("/api/portal/v1/me/time-off-check", async (request, response) => {
 app.get("/api/portal/v1/me/time-off-slots", async (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
   response.json(await ownTimeOffSlots(session.employeeNumber, String(request.query.date || "")));
+});
+
+app.get("/api/portal/v1/branch-portal-settings", async (request, response) => {
+  const session = requirePortalSession(request, BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION);
+  const locationId = await branchPortalDisplaySettingsLocation(session, request.query || {});
+  try {
+    response.json({
+      locationId,
+      settings: sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId),
+    });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
+app.put("/api/portal/v1/branch-portal-settings", async (request, response) => {
+  const session = requirePortalSession(request, BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION);
+  assertPortalCsrf(request);
+  const locationId = await branchPortalDisplaySettingsLocation(session, request.body || {});
+  try {
+    const settings = sqliteBranchOrderOperations.saveBranchPortalSettings(
+      locationId,
+      request.body?.settings,
+      portalActorId(session),
+    );
+    auditPortal(portalActorId(session), "branch-portal.settings.update", "branch_order_location", locationId, JSON.stringify({
+      scheduleDisplayMode: settings.scheduleDisplayMode,
+      mobileHideElapsedDays: settings.mobileHideElapsedDays,
+      orderAutosaveEnabled: settings.orderAutosaveEnabled,
+      orderAutosaveMinutes: settings.orderAutosaveMinutes,
+    }));
+    response.json({ locationId, settings });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
 });
 
 app.get("/api/portal/v1/me/time-off-requests", async (request, response) => {
