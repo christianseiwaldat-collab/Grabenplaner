@@ -1,5 +1,20 @@
 # Grabenplaner Versions-Log
 
+## v0.92.0 Beta · Verkaufsverwaltung und Verkaufsanalysen
+
+- Der feste Desktop-Hauptbereich `Verkaufsverwaltung` startet mit `Verkaufsanalysen`; er ist kein optionales Installationsmodul und erhält keine separate mobile Fachansicht.
+- Aggregierte TradeFoto-Statistikberichte lassen sich kontrolliert aus PDF-Dateien einlesen. Filiale, Zeiträume, Warengruppen und Kennzahlen bleiben vor der unveränderlichen Übernahme prüf- und bestätigungspflichtig; bildbasierte Berichte verwenden einen lokalen OCR-Vorschlag.
+- Das Berichtsarchiv wertet auch frei gewählte Zeiträume, etwa 17 Tage, ohne künstliche Wochen- oder Monatsumdeutung gemeinsam aus und erkennt Überschneidungen sowie Datenlücken.
+- Verkaufsdaten werden ausschließlich serverseitig und fail-closed projiziert. Technische Verwaltungsrollen erhalten dadurch keinen automatischen Verkaufsdatenzugriff; die geschützte Developer-Rolle behält ihren vollständigen Anwendungskatalog.
+- Die bestehende v0.91.5-Funktion für Filialbestellungs-PDFs und PL+-Freigaben bleibt vollständig enthalten.
+
+## v0.91.5 Beta · Filialbestellungs-PDFs und PL+-Freigabe
+
+- Jede neu erfasste Filialbestellung erhält ein kompaktes, textbasiertes Vektor-PDF. Der unveränderbare Bestellbeleg wird mit Dateiname, Prüfsumme und Erstellzeit gespeichert und kann im Filialkonto sowie in der PL+-Verwaltung geöffnet oder heruntergeladen werden.
+- PL+ verwaltet die Filialbestellungs-Konfiguration pro Standort. Das delegierbare Einzelrecht für die eigene Bestellung kann zusätzlich gezielt einem persönlichen Mitarbeitendenzugang, etwa einer Mitarbeiterin am eigenen Standort, zugewiesen werden. Persönliche Zugänge sehen nur ihre eigenen Aufträge; Ziel- und Antwortadressen bleiben geschlossen.
+- Die mobile Bestellerfassung verwendet eine platzsparende Auswahl rechts, klare Ganzzahlmengen und reduzierte Hinweistexte. Mengen werden auch serverseitig ausschließlich als positive ganze Zahlen akzeptiert.
+- Der Linux-Runtime-, Offsite- und Host-Hardening-Vertrag bleibt unverändert; das Update ist ein reguläres Schema-4-Anwendungsupdate.
+
 ## v0.91.0 Beta · Filialzugänge und nachvollziehbare Filialbestellungen
 
 - Aktive Filialkonten erhalten die feste, standortgebundene Lesebasis für offene Leihen sowie vergangene, aktuelle und kommende Dienstplanwochen. Diese Ansichten bleiben ohne Bearbeitungs-, Ausgabe- oder Rücknahmerechte.

@@ -671,8 +671,9 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 .branch-order-item-list { display:grid; }
 .branch-order-item { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px, .9fr); gap:16px; align-items:center; padding:13px 17px; border-top:1px solid var(--line); }
 .branch-order-item:first-child { border-top:0; }
-.branch-order-item-select { display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
+.branch-order-item-select { display:flex; align-items:flex-start; gap:10px; min-width:0; cursor:pointer; }
 .branch-order-item-select input { margin-top:3px; }
+.branch-order-item-select > span { min-width:0; }
 .branch-order-item-select strong,.branch-order-item-select small { display:block; }
 .branch-order-item-select small { margin-top:3px; font-size:12px; }
 .branch-order-line-fields { display:grid; grid-template-columns:minmax(88px, .35fr) auto minmax(130px, 1fr); align-items:end; gap:8px; }
@@ -696,6 +697,10 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 .branch-order-history-entry strong,.branch-order-history-entry small { display:block; }
 .branch-order-history-entry small { margin-top:3px; color:var(--muted); }
 .branch-order-history-entry ul { margin:0; padding-left:19px; color:var(--muted); font-size:13px; }
+.branch-order-portal-history { display:grid; gap:12px; margin-top:18px; }
+.branch-order-portal-history .list-heading { align-items:center; }
+.branch-order-history-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.branch-order-history-actions a { text-decoration:none; }
 .danger-button { color:#a33d35 !important; }
 
 .branch-vacation-card { display:grid; gap:14px; padding:20px; }
@@ -744,12 +749,17 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 @media (max-width:720px) {
   .branch-orders-heading { align-items:stretch; }
   .branch-orders-heading .text-button { align-self:flex-start; }
-  .branch-order-item { grid-template-columns:1fr; gap:11px; }
+  .branch-order-form,.branch-order-group-list,.branch-order-group,.branch-order-item { min-width:0; max-width:100%; }
+  .branch-order-item { grid-template-columns:1fr; gap:11px; padding:14px; }
+  .branch-order-item-select { align-items:center; justify-content:space-between; gap:14px; }
+  .branch-order-item-select input { order:2; flex:0 0 26px; width:26px; height:26px; margin:0; accent-color:var(--green); }
   .branch-order-line-fields { grid-template-columns:minmax(80px, .45fr) auto minmax(0, 1fr); }
+  .branch-order-line-fields input { min-width:0; }
   .branch-order-submit-row,.branch-order-editor-heading { align-items:stretch; flex-direction:column; }
   .branch-order-submit-row .primary,.branch-order-editor-heading > .text-button { width:100%; }
   .branch-order-editor-grid,.branch-order-settings-item { grid-template-columns:1fr; }
   .branch-order-settings-item .danger-button { justify-self:start; }
+  .branch-order-history-actions > a { flex:1 1 140px; justify-content:center; }
   .branch-vacation-entry { align-items:flex-start; flex-direction:column; gap:5px; }
   .branch-vacation-entry time { text-align:left; }
 }
