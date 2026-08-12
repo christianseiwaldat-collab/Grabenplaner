@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.1 Beta · Temporäre Filialeinsätze und Bestellentwürfe
+
+- Filialleitungen der Stammfiliale sowie PL+ können zeitlich begrenzte Filialeinsätze stunden-, tage- oder wochenweise zuweisen. Das eng begrenzte Verwaltungsrecht kann von FL+ gezielt an Abteilungsleitungen delegiert werden; die geschützte Developer-Rolle behält ihren vollständigen Anwendungskatalog.
+- Eingesetzte Mitarbeitende stehen im zugewiesenen Zeitraum der Dienstplanung der Ziel- statt der Stammfiliale zur Verfügung. Genehmigter Urlaub und genehmigter Zeitausgleich haben Vorrang; neue überschneidende Anträge werden fail-closed behandelt. Zuständigkeiten für Zeitausgleich und Krankmeldungen berücksichtigen beide beteiligten Filialen nachvollziehbar.
+- Filialbestellungen lassen sich als serverseitig gebundene Entwürfe speichern, später fortsetzen oder bewusst verwerfen. Standort, Person und Revision bleiben dabei eindeutig gebunden; Versand- und Zielkonfigurationen werden nicht in den Entwurf kopiert.
+- Die Bestellerfassung nutzt in der Desktop- und Mobilansicht ein kompakteres, platzsparendes Layout. Mengen bleiben auch serverseitig auf positive ganze Zahlen begrenzt.
+- Für die ausdrücklich freigegebene Bereinigung historischer Testbestellungen steht ein kontrollierter Wartungsablauf mit Manifest, Prüfsummen und internem, transaktionalem Ausführungsbeleg bereit. Es erfolgt keine automatische Datenlöschung.
+- Linux-Runtime, Offsite-Sicherung, Recovery und Host-Hardening bleiben unverändert; das Update ist eine additive Anwendungsmigration.
+
 ## v0.92.0 Beta · Verkaufsverwaltung und Verkaufsanalysen
 
 - Der feste Desktop-Hauptbereich `Verkaufsverwaltung` startet mit `Verkaufsanalysen`; er ist kein optionales Installationsmodul und erhält keine separate mobile Fachansicht.

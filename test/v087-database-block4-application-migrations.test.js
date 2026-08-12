@@ -305,6 +305,9 @@ test("Block 4/7: all ten SQLite bindings run synchronously on an empty fixture",
       "locations",
       "system_center_trust_metrics",
       "branch_orders",
+      "branch_order_drafts",
+      "employee_location_lendings",
+      "maintenance_cleanup_receipts",
     ]) {
       assert.equal(
         database.prepare(

@@ -204,6 +204,17 @@ function insertShift(employeeNumber, date, locationId, startTime = "09:00", endT
   `).run(employeeNumber, locationId, date, startTime, endTime, note).lastInsertRowid);
 }
 
+function insertLocationAssignment(id, employeeNumber, homeLocationId, destinationLocationId, date) {
+  db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, note,
+      status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES (?, ?, ?, ?, NULL, ?, ?, 1, '', 'active', 1,
+      'v081-test', CURRENT_TIMESTAMP, 'v081-test', CURRENT_TIMESTAMP)
+  `).run(id, employeeNumber, homeLocationId, destinationLocationId, date, date);
+}
+
 function insertEvaluationRun(id, receiptSha256 = canonicalSha256({ receipt: id })) {
   const result = {
     engineVersion: "regression-fixture",
@@ -323,6 +334,13 @@ test("Regression: Eine historisch zugewiesene Profilversion liefert ihre eigene 
 });
 
 test("Regression: Ein filialfremdes neues Teammitglied wird bereits in der Candidate-Prüfung bewertet", async () => {
+  insertLocationAssignment(
+    "regression-foreign-candidate-assignment",
+    FOREIGN_EMPLOYEE,
+    foreignLocationId,
+    mainLocationId,
+    HISTORICAL_WEEK,
+  );
   const evaluated = await request("/api/work-rules/evaluate", {
     method: "POST",
     body: {
@@ -581,6 +599,13 @@ test("Regression: Candidate-Prüfungen bleiben im organisatorisch zugewiesenen S
   });
   assert.equal(allowed.response.status, 200, JSON.stringify(allowed.payload));
 
+  insertLocationAssignment(
+    "regression-existing-foreign-shift-assignment",
+    FOREIGN_EMPLOYEE,
+    foreignLocationId,
+    mainLocationId,
+    "2032-07-06",
+  );
   const existingForeignShiftId = insertShift(
     FOREIGN_EMPLOYEE,
     "2032-07-06",

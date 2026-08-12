@@ -199,6 +199,10 @@ const {
   ensureSqliteBranchOrdersSchema,
 } = require("./lib/persistence/sqlite/operations/branch-orders");
 const {
+  EmployeeLocationLendingError,
+  createSqliteEmployeeLocationLendingOperations,
+} = require("./lib/persistence/sqlite/operations/employee-location-lendings");
+const {
   createApplicationRepositories,
 } = require("./lib/persistence/application-repositories");
 const {
@@ -523,6 +527,7 @@ const defaultPersonalLoanOverviewColumns = Object.freeze([
 const ORGANIZATION_SCHEDULE_PERMISSION = "schedule:location:view";
 const BRANCH_ORDER_SUBMIT_PERMISSION = "branch_orders:submit";
 const BRANCH_ORDER_MANAGE_PERMISSION = "branch_orders:manage";
+const STAFF_ASSIGNMENTS_MANAGE_PERMISSION = "staff_assignments:manage";
 const BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION = "organization_accounts:password:manage";
 const branchOrganizationAccountBasePermissions = Object.freeze([
   LOAN_OVERVIEW_PERMISSION,
@@ -615,6 +620,7 @@ const integrationCache = new IntegrationCache({
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
   { id: "schedule:write", label: "Dienstpläne bearbeiten", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
+  { id: STAFF_ASSIGNMENTS_MANAGE_PERMISSION, label: "Temporäre Filialeinsätze verwalten", description: "Mitarbeitende des eigenen Verantwortungsbereichs zeitlich begrenzt einer anderen Filiale zuweisen.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "absence_entries:write", label: "Genehmigten Urlaub und ZA direkt eintragen", description: "Bereits betrieblich genehmigte Urlaube und vereinbarte Zeitausgleiche im eigenen Planungsbereich erfassen, bearbeiten und entfernen; keine Antrags- oder Freigaberechte.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Dienstplanung", warningLevel: "high", hrDelegable: true },
   { id: "employees:read", label: "Teamstammdaten lesen", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
@@ -739,7 +745,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION, label: "Leihansicht des Filialkontos festlegen", description: "Sichtbare Spalten der reinen Filialkonto-Übersicht im zugewiesenen Standort festlegen; keine Leih-, Foto-, Beleg- oder Personaldatenbearbeitung.", group: "Leihe", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "loans:settings", label: "Leihmodul und Artikelquelle verwalten", description: "Standortfreigaben und externe Artikelkataloge konfigurieren.", group: "Leihe", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ORDER_SUBMIT_PERMISSION, label: "Filialbestellungen für die eigene Filiale erfassen", description: "Erlaubt einer persönlich freigeschalteten Person Bestellungen ausschließlich für sich selbst und ihre Stammfiliale zu erfassen.", group: "Filialbestellungen", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["employee", "location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
-  { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "developer"] },
   { id: BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION, label: "Passwort eines Filialkontos neu vergeben", description: "Passwort ausschließlich für aktive Filialkonten im zugewiesenen Standort zurücksetzen; beendet bestehende Filialkonto-Sitzungen.", group: "Zugänge & Rechte", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -1543,8 +1549,10 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "loans:location:manage",
     "loans:documents:read",
     "loans:settings",
-    BRANCH_ORDER_MANAGE_PERMISSION,
   ]);
+}
+for (const roleId of ["hr", "admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [BRANCH_ORDER_MANAGE_PERMISSION]);
 }
 addBuiltinRolePermissions("developer", [
   LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
@@ -1553,6 +1561,9 @@ addBuiltinRolePermissions("developer", [
 ]);
 for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
+}
+for (const roleId of ["manager", "hr", "admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [STAFF_ASSIGNMENTS_MANAGE_PERMISSION]);
 }
 for (const roleId of ["hr", "admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -2947,6 +2958,7 @@ sqliteApplicationSeedingOperations.seedDemoIfRequested({
 ensureSqliteSystemCenterMetricsSchema(db);
 ensureSqliteBranchOrdersSchema(db);
 const sqliteBranchOrderOperations = createSqliteBranchOrderOperations(db);
+const sqliteEmployeeLocationLendingOperations = createSqliteEmployeeLocationLendingOperations(db);
 sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
 let applicationInitialization = null;
 let configuredAdminSnapshot = false;
@@ -3965,9 +3977,10 @@ async function notifyRequestReviewers(entry, kind, stage = "local", actor = "") 
   const label = labels[kind] || "Abwesenheitsantrag";
   const requestContext = await employeeRequestContext(entry.employee_number, entry.request_date || entry.date_from);
   const locationId = entry.location_id || requestContext.locationId;
+  const departmentId = Number(entry.review_department_id || 0) || requestContext.departmentId;
   const targetKind = kind.startsWith("time_off") ? "time_off" : "vacation";
   const target = `/?view=requests&kind=${targetKind}`;
-  for (const recipient of await requestReviewerRecipients(locationId, requestContext.departmentId, stage, actor)) {
+  for (const recipient of await requestReviewerRecipients(locationId, departmentId, stage, actor)) {
     await createPortalNotification(recipient, "request.review", `${label} wartet auf Prüfung`, `${entry.employee_number} hat einen Antrag eingereicht.`, {
       target,
       entityType: kind,
@@ -4074,12 +4087,13 @@ async function notifyAbsenceRequestReviewers(
     repository,
   );
   const locationId = entry.location_id || requestContext.locationId;
+  const departmentId = Number(entry.review_department_id || 0) || requestContext.departmentId;
   const targetKind = kind.startsWith("time_off") ? "time_off" : "vacation";
   const target = `/?view=requests&kind=${targetKind}`;
   const recipients = await absenceRequestReviewerRecipients(
     repository,
     locationId,
-    requestContext.departmentId,
+    departmentId,
     stage,
     actor,
   );
@@ -5465,13 +5479,15 @@ function daySettingsFromStoredJson(value) {
   } catch { return {}; }
 }
 
-async function daySettingsFromLocation(locationId) {
-  const locations = await organizationPersonnelRepository.listLocations(true);
-  const row = locations.find((location) => String(location.id) === String(locationId));
+async function daySettingsFromLocation(locationId, repository = null) {
+  const row = repository?.locationTimeOffConfiguration
+    ? await repository.locationTimeOffConfiguration({ locationId: String(locationId) })
+    : (await organizationPersonnelRepository.listLocations(true))
+      .find((location) => String(location.id) === String(locationId));
   return daySettingsFromStoredJson(row?.day_settings_json);
 }
 
-async function settingsForLocation(locationId) {
+async function settingsForLocation(locationId, repository = null) {
   const settings = getSettings();
   const branding = brandingForLocation(locationId, settings);
   settings.branding_company_name = branding.companyName;
@@ -5479,7 +5495,7 @@ async function settingsForLocation(locationId) {
   settings.branding_icon_url = branding.iconUrl;
   settings.branding_logo_alt = branding.logoAlt;
   settings.branding_admin_email = branding.adminEmail;
-  const days = await daySettingsFromLocation(locationId);
+  const days = await daySettingsFromLocation(locationId, repository);
   for (const [day] of planningDays) {
     const value = days[day];
     if (!value) continue;
@@ -6437,8 +6453,10 @@ function sicknessAlertPayload(row) {
 }
 
 function sicknessNotificationContexts(payload = {}) {
+  const responsible = Array.isArray(payload.responsibilityContexts)
+    ? payload.responsibilityContexts : [];
   const submitted = Array.isArray(payload.staffingRisk?.contexts) ? payload.staffingRisk.contexts : [];
-  const contexts = submitted.map((context) => ({
+  const contexts = [...responsible, ...submitted].map((context) => ({
     locationId: String(context?.locationId || "").trim(),
     departmentId: Number(context?.departmentId || 0) || null,
   })).filter((context) => context.locationId);
@@ -6449,6 +6467,32 @@ function sicknessNotificationContexts(payload = {}) {
     });
   }
   return [...new Map(contexts.map((context) => [
+    `${context.locationId}:${context.departmentId || 0}`,
+    context,
+  ])).values()];
+}
+
+async function sicknessResponsibilityContexts(
+  employeeNumber,
+  startDate,
+  expectedEnd = "",
+  asOfDate = viennaTodayIso(),
+) {
+  const home = await absenceEmployeeRequestContext(employeeNumber, startDate);
+  const contexts = [{ locationId: home.locationId, departmentId: home.departmentId }];
+  const effectiveAsOfDate = isIsoDate(asOfDate) ? asOfDate : viennaTodayIso();
+  const openCaseEnd = effectiveAsOfDate >= startDate ? effectiveAsOfDate : startDate;
+  for (const lending of await activeEmployeeLendingsForRange(
+    employeeNumber,
+    startDate,
+    isIsoDate(expectedEnd) ? expectedEnd : openCaseEnd,
+  )) {
+    contexts.push({
+      locationId: lending.destination_location_id,
+      departmentId: Number(lending.destination_department_id || 0) || null,
+    });
+  }
+  return [...new Map(contexts.filter((context) => context.locationId).map((context) => [
     `${context.locationId}:${context.departmentId || 0}`,
     context,
   ])).values()];
@@ -6603,6 +6647,60 @@ async function notifySicknessRecipients(row, { stage = "local", kind }) {
   return recipients;
 }
 
+async function notifyNewSicknessResponsibilityRecipients(
+  row,
+  payload,
+  previousResponsibilityContexts,
+  nextResponsibilityContexts,
+) {
+  const previousKeys = new Set((Array.isArray(previousResponsibilityContexts)
+    ? previousResponsibilityContexts : []).map((context) => (
+    `${String(context?.locationId || "").trim()}:${Number(context?.departmentId || 0) || 0}`
+  )));
+  const addedContexts = (Array.isArray(nextResponsibilityContexts)
+    ? nextResponsibilityContexts : []).filter((context) => {
+    const locationId = String(context?.locationId || "").trim();
+    if (!locationId) return false;
+    return !previousKeys.has(`${locationId}:${Number(context?.departmentId || 0) || 0}`);
+  });
+  if (!addedContexts.length) return [];
+
+  const previousRecipients = new Set(await sicknessNotificationRecipients({
+    responsibilityContexts: previousResponsibilityContexts,
+  }, "local", payload.employeeNumber));
+  const notifiedRecipients = [];
+  for (const context of addedContexts) {
+    const locationId = String(context.locationId).trim();
+    const departmentId = Number(context.departmentId || 0) || null;
+    const recipients = await sicknessNotificationRecipients({
+      responsibilityContexts: [{ locationId, departmentId }],
+    }, "local", payload.employeeNumber);
+    for (const recipient of recipients) {
+      if (previousRecipients.has(recipient)) continue;
+      const notificationId = await createProtectedPortalNotification(
+        recipient,
+        "protected.update",
+        "Neue gesch\u00fctzte Meldung",
+        "Bitte im gesch\u00fctzten Portal anmelden.",
+        {
+          target: "/portal.html?tab=leadershipApprovals",
+          entityType: "protected_record",
+          entityId: protectedPortalEntityId("sickness-case", row.id),
+          dedupeKey: protectedPortalDedupeKey([
+            row.id,
+            "responsibility_context",
+            locationId,
+            departmentId || 0,
+            recipient,
+          ]),
+        },
+      );
+      if (notificationId) notifiedRecipients.push(recipient);
+    }
+  }
+  return [...new Set(notifiedRecipients)];
+}
+
 async function sicknessStaffingAlertIsOpen(caseId) {
   return (await sicknessAmuManagementRepository.listSicknessAlertsByCase({
     caseId: Number(caseId),
@@ -6661,19 +6759,32 @@ async function reconcileSicknessStaffingRisk(row, now = new Date()) {
     { locationId: payload.locationId, departmentId: payload.departmentId },
     { asOfDate: viennaTodayIso(now) },
   );
-  const previousContexts = sicknessNotificationContexts({
-    locationId: payload.locationId,
-    departmentId: payload.departmentId,
-    staffingRisk: previousRisk,
-  });
-  const contextChanged = JSON.stringify(previousContexts) !== JSON.stringify(nextRisk.contexts || []);
+  const previousContexts = sicknessNotificationContexts(payload);
+  const previousResponsibilityContexts = Array.isArray(payload.responsibilityContexts)
+    ? structuredClone(payload.responsibilityContexts)
+    : sicknessNotificationContexts(payload);
+  const nextResponsibilityContexts = await sicknessResponsibilityContexts(
+    payload.employeeNumber,
+    payload.startDate,
+    futureRecovered ? addDays(payload.returnToWorkDate, -1) : payload.expectedEnd,
+    viennaTodayIso(now),
+  );
   const primaryContext = nextRisk.contexts?.[0] || null;
   if (primaryContext) {
     payload.locationId = primaryContext.locationId;
     payload.departmentId = primaryContext.departmentId;
   }
-  const payloadChanged = JSON.stringify(previousRisk) !== JSON.stringify(nextRisk) || contextChanged;
   payload.staffingRisk = nextRisk;
+  payload.responsibilityContexts = nextResponsibilityContexts;
+  const nextContexts = sicknessNotificationContexts(payload);
+  const contextChanged = JSON.stringify(previousContexts) !== JSON.stringify(nextContexts);
+  const payloadChanged = JSON.stringify(previousRisk) !== JSON.stringify(nextRisk) || contextChanged;
+  await notifyNewSicknessResponsibilityRecipients(
+    row,
+    payload,
+    previousResponsibilityContexts,
+    nextResponsibilityContexts,
+  );
   if (payloadChanged) {
     const protectedPayload = protectJson(payload, sicknessCaseProtectionContext(row));
     await sicknessAmuManagementRepository.updateSicknessCasePayload({
@@ -6689,12 +6800,13 @@ async function reconcileSicknessStaffingRisk(row, now = new Date()) {
   if (alert.created || contextChanged) {
     if (contextChanged) await resolveSicknessStaffingArtifacts(row.id);
     const refreshedAlert = await upsertSicknessAlert(row.id, "staffing_risk", "warning", "local");
-    const recipients = await notifySicknessRecipients(row, {
+    const notificationRow = payloadChanged ? await sicknessCaseMetadata(row.id) : row;
+    const recipients = await notifySicknessRecipients(notificationRow, {
       stage: "local",
       kind: "staffing",
     });
     await reactivateSicknessStaffingNotifications(row.id, recipients);
-    await queueExternalStaffingAlerts(row, recipients, now.toISOString());
+    await queueExternalStaffingAlerts(notificationRow, recipients, now.toISOString());
     return { checked: true, created: Boolean(alert.created || refreshedAlert.created), resolved: false, risk: nextRisk };
   }
   return { checked: true, created: false, resolved: false, risk: nextRisk };
@@ -11202,6 +11314,124 @@ async function absenceEmployeeRequestContext(
   };
 }
 
+async function activeEmployeeLendingsForRange(
+  employeeNumber,
+  dateFrom,
+  dateTo,
+  repository = absenceManagementRepository,
+) {
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) return [];
+  return repository.activeEmployeeLendingsForRange({
+    employeeNumber: String(employeeNumber || ""),
+    dateFrom,
+    dateTo,
+  });
+}
+
+function employeeLendingOverlapsTimeOff(lending, input) {
+  if (lending.date_from > input.dateTo || lending.date_to < input.dateFrom) return false;
+  if (input.allDay || input.dateFrom !== input.dateTo || Boolean(lending.all_day)) return true;
+  if (lending.date_from !== input.dateFrom || lending.date_to !== input.dateFrom) return false;
+  return isTime(lending.start_time) && isTime(lending.end_time)
+    && timeRangesOverlap(input.startTime, input.endTime, lending.start_time, lending.end_time);
+}
+
+function employeeLendingCoversTimeOff(lending, input) {
+  if (input.allDay || input.dateFrom !== input.dateTo) {
+    return Boolean(lending.all_day)
+      && lending.date_from <= input.dateFrom
+      && lending.date_to >= input.dateTo;
+  }
+  if (Boolean(lending.all_day)) {
+    return lending.date_from <= input.dateFrom && lending.date_to >= input.dateTo;
+  }
+  return lending.date_from === input.dateFrom
+    && lending.date_to === input.dateTo
+    && isTime(lending.start_time)
+    && isTime(lending.end_time)
+    && lending.start_time <= input.startTime
+    && lending.end_time >= input.endTime;
+}
+
+async function timeOffResponsibilityContext(
+  employeeNumber,
+  input,
+  repository = absenceManagementRepository,
+) {
+  const home = await absenceEmployeeRequestContext(employeeNumber, input.dateFrom, {}, repository);
+  const lendings = (await activeEmployeeLendingsForRange(
+    employeeNumber,
+    input.dateFrom,
+    input.dateTo,
+    repository,
+  )).filter((lending) => employeeLendingOverlapsTimeOff(lending, input));
+  if (!lendings.length) {
+    return {
+      mixed: false,
+      lent: false,
+      locationId: home.locationId,
+      originLocationId: home.locationId,
+      departmentId: home.departmentId,
+      lendingId: null,
+    };
+  }
+  if (lendings.length !== 1 || !employeeLendingCoversTimeOff(lendings[0], input)) {
+    return {
+      mixed: true,
+      code: "TIME_OFF_MIXED_RESPONSIBILITY",
+      reason: "Der ZA-Zeitraum umfasst unterschiedliche Filialzuständigkeiten. Bitte getrennte Anträge je Filiale und Zeitraum stellen.",
+    };
+  }
+  const lending = lendings[0];
+  return {
+    mixed: false,
+    lent: true,
+    locationId: lending.destination_location_id,
+    originLocationId: lending.home_location_id || home.locationId,
+    departmentId: Number(lending.destination_department_id || 0) || null,
+    lendingId: lending.id,
+  };
+}
+
+async function assertTimeOffResponsibility(
+  employeeNumber,
+  input,
+  repository = absenceManagementRepository,
+) {
+  const context = await timeOffResponsibilityContext(employeeNumber, input, repository);
+  if (!context.mixed) return context;
+  throw httpError(409, context.reason, context.code);
+}
+
+async function vacationLendingConflict(
+  employeeNumber,
+  dateFrom,
+  dateTo,
+  repository = absenceManagementRepository,
+) {
+  return (await activeEmployeeLendingsForRange(
+    employeeNumber,
+    dateFrom,
+    dateTo,
+    repository,
+  ))[0] || null;
+}
+
+async function assertNoVacationLendingOverlap(
+  employeeNumber,
+  dateFrom,
+  dateTo,
+  repository = absenceManagementRepository,
+) {
+  const conflict = await vacationLendingConflict(employeeNumber, dateFrom, dateTo, repository);
+  if (!conflict) return null;
+  throw httpError(
+    409,
+    "Für diesen Zeitraum besteht bereits ein temporärer Filialeinsatz. Während dieses Einsatzes kann kein Urlaub beantragt oder eingetragen werden.",
+    "VACATION_EMPLOYEE_LENDING_CONFLICT",
+  );
+}
+
 async function getRequestBlackouts(activeOnly = false) {
   return (await absenceManagementRepository.listBlackouts(activeOnly))
     .map(serializeRequestBlackout);
@@ -11249,8 +11479,9 @@ async function findRequestBlackout(
   dateTo,
   dateForDepartment = null,
   repository = absenceManagementRepository,
+  contextOverride = null,
 ) {
-  const context = await absenceEmployeeRequestContext(
+  const context = contextOverride || await absenceEmployeeRequestContext(
     employeeNumber,
     dateForDepartment || dateFrom,
     {},
@@ -11354,6 +11585,13 @@ async function assessVacationAvailability(
     return {
       trafficLight: "red", allowed: false, code: "VACATION_DATES_INVALID",
       reason: "Bitte einen gültigen Urlaubszeitraum von höchstens 366 Kalendertagen eingeben.",
+      manualReview: false, blockingSlots: [], contexts: [],
+    };
+  }
+  if (await vacationLendingConflict(employeeNumber, dateFrom, dateTo, repository)) {
+    return {
+      trafficLight: "red", allowed: false, code: "VACATION_EMPLOYEE_LENDING_CONFLICT",
+      reason: "Für diesen Zeitraum besteht bereits ein temporärer Filialeinsatz. Während dieses Einsatzes kann kein Urlaub beantragt oder eingetragen werden.",
       manualReview: false, blockingSlots: [], contexts: [],
     };
   }
@@ -11496,15 +11734,27 @@ async function assertVacationGovernanceAvailable(
   return assessment;
 }
 
-async function staffingCountAt(locationId, departmentId, date, pointTime, excludedEmployeeNumber) {
+async function staffingCountAt(
+  locationId,
+  departmentId,
+  date,
+  pointTime,
+  excludedEmployeeNumber,
+  repository = absenceManagementRepository,
+) {
   const data = { locationId, departmentId, date, pointTime, excludedEmployeeNumber };
   const row = departmentId
-    ? await absenceManagementRepository.staffingAtDepartment(data)
-    : await absenceManagementRepository.staffingAtLocation(data);
+    ? await repository.staffingAtDepartment(data)
+    : await repository.staffingAtLocation(data);
   return Number(row?.count || 0);
 }
 
-async function evaluateTimeOffRequest(employeeNumber, body) {
+async function evaluateTimeOffRequest(
+  employeeNumber,
+  body,
+  responsibilityOverride = null,
+  repository = absenceManagementRepository,
+) {
   const date = String(body.date || body.requestDate || body.dateFrom || "");
   const dateTo = String(body.dateTo || date);
   const allDay = body.allDay === true || dateTo !== date;
@@ -11514,10 +11764,38 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
     return { trafficLight: "red", allowed: false, reason: "Bitte einen gültigen ZA-Zeitraum eingeben." };
   }
   if (date < viennaTodayIso()) return { trafficLight: "red", allowed: false, reason: "Für vergangene Tage kann kein Zeitausgleich beantragt werden." };
+  if (!allDay && (!isTime(startTime) || !isTime(endTime) || endTime <= startTime)) {
+    return { trafficLight: "red", allowed: false, reason: "Bitte Datum und Uhrzeit für den Zeitausgleich vollständig eingeben." };
+  }
+  if (!allDay && timeToMinutes(endTime) - timeToMinutes(startTime) < 15) {
+    return { trafficLight: "red", allowed: false, reason: "Zeitausgleich muss mindestens 15 Minuten dauern." };
+  }
+  const responsibility = responsibilityOverride || await timeOffResponsibilityContext(employeeNumber, {
+    dateFrom: date,
+    dateTo,
+    allDay,
+    startTime: allDay ? "00:00" : startTime,
+    endTime: allDay ? "23:59" : endTime,
+  }, repository);
+  if (responsibility.mixed) {
+    return {
+      trafficLight: "red",
+      allowed: false,
+      reason: responsibility.reason,
+      code: responsibility.code,
+    };
+  }
+  const context = {
+    locationId: responsibility.locationId,
+    departmentId: responsibility.departmentId,
+  };
   if (allDay) {
-    const blackout = await findRequestBlackout(employeeNumber, "time_off", date, dateTo, date);
+    const blackout = await findRequestBlackout(
+      employeeNumber, "time_off", date, dateTo, date,
+      repository, context,
+    );
     if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Zeitausgleich") };
-    const overlap = await absenceManagementRepository.timeOffRangeOverlap({
+    const overlap = await repository.timeOffRangeOverlap({
       employeeNumber,
       excludeId: Number(body.excludeRequestId || 0),
       dateFrom: date,
@@ -11526,15 +11804,15 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
     if (overlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein ZA-Antrag." };
     const missingDays = [];
     for (let current = date; current <= dateTo; current = addDays(current, 1)) {
-      const context = await absenceEmployeeRequestContext(employeeNumber, current);
-      if (!await operatingHours(current, await settingsForLocation(context.locationId))) {
+      if (!await operatingHours(current, await settingsForLocation(context.locationId, repository))) {
         return { trafficLight: "red", allowed: false, reason: `Am ${current} ist die Filiale geschlossen; dafür kann kein ganztägiger ZA beantragt werden.` };
       }
       const globalBlock = getGlobalDayBlockForDate(current, context.locationId);
       if (globalBlock) return { trafficLight: "red", allowed: false, reason: `Der ${current} ist bereits gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.` };
-      const planned = await absenceManagementRepository.plannedShiftOnDate({
+      const planned = await repository.plannedShiftOnDate({
         employeeNumber,
         date: current,
+        locationId: context.locationId,
       });
       if (!planned) missingDays.push(current);
     }
@@ -11548,10 +11826,12 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
   if (timeToMinutes(endTime) - timeToMinutes(startTime) < 15) {
     return { trafficLight: "red", allowed: false, reason: "Zeitausgleich muss mindestens 15 Minuten dauern." };
   }
-  const context = await absenceEmployeeRequestContext(employeeNumber, date);
-  const blackout = await findRequestBlackout(employeeNumber, "time_off", date, date, date);
+  const blackout = await findRequestBlackout(
+    employeeNumber, "time_off", date, date, date,
+    repository, context,
+  );
   if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Zeitausgleich") };
-  const settings = await settingsForLocation(context.locationId);
+  const settings = await settingsForLocation(context.locationId, repository);
   const hours = await operatingHours(date, settings);
   if (!hours) return { trafficLight: "red", allowed: false, reason: "An diesem Tag ist die Filiale geschlossen." };
   if (startTime < hours.start || endTime > hours.end) {
@@ -11561,7 +11841,7 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
   if (globalBlock) {
     return { trafficLight: "red", allowed: false, reason: `Dieser Tag ist gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.` };
   }
-  const conflictingOption = (await absenceManagementRepository.timeOffOptionsOnDate({
+  const conflictingOption = (await repository.timeOffOptionsOnDate({
     employeeNumber,
     date,
   })).find((option) => option.group_id !== `za-request-${Number(body.excludeRequestId || 0)}`
@@ -11569,7 +11849,7 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
   if (conflictingOption) {
     return { trafficLight: "red", allowed: false, reason: `Zu dieser Zeit ist bereits „${optionLabel(conflictingOption.option_type)}“ eingetragen.` };
   }
-  const pendingOverlap = await absenceManagementRepository.timeOffPointOverlap({
+  const pendingOverlap = await repository.timeOffPointOverlap({
     employeeNumber,
     date,
     excludeId: Number(body.excludeRequestId || 0),
@@ -11577,15 +11857,17 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
     startTime,
   });
   if (pendingOverlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein offener ZA-Antrag." };
-  const coveringShift = await absenceManagementRepository.coveringShift({
+  const coveringShift = await repository.coveringShift({
     employeeNumber,
     date,
+    locationId: context.locationId,
     startTime,
     endTime,
   });
-  const overlappingShift = await absenceManagementRepository.overlappingShift({
+  const overlappingShift = await repository.overlappingShift({
     employeeNumber,
     date,
+    locationId: context.locationId,
     startTime,
     endTime,
   });
@@ -11595,21 +11877,31 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
   if (!coveringShift) {
     return { trafficLight: "yellow", allowed: true, reason: "Für diesen Zeitraum ist noch kein Dienst eingetragen. Der Antrag wird manuell geprüft." };
   }
-  const locationContext = await resolvePlanningContext({ locationId: context.locationId, departmentId: null });
-  const locationRequired = Number((await dayConfiguration(date, settings, locationContext))?.minStaff || 0);
+  const locationConfiguration = await repository.locationTimeOffConfiguration({
+    locationId: context.locationId,
+  });
+  const configuredDayMinimum = Number((await dayConfiguration(date, settings))?.minStaff || 0);
+  const locationRequired = Math.max(
+    configuredDayMinimum,
+    Number(locationConfiguration?.min_staff || 0),
+  );
   const departmentId = coveringShift.department_id ? Number(coveringShift.department_id) : context.departmentId;
   const department = departmentId
-    ? await absenceManagementRepository.departmentById(departmentId)
+    ? await repository.departmentById(departmentId)
     : null;
   const departmentRequired = Number(department?.min_staff || 0);
   for (let minute = timeToMinutes(startTime); minute < timeToMinutes(endTime); minute += 15) {
     const point = minutesToTime(minute);
-    const locationCount = await staffingCountAt(context.locationId, null, date, point, employeeNumber);
+    const locationCount = await staffingCountAt(
+      context.locationId, null, date, point, employeeNumber, repository,
+    );
     if (locationCount < locationRequired) {
       return { trafficLight: "red", allowed: false, reason: `Um ${point} Uhr würde die Filial-Mindestbesetzung auf ${locationCount} von ${locationRequired} Personen sinken.` };
     }
     if (departmentId && departmentRequired > 0) {
-      const departmentCount = await staffingCountAt(context.locationId, departmentId, date, point, employeeNumber);
+      const departmentCount = await staffingCountAt(
+        context.locationId, departmentId, date, point, employeeNumber, repository,
+      );
       if (departmentCount < departmentRequired) {
         const departmentName = department?.name || "Abteilung";
         return { trafficLight: "red", allowed: false, reason: `Um ${point} Uhr würde die Mindestbesetzung in ${departmentName} auf ${departmentCount} von ${departmentRequired} Personen sinken.` };
@@ -11652,10 +11944,12 @@ async function prepareApprovedTimeOffMutation(
       employeeNumber: entry.employee_number,
       dateFrom,
       dateTo,
+      locationId: entry.location_id || null,
     })
     : await readRepository.shiftsForTimeOffPeriod({
       employeeNumber: entry.employee_number,
       date: entry.request_date,
+      locationId: entry.location_id || null,
       startTime: entry.start_time,
       endTime: entry.end_time,
     });
@@ -13041,9 +13335,12 @@ async function assertRequestScope(session, entry, scopeSnapshot = null) {
     throw httpError(403, "Dieser Antrag gehört nicht zum eigenen Standort.", "PORTAL_PERMISSION_DENIED");
   }
   if (session.role === "department_manager") {
-    const employeeDepartment = scopeSnapshot?.employeeDepartment ?? (
-      await employeeRequestContext(entry.employee_number, entry.request_date || entry.date_from)
-    ).departmentId;
+    const employeeDepartment = scopeSnapshot?.employeeDepartment
+      ?? (Number(entry.review_department_id || 0) || null)
+      ?? (await employeeRequestContext(
+        entry.employee_number,
+        entry.request_date || entry.date_from,
+      )).departmentId;
     if (!assignedScopes.some((scope) => scope.locationId === locationId && Number(scope.departmentId) === Number(employeeDepartment))) {
       throw httpError(403, "Dieser Antrag gehört nicht zur eigenen Abteilung.", "PORTAL_PERMISSION_DENIED");
     }
@@ -15257,6 +15554,52 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if (!locationId) throw httpError(400, "Bitte eine Einsatzfiliale auswählen.", "SHIFT_LOCATION_REQUIRED");
   await validateLocationExists(locationId);
   if (department) await validateDepartmentExists(departmentId, locationId);
+  const homeLocationId = String(employee.home_location_id || "").trim();
+  if (locationId === homeLocationId) {
+    const awayAssignment = sqliteEmployeeLocationLendingOperations.overlapForShift(
+      employeeNumber,
+      shiftDate,
+      startTime,
+      endTime,
+    );
+    if (awayAssignment) {
+      throw httpError(
+        409,
+        `${employee.nickname} ist in diesem Zeitraum einer anderen Filiale zugewiesen.`,
+        "STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT",
+      );
+    }
+  } else {
+    const assignment = sqliteEmployeeLocationLendingOperations.coverageForShift(
+      employeeNumber,
+      locationId,
+      shiftDate,
+      startTime,
+      endTime,
+    );
+    if (!assignment) {
+      if (actor && !sessionHasGlobalScope(actor)) {
+        throw httpError(
+          403,
+          "Dieses Teammitglied ist für den vollständigen Dienstzeitraum nicht dieser Filiale zugewiesen.",
+          "SHIFT_FOREIGN_EMPLOYEE_SCOPE_DENIED",
+        );
+      }
+      throw httpError(
+        409,
+        `${employee.nickname} besitzt für diesen vollständigen Zeitraum keinen temporären Einsatz in der gewählten Filiale.`,
+        "STAFF_ASSIGNMENT_COVERAGE_REQUIRED",
+      );
+    }
+    if (assignment.destinationDepartmentId
+      && Number(assignment.destinationDepartmentId) !== Number(departmentId || 0)) {
+      throw httpError(
+        409,
+        "Der Dienst muss der für den temporären Filialeinsatz festgelegten Zielabteilung entsprechen.",
+        "STAFF_ASSIGNMENT_DEPARTMENT_MISMATCH",
+      );
+    }
+  }
   if (!employeeCanWorkOnDate(employee, shiftDate)) {
     throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
   }
@@ -15292,19 +15635,6 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if ((await activeSicknessEmployeeNumbers(shiftDate)).has(employeeNumber)) {
     throw httpError(409, `${employee.nickname} ist an diesem Tag krankgemeldet.`, "SICKNESS_SHIFT_CONFLICT");
   }
-  const otherLocationShift = await planningSettingsRepository.getOtherLocationShift({
-    employeeNumber,
-    shiftDate,
-    existingId,
-    locationId,
-  });
-  if (otherLocationShift) {
-    throw httpError(
-      409,
-      `${employee.nickname} ist an diesem Tag bereits in ${otherLocationShift.location_name || "einer anderen Filiale"} eingeteilt.`,
-      "SHIFT_LOCATION_DAY_CONFLICT",
-    );
-  }
   const overlappingShift = await planningSettingsRepository.getOverlappingShift({
     employeeNumber,
     shiftDate,
@@ -15324,18 +15654,57 @@ async function validateShift(body, contextInput = {}, actor = null) {
   return { employeeNumber, locationId, departmentId, shiftDate, startTime, endTime, area, note };
 }
 
-function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
+function staffAssignmentShiftConstraintError(error) {
+  let current = error;
+  while (current) {
+    const message = String(current.message || "");
+    if (current.messageKey === "staff-assignment-home-shift-conflict"
+      || message.includes("STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT")) {
+      return httpError(
+        409,
+        "Der Dienst überschneidet sich mit einem temporären Einsatz in einer anderen Filiale.",
+        "STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT",
+      );
+    }
+    if (current.messageKey === "staff-assignment-coverage-required"
+      || message.includes("STAFF_ASSIGNMENT_COVERAGE_REQUIRED")) {
+      return httpError(
+        409,
+        "Für den vollständigen Dienstzeitraum besteht kein passender temporärer Filialeinsatz.",
+        "STAFF_ASSIGNMENT_COVERAGE_REQUIRED",
+      );
+    }
+    current = current.cause;
+  }
+  return error;
+}
+
+function staffAssignmentAbsenceConstraintError(error) {
+  if (error?.messageKey !== "staff-assignment-direct-absence-conflict") return error;
+  return httpError(
+    409,
+    "Die direkte Abwesenheit überschneidet sich mit einem temporären Filialeinsatz. Bitte verwenden Sie für ZA den regulären Antrag.",
+    "STAFF_ASSIGNMENT_DIRECT_ABSENCE_CONFLICT",
+  );
+}
+
+async function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
   if (sessionHasGlobalScope(session)) return;
-  const homeLocationId = portalScopeProjectionSnapshot.employees
-    .find((employee) => employee.personnel_number === shift.employeeNumber)?.home_location_id;
+  const employee = sqliteEmployeeLocationLendingOperations.employee(shift.employeeNumber);
+  const homeLocationId = String(employee?.home_location_id || "");
   if (homeLocationId === shift.locationId) return;
-  const alreadyAssignedHere = existing
-    && existing.employee_number === shift.employeeNumber
-    && existing.location_id === shift.locationId;
-  if (alreadyAssignedHere) return;
+  const assignment = sqliteEmployeeLocationLendingOperations.coverageForShift(
+    shift.employeeNumber,
+    shift.locationId,
+    shift.shiftDate,
+    shift.startTime,
+    shift.endTime,
+  );
+  if (assignment && (!assignment.destinationDepartmentId
+    || Number(assignment.destinationDepartmentId) === Number(shift.departmentId || 0))) return;
   throw httpError(
     403,
-    "Filialfremde Teammitglieder können nur durch eine unternehmensweit zuständige Rolle zugeteilt werden.",
+    "Dieses Teammitglied ist für den vollständigen Dienstzeitraum nicht dieser Filiale zugewiesen.",
     "SHIFT_FOREIGN_EMPLOYEE_SCOPE_DENIED",
   );
 }
@@ -15454,6 +15823,25 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
   if (allDay && manualAllDayCreditTypes.has(optionType)) {
     if (!Number.isFinite(manualHours) || manualHours < 0 || manualHours > 24) {
       throw httpError(400, "Bitte die anrechenbaren Stunden pro Tag zwischen 0 und 24 eingeben.");
+    }
+  }
+  if (directlyApprovedAbsenceOptionTypes.has(optionType)) {
+    const assignment = sqliteEmployeeLocationLendingOperations.overlapForPeriod({
+      employeeNumber,
+      dateFrom,
+      dateTo,
+      allDay,
+      startTime: allDay ? null : startTime,
+      endTime: allDay ? null : endTime,
+    });
+    if (assignment) {
+      throw httpError(
+        409,
+        optionType === "time_off"
+          ? "Während eines temporären Filialeinsatzes muss ZA über den regulären ZA-Antrag an die zuständige Zielfiliale gestellt werden."
+          : "Während eines temporären Filialeinsatzes kann genehmigter Urlaub hier nicht direkt eingetragen werden.",
+        "STAFF_ASSIGNMENT_DIRECT_ABSENCE_CONFLICT",
+      );
     }
   }
   const overlappingOption = (await planningSettingsRepository.listOverlappingWeekOptions({
@@ -16308,10 +16696,11 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     weekStart,
     weekEnd,
   };
-  const [employeeRows, shiftRows, storedWeekOptions] = await Promise.all([
+  const [employeeRows, shiftRows, storedWeekOptions, employeeLendings] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listScheduleWeekOptions(planningQuery),
+    planningSettingsRepository.listScheduleLendings(planningQuery),
   ]);
   const employees = employeeRows.map(serializeEmployee);
   const shifts = await Promise.all(
@@ -16491,6 +16880,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     employees,
     shifts,
     weekOptions,
+    staffAssignments: employeeLendings,
     globalDayBlocks,
     scheduleNote: await getScheduleNote(weekStart, context),
     globalBlockDates: Array.from(globalBlockDates),
@@ -17063,6 +17453,12 @@ async function createVacationEntries(vacation, actor = "system", options = {}) {
   const groupId = createVacationGroupId();
   const boundRepository = options.repository || null;
   const mutate = async (repository) => {
+    await assertNoVacationLendingOverlap(
+      vacation.employeeNumber,
+      vacation.dateFrom,
+      vacation.dateTo,
+      repository,
+    );
     const assessment = options.assessment || await assertVacationGovernanceAvailable(
       vacation.employeeNumber,
       vacation,
@@ -17106,6 +17502,12 @@ async function vacationGroupExists(groupId) {
 async function replaceVacationGroup(groupId, vacation, actor = "system", options = {}) {
   const boundRepository = options.repository || null;
   const mutate = async (repository) => {
+    await assertNoVacationLendingOverlap(
+      vacation.employeeNumber,
+      vacation.dateFrom,
+      vacation.dateTo,
+      repository,
+    );
     const assessment = options.assessment || await assertVacationGovernanceAvailable(
       vacation.employeeNumber,
       vacation,
@@ -23961,7 +24363,7 @@ app.post("/api/work-rules/evaluate", async (request, response) => {
       existingId: id,
     }, request.portalSession);
     if (id) candidate.id = id;
-    assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
+    await assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
   }
   const evaluated = await evaluateScheduleWorkRules(
     weekStart,
@@ -29739,6 +30141,396 @@ app.put("/api/portal/v1/branch-accounts/:accountId/password", async (request, re
   });
 });
 
+function staffAssignmentHttpError(error) {
+  if (!(error instanceof EmployeeLocationLendingError)) return error;
+  return httpError(error.status || 400, error.message, error.code || "STAFF_ASSIGNMENT_INVALID");
+}
+
+function requireStaffAssignmentAccess(request, { csrf = false } = {}) {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [STAFF_ASSIGNMENTS_MANAGE_PERMISSION],
+    { csrf },
+  );
+  if (!isLocalSystemSession(session)
+    && (session.sessionKind === "organization" || session.isEmployee === false)) {
+    throw httpError(
+      403,
+      "Temporäre Filialeinsätze können nur mit einem persönlichen Mitarbeiterzugang verwaltet werden.",
+      "STAFF_ASSIGNMENT_PERSONAL_ACCOUNT_REQUIRED",
+    );
+  }
+  return session;
+}
+
+function staffAssignmentEmployeeInScope(session, employee) {
+  if (sessionHasGlobalScope(session)) return true;
+  const homeLocationId = String(employee?.home_location_id ?? employee?.homeLocationId ?? "");
+  const departmentId = Number(
+    employee?.preferred_department_id ?? employee?.preferredDepartmentId ?? 0,
+  ) || null;
+  return (session.scopes || []).some((scope) => (
+    String(scope.locationId || "") === homeLocationId
+    && (!Number(scope.departmentId || 0) || Number(scope.departmentId) === departmentId)
+  ));
+}
+
+function assertStaffAssignmentEmployeeScope(session, employeeNumber) {
+  const employee = sqliteEmployeeLocationLendingOperations.employee(employeeNumber);
+  if (!employee || !employee.active) {
+    throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.", "STAFF_ASSIGNMENT_EMPLOYEE_NOT_FOUND");
+  }
+  if (!staffAssignmentEmployeeInScope(session, employee)) {
+    throw httpError(
+      403,
+      "Das Teammitglied gehört nicht zum eigenen Verantwortungsbereich.",
+      "STAFF_ASSIGNMENT_SCOPE_DENIED",
+    );
+  }
+  return employee;
+}
+
+function normalizeStaffAssignmentInput(input = {}, existing = null) {
+  const employeeNumber = String(
+    own(input, "employeeNumber") ? input.employeeNumber : existing?.employeeNumber || "",
+  ).trim();
+  const destinationLocationId = normalizeLocationId(
+    own(input, "destinationLocationId")
+      ? input.destinationLocationId
+      : existing?.destinationLocationId || "",
+  );
+  const dateFrom = String(own(input, "dateFrom") ? input.dateFrom : existing?.dateFrom || "").trim();
+  const dateTo = String(own(input, "dateTo") ? input.dateTo : existing?.dateTo || "").trim();
+  const allDayInput = own(input, "allDay") ? input.allDay : existing?.allDay ?? true;
+  if (typeof allDayInput !== "boolean") {
+    throw httpError(400, "Die Angabe zum ganztägigen Einsatz ist ungültig.", "STAFF_ASSIGNMENT_ALL_DAY_INVALID");
+  }
+  const allDay = allDayInput;
+  const startTime = allDay
+    ? null
+    : String(own(input, "startTime") ? input.startTime : existing?.startTime || "").trim();
+  const endTime = allDay
+    ? null
+    : String(own(input, "endTime") ? input.endTime : existing?.endTime || "").trim();
+  const rawDepartmentId = own(input, "destinationDepartmentId")
+    ? input.destinationDepartmentId
+    : existing?.destinationDepartmentId ?? null;
+  const destinationDepartmentId = rawDepartmentId === null || rawDepartmentId === ""
+    ? null
+    : Number(rawDepartmentId);
+  const note = stripEmoji(String(own(input, "note") ? input.note : existing?.note || "").trim()).slice(0, 500);
+
+  if (!employeeNumber) {
+    throw httpError(400, "Bitte ein Teammitglied auswählen.", "STAFF_ASSIGNMENT_EMPLOYEE_REQUIRED");
+  }
+  if (!destinationLocationId) {
+    throw httpError(400, "Bitte eine Zielfiliale auswählen.", "STAFF_ASSIGNMENT_DESTINATION_REQUIRED");
+  }
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
+    throw httpError(400, "Bitte einen gültigen Einsatzzeitraum eingeben.", "STAFF_ASSIGNMENT_DATE_INVALID");
+  }
+  if (daysBetweenInclusive(dateFrom, dateTo) > 366) {
+    throw httpError(
+      400,
+      "Ein temporärer Filialeinsatz darf höchstens 366 Kalendertage umfassen.",
+      "STAFF_ASSIGNMENT_DATE_RANGE_TOO_LONG",
+    );
+  }
+  if (!allDay && (dateFrom !== dateTo || !isTime(startTime) || !isTime(endTime)
+    || timeToMinutes(endTime) <= timeToMinutes(startTime))) {
+    throw httpError(
+      400,
+      "Ein stundenweiser Filialeinsatz benötigt am selben Tag eine gültige Start- und Endzeit.",
+      "STAFF_ASSIGNMENT_TIME_INVALID",
+    );
+  }
+  if (!allDay && (timeToMinutes(startTime) % 15 !== 0 || timeToMinutes(endTime) % 15 !== 0)) {
+    throw httpError(
+      400,
+      "Start- und Endzeit müssen im 15-Minuten-Raster liegen.",
+      "STAFF_ASSIGNMENT_TIME_STEP_INVALID",
+    );
+  }
+  if (destinationDepartmentId !== null
+    && (!Number.isSafeInteger(destinationDepartmentId) || destinationDepartmentId <= 0)) {
+    throw httpError(400, "Die Zielabteilung ist ungültig.", "STAFF_ASSIGNMENT_DEPARTMENT_INVALID");
+  }
+  return {
+    employeeNumber,
+    destinationLocationId,
+    destinationDepartmentId,
+    dateFrom,
+    dateTo,
+    allDay,
+    startTime,
+    endTime,
+    note,
+  };
+}
+
+function staffAssignmentRevision(input) {
+  const revision = Number(input);
+  if (!Number.isSafeInteger(revision) || revision < 1) {
+    throw httpError(400, "Bitte den aktuellen Bearbeitungsstand neu laden.", "STAFF_ASSIGNMENT_REVISION_REQUIRED");
+  }
+  return revision;
+}
+
+function staffAssignmentCanDelegate(session) {
+  return isLocalSystemSession(session)
+    || ["manager", "hr", "admin", "developer"].includes(session?.role);
+}
+
+function staffAssignmentDelegateInScope(session, target) {
+  if (isLocalSystemSession(session) || ["hr", "admin", "developer"].includes(session?.role)) return true;
+  return session?.role === "manager" && staffAssignmentEmployeeInScope(session, {
+    home_location_id: target.homeLocationId,
+    preferred_department_id: target.preferredDepartmentId,
+  });
+}
+
+function staffAssignmentVisibleToSession(session, assignment, employee) {
+  if (sessionHasGlobalScope(session)) return true;
+  const homeLocationId = String(assignment?.homeLocationId || "");
+  const destinationLocationId = String(assignment?.destinationLocationId || "");
+  const employeeDepartmentId = Number(
+    employee?.preferred_department_id ?? employee?.preferredDepartmentId ?? 0,
+  ) || null;
+  const destinationDepartmentId = Number(assignment?.destinationDepartmentId || 0) || null;
+  return (session.scopes || []).some((scope) => {
+    const scopeLocationId = String(scope.locationId || "");
+    const scopeDepartmentId = Number(scope.departmentId || 0) || null;
+    const outgoingVisible = scopeLocationId === homeLocationId
+      && (!scopeDepartmentId || scopeDepartmentId === employeeDepartmentId);
+    const incomingVisible = scopeLocationId === destinationLocationId
+      && (!scopeDepartmentId || scopeDepartmentId === destinationDepartmentId);
+    return outgoingVisible || incomingVisible;
+  });
+}
+
+async function staffAssignmentDelegates(session, locationId = "") {
+  if (!staffAssignmentCanDelegate(session)) return [];
+  const normalizedLocationId = String(locationId || "").trim();
+  const users = await portalUsersForAdmin();
+  return users
+    .filter((user) => user.configured && user.active && user.role === "department_manager")
+    .filter((user) => staffAssignmentDelegateInScope(session, user))
+    .filter((user) => !normalizedLocationId || String(user.homeLocationId) === normalizedLocationId)
+    .map((user) => ({
+      employeeNumber: user.employeeNumber,
+      fullName: user.fullName,
+      homeLocationId: user.homeLocationId,
+      preferredDepartmentId: user.preferredDepartmentId,
+      enabled: effectivePortalPermissionState(
+        user.employeeNumber,
+        user.role,
+        user.rolePermissions,
+        user.grantedPermissions,
+        user.deniedPermissions,
+        user.amuLocalAccessMode,
+      ).effectivePermissions.includes(STAFF_ASSIGNMENTS_MANAGE_PERMISSION),
+      denied: user.deniedPermissions.includes(STAFF_ASSIGNMENTS_MANAGE_PERMISSION),
+    }));
+}
+
+app.get("/api/portal/v1/staff-assignments/delegates", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request);
+  const locationId = String(request.query?.locationId || "").trim();
+  if (locationId) await validateActiveLocationExists(locationId);
+  if (locationId && !sessionHasGlobalScope(session)) {
+    assertSessionContextScope(session, { locationId });
+  }
+  response.json({ delegates: await staffAssignmentDelegates(session, locationId) });
+});
+
+app.put("/api/portal/v1/staff-assignments/delegates/:employeeNumber", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request, { csrf: true });
+  if (!staffAssignmentCanDelegate(session)) {
+    throw httpError(403, "Dieses Recht darf nur durch Filialleitung oder PL+ vergeben werden.", "STAFF_ASSIGNMENT_DELEGATION_DENIED");
+  }
+  if (typeof request.body?.enabled !== "boolean") {
+    throw httpError(400, "Bitte den gewünschten Berechtigungsstatus angeben.", "STAFF_ASSIGNMENT_DELEGATION_INVALID");
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const target = (await portalUsersForAdmin()).find((user) => user.employeeNumber === employeeNumber);
+  if (!target?.configured || !target.active || target.role !== "department_manager") {
+    throw httpError(404, "Die aktive Abteilungsleitung wurde nicht gefunden.", "STAFF_ASSIGNMENT_DELEGATE_NOT_FOUND");
+  }
+  if (!staffAssignmentDelegateInScope(session, target)) {
+    throw httpError(403, "Die Abteilungsleitung gehört nicht zum eigenen Verantwortungsbereich.", "STAFF_ASSIGNMENT_SCOPE_DENIED");
+  }
+  const requestedLocationId = String(request.body?.locationId || "").trim();
+  if (requestedLocationId) await validateActiveLocationExists(requestedLocationId);
+  if (requestedLocationId && String(target.homeLocationId) !== requestedLocationId) {
+    throw httpError(
+      403,
+      "Die Abteilungsleitung gehört nicht zur ausgewählten Filiale.",
+      "STAFF_ASSIGNMENT_SCOPE_DENIED",
+    );
+  }
+  const enabled = request.body.enabled;
+  const permissionDenied = target.deniedPermissions.includes(STAFF_ASSIGNMENTS_MANAGE_PERMISSION);
+  if (enabled && permissionDenied) {
+    throw httpError(
+      409,
+      "Das Recht wurde durch eine übergeordnete Rechteverwaltung ausdrücklich gesperrt und kann hier nicht aktiviert werden.",
+      "STAFF_ASSIGNMENT_PERMISSION_DENIED",
+    );
+  }
+  const alreadyGranted = target.grantedPermissions.includes(STAFF_ASSIGNMENTS_MANAGE_PERMISSION);
+  const actorId = portalActorId(session);
+  await organizationPersonnelRepository.transaction(async (organization) => {
+    if (enabled && !alreadyGranted) {
+      await organization.insertPermissionGrant(
+        employeeNumber,
+        STAFF_ASSIGNMENTS_MANAGE_PERMISSION,
+        actorId,
+      );
+    } else if (!enabled && alreadyGranted) {
+      await organization.deletePermissionGrant(employeeNumber, STAFF_ASSIGNMENTS_MANAGE_PERMISSION);
+    }
+    await organization.revokePortalSessions(employeeNumber);
+    await organization.revokeMobileSessions(employeeNumber, "staff_assignment_permission_changed");
+    await organization.insertAudit(
+      actorId,
+      enabled ? "staff-assignment.permission.grant" : "staff-assignment.permission.revoke",
+      "portal_user",
+      employeeNumber,
+      JSON.stringify({ permission: STAFF_ASSIGNMENTS_MANAGE_PERMISSION, enabled }),
+    );
+  }, { isolation: "serializable" });
+  const delegate = (await staffAssignmentDelegates(session, requestedLocationId))
+    .find((entry) => entry.employeeNumber === employeeNumber);
+  response.json({ delegate });
+});
+
+app.get("/api/portal/v1/staff-assignments", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request);
+  const status = String(request.query?.status || "active").trim();
+  if (!["active", "cancelled", "all"].includes(status)) {
+    throw httpError(400, "Der Statusfilter ist ungültig.", "STAFF_ASSIGNMENT_STATUS_INVALID");
+  }
+  const dateFrom = String(request.query?.dateFrom || request.query?.from || "").trim();
+  const dateTo = String(request.query?.dateTo || request.query?.to || "").trim();
+  if ((dateFrom && !isIsoDate(dateFrom)) || (dateTo && !isIsoDate(dateTo))
+    || (dateFrom && dateTo && dateTo < dateFrom)) {
+    throw httpError(400, "Der Zeitraumfilter ist ungültig.", "STAFF_ASSIGNMENT_DATE_FILTER_INVALID");
+  }
+  const assignedLocationIds = sessionHasGlobalScope(session)
+    ? []
+    : [...new Set((session.scopes || []).map((scope) => String(scope.locationId || "")).filter(Boolean))];
+  const requestedLocationId = String(request.query?.locationId || "").trim();
+  if (requestedLocationId) await validateActiveLocationExists(requestedLocationId);
+  if (requestedLocationId && !sessionHasGlobalScope(session)
+    && !assignedLocationIds.includes(requestedLocationId)) {
+    throw httpError(403, "Diese Filiale ist dem Zugang nicht zugewiesen.", "STAFF_ASSIGNMENT_SCOPE_DENIED");
+  }
+  const scopeLocationIds = requestedLocationId ? [requestedLocationId] : assignedLocationIds;
+  const allCandidates = sqliteEmployeeLocationLendingOperations.activeCandidates();
+  const candidateLookup = new Map(allCandidates.map((employee) => [employee.employeeNumber, employee]));
+  const candidates = allCandidates
+    .filter((employee) => staffAssignmentEmployeeInScope(session, employee))
+    .filter((employee) => !requestedLocationId || employee.homeLocationId === requestedLocationId);
+  const assignments = sqliteEmployeeLocationLendingOperations.list({
+    status: status === "all" ? "" : status,
+    dateFrom,
+    dateTo,
+    locationIds: scopeLocationIds,
+  })
+    .filter((assignment) => staffAssignmentVisibleToSession(
+      session,
+      assignment,
+      candidateLookup.get(assignment.employeeNumber)
+        || sqliteEmployeeLocationLendingOperations.employee(assignment.employeeNumber),
+    ))
+    .map((assignment) => ({
+      ...assignment,
+      canEdit: candidates.some((employee) => employee.employeeNumber === assignment.employeeNumber),
+    }));
+  response.json({
+    assignments,
+    candidates,
+    locations: sqliteEmployeeLocationLendingOperations.activeLocations(),
+    departments: sqliteEmployeeLocationLendingOperations.activeDepartments(),
+    delegates: await staffAssignmentDelegates(session, requestedLocationId),
+    canManage: true,
+  });
+});
+
+app.post("/api/portal/v1/staff-assignments", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request, { csrf: true });
+  const input = normalizeStaffAssignmentInput(request.body || {});
+  assertStaffAssignmentEmployeeScope(session, input.employeeNumber);
+  let assignment;
+  try {
+    assignment = sqliteEmployeeLocationLendingOperations.create({
+      ...input,
+      actor: portalActorId(session),
+    });
+  } catch (error) {
+    throw staffAssignmentHttpError(error);
+  }
+  auditPortal(portalActorId(session), "staff-assignment.create", "staff_assignment", assignment.id, JSON.stringify({
+    employeeNumber: assignment.employeeNumber,
+    homeLocationId: assignment.homeLocationId,
+    destinationLocationId: assignment.destinationLocationId,
+    dateFrom: assignment.dateFrom,
+    dateTo: assignment.dateTo,
+    allDay: assignment.allDay,
+  }));
+  response.status(201).json({ assignment });
+});
+
+app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request, { csrf: true });
+  const existing = sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId);
+  if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
+  assertStaffAssignmentEmployeeScope(session, existing.employeeNumber);
+  const input = normalizeStaffAssignmentInput(request.body || {}, existing);
+  const revision = staffAssignmentRevision(request.body?.revision);
+  let assignment;
+  try {
+    assignment = sqliteEmployeeLocationLendingOperations.update(existing.id, {
+      ...input,
+      revision,
+      actor: portalActorId(session),
+    });
+  } catch (error) {
+    throw staffAssignmentHttpError(error);
+  }
+  auditPortal(portalActorId(session), "staff-assignment.update", "staff_assignment", assignment.id, JSON.stringify({
+    employeeNumber: assignment.employeeNumber,
+    destinationLocationId: assignment.destinationLocationId,
+    dateFrom: assignment.dateFrom,
+    dateTo: assignment.dateTo,
+    allDay: assignment.allDay,
+    revision: assignment.revision,
+  }));
+  response.json({ assignment });
+});
+
+app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request, { csrf: true });
+  const existing = sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId);
+  if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
+  assertStaffAssignmentEmployeeScope(session, existing.employeeNumber);
+  const revision = staffAssignmentRevision(request.body?.revision);
+  let assignment;
+  try {
+    assignment = sqliteEmployeeLocationLendingOperations.cancel(existing.id, {
+      revision,
+      actor: portalActorId(session),
+    });
+  } catch (error) {
+    throw staffAssignmentHttpError(error);
+  }
+  auditPortal(portalActorId(session), "staff-assignment.cancel", "staff_assignment", assignment.id, JSON.stringify({
+    employeeNumber: assignment.employeeNumber,
+    revision: assignment.revision,
+  }));
+  response.json({ assignment });
+});
+
 function branchOrderHttpError(error) {
   if (!(error instanceof BranchOrderError)) return error;
   return httpError(error.status || 400, error.message, error.code || "BRANCH_ORDER_INVALID");
@@ -29789,6 +30581,16 @@ function branchOrderSenderEmail(session, locationId) {
   return `fil${safeLocationId}-noreply@grabenplaner.eu`;
 }
 
+function branchOrderDraftScope(context, employeeNumberInput) {
+  const { session } = context;
+  return {
+    ownerKind: session.sessionKind === "organization" ? "organization" : "employee",
+    ownerAccountId: session.accountId || `employee:${session.employeeNumber}`,
+    updatedByLogin: session.loginName || session.actorId || `employee:${session.employeeNumber}`,
+    selectedEmployeeNumber: context.selectedEmployeeNumber || String(employeeNumberInput || "").trim(),
+  };
+}
+
 async function branchOrderManagementLocation(session, input = {}) {
   if (session.sessionKind === "organization" || session.isEmployee === false) {
     throw httpError(
@@ -29797,7 +30599,7 @@ async function branchOrderManagementLocation(session, input = {}) {
       "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
     );
   }
-  if (!isLocalSystemSession(session) && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
+  if (!isLocalSystemSession(session) && !HR_DECISION_PORTAL_ROLES.has(session.role)) {
     throw httpError(
       403,
       "Die Filialbestell-Einstellungen stehen ausschließlich Personalleitung und höheren Rollen zur Verfügung.",
@@ -29865,6 +30667,63 @@ app.get("/api/portal/v1/branch-orders/catalog", async (request, response) => {
   }
 });
 
+app.get("/api/portal/v1/branch-orders/draft", async (request, response) => {
+  const context = requireBranchOrderSubmissionSession(request);
+  const scope = branchOrderDraftScope(context, request.query?.employeeNumber);
+  try {
+    response.json({
+      locationId: context.locationId,
+      draft: sqliteBranchOrderOperations.draftSnapshot(context.locationId, scope),
+    });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
+app.put("/api/portal/v1/branch-orders/draft", async (request, response) => {
+  const context = requireBranchOrderSubmissionSession(request);
+  assertPortalCsrf(request);
+  const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
+  const weekStart = currentWeekStart();
+  try {
+    const draft = sqliteBranchOrderOperations.saveDraft(context.locationId, {
+      ...scope,
+      items: request.body?.items,
+      expectedRevision: request.body?.expectedRevision,
+      weekStartAtSave: weekStart,
+    });
+    auditPortal(context.session.actorId, "branch-order.draft.save", "branch_order_draft", draft.id, JSON.stringify({
+      locationId: context.locationId,
+      selectedEmployeeNumber: draft.selectedEmployeeNumber,
+      revision: draft.revision,
+      lineCount: draft.items.length,
+    }));
+    response.json({ locationId: context.locationId, draft });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
+app.delete("/api/portal/v1/branch-orders/draft", async (request, response) => {
+  const context = requireBranchOrderSubmissionSession(request);
+  assertPortalCsrf(request);
+  const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
+  try {
+    const deleted = sqliteBranchOrderOperations.deleteDraft(context.locationId, {
+      ...scope,
+      expectedRevision: request.body?.expectedRevision,
+    });
+    auditPortal(context.session.actorId, "branch-order.draft.delete", "branch_order_draft", scope.selectedEmployeeNumber, JSON.stringify({
+      locationId: context.locationId,
+      selectedEmployeeNumber: scope.selectedEmployeeNumber,
+      deleted,
+    }));
+    response.json({ locationId: context.locationId, deleted });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
 app.post("/api/portal/v1/branch-orders", async (request, response) => {
   const context = requireBranchOrderSubmissionSession(request);
   const { session, locationId } = context;
@@ -29881,6 +30740,8 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
       submittedAt: new Date().toISOString(),
       submittedByAccountId: session.accountId || `employee:${session.employeeNumber}`,
       submittedByLogin: session.loginName,
+      draftOwnerKind: session.sessionKind === "organization" ? "organization" : "employee",
+      draftRevision: request.body?.draftRevision ?? 0,
       senderEmail,
     });
   } catch (error) {
@@ -29892,6 +30753,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
     selectedEmployeeNumber: order.employee.employeeNumber,
     lineCount: order.lines.length,
     deliveryCount: order.deliveries.length,
+    draftConsumed: order.draftConsumed,
   }));
   for (const delivery of order.deliveries) {
     try {
@@ -29924,6 +30786,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
       submittedAt: order.submittedAt,
       status: deliverySummary.status,
       pdf: order.pdf,
+      draftConsumed: order.draftConsumed,
     },
     delivery: deliverySummary,
   });
@@ -33971,6 +34834,11 @@ async function createOwnSicknessCase(session, body = {}) {
     { asOfDate: today },
   );
   const effectiveContext = staffingRisk.contexts?.[0] || context;
+  const responsibilityContexts = await sicknessResponsibilityContexts(
+    session.employeeNumber,
+    startDate,
+    expectedEnd,
+  );
   const policy = getAmuPolicy();
   const deadlines = sicknessDeadlineState({ startAt: startDate, asOf: new Date(), localDays: policy.localWarningDays, hrDays: policy.hrWarningDays });
   const reportedAt = new Date().toISOString();
@@ -33992,6 +34860,7 @@ async function createOwnSicknessCase(session, body = {}) {
     localDeadlineDate: deadlines.localDeadlineDate,
     hrDeadlineDate: deadlines.hrDeadlineDate,
     staffingRisk,
+    responsibilityContexts,
   }, { hasAum: false, now: new Date(reportedAt) });
   const caseId = await sicknessAmuManagementRepository.transaction(async (repository) => {
     const inserted = await repository.insertSicknessCase({
@@ -38553,6 +39422,11 @@ async function createOwnAmuReport(session, { fields, documents }) {
       { asOfDate: viennaTodayIso() },
     );
     const preparedEffectiveContext = preparedStaffingRisk.contexts?.[0] || reportContext;
+    const preparedResponsibilityContexts = await sicknessResponsibilityContexts(
+      session.employeeNumber,
+      incapacityFrom,
+      incapacityTo,
+    );
     const preparedReportedAt = new Date().toISOString();
     const preparedSicknessRetentionDays = sicknessCaseRetentionDays();
     const preparedPurgeAfter = addDays(
@@ -38581,6 +39455,7 @@ async function createOwnAmuReport(session, { fields, documents }) {
       localDeadlineDate: preparedDeadlines.localDeadlineDate,
       hrDeadlineDate: preparedDeadlines.hrDeadlineDate,
       staffingRisk: preparedStaffingRisk,
+      responsibilityContexts: preparedResponsibilityContexts,
     }, { hasAum: true, now: new Date(preparedReportedAt) });
     const transactionOutcome = await sicknessAmuManagementRepository.transaction(async (repository) => {
       if (linkedSicknessCase) {
@@ -39275,19 +40150,7 @@ app.post("/api/portal/v1/me/time-off-check", async (request, response) => {
 
 app.get("/api/portal/v1/me/time-off-slots", async (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
-  const date = String(request.query.date || "");
-  if (!isIsoDate(date)) throw httpError(400, "Bitte zuerst ein gültiges Datum auswählen.");
-  const context = await absenceEmployeeRequestContext(session.employeeNumber, date);
-  const settings = await settingsForLocation(context.locationId);
-  const hours = await operatingHours(date, settings);
-  const block = getGlobalDayBlockForDate(date, context.locationId);
-  if (!hours || block) {
-    response.json({ date, closed: true, reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.", startTimes: [], endTimes: [] });
-    return;
-  }
-  const values = [];
-  for (let minute = timeToMinutes(hours.start); minute <= timeToMinutes(hours.end); minute += 15) values.push(minutesToTime(minute));
-  response.json({ date, closed: false, start: hours.start, end: hours.end, startTimes: values.slice(0, -1), endTimes: values.slice(1) });
+  response.json(await ownTimeOffSlots(session.employeeNumber, String(request.query.date || "")));
 });
 
 app.get("/api/portal/v1/me/time-off-requests", async (request, response) => {
@@ -39507,8 +40370,14 @@ async function sessionCanReadAbsenceEntry(session, entry) {
     String(entry.employee_number || ""),
   ) || {};
   const locationId = String(entry.location_id || entry.scoped_location_id || employee.home_location_id || "");
-  const departmentId = Number(entry.preferred_department_id || employee.preferred_department_id || 0) || null;
-  return sessionMatchesOrganizationalContext(session, locationId, departmentId);
+  const departmentId = Number(
+    entry.review_department_id || entry.preferred_department_id || employee.preferred_department_id || 0,
+  ) || null;
+  if (sessionMatchesOrganizationalContext(session, locationId, departmentId)) return true;
+  const originLocationId = isTimeOff ? String(entry.origin_location_id || "") : "";
+  return Boolean(originLocationId
+    && originLocationId !== locationId
+    && sessionMatchesOrganizationalContext(session, originLocationId, null));
 }
 
 async function absenceEntryCapabilities(session, entry) {
@@ -39518,7 +40387,9 @@ async function absenceEntryCapabilities(session, entry) {
     String(entry.employee_number || ""),
   ) || {};
   const locationId = String(entry.location_id || entry.scoped_location_id || employee.home_location_id || "");
-  const departmentId = Number(entry.preferred_department_id || employee.preferred_department_id || 0) || null;
+  const departmentId = Number(
+    entry.review_department_id || entry.preferred_department_id || employee.preferred_department_id || 0,
+  ) || null;
   const canManage = sessionCanManageLocalContext(session, { locationId, departmentId, permission });
   const status = String(entry.status || "");
   return {
@@ -39566,6 +40437,7 @@ app.get("/api/portal/v1/absence-requests", async (request, response) => {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || Number(b.id) - Number(a.id));
   const actionable = requests.filter((entry) => {
     if (!["pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) return false;
+    if (entry.capabilities?.decide !== true) return false;
     if (entry.approval_stage === "hr") return sessionCanApproveHr(session);
     return session.role !== "hr" || ["developer", "admin"].includes(session.role)
       || isLocalSystemSession(session);
@@ -39605,6 +40477,12 @@ async function finalizeVacationRequest(
 ) {
   const preparation = prepared || await prepareVacationRequestFinalization(entry);
   const vacation = preparation.vacation;
+  await assertNoVacationLendingOverlap(
+    vacation.employeeNumber,
+    vacation.dateFrom,
+    vacation.dateTo,
+    repository,
+  );
   const groupId = entry.vacation_group_id || createVacationGroupId();
   await insertVacationEntries(vacation, groupId, repository);
   await repository.finalizeVacationRequest({
@@ -39617,6 +40495,14 @@ async function finalizeVacationRequest(
 }
 
 async function prepareTimeOffRequestFinalization(entry) {
+  const responsibility = {
+    mixed: false,
+    lent: Boolean(entry.lending_id),
+    locationId: entry.location_id,
+    originLocationId: entry.origin_location_id || entry.location_id,
+    departmentId: Number(entry.review_department_id || 0) || null,
+    lendingId: entry.lending_id || null,
+  };
   const check = await evaluateTimeOffRequest(entry.employee_number, {
     date: entry.date_from || entry.request_date,
     dateFrom: entry.date_from || entry.request_date,
@@ -39625,8 +40511,8 @@ async function prepareTimeOffRequestFinalization(entry) {
     startTime: entry.start_time,
     endTime: entry.end_time,
     excludeRequestId: entry.id,
-  });
-  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  }, responsibility);
+  if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
   return {
     check,
     mutation: await prepareApprovedTimeOffMutation(entry),
@@ -39670,6 +40556,14 @@ async function prepareTimeOffChangeFinalization(entry) {
   let check = null;
   let replacementMutation = null;
   if (entry.request_type === "change") {
+    const responsibility = {
+      mixed: false,
+      lent: Boolean(entry.lending_id),
+      locationId: entry.location_id,
+      originLocationId: entry.origin_location_id || entry.location_id,
+      departmentId: Number(entry.review_department_id || 0) || null,
+      lendingId: entry.lending_id || null,
+    };
     check = await evaluateTimeOffRequest(entry.employee_number, {
       date: entry.requested_date_from,
       dateFrom: entry.requested_date_from,
@@ -39678,12 +40572,16 @@ async function prepareTimeOffChangeFinalization(entry) {
       startTime: entry.requested_start_time,
       endTime: entry.requested_end_time,
       excludeRequestId: original.id,
-    });
-    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+    }, responsibility);
+    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     const allDay = Boolean(entry.requested_all_day)
       || entry.requested_date_to !== entry.requested_date_from;
     replacementMutation = await prepareApprovedTimeOffMutation({
       ...original,
+      location_id: responsibility.locationId,
+      origin_location_id: responsibility.originLocationId,
+      review_department_id: responsibility.departmentId,
+      lending_id: responsibility.lendingId,
       request_date: entry.requested_date_from,
       date_from: entry.requested_date_from,
       date_to: entry.requested_date_to,
@@ -39728,6 +40626,10 @@ async function finalizeTimeOffChangeRequest(
     const allDay = Boolean(entry.requested_all_day) || entry.requested_date_to !== entry.requested_date_from;
     await repository.replaceOriginalTimeOff({
       id: Number(original.id),
+      locationId: entry.location_id,
+      originLocationId: entry.origin_location_id || entry.location_id,
+      reviewDepartmentId: Number(entry.review_department_id || 0) || null,
+      lendingId: entry.lending_id || null,
       dateFrom: entry.requested_date_from,
       dateTo: entry.requested_date_to,
       allDay: allDay ? 1 : 0,
@@ -39794,6 +40696,14 @@ async function finalizeVacationChangeRequest(
 ) {
   const preparation = prepared || await prepareVacationChangeFinalization(entry);
   const { current, replacement } = preparation;
+  if (replacement) {
+    await assertNoVacationLendingOverlap(
+      replacement.employeeNumber,
+      replacement.dateFrom,
+      replacement.dateTo,
+      repository,
+    );
+  }
   await deleteVacationGroup(
     entry.vacation_group_id,
     actor,
@@ -39911,9 +40821,20 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
       endTime,
       excludeRequestId: preflightEntry.id,
     });
-    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
+    const responsibility = await assertTimeOffResponsibility(preflightEntry.employee_number, {
+      dateFrom,
+      dateTo,
+      allDay,
+      startTime,
+      endTime,
+    });
     const replacement = {
       ...preflightEntry,
+      location_id: responsibility.locationId,
+      origin_location_id: responsibility.originLocationId,
+      review_department_id: responsibility.departmentId,
+      lending_id: responsibility.lendingId,
       request_date: dateFrom,
       date_from: dateFrom,
       date_to: dateTo,
@@ -39929,6 +40850,7 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
       startTime,
       endTime,
       check,
+      responsibility,
       restoreMutation: await prepareRestoreApprovedTimeOffMutation(preflightEntry),
       finalization: {
         check,
@@ -39941,8 +40863,10 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
     && preflightEntry.status === "approved"
     ? await prepareRestoreApprovedTimeOffMutation(preflightEntry)
     : null;
-  const outcome = await absenceManagementRepository.transaction(async (repository) => {
-    const requestMethod = repository[`requestById${repositoryKind}`];
+  let outcome;
+  try {
+    outcome = await absenceManagementRepository.transaction(async (repository) => {
+      const requestMethod = repository[`requestById${repositoryKind}`];
     let entry = await requestMethod(Number(request.params.id));
     if (!entry) throw httpError(404, "Der Antrag wurde nicht gefunden.");
     if (!entry.location_id) {
@@ -40097,6 +41021,10 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
         );
         await repository.replaceOriginalTimeOff({
           id: Number(entry.id),
+          locationId: directTimeOffChange.responsibility.locationId,
+          originLocationId: directTimeOffChange.responsibility.originLocationId,
+          reviewDepartmentId: directTimeOffChange.responsibility.departmentId,
+          lendingId: directTimeOffChange.responsibility.lendingId,
           dateFrom,
           dateTo,
           allDay: allDay ? 1 : 0,
@@ -40205,12 +41133,15 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
       updated.status,
       session.employeeNumber,
     );
-    return {
-      ok: true,
-      request: { ...updated, status: publicRequestStatus(updated.status) },
-      ...result,
-    };
-  });
+      return {
+        ok: true,
+        request: { ...updated, status: publicRequestStatus(updated.status) },
+        ...result,
+      };
+    });
+  } catch (error) {
+    throw staffAssignmentAbsenceConstraintError(error);
+  }
   response.json(outcome);
 });
 
@@ -40231,57 +41162,62 @@ app.put("/api/portal/v1/time-off-requests/:id/decision", async (request, respons
   const preparation = decision === "approved"
     ? await prepareTimeOffRequestFinalization(entry)
     : null;
-  const optionId = await absenceManagementRepository.transaction(async (repository) => {
-    let approvedOptionId = null;
-    if (decision === "approved") {
-      await repository.transitionTimeOffLocalApproved({
-        id: Number(entry.id),
-        note: "",
-        actor: session.employeeNumber,
-      });
-      approvedOptionId = (
-        await finalizeTimeOffRequest(
-          entry,
-          session.employeeNumber,
-          "",
-          repository,
-          preparation,
-        )
-      ).optionId;
-    } else {
-      await repository.transitionTimeOffReject({
-        id: Number(entry.id),
-        note: "",
-        actor: session.employeeNumber,
-      });
-    }
-    await recordRequestDecision(
-      "time_off",
-      entry.id,
-      "local",
-      decision === "approved" ? "approve" : "reject",
-      session.employeeNumber,
-      "",
-      repository,
-    );
-    await auditAbsence(
-      repository,
-      session.employeeNumber,
-      `time_off.request.${decision}`,
-      "time_off_request",
-      String(entry.id),
-    );
-    const updated = await repository.requestByIdTimeOff(Number(entry.id));
-    await resolveAbsenceRequestReviewNotifications(repository, "time_off", entry.id);
-    await notifyAbsenceRequestDecision(
-      repository,
-      updated,
-      "time_off",
-      updated.status,
-      session.employeeNumber,
-    );
-    return approvedOptionId;
-  });
+  let optionId;
+  try {
+    optionId = await absenceManagementRepository.transaction(async (repository) => {
+      let approvedOptionId = null;
+      if (decision === "approved") {
+        await repository.transitionTimeOffLocalApproved({
+          id: Number(entry.id),
+          note: "",
+          actor: session.employeeNumber,
+        });
+        approvedOptionId = (
+          await finalizeTimeOffRequest(
+            entry,
+            session.employeeNumber,
+            "",
+            repository,
+            preparation,
+          )
+        ).optionId;
+      } else {
+        await repository.transitionTimeOffReject({
+          id: Number(entry.id),
+          note: "",
+          actor: session.employeeNumber,
+        });
+      }
+      await recordRequestDecision(
+        "time_off",
+        entry.id,
+        "local",
+        decision === "approved" ? "approve" : "reject",
+        session.employeeNumber,
+        "",
+        repository,
+      );
+      await auditAbsence(
+        repository,
+        session.employeeNumber,
+        `time_off.request.${decision}`,
+        "time_off_request",
+        String(entry.id),
+      );
+      const updated = await repository.requestByIdTimeOff(Number(entry.id));
+      await resolveAbsenceRequestReviewNotifications(repository, "time_off", entry.id);
+      await notifyAbsenceRequestDecision(
+        repository,
+        updated,
+        "time_off",
+        updated.status,
+        session.employeeNumber,
+      );
+      return approvedOptionId;
+    });
+  } catch (error) {
+    throw staffAssignmentAbsenceConstraintError(error);
+  }
   response.json({ ok: true, id: entry.id, status: decision, optionId });
 });
 
@@ -40505,6 +41441,12 @@ async function createOwnVacationRequest(session, body = {}) {
     vacation.dateFrom,
   );
   return absenceManagementRepository.transaction(async (repository) => {
+    await assertNoVacationLendingOverlap(
+      session.employeeNumber,
+      vacation.dateFrom,
+      vacation.dateTo,
+      repository,
+    );
     const overlapping = await repository.vacationOverlap({
       employeeNumber: session.employeeNumber,
       excludeId: 0,
@@ -40574,6 +41516,12 @@ async function updateOwnVacationRequest(session, requestId, body = {}) {
   const availability = await evaluateVacationRequest(session.employeeNumber, { dateFrom, dateTo, excludeGroupId: `request-${entry.id}` });
   if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
   return absenceManagementRepository.transaction(async (repository) => {
+    await assertNoVacationLendingOverlap(
+      session.employeeNumber,
+      dateFrom,
+      dateTo,
+      repository,
+    );
     const overlapping = await repository.vacationOverlap({
       employeeNumber: session.employeeNumber,
       excludeId: Number(entry.id),
@@ -40655,6 +41603,14 @@ async function createOwnVacationChangeRequest(session, body = {}) {
     })) {
       throw httpError(409, "Fuer diesen Urlaub besteht bereits ein offener Aenderungs- oder Stornoantrag.", "VACATION_CHANGE_EXISTS");
     }
+    if (requestType === "change") {
+      await assertNoVacationLendingOverlap(
+        session.employeeNumber,
+        requestedFrom,
+        requestedTo,
+        repository,
+      );
+    }
     const result = await repository.insertVacationChange({
       employeeNumber: session.employeeNumber,
       groupId,
@@ -40713,38 +41669,106 @@ async function ownTimeOffRequests(employeeNumber) {
 
 async function ownTimeOffSlots(employeeNumber, date) {
   if (!isIsoDate(date)) throw httpError(400, "Bitte zuerst ein gueltiges Datum auswaehlen.", "TIME_OFF_DATE_INVALID");
-  const context = await absenceEmployeeRequestContext(employeeNumber, date);
-  const hours = await operatingHours(date, await settingsForLocation(context.locationId));
-  const block = getGlobalDayBlockForDate(date, context.locationId);
-  if (!hours || block) {
+  const home = await absenceEmployeeRequestContext(employeeNumber, date);
+  const assignments = await activeEmployeeLendingsForRange(employeeNumber, date, date);
+  const allDayAssignment = assignments.find((assignment) => Boolean(assignment.all_day));
+  const slotMap = new Map();
+  const warnings = [];
+
+  const addContextSlots = async ({
+    locationId,
+    departmentId = null,
+    windowStart = null,
+    windowEnd = null,
+    temporaryLocationAssignment = false,
+    assignmentId = null,
+  }) => {
+    const hours = await operatingHours(date, await settingsForLocation(locationId));
+    const block = getGlobalDayBlockForDate(date, locationId);
+    if (!hours || block) {
+      warnings.push({
+        locationId,
+        departmentId,
+        temporaryLocationAssignment,
+        reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.",
+      });
+      return;
+    }
+    const start = windowStart && windowStart > hours.start ? windowStart : hours.start;
+    const end = windowEnd && windowEnd < hours.end ? windowEnd : hours.end;
+    if (!isTime(start) || !isTime(end) || end <= start) return;
+    for (let minute = timeToMinutes(start); minute + 15 <= timeToMinutes(end); minute += 15) {
+      const startTime = minutesToTime(minute);
+      const endTime = minutesToTime(minute + 15);
+      slotMap.set(`${startTime}|${endTime}`, {
+        startTime,
+        endTime,
+        allowed: true,
+        reason: "",
+        locationId,
+        departmentId,
+        temporaryLocationAssignment,
+        assignmentId,
+      });
+    }
+  };
+
+  if (allDayAssignment) {
+    await addContextSlots({
+      locationId: allDayAssignment.destination_location_id,
+      departmentId: Number(allDayAssignment.destination_department_id || 0) || null,
+      temporaryLocationAssignment: true,
+      assignmentId: allDayAssignment.id,
+    });
+  } else {
+    await addContextSlots({ locationId: home.locationId, departmentId: home.departmentId });
+    for (const assignment of assignments.filter((entry) => !Boolean(entry.all_day))) {
+      for (const [key, slot] of slotMap) {
+        if (timeRangesOverlap(slot.startTime, slot.endTime, assignment.start_time, assignment.end_time)) {
+          slotMap.delete(key);
+        }
+      }
+      await addContextSlots({
+        locationId: assignment.destination_location_id,
+        departmentId: Number(assignment.destination_department_id || 0) || null,
+        windowStart: assignment.start_time,
+        windowEnd: assignment.end_time,
+        temporaryLocationAssignment: true,
+        assignmentId: assignment.id,
+      });
+    }
+  }
+
+  const slots = [...slotMap.values()].sort((left, right) => (
+    left.startTime.localeCompare(right.startTime)
+      || left.endTime.localeCompare(right.endTime)
+  ));
+  const startTimes = [...new Set(slots.map((slot) => slot.startTime))];
+  const endTimes = [...new Set(slots.map((slot) => slot.endTime))];
+  if (!slots.length) {
     return {
       date,
       closed: true,
-      reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.",
+      reason: warnings[0]?.reason || "An diesem Tag ist die Filiale geschlossen.",
       openingTime: null,
       closingTime: null,
       slots: [],
       startTimes: [],
       endTimes: [],
+      warnings,
     };
   }
-  const values = [];
-  for (let minute = timeToMinutes(hours.start); minute <= timeToMinutes(hours.end); minute += 15) values.push(minutesToTime(minute));
   return {
     date,
     closed: false,
-    start: hours.start,
-    end: hours.end,
-    openingTime: hours.start,
-    closingTime: hours.end,
-    startTimes: values.slice(0, -1),
-    endTimes: values.slice(1),
-    slots: values.slice(0, -1).map((startTime, index) => ({
-      startTime,
-      endTime: values[index + 1],
-      allowed: true,
-      reason: "",
-    })),
+    start: startTimes[0],
+    end: endTimes.at(-1),
+    openingTime: startTimes[0],
+    closingTime: endTimes.at(-1),
+    startTimes,
+    endTimes,
+    slots,
+    warnings,
   };
 }
 
@@ -40762,17 +41786,22 @@ function normalizedTimeOffInput(body = {}) {
 }
 
 async function createOwnTimeOffRequest(session, body = {}) {
-  const check = await evaluateTimeOffRequest(session.employeeNumber, body);
-  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
   const input = normalizedTimeOffInput(body);
-  const context = await absenceEmployeeRequestContext(
-    session.employeeNumber,
-    input.dateFrom,
-  );
   return absenceManagementRepository.transaction(async (repository) => {
+    const context = await assertTimeOffResponsibility(session.employeeNumber, input, repository);
+    const check = await evaluateTimeOffRequest(
+      session.employeeNumber,
+      input,
+      context,
+      repository,
+    );
+    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     const result = await repository.insertTimeOffRequest({
       employeeNumber: session.employeeNumber,
       locationId: context.locationId,
+      originLocationId: context.originLocationId,
+      reviewDepartmentId: context.departmentId,
+      lendingId: context.lendingId,
       requestDate: input.dateFrom,
       dateFrom: input.dateFrom,
       dateTo: input.dateTo,
@@ -40789,6 +41818,9 @@ async function createOwnTimeOffRequest(session, body = {}) {
       id,
       employee_number: session.employeeNumber,
       location_id: context.locationId,
+      origin_location_id: context.originLocationId,
+      review_department_id: context.departmentId,
+      lending_id: context.lendingId,
       date_from: input.dateFrom,
     };
     await recordRequestDecision("time_off", id, "employee", "submit", session.employeeNumber, "", repository);
@@ -40799,17 +41831,27 @@ async function createOwnTimeOffRequest(session, body = {}) {
 }
 
 async function updateOwnTimeOffRequest(session, requestId, body = {}) {
-  const entry = await absenceManagementRepository.openTimeOffForOwner({
-    id: Number(requestId),
-    employeeNumber: session.employeeNumber,
-  });
-  if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
-  const check = await evaluateTimeOffRequest(session.employeeNumber, { ...body, excludeRequestId: entry.id });
-  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
   const input = normalizedTimeOffInput(body);
   return absenceManagementRepository.transaction(async (repository) => {
+    const entry = await repository.openTimeOffForOwner({
+      id: Number(requestId),
+      employeeNumber: session.employeeNumber,
+    });
+    if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
+    const context = await assertTimeOffResponsibility(session.employeeNumber, input, repository);
+    const check = await evaluateTimeOffRequest(
+      session.employeeNumber,
+      { ...input, excludeRequestId: entry.id },
+      context,
+      repository,
+    );
+    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     const result = await repository.updateTimeOffRequest({
       id: Number(entry.id),
+      locationId: context.locationId,
+      originLocationId: context.originLocationId,
+      reviewDepartmentId: context.departmentId,
+      lendingId: context.lendingId,
       requestDate: input.dateFrom,
       dateFrom: input.dateFrom,
       dateTo: input.dateTo,
@@ -40824,7 +41866,12 @@ async function updateOwnTimeOffRequest(session, requestId, body = {}) {
     if (!result.rowsAffected) throw httpError(409, "Der ZA-Antrag wurde bereits bearbeitet.", "TIME_OFF_REQUEST_CHANGED");
     await recordRequestDecision("time_off", entry.id, "employee", "change", session.employeeNumber, input.note, repository);
     await resolveAbsenceRequestReviewNotifications(repository, "time_off", entry.id);
-    await notifyAbsenceRequestReviewers(repository, { ...entry, date_from: input.dateFrom }, "time_off", "local", session.employeeNumber);
+    await notifyAbsenceRequestReviewers(repository, {
+      ...entry,
+      location_id: context.locationId,
+      review_department_id: context.departmentId,
+      date_from: input.dateFrom,
+    }, "time_off", "local", session.employeeNumber);
     await auditAbsence(repository, session.employeeNumber, "time_off.request.update", "time_off_request", String(entry.id), JSON.stringify(check));
     return { id: entry.id, status: "pending", check };
   });
@@ -40855,33 +41902,45 @@ async function createOwnTimeOffChangeRequest(session, body = {}) {
   if (!Number.isInteger(originalRequestId) || !["change", "cancel"].includes(requestType)) {
     throw httpError(400, "Bitte eine gueltige ZA-Aenderung auswaehlen.", "TIME_OFF_CHANGE_INVALID");
   }
-  const original = await absenceManagementRepository.approvedTimeOffForOwner({
-    id: originalRequestId,
-    employeeNumber: session.employeeNumber,
-    fromDate: viennaTodayIso(),
-  });
-  if (!original) throw httpError(404, "Der genehmigte Zeitausgleich wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
-  if (await absenceManagementRepository.pendingTimeOffChange({
-    originalRequestId: Number(original.id),
-  })) {
-    throw httpError(409, "Fuer diesen Zeitausgleich besteht bereits ein offener Aenderungs- oder Stornoantrag.", "TIME_OFF_CHANGE_EXISTS");
-  }
   let input = { dateFrom: null, dateTo: null, allDay: false, startTime: null, endTime: null, note: stripEmoji(String(body.note || "").trim()).slice(0, 500) };
   if (requestType === "change") {
     input = { ...normalizedTimeOffInput(body), note: stripEmoji(String(body.note || "").trim()).slice(0, 500) };
-    const check = await evaluateTimeOffRequest(session.employeeNumber, {
-      date: input.dateFrom, dateFrom: input.dateFrom, dateTo: input.dateTo, allDay: input.allDay,
-      startTime: input.startTime, endTime: input.endTime, excludeRequestId: original.id,
-    });
-    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
   }
   return absenceManagementRepository.transaction(async (repository) => {
+    const original = await repository.approvedTimeOffForOwner({
+      id: originalRequestId,
+      employeeNumber: session.employeeNumber,
+      fromDate: viennaTodayIso(),
+    });
+    if (!original) throw httpError(404, "Der genehmigte Zeitausgleich wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
     if (await repository.pendingTimeOffChange({ originalRequestId: Number(original.id) })) {
       throw httpError(409, "Fuer diesen Zeitausgleich besteht bereits ein offener Aenderungs- oder Stornoantrag.", "TIME_OFF_CHANGE_EXISTS");
     }
+    const context = requestType === "change"
+      ? await assertTimeOffResponsibility(session.employeeNumber, input, repository)
+      : {
+        locationId: original.location_id,
+        originLocationId: original.origin_location_id || original.location_id,
+        departmentId: Number(original.review_department_id || 0) || null,
+        lendingId: original.lending_id || null,
+      };
+    const check = requestType === "change"
+      ? await evaluateTimeOffRequest(
+        session.employeeNumber,
+        { ...input, excludeRequestId: original.id },
+        context,
+        repository,
+      )
+      : null;
+    if (check && !check.allowed) {
+      throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
+    }
     const result = await repository.insertTimeOffChange({
       employeeNumber: session.employeeNumber,
-      locationId: original.location_id,
+      locationId: context.locationId,
+      originLocationId: context.originLocationId,
+      reviewDepartmentId: context.departmentId,
+      lendingId: context.lendingId,
       originalRequestId: Number(original.id),
       requestType,
       requestedDateFrom: input.dateFrom,
@@ -40896,13 +41955,22 @@ async function createOwnTimeOffChangeRequest(session, body = {}) {
     const entry = {
       id,
       employee_number: session.employeeNumber,
-      location_id: original.location_id,
+      location_id: context.locationId,
+      origin_location_id: context.originLocationId,
+      review_department_id: context.departmentId,
       date_from: input.dateFrom || original.date_from,
     };
     await recordRequestDecision("time_off_change", id, "employee", requestType, session.employeeNumber, input.note, repository);
     await notifyAbsenceRequestReviewers(repository, entry, "time_off_change", "local", session.employeeNumber);
-    await auditAbsence(repository, session.employeeNumber, `time_off.${requestType}.request`, "time_off_change_request", String(id));
-    return { id, status: "pending" };
+    await auditAbsence(
+      repository,
+      session.employeeNumber,
+      `time_off.${requestType}.request`,
+      "time_off_change_request",
+      String(id),
+      check ? JSON.stringify(check) : "",
+    );
+    return { id, status: "pending", ...(check ? { check } : {}) };
   });
 }
 
@@ -42432,7 +43500,7 @@ app.post("/api/shifts", async (request, response) => {
   const context = await resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
-  assertShiftEmployeeAssignmentScope(request.portalSession, shift);
+  await assertShiftEmployeeAssignmentScope(request.portalSession, shift);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
   const evaluated = await evaluateScheduleWorkRules(
@@ -42442,29 +43510,34 @@ app.post("/api/shifts", async (request, response) => {
     shift,
   );
   assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
-  const saved = await runWorkRuleMutationTransaction(async (repository) => {
-    const result = await repository.insertPlanningShift({
-      employeeNumber: shift.employeeNumber,
-      locationId: shift.locationId,
-      departmentId: shift.departmentId || null,
-      shiftDate: shift.shiftDate,
-      startTime: shift.startTime,
-      endTime: shift.endTime,
-      area: shift.area,
-      note: shift.note,
+  let saved;
+  try {
+    saved = await runWorkRuleMutationTransaction(async (repository) => {
+      const result = await repository.insertPlanningShift({
+        employeeNumber: shift.employeeNumber,
+        locationId: shift.locationId,
+        departmentId: shift.departmentId || null,
+        shiftDate: shift.shiftDate,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        area: shift.area,
+        note: shift.note,
+      });
+      await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
+      const workRuleAssessment = await recordEvaluatedWorkRuleEvaluation(
+        repository,
+        evaluated,
+        context,
+        request.portalSession?.employeeNumber || "local",
+      );
+      return {
+        id: result.returnedRows[0]?.id,
+        workRuleAssessment,
+      };
     });
-    await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
-    const workRuleAssessment = await recordEvaluatedWorkRuleEvaluation(
-      repository,
-      evaluated,
-      context,
-      request.portalSession?.employeeNumber || "local",
-    );
-    return {
-      id: result.returnedRows[0]?.id,
-      workRuleAssessment,
-    };
-  });
+  } catch (error) {
+    throw staffAssignmentShiftConstraintError(error);
+  }
   await refreshSicknessStaffingAfterPlanningChange();
   response.status(201).json({
     id: saved.id,
@@ -42486,7 +43559,7 @@ app.put("/api/shifts/:id", async (request, response) => {
   const context = await resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
-  assertShiftEmployeeAssignmentScope(request.portalSession, shift, existing);
+  await assertShiftEmployeeAssignmentScope(request.portalSession, shift, existing);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
   const planningChange = { id, ...shift };
@@ -42501,40 +43574,45 @@ app.put("/api/shifts/:id", async (request, response) => {
     [existing, shift],
     planningChange,
   );
-  const workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
-    const result = await repository.updatePlanningShift({
-      id,
-      employeeNumber: shift.employeeNumber,
-      locationId: shift.locationId,
-      departmentId: shift.departmentId || null,
-      shiftDate: shift.shiftDate,
-      startTime: shift.startTime,
-      endTime: shift.endTime,
-      area: shift.area,
-      note: shift.note,
-    });
-    if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
-    await repository.invalidatePlanningDayReview(existing.employee_number, existing.shift_date);
-    await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
-    const records = [];
-    for (const entry of preparedEvaluations) {
-      records.push({
-        ...entry,
-        assessment: await recordEvaluatedWorkRuleEvaluation(
-          repository,
-          entry.evaluated,
-          entry.context,
-          request.portalSession?.employeeNumber || "local",
-        ),
+  let workRuleAssessment;
+  try {
+    workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
+      const result = await repository.updatePlanningShift({
+        id,
+        employeeNumber: shift.employeeNumber,
+        locationId: shift.locationId,
+        departmentId: shift.departmentId || null,
+        shiftDate: shift.shiftDate,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        area: shift.area,
+        note: shift.note,
       });
-    }
-    return records.find((entry) => (
-      entry.weekStart === weekStart
-      && entry.locationId === String(shift.locationId)
-      && Number(entry.departmentId || 0) === Number(shift.departmentId || 0)
-      && entry.employeeNumber === String(shift.employeeNumber)
-    ))?.assessment || preview.assessment;
-  });
+      if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+      await repository.invalidatePlanningDayReview(existing.employee_number, existing.shift_date);
+      await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
+      const records = [];
+      for (const entry of preparedEvaluations) {
+        records.push({
+          ...entry,
+          assessment: await recordEvaluatedWorkRuleEvaluation(
+            repository,
+            entry.evaluated,
+            entry.context,
+            request.portalSession?.employeeNumber || "local",
+          ),
+        });
+      }
+      return records.find((entry) => (
+        entry.weekStart === weekStart
+        && entry.locationId === String(shift.locationId)
+        && Number(entry.departmentId || 0) === Number(shift.departmentId || 0)
+        && entry.employeeNumber === String(shift.employeeNumber)
+      ))?.assessment || preview.assessment;
+    });
+  } catch (error) {
+    throw staffAssignmentShiftConstraintError(error);
+  }
   await refreshSicknessStaffingAfterPlanningChange();
   response.json({
     id,
@@ -42631,7 +43709,12 @@ app.post("/api/week-options", async (request, response) => {
   const option = await validateWeekOption(request.body, 0, request.portalSession);
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
-  const result = await planningSettingsRepository.insertWeekOption(option);
+  let result;
+  try {
+    result = await planningSettingsRepository.insertWeekOption(option);
+  } catch (error) {
+    throw staffAssignmentAbsenceConstraintError(error);
+  }
   const id = Number(result.rows[0]?.id);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) await invalidateTimeDayReview(option.employeeNumber, date);
   auditApprovedAbsenceEntry(request.portalSession, "approved-absence.create", id, option);
@@ -42657,7 +43740,12 @@ app.put("/api/week-options/:id", async (request, response) => {
   }, id, request.portalSession);
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
-  const updated = await planningSettingsRepository.updateWeekOption({ id, ...option });
+  let updated;
+  try {
+    updated = await planningSettingsRepository.updateWeekOption({ id, ...option });
+  } catch (error) {
+    throw staffAssignmentAbsenceConstraintError(error);
+  }
   if (!updated.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) await invalidateTimeDayReview(option.employeeNumber, date);
@@ -42872,12 +43960,34 @@ function shiftCoversPeriod(shift, from, to) {
   return shift.start_time <= from && shift.end_time >= to;
 }
 
-async function findBestAutomaticShift(employeeNumber, date, remainingMinutes, settings, requiredTo = null) {
+async function findBestAutomaticShift(
+  employeeNumber,
+  date,
+  remainingMinutes,
+  settings,
+  {
+    windowStart = null,
+    windowEnd = null,
+    requiredFrom = null,
+    requiredTo = null,
+  } = {},
+) {
   const hours = await operatingHours(date, settings);
   if (!hours) return null;
-  const start = timeToMinutes(hours.start);
-  const end = timeToMinutes(hours.end);
-  const minimumEnd = requiredTo ? Math.max(start + 60, timeToMinutes(requiredTo)) : start + 60;
+  const start = Math.max(
+    timeToMinutes(hours.start),
+    isTime(windowStart) ? timeToMinutes(windowStart) : timeToMinutes(hours.start),
+  );
+  const end = Math.min(
+    timeToMinutes(hours.end),
+    isTime(windowEnd) ? timeToMinutes(windowEnd) : timeToMinutes(hours.end),
+  );
+  if (end - start < 60) return null;
+  if (isTime(requiredFrom) && start > timeToMinutes(requiredFrom)) return null;
+  if (isTime(requiredTo) && end < timeToMinutes(requiredTo)) return null;
+  const minimumEnd = isTime(requiredTo)
+    ? Math.max(start + 60, timeToMinutes(requiredTo))
+    : start + 60;
   let best = null;
 
   for (let candidateEnd = minimumEnd; candidateEnd <= end; candidateEnd += 1) {
@@ -42890,6 +44000,80 @@ async function findBestAutomaticShift(employeeNumber, date, remainingMinutes, se
     const metrics = await shiftMetrics(shift, settings);
     const difference = Math.abs(metrics.counted_minutes - remainingMinutes);
     if (!best || difference < best.difference) best = { shift, metrics, difference };
+  }
+  return best;
+}
+
+function automaticPlanningWindows(employee, date, hours, context, employeeLendings) {
+  if (!hours) return [];
+  const opening = timeToMinutes(hours.start);
+  const closing = timeToMinutes(hours.end);
+  const employeeNumber = String(employee.personnel_number);
+  const locationId = String(context.locationId);
+  const assignments = employeeLendings.filter((assignment) => (
+    String(assignment.employee_number) === employeeNumber
+    && assignment.date_from <= date
+    && assignment.date_to >= date
+  ));
+
+  if (String(employee.home_location_id) === locationId) {
+    const outgoing = assignments
+      .filter((assignment) => String(assignment.home_location_id) === locationId)
+      .map((assignment) => assignment.all_day
+        ? { start: opening, end: closing }
+        : {
+            start: Math.max(opening, timeToMinutes(assignment.start_time)),
+            end: Math.min(closing, timeToMinutes(assignment.end_time)),
+          })
+      .filter((interval) => interval.end > interval.start)
+      .sort((left, right) => left.start - right.start);
+    const windows = [];
+    let cursor = opening;
+    for (const interval of outgoing) {
+      if (interval.start > cursor) windows.push({ start: cursor, end: interval.start, departmentId: null });
+      cursor = Math.max(cursor, interval.end);
+      if (cursor >= closing) break;
+    }
+    if (cursor < closing) windows.push({ start: cursor, end: closing, departmentId: null });
+    return windows.filter((window) => window.end - window.start >= 60);
+  }
+
+  return assignments
+    .filter((assignment) => (
+      String(assignment.destination_location_id) === locationId
+      && (
+        !context.departmentId
+        || Number(assignment.destination_department_id) === Number(context.departmentId)
+      )
+    ))
+    .map((assignment) => ({
+      start: assignment.all_day ? opening : Math.max(opening, timeToMinutes(assignment.start_time)),
+      end: assignment.all_day ? closing : Math.min(closing, timeToMinutes(assignment.end_time)),
+      departmentId: assignment.destination_department_id || null,
+    }))
+    .filter((window) => window.end - window.start >= 60)
+    .sort((left, right) => left.start - right.start);
+}
+
+async function bestAutomaticShiftForWindows(
+  employeeNumber,
+  date,
+  remainingMinutes,
+  settings,
+  windows,
+  requiredFrom = null,
+  requiredTo = null,
+) {
+  let best = null;
+  for (const window of windows) {
+    const candidate = await findBestAutomaticShift(employeeNumber, date, remainingMinutes, settings, {
+      windowStart: minutesToTime(window.start),
+      windowEnd: minutesToTime(window.end),
+      requiredFrom,
+      requiredTo,
+    });
+    if (!candidate) continue;
+    if (!best || candidate.difference < best.difference) best = { ...candidate, window };
   }
   return best;
 }
@@ -42911,13 +44095,23 @@ app.post("/api/schedule/auto", async (request, response) => {
     locationId: context.locationId,
     departmentId: context.departmentId || null,
   };
-  const [employees, storedExistingShifts, options] = await Promise.all([
+  const [employees, storedExistingShifts, employeeWeekShifts, options, employeeLendings] = await Promise.all([
     planningSettingsRepository.listAutoPlanningEmployees(planningQuery),
     planningSettingsRepository.listAutoPlanningShifts(planningQuery),
+    planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningOptions(planningQuery),
+    planningSettingsRepository.listScheduleLendings(planningQuery),
   ]);
   const existingShifts = replaceExisting ? [] : [...storedExistingShifts];
-  const occupied = new Set(existingShifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`));
+  const retainedEmployeeWeekShifts = replaceExisting
+    ? employeeWeekShifts.filter((shift) => (
+        String(shift.location_id) !== String(context.locationId)
+        || (context.departmentId && Number(shift.department_id) !== Number(context.departmentId))
+      ))
+    : employeeWeekShifts;
+  const occupied = new Set(
+    retainedEmployeeWeekShifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`),
+  );
   const unavailable = new Set();
   for (const option of options) {
     for (let date = option.date_from; date <= option.date_to; date = addDays(date, 1)) {
@@ -42932,9 +44126,17 @@ app.post("/api/schedule/auto", async (request, response) => {
 
     const totals = Object.fromEntries(employees.map((employee) => [employee.personnel_number, 0]));
     const dayLoads = Object.fromEntries(Array.from({ length: 6 }, (_, index) => [addDays(weekStart, index), 0]));
-    for (const shift of existingShifts) {
+    const locationSettings = new Map([[String(context.locationId), settings]]);
+    for (const shift of retainedEmployeeWeekShifts) {
+      const shiftLocationId = String(shift.location_id || context.locationId);
+      if (!locationSettings.has(shiftLocationId)) {
+        locationSettings.set(shiftLocationId, await settingsForLocation(shiftLocationId));
+      }
       totals[shift.employee_number] =
-        (totals[shift.employee_number] || 0) + (await shiftMetrics(shift, settings)).counted_minutes;
+        (totals[shift.employee_number] || 0)
+        + (await shiftMetrics(shift, locationSettings.get(shiftLocationId))).counted_minutes;
+    }
+    for (const shift of existingShifts) {
       if (dayLoads[shift.shift_date] !== undefined) dayLoads[shift.shift_date] += 1;
     }
     const claimedOptionDates = new Set();
@@ -43014,7 +44216,14 @@ app.post("/api/schedule/auto", async (request, response) => {
         Math.max(0, Number(employee.contracted_hours) * 60 - (totals[employee.personnel_number] || 0)),
       ]),
     );
-    const automaticDepartmentId = (employee) => context.departmentId || employee.preferred_department_id || null;
+    const automaticDepartmentId = (employee, window = null) => (
+      context.departmentId
+      || window?.departmentId
+      || (String(employee.home_location_id) === String(context.locationId)
+        ? employee.preferred_department_id
+        : null)
+      || null
+    );
 
     for (let dayIndex = 0; dayIndex < 6; dayIndex += 1) {
       const date = addDays(weekStart, dayIndex);
@@ -43035,20 +44244,36 @@ app.post("/api/schedule/auto", async (request, response) => {
             if (aPreferred !== bPreferred) return aPreferred - bPreferred;
             return remainingByEmployee[b.personnel_number] - remainingByEmployee[a.personnel_number];
           });
-        const employee = candidates[0];
-        if (!employee) break;
-        const candidate = await findBestAutomaticShift(
-          employee.personnel_number,
-          date,
-          remainingByEmployee[employee.personnel_number],
-          settings,
-          config.minTo,
-        );
-        if (!candidate) break;
+        const hours = await operatingHours(date, settings);
+        let employee = null;
+        let candidate = null;
+        for (const availableEmployee of candidates) {
+          const windows = automaticPlanningWindows(
+            availableEmployee,
+            date,
+            hours,
+            context,
+            employeeLendings,
+          );
+          const availableCandidate = await bestAutomaticShiftForWindows(
+            availableEmployee.personnel_number,
+            date,
+            remainingByEmployee[availableEmployee.personnel_number],
+            settings,
+            windows,
+            config.minFrom,
+            config.minTo,
+          );
+          if (!availableCandidate) continue;
+          employee = availableEmployee;
+          candidate = availableCandidate;
+          break;
+        }
+        if (!employee || !candidate) break;
         const plannedShift = {
           employeeNumber: employee.personnel_number,
           locationId: context.locationId,
-          departmentId: automaticDepartmentId(employee),
+          departmentId: automaticDepartmentId(employee, candidate.window),
           shiftDate: date,
           startTime: candidate.shift.start_time,
           endTime: candidate.shift.end_time,
@@ -43101,12 +44326,20 @@ app.post("/api/schedule/auto", async (request, response) => {
           return rotatedA - rotatedB;
         });
         const date = availableDates.shift();
-        const candidate = await findBestAutomaticShift(employee.personnel_number, date, remaining, settings);
+        const hours = await operatingHours(date, settings);
+        const windows = automaticPlanningWindows(employee, date, hours, context, employeeLendings);
+        const candidate = await bestAutomaticShiftForWindows(
+          employee.personnel_number,
+          date,
+          remaining,
+          settings,
+          windows,
+        );
         if (!candidate) continue;
         plannedShifts.push({
           employeeNumber: employee.personnel_number,
           locationId: context.locationId,
-          departmentId: automaticDepartmentId(employee),
+          departmentId: automaticDepartmentId(employee, candidate.window),
           shiftDate: date,
           startTime: candidate.shift.start_time,
           endTime: candidate.shift.end_time,
@@ -43141,7 +44374,9 @@ app.post("/api/schedule/auto", async (request, response) => {
       planningChange,
     );
     assertWorkRuleAssessmentAllowsMutation(evaluatedPreview.assessment);
-    const workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
+    let workRuleAssessment;
+    try {
+      workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
       if (replaceExisting) {
         await repository.deletePlanningShiftsForRange({
           locationId: context.locationId,
@@ -43165,7 +44400,10 @@ app.post("/api/schedule/auto", async (request, response) => {
         context,
         request.portalSession?.employeeNumber || "local",
       );
-    });
+      });
+    } catch (error) {
+      throw staffAssignmentShiftConstraintError(error);
+    }
     await refreshSicknessStaffingAfterPlanningChange();
     const schedule = await getSchedule(weekStart, context, request.portalSession);
     response.json({

@@ -91,6 +91,7 @@ function resetFixture() {
     db.prepare(`DELETE FROM request_blackouts WHERE location_id IN (?, ?)`).run(LOCATION, OTHER_LOCATION);
     db.prepare(`DELETE FROM week_options WHERE employee_number LIKE '${PREFIX}%'`).run();
     db.prepare(`DELETE FROM shifts WHERE employee_number LIKE '${PREFIX}%'`).run();
+    db.prepare(`DELETE FROM employee_location_lendings WHERE employee_number LIKE '${PREFIX}%'`).run();
     db.prepare(`DELETE FROM employees WHERE personnel_number LIKE '${PREFIX}%'`).run();
     db.prepare("DELETE FROM departments WHERE location_id IN (?, ?)").run(LOCATION, OTHER_LOCATION);
     db.prepare("DELETE FROM locations WHERE id IN (?, ?)").run(LOCATION, OTHER_LOCATION);
@@ -237,6 +238,14 @@ test("v0.71 Block 7: Abteilungsminimum und bestätigte filialfremde Ersatzschich
   const foreign = addEmployee("foreign", {
     locationId: OTHER_LOCATION, department: otherDepartmentId, costCenterId: "cc-v071-vac-72",
   });
+  db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, note,
+      status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES ('v071-vacation-replacement', ?, ?, ?, ?, ?, ?, 1, '',
+      'active', 1, 'test', CURRENT_TIMESTAMP, 'test', CURRENT_TIMESTAMP)
+  `).run(foreign, OTHER_LOCATION, LOCATION, departmentId, DATE, DATE);
   const insertShift = db.prepare(`INSERT INTO shifts
     (employee_number, location_id, department_id, shift_date, start_time, end_time)
     VALUES (?, ?, ?, ?, '09:00', '18:00')`);

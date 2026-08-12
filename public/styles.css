@@ -1828,6 +1828,40 @@ html[data-active-page-theme="dark"] .personnel-lifecycle-editor-step-actions .da
 .note-style-options input { flex: 0 0 15px; width: 15px; height: 15px; padding: 0; }
 .modal-actions { position:sticky; bottom:-24px; z-index:3; display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:center; gap:8px; margin-top:22px; padding:17px 0 2px; border-top:1px solid var(--line); background:linear-gradient(transparent,var(--modal-surface) 28%); }
 .modal-actions button { min-width:0; white-space:normal; }
+.employee-lending-modal { width:min(1180px,calc(100vw - 40px)); }
+.employee-lending-layout { display:grid; grid-template-columns:minmax(330px,.8fr) minmax(430px,1.2fr); gap:18px; align-items:start; }
+.employee-lending-editor,.employee-lending-overview { min-width:0; padding:18px; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); }
+.employee-lending-editor-actions,.employee-lending-heading,.employee-lending-card,.employee-lending-card-actions { display:flex; align-items:center; gap:9px; }
+.employee-lending-editor-actions { justify-content:flex-end; margin-top:14px; }
+.employee-lending-heading { justify-content:space-between; margin-bottom:12px; }
+.employee-lending-heading > div { display:grid; gap:3px; }
+.employee-lending-heading strong { font-size:13px; }
+.employee-lending-heading small { color:var(--muted); font-size:9px; }
+.employee-lending-list { display:grid; gap:8px; max-height:min(490px,52vh); overflow:auto; padding-right:3px; }
+.employee-lending-card { justify-content:space-between; padding:12px; border:1px solid var(--line); border-left:4px solid #4f7b6d; border-radius:11px; background:var(--surface); }
+.employee-lending-card.incoming { border-left-color:#e66a4d; }
+.employee-lending-card > div:first-child { display:grid; min-width:0; gap:3px; }
+.employee-lending-card span { width:max-content; padding:3px 7px; border-radius:999px; color:#245748; background:#dff0e9; font-size:8px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.employee-lending-card.incoming span { color:#8d3e2c; background:#fde5df; }
+.employee-lending-card strong { font-size:11px; }
+.employee-lending-card small,.employee-lending-card p { margin:0; color:var(--muted); font-size:9px; line-height:1.45; }
+.employee-lending-card-actions { flex:0 0 auto; align-self:flex-end; }
+.employee-lending-card-actions button { padding:8px 10px; font-size:8.5px; }
+.employee-lending-empty { margin:0; padding:22px 14px; border:1px dashed var(--line); border-radius:11px; color:var(--muted); text-align:center; }
+.employee-lending-empty.error { color:#9b3f33; }
+.employee-lending-delegates { margin-top:12px; padding-top:10px; border-top:1px solid var(--line); }
+.employee-lending-delegates summary { cursor:pointer; font-size:10px; font-weight:800; }
+.employee-lending-delegates > p { color:var(--muted); font-size:9px; }
+.employee-lending-delegates > div { display:grid; gap:7px; }
+.employee-lending-times { grid-template-columns:1fr 1fr; }
+.employee-lending-marker { position:absolute; z-index:3; left:2px; right:2px; display:flex; align-items:center; justify-content:center; min-height:16px; padding:2px 3px; overflow:hidden; border:1px solid rgba(28,92,73,.28); border-radius:5px; color:#174e3e; background:rgba(187,226,212,.82); font-size:7px; font-weight:800; line-height:1.15; text-align:center; pointer-events:none; }
+.employee-lending-marker.incoming { color:#713224; border-color:rgba(160,75,54,.3); background:rgba(250,205,194,.82); }
+@media (max-width:900px) {
+  .employee-lending-layout { grid-template-columns:1fr; }
+  .employee-lending-card { align-items:flex-start; flex-direction:column; }
+  .employee-lending-card-actions { align-self:stretch; width:100%; }
+  .employee-lending-card-actions button { flex:1; }
+}
 .calculation-note { padding: 11px 13px; border-radius: 9px; color: #496158; background: #eaf1ed; font-size: 9px; line-height: 1.45; }
 .shift-rule-preview { display:grid; gap:8px; padding:11px 12px; border:1px solid var(--line); border-left:3px solid #7d9189; border-radius:10px; background:var(--surface-soft); }
 .shift-rule-preview.pass { border-left-color:#34906b; }
@@ -3503,6 +3537,8 @@ html[data-active-page-theme="dark"] :is(.modal,.modal form,.modal *) { scrollbar
 html[data-active-page-theme="dark"] :is(.modal,.modal form,.modal *)::-webkit-scrollbar { width:10px; height:10px; }
 html[data-active-page-theme="dark"] :is(.modal,.modal form,.modal *)::-webkit-scrollbar-track { background:#17211e; }
 html[data-active-page-theme="dark"] :is(.modal,.modal form,.modal *)::-webkit-scrollbar-thumb { border:2px solid #17211e; border-radius:999px; background:#5e746b; }
+html[data-active-page-theme="dark"] :is(.employee-lending-editor,.employee-lending-overview) { border-color:#40524b; background:#202d29; }
+html[data-active-page-theme="dark"] .employee-lending-card { border-color:#40524b; background:#24322d; }
 html[data-active-page-theme="dark"] #personnelView .location-card .empty-options { color:#93a39d; border-color:#34443e; background:#1d2925; }
 html[data-active-page-theme="dark"] #personnelView .department-list { background:#34443e; }
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display-columns-button { color:var(--ink); border-color:var(--line); background:var(--surface); }

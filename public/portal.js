@@ -83,6 +83,12 @@ const portalState = {
   activeLoanConfirmation: null,
   loanConfirmationLoading: false,
   branchOrderCatalog: null,
+  branchOrderDraft: null,
+  branchOrderDraftPending: null,
+  branchOrderDraftRevision: 0,
+  branchOrderDraftDirty: false,
+  branchOrderDraftLoading: false,
+  branchOrderDraftEmployeeNumber: "",
   branchOrderPortalHistory: [],
   branchOrderSettings: null,
   branchOrderSettingsDraft: null,
@@ -177,7 +183,7 @@ const el = Object.fromEntries([
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
-  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList",
+  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderSaveDraft", "branchOrderDraftPanel", "branchOrderDraftTitle", "branchOrderDraftDetail", "branchOrderContinueDraft", "branchOrderDiscardDraft", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList",
   "branchVacationTab", "branchVacationView", "branchVacationPrevious", "branchVacationCurrent", "branchVacationNext", "branchVacationWeek", "branchVacationList", "branchVacationMessage",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
@@ -1442,6 +1448,207 @@ function branchOrderTimestampText(value) {
     : date.toLocaleString("de-AT", { dateStyle: "short", timeStyle: "short" });
 }
 
+function clearBranchOrderItemFields() {
+  el.branchOrderGroups?.querySelectorAll("[data-branch-order-item]").forEach((row) => {
+    const checkbox = row.querySelector("[data-branch-order-select]");
+    const quantity = row.querySelector("[data-branch-order-quantity]");
+    const note = row.querySelector("[data-branch-order-note]");
+    if (checkbox) checkbox.checked = false;
+    if (quantity) quantity.value = "1";
+    if (note) note.value = "";
+  });
+}
+
+function captureBranchOrderItems() {
+  const selected = [...(el.branchOrderGroups?.querySelectorAll("[data-branch-order-select]:checked") || [])];
+  const items = selected.map((checkbox) => {
+    const row = checkbox.closest("[data-branch-order-item]");
+    const quantity = Number(row?.querySelector("[data-branch-order-quantity]")?.value || "");
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) return null;
+    return {
+      itemId: row?.dataset.branchOrderItem || "",
+      quantity,
+      note: row?.querySelector("[data-branch-order-note]")?.value || "",
+    };
+  });
+  return { selected, items };
+}
+
+function renderBranchOrderDraftState() {
+  const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
+  const pending = portalState.branchOrderDraftPending;
+  const active = portalState.branchOrderDraft;
+  const hasSavedDraft = portalState.branchOrderDraftRevision > 0;
+  const { selected, items } = captureBranchOrderItems();
+  const validItems = selected.length > 0 && items.every(Boolean);
+  const locked = portalState.branchOrderDraftLoading || Boolean(pending);
+
+  el.branchOrderGroups?.querySelectorAll("[data-branch-order-item]").forEach((row) => {
+    const checkbox = row.querySelector("[data-branch-order-select]");
+    const selectable = row.dataset.branchOrderReady === "1";
+    if (checkbox) checkbox.disabled = locked || !selectable;
+    row.querySelectorAll("[data-branch-order-quantity], [data-branch-order-note]")
+      .forEach((field) => { field.disabled = locked || !checkbox?.checked || !selectable; });
+  });
+
+  if (el.branchOrderSaveDraft) {
+    el.branchOrderSaveDraft.disabled = locked || !employeeNumber || !validItems || !portalState.branchOrderDraftDirty;
+  }
+  if (el.branchOrderSubmit) {
+    el.branchOrderSubmit.disabled = locked || !employeeNumber || !validItems;
+  }
+
+  const visible = portalState.branchOrderDraftLoading || Boolean(pending) || hasSavedDraft || portalState.branchOrderDraftDirty;
+  el.branchOrderDraftPanel?.classList.toggle("hidden", !visible);
+  el.branchOrderContinueDraft?.classList.toggle("hidden", !pending);
+  el.branchOrderDiscardDraft?.classList.toggle("hidden", !(pending || hasSavedDraft || portalState.branchOrderDraftDirty));
+  if (!visible) return;
+
+  if (portalState.branchOrderDraftLoading) {
+    el.branchOrderDraftTitle.textContent = "Entwurf wird geprüft";
+    el.branchOrderDraftDetail.textContent = "Gespeicherter Stand wird geladen.";
+    return;
+  }
+  if (pending) {
+    el.branchOrderDraftTitle.textContent = "Gespeicherter Entwurf vorhanden";
+    const warnings = [];
+    if (pending.configurationChanged) warnings.push("Bestellkatalog wurde seitdem geändert");
+    if (pending.staleItemCount) warnings.push(`${pending.staleItemCount} Position(en) nicht mehr verfügbar`);
+    el.branchOrderDraftDetail.textContent = `${branchOrderTimestampText(pending.updatedAt)} · ${pending.items.length} Position(en)${warnings.length ? ` · ${warnings.join(" · ")}` : ""}`;
+    return;
+  }
+  if (portalState.branchOrderDraftDirty) {
+    el.branchOrderDraftTitle.textContent = "Ungespeicherte Änderungen";
+    el.branchOrderDraftDetail.textContent = hasSavedDraft && active?.updatedAt
+      ? `Letzter gespeicherter Stand: ${branchOrderTimestampText(active.updatedAt)}`
+      : "Dieser Stand ist noch nicht serverseitig gespeichert.";
+    return;
+  }
+  el.branchOrderDraftTitle.textContent = "Entwurf gespeichert";
+  el.branchOrderDraftDetail.textContent = active?.updatedAt
+    ? `Serverseitig gespeichert: ${branchOrderTimestampText(active.updatedAt)}`
+    : "Der Entwurf ist serverseitig gespeichert.";
+}
+
+function resetBranchOrderDraftState({ clearItems = true } = {}) {
+  portalState.branchOrderDraft = null;
+  portalState.branchOrderDraftPending = null;
+  portalState.branchOrderDraftRevision = 0;
+  portalState.branchOrderDraftDirty = false;
+  portalState.branchOrderDraftLoading = false;
+  if (clearItems) clearBranchOrderItemFields();
+  renderBranchOrderDraftState();
+}
+
+function applyPendingBranchOrderDraft() {
+  const draft = portalState.branchOrderDraftPending;
+  if (!draft) return;
+  clearBranchOrderItemFields();
+  let applied = 0;
+  for (const item of draft.items || []) {
+    if (!item.available) continue;
+    const row = [...el.branchOrderGroups.querySelectorAll("[data-branch-order-item]")]
+      .find((entry) => entry.dataset.branchOrderItem === item.itemId);
+    if (!row) continue;
+    const checkbox = row.querySelector("[data-branch-order-select]");
+    const quantity = row.querySelector("[data-branch-order-quantity]");
+    const note = row.querySelector("[data-branch-order-note]");
+    if (checkbox) checkbox.checked = true;
+    if (quantity) quantity.value = String(item.quantity);
+    if (note) note.value = item.note || "";
+    applied += 1;
+  }
+  portalState.branchOrderDraft = draft;
+  portalState.branchOrderDraftPending = null;
+  portalState.branchOrderDraftRevision = Number(draft.revision || 0);
+  portalState.branchOrderDraftDirty = false;
+  renderBranchOrderDraftState();
+  message(
+    el.branchOrderMessage,
+    applied
+      ? `Entwurf wurde fortgesetzt.${draft.staleItemCount ? ` ${draft.staleItemCount} nicht mehr verfügbare Position(en) wurden nicht übernommen.` : ""}`
+      : "Der Entwurf enthält keine aktuell verfügbare Position mehr. Bitte neu erfassen oder verwerfen.",
+    !applied || Boolean(draft.staleItemCount),
+  );
+}
+
+async function loadBranchOrderDraft(employeeNumber = el.branchOrderEmployee?.value) {
+  const normalizedEmployeeNumber = String(employeeNumber || "").trim();
+  portalState.branchOrderDraftEmployeeNumber = normalizedEmployeeNumber;
+  if (!normalizedEmployeeNumber) {
+    resetBranchOrderDraftState();
+    return;
+  }
+  portalState.branchOrderDraftLoading = true;
+  portalState.branchOrderDraft = null;
+  portalState.branchOrderDraftPending = null;
+  portalState.branchOrderDraftRevision = 0;
+  portalState.branchOrderDraftDirty = false;
+  clearBranchOrderItemFields();
+  renderBranchOrderDraftState();
+  try {
+    const result = await api(`/api/portal/v1/branch-orders/draft?employeeNumber=${encodeURIComponent(normalizedEmployeeNumber)}`);
+    if (String(el.branchOrderEmployee?.value || "").trim() !== normalizedEmployeeNumber) return;
+    portalState.branchOrderDraftPending = result.draft || null;
+  } catch (error) {
+    message(el.branchOrderMessage, error.message, true);
+  } finally {
+    if (String(el.branchOrderEmployee?.value || "").trim() === normalizedEmployeeNumber) {
+      portalState.branchOrderDraftLoading = false;
+      renderBranchOrderDraftState();
+    }
+  }
+}
+
+async function saveBranchOrderDraft() {
+  const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
+  const { selected, items } = captureBranchOrderItems();
+  if (!employeeNumber || !selected.length || items.some((item) => item === null)) {
+    message(el.branchOrderMessage, "Bitte mindestens eine Position mit einer ganzen Menge zwischen 1 und 100000 auswählen.", true);
+    return;
+  }
+  el.branchOrderSaveDraft.disabled = true;
+  try {
+    const result = await api("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      body: JSON.stringify({
+        employeeNumber,
+        items,
+        expectedRevision: portalState.branchOrderDraftRevision,
+      }),
+    });
+    portalState.branchOrderDraft = result.draft;
+    portalState.branchOrderDraftPending = null;
+    portalState.branchOrderDraftRevision = Number(result.draft?.revision || 0);
+    portalState.branchOrderDraftDirty = false;
+    message(el.branchOrderMessage, "Entwurf wurde serverseitig gespeichert.");
+  } catch (error) {
+    message(el.branchOrderMessage, error.message, true);
+  } finally {
+    renderBranchOrderDraftState();
+  }
+}
+
+async function discardBranchOrderDraft() {
+  if (!confirm("Diesen gespeicherten oder begonnenen Entwurf wirklich verwerfen?")) return;
+  const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
+  const expectedRevision = Number(
+    portalState.branchOrderDraftPending?.revision
+    || portalState.branchOrderDraftRevision
+    || 0,
+  );
+  try {
+    await api("/api/portal/v1/branch-orders/draft", {
+      method: "DELETE",
+      body: JSON.stringify({ employeeNumber, expectedRevision }),
+    });
+    resetBranchOrderDraftState();
+    message(el.branchOrderMessage, "Entwurf wurde verworfen.");
+  } catch (error) {
+    message(el.branchOrderMessage, error.message, true);
+  }
+}
+
 function renderBranchOrderCatalog() {
   const catalog = portalState.branchOrderCatalog;
   if (!catalog || !el.branchOrderGroups) return;
@@ -1467,14 +1674,13 @@ function renderBranchOrderCatalog() {
     const items = Array.isArray(group.items) ? group.items : [];
     return `<section class="branch-order-group" data-branch-order-group="${esc(group.id)}">
       <div class="branch-order-group-heading"><div><h2>${esc(group.title)}</h2>${group.hint ? `<p>${esc(group.hint)}</p>` : ""}</div><span class="branch-order-delivery-state ${deliveryReady ? "ready" : "missing"}">${deliveryReady ? "Versand bereit" : "E-Mail-Ziel fehlt"}</span></div>
-      <div class="branch-order-item-list">${items.length ? items.map((item) => `<article class="branch-order-item" data-branch-order-item="${esc(item.id)}">
+      <div class="branch-order-item-list">${items.length ? items.map((item) => `<article class="branch-order-item" data-branch-order-item="${esc(item.id)}" data-branch-order-ready="${deliveryReady ? "1" : "0"}">
         <label class="branch-order-item-select"><span><strong>${esc(item.title)}</strong>${deliveryReady ? "" : "<small>Vor Versand muss PL+ ein E-Mail-Ziel einrichten.</small>"}</span><input data-branch-order-select type="checkbox" ${deliveryReady ? "" : "disabled"} /></label>
         <div class="branch-order-line-fields"><label><span>Menge</span><input data-branch-order-quantity type="number" min="1" max="100000" step="1" inputmode="numeric" value="1" disabled /></label><span class="branch-order-unit">${esc(item.unit)}</span><label class="branch-order-note-field"><span>Bemerkung</span><input data-branch-order-note maxlength="500" disabled /></label></div>
       </article>`).join("") : '<p class="empty-state">Diese Warengruppe enthält noch keine Positionen.</p>'}</div>
     </section>`;
   }).join("") : '<p class="empty-state">Für diesen Standort sind noch keine Bestellpositionen eingerichtet.</p>';
-  const available = groups.some((group) => group.deliveryReady && (group.items || []).length);
-  el.branchOrderSubmit.disabled = !available || !employees.length;
+  renderBranchOrderDraftState();
 }
 
 async function loadBranchOrderCatalog() {
@@ -1483,6 +1689,7 @@ async function loadBranchOrderCatalog() {
     const catalog = await api("/api/portal/v1/branch-orders/catalog");
     portalState.branchOrderCatalog = catalog;
     renderBranchOrderCatalog();
+    await loadBranchOrderDraft(el.branchOrderEmployee?.value);
   } catch (error) {
     el.branchOrderGroups.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
     message(el.branchOrderMessage, error.message, true);
@@ -1523,7 +1730,7 @@ async function loadBranchOrderPortalHistory() {
 async function submitBranchOrder(event) {
   event.preventDefault();
   const employeeNumber = String(el.branchOrderEmployee.value || "").trim();
-  const selected = [...el.branchOrderGroups.querySelectorAll("[data-branch-order-select]:checked")];
+  const { selected, items } = captureBranchOrderItems();
   if (!employeeNumber) {
     message(el.branchOrderMessage, "Bitte das Teammitglied mit Name und Personalnummer auswählen.", true);
     return;
@@ -1532,16 +1739,6 @@ async function submitBranchOrder(event) {
     message(el.branchOrderMessage, "Bitte mindestens eine Bestellposition auswählen.", true);
     return;
   }
-  const items = selected.map((checkbox) => {
-    const row = checkbox.closest("[data-branch-order-item]");
-    const quantity = Number(row?.querySelector("[data-branch-order-quantity]")?.value || "");
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) return null;
-    return {
-      itemId: row?.dataset.branchOrderItem || "",
-      quantity,
-      note: row?.querySelector("[data-branch-order-note]")?.value || "",
-    };
-  });
   if (items.some((item) => item === null)) {
     message(el.branchOrderMessage, "Die Bestellmenge muss eine ganze Zahl zwischen 1 und 100000 sein.", true);
     return;
@@ -1551,8 +1748,16 @@ async function submitBranchOrder(event) {
   try {
     const result = await api("/api/portal/v1/branch-orders", {
       method: "POST",
-      body: JSON.stringify({ employeeNumber, items }),
+      body: JSON.stringify({
+        employeeNumber,
+        items,
+        draftRevision: portalState.branchOrderDraftRevision,
+      }),
     });
+    portalState.branchOrderDraft = null;
+    portalState.branchOrderDraftPending = null;
+    portalState.branchOrderDraftRevision = 0;
+    portalState.branchOrderDraftDirty = false;
     await Promise.all([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]);
     message(
       el.branchOrderMessage,
@@ -1564,10 +1769,7 @@ async function submitBranchOrder(event) {
   } catch (error) {
     message(el.branchOrderMessage, error.message, true);
   } finally {
-    if (portalState.branchOrderCatalog) {
-      const hasItems = portalState.branchOrderCatalog.groups?.some((group) => group.deliveryReady && group.items?.length);
-       el.branchOrderSubmit.disabled = !hasItems || !(portalState.branchOrderCatalog.employees || []).length;
-    }
+    renderBranchOrderDraftState();
   }
 }
 
@@ -5415,15 +5617,40 @@ el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayO
 el.branchVacationPrevious?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, -7); loadBranchVacationOverview(); });
 el.branchVacationNext?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, 7); loadBranchVacationOverview(); });
 el.branchVacationCurrent?.addEventListener("click", () => { portalState.branchVacationWeekStart = mondayOf(new Date()); loadBranchVacationOverview(); });
-  el.branchOrderRefresh?.addEventListener("click", () => Promise.allSettled([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]));
+  el.branchOrderRefresh?.addEventListener("click", () => {
+    if (portalState.branchOrderDraftDirty) {
+      message(el.branchOrderMessage, "Bitte den Entwurf vor dem Aktualisieren speichern oder verwerfen.", true);
+      return;
+    }
+    Promise.allSettled([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]);
+  });
   el.branchOrderForm?.addEventListener("submit", submitBranchOrder);
+el.branchOrderEmployee?.addEventListener("change", () => {
+  const nextEmployeeNumber = String(el.branchOrderEmployee.value || "").trim();
+  if (portalState.branchOrderDraftDirty
+    && portalState.branchOrderDraftEmployeeNumber
+    && nextEmployeeNumber !== portalState.branchOrderDraftEmployeeNumber) {
+    el.branchOrderEmployee.value = portalState.branchOrderDraftEmployeeNumber;
+    message(el.branchOrderMessage, "Bitte den begonnenen Entwurf zuerst speichern oder verwerfen.", true);
+    return;
+  }
+  loadBranchOrderDraft(nextEmployeeNumber);
+});
 el.branchOrderGroups?.addEventListener("change", (event) => {
   const checkbox = event.target.closest("[data-branch-order-select]");
-  if (!checkbox) return;
-  const row = checkbox.closest("[data-branch-order-item]");
-  row?.querySelectorAll("[data-branch-order-quantity], [data-branch-order-note]")
-    .forEach((field) => { field.disabled = !checkbox.checked; });
+  if (checkbox || event.target.closest("[data-branch-order-quantity], [data-branch-order-note]")) {
+    portalState.branchOrderDraftDirty = true;
+    renderBranchOrderDraftState();
+  }
 });
+el.branchOrderGroups?.addEventListener("input", (event) => {
+  if (!event.target.closest("[data-branch-order-quantity], [data-branch-order-note]")) return;
+  portalState.branchOrderDraftDirty = true;
+  renderBranchOrderDraftState();
+});
+el.branchOrderSaveDraft?.addEventListener("click", saveBranchOrderDraft);
+el.branchOrderContinueDraft?.addEventListener("click", applyPendingBranchOrderDraft);
+el.branchOrderDiscardDraft?.addEventListener("click", discardBranchOrderDraft);
 el.refreshBranchOrderSettings?.addEventListener("click", loadBranchOrderSettings);
 el.saveBranchOrderSettings?.addEventListener("click", saveBranchOrderSettings);
   el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);

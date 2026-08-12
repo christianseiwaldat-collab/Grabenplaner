@@ -294,7 +294,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   assert.ok(report.serverHotspot.dbPrepareCall < BASELINE.serverHotspot.dbPrepareCall);
   assert.equal(
     report.productionTotals.directNodeSqliteImport,
-    BASELINE.productionTotals.directNodeSqliteImport + 1,
+    BASELINE.productionTotals.directNodeSqliteImport + 2,
   );
   assert.equal(
     report.legacyProductionTotals.directNodeSqliteImport,
@@ -302,12 +302,12 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   );
 
   // Personalmodul-, Filialbestellungs- und Verkaufsanalyse-Schemaoperationen sind explizit als SQLite-Phase-3-Dateien klassifiziert.
-  assert.equal(report.summary.productionDirectFiles, 58);
+  assert.equal(report.summary.productionDirectFiles, 60);
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 1);
   assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 3);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
-  assert.equal(report.summary.productionJavaScriptDriverFiles, 13);
+  assert.equal(report.summary.productionJavaScriptDriverFiles, 14);
   assert.equal(report.summary.phase3SqliteProviderFiles, PHASE_3_SQLITE_PROVIDER_FILES.length);
   assert.equal(report.summary.phase3SqliteProviderTestFiles, PHASE_3_SQLITE_PROVIDER_TEST_FILES.length);
   assert.equal(report.summary.phase4PersistenceFiles, PHASE_4_PERSISTENCE_FILES.length);
@@ -416,7 +416,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1044);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1048);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -433,7 +433,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1044,
+    requiredReceiptCount: 1048,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {

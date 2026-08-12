@@ -51,6 +51,7 @@ const HR = "v091hr";
 const MANAGER = "252";
 const EMPLOYEE = "275";
 const OTHER_MANAGER = "v091other";
+const IT_ADMIN = "v091-it-admin";
 const ORGANIZATION_LOGIN = "fil18";
 const INITIAL_PASSWORD = "Filialkonto-v091!";
 const ACTIVE_PASSWORD = "Filialkonto-aktiv-v091!";
@@ -59,6 +60,7 @@ let baseUrl;
 let httpServer;
 let hrSession;
 let managerSession;
+let itAdminSession;
 let organizationSession;
 
 function ensureLocation(id, name) {
@@ -197,9 +199,11 @@ test.before(() => {
   ensureEmployee(MANAGER, "Mara Filialleitung", LOCATION, "manager");
   ensureEmployee(EMPLOYEE, "Marie-Theres", LOCATION, "employee");
   ensureEmployee(OTHER_MANAGER, "Olaf Andere", OTHER_LOCATION, "manager");
+  ensureEmployee(IT_ADMIN, "Ines Technik", LOCATION, "it_admin");
   insertReadOnlyFixtures();
   hrSession = createEmployeeSession(HR);
   managerSession = createEmployeeSession(MANAGER);
+  itAdminSession = createEmployeeSession(IT_ADMIN);
   return new Promise((resolve) => {
     httpServer = app.listen(0, "127.0.0.1", () => {
       baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
@@ -218,6 +222,7 @@ test.after(async () => {
 test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", async (t) => {
   let accountId;
   let catalog;
+  let organizationOrderDraft;
 
   await t.test("Filialkonto erhält die zwei Basisansichten; Filialbestellung wird durch PL+ einzeln aktiviert", async () => {
     const created = await requestJson("/api/portal/v1/organization-accounts", {
@@ -375,6 +380,23 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
   await t.test("nur PL+ konfiguriert Einheiten, Antwortadresse und Vorlagen", async () => {
     const managerDenied = await requestJson("/api/portal/v1/branch-orders/settings", { session: managerSession });
     assert.equal(managerDenied.response.status, 403, JSON.stringify(managerDenied.payload));
+    const itAdminSessionInfo = await requestJson("/api/portal/v1/session", { session: itAdminSession });
+    assert.equal(itAdminSessionInfo.response.status, 200, JSON.stringify(itAdminSessionInfo.payload));
+    assert.equal(itAdminSessionInfo.payload.user.permissions.includes("branch_orders:manage"), false);
+    const itAdminDenied = await requestJson("/api/portal/v1/branch-orders/settings", { session: itAdminSession });
+    assert.equal(itAdminDenied.response.status, 403, JSON.stringify(itAdminDenied.payload));
+    db.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES (?, 'branch_orders:manage', 'v091-legacy-test')
+    `).run(IT_ADMIN);
+    const legacyGrantDenied = await requestJson("/api/portal/v1/branch-orders/settings", {
+      session: createEmployeeSession(IT_ADMIN),
+    });
+    assert.equal(legacyGrantDenied.response.status, 403, JSON.stringify(legacyGrantDenied.payload));
+    db.prepare(`
+      DELETE FROM portal_permission_grants
+      WHERE employee_number = ? AND permission = 'branch_orders:manage'
+    `).run(IT_ADMIN);
     const settings = await requestJson("/api/portal/v1/branch-orders/settings", { session: hrSession });
     assert.equal(settings.response.status, 200, JSON.stringify(settings.payload));
     assert.equal(settings.payload.locationId, LOCATION);
@@ -447,6 +469,73 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(passwordResetDenied.response.status, 403, JSON.stringify(passwordResetDenied.payload));
   });
 
+  await t.test("Filialkonto speichert und lädt einen revisionsgeschützten Entwurf ohne Empfängerdaten", async () => {
+    const refreshedCatalog = await requestJson("/api/portal/v1/branch-orders/catalog", { session: organizationSession });
+    assert.equal(refreshedCatalog.response.status, 200, JSON.stringify(refreshedCatalog.payload));
+    catalog = refreshedCatalog.payload;
+    const warehouse = catalog.groups.find((group) => group.title === "Lager");
+    const ds40 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
+    const ds620 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS620");
+
+    const empty = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: organizationSession,
+    });
+    assert.equal(empty.response.status, 200, JSON.stringify(empty.payload));
+    assert.equal(empty.payload.draft, null);
+
+    const saved = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: organizationSession,
+      body: {
+        employeeNumber: EMPLOYEE,
+        expectedRevision: 0,
+        items: [
+          { itemId: ds40.id, quantity: 2 },
+          { itemId: ds620.id, quantity: 3, note: "Später fertigstellen" },
+        ],
+      },
+    });
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+    assert.equal(saved.payload.draft.revision, 1);
+    assert.equal(saved.payload.draft.selectedEmployeeNumber, EMPLOYEE);
+    assert.equal(saved.payload.draft.items.length, 2);
+    assert.equal(JSON.stringify(saved.payload).includes("lager@lamprechter.com"), false);
+    assert.equal(JSON.stringify(saved.payload).includes("antworten@grabenplaner.eu"), false);
+
+    const staleWrite = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: organizationSession,
+      body: {
+        employeeNumber: EMPLOYEE,
+        expectedRevision: 0,
+        items: [{ itemId: ds40.id, quantity: 9 }],
+      },
+    });
+    assert.equal(staleWrite.response.status, 409, JSON.stringify(staleWrite.payload));
+    assert.equal(staleWrite.payload.code, "BRANCH_ORDER_DRAFT_REVISION_CONFLICT");
+
+    const updated = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: organizationSession,
+      body: {
+        employeeNumber: EMPLOYEE,
+        expectedRevision: 1,
+        items: [
+          { itemId: ds40.id, quantity: 2 },
+          { itemId: ds620.id, quantity: 3, note: "Dringend" },
+        ],
+      },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.payload));
+    assert.equal(updated.payload.draft.revision, 2);
+    organizationOrderDraft = updated.payload.draft;
+
+    const managerDenied = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: managerSession,
+    });
+    assert.equal(managerDenied.response.status, 403, JSON.stringify(managerDenied.payload));
+  });
+
   await t.test("Bestellung ignoriert eine übermittelte KW, speichert Momentaufnahmen und versendet über den freigegebenen Absender", async () => {
     const refreshedCatalog = await requestJson("/api/portal/v1/branch-orders/catalog", { session: organizationSession });
     assert.equal(refreshedCatalog.response.status, 200, JSON.stringify(refreshedCatalog.payload));
@@ -454,19 +543,36 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     const warehouse = catalog.groups.find((group) => group.title === "Lager");
     const ds40 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
     const ds620 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS620");
+    const missingRevision = await requestJson("/api/portal/v1/branch-orders", {
+      method: "POST",
+      session: organizationSession,
+      body: { employeeNumber: EMPLOYEE, items: [{ itemId: ds40.id, quantity: 2 }] },
+    });
+    assert.equal(missingRevision.response.status, 409, JSON.stringify(missingRevision.payload));
+    assert.equal(missingRevision.payload.code, "BRANCH_ORDER_DRAFT_REVISION_CONFLICT");
     const decimal = await requestJson("/api/portal/v1/branch-orders", {
       method: "POST",
       session: organizationSession,
-      body: { employeeNumber: EMPLOYEE, items: [{ itemId: ds620.id, quantity: 1.5 }] },
+      body: {
+        employeeNumber: EMPLOYEE,
+        draftRevision: organizationOrderDraft.revision,
+        items: [{ itemId: ds620.id, quantity: 1.5 }],
+      },
     });
     assert.equal(decimal.response.status, 400, JSON.stringify(decimal.payload));
     assert.equal(decimal.payload.code, "BRANCH_ORDER_QUANTITY_INVALID");
+    const draftAfterValidationFailure = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: organizationSession,
+    });
+    assert.equal(draftAfterValidationFailure.response.status, 200, JSON.stringify(draftAfterValidationFailure.payload));
+    assert.equal(draftAfterValidationFailure.payload.draft.revision, organizationOrderDraft.revision);
     const order = await requestJson("/api/portal/v1/branch-orders", {
       method: "POST",
       session: organizationSession,
       body: {
         employeeNumber: EMPLOYEE,
         calendarWeek: 1,
+        draftRevision: organizationOrderDraft.revision,
         items: [
           { itemId: ds40.id, quantity: 2 },
           { itemId: ds620.id, quantity: 3, note: "Dringend" },
@@ -476,6 +582,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(order.response.status, 201, JSON.stringify(order.payload));
     assert.equal(order.payload.order.calendarWeek, catalog.calendarWeek);
     assert.equal(order.payload.order.status, "sent");
+    assert.equal(order.payload.order.draftConsumed, true);
     assert.match(order.payload.order.pdf.filename, /^Filialbestellung-18-KW\d{2}-.+\.pdf$/);
     assert.match(order.payload.order.pdf.sha256, /^[a-f0-9]{64}$/);
     assert.equal(sentMails.length, 1);
@@ -527,6 +634,11 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(Buffer.compare(Buffer.from(storedPdf.content), pdf.content), 0);
     assert.equal(storedPdf.sha256, order.payload.order.pdf.sha256);
     assert.equal(storedPdf.filename, order.payload.order.pdf.filename);
+    const consumedDraft = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: organizationSession,
+    });
+    assert.equal(consumedDraft.response.status, 200, JSON.stringify(consumedDraft.payload));
+    assert.equal(consumedDraft.payload.draft, null);
   });
 
   await t.test("PL+ kann Marie-Theres (275) für persönliche Filialbestellungen freischalten", async () => {
@@ -563,17 +675,36 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
 
     const warehouse = personalCatalog.payload.groups.find((group) => group.title === "Lager");
     const ds80 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS80");
+    const personalDraft = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: personalSession,
+      body: {
+        employeeNumber: OTHER_MANAGER,
+        expectedRevision: 0,
+        items: [{ itemId: ds80.id, quantity: 1, note: "Persönlicher Entwurf" }],
+      },
+    });
+    assert.equal(personalDraft.response.status, 200, JSON.stringify(personalDraft.payload));
+    assert.equal(personalDraft.payload.draft.selectedEmployeeNumber, EMPLOYEE);
+    assert.equal(personalDraft.payload.draft.revision, 1);
+    const branchCannotSeePersonalDraft = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: organizationSession,
+    });
+    assert.equal(branchCannotSeePersonalDraft.response.status, 200, JSON.stringify(branchCannotSeePersonalDraft.payload));
+    assert.equal(branchCannotSeePersonalDraft.payload.draft, null);
     const personalOrder = await requestJson("/api/portal/v1/branch-orders", {
       method: "POST",
       session: personalSession,
       body: {
         employeeNumber: OTHER_MANAGER,
+        draftRevision: personalDraft.payload.draft.revision,
         items: [{ itemId: ds80.id, quantity: 1 }],
       },
     });
     assert.equal(personalOrder.response.status, 201, JSON.stringify(personalOrder.payload));
     assert.equal(personalOrder.payload.order.selectedEmployeeNumber, EMPLOYEE);
     assert.equal(personalOrder.payload.order.senderEmail, "fil18-noreply@grabenplaner.eu");
+    assert.equal(personalOrder.payload.order.draftConsumed, true);
 
     const personalHistory = await requestJson("/api/portal/v1/branch-orders/history?limit=10", { session: personalSession });
     assert.equal(personalHistory.response.status, 200, JSON.stringify(personalHistory.payload));
@@ -586,6 +717,23 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(personalPdf.response.status, 200);
     assert.match(personalPdf.response.headers.get("content-disposition") || "", /^attachment;/);
     assert.equal(personalPdf.content.subarray(0, 5).toString("ascii"), "%PDF-");
+
+    const discardCandidate = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: personalSession,
+      body: {
+        expectedRevision: 0,
+        items: [{ itemId: ds80.id, quantity: 2 }],
+      },
+    });
+    assert.equal(discardCandidate.response.status, 200, JSON.stringify(discardCandidate.payload));
+    const discarded = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "DELETE",
+      session: personalSession,
+      body: { expectedRevision: discardCandidate.payload.draft.revision },
+    });
+    assert.equal(discarded.response.status, 200, JSON.stringify(discarded.payload));
+    assert.equal(discarded.payload.deleted, true);
   });
 
   await t.test("ein Versandfehler verliert die Bestellung nicht und wird im Verlauf markiert", async () => {

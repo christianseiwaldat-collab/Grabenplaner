@@ -657,30 +657,37 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 }
 
 .branch-orders-heading { align-items:flex-start; }
-.branch-order-form { display:grid; gap:18px; }
+.branch-orders-view { max-width:1120px; }
+.branch-order-form { display:grid; gap:14px; padding:18px; }
 .branch-order-employee-field { display:grid; gap:6px; max-width:460px; }
 .branch-order-employee-field small,.branch-order-item small,.branch-order-editor-heading p,.branch-order-recipient-editor small { color:var(--muted); }
-.branch-order-group-list { display:grid; gap:14px; }
-.branch-order-group { border:1px solid var(--line); border-radius:16px; overflow:hidden; background:var(--panel-soft, #f5f8f6); }
-.branch-order-group-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; padding:16px 17px 12px; border-bottom:1px solid var(--line); }
+.branch-order-draft-panel { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 12px; border:1px solid #8ebbaa; border-radius:11px; background:#eef8f3; }
+.branch-order-draft-panel > div:first-child { display:grid; gap:2px; min-width:0; }
+.branch-order-draft-panel strong { font-size:13px; }
+.branch-order-draft-panel small { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.branch-order-draft-actions,.branch-order-submit-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+.branch-order-group-list { display:grid; gap:11px; }
+.branch-order-group { border:1px solid var(--line); border-radius:13px; overflow:hidden; background:var(--panel-soft, #f5f8f6); }
+.branch-order-group-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:12px 13px 9px; border-bottom:1px solid var(--line); }
 .branch-order-group-heading h2,.branch-order-editor-heading h2 { margin:0; font-size:17px; }
 .branch-order-group-heading p,.branch-order-editor-heading p { margin:4px 0 0; font-size:13px; }
-.branch-order-delivery-state { flex:0 0 auto; border-radius:999px; padding:5px 9px; font-size:11px; font-weight:700; }
+.branch-order-delivery-state { flex:0 0 auto; border-radius:999px; padding:4px 8px; font-size:10px; font-weight:700; }
 .branch-order-delivery-state.ready { color:#176445; background:#d9f2e5; }
 .branch-order-delivery-state.missing { color:#875d11; background:#fff1cf; }
 .branch-order-item-list { display:grid; }
-.branch-order-item { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px, .9fr); gap:16px; align-items:center; padding:13px 17px; border-top:1px solid var(--line); }
+.branch-order-item { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px, .9fr); gap:12px; align-items:center; padding:10px 13px; border-top:1px solid var(--line); transition:border-color .15s ease,background .15s ease; }
 .branch-order-item:first-child { border-top:0; }
-.branch-order-item-select { display:flex; align-items:flex-start; gap:10px; min-width:0; cursor:pointer; }
-.branch-order-item-select input { margin-top:3px; }
+.branch-order-item:has([data-branch-order-select]:checked) { background:rgba(38,117,88,.075); }
+.branch-order-item-select { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; cursor:pointer; }
+.branch-order-item-select input { order:2; flex:0 0 20px; width:20px; height:20px; margin:0; accent-color:var(--green); }
 .branch-order-item-select > span { min-width:0; }
 .branch-order-item-select strong,.branch-order-item-select small { display:block; }
 .branch-order-item-select small { margin-top:3px; font-size:12px; }
-.branch-order-line-fields { display:grid; grid-template-columns:minmax(88px, .35fr) auto minmax(130px, 1fr); align-items:end; gap:8px; }
+.branch-order-line-fields { display:grid; grid-template-columns:minmax(76px, .3fr) auto minmax(120px, 1fr); align-items:end; gap:7px; }
 .branch-order-line-fields label { display:grid; gap:4px; }
 .branch-order-line-fields label > span { color:var(--muted); font-size:11px; font-weight:700; }
 .branch-order-unit { min-height:40px; display:flex; align-items:center; padding:0 8px; color:var(--muted); font-weight:700; }
-.branch-order-submit-row { display:flex; justify-content:space-between; align-items:center; gap:14px; }
+.branch-order-submit-row { display:flex; justify-content:space-between; align-items:center; gap:14px; padding-top:2px; }
 .branch-order-submit-row small { color:var(--muted); }
 .branch-order-settings-workspace { display:grid; gap:18px; }
 .branch-order-settings-section { display:grid; gap:12px; padding-top:4px; }
@@ -702,6 +709,13 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 .branch-order-history-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .branch-order-history-actions a { text-decoration:none; }
 .danger-button { color:#a33d35 !important; }
+
+@media (min-width:1000px) {
+  .branch-order-item-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:9px; }
+  .branch-order-item,.branch-order-item:first-child { grid-template-columns:1fr; gap:8px; min-width:0; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--panel, #fff); }
+  .branch-order-line-fields { grid-template-columns:76px auto minmax(0,1fr); }
+  .branch-order-line-fields :is(input,.branch-order-unit) { min-height:36px; }
+}
 
 .branch-vacation-card { display:grid; gap:14px; padding:20px; }
 .branch-vacation-card > p { margin:0; }
@@ -732,6 +746,7 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
   body.branch-organization-account .portal-tabs button.active { color:#fff; box-shadow:inset 3px 0 #eb7057; background:rgba(255,255,255,.13); }
   body.branch-organization-account .portal-tabs button:focus-visible { outline-color:rgba(255,255,255,.75); }
   body.branch-organization-account .portal-view { min-width:0; max-width:1360px; }
+  body.branch-organization-account .branch-orders-view { max-width:1120px; }
   body.branch-organization-account .view-heading { align-items:flex-start; margin-bottom:22px; padding:0 0 18px; border-bottom:1px solid rgba(220,226,223,.9); }
   body.branch-organization-account .view-heading h1 { font-size:28px; }
   body.branch-organization-account .portal-card { border-color:rgba(207,216,212,.9); border-radius:14px; background:rgba(255,255,255,.82); box-shadow:none; }
@@ -755,8 +770,10 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
   .branch-order-item-select input { order:2; flex:0 0 26px; width:26px; height:26px; margin:0; accent-color:var(--green); }
   .branch-order-line-fields { grid-template-columns:minmax(80px, .45fr) auto minmax(0, 1fr); }
   .branch-order-line-fields input { min-width:0; }
-  .branch-order-submit-row,.branch-order-editor-heading { align-items:stretch; flex-direction:column; }
-  .branch-order-submit-row .primary,.branch-order-editor-heading > .text-button { width:100%; }
+  .branch-order-draft-panel,.branch-order-submit-row,.branch-order-editor-heading { align-items:stretch; flex-direction:column; }
+  .branch-order-draft-actions,.branch-order-submit-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+  .branch-order-draft-actions > button,.branch-order-submit-actions > button { width:100%; justify-content:center; }
+  .branch-order-editor-heading > .text-button { width:100%; }
   .branch-order-editor-grid,.branch-order-settings-item { grid-template-columns:1fr; }
   .branch-order-settings-item .danger-button { justify-self:start; }
   .branch-order-history-actions > a { flex:1 1 140px; justify-content:center; }

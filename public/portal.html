@@ -397,9 +397,13 @@
           <div class="view-heading branch-orders-heading"><div><span class="eyebrow">Standortbestellung</span><h1>Filialbestellung</h1><p id="branchOrderWeek">Kalenderwoche wird ermittelt.</p></div><button class="text-button" id="branchOrderRefresh" type="button">Aktualisieren</button></div>
           <form class="portal-card branch-order-form" id="branchOrderForm">
             <label class="branch-order-employee-field"><span>Bestellung für</span><select id="branchOrderEmployee" required><option value="">Teammitglied wird geladen.</option></select><small>Name und Personalnummer werden mit der Bestellung gespeichert.</small></label>
+            <aside class="branch-order-draft-panel hidden" id="branchOrderDraftPanel" aria-live="polite">
+              <div><strong id="branchOrderDraftTitle">Entwurf</strong><small id="branchOrderDraftDetail"></small></div>
+              <div class="branch-order-draft-actions"><button class="text-button hidden" id="branchOrderContinueDraft" type="button">Fortsetzen</button><button class="text-button danger-button hidden" id="branchOrderDiscardDraft" type="button">Verwerfen</button></div>
+            </aside>
             <div class="branch-order-group-list" id="branchOrderGroups"><p class="empty-state">Bestellpositionen werden geladen.</p></div>
             <p class="message hidden" id="branchOrderMessage" role="status" aria-live="polite"></p>
-            <div class="branch-order-submit-row"><small>Die Kalenderwoche wird nicht eingegeben und kann nicht überschrieben werden.</small><button class="primary" id="branchOrderSubmit" type="submit">Bestellung senden</button></div>
+            <div class="branch-order-submit-row"><small>Die Kalenderwoche wird automatisch ermittelt. Ein gespeicherter Entwurf lässt sich später fortsetzen.</small><div class="branch-order-submit-actions"><button class="text-button" id="branchOrderSaveDraft" type="button">Entwurf speichern</button><button class="primary" id="branchOrderSubmit" type="submit">Bestellung senden</button></div></div>
           </form>
           <section class="portal-card branch-order-portal-history" aria-labelledby="branchOrderPortalHistoryTitle">
             <div class="list-heading"><div><span class="eyebrow">Nachweis</span><h2 id="branchOrderPortalHistoryTitle">Vergangene Bestellungen</h2></div><button class="text-button" id="branchOrderPortalHistoryRefresh" type="button">Aktualisieren</button></div>

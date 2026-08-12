@@ -90,6 +90,7 @@ function resetFixture() {
     db.prepare("DELETE FROM time_corrections").run();
     db.prepare("DELETE FROM time_entries").run();
     db.prepare("DELETE FROM shifts").run();
+    db.prepare("DELETE FROM employee_location_lendings").run();
     db.prepare("DELETE FROM week_options").run();
     db.prepare("DELETE FROM portal_sessions").run();
     db.prepare("DELETE FROM portal_permission_grants").run();
@@ -687,6 +688,14 @@ test("v0.63: Standortexport ordnet fremde Abteilungsdienste nur dem tatsächlich
   const otherDepartmentId = db.prepare("SELECT id FROM departments WHERE location_id = ? AND active = 1 ORDER BY id LIMIT 1").get(otherLocationId)?.id;
   assert.ok(otherDepartmentId);
   const date = "2026-07-15";
+  db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, note,
+      status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES ('v063-payroll-location-assignment', '101', ?, ?, ?, ?, ?, 1, '',
+      'active', 1, 'v063-test', CURRENT_TIMESTAMP, 'v063-test', CURRENT_TIMESTAMP)
+  `).run(locationId, otherLocationId, otherDepartmentId, date, date);
   db.prepare("INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area) VALUES ('101', ?, ?, '09:00', '17:00', 'Aushilfe')")
     .run(otherDepartmentId, date);
   const configuration = { layout: "daily_journal", sourceMode: "planned", format: "csv" };
