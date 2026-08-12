@@ -44,6 +44,7 @@ button { border:0; border-radius:10px; cursor:pointer; }
 .notification-button.has-unread { color:#7d5907; background:#fff0bd; }
 .notification-badge { position:absolute; top:-5px; right:-6px; display:grid; place-items:center; min-width:19px; height:19px; padding:0 5px; border:2px solid #faf9f4; border-radius:999px; color:white !important; background:#c45142; font-size:8px !important; font-weight:900; }
 .portal-settings-shortcut.active { color:white; background:var(--green); }
+.portal-settings-shortcut svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; vertical-align:middle; }
 main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .portal-tabs { display:flex; gap:7px; margin-bottom:22px; padding:5px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.58); }
 .portal-tabs button { flex:1; min-height:42px; padding:10px; color:var(--muted); background:transparent; font-weight:800; white-space:nowrap; }
@@ -67,6 +68,7 @@ main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .schedule-day header span { margin-top:2px; color:var(--muted); font-size:11px; }
 .shift-card,.option-card { margin-top:7px; padding:9px; border-radius:9px; font-size:12px; line-height:1.45; }
 .shift-card { color:#163d2f; background:#dff0e8; border-left:4px solid var(--green); }
+.shift-card.shift-card-colored { position:relative; padding-right:18px; color:#173a30; background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(255,255,255,.8)); border-left-color:var(--schedule-person-color); box-shadow:inset -6px 0 0 color-mix(in srgb,var(--schedule-person-color) 26%,transparent); }
 .option-card { color:#754a13; background:#f7eedb; border-left:4px solid #c68b2b; }
 .empty-day { color:#99a29e; font-size:11px; }
 .vacation-layout { display:grid; grid-template-columns:minmax(280px,.8fr) minmax(360px,1.2fr); gap:15px; }
@@ -668,7 +670,10 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 .branch-order-draft-actions,.branch-order-submit-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
 .branch-order-group-list { display:grid; gap:11px; }
 .branch-order-group { border:1px solid var(--line); border-radius:13px; overflow:hidden; background:var(--panel-soft, #f5f8f6); }
-.branch-order-group-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:12px 13px 9px; border-bottom:1px solid var(--line); }
+.branch-order-group-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:12px 13px 9px; border-bottom:1px solid var(--line); cursor:pointer; list-style:none; }
+.branch-order-group-heading::-webkit-details-marker { display:none; }
+.branch-order-group-toggle { display:grid; place-items:center; flex:0 0 27px; width:27px; height:27px; border:1px solid var(--line); border-radius:999px; color:var(--green); background:white; font-size:19px; line-height:1; font-weight:500; }
+.branch-order-group[open] .branch-order-group-toggle { transform:rotate(45deg); }
 .branch-order-group-heading h2,.branch-order-editor-heading h2 { margin:0; font-size:17px; }
 .branch-order-group-heading p,.branch-order-editor-heading p { margin:4px 0 0; font-size:13px; }
 .branch-order-delivery-state { flex:0 0 auto; border-radius:999px; padding:4px 8px; font-size:10px; font-weight:700; }
@@ -699,6 +704,27 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 .branch-order-recipient-editor label > span,.branch-order-group-editor label > span,.branch-order-settings-item label > span { color:var(--muted); font-size:12px; font-weight:700; }
 .branch-order-settings-items { display:grid; gap:8px; }
 .branch-order-settings-item { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:8px; align-items:end; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--panel, #fff); }
+.branch-order-catalog-item { display:grid; gap:9px; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--panel, #fff); }
+.branch-order-sort-actions { display:flex; align-items:center; justify-content:flex-end; gap:5px; flex-wrap:wrap; }
+.branch-order-sort-actions .text-button { min-height:34px; padding:6px 8px; }
+.branch-order-unit-editor { grid-template-columns:minmax(180px,.5fr) 1fr; align-items:end; }
+.branch-order-settings-item > strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.branch-order-settings-item > span { color:var(--muted); font-size:12px; }
+.branch-order-group-add { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+.branch-order-review { display:grid; gap:12px; }
+.branch-order-review-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.branch-order-review-heading h2 { margin:2px 0 0; }
+.branch-order-review-heading p { margin:4px 0 0; color:var(--muted); }
+.branch-order-review-person { display:flex; justify-content:space-between; gap:10px; padding:11px; border:1px solid var(--line); border-radius:10px; background:var(--surface-soft); }
+.branch-order-review-person small,.branch-order-review li small { display:block; color:var(--muted); }
+.branch-order-review ul { display:grid; gap:7px; margin:0; padding:0; list-style:none; }
+.branch-order-review li { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:10px 11px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+.branch-order-review li > span { display:grid; justify-items:end; color:var(--green-dark); font-weight:800; text-align:right; }
+.branch-mobile-action-bar,.branch-mobile-home-shortcuts { display:none; }
+.branch-portal-display-settings { display:grid; gap:15px; }
+.branch-portal-display-settings fieldset { display:grid; gap:9px; margin:0; padding:12px; border:1px solid var(--line); border-radius:11px; }
+.branch-portal-display-settings fieldset label { display:flex; align-items:center; gap:8px; }
+.branch-order-autosave-settings > label:last-child { display:grid; gap:5px; max-width:240px; }
 .branch-order-history { display:grid; gap:10px; margin-top:20px; padding-top:18px; border-top:1px solid var(--line); }
 .branch-order-history-entry { display:grid; gap:7px; padding:12px; border:1px solid var(--line); border-radius:12px; }
 .branch-order-history-entry strong,.branch-order-history-entry small { display:block; }
@@ -777,6 +803,36 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
   .branch-order-editor-grid,.branch-order-settings-item { grid-template-columns:1fr; }
   .branch-order-settings-item .danger-button { justify-self:start; }
   .branch-order-history-actions > a { flex:1 1 140px; justify-content:center; }
+  body.branch-mobile-account { padding-bottom:calc(86px + env(safe-area-inset-bottom)); }
+  body.branch-mobile-account .portal-tabs { display:none; }
+  body.branch-mobile-account .portal-settings-shortcut { display:grid; place-items:center; width:39px; min-height:39px; padding:7px; }
+  body.branch-mobile-account .portal-settings-shortcut::before { content:none; }
+  body.branch-mobile-account .portal-settings-shortcut-label { display:none; }
+  body.branch-mobile-account .portal-settings-shortcut svg { width:20px; height:20px; }
+  body.branch-mobile-account .branch-order-submit-row { display:none; }
+  body.branch-mobile-account .branch-mobile-action-bar { position:fixed; z-index:46; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); left:8px; display:flex; align-items:center; gap:7px; min-height:58px; padding:6px; border:1px solid var(--line); border-radius:15px; background:rgba(255,253,250,.97); box-shadow:0 12px 35px rgba(25,53,43,.25); backdrop-filter:blur(12px); }
+  body.branch-mobile-account .branch-mobile-action-bar.hidden { display:none; }
+  .branch-mobile-back { flex:0 0 48px; min-width:48px; min-height:46px; padding:0; font-size:25px; }
+  .branch-mobile-action-spacer { flex:1 1 auto; }
+  .branch-mobile-action-bar > button:not(.branch-mobile-back) { min-height:46px; padding:8px 10px; font-size:10px; white-space:nowrap; }
+  .branch-mobile-action-bar > button.hidden { display:none; }
+  .branch-mobile-home-shortcuts { display:grid; gap:8px; margin-top:15px; }
+  .branch-mobile-home-shortcuts.hidden { display:none; }
+  .branch-mobile-home-shortcuts button { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 10px; padding:15px; color:var(--ink); border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.82); text-align:left; }
+  .branch-mobile-home-shortcuts strong { font-size:15px; }
+  .branch-mobile-home-shortcuts span { grid-column:1; color:var(--muted); font-size:12px; }
+  .branch-mobile-home-shortcuts b { grid-column:2; grid-row:1 / span 2; align-self:center; color:var(--green); font-size:25px; }
+  body.branch-mobile-account .branch-order-group-heading { align-items:center; min-height:66px; padding:13px; }
+  body.branch-mobile-account .branch-order-group-heading h2 { font-size:17px; }
+  body.branch-mobile-account .branch-order-group-heading p { display:none; }
+  body.branch-mobile-account .branch-order-item { padding:13px; }
+  body.branch-mobile-account .branch-order-item-select { gap:12px; }
+  body.branch-mobile-account .branch-order-line-fields { grid-template-columns:minmax(80px,.38fr) auto minmax(0,1fr); }
+  body.branch-mobile-account .branch-order-review { min-height:calc(100vh - 230px); }
+  body.branch-mobile-account .branch-order-review li { align-items:center; }
+  body.branch-mobile-account .branch-order-review-heading { flex-direction:column; }
+  body.branch-mobile-account #branchOrderBackToEdit { display:none; }
+  body.branch-mobile-account .branch-order-editor-heading > .text-button { width:auto; }
   .branch-vacation-entry { align-items:flex-start; flex-direction:column; gap:5px; }
   .branch-vacation-entry time { text-align:left; }
 }

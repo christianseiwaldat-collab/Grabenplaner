@@ -1044,7 +1044,7 @@ function canManageBranchLoanOverview() {
 function canManageBranchOrders() {
   if (state.portalStatus?.installationFeatures?.branchOrders === false) return false;
   if (!state.portalStatus?.portalEnabled) return true;
-  return ["hr", "admin", "it_admin", "developer"].includes(state.portalSession?.user?.role)
+  return ["hr", "admin", "developer"].includes(state.portalSession?.user?.role)
     && state.portalSession?.user?.permissions?.includes("branch_orders:manage") === true;
 }
 
@@ -2283,6 +2283,9 @@ function renderLoanManagementFilters() {
 }
 
 function clonedBranchOrdersManagementConfiguration(configuration = {}) {
+  const sourceItems = Array.isArray(configuration.items) && configuration.items.length
+    ? configuration.items
+    : (configuration.groups || []).flatMap((group) => group.items || []);
   return {
     recipients: (configuration.recipients || []).map((recipient) => ({
       id: String(recipient.id || ""),
@@ -2291,16 +2294,26 @@ function clonedBranchOrdersManagementConfiguration(configuration = {}) {
       subjectTemplate: String(recipient.subjectTemplate || ""),
       bodyTemplate: String(recipient.bodyTemplate || ""),
     })),
+    units: (configuration.units || ["Stück"]).map((unit) => ({
+      id: String(typeof unit === "string" ? branchOrdersManagementClientId("unit") : unit?.id || branchOrdersManagementClientId("unit")),
+      title: String(typeof unit === "string" ? unit : unit?.title || "Stück"),
+    })),
+    items: sourceItems.reduce((items, item) => {
+      const id = String(item?.id || "");
+      if (!id || items.some((entry) => entry.id === id)) return items;
+      items.push({
+        id,
+        recipientId: String(item.recipientId || ""),
+        unitId: String(item.unitId || ""),
+        title: String(item.title || ""),
+      });
+      return items;
+    }, []),
     groups: (configuration.groups || []).map((group) => ({
       id: String(group.id || ""),
-      recipientId: String(group.recipientId || ""),
       title: String(group.title || ""),
       hint: String(group.hint || ""),
-      items: (group.items || []).map((item) => ({
-        id: String(item.id || ""),
-        title: String(item.title || ""),
-        unit: String(item.unit || "Stück"),
-      })),
+      itemIds: [...(group.itemIds || (group.items || []).map((item) => item.id))].map((id) => String(id || "")).filter(Boolean),
     })),
   };
 }
@@ -2411,11 +2424,13 @@ function renderBranchOrdersManagement() {
     renderBranchOrdersManagementHistory();
     return;
   }
-  const units = matchingSettings?.configuration?.units || ["Stück"];
   const recipientOptions = (selectedRecipientId) => [
     `<option value="" ${selectedRecipientId ? "" : "selected"}>Kein E-Mail-Ziel</option>`,
     ...draft.recipients.map((recipient) => `<option value="${escapeHtml(recipient.id)}" ${recipient.id === selectedRecipientId ? "selected" : ""}>${escapeHtml(recipient.email || "Neue Zieladresse")}</option>`),
   ].join("");
+  const unitOptions = (selectedUnitId) => draft.units.map((unit) => (
+    `<option value="${escapeHtml(unit.id)}" ${unit.id === selectedUnitId ? "selected" : ""}>${escapeHtml(unit.title || "Neue Einheit")}</option>`
+  )).join("");
   const recipientRows = draft.recipients.length ? draft.recipients.map((recipient) => `
     <article class="branch-orders-management-recipient" data-branch-orders-management-recipient="${escapeHtml(recipient.id)}">
       <header><div><span class="eyebrow">E-Mail-Ziel</span><h2>${escapeHtml(recipient.email || "Neue Zieladresse")}</h2></div><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-recipient" data-branch-orders-management-id="${escapeHtml(recipient.id)}">Entfernen</button></header>
@@ -2424,20 +2439,36 @@ function renderBranchOrdersManagement() {
       <label class="field"><span>E-Mail-Text</span><textarea data-branch-orders-management-field="recipient-body" rows="6" maxlength="8000">${escapeHtml(recipient.bodyTemplate)}</textarea><small>No-Reply-Hinweis und Antwortadresse werden serverseitig ergänzt.</small></label>
     </article>
   `).join("") : '<p class="settings-note">Noch kein E-Mail-Ziel angelegt.</p>';
-  const groupRows = draft.groups.length ? draft.groups.map((group) => `
-    <article class="branch-orders-management-group" data-branch-orders-management-group="${escapeHtml(group.id)}">
-      <header><div><span class="eyebrow">Warengruppe</span><h2>${escapeHtml(group.title || "Neue Warengruppe")}</h2></div><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Entfernen</button></header>
-      <div class="branch-orders-management-fields two-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="group-title" value="${escapeHtml(group.title)}" maxlength="120" /></label><label class="field"><span>E-Mail-Ziel</span><select data-branch-orders-management-field="group-recipient">${recipientOptions(group.recipientId)}</select></label></div>
-      <label class="field"><span>Hinweis im Bestellformular</span><input data-branch-orders-management-field="group-hint" value="${escapeHtml(group.hint)}" maxlength="400" /></label>
-      <div class="branch-orders-management-items">${group.items.length ? group.items.map((item) => `
-        <div class="branch-orders-management-item" data-branch-orders-management-item="${escapeHtml(item.id)}"><label class="field"><span>Position</span><input data-branch-orders-management-field="item-title" value="${escapeHtml(item.title)}" maxlength="180" /></label><label class="field"><span>Einheit</span><select data-branch-orders-management-field="item-unit">${units.map((unit) => `<option value="${escapeHtml(unit)}" ${unit === item.unit ? "selected" : ""}>${escapeHtml(unit)}</option>`).join("")}</select></label><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-item" data-branch-orders-management-id="${escapeHtml(item.id)}">Entfernen</button></div>
-      `).join("") : '<p class="settings-note">Noch keine Position angelegt.</p>'}</div>
-      <button class="text-button" type="button" data-branch-orders-management-action="add-item" data-branch-orders-management-id="${escapeHtml(group.id)}">+ Position hinzufügen</button>
+  const unitRows = draft.units.length ? draft.units.map((unit, index) => `
+    <div class="branch-orders-management-item branch-orders-management-unit" data-branch-orders-management-unit="${escapeHtml(unit.id)}">
+      <label class="field"><span>Einheit</span><input data-branch-orders-management-field="unit-title" value="${escapeHtml(unit.title)}" maxlength="40" /></label>
+      <div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}" data-branch-orders-management-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}" data-branch-orders-management-direction="1" ${index < draft.units.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}">Entfernen</button></div>
+    </div>
+  `).join("") : '<p class="settings-note">Noch keine Einheit angelegt.</p>';
+  const itemRows = draft.items.length ? draft.items.map((item, index) => `
+    <article class="branch-orders-management-catalog-item" data-branch-orders-management-catalog-item="${escapeHtml(item.id)}">
+      <header><div><span class="eyebrow">Position ${index + 1}</span><h2>${escapeHtml(item.title || "Neue Position")}</h2></div><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-catalog-item" data-branch-orders-management-id="${escapeHtml(item.id)}">Entfernen</button></header>
+      <div class="branch-orders-management-fields three-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="catalog-item-title" value="${escapeHtml(item.title)}" maxlength="180" /></label><label class="field"><span>Einheit</span><select data-branch-orders-management-field="catalog-item-unit">${unitOptions(item.unitId)}</select></label><label class="field"><span>E-Mail-Ziel</span><select data-branch-orders-management-field="catalog-item-recipient">${recipientOptions(item.recipientId)}</select></label></div>
     </article>
-  `).join("") : '<p class="settings-note">Noch keine Warengruppe angelegt.</p>';
+  `).join("") : '<p class="settings-note">Noch keine Position angelegt.</p>';
+  const groupRows = draft.groups.length ? draft.groups.map((group, groupIndex) => {
+    const memberships = group.itemIds.map((itemId) => draft.items.find((item) => item.id === itemId)).filter(Boolean);
+    const available = draft.items.filter((item) => !group.itemIds.includes(item.id));
+    return `
+      <article class="branch-orders-management-group" data-branch-orders-management-group="${escapeHtml(group.id)}">
+        <header><div><span class="eyebrow">Anzeigegruppe</span><h2>${escapeHtml(group.title || "Neue Anzeigegruppe")}</h2></div><div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="-1" ${groupIndex ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="1" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Entfernen</button></div></header>
+        <div class="branch-orders-management-fields two-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="group-title" value="${escapeHtml(group.title)}" maxlength="120" /></label><label class="field"><span>Hinweis im Bestellformular</span><input data-branch-orders-management-field="group-hint" value="${escapeHtml(group.hint)}" maxlength="400" /></label></div>
+        <div class="branch-orders-management-items">${memberships.length ? memberships.map((item, index) => `
+          <div class="branch-orders-management-item"><strong>${escapeHtml(item.title || "Neue Position")}</strong><span>${escapeHtml(draft.units.find((unit) => unit.id === item.unitId)?.title || "")}</span><div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="1" ${index < memberships.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}">Entfernen</button></div></div>
+        `).join("") : '<p class="settings-note">Noch keine Position zugeordnet.</p>'}</div>
+        ${available.length ? `<div class="branch-orders-management-group-add"><select data-branch-orders-management-group-item-select="${escapeHtml(group.id)}"><option value="">Position zuordnen</option>${available.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || "Neue Position")}</option>`).join("")}</select><button class="text-button" type="button" data-branch-orders-management-action="add-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}">+ Zuordnen</button></div>` : ""}
+      </article>`;
+  }).join("") : '<p class="settings-note">Noch keine Anzeigegruppe angelegt.</p>';
   elements.branchOrdersManagementWorkspace.innerHTML = `
     <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</section>
-    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Warengruppen und Positionen</h2><p>DS40, DS80 und DS620 bleiben getrennte Positionen; die Einheit wird je Position festgelegt.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Warengruppe</button></div>${groupRows}</section>`;
+    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">+ Einheit</button></div><div class="branch-orders-management-items">${unitRows}</div></section>
+    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">+ Position</button></div><div class="branch-orders-management-catalog-list">${itemRows}</div></section>
+    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Bestellansicht</span><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern nur die Bestellansicht; die Übergabe wird pro Position zusammengefasst.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Anzeigegruppe</button></div>${groupRows}</section>`;
   renderBranchOrdersManagementHistory();
 }
 
@@ -2486,8 +2517,9 @@ function updateBranchOrdersManagementDraftFromField(field) {
   if (!draft || !field) return;
   const key = field.dataset.branchOrdersManagementField;
   const recipient = field.closest("[data-branch-orders-management-recipient]");
-  const item = field.closest("[data-branch-orders-management-item]");
+  const item = field.closest("[data-branch-orders-management-catalog-item]");
   const group = field.closest("[data-branch-orders-management-group]");
+  const unit = field.closest("[data-branch-orders-management-unit]");
   if (recipient) {
     const target = draft.recipients.find((entry) => entry.id === recipient.dataset.branchOrdersManagementRecipient);
     if (!target) return;
@@ -2497,11 +2529,17 @@ function updateBranchOrdersManagementDraftFromField(field) {
     if (key === "recipient-body") target.bodyTemplate = field.value;
     return;
   }
+  if (unit) {
+    const target = draft.units.find((entry) => entry.id === unit.dataset.branchOrdersManagementUnit);
+    if (target && key === "unit-title") target.title = field.value;
+    return;
+  }
   if (item) {
-    const target = draft.groups.flatMap((entry) => entry.items).find((entry) => entry.id === item.dataset.branchOrdersManagementItem);
+    const target = draft.items.find((entry) => entry.id === item.dataset.branchOrdersManagementCatalogItem);
     if (!target) return;
-    if (key === "item-title") target.title = field.value;
-    if (key === "item-unit") target.unit = field.value;
+    if (key === "catalog-item-title") target.title = field.value;
+    if (key === "catalog-item-unit") target.unitId = field.value;
+    if (key === "catalog-item-recipient") target.recipientId = field.value;
     return;
   }
   if (group) {
@@ -2509,7 +2547,6 @@ function updateBranchOrdersManagementDraftFromField(field) {
     if (!target) return;
     if (key === "group-title") target.title = field.value;
     if (key === "group-hint") target.hint = field.value;
-    if (key === "group-recipient") target.recipientId = field.value;
   }
 }
 
@@ -2546,6 +2583,13 @@ async function saveBranchOrdersManagement() {
   }
 }
 
+function moveBranchOrdersManagementEntry(entries, id, direction) {
+  const index = entries.findIndex((entry) => (typeof entry === "string" ? entry : entry.id) === id);
+  const target = index + Number(direction || 0);
+  if (index < 0 || target < 0 || target >= entries.length) return;
+  [entries[index], entries[target]] = [entries[target], entries[index]];
+}
+
 function handleBranchOrdersManagementAction(event) {
   const button = event.target.closest("[data-branch-orders-management-action]");
   if (!button) return;
@@ -2564,22 +2608,63 @@ function handleBranchOrdersManagementAction(event) {
     });
   } else if (action === "remove-recipient") {
     draft.recipients = draft.recipients.filter((recipient) => recipient.id !== id);
-    draft.groups.forEach((group) => { if (group.recipientId === id) group.recipientId = ""; });
+    draft.items.forEach((item) => { if (item.recipientId === id) item.recipientId = ""; });
+  } else if (action === "add-unit") {
+    draft.units.push({ id: branchOrdersManagementClientId("unit"), title: "Neue Einheit" });
+  } else if (action === "remove-unit") {
+    if (draft.items.some((item) => item.unitId === id)) {
+      setBranchOrdersManagementMessage("Diese Einheit wird noch von einer Position verwendet.", true);
+      return;
+    }
+    draft.units = draft.units.filter((unit) => unit.id !== id);
+  } else if (action === "move-unit") {
+    moveBranchOrdersManagementEntry(draft.units, id, Number(button.dataset.branchOrdersManagementDirection));
+  } else if (action === "add-catalog-item") {
+    const unitId = draft.units[0]?.id || "";
+    if (!unitId) {
+      setBranchOrdersManagementMessage("Bitte zuerst mindestens eine Einheit anlegen.", true);
+      return;
+    }
+    draft.items.push({
+      id: branchOrdersManagementClientId("item"),
+      title: "Neue Position",
+      unitId,
+      recipientId: draft.recipients[0]?.id || "",
+    });
+  } else if (action === "remove-catalog-item") {
+    draft.items = draft.items.filter((item) => item.id !== id);
+    draft.groups.forEach((group) => { group.itemIds = group.itemIds.filter((itemId) => itemId !== id); });
   } else if (action === "add-group") {
     draft.groups.push({
       id: branchOrdersManagementClientId("group"),
-      recipientId: draft.recipients[0]?.id || "",
-      title: "Neue Warengruppe",
+      title: "Neue Anzeigegruppe",
       hint: "",
-      items: [],
+      itemIds: [],
     });
   } else if (action === "remove-group") {
     draft.groups = draft.groups.filter((group) => group.id !== id);
-  } else if (action === "add-item") {
-    const group = draft.groups.find((entry) => entry.id === id);
-    if (group) group.items.push({ id: branchOrdersManagementClientId("item"), title: "Neue Position", unit: "Stück" });
-  } else if (action === "remove-item") {
-    draft.groups.forEach((group) => { group.items = group.items.filter((item) => item.id !== id); });
+  } else if (action === "move-group") {
+    moveBranchOrdersManagementEntry(draft.groups, id, Number(button.dataset.branchOrdersManagementDirection));
+  } else if (action === "add-group-item") {
+    const groupId = button.dataset.branchOrdersManagementGroupId || "";
+    const selected = elements.branchOrdersManagementWorkspace?.querySelector(
+      `[data-branch-orders-management-group-item-select="${CSS.escape(groupId)}"]`,
+    )?.value || "";
+    const group = draft.groups.find((entry) => entry.id === groupId);
+    if (group && selected && !group.itemIds.includes(selected)) group.itemIds.push(selected);
+  } else if (action === "remove-group-item") {
+    const group = draft.groups.find((entry) => entry.id === button.dataset.branchOrdersManagementGroupId);
+    const itemId = button.dataset.branchOrdersManagementItemId || "";
+    if (group) group.itemIds = group.itemIds.filter((entry) => entry !== itemId);
+  } else if (action === "move-group-item") {
+    const group = draft.groups.find((entry) => entry.id === button.dataset.branchOrdersManagementGroupId);
+    if (group) {
+      moveBranchOrdersManagementEntry(
+        group.itemIds,
+        button.dataset.branchOrdersManagementItemId || "",
+        Number(button.dataset.branchOrdersManagementDirection),
+      );
+    }
   }
   renderBranchOrdersManagement();
 }

@@ -88,12 +88,20 @@ const portalState = {
   branchOrderDraftRevision: 0,
   branchOrderDraftDirty: false,
   branchOrderDraftLoading: false,
+  branchOrderDraftSaving: false,
+  branchOrderSubmitting: false,
   branchOrderDraftEmployeeNumber: "",
+  branchOrderSelection: new Map(),
+  branchOrderReviewVisible: false,
+  branchOrderAutosaveTimer: null,
   branchOrderPortalHistory: [],
   branchOrderSettings: null,
   branchOrderSettingsDraft: null,
   branchOrderHistory: [],
   branchOrderSettingsLoading: false,
+  branchPortalDisplaySettings: null,
+  branchPortalDisplaySettingsLoading: false,
+  scheduleData: null,
   branchVacationWeekStart: mondayOf(new Date()),
   branchVacationLoading: false,
 };
@@ -183,7 +191,7 @@ const el = Object.fromEntries([
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
-  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderSaveDraft", "branchOrderDraftPanel", "branchOrderDraftTitle", "branchOrderDraftDetail", "branchOrderContinueDraft", "branchOrderDiscardDraft", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList",
+  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderSaveDraft", "branchOrderDraftPanel", "branchOrderDraftTitle", "branchOrderDraftDetail", "branchOrderContinueDraft", "branchOrderDiscardDraft", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList", "branchOrderReview", "branchOrderReviewList", "branchOrderBackToEdit", "branchMobileActionBar", "branchMobileBack", "branchMobileReview", "branchMobileSubmit", "branchMobileSave", "branchMobileHomeShortcuts",
   "branchVacationTab", "branchVacationView", "branchVacationPrevious", "branchVacationCurrent", "branchVacationNext", "branchVacationWeek", "branchVacationList", "branchVacationMessage",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
@@ -219,7 +227,7 @@ const el = Object.fromEntries([
   "dateRangeDialog", "dateRangeForm", "dateRangeDialogTitle", "dateRangeStartText", "dateRangeEndText", "dateRangePreviousMonth", "dateRangeMonthLabel", "dateRangeNextMonth", "dateRangeCalendarGrid", "dateRangeOpenEnd", "dateRangeMessage", "dateRangeClose", "dateRangeCancel", "dateRangeApply",
   "sicknessRecoveryDialog", "sicknessRecoveryForm", "sicknessRecoveryTitle", "sicknessRecoveryCaseId", "sicknessRecoveryDate", "sicknessRecoveryMessage", "sicknessRecoveryClose", "sicknessRecoveryCancel", "sicknessRecoverySubmit",
   "emailSettingsCard", "emailSettingsSummary", "notificationPreferencesForm", "notificationTargetList", "notificationChannelSelection", "notificationPreferencesSaveButton", "notificationEarliestTime", "notificationQuietHoursBadge", "notificationQuietHoursHint", "emailSettingsMessage", "emailCategoryList",
-  "branchOrderSettingsCard", "branchOrderSettingsSummary", "branchOrderSettingsMessage", "branchOrderSettingsWorkspace", "refreshBranchOrderSettings", "saveBranchOrderSettings", "refreshBranchOrderHistory", "branchOrderHistoryList",
+  "branchOrderSettingsCard", "branchOrderSettingsSummary", "branchOrderSettingsMessage", "branchOrderSettingsWorkspace", "refreshBranchOrderSettings", "saveBranchOrderSettings", "refreshBranchOrderHistory", "branchOrderHistoryList", "branchPortalDisplaySettingsCard", "branchPortalDisplaySettingsSummary", "branchPortalDisplaySettingsForm", "branchPortalHideElapsedDays", "branchOrderAutosaveEnabled", "branchOrderAutosaveMinutes", "branchPortalDisplaySettingsMessage", "saveBranchPortalDisplaySettings",
 ].map((id) => [id, document.querySelector(`#${id}`)]));
 
 function mondayOf(value) {
@@ -448,8 +456,16 @@ function branchVacationCapabilityEnabled(user = portalUser()) {
 
 function branchOrderManagementEnabled(user = portalUser()) {
   return !isOrganizationAccount(user)
-    && ["hr", "admin", "it_admin", "developer"].includes(user?.role)
+    && ["hr", "admin", "developer"].includes(user?.role)
     && (user?.permissions || []).includes("branch_orders:manage");
+}
+
+function branchPortalDisplaySettingsEnabled(user = portalUser()) {
+  const allowed = (user?.permissions || []).includes("branch_portal:display:manage");
+  if (!allowed) return false;
+  return isOrganizationAccount(user)
+    ? user?.accountType === "branch"
+    : user?.isEmployee !== false;
 }
 
 function applyPortalCapabilities() {
@@ -695,14 +711,27 @@ function renderMobileMoreShortcuts(modules = effectiveMobileModules()) {
   });
 }
 
+function isBranchMobileAccount(user = portalUser()) {
+  return isMobileUi() && isOrganizationAccount(user) && user?.accountType === "branch";
+}
+
 function applyMobileLeadershipLayout() {
   const navigation = document.querySelector(".portal-tabs");
   if (!navigation) return;
+  const branchMobile = isBranchMobileAccount();
   const compactMobile = isMobileUi() && !isOrganizationAccount();
   portalState.mobileLeadership = compactMobile;
+  document.body.classList.toggle("branch-mobile-account", branchMobile);
+  navigation.classList.toggle("branch-mobile-navigation", branchMobile);
   navigation.classList.toggle("mobile-personal", compactMobile);
   navigation.classList.toggle("mobile-leadership", compactMobile && isLeadershipUser());
-  el.portalSettingsShortcut?.classList.toggle("hidden", !compactMobile);
+  el.portalSettingsShortcut?.classList.toggle("hidden", !(compactMobile || branchMobile));
+  if (branchMobile) {
+    renderBranchMobileHomeShortcuts();
+    renderBranchMobileActionBar();
+    if (portalState.scheduleData) renderSchedule(portalState.scheduleData);
+    return;
+  }
   const regularTabs = ["settings", "schedule", "branchVacation", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactMobile) {
@@ -1076,6 +1105,7 @@ async function loadPortalData() {
   if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
   if (loanCapabilityEnabled()) requests.push(loadLoanModule());
   if (branchOrderCapabilityEnabled()) requests.push(loadBranchOrderCatalog(), loadBranchOrderPortalHistory());
+  if (branchPortalDisplaySettingsEnabled()) requests.push(loadBranchPortalDisplaySettings());
   await Promise.allSettled(requests);
 }
 
@@ -1225,7 +1255,8 @@ function showLogin(error = "") {
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
   portalState.session = null;
-  document.body.classList.remove("branch-organization-account");
+  document.body.classList.remove("branch-organization-account", "branch-mobile-account");
+  stopBranchOrderAutosave();
   clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
   portalState.processTasksOwnerFingerprint = "";
   el.portalLogin.classList.remove("hidden");
@@ -1277,6 +1308,7 @@ function applySelfServiceVisibility() {
   el.notificationsButton?.classList.toggle("hidden", isOrganizationAccount());
   el.emailSettingsCard?.classList.toggle("hidden", !personalEmailSettingsAvailable());
   el.branchOrderSettingsCard?.classList.toggle("hidden", !branchOrderManagementEnabled());
+  el.branchPortalDisplaySettingsCard?.classList.toggle("hidden", !branchPortalDisplaySettingsEnabled());
   el.passwordSettingsCard?.classList.toggle("hidden", isOrganizationAccount());
   if (!hasPortalPermission("own_time_record:read")) {
     el.timeRecordStatementsPanel?.classList.add("hidden");
@@ -1377,6 +1409,7 @@ async function logout() {
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
   portalState.session = null;
+  stopBranchOrderAutosave();
   clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
   portalState.processTasksOwnerFingerprint = "";
   try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
@@ -1412,6 +1445,7 @@ function setTab(tab) {
     if (hasPortalPermission("own_privacy_requests:read")) loadPrivacyRequests();
     if (personalEmailSettingsAvailable()) loadEmailSettings();
     if (branchOrderManagementEnabled()) Promise.allSettled([loadBranchOrderSettings(), loadBranchOrderHistory()]);
+    if (branchPortalDisplaySettingsEnabled()) loadBranchPortalDisplaySettings();
     focusPortalSettingsSection();
   }
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
@@ -1430,6 +1464,9 @@ function setTab(tab) {
     document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item.dataset.leadershipKind === portalState.leadershipKind));
     loadLeadershipApprovals();
   }
+  if (tab !== "branchOrders") portalState.branchOrderReviewVisible = false;
+  renderBranchMobileHomeShortcuts();
+  renderBranchMobileActionBar();
 }
 
 function branchOrderStatusText(status) {
@@ -1449,6 +1486,7 @@ function branchOrderTimestampText(value) {
 }
 
 function clearBranchOrderItemFields() {
+  portalState.branchOrderSelection.clear();
   el.branchOrderGroups?.querySelectorAll("[data-branch-order-item]").forEach((row) => {
     const checkbox = row.querySelector("[data-branch-order-select]");
     const quantity = row.querySelector("[data-branch-order-quantity]");
@@ -1459,19 +1497,42 @@ function clearBranchOrderItemFields() {
   });
 }
 
+function branchOrderSelection() {
+  if (!(portalState.branchOrderSelection instanceof Map)) portalState.branchOrderSelection = new Map();
+  return portalState.branchOrderSelection;
+}
+
 function captureBranchOrderItems() {
-  const selected = [...(el.branchOrderGroups?.querySelectorAll("[data-branch-order-select]:checked") || [])];
-  const items = selected.map((checkbox) => {
-    const row = checkbox.closest("[data-branch-order-item]");
-    const quantity = Number(row?.querySelector("[data-branch-order-quantity]")?.value || "");
+  const selected = [...branchOrderSelection().entries()].map(([itemId, value]) => ({ itemId, ...value }));
+  const items = selected.map((entry) => {
+    const quantity = Number(entry.quantity);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) return null;
     return {
-      itemId: row?.dataset.branchOrderItem || "",
+      itemId: entry.itemId,
       quantity,
-      note: row?.querySelector("[data-branch-order-note]")?.value || "",
+      note: entry.note || "",
     };
   });
   return { selected, items };
+}
+
+function syncBranchOrderItemRepresentations(itemId, { sourceRow = null } = {}) {
+  const selected = branchOrderSelection().get(String(itemId));
+  el.branchOrderGroups?.querySelectorAll(`[data-branch-order-item="${CSS.escape(String(itemId))}"]`).forEach((row) => {
+    const checkbox = row.querySelector("[data-branch-order-select]");
+    const quantity = row.querySelector("[data-branch-order-quantity]");
+    const note = row.querySelector("[data-branch-order-note]");
+    if (row !== sourceRow) {
+      if (checkbox) checkbox.checked = Boolean(selected);
+      if (quantity) quantity.value = String(selected?.quantity ?? 1);
+      if (note) note.value = selected?.note || "";
+    }
+    row.classList.toggle("selected", Boolean(selected));
+  });
+}
+
+function syncAllBranchOrderItemRepresentations() {
+  for (const itemId of branchOrderSelection().keys()) syncBranchOrderItemRepresentations(itemId);
 }
 
 function renderBranchOrderDraftState() {
@@ -1481,7 +1542,7 @@ function renderBranchOrderDraftState() {
   const hasSavedDraft = portalState.branchOrderDraftRevision > 0;
   const { selected, items } = captureBranchOrderItems();
   const validItems = selected.length > 0 && items.every(Boolean);
-  const locked = portalState.branchOrderDraftLoading || Boolean(pending);
+  const locked = portalState.branchOrderDraftLoading || portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting || Boolean(pending);
 
   el.branchOrderGroups?.querySelectorAll("[data-branch-order-item]").forEach((row) => {
     const checkbox = row.querySelector("[data-branch-order-select]");
@@ -1497,6 +1558,8 @@ function renderBranchOrderDraftState() {
   if (el.branchOrderSubmit) {
     el.branchOrderSubmit.disabled = locked || !employeeNumber || !validItems;
   }
+  renderBranchOrderReview();
+  renderBranchMobileActionBar();
 
   const visible = portalState.branchOrderDraftLoading || Boolean(pending) || hasSavedDraft || portalState.branchOrderDraftDirty;
   el.branchOrderDraftPanel?.classList.toggle("hidden", !visible);
@@ -1536,6 +1599,7 @@ function resetBranchOrderDraftState({ clearItems = true } = {}) {
   portalState.branchOrderDraftRevision = 0;
   portalState.branchOrderDraftDirty = false;
   portalState.branchOrderDraftLoading = false;
+  portalState.branchOrderReviewVisible = false;
   if (clearItems) clearBranchOrderItemFields();
   renderBranchOrderDraftState();
 }
@@ -1547,15 +1611,11 @@ function applyPendingBranchOrderDraft() {
   let applied = 0;
   for (const item of draft.items || []) {
     if (!item.available) continue;
-    const row = [...el.branchOrderGroups.querySelectorAll("[data-branch-order-item]")]
-      .find((entry) => entry.dataset.branchOrderItem === item.itemId);
-    if (!row) continue;
-    const checkbox = row.querySelector("[data-branch-order-select]");
-    const quantity = row.querySelector("[data-branch-order-quantity]");
-    const note = row.querySelector("[data-branch-order-note]");
-    if (checkbox) checkbox.checked = true;
-    if (quantity) quantity.value = String(item.quantity);
-    if (note) note.value = item.note || "";
+    branchOrderSelection().set(String(item.itemId), {
+      quantity: Number(item.quantity),
+      note: item.note || "",
+    });
+    syncBranchOrderItemRepresentations(item.itemId);
     applied += 1;
   }
   portalState.branchOrderDraft = draft;
@@ -1600,14 +1660,16 @@ async function loadBranchOrderDraft(employeeNumber = el.branchOrderEmployee?.val
   }
 }
 
-async function saveBranchOrderDraft() {
+async function saveBranchOrderDraft({ silent = false } = {}) {
+  if (portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting) return false;
   const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
   const { selected, items } = captureBranchOrderItems();
   if (!employeeNumber || !selected.length || items.some((item) => item === null)) {
-    message(el.branchOrderMessage, "Bitte mindestens eine Position mit einer ganzen Menge zwischen 1 und 100000 auswählen.", true);
-    return;
+    if (!silent) message(el.branchOrderMessage, "Bitte mindestens eine Position mit einer ganzen Menge zwischen 1 und 100000 auswählen.", true);
+    return false;
   }
-  el.branchOrderSaveDraft.disabled = true;
+  portalState.branchOrderDraftSaving = true;
+  renderBranchOrderDraftState();
   try {
     const result = await api("/api/portal/v1/branch-orders/draft", {
       method: "PUT",
@@ -1621,10 +1683,13 @@ async function saveBranchOrderDraft() {
     portalState.branchOrderDraftPending = null;
     portalState.branchOrderDraftRevision = Number(result.draft?.revision || 0);
     portalState.branchOrderDraftDirty = false;
-    message(el.branchOrderMessage, "Entwurf wurde serverseitig gespeichert.");
+    if (!silent) message(el.branchOrderMessage, "Entwurf wurde serverseitig gespeichert.");
+    return true;
   } catch (error) {
     message(el.branchOrderMessage, error.message, true);
+    return false;
   } finally {
+    portalState.branchOrderDraftSaving = false;
     renderBranchOrderDraftState();
   }
 }
@@ -1668,18 +1733,19 @@ function renderBranchOrderCatalog() {
     el.branchOrderEmployee.value = selectedEmployee;
   }
   el.branchOrderEmployee.disabled = selfSubmission || !employees.length;
+  const mobileOrdering = isBranchMobileAccount();
   const groups = Array.isArray(catalog.groups) ? catalog.groups : [];
   el.branchOrderGroups.innerHTML = groups.length ? groups.map((group) => {
-    const deliveryReady = group.deliveryReady === true;
     const items = Array.isArray(group.items) ? group.items : [];
-    return `<section class="branch-order-group" data-branch-order-group="${esc(group.id)}">
-      <div class="branch-order-group-heading"><div><h2>${esc(group.title)}</h2>${group.hint ? `<p>${esc(group.hint)}</p>` : ""}</div><span class="branch-order-delivery-state ${deliveryReady ? "ready" : "missing"}">${deliveryReady ? "Versand bereit" : "E-Mail-Ziel fehlt"}</span></div>
-      <div class="branch-order-item-list">${items.length ? items.map((item) => `<article class="branch-order-item" data-branch-order-item="${esc(item.id)}" data-branch-order-ready="${deliveryReady ? "1" : "0"}">
-        <label class="branch-order-item-select"><span><strong>${esc(item.title)}</strong>${deliveryReady ? "" : "<small>Vor Versand muss PL+ ein E-Mail-Ziel einrichten.</small>"}</span><input data-branch-order-select type="checkbox" ${deliveryReady ? "" : "disabled"} /></label>
+    return `<details class="branch-order-group" data-branch-order-group="${esc(group.id)}" ${mobileOrdering ? "" : "open"}>
+      <summary class="branch-order-group-heading"><div><h2>${esc(group.title)}</h2>${group.hint ? `<p>${esc(group.hint)}</p>` : ""}</div><span class="branch-order-group-toggle" aria-hidden="true">+</span></summary>
+      <div class="branch-order-item-list">${items.length ? items.map((item) => `<article class="branch-order-item" data-branch-order-item="${esc(item.id)}" data-branch-order-ready="${item.orderReady === false ? "0" : "1"}">
+        <label class="branch-order-item-select"><span><strong>${esc(item.title)}</strong>${item.orderReady === false ? "<small>Diese Position ist derzeit nicht bestellbar.</small>" : ""}</span><input data-branch-order-select type="checkbox" ${item.orderReady === false ? "disabled" : ""} /></label>
         <div class="branch-order-line-fields"><label><span>Menge</span><input data-branch-order-quantity type="number" min="1" max="100000" step="1" inputmode="numeric" value="1" disabled /></label><span class="branch-order-unit">${esc(item.unit)}</span><label class="branch-order-note-field"><span>Bemerkung</span><input data-branch-order-note maxlength="500" disabled /></label></div>
       </article>`).join("") : '<p class="empty-state">Diese Warengruppe enthält noch keine Positionen.</p>'}</div>
-    </section>`;
+    </details>`;
   }).join("") : '<p class="empty-state">Für diesen Standort sind noch keine Bestellpositionen eingerichtet.</p>';
+  syncAllBranchOrderItemRepresentations();
   renderBranchOrderDraftState();
 }
 
@@ -1688,6 +1754,7 @@ async function loadBranchOrderCatalog() {
   try {
     const catalog = await api("/api/portal/v1/branch-orders/catalog");
     portalState.branchOrderCatalog = catalog;
+    configureBranchOrderAutosave();
     renderBranchOrderCatalog();
     await loadBranchOrderDraft(el.branchOrderEmployee?.value);
   } catch (error) {
@@ -1728,7 +1795,8 @@ async function loadBranchOrderPortalHistory() {
 }
 
 async function submitBranchOrder(event) {
-  event.preventDefault();
+  event?.preventDefault?.();
+  if (portalState.branchOrderSubmitting) return;
   const employeeNumber = String(el.branchOrderEmployee.value || "").trim();
   const { selected, items } = captureBranchOrderItems();
   if (!employeeNumber) {
@@ -1743,7 +1811,8 @@ async function submitBranchOrder(event) {
     message(el.branchOrderMessage, "Die Bestellmenge muss eine ganze Zahl zwischen 1 und 100000 sein.", true);
     return;
   }
-  el.branchOrderSubmit.disabled = true;
+  portalState.branchOrderSubmitting = true;
+  renderBranchOrderDraftState();
   message(el.branchOrderMessage, "");
   try {
     const result = await api("/api/portal/v1/branch-orders", {
@@ -1758,6 +1827,7 @@ async function submitBranchOrder(event) {
     portalState.branchOrderDraftPending = null;
     portalState.branchOrderDraftRevision = 0;
     portalState.branchOrderDraftDirty = false;
+    portalState.branchOrderReviewVisible = false;
     await Promise.all([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]);
     message(
       el.branchOrderMessage,
@@ -1769,8 +1839,106 @@ async function submitBranchOrder(event) {
   } catch (error) {
     message(el.branchOrderMessage, error.message, true);
   } finally {
+    portalState.branchOrderSubmitting = false;
     renderBranchOrderDraftState();
   }
+}
+
+function branchOrderGroupForItem(itemId) {
+  return (portalState.branchOrderCatalog?.groups || [])
+    .find((group) => (group.items || []).some((item) => item.id === itemId)) || null;
+}
+
+function branchOrderInputValid() {
+  const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
+  const { selected, items } = captureBranchOrderItems();
+  return Boolean(employeeNumber && selected.length && items.every(Boolean));
+}
+
+function setBranchOrderReviewVisible(visible) {
+  if (visible && !branchOrderInputValid()) {
+    message(el.branchOrderMessage, "Bitte Teammitglied und mindestens eine Position mit ganzer Menge auswählen.", true);
+    return;
+  }
+  portalState.branchOrderReviewVisible = Boolean(visible);
+  renderBranchOrderDraftState();
+}
+
+function renderBranchOrderReview() {
+  if (!el.branchOrderReview) return;
+  const visible = portalState.activeTab === "branchOrders" && portalState.branchOrderReviewVisible;
+  el.branchOrderReview.classList.toggle("hidden", !visible);
+  el.branchOrderGroups?.classList.toggle("hidden", visible);
+  el.branchOrderEmployee?.closest("label")?.classList.toggle("hidden", visible);
+  el.branchOrderDraftPanel?.classList.toggle("hidden", visible || el.branchOrderDraftPanel?.classList.contains("hidden"));
+  el.branchOrderForm?.classList.toggle("branch-order-reviewing", visible);
+  if (!visible || !el.branchOrderReviewList) return;
+  const employee = (portalState.branchOrderCatalog?.employees || [])
+    .find((entry) => entry.employeeNumber === String(el.branchOrderEmployee?.value || ""));
+  const { items } = captureBranchOrderItems();
+  el.branchOrderReviewList.innerHTML = `<div class="branch-order-review-person"><strong>${esc(employee?.fullName || "Teammitglied")}</strong><small>MA-Nr. ${esc(employee?.employeeNumber || "")}</small></div><ul>${items.filter(Boolean).map((item) => {
+    const group = branchOrderGroupForItem(item.itemId);
+    const catalogItem = (group?.items || []).find((entry) => entry.id === item.itemId);
+    return `<li><div><strong>${esc(catalogItem?.title || item.itemId)}</strong><small>${esc(group?.title || "Filialbestellung")}</small></div><span>${esc(String(item.quantity))} ${esc(catalogItem?.unit || "")}${item.note ? `<small>${esc(item.note)}</small>` : ""}</span></li>`;
+  }).join("")}</ul>`;
+}
+
+function stopBranchOrderAutosave() {
+  if (portalState.branchOrderAutosaveTimer) clearInterval(portalState.branchOrderAutosaveTimer);
+  portalState.branchOrderAutosaveTimer = null;
+}
+
+function configureBranchOrderAutosave() {
+  stopBranchOrderAutosave();
+  const settings = portalState.branchOrderCatalog?.portalSettings || portalState.branchPortalDisplaySettings;
+  if (!settings?.orderAutosaveEnabled) return;
+  const minutes = Number(settings.orderAutosaveMinutes);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 99) return;
+  portalState.branchOrderAutosaveTimer = setInterval(() => {
+    if (portalState.activeTab !== "branchOrders" || !portalState.branchOrderDraftDirty) return;
+    saveBranchOrderDraft({ silent: true });
+  }, minutes * 60 * 1000);
+}
+
+function renderBranchMobileHomeShortcuts() {
+  if (!el.branchMobileHomeShortcuts) return;
+  const visible = isBranchMobileAccount() && portalState.activeTab === "schedule";
+  el.branchMobileHomeShortcuts.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  const targets = [
+    ["branchOrders", "Filialbestellung", "Bestellung erfassen oder fortsetzen"],
+    ["branchVacation", "Urlaubsplanung", "Genehmigte Urlaubstage ansehen"],
+    ["loan", "Leihe", "Offene Leihen am Standort ansehen"],
+  ].filter(([tab]) => portalTabAllowed(tab));
+  el.branchMobileHomeShortcuts.innerHTML = targets.map(([tab, title, detail]) => (
+    `<button type="button" data-branch-mobile-home-tab="${esc(tab)}"><strong>${esc(title)}</strong><span>${esc(detail)}</span><b aria-hidden="true">›</b></button>`
+  )).join("");
+}
+
+function renderBranchMobileActionBar() {
+  if (!el.branchMobileActionBar) return;
+  const visible = isBranchMobileAccount() && portalState.activeTab !== "schedule";
+  el.branchMobileActionBar.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  const ordering = portalState.activeTab === "branchOrders";
+  const reviewing = ordering && portalState.branchOrderReviewVisible;
+  const valid = ordering && branchOrderInputValid();
+  if (el.branchMobileBack) el.branchMobileBack.disabled = portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting;
+  el.branchMobileReview?.classList.toggle("hidden", !ordering || reviewing);
+  el.branchMobileSubmit?.classList.toggle("hidden", !ordering || !reviewing);
+  el.branchMobileSave?.classList.toggle("hidden", !ordering);
+  if (el.branchMobileReview) el.branchMobileReview.disabled = !valid || portalState.branchOrderDraftLoading || portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting;
+  if (el.branchMobileSubmit) el.branchMobileSubmit.disabled = !valid || portalState.branchOrderDraftLoading || portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting;
+  if (el.branchMobileSave) el.branchMobileSave.disabled = !valid || !portalState.branchOrderDraftDirty || portalState.branchOrderDraftLoading || portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting;
+}
+
+function branchMobileBack() {
+  if (!isBranchMobileAccount()) return;
+  if (portalState.activeTab === "branchOrders" && portalState.branchOrderReviewVisible) {
+    setBranchOrderReviewVisible(false);
+    return;
+  }
+  setTab("schedule");
 }
 
 function branchOrderClientId(prefix) {
@@ -1787,16 +1955,21 @@ function clonedBranchOrderConfiguration(configuration = {}) {
       subjectTemplate: recipient.subjectTemplate || "",
       bodyTemplate: recipient.bodyTemplate || "",
     })),
+    units: (configuration.units || []).map((unit) => ({
+      id: typeof unit === "string" ? branchOrderClientId("unit") : unit.id,
+      title: typeof unit === "string" ? unit : unit.title || "Stück",
+    })),
+    items: (configuration.items || []).map((item) => ({
+      id: item.id,
+      recipientId: item.recipientId || "",
+      unitId: item.unitId || "",
+      title: item.title || "",
+    })),
     groups: (configuration.groups || []).map((group) => ({
       id: group.id,
-      recipientId: group.recipientId || "",
       title: group.title || "",
       hint: group.hint || "",
-      items: (group.items || []).map((item) => ({
-        id: item.id,
-        title: item.title || "",
-        unit: item.unit || "Stück",
-      })),
+      itemIds: [...(group.itemIds || (group.items || []).map((item) => item.id))],
     })),
   };
 }
@@ -1805,7 +1978,6 @@ function renderBranchOrderSettings() {
   const settings = portalState.branchOrderSettings;
   const draft = portalState.branchOrderSettingsDraft;
   if (!settings || !draft || !el.branchOrderSettingsWorkspace) return;
-  const units = settings.configuration?.units || ["Stück"];
   const emailDelivery = settings.emailDelivery || {};
   el.branchOrderSettingsSummary.textContent = emailDelivery.available
     ? "E-Mail-Übergabe ist technisch freigeschaltet."
@@ -1822,14 +1994,18 @@ function renderBranchOrderSettings() {
     <label><span>E-Mail-Betreff</span><input data-branch-order-settings-field="recipient-subject" value="${esc(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNumber}}, {{items}}.</small></label>
     <label><span>E-Mail-Text</span><textarea data-branch-order-settings-field="recipient-body" rows="6" maxlength="8000">${esc(recipient.bodyTemplate)}</textarea><small>Der Hinweis zur nicht möglichen Antwort und die Antwortadresse werden automatisch ergänzt.</small></label>
   </article>`).join("") : '<p class="empty-state">Noch kein E-Mail-Ziel angelegt.</p>';
-  const groupRows = draft.groups.length ? draft.groups.map((group) => `<article class="branch-order-group-editor" data-branch-order-group-editor="${esc(group.id)}">
-    <div class="branch-order-editor-heading"><strong>Warengruppe</strong><button class="text-button danger-button" type="button" data-branch-order-remove-group="${esc(group.id)}">Entfernen</button></div>
-    <div class="branch-order-editor-grid"><label><span>Bezeichnung</span><input data-branch-order-settings-field="group-title" value="${esc(group.title)}" maxlength="120" /></label><label><span>E-Mail-Ziel</span><select data-branch-order-settings-field="group-recipient">${recipientOptions(group.recipientId)}</select></label></div>
-    <label><span>Hinweis im Bestellformular</span><input data-branch-order-settings-field="group-hint" value="${esc(group.hint)}" maxlength="400" /></label>
-    <div class="branch-order-settings-items">${group.items.length ? group.items.map((item) => `<div class="branch-order-settings-item" data-branch-order-item-editor="${esc(item.id)}"><label><span>Position</span><input data-branch-order-settings-field="item-title" value="${esc(item.title)}" maxlength="180" /></label><label><span>Einheit</span><select data-branch-order-settings-field="item-unit">${units.map((unit) => `<option value="${esc(unit)}" ${unit === item.unit ? "selected" : ""}>${esc(unit)}</option>`).join("")}</select></label><button class="text-button danger-button" type="button" data-branch-order-remove-item="${esc(item.id)}">Entfernen</button></div>`).join("") : '<p class="empty-state">Noch keine Position angelegt.</p>'}</div>
-    <button class="text-button" type="button" data-branch-order-add-item="${esc(group.id)}">+ Position hinzufügen</button>
-  </article>`).join("") : '<p class="empty-state">Noch keine Warengruppe angelegt.</p>';
-  el.branchOrderSettingsWorkspace.innerHTML = `<section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>E-Mail-Ziele</h2><p>Jedes Ziel erhält einen eigenen Betreff, Text und eine frei bearbeitbare Antwortadresse.</p></div><button class="text-button" type="button" data-branch-order-add-recipient>+ E-Mail-Ziel</button></div>${recipientRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Warengruppen und Positionen</h2><p>Einheiten werden pro Position festgelegt.</p></div><button class="text-button" type="button" data-branch-order-add-group>+ Warengruppe</button></div>${groupRows}</section>`;
+  const unitOptions = (selected) => draft.units.map((unit) => (
+    `<option value="${esc(unit.id)}" ${unit.id === selected ? "selected" : ""}>${esc(unit.title || "Neue Einheit")}</option>`
+  )).join("");
+  const unitRows = draft.units.length ? draft.units.map((unit, index) => `<div class="branch-order-settings-item branch-order-unit-editor" data-branch-order-unit-editor="${esc(unit.id)}"><label><span>Einheit</span><input data-branch-order-settings-field="unit-title" value="${esc(unit.title)}" maxlength="40" /></label><div class="branch-order-sort-actions"><button class="text-button" type="button" data-branch-order-move-unit="${esc(unit.id)}" data-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-order-move-unit="${esc(unit.id)}" data-direction="1" ${index < draft.units.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-order-remove-unit="${esc(unit.id)}">Entfernen</button></div></div>`).join("") : '<p class="empty-state">Noch keine Einheit angelegt.</p>';
+  const itemRows = draft.items.length ? draft.items.map((item, index) => `<article class="branch-order-catalog-item" data-branch-order-catalog-item="${esc(item.id)}"><div class="branch-order-editor-heading"><strong>Position ${index + 1}</strong><button class="text-button danger-button" type="button" data-branch-order-remove-catalog-item="${esc(item.id)}">Entfernen</button></div><div class="branch-order-editor-grid"><label><span>Bezeichnung</span><input data-branch-order-settings-field="catalog-item-title" value="${esc(item.title)}" maxlength="180" /></label><label><span>Einheit</span><select data-branch-order-settings-field="catalog-item-unit">${unitOptions(item.unitId)}</select></label><label><span>E-Mail-Ziel</span><select data-branch-order-settings-field="catalog-item-recipient">${recipientOptions(item.recipientId)}</select></label></div></article>`).join("") : '<p class="empty-state">Noch keine Position angelegt.</p>';
+  const assignableItems = (group) => draft.items.filter((item) => !group.itemIds.includes(item.id));
+  const groupRows = draft.groups.length ? draft.groups.map((group, groupIndex) => {
+    const memberships = group.itemIds.map((itemId) => branchOrderDraftItem(itemId)).filter(Boolean);
+    const available = assignableItems(group);
+    return `<article class="branch-order-group-editor" data-branch-order-group-editor="${esc(group.id)}"><div class="branch-order-editor-heading"><strong>Anzeigegruppe</strong><div class="branch-order-sort-actions"><button class="text-button" type="button" data-branch-order-move-group="${esc(group.id)}" data-direction="-1" ${groupIndex ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-order-move-group="${esc(group.id)}" data-direction="1" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-order-remove-group="${esc(group.id)}">Entfernen</button></div></div><label><span>Bezeichnung</span><input data-branch-order-settings-field="group-title" value="${esc(group.title)}" maxlength="120" /></label><label><span>Hinweis im Bestellformular</span><input data-branch-order-settings-field="group-hint" value="${esc(group.hint)}" maxlength="400" /></label><div class="branch-order-settings-items">${memberships.length ? memberships.map((item, index) => `<div class="branch-order-settings-item"><strong>${esc(item.title || "Neue Position")}</strong><span>${esc(branchOrderDraftUnit(item.unitId)?.title || "")}</span><div class="branch-order-sort-actions"><button class="text-button" type="button" data-branch-order-move-group-item="${esc(group.id)}" data-item-id="${esc(item.id)}" data-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-order-move-group-item="${esc(group.id)}" data-item-id="${esc(item.id)}" data-direction="1" ${index < memberships.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-order-remove-group-item="${esc(group.id)}" data-item-id="${esc(item.id)}">Entfernen</button></div></div>`).join("") : '<p class="empty-state">Noch keine Position zugeordnet.</p>'}</div>${available.length ? `<div class="branch-order-group-add"><select data-branch-order-group-item-select="${esc(group.id)}"><option value="">Position zuordnen</option>${available.map((item) => `<option value="${esc(item.id)}">${esc(item.title || "Neue Position")}</option>`).join("")}</select><button class="text-button" type="button" data-branch-order-add-group-item="${esc(group.id)}">+ Zuordnen</button></div>` : ""}</article>`;
+  }).join("") : '<p class="empty-state">Noch keine Anzeigegruppe angelegt.</p>';
+  el.branchOrderSettingsWorkspace.innerHTML = `<section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>E-Mail-Ziele</h2><p>Jedes Ziel erhält einen eigenen Betreff, Text und eine frei bearbeitbare Antwortadresse.</p></div><button class="text-button" type="button" data-branch-order-add-recipient>+ E-Mail-Ziel</button></div>${recipientRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt und entfernt werden.</p></div><button class="text-button" type="button" data-branch-order-add-unit>+ Einheit</button></div>${unitRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Positionskatalog</h2><p>Eine Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><button class="text-button" type="button" data-branch-order-add-catalog-item>+ Position</button></div>${itemRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern die Bestellansicht, nicht die E-Mail-Zustellung.</p></div><button class="text-button" type="button" data-branch-order-add-group>+ Anzeigegruppe</button></div>${groupRows}</section>`;
 }
 
 function branchOrderDraftRecipient(id) {
@@ -1840,12 +2016,12 @@ function branchOrderDraftGroup(id) {
   return portalState.branchOrderSettingsDraft?.groups.find((group) => group.id === id) || null;
 }
 
+function branchOrderDraftUnit(id) {
+  return portalState.branchOrderSettingsDraft?.units.find((unit) => unit.id === id) || null;
+}
+
 function branchOrderDraftItem(id) {
-  for (const group of portalState.branchOrderSettingsDraft?.groups || []) {
-    const item = group.items.find((entry) => entry.id === id);
-    if (item) return item;
-  }
-  return null;
+  return portalState.branchOrderSettingsDraft?.items.find((item) => item.id === id) || null;
 }
 
 async function loadBranchOrderSettings() {
@@ -1914,30 +2090,128 @@ async function saveBranchOrderSettings() {
   }
 }
 
-async function loadSchedule() {
+function renderBranchPortalDisplaySettings() {
+  const settings = portalState.branchPortalDisplaySettings;
+  if (!settings || !el.branchPortalDisplaySettingsForm) return;
+  const mode = settings.scheduleDisplayMode === "colored" ? "colored" : "classic";
+  el.branchPortalDisplaySettingsForm.querySelectorAll('[name="branchScheduleDisplayMode"]')
+    .forEach((input) => { input.checked = input.value === mode; });
+  if (el.branchPortalHideElapsedDays) el.branchPortalHideElapsedDays.checked = settings.mobileHideElapsedDays === true;
+  if (el.branchOrderAutosaveEnabled) el.branchOrderAutosaveEnabled.checked = settings.orderAutosaveEnabled === true;
+  if (el.branchOrderAutosaveMinutes) el.branchOrderAutosaveMinutes.value = String(settings.orderAutosaveMinutes || 10);
+  if (el.branchPortalDisplaySettingsSummary) {
+    el.branchPortalDisplaySettingsSummary.textContent = mode === "colored"
+      ? "Farbig nach Teammitglied · mobile Ansicht angepasst"
+      : "Klassische Dienstplanansicht · mobile Ansicht angepasst";
+  }
+}
+
+async function loadBranchPortalDisplaySettings() {
+  if (!branchPortalDisplaySettingsEnabled() || portalState.branchPortalDisplaySettingsLoading) return;
+  portalState.branchPortalDisplaySettingsLoading = true;
+  try {
+    const result = await api("/api/portal/v1/branch-portal-settings");
+    portalState.branchPortalDisplaySettings = result.settings || null;
+    if (portalState.scheduleData?.displaySettings && result.settings) {
+      portalState.scheduleData.displaySettings = result.settings;
+      renderSchedule(portalState.scheduleData);
+    }
+    renderBranchPortalDisplaySettings();
+    configureBranchOrderAutosave();
+    message(el.branchPortalDisplaySettingsMessage, "");
+  } catch (error) {
+    message(el.branchPortalDisplaySettingsMessage, error.message, true);
+  } finally {
+    portalState.branchPortalDisplaySettingsLoading = false;
+  }
+}
+
+async function saveBranchPortalDisplaySettings(event) {
+  event?.preventDefault();
+  if (!branchPortalDisplaySettingsEnabled()) return;
+  const mode = el.branchPortalDisplaySettingsForm?.querySelector('[name="branchScheduleDisplayMode"]:checked')?.value || "classic";
+  const minutes = Number(el.branchOrderAutosaveMinutes?.value || "");
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 99) {
+    message(el.branchPortalDisplaySettingsMessage, "Der Speicherabstand muss eine ganze Zahl zwischen 1 und 99 Minuten sein.", true);
+    return;
+  }
+  if (el.saveBranchPortalDisplaySettings) el.saveBranchPortalDisplaySettings.disabled = true;
+  try {
+    const result = await api("/api/portal/v1/branch-portal-settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        settings: {
+          scheduleDisplayMode: mode,
+          mobileHideElapsedDays: el.branchPortalHideElapsedDays?.checked === true,
+          orderAutosaveEnabled: el.branchOrderAutosaveEnabled?.checked === true,
+          orderAutosaveMinutes: minutes,
+        },
+      }),
+    });
+    portalState.branchPortalDisplaySettings = result.settings;
+    if (portalState.scheduleData) {
+      portalState.scheduleData.displaySettings = result.settings;
+      renderSchedule(portalState.scheduleData);
+    }
+    if (portalState.branchOrderCatalog) portalState.branchOrderCatalog.portalSettings = result.settings;
+    renderBranchPortalDisplaySettings();
+    configureBranchOrderAutosave();
+    message(el.branchPortalDisplaySettingsMessage, "Filialkonto-Einstellungen wurden gespeichert.");
+  } catch (error) {
+    message(el.branchPortalDisplaySettingsMessage, error.message, true);
+  } finally {
+    if (el.saveBranchPortalDisplaySettings) el.saveBranchPortalDisplaySettings.disabled = false;
+  }
+}
+
+function schedulePersonColor(value) {
+  const explicit = String(value || "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(explicit)) return explicit;
+  const palette = ["#2b7d66", "#2e6f95", "#a05c43", "#7a5c93", "#9a6b21", "#477a58", "#a64d68", "#386f74"];
+  let hash = 0;
+  for (const character of String(value || "")) hash = ((hash * 31) + character.charCodeAt(0)) >>> 0;
+  return palette[hash % palette.length];
+}
+
+function renderSchedule(data) {
+  if (!data) return;
   const organizationView = isOrganizationAccount();
-  const route = organizationView
-    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}`
-    : `/api/portal/v1/me/schedule?week=${portalState.weekStart}`;
-  const data = await api(route);
   portalState.weekStart = data.weekStart;
+  portalState.scheduleData = data;
   el.scheduleHeading.textContent = organizationView
     ? `${data.location?.name || "Standort"} · KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`
     : `KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
   const today = iso(new Date());
-  el.scheduleGrid.innerHTML = Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(data.weekStart, index);
+  const settings = data.displaySettings || {};
+  const hideElapsedDays = organizationView
+    && isBranchMobileAccount()
+    && settings.mobileHideElapsedDays === true
+    && data.weekStart === mondayOf(new Date());
+  const colored = organizationView && settings.scheduleDisplayMode === "colored";
+  el.scheduleGrid.dataset.scheduleDisplay = colored ? "colored" : "classic";
+  const dates = Array.from({ length: 7 }, (_, index) => ({ date: addDays(data.weekStart, index), index }))
+    .filter(({ date }) => !hideElapsedDays || date >= today);
+  el.scheduleGrid.innerHTML = dates.map(({ date, index }) => {
     const shifts = data.shifts.filter((item) => (item.shift_date || item.date) === date);
     const options = organizationView
       ? []
       : data.options.filter((item) => item.date_from <= date && item.date_to >= date);
     return `<article class="schedule-day ${date === today ? "today" : ""} ${index > 4 ? "weekend" : ""}">
       <header><strong>${weekdayNames[index]}</strong><span>${dateText(date, { day: "2-digit", month: "2-digit" })}</span></header>
-      ${shifts.map((shift) => `<div class="shift-card">${organizationView && shift.employeeName ? `<span>${esc(shift.employeeName)}</span><br>` : ""}<strong>${esc(shift.start_time || shift.startTime)}–${esc(shift.end_time || shift.endTime)}</strong>${shift.department_name || shift.departmentName ? `<br>${esc(shift.department_name || shift.departmentName)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
+      ${shifts.map((shift) => `<div class="shift-card${colored ? " shift-card-colored" : ""}"${colored ? ` style="--schedule-person-color:${schedulePersonColor(shift.employeeColor || shift.employeeName)}"` : ""}>${organizationView && shift.employeeName ? `<span>${esc(shift.employeeName)}</span><br>` : ""}<strong>${esc(shift.start_time || shift.startTime)}–${esc(shift.end_time || shift.endTime)}</strong>${shift.department_name || shift.departmentName ? `<br>${esc(shift.department_name || shift.departmentName)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
       ${options.map((option) => `<div class="option-card"><strong>${esc(optionNames[option.option_type] || option.option_type)}</strong>${!option.all_day && option.start_time ? `<br>${esc(option.start_time)}–${esc(option.end_time)}` : ""}${option.note ? `<br>${esc(option.note)}` : ""}</div>`).join("")}
       ${!shifts.length && !options.length ? '<span class="empty-day">Kein Eintrag</span>' : ""}
     </article>`;
   }).join("");
+  renderBranchMobileHomeShortcuts();
+}
+
+async function loadSchedule() {
+  const organizationView = isOrganizationAccount();
+  const route = organizationView
+    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}`
+    : `/api/portal/v1/me/schedule?week=${portalState.weekStart}`;
+  renderSchedule(await api(route));
 }
 
 function branchVacationDateRangeText(entry) {
@@ -5638,30 +5912,73 @@ el.branchOrderEmployee?.addEventListener("change", () => {
 });
 el.branchOrderGroups?.addEventListener("change", (event) => {
   const checkbox = event.target.closest("[data-branch-order-select]");
-  if (checkbox || event.target.closest("[data-branch-order-quantity], [data-branch-order-note]")) {
-    portalState.branchOrderDraftDirty = true;
-    renderBranchOrderDraftState();
-  }
+  const row = event.target.closest("[data-branch-order-item]");
+  if (!row) return;
+  const itemId = String(row.dataset.branchOrderItem || "");
+  if (!itemId) return;
+  if (checkbox) {
+    if (checkbox.checked) {
+      const quantity = Number(row.querySelector("[data-branch-order-quantity]")?.value || 1);
+      branchOrderSelection().set(itemId, { quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1, note: row.querySelector("[data-branch-order-note]")?.value || "" });
+    } else {
+      branchOrderSelection().delete(itemId);
+    }
+  } else if (event.target.closest("[data-branch-order-quantity], [data-branch-order-note]")) {
+    const current = branchOrderSelection().get(itemId);
+    if (current) {
+      current.quantity = Number(row.querySelector("[data-branch-order-quantity]")?.value || "");
+      current.note = row.querySelector("[data-branch-order-note]")?.value || "";
+    }
+  } else return;
+  syncBranchOrderItemRepresentations(itemId);
+  portalState.branchOrderDraftDirty = true;
+  portalState.branchOrderReviewVisible = false;
+  renderBranchOrderDraftState();
 });
 el.branchOrderGroups?.addEventListener("input", (event) => {
   if (!event.target.closest("[data-branch-order-quantity], [data-branch-order-note]")) return;
+  const row = event.target.closest("[data-branch-order-item]");
+  const itemId = String(row?.dataset.branchOrderItem || "");
+  const current = branchOrderSelection().get(itemId);
+  if (!current) return;
+  current.quantity = row.querySelector("[data-branch-order-quantity]")?.value || "";
+  current.note = row.querySelector("[data-branch-order-note]")?.value || "";
+  syncBranchOrderItemRepresentations(itemId, { sourceRow: row });
   portalState.branchOrderDraftDirty = true;
+  portalState.branchOrderReviewVisible = false;
   renderBranchOrderDraftState();
 });
 el.branchOrderSaveDraft?.addEventListener("click", saveBranchOrderDraft);
 el.branchOrderContinueDraft?.addEventListener("click", applyPendingBranchOrderDraft);
 el.branchOrderDiscardDraft?.addEventListener("click", discardBranchOrderDraft);
+el.branchOrderBackToEdit?.addEventListener("click", () => setBranchOrderReviewVisible(false));
+el.branchMobileBack?.addEventListener("click", branchMobileBack);
+el.branchMobileReview?.addEventListener("click", () => setBranchOrderReviewVisible(true));
+el.branchMobileSave?.addEventListener("click", () => saveBranchOrderDraft());
+el.branchMobileSubmit?.addEventListener("click", () => submitBranchOrder());
+el.branchMobileHomeShortcuts?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-branch-mobile-home-tab]");
+  if (button) setTab(button.dataset.branchMobileHomeTab);
+});
 el.refreshBranchOrderSettings?.addEventListener("click", loadBranchOrderSettings);
 el.saveBranchOrderSettings?.addEventListener("click", saveBranchOrderSettings);
-  el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);
+el.branchPortalDisplaySettingsForm?.addEventListener("submit", saveBranchPortalDisplaySettings);
+el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);
   el.branchOrderPortalHistoryRefresh?.addEventListener("click", loadBranchOrderPortalHistory);
+function moveBranchOrderDraftEntry(entries, id, direction) {
+  const index = entries.findIndex((entry) => (typeof entry === "string" ? entry : entry.id) === id);
+  const target = index + Number(direction || 0);
+  if (index < 0 || target < 0 || target >= entries.length) return;
+  [entries[index], entries[target]] = [entries[target], entries[index]];
+}
 function updateBranchOrderSettingsDraft(event) {
   const field = event.target.closest("[data-branch-order-settings-field]");
   if (!field || !portalState.branchOrderSettingsDraft) return;
   const key = field.dataset.branchOrderSettingsField;
   const recipient = field.closest("[data-branch-order-recipient]");
   const group = field.closest("[data-branch-order-group-editor]");
-  const item = field.closest("[data-branch-order-item-editor]");
+  const item = field.closest("[data-branch-order-catalog-item]");
+  const unit = field.closest("[data-branch-order-unit-editor]");
   if (recipient) {
     const target = branchOrderDraftRecipient(recipient.dataset.branchOrderRecipient);
     if (!target) return;
@@ -5671,11 +5988,17 @@ function updateBranchOrderSettingsDraft(event) {
     if (key === "recipient-body") target.bodyTemplate = field.value;
     return;
   }
+  if (unit) {
+    const target = branchOrderDraftUnit(unit.dataset.branchOrderUnitEditor);
+    if (target && key === "unit-title") target.title = field.value;
+    return;
+  }
   if (item) {
-    const target = branchOrderDraftItem(item.dataset.branchOrderItemEditor);
+    const target = branchOrderDraftItem(item.dataset.branchOrderCatalogItem);
     if (!target) return;
-    if (key === "item-title") target.title = field.value;
-    if (key === "item-unit") target.unit = field.value;
+    if (key === "catalog-item-title") target.title = field.value;
+    if (key === "catalog-item-unit") target.unitId = field.value;
+    if (key === "catalog-item-recipient") target.recipientId = field.value;
     return;
   }
   if (group) {
@@ -5683,7 +6006,6 @@ function updateBranchOrderSettingsDraft(event) {
     if (!target) return;
     if (key === "group-title") target.title = field.value;
     if (key === "group-hint") target.hint = field.value;
-    if (key === "group-recipient") target.recipientId = field.value;
   }
 }
 function captureBranchOrderSettingsDraft() {
@@ -5712,17 +6034,56 @@ el.branchOrderSettingsWorkspace?.addEventListener("click", (event) => {
   if (removeRecipient) {
     const id = removeRecipient.dataset.branchOrderRemoveRecipient;
     draft.recipients = draft.recipients.filter((recipient) => recipient.id !== id);
-    draft.groups.forEach((group) => { if (group.recipientId === id) group.recipientId = ""; });
+    draft.items.forEach((item) => { if (item.recipientId === id) item.recipientId = ""; });
+    renderBranchOrderSettings();
+    return;
+  }
+  if (event.target.closest("[data-branch-order-add-unit]")) {
+    draft.units.push({ id: branchOrderClientId("unit"), title: "Neue Einheit" });
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeUnit = event.target.closest("[data-branch-order-remove-unit]");
+  if (removeUnit) {
+    const id = removeUnit.dataset.branchOrderRemoveUnit;
+    if (draft.items.some((item) => item.unitId === id)) {
+      message(el.branchOrderSettingsMessage, "Diese Einheit wird noch von einer Position verwendet.", true);
+      return;
+    }
+    draft.units = draft.units.filter((unit) => unit.id !== id);
+    renderBranchOrderSettings();
+    return;
+  }
+  const moveUnit = event.target.closest("[data-branch-order-move-unit]");
+  if (moveUnit) {
+    moveBranchOrderDraftEntry(draft.units, moveUnit.dataset.branchOrderMoveUnit, Number(moveUnit.dataset.direction));
+    renderBranchOrderSettings();
+    return;
+  }
+  if (event.target.closest("[data-branch-order-add-catalog-item]")) {
+    const defaultUnit = draft.units[0]?.id || "";
+    if (!defaultUnit) {
+      message(el.branchOrderSettingsMessage, "Bitte zuerst mindestens eine Einheit anlegen.", true);
+      return;
+    }
+    draft.items.push({ id: branchOrderClientId("item"), title: "Neue Position", unitId: defaultUnit, recipientId: draft.recipients[0]?.id || "" });
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeCatalogItem = event.target.closest("[data-branch-order-remove-catalog-item]");
+  if (removeCatalogItem) {
+    const id = removeCatalogItem.dataset.branchOrderRemoveCatalogItem;
+    draft.items = draft.items.filter((item) => item.id !== id);
+    draft.groups.forEach((group) => { group.itemIds = group.itemIds.filter((itemId) => itemId !== id); });
     renderBranchOrderSettings();
     return;
   }
   if (event.target.closest("[data-branch-order-add-group]")) {
     draft.groups.push({
       id: branchOrderClientId("group"),
-      recipientId: draft.recipients[0]?.id || "",
-      title: "Neue Warengruppe",
+      title: "Neue Anzeigegruppe",
       hint: "",
-      items: [],
+      itemIds: [],
     });
     renderBranchOrderSettings();
     return;
@@ -5733,17 +6094,32 @@ el.branchOrderSettingsWorkspace?.addEventListener("click", (event) => {
     renderBranchOrderSettings();
     return;
   }
-  const addItem = event.target.closest("[data-branch-order-add-item]");
-  if (addItem) {
-    const group = branchOrderDraftGroup(addItem.dataset.branchOrderAddItem);
-    if (group) group.items.push({ id: branchOrderClientId("item"), title: "Neue Position", unit: "Stück" });
+  const moveGroup = event.target.closest("[data-branch-order-move-group]");
+  if (moveGroup) {
+    moveBranchOrderDraftEntry(draft.groups, moveGroup.dataset.branchOrderMoveGroup, Number(moveGroup.dataset.direction));
     renderBranchOrderSettings();
     return;
   }
-  const removeItem = event.target.closest("[data-branch-order-remove-item]");
-  if (removeItem) {
-    const id = removeItem.dataset.branchOrderRemoveItem;
-    draft.groups.forEach((group) => { group.items = group.items.filter((item) => item.id !== id); });
+  const addGroupItem = event.target.closest("[data-branch-order-add-group-item]");
+  if (addGroupItem) {
+    const groupId = addGroupItem.dataset.branchOrderAddGroupItem;
+    const selected = el.branchOrderSettingsWorkspace.querySelector(`[data-branch-order-group-item-select="${CSS.escape(groupId)}"]`)?.value || "";
+    const group = branchOrderDraftGroup(groupId);
+    if (group && selected && !group.itemIds.includes(selected)) group.itemIds.push(selected);
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeGroupItem = event.target.closest("[data-branch-order-remove-group-item]");
+  if (removeGroupItem) {
+    const group = branchOrderDraftGroup(removeGroupItem.dataset.branchOrderRemoveGroupItem);
+    if (group) group.itemIds = group.itemIds.filter((id) => id !== removeGroupItem.dataset.itemId);
+    renderBranchOrderSettings();
+    return;
+  }
+  const moveGroupItem = event.target.closest("[data-branch-order-move-group-item]");
+  if (moveGroupItem) {
+    const group = branchOrderDraftGroup(moveGroupItem.dataset.branchOrderMoveGroupItem);
+    if (group) moveBranchOrderDraftEntry(group.itemIds, moveGroupItem.dataset.itemId, Number(moveGroupItem.dataset.direction));
     renderBranchOrderSettings();
   }
 });

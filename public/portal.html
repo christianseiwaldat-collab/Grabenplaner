@@ -26,7 +26,7 @@
     <div class="portal-app hidden" id="portalApp">
       <header class="portal-header">
         <div class="portal-brand"><img id="portalLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" /><div><strong>Grabenplaner</strong><span>Mitarbeiterportal</span></div></div>
-        <div class="portal-user"><div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button><button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Persönliche Einstellungen öffnen">Einstellungen</button><button class="text-button header-action" id="logoutButton" type="button">Abmelden</button></div>
+        <div class="portal-user"><div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button><button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Einstellungen öffnen"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2ZM19 12a7.2 7.2 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-2.1-1.2L14 3h-4l-.4 2.7a7.7 7.7 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5A7.2 7.2 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1a7.7 7.7 0 0 0 2.1 1.2L10 21h4l.4-2.7a7.7 7.7 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" /></svg><span class="portal-settings-shortcut-label">Einstellungen</span></button><button class="text-button header-action" id="logoutButton" type="button">Abmelden</button></div>
       </header>
 
       <main>
@@ -172,6 +172,22 @@
                 <section class="branch-order-history" aria-labelledby="branchOrderHistoryTitle"><div class="list-heading"><h2 id="branchOrderHistoryTitle">Bestellverlauf</h2><button class="text-button" id="refreshBranchOrderHistory" type="button">Verlauf aktualisieren</button></div><div id="branchOrderHistoryList"><p class="empty-state">Bestellverlauf wird geladen.</p></div></section>
               </div>
             </details>
+            <details class="portal-card portal-settings-section hidden" id="branchPortalDisplaySettingsCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Filialkonto</span><strong>Ansicht &amp; Filialbestellung</strong><small id="branchPortalDisplaySettingsSummary">Einstellungen werden geladen.</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <p>Gilt für den zugewiesenen Standort. Die farbige Ansicht setzt Akzente nur am Rand der Dienstfelder, damit Zeiten und Namen uneingeschränkt lesbar bleiben.</p>
+                <form class="branch-portal-display-settings" id="branchPortalDisplaySettingsForm">
+                  <fieldset><legend>Dienstplanansicht</legend><label><input name="branchScheduleDisplayMode" type="radio" value="classic" checked /> Klassisch</label><label><input name="branchScheduleDisplayMode" type="radio" value="colored" /> Farbig nach Teammitglied</label></fieldset>
+                  <label class="portal-switch"><span>In der mobilen aktuellen Woche vergangene Tage ausblenden</span><input id="branchPortalHideElapsedDays" type="checkbox" /></label>
+                  <fieldset class="branch-order-autosave-settings"><legend>Filialbestellung</legend><label class="portal-switch"><span>Begonnene Bestellung automatisch speichern</span><input id="branchOrderAutosaveEnabled" type="checkbox" /></label><label><span>Speicherabstand in Minuten</span><input id="branchOrderAutosaveMinutes" type="number" min="1" max="99" step="1" inputmode="numeric" value="10" /></label></fieldset>
+                  <p class="message hidden" id="branchPortalDisplaySettingsMessage" role="status" aria-live="polite"></p>
+                  <div class="portal-settings-actions"><button class="primary" id="saveBranchPortalDisplaySettings" type="submit">Einstellungen speichern</button></div>
+                </form>
+              </div>
+            </details>
             <details class="portal-card portal-settings-section portal-settings-password" id="passwordSettingsCard">
               <summary class="portal-settings-summary">
                 <span><span class="eyebrow">Sicherheit</span><strong>Passwort ändern</strong><small>Persönliches Passwort sicher aktualisieren</small></span>
@@ -188,6 +204,7 @@
         <section class="portal-view active" id="scheduleView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
           <div class="schedule-grid" id="scheduleGrid"></div>
+          <nav class="branch-mobile-home-shortcuts hidden" id="branchMobileHomeShortcuts" aria-label="Filialkonto-Bereiche"></nav>
         </section>
 
         <section class="portal-view branch-vacation-view" id="branchVacationView" role="tabpanel" aria-labelledby="branchVacationTab">
@@ -402,6 +419,7 @@
               <div class="branch-order-draft-actions"><button class="text-button hidden" id="branchOrderContinueDraft" type="button">Fortsetzen</button><button class="text-button danger-button hidden" id="branchOrderDiscardDraft" type="button">Verwerfen</button></div>
             </aside>
             <div class="branch-order-group-list" id="branchOrderGroups"><p class="empty-state">Bestellpositionen werden geladen.</p></div>
+            <section class="branch-order-review hidden" id="branchOrderReview" aria-live="polite"><div class="branch-order-review-heading"><div><span class="eyebrow">Kontrolle</span><h2>Bestellung überprüfen</h2><p>Bitte Mengen und Bemerkungen vor dem Absenden kontrollieren.</p></div><button class="text-button" id="branchOrderBackToEdit" type="button">Bearbeiten</button></div><div id="branchOrderReviewList"></div></section>
             <p class="message hidden" id="branchOrderMessage" role="status" aria-live="polite"></p>
             <div class="branch-order-submit-row"><small>Die Kalenderwoche wird automatisch ermittelt. Ein gespeicherter Entwurf lässt sich später fortsetzen.</small><div class="branch-order-submit-actions"><button class="text-button" id="branchOrderSaveDraft" type="button">Entwurf speichern</button><button class="primary" id="branchOrderSubmit" type="submit">Bestellung senden</button></div></div>
           </form>
@@ -477,6 +495,7 @@
           </section>
         </section>
       </main>
+      <nav class="branch-mobile-action-bar hidden" id="branchMobileActionBar" aria-label="Filialbestellung Aktionen"><button class="text-button branch-mobile-back" id="branchMobileBack" type="button" aria-label="Zurück">←</button><div class="branch-mobile-action-spacer"></div><button class="text-button hidden" id="branchMobileReview" type="button">Bestellung überprüfen</button><button class="primary hidden" id="branchMobileSubmit" type="button">Bestellung absenden</button><button class="primary hidden" id="branchMobileSave" type="button">Speichern</button></nav>
     </div>
 
     <dialog id="passwordDialog">
