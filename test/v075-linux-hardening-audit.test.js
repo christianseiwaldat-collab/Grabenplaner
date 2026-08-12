@@ -133,6 +133,21 @@ test("v0.75 firewall audit combines UFW transaction rules with listener isolatio
   assert.doesNotMatch(audit, /transaction_ssh_rules_present/);
 });
 
+test("hardening v2 audit loads only a confirmed transaction-bound SSH maintenance policy", () => {
+  assert.match(audit, /ACTIVE_MAINTENANCE_POLICY_FILE/);
+  assert.match(audit, /PENDING_MAINTENANCE_POLICY_FILE/);
+  assert.match(audit, /grabenplaner-host-security-maintenance-transaction/);
+  assert.match(audit, /validate_maintenance_reference .* confirmed/);
+  assert.match(audit, /stored_base" == "\$base_transaction_id/);
+  assert.match(audit, /policy\.validateMaintenanceSources/);
+  assert.match(audit, /policy\.validateSshInterfaces/);
+  assert.match(audit, /TRANSACTION_UFW_ADDED_SHA256/);
+  assert.match(audit, /added_sha256" == "\$TRANSACTION_UFW_ADDED_SHA256/);
+  assert.match(audit, /maintenanceSources:/);
+  assert.match(audit, /allowedSshInterfaces:/);
+  assert.doesNotMatch(audit, /\bufw\s+(?:allow|delete|reset|enable|disable|reload|default|logging)\b/);
+});
+
 test("v0.75 SSH audit uses the exact validated transaction connection context", () => {
   assert.match(audit, /read_private_scalar "\$admin_file" admin/);
   assert.match(audit, /read_private_scalar "\$client_file" client_ip/);

@@ -332,7 +332,7 @@ function readHardeningModuleContract() {
   const expectedContractKeys = ["activationPolicy", "format", "managedArtifacts", "moduleVersion", "schemaVersion"];
   if (JSON.stringify(contractKeys) !== JSON.stringify(expectedContractKeys)
     || contract?.format !== "grabenplaner-linux-hardening-module-contract" || contract?.schemaVersion !== 1
-    || contract?.moduleVersion !== 1 || contract?.activationPolicy !== "explicit-root-two-session"
+    || contract?.moduleVersion !== 2 || contract?.activationPolicy !== "explicit-root-two-session"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedHardeningArtifacts.length
     || expectedHardeningArtifacts.some((relative, index) => contract.managedArtifacts[index] !== relative)) {
     throw new Error("Der optionale Hardening-Modulvertrag wird nicht unterstuetzt.");

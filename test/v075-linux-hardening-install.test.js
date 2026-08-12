@@ -51,16 +51,19 @@ test("v0.75 hardening installer validates then copies only contract artifacts", 
   assert.match(installer, /\*\.sh\) mode=0755/);
   assert.match(installer, /\*\) mode=0644/);
   assert.match(installer, /JSON\.stringify\(installed\) !== JSON\.stringify\(source\)/);
-  assert.match(installer, /weicht vom freigegebenen Quellvertrag ab/);
+  assert.match(installer, /preflight_policy_only_contract_delta/);
+  assert.match(installer, /previous\.moduleVersion !== 1 \|\| next\.moduleVersion !== 2/);
 });
 
-test("v0.75.1 documents the explicit fingerprint-changing module maintenance", () => {
-  const rollback = serverDocumentation.indexOf("grabenplaner-host-security rollback --transaction");
-  const uninstall = serverDocumentation.indexOf("grabenplaner-host-security-uninstall", rollback);
-  const install = serverDocumentation.indexOf("install-grabenplaner-host-hardening.sh", uninstall);
+test("hardening v2 documents the non-mutating active-policy upgrade and Tailscale confirmation", () => {
+  const install = serverDocumentation.indexOf("install-grabenplaner-host-hardening.sh --upgrade-active-policy");
   const audit = serverDocumentation.indexOf("grabenplaner-host-security audit", install);
-  assert.ok(rollback >= 0 && uninstall > rollback && install > uninstall && audit > install);
+  const plan = serverDocumentation.indexOf("maintenance-plan", audit);
+  const adopt = serverDocumentation.indexOf("maintenance-adopt", plan);
+  const confirm = serverDocumentation.indexOf("maintenance-confirm", adopt);
+  assert.ok(install >= 0 && audit > install && plan > audit && adopt > plan && confirm > adopt);
   assert.match(serverDocumentation, /App-Update ersetzt ein bereits .* installiertes Sicherheitsmodul absichtlich nicht/);
+  assert.match(serverDocumentation, /ohne SSH-, UFW-, APT-, Kernel- oder Journalregeln zu veraendern/);
   assert.match(serverDocumentation, /Transaktionsdateien duerfen nicht manuell geloescht/);
 });
 
@@ -91,7 +94,7 @@ test("v0.75 installer and uninstaller hold the shared controller lock across sta
   assert.doesNotMatch(uninstaller, /flock\s+--unlock|flock\s+-u/);
 });
 
-test("v0.75.1 installer refuses pending and active transactions before any installation mutation", () => {
+test("hardening v2 installer permits only an explicit policy-only upgrade for a confirmed active transaction", () => {
   const lock = installer.indexOf("hardening_acquire_controller_lock");
   const pending = installer.indexOf('[[ ! -e "$HARDENING_PENDING_FILE"', lock);
   const active = installer.indexOf('[[ ! -e "$ACTIVE_TRANSACTION_FILE"', lock);
@@ -100,7 +103,18 @@ test("v0.75.1 installer refuses pending and active transactions before any insta
   assert.match(installer, /readonly ACTIVE_TRANSACTION_FILE="\$HARDENING_STATE_ROOT\/active-transaction"/);
   assert.ok(lock >= 0 && pending > lock && active > pending);
   assert.ok(active < preflight && preflight < mutation);
-  assert.match(installer, /Aktives Host-Hardening muss vor einer Modulinstallation mit dem installierten Controller zurueckgerollt werden/);
+  assert.match(installer, /Aktives Host-Hardening erfordert fuer ein reines Modulupgrade --upgrade-active-policy/);
+  assert.match(installer, /preflight_active_policy_upgrade/);
+  assert.match(installer, /state !== "confirmed"/);
+  assert.match(installer, /allowedChanges = new Set/);
+  assert.match(installer, /systemctl disable --now "\$HARDENING_AUDIT_TIMER"/);
+  const suspend = installer.indexOf("UPGRADE_TIMER_SUSPENDED=1", installer.indexOf('systemctl disable --now "$HARDENING_AUDIT_TIMER"'));
+  const serviceStop = installer.indexOf('systemctl stop "$HARDENING_AUDIT_SERVICE"', suspend);
+  assert.ok(suspend >= 0 && suspend < serviceStop, "rollback protection must be armed before the audit service is stopped");
+  const swapGuard = installer.indexOf("UPGRADE_SWAP_STARTED=1", serviceStop);
+  const oldModuleMove = installer.indexOf('mv -- "$HARDENING_MODULE_ROOT" "$OLD_MODULE_ROOT"', swapGuard);
+  assert.ok(swapGuard >= 0 && swapGuard < oldModuleMove, "rollback protection must be armed before the installed module is moved");
+  assert.doesNotMatch(installer, /systemctl (?:reload|restart|stop) (?:ssh|sshd|ufw)/);
 });
 
 test("v0.75 preserves the delegated read-only status directory", () => {

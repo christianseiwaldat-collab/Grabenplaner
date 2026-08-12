@@ -136,22 +136,26 @@ sudo bash server-tools/linux/hardening/install-grabenplaner-host-hardening.sh
 sudo grabenplaner-host-security audit
 ```
 
-Ein App-Update ersetzt ein bereits unter `/opt/grabenplaner-hardening/module` installiertes Sicherheitsmodul absichtlich nicht. Weicht dessen kryptografischer Vertragsfingerprint vom neuen Paket ab, ist deshalb folgende explizite Modulwartung erforderlich; ein noch ausstehender oder bestaetigter Hostzustand wird dabei niemals mit einem neuen Controller weiterverwendet. Modulversion 1 bleibt als Paketbruecke erhalten, waehrend Vertragsfingerprint und exakte Dateiliste jeden konkreten Modulstand eindeutig binden:
+Ein App-Update ersetzt ein bereits unter `/opt/grabenplaner-hardening/module` installiertes Sicherheitsmodul absichtlich nicht. Weicht dessen kryptografischer Vertragsfingerprint vom neuen Paket ab, ist deshalb eine explizite Modulwartung erforderlich. Modulversion 2 erlaubt eine eng begrenzte Policy-/Audit-Aktualisierung bei bestaetigter Hosttransaktion, ohne SSH-, UFW-, APT-, Kernel- oder Journalregeln zu veraendern. Der Installer akzeptiert dabei ausschliesslich den geprueften Versionssprung 1 auf 2 und verweigert Abweichungen an Templates, Units, gemeinsamem Sicherheitscode oder Uninstaller:
 
 ```bash
-# Nur falls eine Transaktion noch aussteht oder bestaetigt aktiv ist:
-sudo grabenplaner-host-security rollback --transaction 64HEX
-
-# Beide Befehle muessen ohne Ausgabe erfolgreich sein:
+# Keine regulaere oder Wartungspolicy-Transaktion darf noch ausstehen:
 sudo test ! -e /var/lib/grabenplaner-host-security/pending-transaction
-sudo test ! -e /var/lib/grabenplaner-host-security/active-transaction
+sudo test ! -e /var/lib/grabenplaner-host-security/pending-maintenance-policy
 
-sudo grabenplaner-host-security-uninstall
-sudo bash server-tools/linux/hardening/install-grabenplaner-host-hardening.sh
+sudo bash server-tools/linux/hardening/install-grabenplaner-host-hardening.sh --upgrade-active-policy
 sudo grabenplaner-host-security audit
 ```
 
-Erst danach wird eine neue Host-Sicherheitstransaktion mit `plan` und `apply` begonnen. Die ausgegebene Transaktionskennung wird ausschliesslich aus einer neu geoeffneten zweiten SSH-Sitzung mit `confirm --transaction 64HEX` bestaetigt. Modulordner, Vertragsbeleg oder Transaktionsdateien duerfen nicht manuell geloescht oder zwischen Modulstaenden kopiert werden.
+Bestehende, jeweils auf genau einen Host begrenzte `/32`- oder `/128`-SSH-Wartungsquellen und die schnittstellengebundene Regel `tailscale0` koennen anschliessend ohne UFW-Mutation in die bestaetigte Auditpolicy uebernommen werden. `maintenance-adopt` bindet den exakten `ufw show added`-Hash. `maintenance-confirm` muss aus einer spaeter geoeffneten, unabhaengigen SSH-Sitzung ueber `tailscale0` erfolgen:
+
+```bash
+sudo grabenplaner-host-security maintenance-plan --source HOST/32 --interface tailscale0
+sudo grabenplaner-host-security maintenance-adopt --source HOST/32 --interface tailscale0
+sudo grabenplaner-host-security maintenance-confirm --transaction 64HEX
+```
+
+Eine allgemeine SSH-Freigabe, ein anderes Interface, ein Quellnetz groesser als ein einzelner Host, Regel- oder Hashdrift bleiben Fehler. Modulordner, Vertragsbeleg oder Transaktionsdateien duerfen nicht manuell geloescht oder zwischen Modulstaenden kopiert werden.
 
 Das Modul lädt keine Programme aus dem Internet. `openssh-server`, `ufw` und `unattended-upgrades` müssen deshalb zuvor aus den freigegebenen Ubuntu-Paketquellen installiert und geprüft sein. Der Audit kontrolliert unter anderem Schlüssel-SSH, Firewall, öffentliche Ports, automatische Sicherheitsaktualisierungen, Kernel-Schutzwerte, Journalbegrenzung, Dienstkonten, Geheimnisdateien, fehlgeschlagene Units und Zeitsynchronisierung. Seine Statusdatei enthält ausschließlich fest definierte Wahrheitswerte und Zeitangaben; IP-Adressen, Benutzernamen, Ports, Pfade und Diagnosefreitext werden nicht an die Anwendung weitergegeben.
 

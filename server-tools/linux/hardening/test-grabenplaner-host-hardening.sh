@@ -17,6 +17,9 @@ readonly UFW_DEFAULT_FILE="/etc/default/ufw"
 readonly JOURNALD_LEGACY_DROPIN="/etc/systemd/journald.conf.d/60-grabenplaner-journald.conf"
 readonly JOURNALD_DROPIN="/etc/systemd/journald.conf.d/zz-grabenplaner-journald.conf"
 readonly ACTIVE_TRANSACTION_FILE="$HARDENING_STATE_ROOT/active-transaction"
+readonly ACTIVE_MAINTENANCE_POLICY_FILE="$HARDENING_STATE_ROOT/active-maintenance-policy"
+readonly PENDING_MAINTENANCE_POLICY_FILE="$HARDENING_STATE_ROOT/pending-maintenance-policy"
+readonly MAINTENANCE_TRANSACTION_ROOT="$HARDENING_STATE_ROOT/maintenance-transactions"
 readonly POLICY_FILE="$MODULE_ROOT/lib/hardening-policy.js"
 
 WRITE_STATUS=0
@@ -27,11 +30,17 @@ CONFIGURED=false
 PENDING_CONFIRMATION=false
 TRANSACTION_POLICY_AVAILABLE=false
 TRANSACTION_MARKER_PRESENT=false
+MAINTENANCE_POLICY_AVAILABLE=false
+MAINTENANCE_MARKER_PRESENT=false
+TRANSACTION_ID=""
 TRANSACTION_ADMIN=""
 TRANSACTION_CLIENT_IP=""
 TRANSACTION_SERVER_IP=""
 TRANSACTION_SSH_PORT=""
 TRANSACTION_SOURCES=()
+TRANSACTION_MAINTENANCE_SOURCES=()
+TRANSACTION_SSH_INTERFACES=()
+TRANSACTION_UFW_ADDED_SHA256=""
 declare -A CHECK_VALUE=(
   [ssh]=false
   [firewall]=false
@@ -186,7 +195,88 @@ load_transaction_policy() {
   TRANSACTION_SERVER_IP="$server_ip"
   TRANSACTION_SSH_PORT="$port"
   TRANSACTION_SOURCES=("${sources[@]}")
+  TRANSACTION_ID="$transaction_id"
   TRANSACTION_POLICY_AVAILABLE=true
+}
+
+validate_maintenance_reference() {
+  local reference_file="$1" expected_state="$2" output_name="$3"
+  local reference_id="" transaction_directory state_file node
+  read_private_scalar "$reference_file" reference_id || return 1
+  node="$(hardening_node)" || return 1
+  "$node" "$POLICY_FILE" validate-transaction "$reference_id" >/dev/null 2>&1 || return 1
+  transaction_directory="$MAINTENANCE_TRANSACTION_ROOT/$reference_id"
+  private_transaction_directory "$transaction_directory" || return 1
+  state_file="$transaction_directory/state.json"
+  private_regular_file "$state_file" || return 1
+  "$node" -e '
+    const fs = require("node:fs");
+    const value = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const keys = Object.keys(value).sort();
+    const expectedKeys = ["format", "schemaVersion", "state", "updatedAt"].sort();
+    if (JSON.stringify(keys) !== JSON.stringify(expectedKeys)
+      || value.format !== "grabenplaner-host-security-maintenance-transaction"
+      || value.schemaVersion !== 1 || value.state !== process.argv[2]
+      || typeof value.updatedAt !== "string" || !Number.isFinite(Date.parse(value.updatedAt))) process.exit(1);
+  ' "$state_file" "$expected_state" >/dev/null 2>&1 || return 1
+  printf -v "$output_name" '%s' "$reference_id"
+}
+
+load_maintenance_policy() {
+  local maintenance_id="$1" base_transaction_id="$2" transaction_directory node
+  local stored_base="" stored_port="" stored_hash="" sources=() interfaces=()
+  transaction_directory="$MAINTENANCE_TRANSACTION_ROOT/$maintenance_id"
+  read_private_scalar "$transaction_directory/base-transaction" stored_base || return 1
+  read_private_scalar "$transaction_directory/ssh-port" stored_port || return 1
+  read_private_scalar "$transaction_directory/ufw-added.sha256" stored_hash || return 1
+  private_regular_file "$transaction_directory/sources" || return 1
+  private_regular_file "$transaction_directory/interfaces" || return 1
+  mapfile -t sources <"$transaction_directory/sources" || return 1
+  mapfile -t interfaces <"$transaction_directory/interfaces" || return 1
+  [[ "$stored_base" == "$base_transaction_id" && "$stored_port" == "$TRANSACTION_SSH_PORT" ]] || return 1
+  node="$(hardening_node)" || return 1
+  "$node" - "$POLICY_FILE" "$stored_base" "$stored_port" "$stored_hash" "${#sources[@]}" "${#interfaces[@]}" \
+    "${sources[@]}" "${interfaces[@]}" <<'NODE' >/dev/null 2>&1 || return 1
+const policy = require(process.argv[2]);
+const baseTransaction = process.argv[3];
+const port = process.argv[4];
+const hash = process.argv[5];
+const sourceCount = Number(process.argv[6]);
+const interfaceCount = Number(process.argv[7]);
+const values = process.argv.slice(8);
+if (!policy.isValidTransactionId(baseTransaction) || !policy.isValidSshPort(port)
+  || !/^[0-9a-f]{64}$/.test(hash) || !Number.isSafeInteger(sourceCount)
+  || !Number.isSafeInteger(interfaceCount) || sourceCount < 0 || interfaceCount < 0
+  || values.length !== sourceCount + interfaceCount || sourceCount < 1 || interfaceCount < 1) process.exit(1);
+policy.validateMaintenanceSources(values.slice(0, sourceCount));
+policy.validateSshInterfaces(values.slice(sourceCount));
+NODE
+  TRANSACTION_MAINTENANCE_SOURCES=("${sources[@]}")
+  TRANSACTION_SSH_INTERFACES=("${interfaces[@]}")
+  TRANSACTION_UFW_ADDED_SHA256="$stored_hash"
+  MAINTENANCE_POLICY_AVAILABLE=true
+}
+
+discover_maintenance_policy() {
+  local base_transaction_id="$1" pending_exists=false active_exists=false maintenance_id=""
+  [[ -e "$PENDING_MAINTENANCE_POLICY_FILE" || -L "$PENDING_MAINTENANCE_POLICY_FILE" ]] && pending_exists=true
+  [[ -e "$ACTIVE_MAINTENANCE_POLICY_FILE" || -L "$ACTIVE_MAINTENANCE_POLICY_FILE" ]] && active_exists=true
+  if [[ "$pending_exists" == true || "$active_exists" == true ]]; then MAINTENANCE_MARKER_PRESENT=true; fi
+  if [[ "$pending_exists" == true ]]; then
+    if validate_maintenance_reference "$PENDING_MAINTENANCE_POLICY_FILE" pending_confirmation maintenance_id; then
+      record_general_warning "Eine SSH-Wartungspolicy wartet noch auf Bestaetigung."
+    else
+      record_general_error "Die ausstehende SSH-Wartungspolicy ist unvollstaendig oder unsicher."
+    fi
+  fi
+  if [[ "$active_exists" == true ]]; then
+    if validate_maintenance_reference "$ACTIVE_MAINTENANCE_POLICY_FILE" confirmed maintenance_id \
+      && load_maintenance_policy "$maintenance_id" "$base_transaction_id"; then
+      return 0
+    fi
+    record_general_error "Die aktive SSH-Wartungspolicy ist unvollstaendig oder unsicher."
+    return 1
+  fi
 }
 
 discover_transaction_configuration() {
@@ -213,6 +303,7 @@ discover_transaction_configuration() {
     if validate_transaction_reference "$ACTIVE_TRANSACTION_FILE" confirmed transaction_id \
       && load_transaction_policy "$transaction_id"; then
       CONFIGURED=true
+      discover_maintenance_policy "$transaction_id" || true
     else
       record_general_error "Die aktive Host-Sicherheitstransaktion ist unvollstaendig oder unsicher."
     fi
@@ -282,10 +373,14 @@ check_ssh() {
 }
 
 validate_transaction_ufw_policy() {
-  local added="$1" status="$2" defaults node
+  local added="$1" status="$2" defaults node added_sha256=""
   [[ "$TRANSACTION_POLICY_AVAILABLE" == true ]] || return 1
   root_readonly_config_file "$UFW_DEFAULT_FILE" || return 1
   defaults="$(<"$UFW_DEFAULT_FILE")" || return 1
+  if [[ "$MAINTENANCE_POLICY_AVAILABLE" == true ]]; then
+    added_sha256="$(printf '%s' "$added" | sha256sum --binary | awk '{print tolower($1)}')" || return 1
+    [[ "$added_sha256" == "$TRANSACTION_UFW_ADDED_SHA256" ]] || return 1
+  fi
   node="$(hardening_node)" || return 1
   printf '%s\0%s\0%s' "$added" "$status" "$defaults" | "$node" -e '
 const fs = require("node:fs");
@@ -300,11 +395,15 @@ try {
     status: input.subarray(first + 1, second).toString("utf8"),
     ufwDefaults: input.subarray(second + 1).toString("utf8"),
     sshPort: process.argv[2],
-    allowedSources: process.argv.slice(3),
+    allowedSources: process.argv.slice(6, 6 + Number(process.argv[3])),
+    maintenanceSources: process.argv.slice(6 + Number(process.argv[3]), 6 + Number(process.argv[3]) + Number(process.argv[4])),
+    allowedSshInterfaces: process.argv.slice(6 + Number(process.argv[3]) + Number(process.argv[4])),
     requireComplete: true,
   });
 } catch { process.exit(1); }
-' "$POLICY_FILE" "$TRANSACTION_SSH_PORT" "${TRANSACTION_SOURCES[@]}"
+' "$POLICY_FILE" "$TRANSACTION_SSH_PORT" "${#TRANSACTION_SOURCES[@]}" \
+    "${#TRANSACTION_MAINTENANCE_SOURCES[@]}" "${#TRANSACTION_SSH_INTERFACES[@]}" \
+    "${TRANSACTION_SOURCES[@]}" "${TRANSACTION_MAINTENANCE_SOURCES[@]}" "${TRANSACTION_SSH_INTERFACES[@]}"
 }
 
 internal_port_is_loopback_only() {
@@ -643,7 +742,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 hardening_require_root
-for command_name in awk chmod chown date flock getent grep id install mktemp mv readlink stat sync systemctl; do
+for command_name in awk chmod chown date flock getent grep id install mktemp mv readlink sha256sum stat sync systemctl; do
   hardening_require_command "$command_name"
 done
 hardening_validate_os

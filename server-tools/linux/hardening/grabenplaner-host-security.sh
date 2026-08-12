@@ -19,6 +19,9 @@ readonly UFW_USER6_RULES="/etc/ufw/user6.rules"
 readonly UFW_CONFIG="/etc/ufw/ufw.conf"
 readonly UFW_DEFAULT="/etc/default/ufw"
 readonly ACTIVE_TRANSACTION_FILE="/var/lib/grabenplaner-host-security/active-transaction"
+readonly ACTIVE_MAINTENANCE_POLICY_FILE="/var/lib/grabenplaner-host-security/active-maintenance-policy"
+readonly PENDING_MAINTENANCE_POLICY_FILE="/var/lib/grabenplaner-host-security/pending-maintenance-policy"
+readonly MAINTENANCE_TRANSACTION_ROOT="/var/lib/grabenplaner-host-security/maintenance-transactions"
 readonly AUTOMATIC_ROLLBACK_LOCK_WAIT_SECONDS=50
 readonly ROLLBACK_CONFIRMATION_SECONDS=600
 readonly -a MANAGED_KEYS=(ssh sysctl journald journald-legacy unattended auto-upgrades ufw-user ufw-user6 ufw-config ufw-default)
@@ -41,6 +44,10 @@ readonly TEMPLATE_ROOT="$HARDENING_MODULE_ROOT/templates"
 CONFIG_ADMIN=""
 CONFIG_SSH_PORT=""
 CONFIG_SOURCES=()
+MAINTENANCE_SOURCES=()
+MAINTENANCE_INTERFACES=()
+MAINTENANCE_BASE_TRANSACTION=""
+MAINTENANCE_UFW_ADDED_SHA256=""
 SESSION_CLIENT_IP=""
 SESSION_SERVER_IP=""
 SESSION_SERVER_PORT=""
@@ -63,7 +70,7 @@ command_json() {
 
 require_controller_dependencies() {
   local command
-  for command in apt-config awk cmp date flock getent grep install mktemp mv readlink sha256sum sshd ssh-keygen stat sudo sync sysctl systemctl systemd-analyze ufw; do
+  for command in apt-config awk cmp date flock getent grep install ip mktemp mv readlink sha256sum sshd ssh-keygen stat sudo sync sysctl systemctl systemd-analyze ufw; do
     hardening_require_command "$command"
   done
   [[ -f "$POLICY_FILE" && ! -L "$POLICY_FILE" ]] || hardening_die "Die installierte Hardening-Policy fehlt."
@@ -116,6 +123,24 @@ try { policy.validateAllowedSources(process.argv.slice(3), { requireNonEmpty: tr
 NODE
 }
 
+policy_validate_maintenance_sources() {
+  local node
+  node="$(hardening_node)" || hardening_die "Node.js fehlt fuer die Wartungsquellenpruefung."
+  "$node" - "$POLICY_FILE" "$@" <<'NODE' >/dev/null
+const policy = require(process.argv[2]);
+try { policy.validateMaintenanceSources(process.argv.slice(3)); } catch { process.exit(1); }
+NODE
+}
+
+policy_validate_interfaces() {
+  local node
+  node="$(hardening_node)" || hardening_die "Node.js fehlt fuer die SSH-Schnittstellenpruefung."
+  "$node" - "$POLICY_FILE" "$@" <<'NODE' >/dev/null
+const policy = require(process.argv[2]);
+try { policy.validateSshInterfaces(process.argv.slice(3)); } catch { process.exit(1); }
+NODE
+}
+
 policy_validate_ip() {
   local node address="$1"
   node="$(hardening_node)" || hardening_die "Node.js fehlt fuer die IP-Pruefung."
@@ -136,6 +161,11 @@ generate_transaction_id() {
 transaction_directory() {
   policy_validate_transaction "$1" || hardening_die "Die Transaktions-ID ist ungueltig."
   printf '%s/%s\n' "$HARDENING_TRANSACTION_ROOT" "$1"
+}
+
+maintenance_transaction_directory() {
+  policy_validate_transaction "$1" || hardening_die "Die Wartungspolicy-Transaktions-ID ist ungueltig."
+  printf '%s/%s\n' "$MAINTENANCE_TRANSACTION_ROOT" "$1"
 }
 
 acquire_controller_lock() {
@@ -190,9 +220,44 @@ parse_configuration_arguments() {
     || hardening_die "Erlaubt sind hoechstens 64 eindeutige SSH-Quellnetze."
 }
 
-require_live_ssh_session() {
+parse_maintenance_arguments() {
+  MAINTENANCE_SOURCES=()
+  MAINTENANCE_INTERFACES=()
+  while (($#)); do
+    case "$1" in
+      --source)
+        [[ $# -ge 2 ]] || hardening_die "Eine SSH-Wartungsquelle fehlt."
+        MAINTENANCE_SOURCES+=("$2")
+        shift 2
+        ;;
+      --source=*)
+        [[ -n "${1#*=}" ]] || hardening_die "Eine SSH-Wartungsquelle fehlt."
+        MAINTENANCE_SOURCES+=("${1#*=}")
+        shift
+        ;;
+      --interface)
+        [[ $# -ge 2 ]] || hardening_die "Eine SSH-Wartungsschnittstelle fehlt."
+        MAINTENANCE_INTERFACES+=("$2")
+        shift 2
+        ;;
+      --interface=*)
+        [[ -n "${1#*=}" ]] || hardening_die "Eine SSH-Wartungsschnittstelle fehlt."
+        MAINTENANCE_INTERFACES+=("${1#*=}")
+        shift
+        ;;
+      *) hardening_die "Unbekannte oder unvollstaendige Wartungspolicy-Option." ;;
+    esac
+  done
+  (( ${#MAINTENANCE_SOURCES[@]} > 0 && ${#MAINTENANCE_INTERFACES[@]} > 0 )) \
+    || hardening_die "Mindestens eine exakte Wartungsquelle und tailscale0 sind erforderlich."
+  policy_validate_maintenance_sources "${MAINTENANCE_SOURCES[@]}" \
+    || hardening_die "Wartungsquellen muessen eindeutige einzelne IPv4-/IPv6-Adressen sein."
+  policy_validate_interfaces "${MAINTENANCE_INTERFACES[@]}" \
+    || hardening_die "Als Wartungsschnittstelle ist ausschliesslich tailscale0 freigegeben."
+}
+
+capture_live_ssh_session() {
   local admin="$1" requested_port="$2"
-  shift 2
   local client_ip client_port server_ip server_port extra=""
   [[ -n "${SSH_TTY:-}" && -n "${SSH_CONNECTION:-}" ]] || hardening_die "Eine interaktive SSH-Sitzung ist erforderlich."
   [[ "$SSH_TTY" == /dev/pts/* || "$SSH_TTY" == /dev/tty* ]] || hardening_die "Die SSH-Terminalsitzung ist ungueltig."
@@ -204,7 +269,6 @@ require_live_ssh_session() {
   policy_validate_configuration "$admin" "$server_port" || hardening_die "Die SSH-Sitzungsdaten sind ungueltig."
   policy_validate_ip "$server_ip" || hardening_die "Die SSH-Sitzungsdaten sind ungueltig."
   [[ "$requested_port" == "$server_port" ]] || hardening_die "Der SSH-Port darf gegenueber der aktiven Sitzung nicht geaendert werden."
-  policy_validate_session "$client_ip" "$@" || hardening_die "Die aktuelle SSH-Sitzung liegt nicht in einer erlaubten Quelle."
   [[ "${SUDO_USER:-}" == "$admin" && "$SUDO_USER" != "root" ]] \
     || hardening_die "Die Sitzung muss vom vorgesehenen Admin mit sudo bestaetigt werden."
 
@@ -215,6 +279,50 @@ require_live_ssh_session() {
   policy_validate_transaction "$SESSION_CONNECTION_FINGERPRINT" || hardening_die "Die SSH-Verbindung konnte nicht sicher gebunden werden."
   SESSION_FINGERPRINT="$(printf '%s\0%s' "$SSH_TTY" "$SSH_CONNECTION" | sha256sum --binary | awk '{print tolower($1)}')"
   policy_validate_transaction "$SESSION_FINGERPRINT" || hardening_die "Die SSH-Sitzung konnte nicht sicher gebunden werden."
+}
+
+require_live_ssh_session() {
+  local admin="$1" requested_port="$2"
+  shift 2
+  capture_live_ssh_session "$admin" "$requested_port"
+  policy_validate_session "$SESSION_CLIENT_IP" "$@" \
+    || hardening_die "Die aktuelle SSH-Sitzung liegt nicht in einer erlaubten Quelle."
+}
+
+session_server_address_uses_interface() {
+  local server_ip="$1" interface_name="$2" node addresses=""
+  policy_validate_interfaces "$interface_name" || return 1
+  command -v ip >/dev/null 2>&1 || return 1
+  ip -o link show dev "$interface_name" 2>/dev/null | grep -Eq '<([^>]*,)?UP(,[^>]*)?>' || return 1
+  addresses="$(ip -o address show dev "$interface_name" 2>/dev/null | awk '{print $4}')" || return 1
+  [[ -n "$addresses" ]] || return 1
+  node="$(hardening_node)" || return 1
+  printf '%s\n' "$addresses" | "$node" - "$POLICY_FILE" "$server_ip" <<'NODE' >/dev/null 2>&1
+const fs = require("node:fs");
+const policy = require(process.argv[2]);
+const serverIp = process.argv[3];
+const cidrs = fs.readFileSync(0, "utf8").split(/\r?\n/).filter(Boolean);
+try {
+  if (!cidrs.some((cidr) => policy.isIpInCidr(serverIp, cidr))) process.exit(1);
+} catch { process.exit(1); }
+NODE
+}
+
+session_uses_maintenance_interface() {
+  local interface_name
+  for interface_name in "${MAINTENANCE_INTERFACES[@]}"; do
+    if session_server_address_uses_interface "$SESSION_SERVER_IP" "$interface_name"; then return 0; fi
+  done
+  return 1
+}
+
+require_live_maintenance_session() {
+  capture_live_ssh_session "$CONFIG_ADMIN" "$CONFIG_SSH_PORT"
+  if policy_validate_session "$SESSION_CLIENT_IP" "${CONFIG_SOURCES[@]}" "${MAINTENANCE_SOURCES[@]}"; then
+    return 0
+  fi
+  session_uses_maintenance_interface \
+    || hardening_die "Die aktuelle SSH-Sitzung ist weder quellgebunden noch ueber eine freigegebene Wartungsschnittstelle aufgebaut."
 }
 
 ssh_connection_is_independent() {
@@ -359,6 +467,52 @@ try {
   });
 } catch { process.exit(1); }
 ' "$POLICY_FILE" "$mode" "$port" "$@"
+}
+
+current_ufw_added() {
+  LC_ALL=C ufw show added 2>/dev/null
+}
+
+current_ufw_added_sha256() {
+  local added
+  added="$(current_ufw_added)" || return 1
+  printf '%s' "$added" | sha256sum --binary | awk '{print tolower($1)}'
+}
+
+validate_effective_maintenance_ufw_policy() {
+  local port="$1" node added status defaults
+  node="$(hardening_node)" || return 1
+  added="$(current_ufw_added)" || return 1
+  status="$(LC_ALL=C ufw status verbose 2>/dev/null)" || return 1
+  root_readonly_configuration_file "$UFW_DEFAULT" || return 1
+  defaults="$(<"$UFW_DEFAULT")" || return 1
+  printf '%s\0%s\0%s' "$added" "$status" "$defaults" | "$node" -e '
+const fs = require("node:fs");
+const policy = require(process.argv[1]);
+const input = fs.readFileSync(0);
+const first = input.indexOf(0);
+const second = input.indexOf(0, first + 1);
+const baseCount = Number(process.argv[3]);
+const maintenanceCount = Number(process.argv[4]);
+const interfaceCount = Number(process.argv[5]);
+const values = process.argv.slice(6);
+if (first < 0 || second < 0 || ![baseCount, maintenanceCount, interfaceCount].every(Number.isSafeInteger)
+  || baseCount < 1 || maintenanceCount < 0 || interfaceCount < 0
+  || values.length !== baseCount + maintenanceCount + interfaceCount) process.exit(1);
+try {
+  policy.validateUfwPolicy({
+    addedRules: input.subarray(0, first).toString("utf8"),
+    status: input.subarray(first + 1, second).toString("utf8"),
+    ufwDefaults: input.subarray(second + 1).toString("utf8"),
+    sshPort: process.argv[2],
+    allowedSources: values.slice(0, baseCount),
+    maintenanceSources: values.slice(baseCount, baseCount + maintenanceCount),
+    allowedSshInterfaces: values.slice(baseCount + maintenanceCount),
+    requireComplete: true,
+  });
+} catch { process.exit(1); }
+' "$POLICY_FILE" "$port" "${#CONFIG_SOURCES[@]}" "${#MAINTENANCE_SOURCES[@]}" \
+    "${#MAINTENANCE_INTERFACES[@]}" "${CONFIG_SOURCES[@]}" "${MAINTENANCE_SOURCES[@]}" "${MAINTENANCE_INTERFACES[@]}"
 }
 
 validate_ufw_support_file_transition() {
@@ -935,6 +1089,81 @@ write_transaction_state() {
   hardening_atomic_private_write "$transaction_directory/state.json" "$content"
 }
 
+write_maintenance_transaction_state() {
+  local transaction_directory="$1" state="$2" content
+  case "$state" in
+    pending_confirmation|confirmed|cancelled|revoked) ;;
+    *) return 1 ;;
+  esac
+  content="$(printf '{"format":"grabenplaner-host-security-maintenance-transaction","schemaVersion":1,"state":"%s","updatedAt":"%s"}' \
+    "$state" "$(date --utc '+%Y-%m-%dT%H:%M:%SZ')")"
+  hardening_atomic_private_write "$transaction_directory/state.json" "$content"
+}
+
+maintenance_transaction_state() {
+  local transaction_directory="$1" node
+  assert_private_file "$transaction_directory/state.json"
+  node="$(hardening_node)" || return 1
+  "$node" - "$transaction_directory/state.json" <<'NODE'
+const fs = require("node:fs");
+const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const expectedKeys = ["format", "schemaVersion", "state", "updatedAt"].sort();
+if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(expectedKeys)
+  || value?.format !== "grabenplaner-host-security-maintenance-transaction"
+  || value?.schemaVersion !== 1
+  || !["pending_confirmation", "confirmed", "cancelled", "revoked"].includes(value?.state)
+  || typeof value.updatedAt !== "string" || !Number.isFinite(Date.parse(value.updatedAt))) process.exit(1);
+process.stdout.write(value.state);
+NODE
+}
+
+load_active_base_policy() {
+  local transaction_id transaction_directory
+  [[ ! -e "$HARDENING_PENDING_FILE" && ! -L "$HARDENING_PENDING_FILE" ]] \
+    || hardening_die "Eine regulaere Host-Sicherheitstransaktion wartet noch auf Bestaetigung."
+  transaction_id="$(read_private_value "$ACTIVE_TRANSACTION_FILE")"
+  policy_validate_transaction "$transaction_id" || hardening_die "Die aktive Host-Sicherheitstransaktion ist ungueltig."
+  transaction_directory="$(transaction_directory "$transaction_id")"
+  [[ "$(transaction_state "$transaction_directory")" == confirmed ]] \
+    || hardening_die "Die aktive Host-Sicherheitstransaktion ist nicht bestaetigt."
+  load_transaction_session_policy "$transaction_directory"
+  MAINTENANCE_BASE_TRANSACTION="$transaction_id"
+}
+
+load_maintenance_transaction_policy() {
+  local transaction_directory="$1" stored_base stored_admin stored_port stored_hash sources_content interfaces_content
+  stored_base="$(read_private_value "$transaction_directory/base-transaction")"
+  stored_admin="$(read_private_value "$transaction_directory/admin")"
+  stored_port="$(read_private_value "$transaction_directory/ssh-port")"
+  stored_hash="$(read_private_value "$transaction_directory/ufw-added.sha256")"
+  assert_private_file "$transaction_directory/sources"
+  assert_private_file "$transaction_directory/interfaces"
+  mapfile -t MAINTENANCE_SOURCES <"$transaction_directory/sources"
+  mapfile -t MAINTENANCE_INTERFACES <"$transaction_directory/interfaces"
+  [[ "$stored_base" == "$MAINTENANCE_BASE_TRANSACTION" && "$stored_admin" == "$CONFIG_ADMIN" \
+    && "$stored_port" == "$CONFIG_SSH_PORT" && "$stored_hash" =~ ^[0-9a-f]{64}$ \
+    && ${#MAINTENANCE_SOURCES[@]} -gt 0 && ${#MAINTENANCE_INTERFACES[@]} -gt 0 ]] \
+    || hardening_die "Die gespeicherte SSH-Wartungspolicy ist ungueltig."
+  policy_validate_maintenance_sources "${MAINTENANCE_SOURCES[@]}" \
+    || hardening_die "Die gespeicherten SSH-Wartungsquellen sind ungueltig."
+  policy_validate_interfaces "${MAINTENANCE_INTERFACES[@]}" \
+    || hardening_die "Die gespeicherten SSH-Wartungsschnittstellen sind ungueltig."
+  policy_validate_sources "${CONFIG_SOURCES[@]}" "${MAINTENANCE_SOURCES[@]}" \
+    || hardening_die "Basis- und Wartungsquellen sind doppelt oder ungueltig."
+  MAINTENANCE_UFW_ADDED_SHA256="$stored_hash"
+}
+
+maintenance_command_json() {
+  local mode="$1" state="$2" transaction_id="${3:-}"
+  if [[ -n "$transaction_id" ]]; then
+    printf '{"format":"grabenplaner-host-security-maintenance-result","schemaVersion":1,"mode":"%s","state":"%s","transactionId":"%s","sourceCount":%d,"interfaceCount":%d,"ufwChanged":false}\n' \
+      "$mode" "$state" "$transaction_id" "${#MAINTENANCE_SOURCES[@]}" "${#MAINTENANCE_INTERFACES[@]}"
+  else
+    printf '{"format":"grabenplaner-host-security-maintenance-result","schemaVersion":1,"mode":"%s","state":"%s","sourceCount":%d,"interfaceCount":%d,"ufwChanged":false}\n' \
+      "$mode" "$state" "${#MAINTENANCE_SOURCES[@]}" "${#MAINTENANCE_INTERFACES[@]}"
+  fi
+}
+
 refresh_audit_status() {
   # The dedicated read-only audit owns the one public machine-status schema.
   # Its non-zero result represents detected findings, not a controller failure.
@@ -1403,6 +1632,207 @@ confirm_command() {
   command_json confirm confirmed "${#CONFIG_SOURCES[@]}" true false false
 }
 
+maintenance_plan_command() {
+  common_preflight
+  parse_maintenance_arguments "$@"
+  load_active_base_policy
+  require_live_maintenance_session
+  admin_key_sudo_preflight "$CONFIG_ADMIN"
+  sshd_validate_and_require_port "$CONFIG_ADMIN" "$SESSION_CLIENT_IP" "$SESSION_SERVER_IP" "$CONFIG_SSH_PORT"
+  validate_effective_maintenance_ufw_policy "$CONFIG_SSH_PORT" \
+    || hardening_die "Die bestehende UFW-Policy entspricht nicht exakt der vorgeschlagenen SSH-Wartungspolicy."
+  maintenance_command_json maintenance-plan ready
+}
+
+maintenance_adopt_command() {
+  common_preflight
+  parse_maintenance_arguments "$@"
+  hardening_secure_roots
+  acquire_controller_lock
+  [[ ! -e "$PENDING_MAINTENANCE_POLICY_FILE" && ! -L "$PENDING_MAINTENANCE_POLICY_FILE" ]] \
+    || hardening_die "Eine SSH-Wartungspolicy wartet bereits auf Bestaetigung."
+  [[ ! -e "$ACTIVE_MAINTENANCE_POLICY_FILE" && ! -L "$ACTIVE_MAINTENANCE_POLICY_FILE" ]] \
+    || hardening_die "Eine SSH-Wartungspolicy ist bereits aktiv und muss vor einer Ersetzung widerrufen werden."
+  load_active_base_policy
+  require_live_maintenance_session
+  admin_key_sudo_preflight "$CONFIG_ADMIN"
+  sshd_validate_and_require_port "$CONFIG_ADMIN" "$SESSION_CLIENT_IP" "$SESSION_SERVER_IP" "$CONFIG_SSH_PORT"
+  validate_effective_maintenance_ufw_policy "$CONFIG_SSH_PORT" \
+    || hardening_die "Die bestehende UFW-Policy entspricht nicht exakt der vorgeschlagenen SSH-Wartungspolicy."
+
+  local transaction_id transaction_directory created_epoch confirmation_not_before_epoch
+  local sources_content interfaces_content ufw_added_sha256 final_ufw_added_sha256
+  transaction_id="$(generate_transaction_id)"
+  install -d -o root -g root -m 0700 -- "$MAINTENANCE_TRANSACTION_ROOT"
+  [[ -d "$MAINTENANCE_TRANSACTION_ROOT" && ! -L "$MAINTENANCE_TRANSACTION_ROOT" \
+    && "$(stat --format='%u:%g:%a' -- "$MAINTENANCE_TRANSACTION_ROOT")" == "0:0:700" ]] \
+    || hardening_die "Die Wartungspolicy-Transaktionsablage ist unsicher."
+  transaction_directory="$(maintenance_transaction_directory "$transaction_id")"
+  install -d -o root -g root -m 0700 -- "$transaction_directory"
+  created_epoch="$(date --utc '+%s')"
+  ufw_added_sha256="$(current_ufw_added_sha256)" \
+    || hardening_die "Der exakte UFW-Regelstand konnte nicht gebunden werden."
+  sources_content="$(printf '%s\n' "${MAINTENANCE_SOURCES[@]}")"
+  interfaces_content="$(printf '%s\n' "${MAINTENANCE_INTERFACES[@]}")"
+  write_private_value "$transaction_directory/base-transaction" "$MAINTENANCE_BASE_TRANSACTION"
+  write_private_value "$transaction_directory/admin" "$CONFIG_ADMIN"
+  write_private_value "$transaction_directory/ssh-port" "$CONFIG_SSH_PORT"
+  write_private_value "$transaction_directory/sources" "$sources_content"
+  write_private_value "$transaction_directory/interfaces" "$interfaces_content"
+  write_private_value "$transaction_directory/ufw-added.sha256" "$ufw_added_sha256"
+  write_private_value "$transaction_directory/first-connection.sha256" "$SESSION_CONNECTION_FINGERPRINT"
+  write_private_value "$transaction_directory/first-session.sha256" "$SESSION_FINGERPRINT"
+  write_private_value "$transaction_directory/created-epoch" "$created_epoch"
+  confirmation_not_before_epoch="$(date --utc '+%s')"
+  write_private_value "$transaction_directory/confirmation-not-before-epoch" "$confirmation_not_before_epoch"
+  write_maintenance_transaction_state "$transaction_directory" pending_confirmation
+  final_ufw_added_sha256="$(current_ufw_added_sha256)" \
+    || hardening_die "Der UFW-Regelstand konnte vor der Policy-Uebergabe nicht erneut gelesen werden."
+  [[ "$final_ufw_added_sha256" == "$ufw_added_sha256" ]] \
+    || hardening_die "Der UFW-Regelstand hat sich waehrend der Policy-Uebergabe geaendert."
+  write_private_value "$PENDING_MAINTENANCE_POLICY_FILE" "$transaction_id"
+  sync
+  refresh_audit_status
+  maintenance_command_json maintenance-adopt pending_confirmation "$transaction_id"
+}
+
+maintenance_confirm_command() {
+  local transaction_id=""
+  while (($#)); do
+    case "$1" in
+      --transaction)
+        [[ -z "$transaction_id" && $# -ge 2 ]] || hardening_die "Die Wartungspolicy-Transaktionsangabe ist ungueltig."
+        transaction_id="$2"
+        shift 2
+        ;;
+      --transaction=*)
+        [[ -z "$transaction_id" && -n "${1#*=}" ]] || hardening_die "Die Wartungspolicy-Transaktionsangabe ist ungueltig."
+        transaction_id="${1#*=}"
+        shift
+        ;;
+      *) hardening_die "Unbekannte Wartungspolicy-Bestaetigungsoption." ;;
+    esac
+  done
+  policy_validate_transaction "$transaction_id" || hardening_die "Die Wartungspolicy-Transaktions-ID ist ungueltig."
+  common_preflight
+  acquire_controller_lock
+  local pending active="" transaction_directory state first_connection first_session
+  local confirmation_not_before_epoch tty_epoch current_ufw_hash effective confirmation_complete=0
+  pending="$(read_private_value "$PENDING_MAINTENANCE_POLICY_FILE")"
+  [[ "$pending" == "$transaction_id" ]] || hardening_die "Diese SSH-Wartungspolicy wartet nicht auf Bestaetigung."
+  if [[ -e "$ACTIVE_MAINTENANCE_POLICY_FILE" || -L "$ACTIVE_MAINTENANCE_POLICY_FILE" ]]; then
+    active="$(read_private_value "$ACTIVE_MAINTENANCE_POLICY_FILE")"
+    [[ "$active" == "$transaction_id" ]] \
+      || hardening_die "Eine andere SSH-Wartungspolicy ist bereits aktiv."
+  fi
+  load_active_base_policy
+  transaction_directory="$(maintenance_transaction_directory "$transaction_id")"
+  state="$(maintenance_transaction_state "$transaction_directory")"
+  [[ "$state" == pending_confirmation || ( "$state" == confirmed && "$active" == "$transaction_id" ) ]] \
+    || hardening_die "Die SSH-Wartungspolicy befindet sich nicht im erwarteten Bestaetigungszustand."
+  load_maintenance_transaction_policy "$transaction_directory"
+  if [[ "$state" == confirmed ]]; then
+    rm -f -- "$PENDING_MAINTENANCE_POLICY_FILE"
+    sync
+    refresh_audit_status
+    maintenance_command_json maintenance-confirm confirmed "$transaction_id"
+    return 0
+  fi
+
+  require_live_maintenance_session
+  session_uses_maintenance_interface \
+    || hardening_die "Die Bestaetigung muss ueber die freigegebene Tailscale-SSH-Schnittstelle erfolgen."
+  admin_key_sudo_preflight "$CONFIG_ADMIN"
+  first_connection="$(read_private_value "$transaction_directory/first-connection.sha256")"
+  policy_validate_transaction "$first_connection" \
+    || hardening_die "Der erste SSH-Verbindungsnachweis der Wartungspolicy ist ungueltig."
+  ssh_connection_is_independent "$SESSION_CONNECTION_FINGERPRINT" "$first_connection" \
+    || hardening_die "Die Wartungspolicy muss ueber eine eigenstaendige neue SSH-Verbindung bestaetigt werden."
+  first_session="$(read_private_value "$transaction_directory/first-session.sha256")"
+  policy_validate_transaction "$first_session" \
+    || hardening_die "Der erste SSH-Sitzungsnachweis der Wartungspolicy ist ungueltig."
+  [[ "$SESSION_FINGERPRINT" != "$first_session" ]] \
+    || hardening_die "Die Wartungspolicy muss aus einer zweiten SSH-Sitzung bestaetigt werden."
+  confirmation_not_before_epoch="$(read_private_value "$transaction_directory/confirmation-not-before-epoch")"
+  tty_epoch="$(stat --format='%Z' -- "$SSH_TTY")"
+  [[ "$confirmation_not_before_epoch" =~ ^[0-9]+$ && "$tty_epoch" =~ ^[0-9]+$ \
+    && "$tty_epoch" -gt "$confirmation_not_before_epoch" ]] \
+    || hardening_die "Die zweite Tailscale-SSH-Sitzung wurde nicht nach der Policy-Uebergabe geoeffnet."
+  sshd -t >/dev/null 2>"$transaction_directory/confirm-private.log" \
+    || hardening_die "Die SSH-Konfiguration ist vor der Wartungspolicy-Bestaetigung ungueltig."
+  effective="$(sshd_effective_configuration "$CONFIG_ADMIN" "$SESSION_CLIENT_IP" "$SESSION_SERVER_IP" "$CONFIG_SSH_PORT" \
+    "$transaction_directory/confirm-private.log")" \
+    || hardening_die "Die effektive SSH-Konfiguration ist vor der Wartungspolicy-Bestaetigung ungueltig."
+  sshd_effective_has_exact_port "$effective" "$CONFIG_SSH_PORT" \
+    || hardening_die "SSH verwendet vor der Wartungspolicy-Bestaetigung nicht exakt den erwarteten Port."
+  sshd_require_hardened_effective_policy "$effective"
+  validate_effective_maintenance_ufw_policy "$CONFIG_SSH_PORT" \
+    || hardening_die "Die UFW-Policy weicht vor der Wartungspolicy-Bestaetigung ab."
+  current_ufw_hash="$(current_ufw_added_sha256)" \
+    || hardening_die "Der UFW-Regelstand konnte vor der Wartungspolicy-Bestaetigung nicht gelesen werden."
+  [[ "$current_ufw_hash" == "$MAINTENANCE_UFW_ADDED_SHA256" ]] \
+    || hardening_die "Der UFW-Regelstand wurde seit der Policy-Uebergabe veraendert."
+  [[ "$(maintenance_transaction_state "$transaction_directory")" == pending_confirmation ]] \
+    || hardening_die "Die Wartungspolicy wurde waehrend der Bestaetigung veraendert."
+
+  trap 'status=$?; if ((confirmation_complete == 0)); then sync || true; fi; exit "$status"' EXIT
+  write_private_value "$ACTIVE_MAINTENANCE_POLICY_FILE" "$transaction_id"
+  write_maintenance_transaction_state "$transaction_directory" confirmed
+  sync
+  rm -f -- "$PENDING_MAINTENANCE_POLICY_FILE"
+  sync
+  confirmation_complete=1
+  trap - EXIT
+  refresh_audit_status
+  maintenance_command_json maintenance-confirm confirmed "$transaction_id"
+}
+
+maintenance_cancel_command() {
+  local transaction_id=""
+  [[ "${1:-}" == --transaction && $# -eq 2 ]] \
+    || hardening_die "Maintenance-cancel erfordert --transaction 64HEX."
+  transaction_id="$2"
+  policy_validate_transaction "$transaction_id" || hardening_die "Die Wartungspolicy-Transaktions-ID ist ungueltig."
+  common_preflight
+  acquire_controller_lock
+  [[ "$(read_private_value "$PENDING_MAINTENANCE_POLICY_FILE")" == "$transaction_id" ]] \
+    || hardening_die "Diese SSH-Wartungspolicy wartet nicht auf Bestaetigung."
+  [[ ! -e "$ACTIVE_MAINTENANCE_POLICY_FILE" && ! -L "$ACTIVE_MAINTENANCE_POLICY_FILE" ]] \
+    || hardening_die "Eine teilweise bestaetigte SSH-Wartungspolicy darf nicht abgebrochen werden."
+  local transaction_directory
+  transaction_directory="$(maintenance_transaction_directory "$transaction_id")"
+  [[ "$(maintenance_transaction_state "$transaction_directory")" == pending_confirmation ]] \
+    || hardening_die "Die SSH-Wartungspolicy ist nicht abbrechbar."
+  write_maintenance_transaction_state "$transaction_directory" cancelled
+  rm -f -- "$PENDING_MAINTENANCE_POLICY_FILE"
+  sync
+  refresh_audit_status
+  maintenance_command_json maintenance-cancel cancelled "$transaction_id"
+}
+
+maintenance_revoke_command() {
+  local transaction_id=""
+  [[ "${1:-}" == --transaction && $# -eq 2 ]] \
+    || hardening_die "Maintenance-revoke erfordert --transaction 64HEX."
+  transaction_id="$2"
+  policy_validate_transaction "$transaction_id" || hardening_die "Die Wartungspolicy-Transaktions-ID ist ungueltig."
+  common_preflight
+  acquire_controller_lock
+  [[ ! -e "$PENDING_MAINTENANCE_POLICY_FILE" && ! -L "$PENDING_MAINTENANCE_POLICY_FILE" ]] \
+    || hardening_die "Eine SSH-Wartungspolicy wartet noch auf Bestaetigung."
+  [[ "$(read_private_value "$ACTIVE_MAINTENANCE_POLICY_FILE")" == "$transaction_id" ]] \
+    || hardening_die "Nur die aktive SSH-Wartungspolicy darf widerrufen werden."
+  local transaction_directory
+  transaction_directory="$(maintenance_transaction_directory "$transaction_id")"
+  [[ "$(maintenance_transaction_state "$transaction_directory")" == confirmed ]] \
+    || hardening_die "Die aktive SSH-Wartungspolicy ist ungueltig."
+  write_maintenance_transaction_state "$transaction_directory" revoked
+  rm -f -- "$ACTIVE_MAINTENANCE_POLICY_FILE"
+  sync
+  refresh_audit_status
+  maintenance_command_json maintenance-revoke revoked "$transaction_id"
+}
+
 rollback_command() {
   local transaction_id=""
   while (($#)); do
@@ -1419,6 +1849,8 @@ rollback_command() {
   policy_validate_transaction "$transaction_id" || hardening_die "Die Transaktions-ID ist ungueltig."
   common_preflight
   acquire_controller_lock
+  [[ ! -e "$ACTIVE_MAINTENANCE_POLICY_FILE" && ! -L "$ACTIVE_MAINTENANCE_POLICY_FILE" ]] \
+    || hardening_die "Die aktive SSH-Wartungspolicy muss vor einem Host-Rollback ausdruecklich widerrufen werden."
   local pending="" active=""
   [[ -f "$HARDENING_PENDING_FILE" ]] && pending="$(read_private_value "$HARDENING_PENDING_FILE")"
   [[ -f "$ACTIVE_TRANSACTION_FILE" ]] && active="$(read_private_value "$ACTIVE_TRANSACTION_FILE")"
@@ -1472,6 +1904,11 @@ usage() {
     "  $CONTROLLER_NAME plan --admin USER --ssh-port PORT --source CIDR [--source CIDR ...]" \
     "  $CONTROLLER_NAME apply --admin USER --ssh-port PORT --source CIDR [--source CIDR ...]" \
     "  $CONTROLLER_NAME confirm --transaction 64HEX" \
+    "  $CONTROLLER_NAME maintenance-plan --source HOST_CIDR [--source HOST_CIDR ...] --interface tailscale0" \
+    "  $CONTROLLER_NAME maintenance-adopt --source HOST_CIDR [--source HOST_CIDR ...] --interface tailscale0" \
+    "  $CONTROLLER_NAME maintenance-confirm --transaction 64HEX" \
+    "  $CONTROLLER_NAME maintenance-cancel --transaction 64HEX" \
+    "  $CONTROLLER_NAME maintenance-revoke --transaction 64HEX" \
     "  $CONTROLLER_NAME rollback --transaction 64HEX"
 }
 
@@ -1483,6 +1920,11 @@ main() {
     plan) plan_command "$@" ;;
     apply) apply_command "$@" ;;
     confirm) confirm_command "$@" ;;
+    maintenance-plan) maintenance_plan_command "$@" ;;
+    maintenance-adopt) maintenance_adopt_command "$@" ;;
+    maintenance-confirm) maintenance_confirm_command "$@" ;;
+    maintenance-cancel) maintenance_cancel_command "$@" ;;
+    maintenance-revoke) maintenance_revoke_command "$@" ;;
     rollback) rollback_command "$@" ;;
     rollback-pending) rollback_pending_command "$@" ;;
     --help|-h|help) usage ;;

@@ -621,7 +621,7 @@ let hardeningSchema;
 try { hardeningSchema = JSON.parse(fs.readFileSync(hardeningSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Hardening-Modulvertrag ist nicht lesbar."); }
 if (JSON.stringify(Object.keys(hardeningSchema || {}).sort()) !== JSON.stringify(["activationPolicy", "format", "managedArtifacts", "moduleVersion", "schemaVersion"])
   || hardeningSchema?.format !== "grabenplaner-linux-hardening-module-contract" || hardeningSchema?.schemaVersion !== 1
-  || hardeningSchema?.moduleVersion !== 1 || hardeningSchema?.activationPolicy !== "explicit-root-two-session"
+  || hardeningSchema?.moduleVersion !== 2 || hardeningSchema?.activationPolicy !== "explicit-root-two-session"
   || !Array.isArray(hardeningSchema?.managedArtifacts) || hardeningSchema.managedArtifacts.length !== expectedHardeningArtifacts.length
   || expectedHardeningArtifacts.some((relative, index) => hardeningSchema.managedArtifacts[index] !== relative)) {
   fail("Der optionale Hardening-Modulvertrag ist ungueltig.");

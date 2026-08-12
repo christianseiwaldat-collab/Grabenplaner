@@ -245,6 +245,77 @@ DEFAULT_APPLICATION_POLICY="SKIP"`;
   }
 });
 
+test("hardening v2 UFW policy adopts exact host maintenance sources and the Tailscale SSH interface", () => {
+  const baseSources = ["203.0.113.10/32", "203.0.113.11/32"];
+  const maintenanceSources = ["198.51.100.20/32"];
+  const added = `Added user rules (see 'ufw status' for running firewall):
+ufw allow in on tailscale0 to any port 22 proto tcp comment 'private overlay SSH'
+ufw allow from 203.0.113.10 to any port 22 proto tcp comment 'Grabenplaner managed SSH'
+ufw allow 80/tcp comment 'Grabenplaner managed HTTP'
+ufw allow 443/tcp comment 'Grabenplaner managed HTTPS'
+ufw allow from 203.0.113.11 to any port 22 proto tcp
+ufw allow from 198.51.100.20 to any port 22 proto tcp`;
+  const status = `Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), deny (routed)
+
+22/tcp on tailscale0 ALLOW IN Anywhere
+22/tcp ALLOW IN 203.0.113.10
+80/tcp ALLOW IN Anywhere
+443/tcp ALLOW IN Anywhere
+22/tcp ALLOW IN 203.0.113.11
+22/tcp ALLOW IN 198.51.100.20
+80/tcp (v6) ALLOW IN Anywhere (v6)
+443/tcp (v6) ALLOW IN Anywhere (v6)
+22/tcp (v6) on tailscale0 ALLOW IN Anywhere (v6)`;
+
+  assert.deepEqual(policy.validateUfwPolicy({
+    addedRules: added,
+    status,
+    sshPort: 22,
+    allowedSources: baseSources,
+    maintenanceSources,
+    allowedSshInterfaces: ["tailscale0"],
+    requireComplete: true,
+  }), { configuredCount: 6, effectiveCount: 6, complete: true });
+
+  assert.equal(policy.validateMaintenanceSources(maintenanceSources, { requireNonEmpty: true }).length, 1);
+  assert.deepEqual(policy.validateSshInterfaces(["tailscale0"], { requireNonEmpty: true }), ["tailscale0"]);
+
+  for (const invalidSource of ["198.51.100.0/24", "2001:db8::/64", "198.51.100.20"]) {
+    assert.throws(() => policy.validateMaintenanceSources([invalidSource]), /invalid|exact host/);
+  }
+  for (const invalidInterface of ["eth0", "tailscale1", "tailscale0;bad", " tailscale0", ""]) {
+    assert.throws(() => policy.validateSshInterfaces([invalidInterface]), /invalid/);
+  }
+
+  for (const unsafeAdded of [
+    added.replace("on tailscale0", "on eth0"),
+    added.replace("allow in on tailscale0", "allow in on tailscale0 from 198.51.100.9"),
+    `${added}\nufw allow 22/tcp`,
+  ]) {
+    assert.throws(() => policy.validateUfwPolicy({
+      addedRules: unsafeAdded,
+      status,
+      sshPort: 22,
+      allowedSources: baseSources,
+      maintenanceSources,
+      allowedSshInterfaces: ["tailscale0"],
+      requireComplete: true,
+    }), /invalid|not allowed/);
+  }
+
+  assert.throws(() => policy.validateUfwPolicy({
+    addedRules: added,
+    status: status.replace(/^22\/tcp(?: \(v6\))? on tailscale0.*(?:\n|$)/gm, ""),
+    sshPort: 22,
+    allowedSources: baseSources,
+    maintenanceSources,
+    allowedSshInterfaces: ["tailscale0"],
+    requireComplete: true,
+  }), /missing/);
+});
+
 test("v0.75 UFW denial fixtures fail closed for broad, intersecting ranges and profiles", () => {
   const source = "203.0.113.0/24";
   const safeBase = "Added user rules (see 'ufw status' for running firewall):\nufw deny 25/tcp";
