@@ -35,6 +35,12 @@ const state = {
   locationId: "",
   departmentId: "",
   data: null,
+  employeeLendings: [],
+  employeeLendingDelegates: [],
+  employeeLendingCandidates: [],
+  employeeLendingLocations: [],
+  employeeLendingDepartments: [],
+  employeeLendingLoading: false,
   vacationData: null,
   locations: [],
   positions: [],
@@ -418,6 +424,7 @@ const elements = Object.fromEntries(
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
+    "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount", "vacationAccountsButton", "vacationAccountsModal", "vacationAccountsYear", "loadVacationAccountsButton", "vacationAccountsSummary", "vacationAccountsList",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
@@ -2982,6 +2989,7 @@ function renderHeader() {
   const hasNote = Boolean(state.data.scheduleNote?.note_text);
   elements.scheduleNoteButton.classList.toggle("has-note", hasNote);
   elements.scheduleNoteButtonHint.textContent = hasNote ? "anzeigen/bearbeiten" : "hinzufügen";
+  elements.employeeLendingButton?.classList.toggle("hidden", !canManageEmployeeLendings());
   ["autoPlanButton", "optionsButton", "resetWeekButton", "scheduleNoteButton"].forEach((id) => {
     const button = document.querySelector(`#${id}`);
     if (button) {
@@ -3260,6 +3268,13 @@ function renderWorkRuleAssessment() {
   });
 }
 
+function staffAssignmentsForDate(employeeNumber, date) {
+  return (state.data?.employeeLendings || state.data?.staffAssignments || [])
+    .filter((assignment) => String(assignment.employee_number || assignment.employeeNumber) === String(employeeNumber))
+    .filter((assignment) => date >= String(assignment.date_from || assignment.dateFrom)
+      && date <= String(assignment.date_to || assignment.dateTo));
+}
+
 function renderTimeline() {
   const employees = state.data.employees;
   const settings = state.data.settings;
@@ -3308,14 +3323,20 @@ function renderTimeline() {
           const dayOptions = specialCasesFor(employee.personnel_number, date);
           const specialCase = dayOptions.find((option) => optionIsAllDay(option) && !option.soft_pending);
           const softPending = dayOptions.find((option) => optionIsAllDay(option) && option.soft_pending);
+          const staffAssignments = staffAssignmentsForDate(employee.personnel_number, date);
+          const outgoingAssignments = staffAssignments.filter((assignment) => String(assignment.home_location_id || assignment.homeLocationId) === String(state.locationId));
+          const incomingAssignments = staffAssignments.filter((assignment) => String(assignment.destination_location_id || assignment.destinationLocationId) === String(state.locationId));
+          const fullDayOutgoingAssignment = outgoingAssignments.find((assignment) => Number(assignment.all_day ?? assignment.allDay ?? 1) === 1);
           const fixedUnavailable = !employeeCanWorkOnDate(employee, date);
-          const unavailable = Boolean(locked || globalBlock || specialCase || fixedUnavailable);
+          const unavailable = Boolean(locked || globalBlock || specialCase || fixedUnavailable || fullDayOutgoingAssignment);
           const unavailableText = locked
             ? "Vergangene Kalenderwoche ist schreibgeschützt"
             : globalBlock
               ? `${globalBlock.reason || globalBlock.holiday_name || "Tag gesperrt"}${globalBlock.is_public_holiday ? " · Feiertag" : ""}`
               : specialCase
                 ? `${optionLabels[specialCase.option_type]} · ${formatOptionTime(specialCase)}${specialCase.note ? ` – ${specialCase.note}` : ""}`
+                : fullDayOutgoingAssignment
+                  ? `Temporärer Einsatz in ${fullDayOutgoingAssignment.destination_location_name || fullDayOutgoingAssignment.destinationLocationName || fullDayOutgoingAssignment.destination_location_id || fullDayOutgoingAssignment.destinationLocationId}`
                 : fixedUnavailable
                   ? "Kein fixer Arbeitstag"
                   : "";
@@ -3327,6 +3348,21 @@ function renderTimeline() {
             const height = Math.max(2.5, ((optionEnd - optionStart) / range) * 100);
             const title = `${optionLabels[option.option_type]} · ${formatOptionTime(option)}${option.note ? ` – ${option.note}` : ""}`;
             return `<span class="option-block ${option.soft_pending ? "soft-pending-option" : ""}" data-option-title="${escapeHtml(title)}" style="top:${top}%;height:${height}%"><em>${escapeHtml(option.soft_pending ? "ZA beantragt" : optionLabels[option.option_type])}</em></span>`;
+          }).join("");
+          const assignmentBlocks = [...outgoingAssignments, ...incomingAssignments].map((assignment) => {
+            const incoming = String(assignment.destination_location_id || assignment.destinationLocationId) === String(state.locationId);
+            const allDay = Number(assignment.all_day ?? assignment.allDay ?? 1) === 1;
+            const otherLocation = incoming
+              ? (assignment.home_location_name || assignment.homeLocationName || assignment.home_location_id || assignment.homeLocationId)
+              : (assignment.destination_location_name || assignment.destinationLocationName || assignment.destination_location_id || assignment.destinationLocationId);
+            const label = incoming ? `Einsatz hier · von ${otherLocation}` : `Einsatz · ${otherLocation}`;
+            if (allDay) return `<span class="employee-lending-marker ${incoming ? "incoming" : "outgoing"}" style="top:3px;height:18px" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+            const assignmentStart = Math.max(start, timeToMinutes(assignment.start_time || assignment.startTime));
+            const assignmentEnd = Math.min(end, timeToMinutes(assignment.end_time || assignment.endTime));
+            if (assignmentEnd <= assignmentStart) return "";
+            const top = ((assignmentStart - start) / range) * 100;
+            const height = Math.max(2.5, ((assignmentEnd - assignmentStart) / range) * 100);
+            return `<span class="employee-lending-marker ${incoming ? "incoming" : "outgoing"}" style="top:${top}%;height:${height}%" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
           }).join("");
           const softPendingBlock = softPending ? '<span class="option-block soft-pending-option soft-pending-all-day"><em>ZA beantragt</em></span>' : "";
           const shifts = state.data.shifts.filter((shift) => shift.shift_date === date && shift.employee_number === employee.personnel_number);
@@ -3344,8 +3380,10 @@ function renderTimeline() {
               ? (globalBlock.is_public_holiday ? "Feiertag" : "gesperrt")
               : specialCase
                 ? optionLabels[specialCase.option_type]
+                : fullDayOutgoingAssignment
+                  ? "Filialeinsatz"
                 : "frei";
-          return `<div class="employee-lane ${specialCase ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtml(unavailableText)}">${bars}${optionBlocks}${softPendingBlock}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
+          return `<div class="employee-lane ${specialCase || fullDayOutgoingAssignment ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtml(unavailableText)}">${bars}${optionBlocks}${assignmentBlocks}${softPendingBlock}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
         }).join("")
       : '<div class="employee-lane"></div>';
 
@@ -22996,6 +23034,242 @@ function shiftEmployeeOptionLabel(employee) {
   return `${employee.nickname || employee.full_name || employee.fullName || employee.personnel_number} · ${employee.personnel_number}${externalHint}`;
 }
 
+function canManageEmployeeLendings() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("staff_assignments:manage") === true;
+}
+
+function employeeLendingWeekEnd() {
+  return addDays(state.weekStart, 6);
+}
+
+function employeeLendingCandidates() {
+  const source = state.employeeLendingCandidates.length
+    ? state.employeeLendingCandidates.map((employee) => ({
+      ...employee,
+      personnel_number: employee.personnel_number || employee.employeeNumber,
+      full_name: employee.full_name || employee.fullName,
+      home_location_id: employee.home_location_id || employee.homeLocationId,
+    }))
+    : (state.allEmployees || []);
+  return source
+    .filter((employee) => employee.active !== false && employee.active !== 0 && employee.active !== "0")
+    .filter((employee) => String(employee.home_location_id || employee.homeLocationId || "") === String(state.locationId))
+    .sort((left, right) => String(left.personnel_number).localeCompare(String(right.personnel_number), "de-AT", { numeric: true }));
+}
+
+function employeeLendingDestinationDepartments() {
+  const locationId = String(elements.employeeLendingDestination?.value || "");
+  const departments = state.employeeLendingDepartments.length
+    ? state.employeeLendingDepartments
+      .filter((department) => String(department.locationId || department.location_id) === locationId)
+      .map((department) => ({ ...department, id: department.id, name: department.name }))
+    : departmentsForLocation(locationId);
+  elements.employeeLendingDepartment.innerHTML = `<option value="">Gesamte Filiale / keine feste Abteilung</option>${departments.map((department) =>
+    `<option value="${escapeHtmlAttribute(String(department.id))}">${escapeHtml(department.name)}</option>`,
+  ).join("")}`;
+}
+
+function syncEmployeeLendingTimeFields() {
+  const allDay = elements.employeeLendingAllDay.checked;
+  elements.employeeLendingTimes.classList.toggle("hidden", allDay);
+  elements.employeeLendingStartTime.required = !allDay;
+  elements.employeeLendingEndTime.required = !allDay;
+  elements.employeeLendingDateTo.disabled = !allDay;
+  if (!allDay) elements.employeeLendingDateTo.value = elements.employeeLendingDateFrom.value;
+}
+
+function resetEmployeeLendingEditor() {
+  elements.employeeLendingForm.reset();
+  elements.employeeLendingEmployee.disabled = false;
+  elements.employeeLendingId.value = "";
+  elements.employeeLendingRevision.value = "";
+  elements.employeeLendingDateFrom.value = state.weekStart;
+  elements.employeeLendingDateTo.value = employeeLendingWeekEnd();
+  elements.employeeLendingAllDay.checked = true;
+  elements.employeeLendingStartTime.value = "09:00";
+  elements.employeeLendingEndTime.value = "18:00";
+  elements.employeeLendingEmployee.innerHTML = employeeLendingCandidates().map((employee) =>
+    `<option value="${escapeHtmlAttribute(employee.personnel_number)}">${escapeHtml(employee.nickname || employee.full_name)} · ${escapeHtml(employee.personnel_number)}</option>`,
+  ).join("");
+  const destinationLocations = state.employeeLendingLocations.length
+    ? state.employeeLendingLocations
+    : activeLocations();
+  elements.employeeLendingDestination.innerHTML = destinationLocations
+    .filter((location) => String(location.id) !== String(state.locationId))
+    .map((location) => `<option value="${escapeHtmlAttribute(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`)
+    .join("");
+  employeeLendingDestinationDepartments();
+  syncEmployeeLendingTimeFields();
+  elements.employeeLendingCancelEdit.classList.add("hidden");
+  elements.employeeLendingSave.textContent = "Filialeinsatz anlegen";
+  elements.employeeLendingMessage.textContent = "Bestehende Dienste oder genehmigte Abwesenheiten werden nicht automatisch verändert.";
+}
+
+function employeeLendingPeriodText(lending) {
+  const dateFrom = lending.date_from || lending.dateFrom;
+  const dateTo = lending.date_to || lending.dateTo;
+  const dates = dateFrom === dateTo
+    ? formatDate(dateFrom)
+    : `${formatDate(dateFrom)} – ${formatDate(dateTo)}`;
+  return Number(lending.all_day) === 1 || lending.allDay === true
+    ? `${dates} · ganztägig`
+    : `${dates} · ${lending.start_time || lending.startTime}–${lending.end_time || lending.endTime} Uhr`;
+}
+
+function renderEmployeeLendingList() {
+  const lendings = state.employeeLendings || [];
+  if (!lendings.length) {
+    elements.employeeLendingList.innerHTML = '<p class="employee-lending-empty">Im gewählten Zeitraum bestehen keine temporären Filialeinsätze.</p>';
+    return;
+  }
+  elements.employeeLendingList.innerHTML = lendings.map((lending) => {
+    const homeHere = String(lending.home_location_id || lending.homeLocationId) === String(state.locationId);
+    const destination = lending.destination_location_name || lending.destinationLocationName || lending.destination_location_id || lending.destinationLocationId;
+    const home = lending.home_location_name || lending.homeLocationName || lending.home_location_id || lending.homeLocationId;
+    const employeeName = lending.employee_nickname || lending.employeeNickname || lending.employee_name || lending.employeeName || lending.employee_number;
+    const editable = lending.capabilities?.edit ?? lending.canEdit ?? (homeHere && canManageEmployeeLendings());
+    const cancellable = lending.capabilities?.cancel ?? editable;
+    return `<article class="employee-lending-card ${homeHere ? "outgoing" : "incoming"}">
+      <div><span>${homeHere ? "Ausgehend" : "Eingehend"}</span><strong>${escapeHtml(employeeName)} · ${escapeHtml(lending.employee_number || lending.employeeNumber)}</strong><small>${escapeHtml(employeeLendingPeriodText(lending))}</small><small>${escapeHtml(homeHere ? `Ziel: ${destination}` : `Stammfiliale: ${home}`)}${lending.destination_department_name || lending.destinationDepartmentName ? ` · ${escapeHtml(lending.destination_department_name || lending.destinationDepartmentName)}` : ""}</small>${lending.note ? `<p>${escapeHtml(lending.note)}</p>` : ""}</div>
+      <div class="employee-lending-card-actions">${editable ? `<button type="button" class="secondary-button" data-lending-edit="${escapeHtmlAttribute(lending.id)}">Bearbeiten</button>` : ""}${cancellable ? `<button type="button" class="danger-button" data-lending-cancel="${escapeHtmlAttribute(lending.id)}">Stornieren</button>` : ""}</div>
+    </article>`;
+  }).join("");
+}
+
+function renderEmployeeLendingDelegates() {
+  const delegates = state.employeeLendingDelegates || [];
+  elements.employeeLendingDelegatesPanel.classList.toggle("hidden", !delegates.length);
+  elements.employeeLendingDelegates.innerHTML = delegates.map((delegate) => `
+    <label class="switch-row"><span><strong>${escapeHtml(delegate.name || delegate.fullName || delegate.employeeNumber)}</strong><small>MA-Nr. ${escapeHtml(delegate.employeeNumber)}</small></span><input type="checkbox" data-lending-delegate="${escapeHtmlAttribute(delegate.employeeNumber)}" ${delegate.enabled || delegate.granted ? "checked" : ""} /></label>
+  `).join("");
+}
+
+async function loadEmployeeLendings() {
+  if (!canManageEmployeeLendings()) return;
+  state.employeeLendingLoading = true;
+  elements.employeeLendingRefresh.disabled = true;
+  try {
+    const query = new URLSearchParams({ locationId: state.locationId, dateFrom: state.weekStart, dateTo: employeeLendingWeekEnd() });
+    const [result, delegationResult] = await Promise.all([
+      api(`/api/portal/v1/staff-assignments?${query}`),
+      api(`/api/portal/v1/staff-assignments/delegates?locationId=${encodeURIComponent(state.locationId)}`).catch((error) => {
+        if (error.status === 403 || error.status === 404) return { delegates: [] };
+        throw error;
+      }),
+    ]);
+    state.employeeLendings = Array.isArray(result) ? result : (result.assignments || result.lendings || []);
+    state.employeeLendingCandidates = result.candidates || [];
+    state.employeeLendingLocations = result.locations || [];
+    state.employeeLendingDepartments = result.departments || [];
+    state.employeeLendingDelegates = delegationResult.delegates || result.delegates || [];
+    renderEmployeeLendingList();
+    renderEmployeeLendingDelegates();
+  } catch (error) {
+    elements.employeeLendingMessage.textContent = error.message;
+    elements.employeeLendingList.innerHTML = `<p class="employee-lending-empty error">${escapeHtml(error.message)}</p>`;
+  } finally {
+    state.employeeLendingLoading = false;
+    elements.employeeLendingRefresh.disabled = false;
+  }
+}
+
+async function openEmployeeLendingModal() {
+  resetEmployeeLendingEditor();
+  elements.employeeLendingModal.showModal();
+  await loadEmployeeLendings();
+  resetEmployeeLendingEditor();
+}
+
+function editEmployeeLending(id) {
+  const lending = state.employeeLendings.find((entry) => String(entry.id) === String(id));
+  if (!lending) return;
+  elements.employeeLendingId.value = lending.id;
+  elements.employeeLendingRevision.value = lending.revision || 1;
+  elements.employeeLendingEmployee.value = lending.employee_number || lending.employeeNumber;
+  elements.employeeLendingDestination.value = lending.destination_location_id || lending.destinationLocationId;
+  employeeLendingDestinationDepartments();
+  elements.employeeLendingDepartment.value = lending.destination_department_id || lending.destinationDepartmentId || "";
+  elements.employeeLendingDateFrom.value = lending.date_from || lending.dateFrom;
+  elements.employeeLendingDateTo.value = lending.date_to || lending.dateTo;
+  elements.employeeLendingAllDay.checked = Number(lending.all_day ?? lending.allDay ?? 1) === 1;
+  elements.employeeLendingStartTime.value = lending.start_time || lending.startTime || "09:00";
+  elements.employeeLendingEndTime.value = lending.end_time || lending.endTime || "18:00";
+  elements.employeeLendingNote.value = lending.note || "";
+  syncEmployeeLendingTimeFields();
+  elements.employeeLendingEmployee.disabled = true;
+  elements.employeeLendingCancelEdit.classList.remove("hidden");
+  elements.employeeLendingSave.textContent = "Änderung speichern";
+  elements.employeeLendingMessage.textContent = "Eine Verkürzung oder Stornierung ist nur möglich, wenn keine Zielschicht ohne gültige Abdeckung zurückbleibt.";
+}
+
+async function saveEmployeeLending(event) {
+  event.preventDefault();
+  const id = elements.employeeLendingId.value;
+  const allDay = elements.employeeLendingAllDay.checked;
+  const payload = {
+    employeeNumber: elements.employeeLendingEmployee.value,
+    destinationLocationId: elements.employeeLendingDestination.value,
+    destinationDepartmentId: elements.employeeLendingDepartment.value || null,
+    dateFrom: elements.employeeLendingDateFrom.value,
+    dateTo: allDay ? elements.employeeLendingDateTo.value : elements.employeeLendingDateFrom.value,
+    allDay,
+    startTime: allDay ? null : elements.employeeLendingStartTime.value,
+    endTime: allDay ? null : elements.employeeLendingEndTime.value,
+    note: elements.employeeLendingNote.value.trim(),
+    revision: id ? Number(elements.employeeLendingRevision.value) : undefined,
+  };
+  elements.employeeLendingSave.disabled = true;
+  try {
+    await api(id ? `/api/portal/v1/staff-assignments/${encodeURIComponent(id)}` : "/api/portal/v1/staff-assignments", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    });
+    showToast(id ? "Filialeinsatz wurde aktualisiert." : "Filialeinsatz wurde angelegt.");
+    resetEmployeeLendingEditor();
+    await Promise.all([loadEmployeeLendings(), loadAll()]);
+  } catch (error) {
+    elements.employeeLendingMessage.textContent = error.message;
+  } finally {
+    elements.employeeLendingSave.disabled = false;
+  }
+}
+
+async function cancelEmployeeLending(id) {
+  const lending = state.employeeLendings.find((entry) => String(entry.id) === String(id));
+  const employeeName = lending?.employee_nickname || lending?.employeeNickname
+    || lending?.employee_name || lending?.employeeName
+    || lending?.employee_number || lending?.employeeNumber;
+  if (!lending || !window.confirm(`${employeeName}: Filialeinsatz wirklich stornieren?`)) return;
+  try {
+    await api(`/api/portal/v1/staff-assignments/${encodeURIComponent(id)}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ revision: Number(lending.revision || 1) }),
+    });
+    showToast("Filialeinsatz wurde storniert.");
+    await Promise.all([loadEmployeeLendings(), loadAll()]);
+  } catch (error) {
+    elements.employeeLendingMessage.textContent = error.message;
+  }
+}
+
+async function updateEmployeeLendingDelegate(employeeNumber, enabled, control) {
+  control.disabled = true;
+  try {
+    await api(`/api/portal/v1/staff-assignments/delegates/${encodeURIComponent(employeeNumber)}`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled, locationId: state.locationId }),
+    });
+    showToast(enabled ? "Einsatzrecht wurde delegiert." : "Delegiertes Einsatzrecht wurde entzogen.");
+    await loadEmployeeLendings();
+  } catch (error) {
+    control.checked = !enabled;
+    elements.employeeLendingMessage.textContent = error.message;
+  } finally {
+    control.disabled = false;
+  }
+}
+
 function openShiftModal(employeeNumber, date, shift = null) {
   if (isWeekLocked()) {
     showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
@@ -26294,6 +26568,26 @@ elements.editEntitlementsButton.addEventListener("click", () => {
   renderVacations();
 });
 document.querySelector("#optionsButton").addEventListener("click", openOptionsModal);
+elements.employeeLendingButton?.addEventListener("click", openEmployeeLendingModal);
+elements.employeeLendingForm?.addEventListener("submit", saveEmployeeLending);
+elements.employeeLendingDestination?.addEventListener("change", employeeLendingDestinationDepartments);
+elements.employeeLendingAllDay?.addEventListener("change", syncEmployeeLendingTimeFields);
+elements.employeeLendingDateFrom?.addEventListener("change", () => {
+  if (!elements.employeeLendingAllDay.checked) elements.employeeLendingDateTo.value = elements.employeeLendingDateFrom.value;
+  else if (elements.employeeLendingDateTo.value < elements.employeeLendingDateFrom.value) elements.employeeLendingDateTo.value = elements.employeeLendingDateFrom.value;
+});
+elements.employeeLendingCancelEdit?.addEventListener("click", resetEmployeeLendingEditor);
+elements.employeeLendingRefresh?.addEventListener("click", loadEmployeeLendings);
+elements.employeeLendingList?.addEventListener("click", (event) => {
+  const edit = event.target.closest("[data-lending-edit]");
+  if (edit) { editEmployeeLending(edit.dataset.lendingEdit); return; }
+  const cancel = event.target.closest("[data-lending-cancel]");
+  if (cancel) cancelEmployeeLending(cancel.dataset.lendingCancel);
+});
+elements.employeeLendingDelegates?.addEventListener("change", (event) => {
+  const control = event.target.closest("[data-lending-delegate]");
+  if (control) updateEmployeeLendingDelegate(control.dataset.lendingDelegate, control.checked, control);
+});
 document.querySelector("#optionType").addEventListener("change", handleOptionTypeChange);
 document.querySelector("#optionEmployee").addEventListener("change", updateOptionCreditFields);
 elements.globalBlockSubmitButton.addEventListener("click", saveGlobalBlock);

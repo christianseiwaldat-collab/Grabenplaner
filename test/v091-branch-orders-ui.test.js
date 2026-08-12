@@ -25,6 +25,9 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(html, /id="branchOrderHistoryList"/);
   assert.match(html, /id="branchOrderPortalHistoryList"/);
   assert.match(html, /id="branchOrderPortalHistoryRefresh"/);
+  assert.match(html, /id="branchOrderSaveDraft"[^>]*>Entwurf speichern/);
+  assert.match(html, /id="branchOrderContinueDraft"[^>]*>Fortsetzen/);
+  assert.match(html, /id="branchOrderDiscardDraft"[^>]*>Verwerfen/);
   assert.match(html, /id="passwordSettingsCard"/);
   assert.doesNotMatch(html, /branchPasswordShortcut/);
   assert.match(script, /function branchOrderCapabilityEnabled/);
@@ -34,6 +37,9 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.doesNotMatch(script, /catalog\.senderEmail/);
   assert.match(script, /\/api\/portal\/v1\/branch-orders\/settings/);
   assert.match(script, /\/api\/portal\/v1\/branch-orders\/history/);
+  assert.match(script, /\/api\/portal\/v1\/branch-orders\/draft/);
+  assert.match(script, /expectedRevision: portalState\.branchOrderDraftRevision/);
+  assert.match(script, /draftRevision: portalState\.branchOrderDraftRevision/);
   assert.match(script, /\/api\/portal\/v1\/branch-orders\/\$\{encodeURIComponent\(id\)\}\/pdf/);
   assert.match(script, /step="1" inputmode="numeric"/);
   assert.match(script, /function captureBranchOrderSettingsDraft/);
@@ -66,4 +72,6 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(styles, /body\.branch-organization-account main \{ width:auto; min-height:100vh; margin:0 0 0 230px/);
   assert.match(styles, /branch-order-history-actions/);
   assert.match(styles, /branch-order-item-select input \{ order:2/);
+  assert.match(styles, /branch-order-draft-panel/);
+  assert.match(styles, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });

@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.0 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.1 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -183,6 +183,7 @@
               <label class="week-jump"><span>Springe zu Woche</span><input id="weekJumpDate" type="date" /></label>
               <button class="primary-button" id="autoPlanButton"><span>✦</span> Dienstplan automatisch erstellen</button>
               <button class="secondary-button" id="optionsButton"><span>✦</span> Planungsoptionen</button>
+              <button class="secondary-button hidden" id="employeeLendingButton" type="button"><span>⇄</span> Filialeinsatz zuweisen</button>
               <button class="secondary-button reset-button" id="resetWeekButton"><span>↺</span> Zurücksetzen</button>
               <button class="secondary-button schedule-note-button" id="scheduleNoteButton" type="button"><span>✎</span><span>Bemerkung<small id="scheduleNoteButtonHint">hinzufügen</small></span></button>
               <label class="department-pdf-control hidden" id="departmentPdfControl"><span>Abteilungs-PDF</span><select id="departmentPdfSelect"></select><a class="secondary-button" id="departmentPdfButton" href="/api/schedule.pdf"><span>↓</span></a></label>
@@ -2134,7 +2135,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.0 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.1 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -2349,6 +2350,43 @@
           </section>
         </div>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteShiftButton">Dienst löschen</button><span></span><button type="button" class="secondary-button" data-close="shiftModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal employee-lending-modal" id="employeeLendingModal">
+      <form method="dialog" id="employeeLendingForm">
+        <div class="modal-header"><div><span class="eyebrow">Standortübergreifende Planung</span><h2>Temporären Filialeinsatz zuweisen</h2><p>Die Stammfiliale legt den verbindlichen Einsatzzeitraum fest. Genehmigter Urlaub und ZA haben Vorrang.</p></div><button type="button" class="close-button" data-close="employeeLendingModal">×</button></div>
+        <input id="employeeLendingId" type="hidden" />
+        <input id="employeeLendingRevision" type="hidden" />
+        <div class="employee-lending-layout">
+          <section class="employee-lending-editor">
+            <div class="form-grid">
+              <label class="field full-width"><span>Teammitglied der Stammfiliale</span><select id="employeeLendingEmployee" required></select></label>
+              <label class="field"><span>Zielfiliale</span><select id="employeeLendingDestination" required></select></label>
+              <label class="field"><span>Zielabteilung</span><select id="employeeLendingDepartment"><option value="">Gesamte Filiale / keine feste Abteilung</option></select></label>
+              <label class="field"><span>Von</span><input id="employeeLendingDateFrom" type="date" required /></label>
+              <label class="field"><span>Bis</span><input id="employeeLendingDateTo" type="date" required /></label>
+              <label class="switch-row full-width"><span><strong>Ganztägiger Zeitraum</strong><small>Für mehrere Tage oder Kalenderwochen aktivieren.</small></span><input id="employeeLendingAllDay" type="checkbox" checked /></label>
+              <div class="inline-fields full-width employee-lending-times hidden" id="employeeLendingTimes">
+                <label class="field"><span>Beginn</span><input id="employeeLendingStartTime" type="time" step="900" /></label>
+                <label class="field"><span>Ende</span><input id="employeeLendingEndTime" type="time" step="900" /></label>
+              </div>
+              <label class="field full-width"><span>Interne Bemerkung</span><textarea id="employeeLendingNote" rows="2" maxlength="500"></textarea></label>
+            </div>
+            <p class="calculation-note" id="employeeLendingMessage">Bestehende Dienste oder genehmigte Abwesenheiten werden nicht automatisch verändert.</p>
+            <div class="employee-lending-editor-actions"><button type="button" class="secondary-button hidden" id="employeeLendingCancelEdit">Bearbeitung abbrechen</button><button type="submit" class="primary-button" id="employeeLendingSave">Filialeinsatz anlegen</button></div>
+          </section>
+          <section class="employee-lending-overview">
+            <div class="employee-lending-heading"><div><strong>Temporäre Filialeinsätze im Zeitraum</strong><small>Stornierte Einträge bleiben im Audit erhalten.</small></div><button type="button" class="secondary-button" id="employeeLendingRefresh">Aktualisieren</button></div>
+            <div class="employee-lending-list" id="employeeLendingList"></div>
+            <details class="employee-lending-delegates hidden" id="employeeLendingDelegatesPanel">
+              <summary>Recht an Abteilungsleitung delegieren</summary>
+              <p>Nur aktive Abteilungsleitungen derselben Stammfiliale können dieses einzelne Recht erhalten.</p>
+              <div id="employeeLendingDelegates"></div>
+            </details>
+          </section>
+        </div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="primary-button" data-close="employeeLendingModal">Fertig</button></div>
       </form>
     </dialog>
 

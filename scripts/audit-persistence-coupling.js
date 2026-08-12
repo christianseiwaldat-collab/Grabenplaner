@@ -165,6 +165,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/branch-orders.js",
   "lib/persistence/sqlite/operations/application-schema.js",
   "lib/persistence/sqlite/operations/database-import.js",
+  "lib/persistence/sqlite/operations/employee-location-lendings.js",
   "lib/persistence/sqlite/operations/feature-compatibility-migrations.js",
   "lib/persistence/sqlite/operations/historical-compatibility-migrations.js",
   "lib/persistence/sqlite/operations/maintenance.js",
@@ -276,6 +277,9 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/v087-wifi-automation-persistence.test.js",
   "test/v088-personal-email-settings.test.js",
   "test/v091-branch-orders.test.js",
+  "test/v092-branch-order-cleanup-cli.test.js",
+  "test/v0921-staff-assignment-absences.test.js",
+  "test/v0921-staff-assignments.test.js",
 ]);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_TEST_FILES);
 const PHASE_3_SQLITE_DRIVER_FILES = Object.freeze([
@@ -321,10 +325,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1044;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1048;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 24;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1020;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 947;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1024;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 951;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -448,7 +452,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 938;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 942;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 106;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
@@ -606,6 +610,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
   Object.freeze({
     id: "development-sqlite-tools",
     files: Object.freeze([
+      "scripts/cleanup-branch-order-test-data.js",
       "scripts/codespaces-runner.js",
       "scripts/set-developer.js",
     ]),
@@ -946,6 +951,7 @@ const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   ...BASELINE_DIRECT_PRODUCTION_DRIVER_FILES.filter((file) => file !== "server.js"),
   ...PHASE_3_SQLITE_DRIVER_FILES,
   ...MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES,
+  "scripts/cleanup-branch-order-test-data.js",
 ]);
 const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
   ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![
@@ -953,6 +959,10 @@ const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
     "test/work-rule-store.test.js",
   ].includes(file)),
   "test/personnel-workflow-lifecycle-onboarding-schema.test.js",
+  "test/v092-branch-order-cleanup-cli.test.js",
+]);
+const SQLITE_MAINTENANCE_CLI_FILES = new Set([
+  "scripts/cleanup-branch-order-test-data.js",
 ]);
 const SIGNALS = Object.freeze([
   { id: "directNodeSqliteImport", operation: "driver import", sqliteFeature: "node:sqlite", directDiscovery: true },
@@ -3811,6 +3821,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const legacyProductionRecords = productionDirect
     .filter((record) => (
       !PHASE_3_SQLITE_PROVIDER_FILE_SET.has(record.file)
+      && !SQLITE_MAINTENANCE_CLI_FILES.has(record.file)
       && !PHASE_4_PERSISTENCE_FILE_SET.has(record.file)
       && !PHASE_5_POSTGRESQL_FILE_SET.has(record.file)
       && !SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET.has(record.file)
