@@ -245,7 +245,7 @@ DEFAULT_APPLICATION_POLICY="SKIP"`;
   }
 });
 
-test("hardening v2 UFW policy adopts exact host maintenance sources and the Tailscale SSH interface", () => {
+test("hardening v3 UFW policy adopts exact host maintenance sources and the Tailscale SSH interface", () => {
   const baseSources = ["203.0.113.10/32", "203.0.113.11/32"];
   const maintenanceSources = ["198.51.100.20/32"];
   const added = `Added user rules (see 'ufw status' for running firewall):

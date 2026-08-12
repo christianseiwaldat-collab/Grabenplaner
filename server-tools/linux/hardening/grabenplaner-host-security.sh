@@ -290,18 +290,18 @@ require_live_ssh_session() {
 }
 
 session_server_address_uses_interface() {
-  local server_ip="$1" interface_name="$2" node addresses=""
+  local server_ip="$1" interface_name="$2" node
+  local -a addresses=()
   policy_validate_interfaces "$interface_name" || return 1
   command -v ip >/dev/null 2>&1 || return 1
   ip -o link show dev "$interface_name" 2>/dev/null | grep -Eq '<([^>]*,)?UP(,[^>]*)?>' || return 1
-  addresses="$(ip -o address show dev "$interface_name" 2>/dev/null | awk '{print $4}')" || return 1
-  [[ -n "$addresses" ]] || return 1
+  mapfile -t addresses < <(ip -o address show dev "$interface_name" 2>/dev/null | awk '{print $4}') || return 1
+  (( ${#addresses[@]} > 0 )) || return 1
   node="$(hardening_node)" || return 1
-  printf '%s\n' "$addresses" | "$node" - "$POLICY_FILE" "$server_ip" <<'NODE' >/dev/null 2>&1
-const fs = require("node:fs");
+  "$node" - "$POLICY_FILE" "$server_ip" "${addresses[@]}" <<'NODE' >/dev/null 2>&1
 const policy = require(process.argv[2]);
 const serverIp = process.argv[3];
-const cidrs = fs.readFileSync(0, "utf8").split(/\r?\n/).filter(Boolean);
+const cidrs = process.argv.slice(4);
 try {
   if (!cidrs.some((cidr) => policy.isIpInCidr(serverIp, cidr))) process.exit(1);
 } catch { process.exit(1); }

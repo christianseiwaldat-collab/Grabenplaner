@@ -181,7 +181,7 @@ test("hardening stays separate from the current core runtime and binds its exact
   const { moduleContract } = require(path.join(root, "server-tools/linux/hardening/lib/hardening-contract.js"));
   const expected = moduleContract(hardeningRoot);
   assert.deepEqual(result.hardeningModule, expected);
-  assert.equal(result.hardeningModule.fingerprint, "9916688dc68c6b61de3ecc818f3a63210c37563d4005a8c64f8ad84a803eca3f");
+  assert.equal(result.hardeningModule.fingerprint, "ca50a675a740830561c1784c6e527efedd5a167811914f22dc51f4e028d5c24b");
   assert.equal(result.hardeningModule.format, "grabenplaner-linux-hardening-installed-contract");
   assert.equal(result.hardeningModule.schemaVersion, schema.schemaVersion);
   assert.equal(result.hardeningModule.moduleVersion, schema.moduleVersion);
@@ -211,26 +211,26 @@ test("v0.75 hardening contract accepts only its exact regular-file tree", () => 
   });
 });
 
-test("hardening v2 rejects obsolete module schemas instead of reinterpreting transactions", () => {
+test("hardening v3 rejects obsolete module schemas instead of reinterpreting transactions", () => {
   const { moduleContract } = require(path.join(hardeningRoot, "lib", "hardening-contract.js"));
   withHardeningCopy((moduleRoot) => {
     const schemaPath = path.join(moduleRoot, "module-schema.json");
     const obsolete = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
-    obsolete.moduleVersion = 1;
+    obsolete.moduleVersion = 2;
     fs.writeFileSync(schemaPath, `${JSON.stringify(obsolete, null, 2)}\n`, "utf8");
     assert.throws(() => moduleContract(moduleRoot), /wird nicht unterstuetzt/);
   });
 });
 
-test("hardening v2 package publishes the maintenance-policy module contract", () => {
+test("hardening v3 package publishes the maintenance-policy module contract", () => {
   const { moduleContract } = require(path.join(hardeningRoot, "lib", "hardening-contract.js"));
   assert.equal(schema.schemaVersion, 1);
-  assert.equal(schema.moduleVersion, 2);
+  assert.equal(schema.moduleVersion, 3);
   assert.deepEqual(schema.managedArtifacts, legacyV075HardeningArtifacts);
   assert.equal(fs.existsSync(path.join(hardeningRoot, "templates", "zz-grabenplaner-journald.conf")), false);
   const contract = moduleContract(hardeningRoot);
   assert.equal(contract.schemaVersion, 1);
-  assert.equal(contract.moduleVersion, 2);
+  assert.equal(contract.moduleVersion, 3);
   assert.equal(contract.files.length, legacyV075HardeningArtifacts.length);
 });
 
@@ -368,7 +368,7 @@ test("v0.75 hardening package schema stays exact and explicitly activated", () =
   assert.deepEqual(Object.keys(schema).sort(), ["activationPolicy", "format", "managedArtifacts", "moduleVersion", "schemaVersion"]);
   assert.equal(schema.format, "grabenplaner-linux-hardening-module-contract");
   assert.equal(schema.schemaVersion, 1);
-  assert.equal(schema.moduleVersion, 2);
+  assert.equal(schema.moduleVersion, 3);
   assert.equal(schema.activationPolicy, "explicit-root-two-session");
   assert.equal(new Set(schema.managedArtifacts).size, schema.managedArtifacts.length);
   assert.ok(schema.managedArtifacts.every((relative) => relative.startsWith("server-tools/linux/hardening/")));

@@ -164,7 +164,7 @@ test("v0.75 requires admin key, sudo and a newly opened second SSH session", () 
   assert.match(controller, /\^\[0-9a-f\]\{64\}\$/);
 });
 
-test("hardening v2 adopts SSH maintenance policy without changing UFW and confirms over Tailscale", () => {
+test("hardening v3 adopts SSH maintenance policy without changing UFW and confirms over Tailscale", () => {
   const adopt = section("maintenance_adopt_command", "maintenance_confirm_command");
   const confirm = section("maintenance_confirm_command", "maintenance_cancel_command");
   assert.match(adopt, /validate_effective_maintenance_ufw_policy/);
@@ -179,6 +179,36 @@ test("hardening v2 adopts SSH maintenance policy without changing UFW and confir
   assert.match(controller, /validateSshInterfaces/);
   assert.match(controller, /ACTIVE_MAINTENANCE_POLICY_FILE/);
   assert.match(controller, /aktive SSH-Wartungspolicy muss vor einem Host-Rollback/);
+});
+
+test("hardening v3 binds the confirmed server address to an address on tailscale0", (context) => {
+  const probe = spawnSync("bash", ["--version"], { encoding: "utf8" });
+  if (probe.error?.code === "ENOENT") {
+    context.skip("Bash is not installed on this test host");
+    return;
+  }
+  const policyPath = path.join(root, "server-tools", "linux", "hardening", "lib", "hardening-policy.js");
+  const script = [
+    'POLICY_FILE="$1"',
+    'NODE_BINARY="$2"',
+    'hardening_node() { printf \'%s\\n\' "$NODE_BINARY"; }',
+    'policy_validate_interfaces() { [[ "$#" -eq 1 && "$1" == tailscale0 ]]; }',
+    'ip() {',
+    '  case "$*" in',
+    '    "-o link show dev tailscale0") printf \'3: tailscale0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1280\\n\' ;;',
+    '    "-o address show dev tailscale0") printf \'3: tailscale0 inet 100.64.0.8/32 scope global tailscale0\\n3: tailscale0 inet6 2001:db8::5/128 scope global\\n\' ;;',
+    '    *) return 1 ;;',
+    '  esac',
+    '}',
+    section("session_server_address_uses_interface", "session_uses_maintenance_interface"),
+    'session_server_address_uses_interface 100.64.0.8 tailscale0',
+    'session_server_address_uses_interface 2001:db8::5 tailscale0',
+    '! session_server_address_uses_interface 100.64.0.9 tailscale0',
+    '! session_server_address_uses_interface 100.64.0.8 eth0',
+  ].join("\n");
+  const nodeBinary = process.execPath.replaceAll("\\", "/");
+  const result = spawnSync("bash", ["-c", script, "test", policyPath, nodeBinary], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 test("v0.75 keeps backups and hashes root-only and public status redacted", () => {

@@ -65,7 +65,7 @@ function parseSchema(moduleRoot) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der Hardening-Modulvertrag fehlt.");
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (schema.format !== "grabenplaner-linux-hardening-module-contract" || schema.schemaVersion !== 1
-    || schema.moduleVersion !== 2 || schema.activationPolicy !== "explicit-root-two-session"
+    || schema.moduleVersion !== 3 || schema.activationPolicy !== "explicit-root-two-session"
     || !Array.isArray(schema.managedArtifacts) || schema.managedArtifacts.length < 12 || schema.managedArtifacts.length > 48) {
     throw new Error("Der Hardening-Modulvertrag wird nicht unterstuetzt.");
   }

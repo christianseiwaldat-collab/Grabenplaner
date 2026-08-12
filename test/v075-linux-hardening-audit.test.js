@@ -133,7 +133,7 @@ test("v0.75 firewall audit combines UFW transaction rules with listener isolatio
   assert.doesNotMatch(audit, /transaction_ssh_rules_present/);
 });
 
-test("hardening v2 audit loads only a confirmed transaction-bound SSH maintenance policy", () => {
+test("hardening v3 audit loads only a confirmed transaction-bound SSH maintenance policy", () => {
   assert.match(audit, /ACTIVE_MAINTENANCE_POLICY_FILE/);
   assert.match(audit, /PENDING_MAINTENANCE_POLICY_FILE/);
   assert.match(audit, /grabenplaner-host-security-maintenance-transaction/);

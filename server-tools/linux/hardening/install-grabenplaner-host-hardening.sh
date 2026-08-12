@@ -234,7 +234,7 @@ const allowedChanges = new Set([
 ]);
 if (previous?.format !== "grabenplaner-linux-hardening-installed-contract"
   || next?.format !== previous.format || previous.schemaVersion !== 1 || next.schemaVersion !== 1
-  || previous.moduleVersion !== 1 || next.moduleVersion !== 2
+  || ![1, 2].includes(previous.moduleVersion) || next.moduleVersion !== 3
   || !Array.isArray(previous.files) || !Array.isArray(next.files)) process.exit(1);
 const before = new Map(previous.files.map((item) => [item.path, item.sha256]));
 const after = new Map(next.files.map((item) => [item.path, item.sha256]));
