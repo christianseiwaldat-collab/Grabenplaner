@@ -510,6 +510,7 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 .loan-list-main > strong { margin:7px 0 3px; }
 .loan-list-main > small { margin-top:3px; color:var(--muted); font-size:10px; }
 .loan-list-main > .loan-pending-confirmation { margin-top:8px; padding:7px 9px; border-left:3px solid var(--warning); border-radius:7px; color:#74520d; background:#fff3cd; font-weight:750; }
+.loan-list-main > .loan-return-preparation { margin-top:8px; padding:7px 9px; border-left:3px solid var(--primary); border-radius:7px; color:var(--primary); background:var(--soft); font-weight:750; }
 .loan-list-main ul { display:grid; gap:5px; margin:10px 0 0; padding:0; list-style:none; }
 .loan-list-main li { padding:8px 9px; border-radius:8px; background:#eff4f1; font-size:10px; }
 .loan-list-main li strong,.loan-list-main li small { display:block; overflow-wrap:anywhere; }

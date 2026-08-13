@@ -108,6 +108,7 @@ const state = {
   rightsDashboardSelectedEmployeeNumber: "",
   rightsDashboardSelectedPermissionId: "",
   rightsDashboardTheme: "light",
+  globalTheme: "light",
   pageThemes: {
     planning: "light",
     requests: "light",
@@ -115,6 +116,8 @@ const state = {
     vacations: "light",
     personnelAdministration: "light",
     personnel: "light",
+    salesAdministration: "light",
+    salesAnalytics: "light",
     loans: "light",
     branchOrders: "light",
     rightsDashboard: "light",
@@ -420,7 +423,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -1606,17 +1609,16 @@ function applyRoleVisibility() {
       && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false),
     rights: rightsAccess,
     dataProtection: retentionReadAccess,
-    backup: diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess,
-    usbProvisioning: usbProvisioningAccess,
+    backup: diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || usbProvisioningAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
+  document.querySelector("#legacyUsbProvisioning")?.classList.toggle("hidden", !usbProvisioningAccess);
   const timeTrackingTabActive = document.querySelector('[data-settings-tab="timeTracking"]')?.classList.contains("active");
   const integrationTabActive = document.querySelector('[data-settings-tab="integrations"]')?.classList.contains("active");
   const dataProtectionTabActive = document.querySelector('[data-settings-tab="dataProtection"]')?.classList.contains("active");
-  const usbTabActive = document.querySelector('[data-settings-tab="usbProvisioning"]')?.classList.contains("active");
   const backupTabActive = document.querySelector('[data-settings-tab="backup"]')?.classList.contains("active");
   elements.saveSettingsButton?.classList.toggle("hidden", (!(settingsAccess || brandingAccess) && !backupTabActive)
-    || integrationTabActive || dataProtectionTabActive || usbTabActive
+    || integrationTabActive || dataProtectionTabActive
     || (timeTrackingTabActive && !settingsAccess)
     || (backupTabActive && (serverActive || !backupConfigurationAccess)));
   const canExit = serverActive
@@ -2355,6 +2357,15 @@ function branchOrdersManagementTimestamp(value) {
   });
 }
 
+function branchOrdersManagementStatusText(status) {
+  return {
+    sent: "E-Mail-Übergabe abgeschlossen",
+    partial: "Teilweise zugestellt",
+    failed: "Zustellung technisch nicht bestätigt",
+    pending: "Zustellbestätigung noch offen",
+  }[status] || "Gespeichert";
+}
+
 function setBranchOrdersManagementMessage(text = "", error = false) {
   if (!elements.branchOrdersManagementMessage) return;
   elements.branchOrdersManagementMessage.textContent = text;
@@ -2375,12 +2386,29 @@ function renderBranchOrdersManagementHistory() {
     const pdfBase = `/api/portal/v1/branch-orders/${orderId}/pdf`;
     return `
     <article class="branch-orders-management-history-entry">
-      <div><strong>KW ${Number(order.calendarWeek || 0)} · ${escapeHtml(order.selectedEmployeeName || "Teammitglied")} · MA-Nr. ${escapeHtml(order.selectedEmployeeNumber || "–")}</strong><small>${escapeHtml(branchOrdersManagementTimestamp(order.submittedAt))} · ${escapeHtml(order.status || "gespeichert")}</small></div>
+      <div><strong>KW ${Number(order.calendarWeek || 0)} · ${escapeHtml(order.selectedEmployeeName || "Teammitglied")} · MA-Nr. ${escapeHtml(order.selectedEmployeeNumber || "–")}</strong><small>${escapeHtml(branchOrdersManagementTimestamp(order.submittedAt))} · ${escapeHtml(branchOrdersManagementStatusText(order.status))}</small></div>
       <ul>${(order.lines || []).map((line) => `<li>${escapeHtml(line.groupTitle || "Warengruppe")} · ${escapeHtml(line.itemTitle || "Position")}: ${escapeHtml(Number(line.quantity || 0).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${escapeHtml(line.unit || "")}</li>`).join("")}</ul>
-      <nav class="branch-orders-management-history-actions"><a class="secondary-button" href="${escapeHtml(pdfBase)}" target="_blank" rel="noopener">PDF öffnen</a><a class="secondary-button" href="${escapeHtml(`${pdfBase}?download=1`)}">Herunterladen</a></nav>
+      <nav class="branch-orders-management-history-actions"><a class="secondary-button" href="${escapeHtml(pdfBase)}" target="_blank" rel="noopener">PDF öffnen</a><a class="secondary-button" href="${escapeHtml(`${pdfBase}?download=1`)}">Herunterladen</a>${order.status !== "sent" ? `<button class="secondary-button" type="button" data-branch-orders-confirm-delivery="${escapeHtml(order.id)}">Zustellung bestätigen</button>` : ""}</nav>
     </article>
   `;
   }).join("") : '<p class="settings-note">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
+}
+
+async function confirmBranchOrderDelivery(orderId) {
+  const order = state.branchOrdersManagementHistory.find((entry) => entry.id === orderId);
+  if (!order) return;
+  if (!window.confirm("Nur bestätigen, wenn die E-Mail-Ziele die Bestellung nachweislich erhalten haben. Zustellung jetzt als abgeschlossen markieren?")) return;
+  setBranchOrdersManagementMessage("");
+  try {
+    await api(`/api/portal/v1/branch-orders/${encodeURIComponent(orderId)}/delivery-confirmation`, {
+      method: "POST",
+      body: JSON.stringify({ locationId: selectedBranchOrdersManagementLocationId() }),
+    });
+    setBranchOrdersManagementMessage("Die nachweislich erfolgte Zustellung wurde bestätigt.");
+    await loadBranchOrdersManagement(selectedBranchOrdersManagementLocationId());
+  } catch (error) {
+    setBranchOrdersManagementMessage(error.message, true);
+  }
 }
 
 function renderBranchOrdersManagement() {
@@ -2432,43 +2460,55 @@ function renderBranchOrdersManagement() {
     `<option value="${escapeHtml(unit.id)}" ${unit.id === selectedUnitId ? "selected" : ""}>${escapeHtml(unit.title || "Neue Einheit")}</option>`
   )).join("");
   const recipientRows = draft.recipients.length ? draft.recipients.map((recipient) => `
-    <article class="branch-orders-management-recipient" data-branch-orders-management-recipient="${escapeHtml(recipient.id)}">
-      <header><div><span class="eyebrow">E-Mail-Ziel</span><h2>${escapeHtml(recipient.email || "Neue Zieladresse")}</h2></div><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-recipient" data-branch-orders-management-id="${escapeHtml(recipient.id)}">Entfernen</button></header>
+    <details class="branch-orders-management-recipient" data-branch-orders-management-recipient="${escapeHtml(recipient.id)}">
+      <summary><div><span class="eyebrow">E-Mail-Ziel</span><h2>${escapeHtml(recipient.email || "Neue Zieladresse")}</h2></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
+      <div class="branch-orders-management-disclosure-body">
       <div class="branch-orders-management-fields two-columns"><label class="field"><span>Zieladresse</span><input type="email" data-branch-orders-management-field="recipient-email" value="${escapeHtml(recipient.email)}" maxlength="320" autocomplete="email" /></label><label class="field"><span>Antwortadresse</span><input type="email" data-branch-orders-management-field="recipient-reply-to" value="${escapeHtml(recipient.replyToEmail)}" maxlength="320" autocomplete="email" /><small>Wird im verpflichtenden No-Reply-Hinweis genannt.</small></label></div>
-      <label class="field"><span>E-Mail-Betreff</span><input data-branch-orders-management-field="recipient-subject" value="${escapeHtml(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNumber}}, {{items}}.</small></label>
+      <label class="field"><span>E-Mail-Betreff</span><input data-branch-orders-management-field="recipient-subject" value="${escapeHtml(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNickname}}, {{employeeNumber}}, {{weekStart}}, {{submittedAt}}, {{items}}.</small></label>
       <label class="field"><span>E-Mail-Text</span><textarea data-branch-orders-management-field="recipient-body" rows="6" maxlength="8000">${escapeHtml(recipient.bodyTemplate)}</textarea><small>No-Reply-Hinweis und Antwortadresse werden serverseitig ergänzt.</small></label>
-    </article>
+      <div class="branch-orders-management-row-actions"><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-recipient" data-branch-orders-management-id="${escapeHtml(recipient.id)}">E-Mail-Ziel entfernen</button></div>
+      </div>
+    </details>
   `).join("") : '<p class="settings-note">Noch kein E-Mail-Ziel angelegt.</p>';
   const unitRows = draft.units.length ? draft.units.map((unit, index) => `
-    <div class="branch-orders-management-item branch-orders-management-unit" data-branch-orders-management-unit="${escapeHtml(unit.id)}">
+    <details class="branch-orders-management-item branch-orders-management-unit" data-branch-orders-management-unit="${escapeHtml(unit.id)}">
+      <summary><strong>${escapeHtml(unit.title || "Neue Einheit")}</strong><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
+      <div class="branch-orders-management-disclosure-body">
       <label class="field"><span>Einheit</span><input data-branch-orders-management-field="unit-title" value="${escapeHtml(unit.title)}" maxlength="40" /></label>
       <div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}" data-branch-orders-management-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}" data-branch-orders-management-direction="1" ${index < draft.units.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}">Entfernen</button></div>
-    </div>
+      </div>
+    </details>
   `).join("") : '<p class="settings-note">Noch keine Einheit angelegt.</p>';
   const itemRows = draft.items.length ? draft.items.map((item, index) => `
-    <article class="branch-orders-management-catalog-item" data-branch-orders-management-catalog-item="${escapeHtml(item.id)}">
-      <header><div><span class="eyebrow">Position ${index + 1}</span><h2>${escapeHtml(item.title || "Neue Position")}</h2></div><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-catalog-item" data-branch-orders-management-id="${escapeHtml(item.id)}">Entfernen</button></header>
+    <details class="branch-orders-management-catalog-item" data-branch-orders-management-catalog-item="${escapeHtml(item.id)}">
+      <summary><div><span class="eyebrow">Position ${index + 1}</span><h2>${escapeHtml(item.title || "Neue Position")}</h2></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
+      <div class="branch-orders-management-disclosure-body">
       <div class="branch-orders-management-fields three-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="catalog-item-title" value="${escapeHtml(item.title)}" maxlength="180" /></label><label class="field"><span>Einheit</span><select data-branch-orders-management-field="catalog-item-unit">${unitOptions(item.unitId)}</select></label><label class="field"><span>E-Mail-Ziel</span><select data-branch-orders-management-field="catalog-item-recipient">${recipientOptions(item.recipientId)}</select></label></div>
-    </article>
+      <div class="branch-orders-management-row-actions"><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-catalog-item" data-branch-orders-management-id="${escapeHtml(item.id)}">Position entfernen</button></div>
+      </div>
+    </details>
   `).join("") : '<p class="settings-note">Noch keine Position angelegt.</p>';
   const groupRows = draft.groups.length ? draft.groups.map((group, groupIndex) => {
     const memberships = group.itemIds.map((itemId) => draft.items.find((item) => item.id === itemId)).filter(Boolean);
     const available = draft.items.filter((item) => !group.itemIds.includes(item.id));
     return `
-      <article class="branch-orders-management-group" data-branch-orders-management-group="${escapeHtml(group.id)}">
-        <header><div><span class="eyebrow">Anzeigegruppe</span><h2>${escapeHtml(group.title || "Neue Anzeigegruppe")}</h2></div><div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="-1" ${groupIndex ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="1" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Entfernen</button></div></header>
+      <details class="branch-orders-management-group" data-branch-orders-management-group="${escapeHtml(group.id)}">
+        <summary><div><span class="eyebrow">Anzeigegruppe</span><h2>${escapeHtml(group.title || "Neue Anzeigegruppe")}</h2></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
+        <div class="branch-orders-management-disclosure-body">
+        <div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="-1" ${groupIndex ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="1" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Gruppe entfernen</button></div>
         <div class="branch-orders-management-fields two-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="group-title" value="${escapeHtml(group.title)}" maxlength="120" /></label><label class="field"><span>Hinweis im Bestellformular</span><input data-branch-orders-management-field="group-hint" value="${escapeHtml(group.hint)}" maxlength="400" /></label></div>
         <div class="branch-orders-management-items">${memberships.length ? memberships.map((item, index) => `
           <div class="branch-orders-management-item"><strong>${escapeHtml(item.title || "Neue Position")}</strong><span>${escapeHtml(draft.units.find((unit) => unit.id === item.unitId)?.title || "")}</span><div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="1" ${index < memberships.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}">Entfernen</button></div></div>
         `).join("") : '<p class="settings-note">Noch keine Position zugeordnet.</p>'}</div>
         ${available.length ? `<div class="branch-orders-management-group-add"><select data-branch-orders-management-group-item-select="${escapeHtml(group.id)}"><option value="">Position zuordnen</option>${available.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || "Neue Position")}</option>`).join("")}</select><button class="text-button" type="button" data-branch-orders-management-action="add-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}">+ Zuordnen</button></div>` : ""}
-      </article>`;
+        </div>
+      </details>`;
   }).join("") : '<p class="settings-note">Noch keine Anzeigegruppe angelegt.</p>';
   elements.branchOrdersManagementWorkspace.innerHTML = `
-    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</section>
-    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">+ Einheit</button></div><div class="branch-orders-management-items">${unitRows}</div></section>
-    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">+ Position</button></div><div class="branch-orders-management-catalog-list">${itemRows}</div></section>
-    <section class="branch-orders-management-section"><div class="branch-orders-management-section-heading"><div><span class="eyebrow">Bestellansicht</span><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern nur die Bestellansicht; die Übergabe wird pro Position zusammengefasst.</p></div><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Anzeigegruppe</button></div>${groupRows}</section>`;
+    <details class="branch-orders-management-section"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</div></details>
+    <details class="branch-orders-management-section"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">+ Einheit</button></div><div class="branch-orders-management-items">${unitRows}</div></div></details>
+    <details class="branch-orders-management-section"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">+ Position</button></div><div class="branch-orders-management-catalog-list">${itemRows}</div></div></details>
+    <details class="branch-orders-management-section"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Bestellansicht</span><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern nur die Bestellansicht; die Übergabe wird pro Position zusammengefasst.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Anzeigegruppe</button></div>${groupRows}</div></details>`;
   renderBranchOrdersManagementHistory();
 }
 
@@ -2593,6 +2633,8 @@ function moveBranchOrdersManagementEntry(entries, id, direction) {
 function handleBranchOrdersManagementAction(event) {
   const button = event.target.closest("[data-branch-orders-management-action]");
   if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
   const draft = captureBranchOrdersManagementDraft();
   if (!draft) return;
   const action = button.dataset.branchOrdersManagementAction;
@@ -3054,10 +3096,11 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAnalyticsActive = state.currentView === "salesAnalytics";
-  elements.salesAdministrationNav?.classList.toggle("contains-active", salesAnalyticsActive);
+  const salesAdministrationActive = ["salesAdministration", "salesAnalytics"].includes(state.currentView);
+  elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
-  setNavigationCurrent(elements.salesAnalyticsNavButton, salesAnalyticsActive);
+  setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
+  setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
 }
 
 function renderHeader() {
@@ -14609,13 +14652,14 @@ async function loadPortalUsers() {
         : `<input data-portal-role type="hidden" value="${escapeHtml(user.role)}" /><span class="protected-role-badge ${protectedRole ? "developer" : ""}">${escapeHtml(user.roleName || user.role)}${protectedRole ? " · geschützt" : ""}</span>`;
       return `
       <article class="portal-user-row" data-portal-user="${escapeHtml(user.employeeNumber)}">
-        <div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}${user.locked ? ` · gesperrt bis ${escapeHtml(new Date(user.lockedUntil).toLocaleString("de-AT"))}` : user.failedLoginAttempts ? ` · ${Number(user.failedLoginAttempts)} Fehlversuch(e)` : ""}</small></div>
+        <header class="portal-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}${user.locked ? ` · gesperrt bis ${escapeHtml(new Date(user.lockedUntil).toLocaleString("de-AT"))}` : user.failedLoginAttempts ? ` · ${Number(user.failedLoginAttempts)} Fehlversuch(e)` : ""}</small></div><label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${roleEditable ? "" : "disabled"} /><span><strong>Zugang aktiv</strong><small>Anmeldung erlaubt</small></span></label></header>
+        <div class="portal-user-controls">
         ${roleControl}
         <select data-scope-location aria-label="Zugewiesene Filiale" class="${["location_planner", "manager", "department_manager"].includes(user.role) ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${locations}</select>
         <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${departments}</select>
-        <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${roleEditable ? "" : "disabled"} /> aktiv</label>
         <span class="password-field portal-user-password ${roleEditable ? "" : "hidden"}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="${Number(state.portalStatus?.passwordMinLength || 6)}" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
-        <span class="portal-user-actions">${roleEditable || scopeEditable ? '<button class="secondary-button" data-save-portal-user type="button">Speichern</button>' : ""}${(user.locked || user.failedLoginAttempts) && roleEditable ? '<button class="secondary-button" data-unlock-portal-user type="button">Entsperren</button>' : ""}</span>
+        </div>
+        <footer class="portal-user-actions">${roleEditable || scopeEditable ? '<button class="secondary-button" data-save-portal-user type="button">Speichern</button>' : ""}${(user.locked || user.failedLoginAttempts) && roleEditable ? '<button class="secondary-button" data-unlock-portal-user type="button">Entsperren</button>' : ""}</footer>
       </article>`;
     }).join("");
     await loadApprovalDelegations();
@@ -15201,7 +15245,10 @@ const UI_APPEARANCE_VIEWS = Object.freeze([
   "vacations",
   "personnelAdministration",
   "personnel",
+  "salesAdministration",
+  "salesAnalytics",
   "loans",
+  "branchOrders",
   "rightsDashboard",
   "settings",
 ]);
@@ -15212,6 +15259,10 @@ function uiPreferenceActorKey() {
 
 function pageThemeStorageKey(view) {
   return `grabenplaner:page-theme:${uiPreferenceActorKey()}:${view}`;
+}
+
+function globalThemeStorageKey() {
+  return `grabenplaner:global-theme:${uiPreferenceActorKey()}`;
 }
 
 function appFontScaleStorageKey() {
@@ -15254,14 +15305,17 @@ function pageViewElement(view) {
     vacations: elements.vacationsView,
     personnelAdministration: elements.personnelAdministrationView,
     personnel: elements.personnelView,
+    salesAdministration: elements.salesAdministrationView,
+    salesAnalytics: elements.salesAnalyticsView,
     loans: elements.loansView,
+    branchOrders: elements.branchOrdersView,
     rightsDashboard: elements.rightsDashboardView,
     settings: elements.settingsView,
   })[view] || null;
 }
 
 function applyActivePageAppearance() {
-  const theme = state.pageThemes[state.currentView] === "dark" ? "dark" : "light";
+  const theme = state.globalTheme === "dark" ? "dark" : "light";
   document.documentElement.dataset.activePageTheme = theme;
   document.documentElement.dataset.activeView = state.currentView;
   document.querySelector(".main-content")?.setAttribute("data-active-page-theme", theme);
@@ -15281,6 +15335,17 @@ function applyPageTheme(view, theme) {
     button.setAttribute("aria-pressed", String(button.dataset.pageThemeChoice === normalized));
   });
   if (state.currentView === view) applyActivePageAppearance();
+}
+
+function applyGlobalTheme(theme) {
+  const normalized = theme === "dark" ? "dark" : "light";
+  state.globalTheme = normalized;
+  for (const view of UI_APPEARANCE_VIEWS) applyPageTheme(view, normalized);
+  document.querySelectorAll("button[data-global-theme-choice]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.globalThemeChoice === normalized));
+  });
+  applyActivePageAppearance();
+  return normalized;
 }
 
 const APP_FONT_SCALE_MIN = 75;
@@ -15418,6 +15483,52 @@ function initializeSettingsPackedGrids() {
   scheduleAllSettingsPackedGrids();
 }
 
+function integrateLegacyUsbProvisioning() {
+  const section = elements.usbProvisioningSettings;
+  if (!section || section.dataset.integratedIntoBackup === "1" || !elements.backupSettings) return;
+  section.dataset.integratedIntoBackup = "1";
+  section.classList.remove("settings-section", "settings-two-column", "active");
+  section.classList.add("settings-accordion-body", "settings-accordion-grid");
+  const details = document.createElement("details");
+  details.id = "legacyUsbProvisioning";
+  details.className = "settings-accordion full-settings-card legacy-usb-provisioning";
+  details.innerHTML = `<summary><span class="card-icon">USB</span><span class="settings-accordion-copy"><strong>Lokale Altinstallation auf USB-Stick</strong><small>Historisches Werkzeug für eigenständige lokale Windows-Installationen.</small></span><span class="settings-accordion-chevron" aria-hidden="true">›</span></summary>`;
+  details.append(section);
+  elements.backupSettings.append(details);
+}
+
+function initializeSettingsCardDisclosures() {
+  elements.settingsView?.querySelectorAll(".settings-card:not(.settings-field-disclosure)").forEach((card) => {
+    if (card.closest("dialog")) return;
+    const heading = card.querySelector(":scope > .card-heading");
+    if (!heading) return;
+    const summary = document.createElement("button");
+    summary.type = "button";
+    summary.className = "settings-field-disclosure-summary";
+    summary.setAttribute("aria-expanded", "false");
+    while (heading.firstChild) summary.append(heading.firstChild);
+    const chevron = document.createElement("span");
+    chevron.className = "settings-field-disclosure-chevron";
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.textContent = "›";
+    summary.append(chevron);
+    heading.replaceWith(summary);
+    const body = document.createElement("div");
+    body.className = "settings-field-disclosure-body";
+    body.hidden = true;
+    [...card.children].filter((child) => child !== summary).forEach((child) => body.append(child));
+    card.append(body);
+    card.classList.add("settings-field-disclosure");
+    summary.addEventListener("click", () => {
+      const expanded = summary.getAttribute("aria-expanded") !== "true";
+      summary.setAttribute("aria-expanded", String(expanded));
+      body.hidden = !expanded;
+      card.classList.toggle("open", expanded);
+      scheduleSettingsPackedGrid(card.parentElement);
+    });
+  });
+}
+
 function normalizeAppFontScalePercent(value, fallback = APP_FONT_SCALE_DEFAULT) {
   const legacyValue = LEGACY_DASHBOARD_FONT_SCALE[String(value || "").trim().toLowerCase()];
   const numericValue = legacyValue ?? Number(value);
@@ -15457,10 +15568,10 @@ async function loadUiPreferences() {
     const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing");
     if (allowPastWeekEditing) allowPastWeekEditing.checked = state.allowPastWeekEditing;
   }
-  for (const view of UI_APPEARANCE_VIEWS) {
-    const stored = localOnly ? localStorage.getItem(pageThemeStorageKey(view)) : "";
-    applyPageTheme(view, stored || preferences?.pageThemes?.[view] || "light");
-  }
+  const storedGlobalTheme = localOnly ? localStorage.getItem(globalThemeStorageKey()) : "";
+  const legacyStoredTheme = localOnly ? localStorage.getItem(pageThemeStorageKey("planning")) : "";
+  applyGlobalTheme(storedGlobalTheme || legacyStoredTheme || preferences?.pageThemes?.planning || "light");
+  if (localOnly) localStorage.setItem(globalThemeStorageKey(), state.globalTheme);
   const storedFontScale = localOnly ? localStorage.getItem(appFontScaleStorageKey()) : "";
   const legacyStoredFontSize = localOnly ? localStorage.getItem(legacyDashboardFontSizeStorageKey()) : "";
   const loadedFontScale = normalizeAppFontScalePercent(storedFontScale, null)
@@ -15551,19 +15662,27 @@ async function saveWorkRuleAssessmentExpanded(value) {
 
 async function savePageTheme(view, theme) {
   if (!UI_APPEARANCE_VIEWS.includes(view)) return;
-  const previous = state.pageThemes[view] || "light";
+  await saveGlobalTheme(theme);
+}
+
+async function saveGlobalTheme(theme) {
+  const previous = state.globalTheme || "light";
   const normalized = theme === "dark" ? "dark" : "light";
-  applyPageTheme(view, normalized);
-  localStorage.setItem(pageThemeStorageKey(view), normalized);
+  applyGlobalTheme(normalized);
+  localStorage.setItem(globalThemeStorageKey(), normalized);
   try {
     const result = await api("/api/portal/v1/ui-preferences", {
       method: "PUT",
-      body: JSON.stringify({ pageThemes: { [view]: normalized } }),
+      body: JSON.stringify({
+        pageThemes: Object.fromEntries(UI_APPEARANCE_VIEWS.map((view) => [view, normalized])),
+      }),
     });
-    applyPageTheme(view, result.pageThemes?.[view] || normalized);
+    const stored = result.pageThemes?.planning || normalized;
+    applyGlobalTheme(stored);
+    localStorage.setItem(globalThemeStorageKey(), stored);
   } catch (error) {
-    applyPageTheme(view, previous);
-    localStorage.setItem(pageThemeStorageKey(view), previous);
+    applyGlobalTheme(previous);
+    localStorage.setItem(globalThemeStorageKey(), previous);
     showToast(error.message, true);
   }
 }
@@ -22201,6 +22320,7 @@ function setView(view) {
     || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
+    || (view === "salesAdministration" && !canAccessSalesAnalytics())
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "branchOrders" && !canManageBranchOrders())
@@ -22241,6 +22361,7 @@ function setView(view) {
   elements.timeTrackingView?.classList.toggle("active", view === "timeTracking");
   elements.vacationsView.classList.toggle("active", view === "vacations");
   elements.personnelAdministrationView?.classList.toggle("active", view === "personnelAdministration");
+  elements.salesAdministrationView?.classList.toggle("active", view === "salesAdministration");
   elements.salesAnalyticsView?.classList.toggle("active", view === "salesAnalytics");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.loansView?.classList.toggle("active", view === "loans");
@@ -22269,7 +22390,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) return;
+  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) return;
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -22294,6 +22415,7 @@ function applyRequestedView() {
 }
 
 function setSettingsTab(tab) {
+  if (tab === "usbProvisioning") tab = "backup";
   const integratedTarget = ["branding", "pdf"].includes(tab) ? tab : "";
   const activeTab = integratedTarget ? "general" : tab;
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === activeTab));
@@ -22307,7 +22429,6 @@ function setSettingsTab(tab) {
   elements.accessSettings.classList.toggle("active", activeTab === "access");
   elements.rightsSettings?.classList.toggle("active", activeTab === "rights");
   elements.backupSettings.classList.toggle("active", activeTab === "backup");
-  elements.usbProvisioningSettings?.classList.toggle("active", activeTab === "usbProvisioning");
   if (activeTab === "general" && canManageLoanSettings()) {
     loadLoanSettings();
   }
@@ -22318,7 +22439,7 @@ function setSettingsTab(tab) {
   const canSaveBranding = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("branding:write");
   const serverBackupTab = activeTab === "backup" && state.portalStatus?.operationMode === "server";
-  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection", "usbProvisioning"].includes(activeTab)
+  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection"].includes(activeTab)
     || serverBackupTab
     || (activeTab === "backup" ? !canSaveBackupSettings : !(canSaveGeneralSettings || (activeTab === "general" && canSaveBranding))));
   if (activeTab === "access") {
@@ -22344,6 +22465,10 @@ function setSettingsTab(tab) {
   if (activeTab === "backup") {
     refreshServerDiagnostics();
     if (canManageOffsiteFolders()) loadManagedOffsiteFolders();
+    renderUsbAvailability(state.portalStatus?.usbProvisioning || {});
+    if (state.portalStatus?.usbProvisioning?.available === true) {
+      loadUsbProvisioning().catch((error) => showToast(error.message, true));
+    }
   }
   if (activeTab === "personnel") loadTrustLevelSettings();
   if (activeTab === "general" && canSaveBranding) {
@@ -22356,12 +22481,6 @@ function setSettingsTab(tab) {
     if (target) {
       target.open = true;
       window.setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-    }
-  }
-  if (activeTab === "usbProvisioning") {
-    renderUsbAvailability(state.portalStatus?.usbProvisioning || {});
-    if (state.portalStatus?.usbProvisioning?.available === true) {
-      loadUsbProvisioning().catch((error) => showToast(error.message, true));
     }
   }
   scheduleAllSettingsPackedGrids();
@@ -25672,7 +25791,19 @@ document.addEventListener("keydown", (event) => {
   }
 });
 syncMobileNavigationMode();
+integrateLegacyUsbProvisioning();
+initializeSettingsCardDisclosures();
 initializeSettingsPackedGrids();
+elements.settingsView?.addEventListener("invalid", (event) => {
+  const card = event.target.closest?.(".settings-field-disclosure");
+  const summary = card?.querySelector(":scope > .settings-field-disclosure-summary");
+  const body = card?.querySelector(":scope > .settings-field-disclosure-body");
+  if (card && summary && body) {
+    card.classList.add("open");
+    summary.setAttribute("aria-expanded", "true");
+    body.hidden = false;
+  }
+}, true);
 elements.adminLoginForm?.addEventListener("submit", loginToAdministration);
 elements.adminLoginPersonnelNumber?.addEventListener("input", scheduleAdminLoginBrandingPreview);
 elements.adminLoginPersonnelNumber?.addEventListener("blur", previewAdminLoginBranding);
@@ -25998,6 +26129,10 @@ elements.branchOrdersManagementWorkspace?.addEventListener("change", (event) => 
   if (field) updateBranchOrdersManagementDraftFromField(field);
 });
 elements.branchOrdersManagementWorkspace?.addEventListener("click", handleBranchOrdersManagementAction);
+elements.branchOrdersManagementHistory?.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-branch-orders-confirm-delivery]");
+  if (button) confirmBranchOrderDelivery(button.dataset.branchOrdersConfirmDelivery);
+});
 elements.loanOverviewSettingsButton?.addEventListener("click", openLoanOverviewColumnsDialog);
 elements.loanOverviewColumnsLocation?.addEventListener("change", () => {
   state.loanOverviewColumnsLocationId = elements.loanOverviewColumnsLocation.value;
@@ -26025,9 +26160,8 @@ elements.loanSettingsList?.addEventListener("submit", (event) => {
   event.preventDefault();
   saveLoanLocationSetting(form);
 });
-document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => button.addEventListener("click", () => {
-  const view = button.closest(".view")?.id?.replace(/View$/, "") || state.currentView;
-  savePageTheme(view, button.dataset.pageThemeChoice);
+document.querySelectorAll("button[data-global-theme-choice]").forEach((button) => button.addEventListener("click", () => {
+  saveGlobalTheme(button.dataset.globalThemeChoice);
 }));
 elements.decreaseAppFontScale?.addEventListener("click", () => {
   applyAppFontScalePercent(Math.max(APP_FONT_SCALE_MIN, state.appFontScalePercent - APP_FONT_SCALE_STEP));

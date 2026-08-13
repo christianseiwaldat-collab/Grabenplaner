@@ -249,6 +249,7 @@ test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leih
     "loans",
     "loan_items",
     "loan_return_confirmations",
+    "loan_return_preparations",
     "loan_documents",
     "loan_photos",
     "loan_photo_attachments",
@@ -575,18 +576,20 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
     UPDATE portal_sessions SET last_seen_at = datetime('now', '-5 minutes')
     WHERE employee_number = ?
   `).run(WITNESS);
-  const offline = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+  const prepared = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
     method: "POST",
     body: {
       expectedRevision: 1,
-      witnessEmployeeNumber: WITNESS,
       borrowerConfirmed: true,
       note: "vollständig",
       items: [{ position: 1, conditionReturn: "good", note: "" }],
     },
   });
-  assert.equal(offline.response.status, 409, JSON.stringify(offline.payload));
-  assert.equal(offline.payload.code, "LOAN_RETURN_WITNESS_OFFLINE");
+  assert.equal(prepared.response.status, 202, JSON.stringify(prepared.payload));
+  assert.equal(prepared.payload.prepared, true);
+  assert.equal(prepared.payload.confirmation, null);
+  assert.equal(prepared.payload.loan.returnPreparation.requestedBy.employeeNumber, EMPLOYEE);
+  assert.equal(prepared.payload.loan.pendingReturnConfirmation, null);
 
   const heartbeat = await request("/api/portal/v1/loans/return-confirmations/pending", {
     session: witnessSession,
@@ -626,6 +629,20 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(requested.payload.loan.status, "issued");
   assert.equal(requested.payload.loan.revision, 1);
   assert.equal(requested.payload.loan.pendingReturnConfirmation.witness.employeeNumber, WITNESS);
+  const expiresAt = new Date(requested.payload.confirmation.expiresAt);
+  const expiryParts = Object.fromEntries(new Intl.DateTimeFormat("de-AT", {
+    timeZone: "Europe/Vienna",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(expiresAt).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  assert.equal(expiryParts.hour, "23");
+  assert.equal(expiryParts.minute, "59");
+  assert.equal(expiryParts.second, "59");
 
   const lateReturnPhotoForm = new FormData();
   lateReturnPhotoForm.set("phase", "return");
@@ -708,7 +725,9 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
     "issued",
     "document_created",
     "photos_added",
+    "return_prepared",
     "photos_added",
+    "return_prepared",
     "return_confirmation_requested",
     "returned",
     "document_created",
@@ -732,7 +751,7 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(stale.payload.code, "LOAN_ALREADY_CLOSED");
 });
 
-test("Filialleitung kann die Rückgabebestätigung des Borrowers nicht stellvertretend setzen", async () => {
+test("Filialleitung kann die Rücknahme im eigenen Team ohne zweite Person direkt abschließen", async () => {
   const issued = await request("/api/portal/v1/loans", {
     method: "POST",
     body: {
@@ -745,37 +764,51 @@ test("Filialleitung kann die Rückgabebestätigung des Borrowers nicht stellvert
     },
   });
   assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
-  const witnessHeartbeat = await request("/api/portal/v1/loans/return-confirmations/pending", {
-    session: otherSession,
-  });
-  assert.equal(witnessHeartbeat.response.status, 200);
-
-  const requested = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+  const returned = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
     method: "POST",
     session: managerSession,
     body: {
       expectedRevision: 1,
-      witnessEmployeeNumber: OTHER,
       borrowerConfirmed: true,
       items: [{ position: 1, conditionReturn: "good", note: "" }],
     },
   });
-  assert.equal(requested.response.status, 202, JSON.stringify(requested.payload));
-  const returned = await request(
-    `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
-    {
-      method: "POST",
-      session: otherSession,
-      body: { decision: "confirm" },
-    },
-  );
   assert.equal(returned.response.status, 200, JSON.stringify(returned.payload));
+  assert.equal(returned.payload.direct, true);
+  assert.equal(returned.payload.loan.status, "returned");
+  assert.equal(returned.payload.loan.returnWitness, null);
   assert.equal(returned.payload.loan.borrowerReturnConfirmed, false);
   assert.equal(
     Boolean(db.prepare("SELECT borrower_return_confirmed FROM loans WHERE id = ?")
       .get(issued.payload.loan.id).borrower_return_confirmed),
     false,
   );
+
+  const selfIssued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    session: managerSession,
+    body: {
+      locationId,
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "TZ99-MANAGER-SELF-RETURN",
+        conditionOut: "good",
+      }],
+    },
+  });
+  assert.equal(selfIssued.response.status, 201, JSON.stringify(selfIssued.payload));
+  assert.equal(selfIssued.payload.loan.borrower.employeeNumber, MANAGER);
+  const selfReturned = await request(`/api/portal/v1/loans/${selfIssued.payload.loan.id}/return`, {
+    method: "POST",
+    session: managerSession,
+    body: {
+      expectedRevision: 1,
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(selfReturned.response.status, 200, JSON.stringify(selfReturned.payload));
+  assert.equal(selfReturned.payload.loan.status, "returned");
+  assert.equal(selfReturned.payload.loan.borrower.employeeNumber, MANAGER);
 });
 
 test("parallele Foto-Uploads vergeben Positionen erst im serialisierten Schreibvorgang", async () => {
@@ -922,6 +955,37 @@ test("v0.85 eine abgelehnte Gegenprüfung lässt die Leihe offen und erlaubt ein
   });
   assert.equal(requestedAgain.response.status, 202, JSON.stringify(requestedAgain.payload));
   assert.notEqual(requestedAgain.payload.confirmation.id, requested.payload.confirmation.id);
+
+  db.prepare(`
+    UPDATE loan_return_confirmations
+    SET expires_at = datetime('now', '-1 minute')
+    WHERE id = ?
+  `).run(requestedAgain.payload.confirmation.id);
+  const expiredPending = await request("/api/portal/v1/loans/return-confirmations/pending", {
+    session: witnessSession,
+  });
+  assert.equal(expiredPending.response.status, 200, JSON.stringify(expiredPending.payload));
+  assert.equal(expiredPending.payload.confirmations.some(
+    (entry) => entry.id === requestedAgain.payload.confirmation.id,
+  ), false);
+  assert.equal(
+    db.prepare("SELECT status FROM loan_return_confirmations WHERE id = ?")
+      .get(requestedAgain.payload.confirmation.id).status,
+    "expired",
+  );
+
+  const reopened = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: OTHER,
+      items: [{ position: 1, conditionReturn: "good", note: "erneut geprüft" }],
+    },
+  });
+  assert.equal(reopened.response.status, 202, JSON.stringify(reopened.payload));
+  assert.equal(reopened.payload.confirmation.witness.employeeNumber, OTHER);
+  assert.equal(reopened.payload.preparation.items[0].returnNote, "erneut geprüft");
+  assert.notEqual(reopened.payload.confirmation.id, requestedAgain.payload.confirmation.id);
 });
 
 test("neue Leihen werden serverseitig immer dem angemeldeten Mitarbeiter zugeordnet", async () => {

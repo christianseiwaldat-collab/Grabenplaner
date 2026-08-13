@@ -188,7 +188,7 @@ const el = Object.fromEntries([
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
   "loanOpenOverview", "loanOverviewDescription", "loanOverviewSearchField", "loanOverviewSearch", "loanOverviewTableHeader", "loanOverviewTableBody", "loanPersonalOverview",
   "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoPolicy", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
-  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoPolicy", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
+  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnWitnessHint", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoPolicy", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
@@ -1709,8 +1709,8 @@ function branchOrderStatusText(status) {
   return {
     sent: "E-Mail-Übergabe abgeschlossen",
     partial: "Teilweise übergeben",
-    failed: "E-Mail-Übergabe fehlgeschlagen",
-    pending: "E-Mail-Übergabe offen",
+    failed: "Zustellung technisch nicht bestätigt",
+    pending: "Zustellbestätigung noch offen",
   }[status] || "Status unbekannt";
 }
 
@@ -2251,7 +2251,7 @@ function renderBranchOrderSettings() {
   const recipientRows = draft.recipients.length ? draft.recipients.map((recipient) => `<article class="branch-order-recipient-editor" data-branch-order-recipient="${esc(recipient.id)}">
     <div class="branch-order-editor-heading"><strong>E-Mail-Ziel</strong><button class="text-button danger-button" type="button" data-branch-order-remove-recipient="${esc(recipient.id)}">Entfernen</button></div>
     <div class="branch-order-editor-grid"><label><span>Zieladresse</span><input data-branch-order-settings-field="recipient-email" value="${esc(recipient.email)}" maxlength="320" inputmode="email" /></label><label><span>Antwortadresse</span><input data-branch-order-settings-field="recipient-reply-to" value="${esc(recipient.replyToEmail)}" maxlength="320" inputmode="email" /><small>Wird im verpflichtenden Antwort-Hinweis genannt.</small></label></div>
-    <label><span>E-Mail-Betreff</span><input data-branch-order-settings-field="recipient-subject" value="${esc(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNumber}}, {{items}}.</small></label>
+    <label><span>E-Mail-Betreff</span><input data-branch-order-settings-field="recipient-subject" value="${esc(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNickname}}, {{employeeNumber}}, {{weekStart}}, {{submittedAt}}, {{items}}.</small></label>
     <label><span>E-Mail-Text</span><textarea data-branch-order-settings-field="recipient-body" rows="6" maxlength="8000">${esc(recipient.bodyTemplate)}</textarea><small>Der Hinweis zur nicht möglichen Antwort und die Antwortadresse werden automatisch ergänzt.</small></label>
   </article>`).join("") : '<p class="empty-state">Noch kein E-Mail-Ziel angelegt.</p>';
   const unitOptions = (selected) => draft.units.map((unit) => (
@@ -5271,7 +5271,7 @@ function renderLoanPhotoPolicy() {
     el.loanIssuePhotoPolicy.textContent = `Optional · bis zu 9 Fotos · je 10 MB, zusammen 45 MB. ${processing}`;
   }
   if (el.loanReturnPhotoPolicy) {
-    el.loanReturnPhotoPolicy.textContent = `${processing} Die Rückgabe-Beilage wird dem zweiten Teammitglied vor der Bestätigung angezeigt.`;
+    el.loanReturnPhotoPolicy.textContent = `${processing} Die Rückgabe-Beilage wird gespeichert und bei einer Gegenprüfung dem zweiten Teammitglied angezeigt.`;
   }
 }
 
@@ -5602,14 +5602,17 @@ function renderLoanList() {
     const pendingCopy = loan.pendingReturnConfirmation
       ? `<small class="loan-pending-confirmation">Bestätigung ausständig bei ${esc(loan.pendingReturnConfirmation.witness.employeeNumber)} · ${esc(loan.pendingReturnConfirmation.witness.name)} – gültig bis ${esc(timestampText(loan.pendingReturnConfirmation.expiresAt))}</small>`
       : "";
+    const preparationCopy = loan.returnPreparation && !loan.pendingReturnConfirmation
+      ? `<small class="loan-return-preparation">Rücknahme vorbereitet von ${esc(loan.returnPreparation.requestedBy.employeeNumber)} · ${esc(loan.returnPreparation.requestedBy.name)} – zuletzt gespeichert ${esc(timestampText(loan.returnPreparation.updatedAt))}</small>`
+      : "";
     const photos = loanPhotoGallery(loan.photos);
     const photoAttachments = loanPhotoAttachmentList(loan.photoAttachments);
     const actions = [
       canManage ? `<button class="text-button" data-loan-manage="${esc(loan.id)}" type="button">Bearbeiten</button>` : "",
-      canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">Zurücknehmen</button>` : "",
+      canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">${loan.returnPreparation ? "Rücknahme fortsetzen" : "Zurücknehmen"}</button>` : "",
     ].filter(Boolean).join("");
     return `<article class="loan-list-item">
-      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${photos}${photoAttachments}${documents}</div>
+      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}${preparationCopy}<ul>${items}</ul>${photos}${photoAttachments}${documents}</div>
       ${actions ? `<div class="loan-list-actions">${actions}</div>` : ""}
     </article>`;
   }).join("") : '<p class="empty-state">In diesem Bereich sind noch keine Leihvorgänge vorhanden.</p>';
@@ -5730,19 +5733,29 @@ async function openLoanReturn(loanId) {
   const loan = portalState.loans.find((item) => item.id === loanId);
   if (!loan) return;
   portalState.selectedLoan = loan;
+  const preparation = loan.returnPreparation || null;
+  const preparedItems = new Map((preparation?.items || []).map((item) => [Number(item.position), item]));
   el.loanReturnTitle.textContent = `Leihe von ${loan.borrower?.name || loan.borrower?.employeeNumber}`;
   el.loanReturnSummary.innerHTML = `<strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><span>${loan.items.length} ${loan.items.length === 1 ? "Artikel" : "Artikel"} · Revision ${loan.revision}</span>`;
-  el.loanReturnItems.innerHTML = loan.items.map((item) => `<article class="loan-return-item" data-loan-return-position="${item.position}">
+  el.loanReturnItems.innerHTML = loan.items.map((item) => {
+    const prepared = preparedItems.get(Number(item.position));
+    return `<article class="loan-return-item" data-loan-return-position="${item.position}">
     <div><strong>${esc(item.articleNumber)} · ${esc(item.description)}</strong>${item.serialNumber ? `<small>Seriennummer: ${esc(item.serialNumber)}</small>` : ""}</div>
-    <label><span>Zustand bei Rückgabe</span><select data-loan-return-condition="${item.position}">${loanConditionOptions(item.conditionOut || "good")}</select></label>
-    <label><span>Bemerkung</span><input data-loan-return-note="${item.position}" maxlength="500" placeholder="Optional" /></label>
-  </article>`).join("");
-  el.loanReturnWitness.innerHTML = '<option value="">Bitte auswählen</option>' + portalState.loanTeamMembers
+    <label><span>Zustand bei Rückgabe</span><select data-loan-return-condition="${item.position}">${loanConditionOptions(prepared?.conditionReturn || item.conditionOut || "good")}</select></label>
+    <label><span>Bemerkung</span><input data-loan-return-note="${item.position}" maxlength="500" placeholder="Optional" value="${esc(prepared?.returnNote || "")}" /></label>
+  </article>`;
+  }).join("");
+  const canManage = portalState.loanStatus?.permissions?.locationManage === true;
+  el.loanReturnWitness.innerHTML = `<option value="">${canManage ? "Ohne zweite Person direkt abschließen" : "Jetzt speichern – Gegenprüfung später anfordern"}</option>` + portalState.loanTeamMembers
     .filter((member) => member.employeeNumber !== loan.borrower?.employeeNumber
       && member.employeeNumber !== portalUser()?.employeeNumber)
-    .map((member) => `<option value="${esc(member.employeeNumber)}" ${member.portalOpen ? "" : "disabled"}>${esc(member.employeeNumber)} · ${esc(member.name)} · ${member.portalOpen ? "Portal geöffnet" : "Portal nicht geöffnet"}</option>`)
+    .map((member) => `<option value="${esc(member.employeeNumber)}">${esc(member.employeeNumber)} · ${esc(member.name)}</option>`)
     .join("");
-  el.loanReturnNote.value = "";
+  el.loanReturnNote.value = preparation?.note || "";
+  el.loanReturnWitnessHint.textContent = canManage
+    ? "Ohne Auswahl schließt die zuständige Leitung direkt ab. Mit Auswahl kann ein zweites Teammitglied bis 23:59 Uhr gegenprüfen."
+    : "Ohne Auswahl wird die Rücknahme gespeichert. Ein zweites Teammitglied kann auch später ausgewählt werden und bis 23:59 Uhr gegenprüfen.";
+  el.loanReturnSubmit.textContent = canManage ? "Rücknahme abschließen" : "Rücknahme speichern";
   setLoanPhotoFiles("return", []);
   el.loanReturnPhotos.value = "";
   el.loanReturnCamera.value = "";
@@ -5779,10 +5792,12 @@ async function submitLoanReturn(event) {
     });
     el.loanReturnDialog.close();
     portalState.selectedLoan = null;
-    message(
-      el.loanAvailabilityMessage,
-      `Bestätigung bei ${result.confirmation.witness.employeeNumber} · ${result.confirmation.witness.name} angefordert. Die Leihe bleibt bis dahin offen.`,
-    );
+    const completionCopy = result.direct
+      ? "Die Rücknahme wurde durch die zuständige Leitung abgeschlossen."
+      : result.confirmation
+        ? `Bestätigung bei ${result.confirmation.witness.employeeNumber} · ${result.confirmation.witness.name} bis heute 23:59 Uhr angefordert. Die Leihe bleibt bis dahin offen.`
+        : "Die Rücknahme wurde gespeichert und kann später fortgesetzt oder zur Gegenprüfung weitergegeben werden.";
+    message(el.loanAvailabilityMessage, completionCopy);
     await loadLoans();
   } catch (error) {
     message(el.loanReturnMessage, error.message, true);
@@ -6467,6 +6482,12 @@ el.loanList?.addEventListener("click", (event) => {
   if (manageButton) openLoanManagement(manageButton.dataset.loanManage);
 });
 el.loanReturnForm?.addEventListener("submit", submitLoanReturn);
+el.loanReturnWitness?.addEventListener("change", () => {
+  const canManage = portalState.loanStatus?.permissions?.locationManage === true;
+  el.loanReturnSubmit.textContent = el.loanReturnWitness.value
+    ? "Gegenprüfung anfordern"
+    : (canManage ? "Rücknahme abschließen" : "Rücknahme speichern");
+});
 el.loanManageForm?.addEventListener("submit", submitLoanManagement);
 el.loanManageClose?.addEventListener("click", () => runLoanManagementAction("close"));
 el.loanManageReopen?.addEventListener("click", () => runLoanManagementAction("reopen"));

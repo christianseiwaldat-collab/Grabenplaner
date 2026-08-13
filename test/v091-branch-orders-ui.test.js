@@ -67,6 +67,7 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(admin, /id="organizationAccountBranchOrders"/);
   assert.match(admin, /id="branchOrdersManagementNavButton"/);
   assert.match(admin, /id="branchOrdersView"/);
+  assert.doesNotMatch(admin, /PL\+ · Standort &amp; Übergabe/);
   assert.match(admin, /id="branchOrdersManagementSaveInline"[^>]*>Bestellkonfiguration speichern/);
   assert.match(admin, /branchOrdersManagementNavButton[^>]*data-view="branchOrders"/);
   assert.doesNotMatch(admin, /branchOrdersManagementNavButton[^>]*href=/);
@@ -80,6 +81,11 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminScript, /function saveBranchOrdersManagement/);
   assert.match(adminScript, /function moveBranchOrdersManagementEntry/);
   assert.match(adminScript, /branch-orders-management-catalog-item/);
+  assert.match(adminScript, /branch-orders-management-chevron/);
+  assert.match(adminScript, /\{\{employeeNickname\}\}/);
+  assert.match(adminScript, /function confirmBranchOrderDelivery/);
+  assert.match(adminScript, /\/delivery-confirmation/);
+  assert.match(adminScript, /Zustellung technisch nicht bestätigt/);
   assert.match(adminScript, /add-catalog-item/);
   assert.match(adminScript, /move-group-item/);
   assert.match(adminScript, /add-unit/);
@@ -92,6 +98,8 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminStyles, /branch-orders-management-toolbar/);
   assert.match(adminStyles, /branch-orders-management-history-actions/);
   assert.match(adminStyles, /branch-orders-management-catalog-item/);
+  assert.match(adminStyles, /branch-orders-management-workspace \{ display:grid; grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(adminStyles, /details\[open\] > summary > \.branch-orders-management-chevron \{ transform:rotate\(90deg\)/);
   assert.match(adminStyles, /branch-orders-management-sort-actions/);
   assert.match(adminStyles, /grid-template-columns:minmax\(240px,\.7fr\) 1fr auto/);
   assert.match(styles, /branch-organization-account/);
