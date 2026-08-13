@@ -418,6 +418,8 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     const ds40Before = configuration.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
     assert.ok(ds40Before);
     recipient.email = "test-filialbestellung@example.test";
+    recipient.subjectTemplate = "Filialbestellung {{employeeNickname}} · KW {{calendarWeek}}";
+    recipient.bodyTemplate = `${recipient.bodyTemplate}\n\nDienstplanname: {{employeeNickname}}`;
     for (const recipient of configuration.recipients) recipient.replyToEmail = "antworten@grabenplaner.eu";
     configuration.items.find((item) => item.title === "Fotodrucker: Mediaset DS40").unitId = configuration.units.find((unit) => unit.title === "Karton").id;
     const saved = await requestJson("/api/portal/v1/branch-orders/settings", {
@@ -714,6 +716,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
   });
 
   await t.test("Bestellung ignoriert eine übermittelte KW, speichert Momentaufnahmen und versendet über den freigegebenen Absender", async () => {
+    db.prepare("UPDATE employees SET nickname = 'Mitzi' WHERE personnel_number = ?").run(EMPLOYEE);
     const refreshedCatalog = await requestJson("/api/portal/v1/branch-orders/catalog", { session: organizationSession });
     assert.equal(refreshedCatalog.response.status, 200, JSON.stringify(refreshedCatalog.payload));
     catalog = refreshedCatalog.payload;
@@ -766,6 +769,8 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(sentMails[0].from, "fil18-noreply@grabenplaner.eu");
     assert.equal(sentMails[0].to, "lager@lamprechter.com");
     assert.equal(sentMails[0].replyTo, "antworten@grabenplaner.eu");
+    assert.match(sentMails[0].subject, /Filialbestellung Mitzi/);
+    assert.match(sentMails[0].text, /Dienstplanname: Mitzi/);
     assert.match(sentMails[0].text, /Fotodrucker: Mediaset DS40: 2 Karton/);
     assert.match(sentMails[0].text, /Bitte antworten Sie an antworten@grabenplaner\.eu\./);
     assert.equal(
@@ -932,5 +937,35 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       db.prepare("SELECT status FROM branch_order_deliveries WHERE order_id = ?").get(failed.payload.order.id).status,
       "failed",
     );
+    const confirmed = await requestJson(
+      `/api/portal/v1/branch-orders/${encodeURIComponent(failed.payload.order.id)}/delivery-confirmation`,
+      {
+        method: "POST",
+        session: hrSession,
+        body: { locationId: LOCATION },
+      },
+    );
+    assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.payload));
+    assert.equal(confirmed.payload.delivery.status, "sent");
+    assert.equal(confirmed.payload.delivery.changed, 1);
+    assert.equal(
+      db.prepare("SELECT status FROM branch_orders WHERE id = ?").get(failed.payload.order.id).status,
+      "sent",
+    );
+    assert.equal(
+      db.prepare("SELECT status FROM branch_order_deliveries WHERE order_id = ?").get(failed.payload.order.id).status,
+      "sent",
+    );
+    const audit = db.prepare(`
+      SELECT action, entity_type, entity_id
+      FROM audit_log
+      WHERE action = 'branch-order.delivery.confirm' AND entity_id = ?
+      ORDER BY id DESC LIMIT 1
+    `).get(failed.payload.order.id);
+    assert.deepEqual({ ...audit }, {
+      action: "branch-order.delivery.confirm",
+      entity_type: "branch_order",
+      entity_id: failed.payload.order.id,
+    });
   });
 });

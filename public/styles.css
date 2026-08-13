@@ -93,6 +93,12 @@ button { color: inherit; }
 .sidebar-developer-contact span { font-size: 7.8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .sidebar-developer-contact strong { overflow-wrap: anywhere; color: rgba(255,255,255,.88); font-size: 9px; line-height: 1.35; }
 .sidebar-developer-contact:hover { color: white; background: rgba(255,255,255,.07); }
+.sidebar-global-theme { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; min-height:38px; padding:5px 6px 5px 11px; border:1px solid rgba(255,255,255,.12); border-radius:10px; color:rgba(255,255,255,.82); background:rgba(255,255,255,.055); }
+.sidebar-global-theme > span { font-size:8.5px; font-weight:800; letter-spacing:.03em; }
+.sidebar-global-theme > div { display:flex; gap:3px; padding:3px; border-radius:8px; background:rgba(0,0,0,.14); }
+.sidebar-global-theme button { min-height:25px; padding:0 8px; border:0; border-radius:6px; color:rgba(255,255,255,.65); background:transparent; font-size:8px; font-weight:800; cursor:pointer; }
+.sidebar-global-theme button[aria-pressed="true"] { color:#10241d; background:#79d0ad; }
+.sidebar-global-theme button:focus-visible { outline:2px solid #79d0ad; outline-offset:2px; }
 .sidebar-exit-button { min-height: 36px; padding: 0 11px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; color: rgba(255,255,255,.82); background: rgba(255,255,255,.055); font-size: 9.5px; font-weight: 800; cursor: pointer; }
 .sidebar-exit-button.logout-mode { border-color:rgba(121,208,173,.48); color:#effff8; background:rgba(121,208,173,.1); font-size:10.5px; letter-spacing:.01em; }
 .sidebar-exit-button.logout-mode:hover { border-color:rgba(121,208,173,.8); background:rgba(121,208,173,.2); }
@@ -578,7 +584,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .sidebar-portal-link { display: block; padding: 10px 12px; border-radius: 10px; color: #174f3b; background: #e3f2eb; font-size: 9px; font-weight: 800; text-align: center; text-decoration: none; }
 .access-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .portal-user-list { display: grid; gap: 8px; margin-top: 14px; }
-.portal-user-row { display: grid; grid-template-columns: minmax(155px,1.25fr) minmax(115px,.7fr) minmax(120px,.75fr) minmax(120px,.75fr) auto minmax(145px,1fr) auto; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.68); }
+.portal-user-row { display:grid; gap:11px; padding:13px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.68); }
 .portal-user-row strong,.portal-user-row small { display: block; }
 .portal-user-row strong { font-size: 10px; }
 .portal-user-row small { margin-top: 3px; color: var(--muted); font-size: 8px; }
@@ -591,8 +597,14 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .organization-account-copy strong { font-size:11px; }
 .organization-account-copy small { margin-top:3px; color:var(--muted); font-size:8px; }
 .organization-account-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
-.portal-active { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 9px; }
-.portal-user-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.portal-user-heading { display:flex; align-items:center; justify-content:space-between; gap:13px; padding-bottom:10px; border-bottom:1px solid var(--line); }
+.portal-user-heading > div { min-width:0; }
+.portal-user-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.portal-active { display:grid; grid-template-columns:18px auto; align-items:center; gap:8px; min-width:126px; padding:7px 9px; border:1px solid var(--line); border-radius:10px; white-space:nowrap; background:var(--surface); cursor:pointer; }
+.portal-active input[type="checkbox"] { width:18px; min-width:18px; height:18px; min-height:18px; margin:0; padding:0; accent-color:var(--green); }
+.portal-active span strong { font-size:8.5px; }
+.portal-active span small { margin-top:1px; font-size:7px; }
+.portal-user-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
 .protected-role-badge { display:flex; align-items:center; min-height:34px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; color:var(--muted); background:var(--surface-muted); font-size:9px; font-weight:800; }
 .protected-role-badge.developer { border-color:#bea657; color:#5f4b09; background:#fff6cf; }
 .manager-request-list { display: grid; gap: 8px; padding: 14px 20px 17px; }
@@ -2306,11 +2318,27 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 #vacationSettings .delegation-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
 #accessSettings .compact-policy-grid { grid-template-columns:minmax(0,1fr); }
 #accessSettings .greeting-template-grid { grid-template-columns:minmax(0,1fr); }
-#accessSettings .portal-user-row { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:end; }
-#accessSettings .portal-user-row > div { grid-column:1 / -1; }
+#accessSettings .portal-user-row { align-items:stretch; }
 #rightsSettings .rights-permission-grid { grid-template-columns:minmax(0,1fr); }
 #rightsSettings .mobile-module-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 #backupSettings .diagnostic-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.settings-field-disclosure { align-self:start; padding:0 !important; overflow:hidden; }
+.settings-field-disclosure-summary { display:grid; grid-template-columns:auto minmax(0,1fr) 30px; align-items:center; gap:11px; width:100%; min-height:0; padding:16px 17px; border:0; border-radius:inherit; color:var(--ink); background:transparent; text-align:left; cursor:pointer; }
+.settings-field-disclosure-summary:hover { background:var(--surface-muted); }
+.settings-field-disclosure-summary > div { min-width:0; }
+.settings-field-disclosure-summary h2,.settings-field-disclosure-summary p { margin-left:0; }
+.settings-field-disclosure-chevron { display:grid; width:30px; height:30px; place-items:center; border:1px solid var(--line); border-radius:9px; color:var(--green); background:var(--surface-soft); font-size:22px; font-weight:850; line-height:1; transition:transform .16s ease; }
+.settings-field-disclosure.open > .settings-field-disclosure-summary { border-bottom:1px solid var(--line); border-radius:0; }
+.settings-field-disclosure.open > .settings-field-disclosure-summary .settings-field-disclosure-chevron { transform:rotate(90deg); }
+.settings-field-disclosure-body { display:grid; gap:13px; padding:16px 17px 17px; }
+.settings-field-disclosure-body[hidden] { display:none !important; }
+.legacy-usb-provisioning { order:99; }
+@media (max-width:900px) {
+  .portal-user-row { grid-template-columns:1fr; }
+  .portal-user-heading { align-items:flex-start; flex-direction:column; }
+  .portal-user-controls { grid-template-columns:1fr; }
+  .portal-active { min-width:0; }
+}
 .time-presence-list > .settings-note { min-width:0; margin:0; padding:18px 20px; overflow-wrap:anywhere; }
 .personnel-record-modal { width:min(720px,calc(100vw - 28px)); overflow-x:hidden; }
 .personnel-record-modal form { width:auto; min-width:0; }
@@ -3343,7 +3371,8 @@ html[data-active-page-theme="dark"] .custom-process-modal .custom-process-step-c
   .rights-process-step-state { grid-column:2; justify-self:start; margin:-5px 0 13px 10px; }
 }
 
-/* Seitenspezifische Darstellung */
+/* Globale Darstellung */
+.view .page-theme-switch { display:none !important; }
 .page-theme-switch:not(.dashboard-theme-switch) { display:flex; align-items:center; gap:4px; padding:4px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb,var(--surface) 86%,transparent); }
 .page-theme-switch:not(.dashboard-theme-switch) button { min-height:32px; padding:0 11px; border:0; border-radius:8px; color:var(--muted); background:transparent; font-size:9px; font-weight:800; cursor:pointer; }
 .page-theme-switch:not(.dashboard-theme-switch) button[aria-pressed="true"] { color:#fff; background:var(--green); }
@@ -3551,7 +3580,7 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display
 .loan-overview-column-options { display:grid; gap:8px; margin:16px 0; padding:0; border:0; }
 .loan-overview-column-options legend { margin-bottom:8px; color:var(--ink); font-size:12px; font-weight:850; }
 .loan-overview-column-option { display:flex; align-items:flex-start; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface-soft); cursor:pointer; }
-.loan-overview-column-option input { flex:0 0 auto; margin-top:2px; }
+.loan-overview-column-option input[type="checkbox"] { flex:0 0 18px; width:18px; min-width:18px; height:18px; min-height:18px; margin:2px 0 0; padding:0; accent-color:var(--green); }
 .loan-overview-column-option span { display:grid; gap:2px; }
 .loan-overview-column-option strong { font-size:11px; }
 .loan-overview-column-option small { color:var(--muted); font-size:9px; }
@@ -3612,26 +3641,42 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display
 .branch-orders-management-toolbar > .primary-button { align-self:center; justify-self:end; white-space:nowrap; }
 .branch-orders-management-message { margin:0 0 12px; padding:11px 13px; border:1px solid #78b9a0; border-radius:12px; color:var(--success-ink,#245a46); background:var(--success-surface,#e5f5ee); font-size:10px; font-weight:750; }
 .branch-orders-management-message.error { color:var(--danger-ink,#9b3327); border-color:#e6a095; background:var(--danger-surface,#fce9e6); }
-.branch-orders-management-workspace { display:grid; gap:14px; }
-.branch-orders-management-section,.branch-orders-management-history { display:grid; gap:13px; padding:18px 19px; border:1px solid var(--line); border-radius:16px; background:var(--surface); box-shadow:var(--shadow); }
+.branch-orders-management-workspace { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:14px; }
+.branch-orders-management-section,.branch-orders-management-history { padding:0; border:1px solid var(--line); border-radius:16px; background:var(--surface); box-shadow:var(--shadow); overflow:hidden; }
+.branch-orders-management-history { margin-top:14px; }
+.branch-orders-management-section:not([open]) > :not(summary),.branch-orders-management-history:not([open]) > :not(summary),.branch-orders-management-recipient:not([open]) > :not(summary),.branch-orders-management-group:not([open]) > :not(summary),.branch-orders-management-catalog-item:not([open]) > :not(summary),.branch-orders-management-unit:not([open]) > :not(summary) { display:none; }
 .branch-orders-management-section-heading,.branch-orders-management-recipient > header,.branch-orders-management-group > header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.branch-orders-management-section > summary,.branch-orders-management-history > summary,.branch-orders-management-recipient > summary,.branch-orders-management-group > summary,.branch-orders-management-catalog-item > summary,.branch-orders-management-unit > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; list-style:none; }
+.branch-orders-management-section > summary,.branch-orders-management-history > summary { padding:17px 19px; }
+.branch-orders-management-section > summary::-webkit-details-marker,.branch-orders-management-history > summary::-webkit-details-marker,.branch-orders-management-recipient > summary::-webkit-details-marker,.branch-orders-management-group > summary::-webkit-details-marker,.branch-orders-management-catalog-item > summary::-webkit-details-marker,.branch-orders-management-unit > summary::-webkit-details-marker { display:none; }
+.branch-orders-management-chevron { display:grid; flex:0 0 30px; width:30px; height:30px; place-items:center; border:1px solid var(--line); border-radius:9px; color:var(--green); background:var(--surface-soft); font-size:22px; font-weight:850; line-height:1; transition:transform .18s ease; }
+details[open] > summary > .branch-orders-management-chevron { transform:rotate(90deg); }
+.branch-orders-management-section-body,.branch-orders-management-disclosure-body { display:grid; gap:12px; }
+.branch-orders-management-section-body { padding:0 19px 19px; }
+.branch-orders-management-section-actions,.branch-orders-management-row-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
 .branch-orders-management-section-heading h2,.branch-orders-management-recipient h2,.branch-orders-management-group h2,.branch-orders-management-history h2 { margin:3px 0; font-size:17px; }
 .branch-orders-management-section-heading p,.branch-orders-management-history p { margin:0; color:var(--muted); font-size:10px; }
-.branch-orders-management-recipient,.branch-orders-management-group { display:grid; gap:12px; padding:15px; border:1px solid var(--line); border-radius:13px; background:var(--surface-soft); }
+.branch-orders-management-recipient,.branch-orders-management-group { padding:0; border:1px solid var(--line); border-radius:13px; background:var(--surface-soft); overflow:hidden; }
+.branch-orders-management-recipient > summary,.branch-orders-management-group > summary { padding:13px 15px; }
+.branch-orders-management-recipient > .branch-orders-management-disclosure-body,.branch-orders-management-group > .branch-orders-management-disclosure-body { padding:0 15px 15px; }
 .branch-orders-management-fields { display:grid; gap:10px; }
 .branch-orders-management-fields.two-columns { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .branch-orders-management-fields.three-columns { grid-template-columns:minmax(0,1.2fr) minmax(150px,.5fr) minmax(190px,.75fr); }
-.branch-orders-management-items { display:grid; gap:8px; }
+.branch-orders-management-items { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .branch-orders-management-item { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(150px,.55fr) auto; align-items:end; gap:10px; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
-.branch-orders-management-unit { grid-template-columns:minmax(200px,.8fr) auto; }
-.branch-orders-management-catalog-list { display:grid; gap:10px; }
-.branch-orders-management-catalog-item { display:grid; gap:11px; padding:14px; border:1px solid var(--line); border-radius:13px; background:var(--surface-soft); }
+.branch-orders-management-unit { display:block; padding:0; }
+.branch-orders-management-unit > summary { padding:10px 12px; }
+.branch-orders-management-unit > .branch-orders-management-disclosure-body { padding:0 12px 12px; }
+.branch-orders-management-catalog-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.branch-orders-management-catalog-item { padding:0; border:1px solid var(--line); border-radius:13px; background:var(--surface-soft); overflow:hidden; }
+.branch-orders-management-catalog-item > summary { padding:12px 14px; }
+.branch-orders-management-catalog-item > .branch-orders-management-disclosure-body { padding:0 14px 14px; }
 .branch-orders-management-catalog-item > header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
 .branch-orders-management-catalog-item h2 { margin:3px 0; font-size:15px; }
 .branch-orders-management-sort-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:5px; }
 .branch-orders-management-sort-actions .text-button { min-height:32px; padding:6px 8px; }
 .branch-orders-management-group-add { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
-.branch-orders-management-history-list { display:grid; gap:8px; }
+.branch-orders-management-history-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:0 19px 19px; }
 .branch-orders-management-history-entry { display:grid; gap:8px; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
 .branch-orders-management-history-entry > div { display:grid; gap:3px; }
 .branch-orders-management-history-entry strong { font-size:11px; }
@@ -3682,6 +3727,8 @@ html[data-active-page-theme="dark"] #settingsView :is(.f18-migration-preview,.f1
 html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { color:var(--ink); border-color:var(--line); background:var(--surface); }
 
 @media (max-width:1200px) {
+  .branch-orders-management-workspace { grid-template-columns:1fr; }
+  .branch-orders-management-catalog-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .loan-management-summary { grid-template-columns:repeat(3,minmax(120px,1fr)); }
   .f18-migration-form { grid-template-columns:1fr 1fr; }
   .f18-migration-form > button { justify-self:start; }
@@ -3689,7 +3736,7 @@ html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { 
 @media (max-width:820px) {
   .loan-management-topbar,.loan-management-entry > header,.branch-orders-management-topbar,.branch-orders-management-section-heading,.branch-orders-management-recipient > header,.branch-orders-management-group > header { align-items:stretch; flex-direction:column; }
   .loan-management-header-actions,.branch-orders-management-header-actions { justify-content:flex-start; }
-  .loan-management-toolbar,.loan-management-body,.loan-setting-fields,.branch-orders-management-toolbar,.branch-orders-management-fields.two-columns,.branch-orders-management-fields.three-columns,.branch-orders-management-item { grid-template-columns:1fr; }
+  .loan-management-toolbar,.loan-management-body,.loan-setting-fields,.branch-orders-management-toolbar,.branch-orders-management-fields.two-columns,.branch-orders-management-fields.three-columns,.branch-orders-management-item,.branch-orders-management-catalog-list,.branch-orders-management-items,.branch-orders-management-history-list { grid-template-columns:1fr; }
   .loan-photo-attachment { align-items:flex-start; flex-direction:column; }
   .loan-photo-attachment nav { justify-content:flex-start; width:100%; }
   .loan-management-toolbar > p,.loan-management-dates,.branch-orders-management-toolbar > p,.branch-orders-management-toolbar > .primary-button { justify-self:start; justify-items:start; text-align:left; }

@@ -28,6 +28,7 @@ test("Verkaufsverwaltung ist ein fester Hauptbereich mit erstem Unterpunkt", () 
   );
   assert.match(navigation, /id="salesAdministrationToggle"[^>]*data-nav-toggle="salesAdministration"[^>]*aria-controls="salesAdministrationNavChildren"/);
   assert.match(navigation, /<span>Verkaufsverwaltung<\/span>/);
+  assert.match(navigation, /<button(?=[^>]*id="salesDashboardNavButton")(?=[^>]*data-view="salesAdministration")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="salesAnalyticsNavButton")(?=[^>]*data-view="salesAnalytics")[^>]*>/);
   assert.match(navigation, /<span>Verkaufsanalysen<\/span>/);
   assert.ok(html.indexOf("personnelAdministrationNav") < html.indexOf("salesAdministrationNav"));
@@ -66,7 +67,9 @@ test("Navigation und Direktaufruf bleiben ohne Zugangsrecht fail-closed", () => 
   assert.match(groups, /salesAdministration:\s*\{\s*toggle:\s*elements\.salesAdministrationToggle,\s*children:\s*elements\.salesAdministrationNavChildren\s*\}/);
 
   const viewSwitch = between(app, "function setView(view)", "function applyRequestedView()");
+  assert.match(viewSwitch, /view === "salesAdministration" && !canAccessSalesAnalytics\(\)/);
   assert.match(viewSwitch, /view === "salesAnalytics" && !canAccessSalesAnalytics\(\)/);
+  assert.match(viewSwitch, /salesAdministrationView\?\.classList\.toggle\("active", view === "salesAdministration"\)/);
   assert.match(viewSwitch, /salesAnalyticsView\?\.classList\.toggle\("active", view === "salesAnalytics"\)/);
 
   const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
@@ -74,6 +77,11 @@ test("Navigation und Direktaufruf bleiben ohne Zugangsrecht fail-closed", () => 
 });
 
 test("Fest integrierter Verkaufsbereich bleibt eine klar gekennzeichnete Desktop-Arbeitsfläche", () => {
+  const landing = between(html, '<section id="salesAdministrationView"', '<section id="salesAnalyticsView"');
+  assert.match(landing, /Verkaufsverwaltung im Überblick/);
+  assert.match(landing, /class="personnel-dashboard-card"[^>]*data-view="salesAnalytics"/);
+  assert.match(landing, />Verkaufsanalysen</);
+
   const view = between(html, '<section id="salesAnalyticsView"', '<section id="personnelView"');
   assert.match(view, /id="salesAnalyticsTitle">Verkaufsanalysen/);
   assert.match(view, /TradeFoto-PDF-Statistiken sicher erkennen und auswerten/);

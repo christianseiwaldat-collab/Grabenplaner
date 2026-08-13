@@ -120,6 +120,19 @@ test("v0.87 Block 7: Grundeinstellungen verwenden Accordions und eine globale nu
   assert.match(styles, /\.settings-packed-grid\s*\{[^}]*grid-auto-flow:\s*row[^}]*grid-auto-rows:\s*1px/);
   assert.match(script, /function applyAppFontScalePercent[\s\S]*?scheduleAllSettingsPackedGrids\(\);[\s\S]*?return normalized;/);
   assert.doesNotMatch(styles, /--app-font-scale-(?:width|min-height)/);
+
+  assert.match(html, /class="sidebar-global-theme"[\s\S]*data-global-theme-choice="light"[\s\S]*data-global-theme-choice="dark"/);
+  assert.match(styles, /\.view \.page-theme-switch \{ display:none !important; \}/);
+  assert.match(script, /function applyGlobalTheme\(theme\)[\s\S]*for \(const view of UI_APPEARANCE_VIEWS\) applyPageTheme\(view, normalized\)/);
+  assert.match(script, /pageThemes: Object\.fromEntries\(UI_APPEARANCE_VIEWS\.map\(\(view\) => \[view, normalized\]\)\)/);
+  assert.doesNotMatch(script, /querySelectorAll\("button\[data-page-theme-choice\]"\)\.forEach\(\(button\) => button\.addEventListener/);
+
+  assert.doesNotMatch(html, /data-settings-tab="usbProvisioning"/);
+  assert.match(script, /function integrateLegacyUsbProvisioning\(\)[\s\S]*elements\.backupSettings\.append\(details\)/);
+  assert.match(script, /function initializeSettingsCardDisclosures\(\)[\s\S]*settings-field-disclosure-chevron[\s\S]*chevron\.textContent = "›"/);
+  assert.ok(script.indexOf("integrateLegacyUsbProvisioning();") < script.indexOf("initializeSettingsCardDisclosures();"));
+  assert.match(styles, /\.portal-active input\[type="checkbox"\] \{ width:18px; min-width:18px; height:18px; min-height:18px/);
+  assert.match(styles, /\.portal-user-controls \{ display:grid; grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
 
 test("v0.87 Block 7: Legacy-Schriftwerte und Betriebsmodus-Reste werden idempotent migriert", async () => {

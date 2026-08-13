@@ -518,10 +518,18 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
     assert.equal(homeSchedule.response.status, 200, JSON.stringify(homeSchedule.payload));
     assert.deepEqual(Object.keys(homeSchedule.payload).sort(), [
       "calendarWeek",
+      "displaySettings",
       "location",
       "shifts",
       "weekEnd",
       "weekStart",
+    ]);
+    assert.deepEqual(Object.keys(homeSchedule.payload.displaySettings).sort(), [
+      "mobileHideElapsedDays",
+      "orderAutosaveEnabled",
+      "orderAutosaveMinutes",
+      "scheduleDisplayMode",
+      "updatedAt",
     ]);
     assert.deepEqual(homeSchedule.payload.location, {
       id: HOME_LOCATION,
@@ -534,11 +542,13 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       "area",
       "date",
       "departmentName",
+      "employeeColor",
       "employeeName",
       "endTime",
       "startTime",
     ]);
     assert.equal(homeSchedule.payload.shifts[0].employeeName, "Berta");
+    assert.match(homeSchedule.payload.shifts[0].employeeColor, /^#[0-9a-f]{6}$/i);
     assert.equal(homeSchedule.payload.shifts[0].area, "Verkauf");
 
     const serialized = JSON.stringify(homeSchedule.payload);

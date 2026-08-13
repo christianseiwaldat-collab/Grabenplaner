@@ -5381,6 +5381,11 @@ function viennaLocalDateTime(date, time) {
   return result;
 }
 
+function viennaEndOfDayIso(date = new Date()) {
+  const finalMinute = viennaLocalDateTime(viennaTodayIso(date), "23:59");
+  return new Date(finalMinute.getTime() + 59_999).toISOString();
+}
+
 function currentWeekLockPoint(settings = getSettings()) {
   const weekStart = currentWeekStart();
   if (settings.current_week_lock_mode === "manual") {
@@ -25976,6 +25981,10 @@ const UI_PREFERENCE_VIEWS = Object.freeze([
   "vacations",
   "personnelAdministration",
   "personnel",
+  "salesAdministration",
+  "salesAnalytics",
+  "loans",
+  "branchOrders",
   "rightsDashboard",
   "settings",
 ]);
@@ -30891,7 +30900,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
       sqliteBranchOrderOperations.markDelivery(delivery.id, { status: "sent" });
     } catch (error) {
       sqliteBranchOrderOperations.markDelivery(delivery.id, {
-        status: "failed",
+        status: error?.code === "EXTERNAL_NOTIFICATION_TIMEOUT" ? "pending" : "failed",
         failureCode: String(error?.code || "EXTERNAL_NOTIFICATION_DELIVERY_FAILED"),
       });
     }
@@ -32438,12 +32447,61 @@ function loanPendingReturnConfirmationRow(loanId) {
   });
 }
 
-function parseLoanReturnConfirmationPayload(row) {
+function loanReturnPreparationRow(loanId) {
+  return loanModuleRepository.getReturnPreparation({
+    loanId: String(loanId || "").trim(),
+  });
+}
+
+function parseLoanReturnPayload(row) {
   try {
     const parsed = JSON.parse(String(row?.payload_json || "{}"));
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
   } catch {}
   return {};
+}
+
+const parseLoanReturnConfirmationPayload = parseLoanReturnPayload;
+
+async function publicLoanReturnPreparation(row) {
+  if (!row) return null;
+  const payload = parseLoanReturnPayload(row);
+  const [sourceItems, attachments, photos] = await Promise.all([
+    loanItemRows(row.loan_id),
+    loanPhotoAttachmentRows(row.loan_id),
+    loanPhotoRows(row.loan_id),
+  ]);
+  const returnedItems = Array.isArray(payload.items) ? payload.items : [];
+  const photoIds = new Set(Array.isArray(payload.photoIds) ? payload.photoIds.map(String) : []);
+  const photoAttachmentIds = new Set(
+    Array.isArray(payload.photoAttachmentIds) ? payload.photoAttachmentIds.map(String) : [],
+  );
+  return {
+    loanId: row.loan_id,
+    expectedRevision: Number(row.expected_revision),
+    requestedBy: {
+      employeeNumber: row.requested_by_employee_number,
+      name: row.requester_nickname || row.requester_full_name || row.requested_by_employee_number,
+    },
+    preparedAt: row.prepared_at,
+    updatedAt: row.updated_at,
+    note: String(payload.note || ""),
+    borrowerConfirmed: Boolean(payload.borrowerConfirmed),
+    items: sourceItems.map((item) => {
+      const returned = returnedItems.find((entry) => Number(entry.position) === Number(item.position)) || {};
+      return {
+        ...publicLoanItem(item),
+        conditionReturn: returned.conditionReturn || "",
+        returnNote: returned.note || "",
+      };
+    }),
+    photos: photos
+      .filter((photo) => photo.phase === "return" && photoIds.has(photo.id))
+      .map(publicLoanPhoto),
+    photoAttachments: attachments
+      .filter((attachment) => attachment.phase === "return" && photoAttachmentIds.has(attachment.id))
+      .map(publicLoanPhotoAttachment),
+  };
 }
 
 async function publicLoanReturnConfirmation(row, { includeLoan = true } = {}) {
@@ -33151,6 +33209,7 @@ async function publicLoan(row, { includeEvents = true } = {}) {
   if (!row) return null;
   const [
     pendingReturnConfirmation,
+    returnPreparation,
     itemRows,
     photoRows,
     attachmentRows,
@@ -33158,6 +33217,7 @@ async function publicLoan(row, { includeEvents = true } = {}) {
     eventRows,
   ] = await Promise.all([
     loanPendingReturnConfirmationRow(row.id),
+    loanReturnPreparationRow(row.id),
     loanItemRows(row.id),
     loanPhotoRows(row.id),
     loanPhotoAttachmentRows(row.id),
@@ -33191,6 +33251,9 @@ async function publicLoan(row, { includeEvents = true } = {}) {
     } : null,
     pendingReturnConfirmation: pendingReturnConfirmation
       ? await publicLoanReturnConfirmation(pendingReturnConfirmation, { includeLoan: false })
+      : null,
+    returnPreparation: returnPreparation
+      ? await publicLoanReturnPreparation(returnPreparation)
       : null,
     borrowerReturnConfirmed: Boolean(row.borrower_return_confirmed),
     revision: Number(row.revision || 1),
@@ -34000,6 +34063,7 @@ app.put("/api/portal/v1/loans/:loanId/management", async (request, response) => 
       "Durch Bearbeitung der Filialleitung aufgehoben.",
       repository,
     );
+    await repository.deleteReturnPreparation({ loanId: row.id });
     await appendLoanEvent(row.id, actor.employeeNumber, "manager_edited", nextRevision, {
       previousRevision: expectedRevision,
       status: row.status,
@@ -34076,6 +34140,7 @@ app.post("/api/portal/v1/loans/:loanId/management/close", async (request, respon
       "Durch manuelles Schließen der Filialleitung aufgehoben.",
       repository,
     );
+    await repository.deleteReturnPreparation({ loanId: row.id });
     await appendLoanEvent(row.id, actor.employeeNumber, "manager_closed_without_document", nextRevision, {
       previousRevision: expectedRevision,
       returnRecordedByEmployeeNumber: actor.employeeNumber,
@@ -34194,6 +34259,169 @@ app.post("/api/portal/v1/loans/:loanId/management/reopen", async (request, respo
   response.json({ loan: await publicLoan(await loanRow(row.id)) });
 });
 
+app.post("/api/portal/v1/branch-orders/:orderId/delivery-confirmation", async (request, response) => {
+  const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
+  assertPortalCsrf(request);
+  const locationId = await branchOrderManagementLocation(session, request.body || {});
+  try {
+    const result = sqliteBranchOrderOperations.confirmOrderDeliveries(
+      locationId,
+      request.params.orderId,
+      new Date().toISOString(),
+    );
+    auditPortal(portalActorId(session), "branch-order.delivery.confirm", "branch_order", request.params.orderId, JSON.stringify({
+      locationId,
+      changedDeliveryCount: result.changed,
+      status: result.status,
+    }));
+    response.json({ locationId, orderId: request.params.orderId, delivery: result });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
+async function completePreparedLoanReturn({
+  loan,
+  expectedRevision,
+  returnedItems,
+  note = "",
+  borrowerConfirmed = false,
+  recordedByEmployeeNumber,
+  witnessEmployeeNumber = "",
+  completionActor,
+  confirmationId = "",
+  confirmationNote = "",
+  directManagement = false,
+}) {
+  const completedAt = new Date().toISOString();
+  const nextRevision = Number(expectedRevision) + 1;
+  const sourceItems = await loanItemRows(loan.id);
+  const [recordedByParticipant, completionParticipant] = await Promise.all([
+    loanParticipant(recordedByEmployeeNumber),
+    loanParticipant(completionActor.employeeNumber),
+  ]);
+  let preparedReturnDocument;
+  try {
+    preparedReturnDocument = await prepareLoanDocument({
+      type: "return",
+      confirmationMode: directManagement ? "management" : "witness",
+      loanId: loan.id,
+      revision: nextRevision,
+      createdAt: completedAt,
+      issuedAt: loan.issued_at,
+      returnedAt: completedAt,
+      dueDate: loan.due_date,
+      note: [loan.notes, note].filter(Boolean).join(" · "),
+      confirmationNote,
+      location: { id: loan.location_id, name: loan.location_name },
+      borrower: {
+        employeeNumber: loan.borrower_employee_number,
+        name: loan.borrower_nickname || loan.borrower_full_name,
+      },
+      recordedBy: recordedByParticipant,
+      witness: completionParticipant,
+      items: sourceItems.map((item) => {
+        const returned = returnedItems.find((entry) => Number(entry.position) === Number(item.position)) || {};
+        return {
+          position: item.position,
+          articleNumber: item.article_number,
+          description: item.description_snapshot,
+          serialNumber: item.serial_number,
+          conditionOut: item.condition_out,
+          conditionReturn: returned.conditionReturn,
+          note: [item.item_note, returned.note].filter(Boolean).join(" · "),
+        };
+      }),
+      branding: loanPdfBranding(loan.location_id),
+    }, completionActor.employeeNumber);
+  } catch (error) {
+    throw httpError(
+      503,
+      `Der Rücknahmebeleg konnte nicht sicher erstellt werden: ${String(error.message || error)}`,
+      "LOAN_DOCUMENT_CREATE_FAILED",
+    );
+  }
+  try {
+    await persistenceProvider.transaction(async (executor) => {
+      const repository = createApplicationRepositories(executor).loanModule;
+      const result = await repository.markLoanReturned({
+        loanId: loan.id,
+        returnedAt: completedAt,
+        recordedByEmployeeNumber,
+        witnessEmployeeNumber: witnessEmployeeNumber || null,
+        borrowerReturnConfirmed: Boolean(borrowerConfirmed),
+        expectedRevision,
+      });
+      if (!result.rowsAffected) {
+        throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+      }
+      for (const item of returnedItems) {
+        await repository.updateLoanItemReturnCondition({
+          loanId: loan.id,
+          position: item.position,
+          conditionReturn: item.conditionReturn,
+          updatedAt: completedAt,
+        });
+      }
+      if (confirmationId) {
+        const confirmationResult = await repository.confirmReturnConfirmation({
+          confirmationId,
+          respondedAt: completedAt,
+          responseNote: confirmationNote,
+        });
+        if (!confirmationResult.rowsAffected) {
+          throw httpError(409, "Diese Rücknahmebestätigung wurde bereits bearbeitet.", "LOAN_RETURN_CONFIRMATION_CLOSED");
+        }
+      }
+      await repository.deleteReturnPreparation({ loanId: loan.id });
+      await insertPreparedLoanDocument(loan.id, preparedReturnDocument, repository);
+      await appendLoanEvent(loan.id, completionActor.employeeNumber, "returned", nextRevision, {
+        confirmationId: confirmationId || null,
+        completionMode: directManagement ? "management" : "second_employee",
+        requestedByEmployeeNumber: recordedByEmployeeNumber,
+        witnessEmployeeNumber: witnessEmployeeNumber || null,
+        borrowerConfirmed: Boolean(borrowerConfirmed),
+        note,
+        responseNote: confirmationNote,
+        items: returnedItems,
+      }, repository);
+      await appendLoanEvent(loan.id, completionActor.employeeNumber, "document_created", nextRevision, {
+        documentId: preparedReturnDocument.id,
+        documentType: preparedReturnDocument.documentType,
+        sha256: preparedReturnDocument.sha256,
+      }, repository);
+    });
+  } catch (error) {
+    cleanupPreparedLoanDocument(preparedReturnDocument);
+    throw error;
+  }
+  await refreshLoanProtectedStorageSnapshot();
+  const [returnedLoan, returnedDocument] = await Promise.all([
+    loanRow(loan.id),
+    loanDocumentRow(preparedReturnDocument.id),
+  ]);
+  const messageText = directManagement
+    ? `Die Rücknahme wurde von ${completionActor.employeeNumber} als zuständige Leitung abgeschlossen.`
+    : `Die Rücknahme wurde von ${completionActor.employeeNumber} gegengeprüft und abgeschlossen.`;
+  for (const recipient of new Set([recordedByEmployeeNumber, loan.borrower_employee_number])) {
+    if (!recipient || recipient === completionActor.employeeNumber) continue;
+    await createPortalNotification(
+      recipient,
+      "loan.returned",
+      "Leihe zurückgenommen",
+      messageText,
+      {
+        target: `/portal.html?tab=loan&loan=${encodeURIComponent(loan.id)}`,
+        entityType: "loan",
+        entityId: loan.id,
+        dedupeKey: `loan:${loan.id}:returned:${nextRevision}:${recipient}`,
+      },
+    );
+  }
+  await notifyLoanDocumentAvailable(returnedLoan, returnedDocument);
+  return { returnedLoan, returnedDocument, nextRevision, completedAt };
+}
+
 app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
   const actor = requirePortalAnyPermissionOrLocal(
     request,
@@ -34225,21 +34453,17 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
     throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
   }
   const witnessEmployeeNumber = String(request.body?.witnessEmployeeNumber || "").trim();
-  const witness = await loanEmployeeRow(witnessEmployeeNumber, { active: true });
-  if (!witness || String(witness.home_location_id || "") !== String(row.location_id)
+  const witness = witnessEmployeeNumber
+    ? await loanEmployeeRow(witnessEmployeeNumber, { active: true })
+    : null;
+  if (witnessEmployeeNumber && (!witness
+    || String(witness.home_location_id || "") !== String(row.location_id)
     || witness.personnel_number === row.borrower_employee_number
-    || witness.personnel_number === actor.employeeNumber) {
+    || witness.personnel_number === actor.employeeNumber)) {
     throw httpError(
       400,
       "Bitte ein anderes aktives Teammitglied dieses Standorts als Rücknahmebestätigung auswählen.",
       "LOAN_RETURN_WITNESS_INVALID",
-    );
-  }
-  if (!await employeeHasLivePortalSession(witness.personnel_number)) {
-    throw httpError(
-      409,
-      `${witness.nickname || witness.full_name} muss das Mitarbeiterportal geöffnet haben, bevor die Rücknahme angefordert wird.`,
-      "LOAN_RETURN_WITNESS_OFFLINE",
     );
   }
   let returnedItems;
@@ -34257,12 +34481,64 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
       "LOAN_RETURN_CONFIRMATION_PENDING",
     );
   }
-  const confirmationId = crypto.randomUUID();
+  const existingPreparation = await loanReturnPreparationRow(row.id);
+  if (existingPreparation
+    && existingPreparation.requested_by_employee_number !== actor.employeeNumber
+    && !managesLocation) {
+    throw httpError(
+      409,
+      "Diese Rücknahme wurde bereits von einer anderen zuständigen Person vorbereitet.",
+      "LOAN_RETURN_PREPARATION_OWNED",
+    );
+  }
   const requestedAt = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   const borrowerConfirmed = actor.employeeNumber === row.borrower_employee_number;
   let photoIds = [];
   let photoAttachmentIds = [];
+  const payload = {
+    items: returnedItems,
+    note,
+    borrowerConfirmed,
+    photoIds,
+    photoAttachmentIds,
+  };
+
+  if (managesLocation && !witness) {
+    photoIds = (await loanPhotoRows(row.id))
+      .filter((photo) => photo.phase === "return")
+      .map((photo) => photo.id);
+    photoAttachmentIds = (await loanPhotoAttachmentRows(row.id))
+      .filter((attachment) => attachment.phase === "return")
+      .map((attachment) => attachment.id);
+    payload.photoIds = photoIds;
+    payload.photoAttachmentIds = photoAttachmentIds;
+    const completed = await completePreparedLoanReturn({
+      loan: row,
+      expectedRevision,
+      returnedItems,
+      note,
+      borrowerConfirmed,
+      recordedByEmployeeNumber: actor.employeeNumber,
+      completionActor: actor,
+      directManagement: true,
+    });
+    auditPortal(actor.employeeNumber, "loan.return.management-complete", "loan", row.id, JSON.stringify({
+      locationId: row.location_id,
+      borrowerEmployeeNumber: row.borrower_employee_number,
+      itemCount: returnedItems.length,
+      photoCount: photoIds.length,
+      photoAttachmentCount: photoAttachmentIds.length,
+      noteProvided: Boolean(note),
+    }));
+    response.json({
+      direct: true,
+      loan: await publicLoan(completed.returnedLoan),
+    });
+    return;
+  }
+
+  const confirmationId = witness ? crypto.randomUUID() : "";
+  const expiresAt = witness ? viennaEndOfDayIso() : null;
   await persistenceProvider.transaction(async (executor) => {
     const repository = createApplicationRepositories(executor).loanModule;
     const current = await repository.getLoan({ loanId: row.id });
@@ -34275,54 +34551,81 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
     photoAttachmentIds = (await repository.listLoanPhotoAttachments({ loanId: row.id }))
       .filter((attachment) => attachment.phase === "return")
       .map((attachment) => attachment.id);
-    await repository.insertReturnConfirmation({
-      id: confirmationId,
+    payload.photoIds = photoIds;
+    payload.photoAttachmentIds = photoAttachmentIds;
+    const currentPreparation = await repository.getReturnPreparation({ loanId: row.id });
+    if (currentPreparation
+      && currentPreparation.requested_by_employee_number !== actor.employeeNumber
+      && !managesLocation) {
+      throw httpError(
+        409,
+        "Diese Rücknahme wurde bereits von einer anderen zuständigen Person vorbereitet.",
+        "LOAN_RETURN_PREPARATION_OWNED",
+      );
+    }
+    await repository.upsertReturnPreparation({
       loanId: row.id,
       requestedByEmployeeNumber: actor.employeeNumber,
-      witnessEmployeeNumber: witness.personnel_number,
       expectedRevision,
-      payloadJson: JSON.stringify({
-        items: returnedItems,
-        note,
-        borrowerConfirmed,
-        photoIds,
-        photoAttachmentIds,
-      }),
-      requestedAt,
-      expiresAt,
+      payloadJson: JSON.stringify(payload),
+      preparedAt: currentPreparation?.prepared_at || requestedAt,
+      updatedAt: requestedAt,
     });
-    await appendLoanEvent(row.id, actor.employeeNumber, "return_confirmation_requested", expectedRevision, {
-      confirmationId,
-      witnessEmployeeNumber: witness.personnel_number,
-      expiresAt,
+    await appendLoanEvent(row.id, actor.employeeNumber, "return_prepared", expectedRevision, {
+      confirmationRequested: Boolean(witness),
       photoIds,
       photoAttachmentIds,
     }, repository);
+    if (witness) {
+      await repository.insertReturnConfirmation({
+        id: confirmationId,
+        loanId: row.id,
+        requestedByEmployeeNumber: actor.employeeNumber,
+        witnessEmployeeNumber: witness.personnel_number,
+        expectedRevision,
+        payloadJson: JSON.stringify(payload),
+        requestedAt,
+        expiresAt,
+      });
+      await appendLoanEvent(row.id, actor.employeeNumber, "return_confirmation_requested", expectedRevision, {
+        confirmationId,
+        witnessEmployeeNumber: witness.personnel_number,
+        expiresAt,
+        photoIds,
+        photoAttachmentIds,
+      }, repository);
+    }
   });
-  auditPortal(actor.employeeNumber, "loan.return.request", "loan", row.id, JSON.stringify({
+  auditPortal(actor.employeeNumber, witness ? "loan.return.request" : "loan.return.prepare", "loan", row.id, JSON.stringify({
     locationId: row.location_id,
     borrowerEmployeeNumber: row.borrower_employee_number,
-    witnessEmployeeNumber: witness.personnel_number,
+    witnessEmployeeNumber: witness?.personnel_number || null,
     itemCount: returnedItems.length,
     photoCount: photoIds.length,
     photoAttachmentCount: photoAttachmentIds.length,
     noteProvided: Boolean(note),
   }));
-  await createPortalNotification(
-    witness.personnel_number,
-    "loan.return_confirmation",
-    "Rücknahme bestätigen",
-    `${actor.nickname || actor.fullName || actor.employeeNumber} bittet um deine Gegenbestätigung.`,
-    {
-      target: `/portal.html?tab=loan&confirmation=${encodeURIComponent(confirmationId)}`,
-      entityType: "loan_return_confirmation",
-      entityId: confirmationId,
-      dedupeKey: `loan-return-confirmation:${confirmationId}`,
-    },
-  );
+  if (witness) {
+    await createPortalNotification(
+      witness.personnel_number,
+      "loan.return_confirmation",
+      "Rücknahme bestätigen",
+      `${actor.nickname || actor.fullName || actor.employeeNumber} bittet um deine Gegenbestätigung bis heute 23:59 Uhr.`,
+      {
+        target: `/portal.html?tab=loan&confirmation=${encodeURIComponent(confirmationId)}`,
+        entityType: "loan_return_confirmation",
+        entityId: confirmationId,
+        dedupeKey: `loan-return-confirmation:${confirmationId}`,
+      },
+    );
+  }
   response.status(202).json({
     loan: await publicLoan(await loanRow(row.id)),
-    confirmation: await publicLoanReturnConfirmation(await loanReturnConfirmationRow(confirmationId)),
+    prepared: true,
+    preparation: await publicLoanReturnPreparation(await loanReturnPreparationRow(row.id)),
+    confirmation: confirmationId
+      ? await publicLoanReturnConfirmation(await loanReturnConfirmationRow(confirmationId))
+      : null,
   });
 });
 
@@ -34506,6 +34809,7 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", as
     if (!confirmationResult.rowsAffected) {
       throw httpError(409, "Diese Rücknahmebestätigung wurde bereits bearbeitet.", "LOAN_RETURN_CONFIRMATION_CLOSED");
     }
+    await repository.deleteReturnPreparation({ loanId: loan.id });
     await insertPreparedLoanDocument(loan.id, preparedReturnDocument, repository);
     await appendLoanEvent(loan.id, actor.employeeNumber, "returned", nextRevision, {
       confirmationId: confirmation.id,

@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.1 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.4 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -125,9 +125,10 @@
             </div>
           </section>
           <section class="nav-module hidden" id="salesAdministrationNav" aria-label="Verkaufsverwaltung">
-            <button type="button" class="nav-module-toggle expanded" id="salesAdministrationToggle" data-nav-toggle="salesAdministration" aria-controls="salesAdministrationNavChildren" aria-expanded="true">
-              <span class="nav-module-chevron" aria-hidden="true"></span><span class="nav-symbol" aria-hidden="true">▤</span><span>Verkaufsverwaltung</span>
-            </button>
+            <div class="nav-branch nav-module-heading">
+              <button type="button" class="nav-disclosure expanded" id="salesAdministrationToggle" data-nav-toggle="salesAdministration" aria-controls="salesAdministrationNavChildren" aria-label="Unterpunkte der Verkaufsverwaltung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+              <button class="nav-item nav-module-main" data-view="salesAdministration" id="salesDashboardNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>Verkaufsverwaltung</span></button>
+            </div>
             <div class="nav-module-children" id="salesAdministrationNavChildren">
               <button class="nav-item nav-module-route hidden" data-view="salesAnalytics" id="salesAnalyticsNavButton">
                 <span class="nav-symbol" aria-hidden="true">⌁</span><span>Verkaufsanalysen</span>
@@ -153,6 +154,10 @@
             <span>Developer-Kontakt</span>
             <strong>christian.seiwald.at@gmail.com</strong>
           </a>
+          <div class="sidebar-global-theme" role="group" aria-label="Globale Darstellung">
+            <span>Darstellung</span>
+            <div><button type="button" data-global-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-global-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+          </div>
           <button class="sidebar-exit-button" id="systemExitButton" type="button">
             <span>Beenden</span>
           </button>
@@ -1008,6 +1013,24 @@
           </form>
         </dialog>
 
+        <section id="salesAdministrationView" class="view" aria-labelledby="salesAdministrationTitle">
+          <header class="topbar">
+            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAdministrationTitle">Verkaufsverwaltung</h1><p class="subtitle">Verkaufsberichte und Auswertungen in einem geschützten Desktop-Arbeitsbereich.</p></div>
+          </header>
+          <section class="personnel-dashboard-section active">
+            <div class="personnel-dashboard-heading">
+              <div><span class="eyebrow">Arbeitsbereiche</span><h2>Verkaufsverwaltung im Überblick</h2><p>Öffne die aktuell verfügbaren Bereiche der Verkaufsverwaltung.</p></div>
+            </div>
+            <div class="personnel-dashboard-grid sales-dashboard-grid">
+              <button class="personnel-dashboard-card" type="button" data-view="salesAnalytics">
+                <span class="personnel-dashboard-card-symbol" aria-hidden="true">⌁</span>
+                <span class="personnel-dashboard-card-copy"><small>Berichte &amp; Kennzahlen</small><strong>Verkaufsanalysen</strong><span>TradeFoto-Berichte sicher importieren, vergleichen und auswerten.</span></span>
+                <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
+              </button>
+            </div>
+          </section>
+        </section>
+
         <section id="salesAnalyticsView" class="view sales-analytics-view" aria-labelledby="salesAnalyticsTitle">
           <header class="topbar sales-analytics-topbar">
             <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAnalyticsTitle">Verkaufsanalysen</h1><p class="subtitle">Filial-, Unternehmens- und Onlineshop-Auswertungen in einem geschützten Desktop-Arbeitsbereich.</p></div>
@@ -1243,7 +1266,7 @@
 
         <section id="branchOrdersView" class="view branch-orders-management-view">
           <header class="topbar branch-orders-management-topbar">
-            <div><span class="eyebrow">PL+ · Standort &amp; Übergabe</span><h1>Filialbestellungen</h1><p class="subtitle">Bestellpositionen, Einheiten, E-Mail-Ziele, Vorlagen und PDF-Nachweise direkt im Desktop-Grabenplaner verwalten.</p></div>
+            <div><span class="eyebrow">Standort &amp; Übergabe</span><h1>Filialbestellungen</h1><p class="subtitle">Bestellpositionen, Einheiten, E-Mail-Ziele, Vorlagen und PDF-Nachweise direkt im Desktop-Grabenplaner verwalten.</p></div>
             <div class="branch-orders-management-header-actions">
               <button class="secondary-button" id="branchOrdersManagementRefresh" type="button">Aktualisieren</button>
               <button class="primary-button" id="branchOrdersManagementSave" type="button">Bestellkonfiguration speichern</button>
@@ -1257,10 +1280,10 @@
           </section>
           <p class="branch-orders-management-message hidden" id="branchOrdersManagementMessage" role="status" aria-live="polite"></p>
           <section class="branch-orders-management-workspace" id="branchOrdersManagementWorkspace" aria-live="polite"><p class="settings-note">Bestellkonfiguration wird geladen.</p></section>
-          <section class="branch-orders-management-history card" aria-labelledby="branchOrdersManagementHistoryTitle">
-            <div class="branch-orders-management-section-heading"><div><span class="eyebrow">Nachweis</span><h2 id="branchOrdersManagementHistoryTitle">Bestellverlauf</h2><p>Erfasst Zeitpunkt, Filialkonto, ausgewählte Person und Mengen.</p></div></div>
+          <details class="branch-orders-management-history card" aria-labelledby="branchOrdersManagementHistoryTitle">
+            <summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Nachweis</span><h2 id="branchOrdersManagementHistoryTitle">Bestellverlauf</h2><p>Erfasst Zeitpunkt, Filialkonto, ausgewählte Person und Mengen.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
             <div class="branch-orders-management-history-list" id="branchOrdersManagementHistory"><p class="settings-note">Bestellverlauf wird geladen.</p></div>
-          </section>
+          </details>
         </section>
 
         <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
@@ -1470,7 +1493,6 @@
             <button class="settings-tab" data-settings-tab="rights">Rechtemanagement</button>
             <button class="settings-tab hidden" data-settings-tab="dataProtection">Datenschutz</button>
             <button class="settings-tab" data-settings-tab="backup">System &amp; Backups</button>
-            <button class="settings-tab hidden" id="usbProvisioningTab" data-settings-tab="usbProvisioning">USB-Stick</button>
           </div>
 
           <section id="generalSettings" class="settings-section settings-two-column active">
@@ -2135,7 +2157,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.1 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.4 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

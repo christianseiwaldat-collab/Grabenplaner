@@ -1,5 +1,23 @@
 # Grabenplaner Versions-Log
 
+## v0.92.4 Beta · Rücknahme, Filialbestellung und globale Oberfläche
+
+- Rücknahmen können vorbereitet und bis Tagesende durch eine zweite Person bestätigt werden; berechtigte Leitungen schließen eigene Teamfälle direkt ab.
+- Filialbestellungen verwenden kompaktere Konfigurationsbereiche, zusätzliche Vorlagenwerte und einen nachvollziehbaren Zustellstatus.
+- Verkaufsverwaltung, Portalzugänge, Einstellungen und die globale Hell-/Dunkel-Auswahl folgen dem einheitlichen Desktop-Layout.
+
+## v0.92.3 Beta · Mobile Filialkonto-Startseite und Portalgestaltung
+
+- Mobile Filialkonto-Startseite mit konfigurierbaren Kacheln, Farben und Anordnung.
+- Einheitliche Filialkonto-Einstellungen für Dienstplanfarben und mobile Tagesanzeige.
+- Überarbeitete Navigation und kompaktere mobile Bedienung.
+
+## v0.92.2 Beta · Filialbestellungen und mobile Bestellführung
+
+- Ausklappbare, frei pflegbare Bestellgruppen mit gemeinsam verwendbaren Positionen.
+- Kompaktere mobile Bestellerfassung mit Entwurfsspeicherung und Prüfseite.
+- Erweiterte Filialkonto-Einstellungen für Bestellautomatik und Darstellung.
+
 ## v0.92.1 Beta · Temporäre Filialeinsätze und Bestellentwürfe
 
 - Filialleitungen der Stammfiliale sowie PL+ können zeitlich begrenzte Filialeinsätze stunden-, tage- oder wochenweise zuweisen. Das eng begrenzte Verwaltungsrecht kann von FL+ gezielt an Abteilungsleitungen delegiert werden; die geschützte Developer-Rolle behält ihren vollständigen Anwendungskatalog.
