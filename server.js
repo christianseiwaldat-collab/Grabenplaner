@@ -533,7 +533,6 @@ const BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION = "organization_accounts:passwor
 const branchOrganizationAccountBasePermissions = Object.freeze([
   LOAN_OVERVIEW_PERMISSION,
   ORGANIZATION_SCHEDULE_PERMISSION,
-  BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
 ]);
 const organizationAccountPermissionCatalog = Object.freeze([
   {
@@ -550,12 +549,6 @@ const organizationAccountPermissionCatalog = Object.freeze([
     id: BRANCH_ORDER_SUBMIT_PERMISSION,
     label: "Filialbestellungen erfassen",
     description: "Standortgebundene Bestellung mit Personenauswahl, Mengen und dokumentierter E-Mail-Übergabe.",
-    accountTypes: ["branch"],
-  },
-  {
-    id: BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
-    label: "Filialkonto-Anzeige festlegen",
-    description: "Dienstplanansicht, mobile Tagesausblendung und automatisches Speichern der Filialbestellung für den zugewiesenen Standort festlegen.",
     accountTypes: ["branch"],
   },
 ]);
@@ -26021,7 +26014,25 @@ const UI_MOBILE_PORTAL_NAVIGATION_ITEMS = Object.freeze([
   "sickness",
 ]);
 const UI_MOBILE_PORTAL_NAVIGATION_ITEM_SET = new Set(UI_MOBILE_PORTAL_NAVIGATION_ITEMS);
-const UI_MOBILE_PORTAL_PALETTES = new Set(["forest", "ocean", "plum", "sand"]);
+const UI_MOBILE_PORTAL_HOME_ITEMS = Object.freeze([
+  ...UI_MOBILE_PORTAL_NAVIGATION_ITEMS,
+  "branchOrders",
+  "branchVacation",
+]);
+const UI_MOBILE_PORTAL_HOME_ITEM_SET = new Set(UI_MOBILE_PORTAL_HOME_ITEMS);
+const UI_MOBILE_PORTAL_HOME_DEFAULT_COLORS = Object.freeze({
+  time: [39, 110, 85],
+  tasks: [41, 107, 145],
+  team: [98, 84, 151],
+  approvals: [156, 104, 28],
+  schedule: [38, 112, 104],
+  requests: [128, 82, 108],
+  loan: [129, 91, 48],
+  sickness: [173, 75, 66],
+  branchOrders: [42, 122, 99],
+  branchVacation: [76, 112, 167],
+});
+const UI_MOBILE_PORTAL_PALETTES = new Set(["forest", "ocean", "plum", "sand", "berry", "amber", "slate", "teal"]);
 const UI_MOBILE_PORTAL_SURFACES = new Set(["soft", "compact"]);
 
 function defaultPersonnelDashboardLayout() {
@@ -26094,6 +26105,64 @@ function validateMobilePortalNavigation(value) {
   return normalizeMobilePortalNavigation(value);
 }
 
+function mobilePortalHomeRgb(value, fallback) {
+  if (!Array.isArray(value) || value.length !== 3
+    || value.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+    return [...fallback];
+  }
+  return value.map(Number);
+}
+
+function defaultMobilePortalHome() {
+  return {
+    version: 1,
+    order: [...UI_MOBILE_PORTAL_HOME_ITEMS],
+    colors: Object.fromEntries(UI_MOBILE_PORTAL_HOME_ITEMS.map((id) => [
+      id,
+      [...UI_MOBILE_PORTAL_HOME_DEFAULT_COLORS[id]],
+    ])),
+  };
+}
+
+function normalizeMobilePortalHome(value) {
+  const fallback = defaultMobilePortalHome();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return fallback;
+  }
+  const order = Array.isArray(value.order)
+    ? [...new Set(value.order.map(String))].filter((id) => UI_MOBILE_PORTAL_HOME_ITEM_SET.has(id))
+    : [];
+  for (const id of UI_MOBILE_PORTAL_HOME_ITEMS) if (!order.includes(id)) order.push(id);
+  const submittedColors = value.colors && typeof value.colors === "object" && !Array.isArray(value.colors)
+    ? value.colors
+    : {};
+  return {
+    version: 1,
+    order,
+    colors: Object.fromEntries(UI_MOBILE_PORTAL_HOME_ITEMS.map((id) => [
+      id,
+      mobilePortalHomeRgb(submittedColors[id], UI_MOBILE_PORTAL_HOME_DEFAULT_COLORS[id]),
+    ])),
+  };
+}
+
+function validateMobilePortalHome(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["version", "order", "colors"].includes(key))
+    || value.version !== 1
+    || !Array.isArray(value.order)
+    || value.order.length > UI_MOBILE_PORTAL_HOME_ITEMS.length
+    || new Set(value.order.map(String)).size !== value.order.length
+    || value.order.some((id) => !UI_MOBILE_PORTAL_HOME_ITEM_SET.has(String(id)))
+    || !value.colors || typeof value.colors !== "object" || Array.isArray(value.colors)
+    || Object.keys(value.colors).some((id) => !UI_MOBILE_PORTAL_HOME_ITEM_SET.has(String(id)))
+    || Object.values(value.colors).some((rgb) => !Array.isArray(rgb) || rgb.length !== 3
+      || rgb.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255))) {
+    throw httpError(400, "Bitte eine gültige persönliche mobile Startseite übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  return normalizeMobilePortalHome(value);
+}
+
 function defaultMobilePortalAppearance() {
   return { version: 1, palette: "forest", surface: "soft" };
 }
@@ -26147,8 +26216,10 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
+  let mobilePortalHome = defaultMobilePortalHome();
   let mobilePortalNavigationCustomized = false;
   let mobilePortalAppearanceCustomized = false;
+  let mobilePortalHomeCustomized = false;
   if (actor?.employeeNumber && !isLocalSystemSession(actor)) {
     const rows = await uiPreferencesRepository.list(actor.employeeNumber);
     const lookup = new Map(rows.map((row) => [row.preferenceKey, row.value]));
@@ -26193,6 +26264,12 @@ async function uiPreferencesForActor(actor, overrides = {}) {
       );
       mobilePortalAppearanceCustomized = lookup.has("mobile_portal_appearance_v1");
     } catch {}
+    try {
+      mobilePortalHome = normalizeMobilePortalHome(
+        JSON.parse(lookup.get("mobile_portal_home_v1") || "null"),
+      );
+      mobilePortalHomeCustomized = lookup.has("mobile_portal_home_v1");
+    } catch {}
   }
   for (const [view, theme] of Object.entries(overrides.pageThemes || {})) {
     if (UI_PREFERENCE_VIEWS.includes(view) && UI_PAGE_THEMES.has(theme)) pageThemes[view] = theme;
@@ -26218,6 +26295,10 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     mobilePortalAppearance = normalizeMobilePortalAppearance(overrides.mobilePortalAppearance);
     mobilePortalAppearanceCustomized = true;
   }
+  if (overrides.mobilePortalHome) {
+    mobilePortalHome = normalizeMobilePortalHome(overrides.mobilePortalHome);
+    mobilePortalHomeCustomized = true;
+  }
   return {
     actor: actor?.employeeNumber || "local",
     pageThemes,
@@ -26229,8 +26310,10 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     personnelDashboardLayout,
     mobilePortalNavigation,
     mobilePortalAppearance,
+    mobilePortalHome,
     mobilePortalNavigationCustomized,
     mobilePortalAppearanceCustomized,
+    mobilePortalHomeCustomized,
   };
 }
 
@@ -26300,11 +26383,14 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   const mobilePortalAppearance = input.mobilePortalAppearance === undefined
     ? undefined
     : validateMobilePortalAppearance(input.mobilePortalAppearance);
+  const mobilePortalHome = input.mobilePortalHome === undefined
+    ? undefined
+    : validateMobilePortalHome(input.mobilePortalHome);
   if (!Object.keys(pageThemes).length && appFontScalePercent === undefined && employeeDisplayColumns === undefined
     && employeeDisplaySort === undefined && workRuleAssessmentExpanded === undefined
     && allowPastWeekEditing === undefined
     && personnelDashboardLayout === undefined && mobilePortalNavigation === undefined
-    && mobilePortalAppearance === undefined) {
+    && mobilePortalAppearance === undefined && mobilePortalHome === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
   }
   if (!isLocalSystemSession(actor)) {
@@ -26363,6 +26449,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
         value: JSON.stringify(mobilePortalAppearance),
       });
     }
+    if (mobilePortalHome !== undefined) {
+      upserts.push({
+        preferenceKey: "mobile_portal_home_v1",
+        value: JSON.stringify(mobilePortalHome),
+      });
+    }
     await uiPreferencesRepository.saveChanges(actor.employeeNumber, {
       upserts,
       deleteKeys: appFontScalePercent === undefined ? [] : ["dashboard_font_size"],
@@ -26387,6 +26479,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     personnelDashboardLayout,
     mobilePortalNavigation,
     mobilePortalAppearance,
+    mobilePortalHome,
   });
 }
 
@@ -30627,13 +30720,11 @@ async function branchPortalDisplaySettingsLocation(session, input = {}) {
     throw httpError(403, "Für die Filialkonto-Einstellungen fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
   if (session.sessionKind === "organization" || session.isEmployee === false) {
-    if (session.accountType !== "branch") {
-      throw httpError(403, "Die Filialkonto-Einstellungen sind nur für Filialkonten verfügbar.", "PORTAL_BRANCH_ACCOUNT_REQUIRED");
-    }
-    const locationId = normalizeLocationId(session.homeLocationId);
-    assertSessionContextScope(session, { locationId });
-    await validateActiveLocationExists(locationId);
-    return locationId;
+    throw httpError(
+      403,
+      "Filialkonto-Einstellungen werden ausschließlich über einen persönlichen Leitungszugang in der Desktopansicht verwaltet.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
   }
   const eligible = new Set(["department_manager", "manager", "hr", "admin", "developer"]);
   if (!isLocalSystemSession(session) && !eligible.has(session.role)) {

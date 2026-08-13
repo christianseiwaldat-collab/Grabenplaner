@@ -22,7 +22,9 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(html, /id="branchVacationView"/);
   assert.match(html, /id="branchOrderEmployee"/);
   assert.match(html, /id="branchOrderSettingsCard"/);
-  assert.match(html, /id="branchPortalDisplaySettingsCard"/);
+    assert.match(html, /id="branchPortalDisplaySettingsCard"/);
+    assert.match(html, /id="mobileHomeView"/);
+    assert.match(html, /id="mobileHomeTiles"/);
   assert.match(html, /id="branchMobileActionBar"/);
   assert.match(html, /id="branchOrderReview"/);
   assert.match(html, /id="portalSettingsShortcut"[^>]*aria-label="Einstellungen öffnen"/);
@@ -52,7 +54,10 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(script, /function branchOrderSelection/);
   assert.match(script, /function configureBranchOrderAutosave/);
   assert.match(script, /function renderBranchOrderReview/);
-  assert.match(script, /function renderBranchMobileActionBar/);
+    assert.match(script, /function renderBranchMobileActionBar/);
+    assert.match(script, /function renderMobileHome/);
+    assert.match(script, /portalState\.activeTab === "settings" \? "home" : "settings"/);
+    assert.match(script, /if \(isOrganizationAccount\(user\) \|\| user\?\.isEmployee === false \|\| isMobileUi\(\)\) return false/);
   assert.match(script, /branchOrderSubmitting/);
   assert.match(script, /branch-order-group-toggle/);
   assert.match(script, /branchOrderSelection\(\)\.set/);
@@ -95,9 +100,12 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(styles, /branch-order-history-actions/);
   assert.match(styles, /branch-order-item-select input \{ order:2/);
   assert.match(styles, /branch-order-draft-panel/);
-  assert.match(styles, /body\.branch-mobile-account \.portal-tabs/);
-  assert.match(styles, /branch-mobile-action-bar/);
-  assert.match(styles, /shift-card-colored/);
+    assert.match(styles, /body\.branch-mobile-account \.portal-tabs/);
+    assert.match(styles, /portal-tabs\.mobile-settings-hidden/);
+    assert.match(styles, /branch-mobile-action-active/);
+    assert.match(styles, /branch-mobile-action-bar/);
+    assert.match(styles, /shift-card-colored/);
+    assert.match(styles, /color-mix\(in srgb,var\(--schedule-person-color\) 38%,#fff\)/);
   assert.match(styles, /branch-order-group-toggle/);
   assert.match(styles, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
