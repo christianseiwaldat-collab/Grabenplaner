@@ -245,7 +245,6 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(created.payload.account.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
-      "branch_portal:display:manage",
     ]));
 
     db.prepare("DELETE FROM portal_organization_account_permissions WHERE account_id = ?").run(accountId);
@@ -257,7 +256,6 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(login.payload.user.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
-      "branch_portal:display:manage",
     ]));
     organizationSession = responseSession(login.response);
     const selfChangeDenied = await requestJson("/api/portal/v1/me/password", {
@@ -292,7 +290,6 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(activeLogin.payload.user.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
-      "branch_portal:display:manage",
     ]));
 
     const activated = await requestJson(`/api/portal/v1/organization-accounts/${encodeURIComponent(accountId)}`, {
@@ -311,7 +308,6 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(activated.payload.account.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
-      "branch_portal:display:manage",
       "branch_orders:submit",
     ]));
 
@@ -588,7 +584,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.ok(otherGroup.itemIds.some((id) => catalogById.get(id) === "Eigene Plotterfolie"));
   });
 
-  await t.test("Filialkonto-Anzeige ist getrennt von PL+-Bestellkonfiguration und speichert nur zulässige Werte", async () => {
+  await t.test("Filialkonto-Anzeige ist ausschließlich persönlich für FL+ oder berechtigte AL konfigurierbar", async () => {
     const managerRead = await requestJson("/api/portal/v1/branch-portal-settings", { session: managerSession });
     assert.equal(managerRead.response.status, 200, JSON.stringify(managerRead.payload));
     assert.equal(managerRead.payload.settings.scheduleDisplayMode, "classic");
@@ -600,7 +596,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
     const saved = await requestJson("/api/portal/v1/branch-portal-settings", {
       method: "PUT",
-      session: organizationSession,
+      session: managerSession,
       body: { settings: { scheduleDisplayMode: "colored", mobileHideElapsedDays: true, orderAutosaveEnabled: true, orderAutosaveMinutes: 17 } },
     });
     assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
@@ -611,6 +607,18 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       orderAutosaveMinutes: 17,
       updatedAt: saved.payload.settings.updatedAt,
     });
+    db.prepare(`
+      INSERT INTO portal_organization_account_permissions (account_id, permission)
+      VALUES (?, 'branch_portal:display:manage')
+    `).run(accountId);
+    const organizationDenied = await requestJson("/api/portal/v1/branch-portal-settings", {
+      session: organizationSession,
+    });
+    assert.equal(organizationDenied.response.status, 403, JSON.stringify(organizationDenied.payload));
+    db.prepare(`
+      DELETE FROM portal_organization_account_permissions
+      WHERE account_id = ? AND permission = 'branch_portal:display:manage'
+    `).run(accountId);
     const schedule = await requestJson("/api/portal/v1/location-dashboard/schedule?week=2031-03-10", {
       session: organizationSession,
     });

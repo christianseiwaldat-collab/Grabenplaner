@@ -21,7 +21,7 @@ test("v0.87: Persönliche Einstellungen sind geschlossen, Benachrichtigungen erg
   )?.[0] || "";
   const detailTags = [...settingsView.matchAll(/<details\b[^>]*>/g)].map((match) => match[0]);
 
-  assert.equal(detailTags.length, 7);
+  assert.equal(detailTags.length, 9);
   assert.equal(detailTags.every((tag) => !/\sopen(?:\s|=|>)/.test(tag)), true);
   assert.doesNotMatch(portalHtml, /Verifizierte Empfänger|sicknessNotificationPreferencesCard/);
   assert.doesNotMatch(moreView, /Externe Benachrichtigungen|emailSettingsCard/);
@@ -74,17 +74,21 @@ test("v0.87: Bottom-Menü bleibt auch bei 360px garantiert eine horizontale Zeil
   );
 });
 
-test("v0.87: Portaldesign verwendet nur kuratierte Varianten und kein freies CSS", () => {
-  for (const palette of ["forest", "ocean", "plum", "sand"]) {
+test("v0.92.3: Portaldesign bietet acht kuratierte Farbwelten und eine begrenzte RGB-Kachelauswahl", () => {
+  for (const palette of ["forest", "ocean", "plum", "sand", "berry", "amber", "slate", "teal"]) {
     assert.match(portalHtml, new RegExp(`name="mobilePortalPalette" value="${palette}"`));
     assert.match(portalStyles, new RegExp(`data-portal-palette="${palette}"`));
   }
   for (const surface of ["soft", "compact"]) {
     assert.match(portalHtml, new RegExp(`name="mobilePortalSurface" value="${surface}"`));
   }
-  assert.doesNotMatch(portalHtml, /type="color"|customCss|customColor/i);
+  assert.match(portalHtml, /id="mobileHomeSettingsCard"/);
+  assert.match(portalScript, /type="color" data-mobile-home-color-picker[\s\S]*?data-mobile-home-rgb="r"/);
+  assert.doesNotMatch(portalHtml, /customCss|customColor/i);
   assert.match(portalScript, /document\.documentElement\.dataset\.portalPalette = appearance\.palette/);
   assert.match(portalScript, /document\.documentElement\.dataset\.portalSurface = appearance\.surface/);
+  assert.match(portalScript, /function normalizedMobilePortalHome/);
+  assert.match(portalStyles, /\.mobile-home-tiles button/);
 });
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v087-mobile-personal-"));
@@ -168,7 +172,7 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
-test("v0.87: Navigation und Design werden ausschließlich pro Mitarbeiter gespeichert", async () => {
+test("v0.92.3: Navigation, Design und Startseite werden ausschließlich pro Mitarbeiter gespeichert", async () => {
   const employeeA = createPortalSession("v087-mobile-a");
   const employeeB = createPortalSession("v087-mobile-b");
   const defaults = await requestJson("/api/portal/v1/ui-preferences", { session: employeeA });
@@ -184,6 +188,15 @@ test("v0.87: Navigation und Design werden ausschließlich pro Mitarbeiter gespei
     palette: "forest",
     surface: "soft",
   });
+  assert.deepEqual(defaults.payload.mobilePortalHome, {
+    version: 1,
+    order: ["time", "tasks", "team", "approvals", "schedule", "requests", "loan", "sickness", "branchOrders", "branchVacation"],
+    colors: {
+      time: [39, 110, 85], tasks: [41, 107, 145], team: [98, 84, 151], approvals: [156, 104, 28],
+      schedule: [38, 112, 104], requests: [128, 82, 108], loan: [129, 91, 48], sickness: [173, 75, 66],
+      branchOrders: [42, 122, 99], branchVacation: [76, 112, 167],
+    },
+  });
   assert.equal(defaults.payload.mobilePortalNavigationCustomized, false);
   assert.equal(defaults.payload.mobilePortalAppearanceCustomized, false);
 
@@ -193,15 +206,25 @@ test("v0.87: Navigation und Design werden ausschließlich pro Mitarbeiter gespei
     hidden: ["loan", "team", "approvals"],
   };
   const appearance = { version: 1, palette: "ocean", surface: "compact" };
+  const home = {
+    version: 1,
+    order: ["loan", "schedule", "time", "tasks", "requests", "sickness", "team", "approvals", "branchOrders", "branchVacation"],
+    colors: {
+      time: [10, 20, 30], tasks: [40, 50, 60], team: [70, 80, 90], approvals: [100, 110, 120],
+      schedule: [130, 140, 150], requests: [160, 170, 180], loan: [190, 200, 210], sickness: [220, 230, 240],
+      branchOrders: [24, 122, 99], branchVacation: [76, 112, 167],
+    },
+  };
   const changed = await requestJson("/api/portal/v1/ui-preferences", {
     method: "PUT",
     session: employeeA,
-    body: { mobilePortalNavigation: navigation, mobilePortalAppearance: appearance },
+    body: { mobilePortalNavigation: navigation, mobilePortalAppearance: appearance, mobilePortalHome: home },
   });
 
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   assert.deepEqual(changed.payload.mobilePortalNavigation, navigation);
   assert.deepEqual(changed.payload.mobilePortalAppearance, appearance);
+  assert.deepEqual(changed.payload.mobilePortalHome, home);
   assert.equal(changed.payload.mobilePortalNavigationCustomized, true);
   assert.equal(changed.payload.mobilePortalAppearanceCustomized, true);
 
@@ -209,19 +232,22 @@ test("v0.87: Navigation und Design werden ausschließlich pro Mitarbeiter gespei
     SELECT preference_key, value
     FROM portal_user_preferences
     WHERE employee_number = ?
-      AND preference_key IN ('mobile_portal_navigation_v1', 'mobile_portal_appearance_v1')
+      AND preference_key IN ('mobile_portal_navigation_v1', 'mobile_portal_appearance_v1', 'mobile_portal_home_v1')
     ORDER BY preference_key
   `).all("v087-mobile-a");
   assert.deepEqual(storedRows.map((row) => row.preference_key), [
     "mobile_portal_appearance_v1",
+    "mobile_portal_home_v1",
     "mobile_portal_navigation_v1",
   ]);
   assert.deepEqual(JSON.parse(storedRows[0].value), appearance);
-  assert.deepEqual(JSON.parse(storedRows[1].value), navigation);
+  assert.deepEqual(JSON.parse(storedRows[1].value), home);
+  assert.deepEqual(JSON.parse(storedRows[2].value), navigation);
 
   const untouched = await requestJson("/api/portal/v1/ui-preferences", { session: employeeB });
   assert.equal(untouched.response.status, 200, JSON.stringify(untouched.payload));
   assert.equal(untouched.payload.mobilePortalAppearance.palette, "forest");
+  assert.deepEqual(untouched.payload.mobilePortalHome.colors.schedule, [38, 112, 104]);
   assert.equal(untouched.payload.mobilePortalNavigationCustomized, false);
   assert.equal(
     db.prepare("SELECT COUNT(*) AS count FROM portal_user_preferences WHERE employee_number = ?").get("v087-mobile-b").count,
@@ -229,12 +255,16 @@ test("v0.87: Navigation und Design werden ausschließlich pro Mitarbeiter gespei
   );
 });
 
-test("v0.87: Freie Farben, CSS, Oberflächen und unbekannte Menü-IDs werden abgewiesen", async () => {
+test("v0.92.3: Ungültige RGB-Werte, CSS, Oberflächen und unbekannte Menü-IDs werden abgewiesen", async () => {
   const employee = createPortalSession("v087-mobile-a");
   const invalidBodies = [
     { mobilePortalAppearance: { version: 1, palette: "#0055ff", surface: "soft" } },
     { mobilePortalAppearance: { version: 1, palette: "forest", surface: "glass" } },
     { mobilePortalAppearance: { version: 1, palette: "forest", surface: "soft", customCss: "*{}" } },
+    { mobilePortalHome: { version: 1, order: ["schedule"], colors: { schedule: [256, 0, 0] } } },
+    { mobilePortalHome: { version: 1, order: ["schedule"], colors: { schedule: "rgb(1,2,3)" } } },
+    { mobilePortalHome: { version: 1, order: ["schedule", "secrets"], colors: { schedule: [1, 2, 3] } } },
+    { mobilePortalHome: { version: 1, order: ["schedule"], colors: { schedule: [1, 2, 3], secrets: [4, 5, 6] } } },
     { mobilePortalNavigation: { version: 1, order: ["schedule", "secrets"], hidden: [] } },
     { mobilePortalNavigation: { version: 1, order: ["schedule"], hidden: ["loan", "loan"] } },
     { mobilePortalNavigation: { version: 1, order: ["schedule"], hidden: [], customTab: "/admin" } },

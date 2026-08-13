@@ -56,6 +56,7 @@ const portalState = {
   mobileLayout: null,
   uiPreferences: null,
   mobileNavigationDraft: null,
+  mobileHomeDraft: null,
   mobileLeadership: false,
   leadershipOverview: null,
   leadershipLocations: [],
@@ -183,7 +184,7 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
-  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
+  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "mobileHomeTab", "mobileHomeView", "mobileHomeTiles", "mobileSettingsHome", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
   "loanOpenOverview", "loanOverviewDescription", "loanOverviewSearchField", "loanOverviewSearch", "loanOverviewTableHeader", "loanOverviewTableBody", "loanPersonalOverview",
   "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoPolicy", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
@@ -191,7 +192,7 @@ const el = Object.fromEntries([
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
-  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderSaveDraft", "branchOrderDraftPanel", "branchOrderDraftTitle", "branchOrderDraftDetail", "branchOrderContinueDraft", "branchOrderDiscardDraft", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList", "branchOrderReview", "branchOrderReviewList", "branchOrderBackToEdit", "branchMobileActionBar", "branchMobileBack", "branchMobileReview", "branchMobileSubmit", "branchMobileSave", "branchMobileHomeShortcuts",
+  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderSaveDraft", "branchOrderDraftPanel", "branchOrderDraftTitle", "branchOrderDraftDetail", "branchOrderContinueDraft", "branchOrderDiscardDraft", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList", "branchOrderReview", "branchOrderReviewList", "branchOrderBackToEdit", "branchMobileActionBar", "branchMobileBack", "branchMobileReview", "branchMobileSubmit", "branchMobileSave",
   "branchVacationTab", "branchVacationView", "branchVacationPrevious", "branchVacationCurrent", "branchVacationNext", "branchVacationWeek", "branchVacationList", "branchVacationMessage",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
@@ -199,7 +200,7 @@ const el = Object.fromEntries([
   "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
   "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
   "privacyRequestsCard", "privacyRequestsNotice", "privacyRequestForm", "privacyRequestType", "privacyRequestSubmit", "privacyRequestMessage", "privacyRequestsRefresh", "privacyExportHint", "privacyRequestList",
-  "mobileNavigationSettingsCard", "mobileNavigationSettingsList", "mobileNavigationSettingsMessage", "resetMobileNavigationButton", "saveMobileNavigationButton",
+  "mobileHomeSettingsCard", "mobileHomeSettingsList", "mobileHomeSettingsMessage", "resetMobileHomeButton", "saveMobileHomeButton", "mobileNavigationSettingsCard", "mobileNavigationSettingsList", "mobileNavigationSettingsMessage", "resetMobileNavigationButton", "saveMobileNavigationButton",
   "mobileAppearanceSettingsCard", "mobileAppearanceSettingsMessage", "saveMobileAppearanceButton",
   "vacationAccountCard", "vacationAccountYear", "vacationAccountSummary", "vacationAccountNotice",
   "timeRecordStatementsPanel", "timeRecordStatementList",
@@ -461,11 +462,9 @@ function branchOrderManagementEnabled(user = portalUser()) {
 }
 
 function branchPortalDisplaySettingsEnabled(user = portalUser()) {
+  if (isOrganizationAccount(user) || user?.isEmployee === false || isMobileUi()) return false;
   const allowed = (user?.permissions || []).includes("branch_portal:display:manage");
-  if (!allowed) return false;
-  return isOrganizationAccount(user)
-    ? user?.accountType === "branch"
-    : user?.isEmployee !== false;
+  return allowed && ["department_manager", "manager", "hr", "admin", "developer"].includes(user?.role);
 }
 
 function applyPortalCapabilities() {
@@ -530,6 +529,8 @@ function isLeadershipUser(user = portalUser()) {
 
 const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "loan", "settings"]);
 mobileMoreSecondaryTabs.add("processTasks");
+mobileMoreSecondaryTabs.add("branchOrders");
+mobileMoreSecondaryTabs.add("branchVacation");
 const mobileModuleCatalog = Object.freeze([
   { id: "time", tab: "timeTracking", label: "Zeit", description: "Zeiterfassung und Zeitkonto" },
   { id: "tasks", tab: "processTasks", label: "Aufgaben", description: "Offene persönliche Prozessschritte" },
@@ -544,6 +545,25 @@ const mobileModuleCatalog = Object.freeze([
 const mobileModuleIds = new Set(mobileModuleCatalog.map((item) => item.id));
 const mobileModuleById = new Map(mobileModuleCatalog.map((item) => [item.id, item]));
 const mobileModuleByTab = new Map(mobileModuleCatalog.map((item) => [item.tab, item.id]));
+const mobileHomeTileCatalog = Object.freeze([
+  ...mobileModuleCatalog.filter((item) => item.id !== "more"),
+  { id: "branchOrders", tab: "branchOrders", label: "Filialbestellung", description: "Bestellung erfassen oder fortsetzen" },
+  { id: "branchVacation", tab: "branchVacation", label: "Urlaubsplanung", description: "Genehmigte Urlaubstage ansehen" },
+]);
+const mobileHomeTileById = new Map(mobileHomeTileCatalog.map((item) => [item.id, item]));
+const mobileHomeTileIds = Object.freeze(mobileHomeTileCatalog.map((item) => item.id));
+const mobileHomeDefaultColors = Object.freeze({
+  time: [39, 110, 85],
+  tasks: [41, 107, 145],
+  team: [98, 84, 151],
+  approvals: [156, 104, 28],
+  schedule: [38, 112, 104],
+  requests: [128, 82, 108],
+  loan: [129, 91, 48],
+  sickness: [173, 75, 66],
+  branchOrders: [42, 122, 99],
+  branchVacation: [76, 112, 167],
+});
 
 const mobileModuleAliases = {
   time: "time",
@@ -593,6 +613,7 @@ function mobileModuleAllowed(module, permissions = portalUser()?.permissions || 
 
 function portalTabAllowed(tab, user = portalUser()) {
   const permissions = user?.permissions || [];
+  if (tab === "home") return isMobileUi();
   if (tab === "settings") return true;
   if (tab === "schedule") return scheduleCapabilityEnabled(user);
   if (tab === "branchOrders") return branchOrderCapabilityEnabled(user);
@@ -620,6 +641,53 @@ function portalTabAllowed(tab, user = portalUser()) {
   if (tab === "leadershipTeam") return mobileModuleAllowed("team", permissions);
   if (tab === "leadershipApprovals") return mobileModuleAllowed("approvals", permissions);
   return false;
+}
+
+function mobileHomeTileAllowed(tile, user = portalUser()) {
+  if (!tile) return false;
+  if (tile.id === "branchOrders" || tile.id === "branchVacation") return portalTabAllowed(tile.tab, user);
+  return mobileModuleAllowed(tile.id, user?.permissions || []);
+}
+
+function availableMobileHomeTiles(user = portalUser()) {
+  return mobileHomeTileCatalog.filter((tile) => mobileHomeTileAllowed(tile, user));
+}
+
+function normalizedRgb(value, fallback) {
+  if (!Array.isArray(value) || value.length !== 3
+    || value.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+    return [...fallback];
+  }
+  return value.map(Number);
+}
+
+function defaultMobilePortalHome() {
+  return {
+    version: 1,
+    order: [...mobileHomeTileIds],
+    colors: Object.fromEntries(mobileHomeTileIds.map((id) => [id, [...mobileHomeDefaultColors[id]]])),
+  };
+}
+
+function normalizedMobilePortalHome(value) {
+  const fallback = defaultMobilePortalHome();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) return fallback;
+  const order = Array.isArray(value.order)
+    ? [...new Set(value.order.map(String))].filter((id) => mobileHomeTileById.has(id))
+    : [];
+  for (const id of mobileHomeTileIds) if (!order.includes(id)) order.push(id);
+  const submittedColors = value.colors && typeof value.colors === "object" && !Array.isArray(value.colors)
+    ? value.colors
+    : {};
+  const colors = Object.fromEntries(mobileHomeTileIds.map((id) => [
+    id,
+    normalizedRgb(submittedColors[id], mobileHomeDefaultColors[id]),
+  ]));
+  return { version: 1, order, colors };
+}
+
+function rgbToHex(rgb) {
+  return `#${rgb.map((channel) => Number(channel).toString(16).padStart(2, "0")).join("")}`;
 }
 
 function availablePersonalMobileModules() {
@@ -720,14 +788,34 @@ function applyMobileLeadershipLayout() {
   if (!navigation) return;
   const branchMobile = isBranchMobileAccount();
   const compactMobile = isMobileUi() && !isOrganizationAccount();
+  const mobilePortal = branchMobile || compactMobile;
   portalState.mobileLeadership = compactMobile;
   document.body.classList.toggle("branch-mobile-account", branchMobile);
+  document.body.classList.toggle("portal-mobile-session", mobilePortal);
+  document.body.classList.toggle(
+    "branch-mobile-action-active",
+    branchMobile && portalState.activeTab === "branchOrders",
+  );
   navigation.classList.toggle("branch-mobile-navigation", branchMobile);
   navigation.classList.toggle("mobile-personal", compactMobile);
   navigation.classList.toggle("mobile-leadership", compactMobile && isLeadershipUser());
-  el.portalSettingsShortcut?.classList.toggle("hidden", !(compactMobile || branchMobile));
+  navigation.classList.toggle("mobile-settings-hidden", mobilePortal && portalState.activeTab === "settings");
+  el.portalSettingsShortcut?.classList.toggle("hidden", !mobilePortal);
   if (branchMobile) {
-    renderBranchMobileHomeShortcuts();
+    document.querySelectorAll("[data-tab]").forEach((button) => {
+      button.classList.add("hidden");
+      button.classList.add("mobile-navigation-hidden");
+    });
+    ["home", "schedule", "branchOrders", "loan", "branchVacation"]
+      .filter((tab) => portalTabAllowed(tab))
+      .forEach((tab, index) => {
+        const button = document.querySelector(`[data-tab="${tab}"]`);
+        button?.classList.remove("hidden");
+        button?.classList.remove("mobile-navigation-hidden");
+        if (button) button.style.order = String(index);
+      });
+    syncPortalTabButtons(portalState.activeTab);
+    renderMobileHome();
     renderBranchMobileActionBar();
     if (portalState.scheduleData) renderSchedule(portalState.scheduleData);
     return;
@@ -736,6 +824,8 @@ function applyMobileLeadershipLayout() {
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactMobile) {
     document.querySelectorAll("[data-tab]").forEach((button) => button.classList.remove("mobile-navigation-hidden"));
+    el.mobileHomeTab?.classList.add("hidden");
+    el.mobileHomeTab?.style.removeProperty("order");
     regularTabs.forEach((tab) => {
       const button = document.querySelector(`[data-tab="${tab}"]`);
       const unavailable = !portalTabAllowed(tab);
@@ -747,6 +837,10 @@ function applyMobileLeadershipLayout() {
       setTab("timeTracking");
       return;
     }
+    if (portalState.activeTab === "home") {
+      setTab(defaultPortalTab());
+      return;
+    }
     syncPortalTabButtons(portalState.activeTab);
     return;
   }
@@ -755,6 +849,10 @@ function applyMobileLeadershipLayout() {
     button.classList.add("mobile-navigation-hidden");
   });
   const modules = effectiveMobileModules();
+  const homeButton = el.mobileHomeTab;
+  homeButton?.classList.remove("hidden");
+  homeButton?.classList.remove("mobile-navigation-hidden");
+  if (homeButton) homeButton.style.order = "-1";
   modules.forEach((module, index) => {
     const button = document.querySelector(`[data-tab="${mobileModuleById.get(module)?.tab}"]`);
     button?.classList.remove("hidden");
@@ -772,6 +870,7 @@ function applyMobileLeadershipLayout() {
     return;
   }
   syncPortalTabButtons(portalState.activeTab);
+  renderMobileHome();
 }
 
 async function loadMobileLayout() {
@@ -790,17 +889,21 @@ async function loadMobileLayout() {
     : {
       mobilePortalNavigation: { version: 1, order: mobileModuleCatalog.filter((item) => item.id !== "more").map((item) => item.id), hidden: [] },
       mobilePortalAppearance: { version: 1, palette: "forest", surface: "soft" },
+      mobilePortalHome: defaultMobilePortalHome(),
       mobilePortalNavigationCustomized: false,
     };
   portalState.mobileNavigationDraft = null;
+  portalState.mobileHomeDraft = null;
   applyMobilePortalAppearance(portalState.uiPreferences.mobilePortalAppearance);
   renderMobileAppearanceSettings();
   renderMobileNavigationSettings();
+  renderMobileHomeSettings();
+  renderMobileHome();
   applyMobileLeadershipLayout();
 }
 
 function normalizedMobilePortalAppearance(value) {
-  const palettes = new Set(["forest", "ocean", "plum", "sand"]);
+  const palettes = new Set(["forest", "ocean", "plum", "sand", "berry", "amber", "slate", "teal"]);
   const surfaces = new Set(["soft", "compact"]);
   return {
     version: 1,
@@ -848,6 +951,130 @@ async function saveMobileAppearanceSettings() {
     message(el.mobileAppearanceSettingsMessage, error.message, true);
   } finally {
     el.saveMobileAppearanceButton.disabled = false;
+  }
+}
+
+function currentMobileHomeDraft() {
+  if (!portalState.mobileHomeDraft) {
+    const stored = normalizedMobilePortalHome(portalState.uiPreferences?.mobilePortalHome);
+    portalState.mobileHomeDraft = {
+      order: [...stored.order],
+      colors: Object.fromEntries(Object.entries(stored.colors).map(([id, rgb]) => [id, [...rgb]])),
+    };
+  }
+  return portalState.mobileHomeDraft;
+}
+
+function mobileHomeItemsForSettings() {
+  const draft = currentMobileHomeDraft();
+  const allowed = new Set(availableMobileHomeTiles().map((tile) => tile.id));
+  return draft.order
+    .filter((id) => allowed.has(id))
+    .map((id) => mobileHomeTileById.get(id))
+    .filter(Boolean);
+}
+
+function renderMobileHomeSettings() {
+  if (!el.mobileHomeSettingsList) return;
+  if (isOrganizationAccount()) {
+    el.mobileHomeSettingsList.innerHTML = "";
+    return;
+  }
+  const draft = currentMobileHomeDraft();
+  const items = mobileHomeItemsForSettings();
+  if (!items.length) {
+    el.mobileHomeSettingsList.innerHTML = '<p class="empty-state">Für dein Konto ist derzeit kein Bereich für die Startseite freigeschaltet.</p>';
+    if (el.saveMobileHomeButton) el.saveMobileHomeButton.disabled = true;
+    return;
+  }
+  if (el.saveMobileHomeButton) el.saveMobileHomeButton.disabled = false;
+  el.mobileHomeSettingsList.innerHTML = items.map((item, index) => {
+    const rgb = normalizedRgb(draft.colors[item.id], mobileHomeDefaultColors[item.id]);
+    return `
+      <div class="mobile-home-setting-row" data-mobile-home-item="${esc(item.id)}">
+        <div class="mobile-home-setting-copy"><span class="mobile-home-color-preview" style="--mobile-home-tile-color:rgb(${rgb.join(",")})"></span><span><strong>${esc(item.label)}</strong><small>${esc(item.description)}</small></span></div>
+        <label class="mobile-home-color-picker"><span>Farbe</span><input type="color" data-mobile-home-color-picker value="${rgbToHex(rgb)}" aria-label="${esc(item.label)} Farbwahl" /></label>
+        <div class="mobile-home-rgb-fields" aria-label="${esc(item.label)} RGB-Werte"><label><span>R</span><input data-mobile-home-rgb="r" type="number" min="0" max="255" step="1" inputmode="numeric" value="${rgb[0]}" /></label><label><span>G</span><input data-mobile-home-rgb="g" type="number" min="0" max="255" step="1" inputmode="numeric" value="${rgb[1]}" /></label><label><span>B</span><input data-mobile-home-rgb="b" type="number" min="0" max="255" step="1" inputmode="numeric" value="${rgb[2]}" /></label></div>
+        <div class="mobile-home-order-actions" aria-label="${esc(item.label)} anordnen"><button type="button" data-mobile-home-move="-1" aria-label="${esc(item.label)} nach oben verschieben" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-mobile-home-move="1" aria-label="${esc(item.label)} nach unten verschieben" ${index === items.length - 1 ? "disabled" : ""}>↓</button></div>
+      </div>`;
+  }).join("");
+}
+
+function mobileHomeRgbFromRow(row) {
+  const values = ["r", "g", "b"].map((channel) => Number(row.querySelector(`[data-mobile-home-rgb="${channel}"]`)?.value));
+  if (values.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) return null;
+  return values;
+}
+
+function updateMobileHomeColor(itemId, row, rgb) {
+  if (!mobileHomeTileById.has(itemId) || !rgb) return false;
+  const draft = currentMobileHomeDraft();
+  draft.colors[itemId] = [...rgb];
+  row?.querySelector("[data-mobile-home-color-picker]")?.setAttribute("value", rgbToHex(rgb));
+  if (row?.querySelector("[data-mobile-home-color-picker]")) row.querySelector("[data-mobile-home-color-picker]").value = rgbToHex(rgb);
+  row?.querySelector(".mobile-home-color-preview")?.style.setProperty("--mobile-home-tile-color", `rgb(${rgb.join(",")})`);
+  renderMobileHome();
+  message(el.mobileHomeSettingsMessage, "Vorschau aktiv. Bitte speichern, um die Auswahl zu behalten.");
+  return true;
+}
+
+function updateMobileHomeColorFromPicker(row) {
+  const picker = row?.querySelector("[data-mobile-home-color-picker]");
+  const itemId = String(row?.dataset.mobileHomeItem || "");
+  const match = String(picker?.value || "").match(/^#([0-9a-f]{6})$/i);
+  if (!match) return;
+  const hex = match[1];
+  const rgb = [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+  ["r", "g", "b"].forEach((channel, index) => {
+    const input = row.querySelector(`[data-mobile-home-rgb="${channel}"]`);
+    if (input) input.value = String(rgb[index]);
+  });
+  updateMobileHomeColor(itemId, row, rgb);
+}
+
+function moveMobileHomeItem(itemId, direction) {
+  const draft = currentMobileHomeDraft();
+  const visibleOrder = mobileHomeItemsForSettings().map((item) => item.id);
+  const index = visibleOrder.indexOf(itemId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= visibleOrder.length) return;
+  [visibleOrder[index], visibleOrder[target]] = [visibleOrder[target], visibleOrder[index]];
+  const visible = new Set(visibleOrder);
+  draft.order = [...visibleOrder, ...draft.order.filter((id) => !visible.has(id))];
+  renderMobileHomeSettings();
+  renderMobileHome();
+  message(el.mobileHomeSettingsMessage, "Vorschau aktiv. Bitte speichern, um die Reihenfolge zu behalten.");
+}
+
+function resetMobileHomeSettings() {
+  const defaults = defaultMobilePortalHome();
+  portalState.mobileHomeDraft = {
+    order: [...defaults.order],
+    colors: Object.fromEntries(Object.entries(defaults.colors).map(([id, rgb]) => [id, [...rgb]])),
+  };
+  renderMobileHomeSettings();
+  renderMobileHome();
+  message(el.mobileHomeSettingsMessage, "Der Rollenstandard ist als Vorschau eingestellt. Bitte noch speichern.");
+}
+
+async function saveMobileHomeSettings() {
+  const draft = currentMobileHomeDraft();
+  const home = normalizedMobilePortalHome({ version: 1, order: draft.order, colors: draft.colors });
+  if (el.saveMobileHomeButton) el.saveMobileHomeButton.disabled = true;
+  message(el.mobileHomeSettingsMessage, "");
+  try {
+    portalState.uiPreferences = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ mobilePortalHome: home }),
+    });
+    portalState.mobileHomeDraft = null;
+    renderMobileHomeSettings();
+    renderMobileHome();
+    message(el.mobileHomeSettingsMessage, "Deine persönliche Startseite wurde gespeichert.");
+  } catch (error) {
+    message(el.mobileHomeSettingsMessage, error.message, true);
+  } finally {
+    if (el.saveMobileHomeButton) el.saveMobileHomeButton.disabled = false;
   }
 }
 
@@ -969,7 +1196,7 @@ function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
   if (["leadershipTeam", "leadershipApprovals"].includes(tab) && !isLeadershipUser()) return "";
-  return ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "loan", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+  return ["home", "settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "loan", "branchOrders", "branchVacation", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
 const portalTabStorageKey = "grabenplaner.portal.active-tab";
@@ -1038,15 +1265,17 @@ function clearRememberedPortalTab() {
 function chooseInitialPortalTab() {
   const requested = requestedPortalTab();
   const parameters = new URLSearchParams(location.search);
+  const explicitTab = normalizedPortalTab(parameters.get("tab"));
   const requestedKind = parameters.get("kind");
   portalState.processTaskRequestedRunId = String(parameters.get("run") || "").slice(0, 120);
   portalState.processTaskRequestedStepId = String(parameters.get("step") || "").slice(0, 120);
   if (["absence", "sickness", "amu", "time_correction"].includes(requestedKind)) portalState.leadershipKind = requestedKind;
-  setTab(requested || defaultPortalTab());
+  setTab(explicitTab || (isMobileUi() ? "home" : requested || defaultPortalTab()));
   return requested;
 }
 
 function defaultPortalTab(user = portalUser()) {
+  if (isMobileUi()) return "home";
   if (portalTabAllowed("timeTracking", user)) return "timeTracking";
   if (portalTabAllowed("schedule", user)) return "schedule";
   if (portalTabAllowed("loan", user)) return "loan";
@@ -1307,6 +1536,7 @@ function applySelfServiceVisibility() {
   el.leadershipProcessTasksShortcut?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
   el.notificationsButton?.classList.toggle("hidden", isOrganizationAccount());
   el.emailSettingsCard?.classList.toggle("hidden", !personalEmailSettingsAvailable());
+  el.mobileHomeSettingsCard?.classList.toggle("hidden", isOrganizationAccount());
   el.branchOrderSettingsCard?.classList.toggle("hidden", !branchOrderManagementEnabled());
   el.branchPortalDisplaySettingsCard?.classList.toggle("hidden", !branchPortalDisplaySettingsEnabled());
   el.passwordSettingsCard?.classList.toggle("hidden", isOrganizationAccount());
@@ -1337,6 +1567,8 @@ function showPortal(session) {
     "branch-organization-account",
     isOrganizationAccount(session?.user) && session?.user?.accountType === "branch",
   );
+  document.body.classList.toggle("portal-mobile-session", isMobileUi());
+  el.portalSettingsShortcut?.classList.toggle("hidden", !isMobileUi());
   const nextProcessTaskOwner = processTaskActorFingerprint(session?.user);
   if (previousProcessTaskOwner !== nextProcessTaskOwner) {
     clearProcessTaskState({
@@ -1423,8 +1655,11 @@ function setTab(tab) {
   if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
   portalState.activeTab = tab;
   rememberPortalTab(tab);
+  document.body.classList.toggle("portal-settings-active", tab === "settings" && isMobileUi());
   syncPortalTabButtons(tab);
   el.portalSettingsShortcut?.classList.toggle("active", tab === "settings");
+  el.portalSettingsShortcut?.setAttribute("aria-label", tab === "settings" ? "Zur Startseite" : "Einstellungen öffnen");
+  el.mobileHomeView?.classList.toggle("active", tab === "home");
   el.settingsView.classList.toggle("active", tab === "settings");
   el.scheduleView.classList.toggle("active", tab === "schedule");
   el.timeTrackingView.classList.toggle("active", tab === "timeTracking");
@@ -1465,8 +1700,9 @@ function setTab(tab) {
     loadLeadershipApprovals();
   }
   if (tab !== "branchOrders") portalState.branchOrderReviewVisible = false;
-  renderBranchMobileHomeShortcuts();
+  renderMobileHome();
   renderBranchMobileActionBar();
+  if (portalState.session) applyMobileLeadershipLayout();
 }
 
 function branchOrderStatusText(status) {
@@ -1900,24 +2136,48 @@ function configureBranchOrderAutosave() {
   }, minutes * 60 * 1000);
 }
 
-function renderBranchMobileHomeShortcuts() {
-  if (!el.branchMobileHomeShortcuts) return;
-  const visible = isBranchMobileAccount() && portalState.activeTab === "schedule";
-  el.branchMobileHomeShortcuts.classList.toggle("hidden", !visible);
+function mobileHomeTilesForCurrentAccount() {
+  const user = portalUser();
+  if (isOrganizationAccount(user)) {
+    return ["schedule", "branchOrders", "loan", "branchVacation"]
+      .map((tab) => mobileHomeTileCatalog.find((tile) => tile.tab === tab)
+        || { id: tab, tab, label: tab === "schedule" ? "Dienstplan" : tab, description: "" })
+      .filter((tile) => portalTabAllowed(tile.tab, user))
+      .map((tile) => ({ ...tile, rgb: [...(mobileHomeDefaultColors[tile.id] || mobileHomeDefaultColors.schedule)] }));
+  }
+  const layout = normalizedMobilePortalHome(portalState.uiPreferences?.mobilePortalHome);
+  const allowed = new Set(availableMobileHomeTiles(user).map((tile) => tile.id));
+  return layout.order
+    .filter((id) => allowed.has(id))
+    .map((id) => {
+      const tile = mobileHomeTileById.get(id);
+      return tile ? { ...tile, rgb: normalizedRgb(layout.colors[id], mobileHomeDefaultColors[id]) } : null;
+    })
+    .filter(Boolean);
+}
+
+function renderMobileHome() {
+  if (!el.mobileHomeTiles) return;
+  const visible = isMobileUi() && portalState.activeTab === "home";
+  el.mobileHomeTiles.classList.toggle("hidden", !visible);
   if (!visible) return;
-  const targets = [
-    ["branchOrders", "Filialbestellung", "Bestellung erfassen oder fortsetzen"],
-    ["branchVacation", "Urlaubsplanung", "Genehmigte Urlaubstage ansehen"],
-    ["loan", "Leihe", "Offene Leihen am Standort ansehen"],
-  ].filter(([tab]) => portalTabAllowed(tab));
-  el.branchMobileHomeShortcuts.innerHTML = targets.map(([tab, title, detail]) => (
-    `<button type="button" data-branch-mobile-home-tab="${esc(tab)}"><strong>${esc(title)}</strong><span>${esc(detail)}</span><b aria-hidden="true">›</b></button>`
-  )).join("");
+  const tiles = mobileHomeTilesForCurrentAccount();
+  if (!tiles.length) {
+    el.mobileHomeTiles.innerHTML = '<p class="empty-state">Für dieses Konto ist derzeit kein Portalbereich freigeschaltet.</p>';
+    return;
+  }
+  el.mobileHomeTiles.innerHTML = tiles.map((tile) => `
+    <button type="button" data-mobile-home-tab="${esc(tile.tab)}" style="--mobile-home-tile-color:rgb(${tile.rgb.join(",")})">
+      <span class="mobile-home-tile-accent" aria-hidden="true"></span>
+      <span><strong>${esc(tile.label)}</strong><small>${esc(tile.description)}</small></span>
+      <b aria-hidden="true">›</b>
+    </button>
+  `).join("");
 }
 
 function renderBranchMobileActionBar() {
   if (!el.branchMobileActionBar) return;
-  const visible = isBranchMobileAccount() && portalState.activeTab !== "schedule";
+  const visible = isBranchMobileAccount() && portalState.activeTab === "branchOrders";
   el.branchMobileActionBar.classList.toggle("hidden", !visible);
   if (!visible) return;
   const ordering = portalState.activeTab === "branchOrders";
@@ -1938,7 +2198,7 @@ function branchMobileBack() {
     setBranchOrderReviewVisible(false);
     return;
   }
-  setTab("schedule");
+  setTab("home");
 }
 
 function branchOrderClientId(prefix) {
@@ -2203,7 +2463,7 @@ function renderSchedule(data) {
       ${!shifts.length && !options.length ? '<span class="empty-day">Kein Eintrag</span>' : ""}
     </article>`;
   }).join("");
-  renderBranchMobileHomeShortcuts();
+  renderMobileHome();
 }
 
 async function loadSchedule() {
@@ -5736,8 +5996,34 @@ el.loginPersonnelNumber.addEventListener("input", scheduleLoginBrandingPreview);
 el.loginPersonnelNumber.addEventListener("blur", previewLoginBranding);
 el.logoutButton.addEventListener("click", logout);
 el.settingsPasswordButton?.addEventListener("click", () => el.passwordDialog.showModal());
-el.portalSettingsShortcut?.addEventListener("click", () => setTab("settings"));
+el.portalSettingsShortcut?.addEventListener("click", () => setTab(portalState.activeTab === "settings" ? "home" : "settings"));
+el.mobileSettingsHome?.addEventListener("click", () => setTab("home"));
+el.mobileHomeTiles?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-mobile-home-tab]");
+  if (button) setTab(button.dataset.mobileHomeTab);
+});
 el.leadershipSettingsButton?.addEventListener("click", () => setTab("settings"));
+el.mobileHomeSettingsList?.addEventListener("change", (event) => {
+  const row = event.target.closest("[data-mobile-home-item]");
+  if (!row) return;
+  if (event.target.closest("[data-mobile-home-color-picker]")) {
+    updateMobileHomeColorFromPicker(row);
+    return;
+  }
+  if (event.target.closest("[data-mobile-home-rgb]")) {
+    const rgb = mobileHomeRgbFromRow(row);
+    if (!updateMobileHomeColor(String(row.dataset.mobileHomeItem || ""), row, rgb)) {
+      message(el.mobileHomeSettingsMessage, "RGB-Werte müssen ganze Zahlen zwischen 0 und 255 sein.", true);
+    }
+  }
+});
+el.mobileHomeSettingsList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-mobile-home-move]");
+  const row = button?.closest("[data-mobile-home-item]");
+  if (button && row) moveMobileHomeItem(row.dataset.mobileHomeItem, Number(button.dataset.mobileHomeMove));
+});
+el.resetMobileHomeButton?.addEventListener("click", resetMobileHomeSettings);
+el.saveMobileHomeButton?.addEventListener("click", saveMobileHomeSettings);
 el.mobileNavigationSettingsList?.addEventListener("change", (event) => {
   const input = event.target.closest("[data-mobile-navigation-visible]");
   if (!input) return;
@@ -5956,10 +6242,6 @@ el.branchMobileBack?.addEventListener("click", branchMobileBack);
 el.branchMobileReview?.addEventListener("click", () => setBranchOrderReviewVisible(true));
 el.branchMobileSave?.addEventListener("click", () => saveBranchOrderDraft());
 el.branchMobileSubmit?.addEventListener("click", () => submitBranchOrder());
-el.branchMobileHomeShortcuts?.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-branch-mobile-home-tab]");
-  if (button) setTab(button.dataset.branchMobileHomeTab);
-});
 el.refreshBranchOrderSettings?.addEventListener("click", loadBranchOrderSettings);
 el.saveBranchOrderSettings?.addEventListener("click", saveBranchOrderSettings);
 el.branchPortalDisplaySettingsForm?.addEventListener("submit", saveBranchPortalDisplaySettings);
