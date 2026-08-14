@@ -23,7 +23,7 @@ function recognitionBlocks(lines) {
 test("v0.92.5: xoffi-OCR erkennt KW, Standort, Teamzeilen, Wochenwerte und Tagesintervalle", () => {
   const centers = [150, 300, 450, 600, 750, 900, 1050];
   const lines = [
-    recognitionLine("Kalenderwoche: [32]", 10, 20, 180),
+    recognitionLine("Kalenderwoche: 4? [32] &", 10, 20, 180),
     recognitionLine("2026", 300, 20, 50),
     recognitionLine("Abteilung: Kst. 18 Grabenweg MA:", 500, 20, 300),
     recognitionLine("1 Seiwald Christian", 10, 300, 150),
@@ -74,6 +74,91 @@ test("v0.92.5: xoffi-OCR erkennt KW, Standort, Teamzeilen, Wochenwerte und Tages
   assert.deepEqual(parsed.employees[0].days[0].intervals, ["09:00-12:00", "13:00-16:00"]);
   assert.equal(parsed.employees[1].employeeNumber, "5");
   assert.equal(parsed.employees[1].closingBalanceMinutes, -60);
+});
+
+test("v0.92.5: sieben Spaltendaten bestimmen die KW auch bei einer abweichenden OCR-KW", () => {
+  const centers = [150, 300, 450, 600, 750, 900, 1050];
+  const dates = ["03.08.2026", "04.08.2026", "05.08.2026", "06.08.2026", "07.08.2026", "08.08.2026", "09.08.2026"];
+  const lines = [
+    recognitionLine("Kalenderwoche: [33]", 10, 20, 190),
+    recognitionLine("2026", 300, 20, 50),
+    recognitionLine("Abteilung: Kst. 18 Grabenweg MA:", 500, 20, 300),
+    recognitionLine("1 Seiwald Christian", 10, 300, 150),
+    recognitionLine("2 Usel Brigitte", 10, 600, 130),
+  ];
+  for (const center of centers) {
+    lines.push(recognitionLine("Gesamt: 0.00", center - 35, 180, 70));
+    lines.push(recognitionLine("Gesamt: 0.00", center - 35, 480, 70));
+  }
+
+  const parsed = parseXoffiRecognition({
+    text: "Stundenerfassung",
+    blocks: recognitionBlocks(lines),
+    width: 1400,
+    height: 800,
+    headerDates: dates.map((date) => {
+      const [day, month, year] = date.split(".");
+      return `${year}-${month}-${day}`;
+    }),
+    employees: [
+      { personnel_number: "252", full_name: "Christian Seiwald", nickname: "Chris" },
+      { personnel_number: "5", full_name: "Brigitte Usel", nickname: "Brigitte" },
+    ],
+  });
+
+  assert.equal(parsed.weekStart, "2026-08-03");
+  assert.equal(parsed.weekEnd, "2026-08-09");
+});
+
+test("v0.92.5: Urlaubstage und Urlaubsguthaben werden vollständig ignoriert", () => {
+  const centers = [150, 300, 450, 600, 750, 900, 1050];
+  const lines = [
+    recognitionLine("Kalenderwoche: [32]", 10, 20, 180),
+    recognitionLine("2026", 300, 20, 50),
+    recognitionLine("Abteilung: Kst. 18 Grabenweg MA:", 500, 20, 300),
+    recognitionLine("1 Usel Brigitte", 10, 300, 150),
+    recognitionLine("2 Testperson Zwei", 10, 600, 150),
+  ];
+  for (const [index, center] of centers.entries()) {
+    lines.push(recognitionLine(index === 0 ? "Gesamt: 7.70" : "Gesamt: 0.00", center - 35, 180, 70));
+    lines.push(recognitionLine("Gesamt: 0.00", center - 35, 480, 70));
+  }
+  lines.push(
+    // Die grüne Urlaub-Zeile ist im echten Screenshot für OCR nicht zuverlässig lesbar.
+    // Positiver Tageswert ohne echte Anwesenheitszeit wird deshalb ebenfalls ignoriert.
+    recognitionLine("Stunden inklusive", 1300, 220, 75),
+    recognitionLine("38.70", 1370, 220, 30),
+    recognitionLine("Anwesend", 1300, 240, 60),
+    recognitionLine("38.70", 1370, 240, 30),
+    recognitionLine("Urlaub (Std)", 1300, 260, 70),
+    recognitionLine("7.70", 1370, 260, 25),
+    recognitionLine("Rest Url. (Tage)", 1300, 280, 90),
+    recognitionLine("37.00", 1370, 280, 30),
+    recognitionLine("Mehrstunden", 1300, 300, 65),
+    recognitionLine("0.20", 1370, 300, 25),
+  );
+
+  const parsed = parseXoffiRecognition({
+    text: "Stundenerfassung",
+    blocks: recognitionBlocks(lines),
+    width: 1400,
+    height: 800,
+    employees: [
+      { personnel_number: "5", full_name: "Brigitte Usel", nickname: "Brigitte" },
+      { personnel_number: "6", full_name: "Testperson Zwei", nickname: "Testperson" },
+    ],
+  });
+
+  assert.equal(parsed.employees[0].weeklyActualMinutes, 2322);
+  assert.equal(parsed.employees[0].weeklyValuedMinutes, 2322);
+  assert.equal(parsed.employees[0].closingBalanceMinutes, 12);
+  assert.deepEqual(parsed.employees[0].days[0].intervals, []);
+  assert.equal(parsed.employees[0].days[0].actualMinutes, 0);
+  assert.equal(parsed.employees[0].days[0].valuedMinutes, 0);
+  assert.equal(parsed.employees[0].days[0].surchargeMinutes, 0);
+  assert.equal(parsed.employees[0].days[0].absence, "");
+  assert.equal(parsed.employees[0].days[0].vacationIgnored, true);
+  assert.match(parsed.employees[0].warnings.join(" "), /Urlaubstage und Urlaubsguthaben werden nicht importiert/);
 });
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v0925-xoffi-"));
@@ -251,6 +336,17 @@ test("v0.92.5: xoffi-Rohdaten bleiben revisionssicher und funktionieren auch bei
   assert.equal(evaluation.actualValuedMinutes, 480);
   assert.equal(evaluation.comparison.workedDifferenceMinutes, evaluation.actualMinutes - evaluation.plannedMinutes);
   assert.equal(evaluation.issues.some((issue) => issue.code === "missing_entries"), false);
+  const auth = createSession(MANAGER);
+  const nextWeekResponse = await fetch(
+    `${baseUrl}/api/schedule?week=2026-08-10&locationId=${LOCATION}&departmentId=${departmentId}`,
+    { headers: { Cookie: auth.cookie } },
+  );
+  const nextWeekSchedule = await nextWeekResponse.json();
+  assert.equal(nextWeekResponse.status, 200, JSON.stringify(nextWeekSchedule));
+  assert.deepEqual(nextWeekSchedule.xoffiTime.balanceByEmployee[MANAGER], {
+    minutes: 120,
+    weekStart: "2026-08-03",
+  });
   assert.throws(() => db.prepare("UPDATE xoffi_time_days SET actual_minutes = 1 WHERE employee_row_id = ?").run(row.id), /immutable/);
   assert.throws(() => db.prepare("DELETE FROM xoffi_time_imports WHERE id = ?").run(importId), /immutable/);
 });
