@@ -20307,7 +20307,7 @@ function validateXoffiReviewedRows(inputRows, preview) {
         valuedMinutes: xoffiInteger(day.valuedMinutes, 0, 2880),
         surchargeMinutes: xoffiInteger(day.surchargeMinutes, 0, 1440),
         intervals: [...new Set(intervals)],
-        absence: ["", "vacation", "sick"].includes(String(day.absence || "")) ? String(day.absence || "") : "",
+        absence: String(day.absence || "") === "sick" ? "sick" : "",
         confidence: xoffiInteger(day.confidence ?? 0, 0, 100),
       };
     });
@@ -26438,6 +26438,7 @@ function rightsDashboardCoverage(permission, user, scope) {
 }
 
 const UI_PREFERENCE_VIEWS = Object.freeze([
+  "filialAdministration",
   "planning",
   "requests",
   "timeTracking",
