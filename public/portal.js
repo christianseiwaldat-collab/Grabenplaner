@@ -183,8 +183,8 @@ applyDeviceMode();
 window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
-  "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
-  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "mobileHomeTab", "mobileHomeView", "mobileHomeTiles", "mobileSettingsHome", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
+  "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "forgotPasswordButton", "passwordResetRequestDialog", "passwordResetRequestForm", "passwordResetEmail", "passwordResetRequestMessage", "passwordResetRequestSubmit", "passwordResetConfirmDialog", "passwordResetConfirmForm", "passwordResetToken", "passwordResetNewPassword", "passwordResetRepeatPassword", "passwordResetConfirmMessage", "passwordResetConfirmSubmit", "portalApp", "portalLogo", "portalAccessModeLabel",
+  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "portalLogoutStatus", "notificationsButton", "notificationBadge", "mobileHomeTab", "mobileHomeView", "mobileHomeTiles", "mobileSettingsHome", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
   "loanOpenOverview", "loanOverviewDescription", "loanOverviewSearchField", "loanOverviewSearch", "loanOverviewTableHeader", "loanOverviewTableBody", "loanPersonalOverview",
   "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoPolicy", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
@@ -470,7 +470,10 @@ function branchPortalDisplaySettingsEnabled(user = portalUser()) {
 function applyPortalCapabilities() {
   const timeTrackingEnabled = timeTrackingCapabilityEnabled();
   el.timeTrackingTab?.classList.toggle("hidden", !timeTrackingEnabled);
-  el.wifiAutomationCard?.classList.toggle("hidden", !wifiTimeSuggestionsCapabilityEnabled());
+  el.wifiAutomationCard?.classList.toggle(
+    "hidden",
+    !wifiTimeSuggestionsCapabilityEnabled() || !mobileLocationDisplayAllows("time"),
+  );
   if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab(defaultPortalTab());
   const sicknessEnabled = portalState.status?.capabilities?.sicknessReports === true;
   document.querySelector('[data-tab="amu"]')?.classList.toggle("hidden", !sicknessEnabled);
@@ -552,6 +555,21 @@ const mobileHomeTileCatalog = Object.freeze([
 ]);
 const mobileHomeTileById = new Map(mobileHomeTileCatalog.map((item) => [item.id, item]));
 const mobileHomeTileIds = Object.freeze(mobileHomeTileCatalog.map((item) => item.id));
+const mobileLocationDisplayManagedModuleIds = new Set([
+  "time", "tasks", "team", "approvals", "schedule", "requests", "loan", "sickness", "branchOrders", "branchVacation",
+]);
+const mobileLocationDisplayTabModules = Object.freeze({
+  timeTracking: "time",
+  processTasks: "tasks",
+  schedule: "schedule",
+  timeOff: "requests",
+  vacation: "requests",
+  history: "requests",
+  loan: "loan",
+  amu: "sickness",
+  branchOrders: "branchOrders",
+  branchVacation: "branchVacation",
+});
 const mobileHomeDefaultColors = Object.freeze({
   time: [39, 110, 85],
   tasks: [41, 107, 145],
@@ -599,7 +617,16 @@ function normalizedMobileModules(value) {
   return [...new Set(normalized)].filter((id) => mobileModuleIds.has(id));
 }
 
+function mobileLocationDisplayAllows(moduleId, user = portalUser()) {
+  if (!isMobileUi() || isOrganizationAccount(user) || !mobileLocationDisplayManagedModuleIds.has(moduleId)) {
+    return true;
+  }
+  const allowedModules = portalState.uiPreferences?.mobilePortalLocationDisplay?.allowedModules;
+  return Array.isArray(allowedModules) && allowedModules.includes(moduleId);
+}
+
 function mobileModuleAllowed(module, permissions = portalUser()?.permissions || []) {
+  if (!mobileLocationDisplayAllows(module)) return false;
   if (module === "time") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (module === "tasks") return portalTabAllowed("processTasks");
   if (module === "team") return permissions.includes("time:read");
@@ -615,6 +642,8 @@ function portalTabAllowed(tab, user = portalUser()) {
   const permissions = user?.permissions || [];
   if (tab === "home") return isMobileUi();
   if (tab === "settings") return true;
+  const locationDisplayModule = mobileLocationDisplayTabModules[tab];
+  if (locationDisplayModule && !mobileLocationDisplayAllows(locationDisplayModule, user)) return false;
   if (tab === "schedule") return scheduleCapabilityEnabled(user);
   if (tab === "branchOrders") return branchOrderCapabilityEnabled(user);
   if (tab === "branchVacation") return branchVacationCapabilityEnabled(user);
@@ -884,14 +913,24 @@ async function loadMobileLayout() {
   portalState.mobileLayout = layoutResult.status === "fulfilled"
     ? layoutResult.value
     : { modules: ["time", "team", "approvals", "schedule", "requests", "more"] };
+  const locationDisplay = preferencesResult.status === "fulfilled"
+    ? preferencesResult.value?.mobilePortalLocationDisplay
+    : layoutResult.status === "fulfilled"
+      ? layoutResult.value?.locationDisplay
+      : null;
   portalState.uiPreferences = preferencesResult.status === "fulfilled"
     ? preferencesResult.value
     : {
       mobilePortalNavigation: { version: 1, order: mobileModuleCatalog.filter((item) => item.id !== "more").map((item) => item.id), hidden: [] },
       mobilePortalAppearance: { version: 1, palette: "forest", surface: "soft" },
       mobilePortalHome: defaultMobilePortalHome(),
+      mobilePortalLocationDisplay: locationDisplay || { version: 1, locationId: "", allowedModules: [] },
       mobilePortalNavigationCustomized: false,
     };
+  if (!portalState.uiPreferences.mobilePortalLocationDisplay) {
+    portalState.uiPreferences.mobilePortalLocationDisplay = locationDisplay
+      || { version: 1, locationId: "", allowedModules: [] };
+  }
   portalState.mobileNavigationDraft = null;
   portalState.mobileHomeDraft = null;
   applyMobilePortalAppearance(portalState.uiPreferences.mobilePortalAppearance);
@@ -1297,7 +1336,8 @@ async function initialize() {
     el.portalDeploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
     applyPortalCapabilities();
     const minimum = Number(status.passwordMinLength || 6);
-    [el.loginPassword, el.newPassword, el.repeatPassword].forEach((input) => { if (input) input.minLength = minimum; });
+    [el.loginPassword, el.newPassword, el.repeatPassword, el.passwordResetNewPassword, el.passwordResetRepeatPassword]
+      .forEach((input) => { if (input) input.minLength = minimum; });
     if (el.portalAccessModeLabel) el.portalAccessModeLabel.textContent = status.operationMode === "server" ? "Mitarbeiterportal · HTTPS" : "Mitarbeiterportal";
     if (!status.portalEnabled) {
       message(el.loginError, "Das Mitarbeiterportal ist für diese Installation nicht freigeschaltet.", true);
@@ -1306,6 +1346,7 @@ async function initialize() {
     const session = await api("/api/portal/v1/session");
     if (!session.authenticated) {
       showLogin();
+      openPasswordResetConfirm();
       return;
     }
     showPortal(session);
@@ -1314,6 +1355,7 @@ async function initialize() {
       chooseInitialPortalTab();
       await loadPortalData();
     }
+    openPasswordResetConfirm();
   } catch (error) {
     showLogin(error.message);
   }
@@ -1332,8 +1374,8 @@ async function loadPortalData() {
   if (portalTabAllowed("timeTracking")) requests.push(loadTimeTracking());
   if (hasPortalPermission("own_privacy_requests:read")) requests.push(loadPrivacyRequests());
   if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
-  if (loanCapabilityEnabled()) requests.push(loadLoanModule());
-  if (branchOrderCapabilityEnabled()) requests.push(loadBranchOrderCatalog(), loadBranchOrderPortalHistory());
+  if (portalTabAllowed("loan")) requests.push(loadLoanModule());
+  if (portalTabAllowed("branchOrders")) requests.push(loadBranchOrderCatalog(), loadBranchOrderPortalHistory());
   if (branchPortalDisplaySettingsEnabled()) requests.push(loadBranchPortalDisplaySettings());
   await Promise.allSettled(requests);
 }
@@ -1512,11 +1554,16 @@ function applySelfServiceVisibility() {
   if (canCreatePrivacyRequest && !canReadPrivacyRequests && el.privacyRequestsNotice) {
     el.privacyRequestsNotice.textContent = "Jede Anfrage wird nach einer Identitätsprüfung manuell bearbeitet und nachvollziehbar entschieden.";
   }
-  el.vacationAccountCard?.classList.toggle("hidden", !hasPortalPermission("own_vacation:read"));
+  el.vacationAccountCard?.classList.toggle(
+    "hidden",
+    !hasPortalPermission("own_vacation:read") || !mobileLocationDisplayAllows("requests"),
+  );
   el.timeTrackingTab?.classList.toggle("hidden", !portalTabAllowed("timeTracking"));
   el.wifiAutomationCard?.classList.toggle(
     "hidden",
-    !wifiTimeSuggestionsCapabilityEnabled() || !hasPortalPermission("own_time:read"),
+    !wifiTimeSuggestionsCapabilityEnabled()
+      || !hasPortalPermission("own_time:read")
+      || !mobileLocationDisplayAllows("time"),
   );
   el.scheduleTab?.classList.toggle("hidden", !portalTabAllowed("schedule"));
   el.timeOffTab?.classList.toggle("hidden", !portalTabAllowed("timeOff"));
@@ -1636,17 +1683,141 @@ async function login(event) {
   }
 }
 
+function passwordResetTokenFromHash() {
+  const match = String(window.location.hash || "").match(/^#password-reset=([A-Za-z0-9_-]{43})$/);
+  return match?.[1] || "";
+}
+
+function clearPasswordResetHash() {
+  if (!String(window.location.hash || "").startsWith("#password-reset=")) return;
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+}
+
+function openPasswordResetRequest() {
+  message(el.passwordResetRequestMessage, "");
+  el.passwordResetEmail.value = "";
+  el.passwordResetRequestDialog.showModal();
+  el.passwordResetEmail.focus();
+}
+
+function openPasswordResetConfirm(token = passwordResetTokenFromHash()) {
+  if (!token) return false;
+  el.passwordResetToken.value = token;
+  el.passwordResetNewPassword.value = "";
+  el.passwordResetRepeatPassword.value = "";
+  message(el.passwordResetConfirmMessage, "");
+  el.passwordResetConfirmDialog.showModal();
+  el.passwordResetNewPassword.focus();
+  return true;
+}
+
+function closePasswordResetConfirm() {
+  clearPasswordResetHash();
+  el.passwordResetToken.value = "";
+  el.passwordResetNewPassword.value = "";
+  el.passwordResetRepeatPassword.value = "";
+  message(el.passwordResetConfirmMessage, "");
+  if (el.passwordResetConfirmDialog.open) el.passwordResetConfirmDialog.close();
+}
+
+async function requestPasswordReset(event) {
+  event.preventDefault();
+  if (el.passwordResetRequestSubmit.disabled) return;
+  el.passwordResetRequestSubmit.disabled = true;
+  message(el.passwordResetRequestMessage, "Der Rücksetzlink wird angefordert.");
+  try {
+    const result = await api("/api/portal/v1/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email: el.passwordResetEmail.value.trim() }),
+    });
+    el.passwordResetEmail.value = "";
+    message(
+      el.passwordResetRequestMessage,
+      result?.message || "Falls ein passender persönlicher Zugang vorhanden ist, wurde ein Rücksetzlink versendet.",
+    );
+  } catch (error) {
+    message(el.passwordResetRequestMessage, error.message, true);
+  } finally {
+    el.passwordResetRequestSubmit.disabled = false;
+  }
+}
+
+async function confirmPasswordReset(event) {
+  event.preventDefault();
+  if (el.passwordResetConfirmSubmit.disabled) return;
+  const newPassword = el.passwordResetNewPassword.value;
+  const repeatPassword = el.passwordResetRepeatPassword.value;
+  if (!repeatPassword || newPassword !== repeatPassword) {
+    message(el.passwordResetConfirmMessage, "Die Passwortwiederholung stimmt nicht überein.", true);
+    el.passwordResetRepeatPassword.focus();
+    return;
+  }
+  el.passwordResetConfirmSubmit.disabled = true;
+  message(el.passwordResetConfirmMessage, "Das neue Passwort wird gespeichert.");
+  try {
+    await api("/api/portal/v1/auth/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        token: el.passwordResetToken.value,
+        newPassword,
+        repeatPassword,
+      }),
+    });
+    clearPasswordResetHash();
+    el.passwordResetConfirmDialog.close();
+    showLogin();
+    el.loginPassword.value = "";
+    message(el.loginError, "Das Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.");
+    el.loginPersonnelNumber.focus();
+  } catch (error) {
+    message(el.passwordResetConfirmMessage, error.message, true);
+  } finally {
+    el.passwordResetConfirmSubmit.disabled = false;
+  }
+}
+
+let logoutInProgress = false;
+
 async function logout() {
+  if (logoutInProgress) return;
+  logoutInProgress = true;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  const originalLabel = el.logoutButton.textContent;
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
-  portalState.session = null;
-  stopBranchOrderAutosave();
-  clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
-  portalState.processTasksOwnerFingerprint = "";
-  try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
-  clearRememberedPortalTab();
-  location.reload();
+  el.logoutButton.disabled = true;
+  el.logoutButton.setAttribute("aria-busy", "true");
+  el.logoutButton.textContent = "Abmelden…";
+  message(el.portalLogoutStatus, "");
+  try {
+    await api("/api/portal/v1/auth/logout", {
+      method: "POST",
+      body: "{}",
+      keepalive: true,
+      signal: controller.signal,
+    });
+    portalState.session = null;
+    stopBranchOrderAutosave();
+    clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
+    portalState.processTasksOwnerFingerprint = "";
+    clearRememberedPortalTab();
+    showLogin();
+    el.loginPassword.value = "";
+    el.loginPersonnelNumber.focus();
+  } catch (error) {
+    const detail = controller.signal.aborted
+      ? "Die Abmeldung wurde nicht rechtzeitig bestätigt. Bitte erneut versuchen."
+      : `Die Abmeldung konnte nicht bestätigt werden: ${error.message}`;
+    message(el.portalLogoutStatus, detail, true);
+  } finally {
+    window.clearTimeout(timeout);
+    logoutInProgress = false;
+    el.logoutButton.disabled = false;
+    el.logoutButton.removeAttribute("aria-busy");
+    el.logoutButton.textContent = originalLabel;
+  }
 }
 
 function setTab(tab) {
@@ -2626,7 +2797,10 @@ function wifiSuggestionValues(row) {
 
 function renderWifiAutomation() {
   const data = portalState.wifiAutomation;
-  el.wifiAutomationCard?.classList.toggle("hidden", !wifiTimeSuggestionsCapabilityEnabled());
+  el.wifiAutomationCard?.classList.toggle(
+    "hidden",
+    !wifiTimeSuggestionsCapabilityEnabled() || !mobileLocationDisplayAllows("time"),
+  );
   if (!data) return;
   const enabled = data.preference?.enabled === true;
   el.wifiAutomationToggle.checked = enabled;
@@ -6009,6 +6183,15 @@ async function respondToLoanConfirmation(decision) {
 el.portalLoginForm.addEventListener("submit", login);
 el.loginPersonnelNumber.addEventListener("input", scheduleLoginBrandingPreview);
 el.loginPersonnelNumber.addEventListener("blur", previewLoginBranding);
+el.forgotPasswordButton?.addEventListener("click", openPasswordResetRequest);
+el.passwordResetRequestForm?.addEventListener("submit", requestPasswordReset);
+el.passwordResetConfirmForm?.addEventListener("submit", confirmPasswordReset);
+document.querySelectorAll("[data-close-password-reset-request]").forEach((button) => button.addEventListener("click", () => el.passwordResetRequestDialog.close()));
+document.querySelectorAll("[data-close-password-reset-confirm]").forEach((button) => button.addEventListener("click", closePasswordResetConfirm));
+el.passwordResetConfirmDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closePasswordResetConfirm();
+});
 el.logoutButton.addEventListener("click", logout);
 el.settingsPasswordButton?.addEventListener("click", () => el.passwordDialog.showModal());
 el.portalSettingsShortcut?.addEventListener("click", () => setTab(portalState.activeTab === "settings" ? "home" : "settings"));

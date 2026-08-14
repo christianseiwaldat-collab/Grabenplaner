@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.4 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.5 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -48,9 +48,12 @@
             <span class="nav-symbol">◇</span><span>Dashboards</span>
           </button>
           <section class="nav-module" id="filialManagementNav" aria-label="Filialverwaltung">
-            <button type="button" class="nav-module-toggle expanded" id="filialManagementToggle" data-nav-toggle="filialManagement" aria-controls="filialManagementNavChildren" aria-expanded="true">
-              <span class="nav-module-chevron" aria-hidden="true"></span><span class="nav-symbol" aria-hidden="true">⌂</span><span>Filialverwaltung</span>
-            </button>
+            <div class="nav-branch nav-module-heading">
+              <button type="button" class="nav-disclosure expanded" id="filialManagementToggle" data-nav-toggle="filialManagement" aria-controls="filialManagementNavChildren" aria-label="Unterpunkte der Filialverwaltung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+              <button class="nav-item nav-module-main" data-view="filialAdministration" id="filialDashboardNavButton">
+                <span class="nav-symbol" aria-hidden="true">⌂</span><span>Filialverwaltung</span>
+              </button>
+            </div>
             <div class="nav-module-children" id="filialManagementNavChildren">
               <button class="nav-item nav-module-route" data-view="personnel" id="filialTeamsNavButton">
                 <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
@@ -172,6 +175,17 @@
           <span><strong id="serverAlertTitle">Serverzustand prüfen</strong><small id="serverAlertMessage">Eine technische Warnung benötigt Aufmerksamkeit.</small></span>
           <em>Details öffnen</em>
         </button>
+        <section id="filialAdministrationView" class="view" aria-labelledby="filialAdministrationTitle">
+          <header class="topbar">
+            <div><span class="eyebrow">Filialverwaltung</span><h1 id="filialAdministrationTitle">Filialverwaltung</h1><p class="subtitle">Team, operative Abläufe und Planung im eigenen Verantwortungsbereich.</p></div>
+          </header>
+          <section class="personnel-dashboard-section active">
+            <div class="personnel-dashboard-heading">
+              <div><span class="eyebrow">Arbeitsbereiche</span><h2>Filialverwaltung im Überblick</h2><p>Es werden ausschließlich die für den angemeldeten Zugang freigegebenen Bereiche angezeigt.</p></div>
+            </div>
+            <div class="personnel-dashboard-grid" id="filialDashboardGrid" aria-live="polite"></div>
+          </section>
+        </section>
         <section id="planningView" class="view active">
           <header class="topbar">
             <div>
@@ -246,11 +260,37 @@
           <section class="hours-panel">
             <div class="hours-heading">
               <div><h2>Wochenstunden je Teammitglied</h2><p>Eingeteilte Nettozeit, gewertete Zeit und Wochen-Soll im Vergleich.</p></div>
-              <div class="hours-legend"><span>Eingeteilt = in Filiale nach Pause</span><span>Gewertet = inkl. Samstagsfaktor/Sonderfällen</span></div>
+              <div class="hours-heading-actions">
+                <div class="hours-legend"><span>Eingeteilt = in Filiale nach Pause</span><span>Gewertet = inkl. Samstagsfaktor/Sonderfällen</span></div>
+                <button type="button" class="secondary-button hidden" id="xoffiImportButton">xoffi importieren</button>
+              </div>
             </div>
             <div class="hours-grid" id="hoursOverview"></div>
           </section>
         </section>
+
+        <dialog class="modal xoffi-import-modal" id="xoffiImportDialog">
+          <form id="xoffiImportForm">
+            <div class="modal-header">
+              <div><span class="eyebrow">Vergangene Kalenderwoche</span><h2>xoffi-Zeiterfassung importieren</h2><p>Das Bild wird lokal ausgelesen. Erst die ausdrücklich bestätigte Vorschau wird gespeichert; die Bilddatei selbst wird nicht aufbewahrt.</p></div>
+              <button type="button" class="close-button" id="xoffiImportClose" aria-label="Dialog schließen">×</button>
+            </div>
+            <div class="xoffi-import-source">
+              <label>Bilddatei<input type="file" id="xoffiImportFile" accept="image/jpeg,image/png,image/webp" /></label>
+              <button type="button" class="secondary-button" id="xoffiInspectButton">Bild auslesen</button>
+              <p class="settings-note" id="xoffiImportStatus">Öffnen Sie zuerst die betreffende vergangene Woche im Dienstplan.</p>
+            </div>
+            <div class="xoffi-import-preview" id="xoffiImportPreview"></div>
+            <div class="xoffi-import-confirmation hidden" id="xoffiImportConfirmation">
+              <label class="checkbox-line"><input type="checkbox" id="xoffiUseAsActual" checked /><span>xoffi-Werte als maßgebliche Ist-Zeiten für Zeitauswertung und Planvergleich verwenden</span></label>
+              <label class="checkbox-line"><input type="checkbox" id="xoffiImportConfirmed" /><span>Ich habe Namen, Tageszeiten, Wochenwerte und Stundenkonten geprüft.</span></label>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="secondary-button" id="xoffiImportCancel">Abbrechen</button>
+              <button type="submit" class="primary-button" id="xoffiApplyButton" disabled>Geprüfte Werte importieren</button>
+            </div>
+          </form>
+        </dialog>
 
         <section id="requestsView" class="view">
           <header class="topbar">
@@ -1021,8 +1061,8 @@
             <div class="personnel-dashboard-heading">
               <div><span class="eyebrow">Arbeitsbereiche</span><h2>Verkaufsverwaltung im Überblick</h2><p>Öffne die aktuell verfügbaren Bereiche der Verkaufsverwaltung.</p></div>
             </div>
-            <div class="personnel-dashboard-grid sales-dashboard-grid">
-              <button class="personnel-dashboard-card" type="button" data-view="salesAnalytics">
+            <div class="personnel-dashboard-grid sales-dashboard-grid" id="salesDashboardGrid">
+              <button class="personnel-dashboard-card" type="button" data-sales-dashboard-view="salesAnalytics">
                 <span class="personnel-dashboard-card-symbol" aria-hidden="true">⌁</span>
                 <span class="personnel-dashboard-card-copy"><small>Berichte &amp; Kennzahlen</small><strong>Verkaufsanalysen</strong><span>TradeFoto-Berichte sicher importieren, vergleichen und auswerten.</span></span>
                 <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
@@ -1700,7 +1740,7 @@
               </div>
               <div class="form-actions-inline"><span class="settings-note" id="greetingSettingsHint">Begrüßungen werden ausschließlich serverseitig ausgewählt.</span><button class="primary-button" id="saveGreetingSettingsButton" type="button">Begrüßungen speichern</button></div>
             </div>
-            <div class="settings-card">
+            <div class="settings-card" id="portalUserAccessCard">
               <div class="card-heading"><div class="card-icon">Login</div><div><h2>Portal-Zugänge</h2><p>Rollen, Freigabe und Startpasswort je Teammitglied verwalten.</p></div></div>
               <div class="access-toolbar">
                 <button class="secondary-button" id="adminSetupButton" type="button">Admin-Ersteinrichtung</button>
@@ -1708,6 +1748,13 @@
               </div>
               <p class="settings-note" id="accessSettingsHint">Die Zugänge werden geladen.</p>
               <div class="portal-user-list" id="portalUserList"></div>
+            </div>
+            <div class="settings-card hidden" id="mobilePortalLocationDisplayCard">
+              <div class="card-heading"><div class="card-icon">Mobil</div><div><h2>Mobile Mitarbeiteransicht</h2><p>Legt je Filiale fest, welche fachlich freigegebenen Bereiche Mitarbeitende mobil sehen.</p></div></div>
+              <label class="field"><span>Filiale</span><select id="mobilePortalLocationDisplayLocation"></select></label>
+              <p class="settings-note security-note">Die Auswahl erweitert keine Fachrechte. Sichtbar ist nur die Schnittmenge aus persönlichen Fachrechten, dieser Filialauswahl und der persönlichen Startseiten-Anordnung.</p>
+              <div class="mobile-module-grid" id="mobilePortalLocationDisplayModules"></div>
+              <div class="form-actions-inline"><span class="settings-note" id="mobilePortalLocationDisplayHint">Filialauswahl wird geladen.</span><button class="primary-button" id="saveMobilePortalLocationDisplayButton" type="button">Mobile Ansicht speichern</button></div>
             </div>
             <div class="settings-card" id="organizationAccountsCard">
               <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Filial- &amp; Terminalkonten</h2><p>Allgemeine, filialgebundene Zugänge ohne Mitarbeiterdatensatz oder Personalnummer.</p></div></div>
@@ -2157,7 +2204,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.4 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.5 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

@@ -40,7 +40,7 @@ sha256_arg=""
 sha256_file_arg=""
 node_arg=""
 pnpm_arg=""
-health_timeout=120
+health_timeout=1500
 
 usage() {
   cat <<'EOF'
@@ -77,8 +77,8 @@ done
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
 [[ -z "$sha256_arg" || -z "$sha256_file_arg" ]] \
   || gp_die "--sha256 und --sha256-file duerfen nicht gemeinsam verwendet werden."
-[[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 600 )) \
-  || gp_die "--health-timeout muss zwischen 30 und 600 liegen."
+[[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 1500 )) \
+  || gp_die "--health-timeout muss zwischen 30 und 1500 liegen."
 
 os_release_source="$(realpath --canonicalize-existing -- /etc/os-release)" \
   || gp_die "Ubuntu konnte nicht sicher erkannt werden."

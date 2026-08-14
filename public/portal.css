@@ -17,6 +17,8 @@ select { width:100%; padding:11px 12px; border:1px solid var(--line); border-rad
 .portal-card { border:1px solid rgba(49,89,74,.17); border-radius:18px; background:rgba(255,253,250,.95); box-shadow:0 16px 50px rgba(27,54,44,.09); }
 .login-card { width:min(400px,100%); display:grid; gap:15px; padding:30px; }
 .login-card img { width:min(220px,72%); max-height:68px; object-fit:contain; object-position:left; }
+.login-forgot-password { justify-self:start; padding:0; color:var(--green); background:transparent; font-size:11px; font-weight:800; text-decoration:underline; text-underline-offset:3px; }
+.login-forgot-password:hover { color:#173f31; }
 h1,h2,p { margin-top:0; }
 h1 { margin-bottom:7px; font-size:28px; letter-spacing:-.04em; }
 h2 { margin-bottom:14px; font-size:18px; }
@@ -48,7 +50,10 @@ button { border:0; border-radius:10px; cursor:pointer; }
 .notification-button.has-unread { color:#7d5907; background:#fff0bd; }
 .notification-badge { position:absolute; top:-5px; right:-6px; display:grid; place-items:center; min-width:19px; height:19px; padding:0 5px; border:2px solid #faf9f4; border-radius:999px; color:white !important; background:#c45142; font-size:8px !important; font-weight:900; }
 .portal-settings-shortcut.active { color:white; background:var(--green); }
-.portal-settings-shortcut svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; vertical-align:middle; }
+.portal-settings-shortcut { display:inline-flex; align-items:center; justify-content:center; gap:5px; white-space:nowrap; }
+.portal-settings-shortcut svg { flex:none; width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; vertical-align:middle; }
+.portal-logout-status { position:fixed; top:84px; right:16px; z-index:70; width:min(360px,calc(100vw - 32px)); margin:0; box-shadow:0 12px 32px rgba(36,54,47,.18); }
+#logoutButton[aria-busy="true"] { cursor:wait; opacity:.72; }
 main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .portal-tabs { display:flex; gap:7px; margin-bottom:22px; padding:5px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.58); }
 .portal-tabs.mobile-settings-hidden { display:none !important; }
@@ -577,13 +582,33 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 @media (max-width:850px) { .time-tracking-layout { grid-template-columns:1fr; }.time-clock-card,.time-day-card { padding:20px; } }
 @media (max-width:850px) { .portal-settings-grid { grid-template-columns:1fr; }.portal-settings-card { min-height:0; }.privacy-settings-card { grid-column:auto; }.privacy-data-layout { grid-template-columns:1fr; }.vacation-account-primary,.vacation-account-details { grid-template-columns:repeat(2,minmax(0,1fr)); }.time-record-statement { grid-template-columns:minmax(0,1fr) auto; }.time-record-statement .time-record-actuals { grid-column:1 / -1; }.time-record-statement .time-record-download,.time-record-statement .time-record-unavailable { grid-column:1 / -1; justify-self:start; text-align:left; } }
 @media (max-width:980px) { .wifi-suggestion-row { grid-template-columns:repeat(2,minmax(0,1fr)); }.wifi-suggestion-row > div:first-child,.wifi-suggestion-actions { grid-column:1 / -1; }.wifi-suggestion-actions button { flex:1; } }
-@media (max-width:560px) { .portal-brand img { width:88px; height:40px; }.portal-brand > div { display:none; }.portal-header { align-items:center; }.portal-user { gap:5px; flex-wrap:nowrap; }.portal-user #adminAppLink { display:none !important; }.wide-label { display:none !important; }.compact-label { display:block !important; }.header-action { min-height:38px; padding:7px; font-size:9px; }.schedule-grid { grid-template-columns:1fr; }.view-heading { align-items:flex-start; flex-direction:column; }.date-fields,.history-toolbar { grid-template-columns:1fr; width:100%; }.request-mode { grid-template-columns:1fr; } }
-@media (max-width:430px) { .portal-settings-shortcut { display:grid; place-items:center; width:40px; min-height:40px; padding:7px; overflow:hidden; font-size:0; }.portal-settings-shortcut::before { content:none; }.portal-settings-shortcut svg { width:21px; height:21px; stroke-width:2; } }
+@media (max-width:560px) {
+  .portal-brand { flex:1 1 auto; min-width:0; }
+  .portal-brand img { width:clamp(72px,24vw,88px); max-width:100%; height:40px; }
+  .portal-brand > div { display:none; }
+  .portal-header { align-items:center; gap:8px; }
+  .portal-user { flex:0 0 auto; gap:5px; flex-wrap:nowrap; }
+  .portal-user #adminAppLink { display:none !important; }
+  .wide-label { display:none !important; }
+  .compact-label { display:block !important; }
+  .notification-button,.portal-settings-shortcut { flex:0 0 44px; width:44px; height:44px; min-height:44px; padding:0; }
+  .portal-settings-shortcut { display:grid; place-items:center; overflow:hidden; font-size:0; }
+  .portal-settings-shortcut-label { display:none; }
+  .portal-settings-shortcut::before { content:none; }
+  .portal-settings-shortcut svg { width:21px; height:21px; stroke-width:2; }
+  .header-action { min-height:44px; padding:7px 8px; font-size:9px; }
+  #logoutButton { white-space:nowrap; }
+  .schedule-grid { grid-template-columns:1fr; }
+  .view-heading { align-items:flex-start; flex-direction:column; }
+  .date-fields,.history-toolbar { grid-template-columns:1fr; width:100%; }
+  .request-mode { grid-template-columns:1fr; }
+}
+@media (max-width:430px) { .portal-header { padding-inline:8px; }.portal-user { gap:4px; } }
 @media (max-width:560px) { .leadership-filter-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:560px) { .time-heading { align-items:stretch; }.time-heading .time-refresh-button { align-self:flex-start; }.time-clock-card,.time-day-card { padding:17px; }.time-state-heading { grid-template-columns:36px 1fr; gap:11px; }.time-state-indicator { width:32px; height:32px; border-width:9px; }.time-state-heading h2 { font-size:22px; }.time-action-grid { gap:7px; margin-top:18px; }.time-action { min-height:70px; padding:11px; }.time-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }.time-summary > div { padding:10px 8px; }.time-summary strong { font-size:15px; }.time-entry-heading { align-items:flex-start; flex-direction:column; }.time-entry-heading small { text-align:left; } }
 @media (max-width:560px) { .wifi-suggestion-card { padding:16px; }.wifi-suggestion-heading { align-items:stretch; flex-direction:column; }.portal-switch { justify-content:space-between; }.wifi-suggestion-row { grid-template-columns:1fr 1fr; }.wifi-week-heading { align-items:stretch; flex-direction:column; }.wifi-week-confirm { width:100%; } }
 @media (max-width:560px) { .privacy-settings-heading,.vacation-account-heading { align-items:stretch; flex-direction:column; }.privacy-manual-badge { align-self:flex-start; }.privacy-request-item { grid-template-columns:1fr; }.privacy-request-actions { align-items:flex-start; }.vacation-account-heading label { width:100%; }.vacation-account-primary,.vacation-account-details { grid-template-columns:1fr; }.vacation-account-card { padding:17px; }.time-record-statement { grid-template-columns:1fr; }.time-record-statement .status { justify-self:start; }.time-record-actuals { grid-column:1; width:100%; } }
-@media (max-width:720px) { body { padding-bottom:calc(78px + env(safe-area-inset-bottom)); }.portal-settings-active { padding-bottom:24px; }.portal-header { min-height:58px; padding:8px 10px; }.portal-tabs { position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:30; margin:0; padding:5px; flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; box-shadow:0 12px 35px rgba(25,53,43,.25); background:rgba(255,253,250,.97); backdrop-filter:blur(12px); }.portal-tabs button { flex:0 0 auto; min-width:94px; min-height:48px; padding:7px 10px; font-size:10px; scroll-snap-align:start; }.portal-card { border-radius:14px; }.request-form,.vacation-layout > section,.history-card { padding:17px; } main { width:min(100% - 20px,1180px); margin-top:18px; }.primary,.text-button,.approved-vacation-item button,.cancel-request,input,select { min-height:44px; }.request-item,.history-item { grid-template-columns:1fr; }.request-item button,.history-item button { width:100%; }.history-item-status { justify-items:start; }.dialog-actions { position:sticky; bottom:-24px; padding:10px 0 max(2px,env(safe-area-inset-bottom)); background:white; }.notification-button { flex-basis:38px; } }
+@media (max-width:720px) { body { padding-bottom:calc(78px + env(safe-area-inset-bottom)); }.portal-settings-active { padding-bottom:24px; }.portal-header { min-height:58px; padding:8px 10px; }.portal-logout-status { top:68px; right:10px; width:min(360px,calc(100vw - 20px)); }.portal-tabs { position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:30; margin:0; padding:5px; flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; box-shadow:0 12px 35px rgba(25,53,43,.25); background:rgba(255,253,250,.97); backdrop-filter:blur(12px); }.portal-tabs button { flex:0 0 auto; min-width:94px; min-height:48px; padding:7px 10px; font-size:10px; scroll-snap-align:start; }.portal-card { border-radius:14px; }.request-form,.vacation-layout > section,.history-card { padding:17px; } main { width:min(100% - 20px,1180px); margin-top:18px; }.primary,.text-button,.approved-vacation-item button,.cancel-request,input,select { min-height:44px; }.request-item,.history-item { grid-template-columns:1fr; }.request-item button,.history-item button { width:100%; }.history-item-status { justify-items:start; }.dialog-actions { position:sticky; bottom:-24px; padding:10px 0 max(2px,env(safe-area-inset-bottom)); background:white; }.notification-button { flex-basis:44px; } }
 @media (max-width:720px) {
   .portal-tabs.mobile-personal { display:flex; flex-wrap:nowrap; gap:3px; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x proximity; scrollbar-width:none; }
   .portal-tabs.mobile-personal::-webkit-scrollbar { display:none; }

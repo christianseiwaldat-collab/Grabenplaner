@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.5 Beta · Xoffi-Zeiten, Portalzugang und Navigation
+
+- Vergangene Xoffi-Wochen können als lokal ausgelesene, vor der Übernahme prüfbare Ist-Zeiten importiert und mit dem Dienstplan verglichen werden; der Stundenstand bleibt in der aktuellen Wochenübersicht sichtbar.
+- Passwortwiederherstellung für persönliche Portalzugänge, verlängerte aktive Sitzungen sowie eine robuste mobile Abmeldung ergänzen den Portalzugang.
+- Filial- und Verkaufsverwaltung verwenden funktionsfähige, berechtigungsgefilterte Bereichs-Dashboards; die Seitenleiste und mobile Kopfzeile sind einheitlich ausgerichtet.
+- Standortbezogene mobile Sichtbarkeit bleibt über ein entzieh- und delegierbares Recht steuerbar. Linux-Update- und Recovery-Prüfungen verwenden künftig einen Health-Zeitrahmen von bis zu 1500 Sekunden.
+
 ## v0.92.4 Beta · Rücknahme, Filialbestellung und globale Oberfläche
 
 - Rücknahmen können vorbereitet und bis Tagesende durch eine zweite Person bestätigt werden; berechtigte Leitungen schließen eigene Teamfälle direkt ab.

@@ -79,8 +79,10 @@ test("Navigation und Direktaufruf bleiben ohne Zugangsrecht fail-closed", () => 
 test("Fest integrierter Verkaufsbereich bleibt eine klar gekennzeichnete Desktop-Arbeitsfläche", () => {
   const landing = between(html, '<section id="salesAdministrationView"', '<section id="salesAnalyticsView"');
   assert.match(landing, /Verkaufsverwaltung im Überblick/);
-  assert.match(landing, /class="personnel-dashboard-card"[^>]*data-view="salesAnalytics"/);
+  assert.match(landing, /id="salesDashboardGrid"/);
+  assert.match(landing, /class="personnel-dashboard-card"[^>]*data-sales-dashboard-view="salesAnalytics"/);
   assert.match(landing, />Verkaufsanalysen</);
+  assert.match(app, /salesDashboardGrid\?\.addEventListener\("click"[\s\S]*setView\(button\.dataset\.salesDashboardView\)/);
 
   const view = between(html, '<section id="salesAnalyticsView"', '<section id="personnelView"');
   assert.match(view, /id="salesAnalyticsTitle">Verkaufsanalysen/);

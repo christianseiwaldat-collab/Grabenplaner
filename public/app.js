@@ -48,6 +48,7 @@ const state = {
   portalStatus: null,
   portalSession: null,
   portalUsers: [],
+  mobilePortalLocationDisplay: null,
   organizationAccounts: [],
   portalRoles: [],
   portalPermissionCatalog: [],
@@ -62,6 +63,7 @@ const state = {
   requestCounts: { vacation: 0, timeOff: 0, sickness: 0, amu: 0, total: 0 },
   requestKindTab: "vacation",
   currentView: "planning",
+  xoffiImportPreview: null,
   timePresence: null,
   timeDayReview: null,
   timeSummary: null,
@@ -423,9 +425,9 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "filialAdministrationView", "filialDashboardGrid", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
-    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
+    "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
@@ -444,7 +446,8 @@ const elements = Object.fromEntries(
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionsScopeHint", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
-    "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
+    "adminAccessModeLabel", "accessSettings", "portalUserAccessCard", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
+    "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
     "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
@@ -1056,6 +1059,16 @@ function canManageBranchAccountPasswords() {
   return state.portalSession?.user?.permissions?.includes("organization_accounts:password:manage") === true;
 }
 
+function canManageMobilePortalLocationDisplay() {
+  return state.portalStatus?.portalEnabled === true
+    && state.portalSession?.user?.permissions?.includes("mobile_portal:location_display:manage") === true;
+}
+
+function canImportXoffiTime() {
+  return state.portalStatus?.portalEnabled !== true
+    || state.portalSession?.user?.permissions?.includes("xoffi_time_import:manage") === true;
+}
+
 function personnelLifecycleFoundationEnabled() {
   return state.portalStatus?.installationFeatures?.personnelLifecycle === true;
 }
@@ -1552,6 +1565,9 @@ function applyRoleVisibility() {
   const branchLoanOverviewManagementAccess = canManageBranchLoanOverview();
   const branchOrderManagementAccess = canManageBranchOrders();
   const branchAccountPasswordManagementAccess = canManageBranchAccountPasswords();
+  const mobilePortalLocationDisplayAccess = canManageMobilePortalLocationDisplay()
+    && features.employeePortal !== false;
+  const portalUserAdministrationAccess = scopeAccess || permissions.includes("users:write") || globalAdministration;
   const salesAnalyticsAccess = canAccessSalesAnalytics();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelTasksAccess;
@@ -1583,6 +1599,7 @@ function applyRoleVisibility() {
   elements.branchOrdersManagementNavButton?.classList.toggle("hidden", !branchOrderManagementAccess);
   elements.loanOverviewSettingsButton?.classList.toggle("hidden", !branchLoanOverviewManagementAccess);
   elements.branchAccountPasswordButton?.classList.toggle("hidden", !branchAccountPasswordManagementAccess);
+  elements.xoffiImportButton?.classList.toggle("hidden", !canImportXoffiTime());
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
@@ -1597,7 +1614,7 @@ function applyRoleVisibility() {
   const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
     || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
     || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess
-    || loanSettingsAccess;
+    || loanSettingsAccess || mobilePortalLocationDisplayAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || brandingAccess || loanSettingsAccess,
@@ -1605,7 +1622,7 @@ function applyRoleVisibility() {
     vacation: features.vacation !== false && (settingsAccess || globalAdministration),
     timeTracking: settingsAccess || (wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false),
     integrations: integrationAccess,
-    access: (scopeAccess || permissions.includes("users:write") || globalAdministration)
+    access: (portalUserAdministrationAccess || mobilePortalLocationDisplayAccess)
       && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false),
     rights: rightsAccess,
     dataProtection: retentionReadAccess,
@@ -1688,6 +1705,8 @@ function applyRoleVisibility() {
   elements.workflowSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
   elements.amuSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
   if (features.sicknessAmu === false) elements.amuSettingsCard?.classList.add("hidden");
+  elements.portalUserAccessCard?.classList.toggle("hidden", !portalUserAdministrationAccess);
+  elements.mobilePortalLocationDisplayCard?.classList.toggle("hidden", !mobilePortalLocationDisplayAccess);
   elements.greetingSettingsCard?.classList.toggle("hidden", !greetingSettingsAccess || features.employeePortal === false);
   elements.serverDiagnosticsCard?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
   elements.refreshServerDiagnosticsButton?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
@@ -2097,6 +2116,7 @@ function render() {
   renderTimeline();
   renderRemarks();
   renderHoursOverview();
+  renderFilialDashboard();
   renderVacations();
   renderPersonnelAdministration();
   renderEmployees();
@@ -3045,9 +3065,10 @@ function applyNavigationGroupState(key, visible = true) {
 function renderContextNavigation() {
   const locations = activeLocations();
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
-  const filialViewActive = ["personnel", "planning", "vacations", "loans", "branchOrders"].includes(state.currentView);
+  const filialViewActive = ["filialAdministration", "personnel", "planning", "vacations", "loans", "branchOrders"].includes(state.currentView);
   elements.filialManagementNav?.classList.toggle("contains-active", filialViewActive);
   applyNavigationGroupState("filialManagement", true);
+  setNavigationCurrent(elements.filialDashboardNavButton, state.currentView === "filialAdministration");
   setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
   setNavigationCurrent(elements.loanManagementNavButton, state.currentView === "loans");
   setNavigationCurrent(elements.branchOrdersManagementNavButton, state.currentView === "branchOrders");
@@ -3557,6 +3578,13 @@ function hoursOverviewValue(value) {
 
 function renderHoursOverview() {
   const showSaturdayStats = state.data.settings.show_saturday_service_stats !== "0";
+  if (elements.xoffiImportButton) {
+    const eligibleWeek = state.data.isPastWeek === true && canImportXoffiTime();
+    elements.xoffiImportButton.disabled = !eligibleWeek;
+    elements.xoffiImportButton.title = eligibleWeek
+      ? "xoffi-Bild für diese abgeschlossene Kalenderwoche auslesen"
+      : "Der xoffi-Import ist ausschließlich in vergangenen Kalenderwochen verfügbar.";
+  }
   let hasEstimatedSaturdayStats = false;
   elements.hoursOverview.innerHTML = state.data.employees.map((employee) => {
     const planned = hoursOverviewMinutes(state.data.plannedTotals, employee.personnel_number);
@@ -3570,6 +3598,8 @@ function renderHoursOverview() {
       : 0;
     const calculationError = [planned, optionCredit, counted, target].some((value) => value === null);
     const saturdayStats = state.data.saturdayStats?.byEmployee?.[employee.personnel_number] || null;
+    const xoffi = state.data.xoffiTime?.weekByEmployee?.[employee.personnel_number] || null;
+    const xoffiBalance = state.data.xoffiTime?.balanceByEmployee?.[employee.personnel_number] || null;
     if (saturdayStats?.fourWeeksEstimated || saturdayStats?.threeMonthsEstimated) hasEstimatedSaturdayStats = true;
     const saturdayStatsHtml = showSaturdayStats && saturdayStats ? `
       <div class="hours-saturday-stats">
@@ -3578,6 +3608,17 @@ function renderHoursOverview() {
         <strong class="${saturdayStats.threeMonthsEstimated ? "estimated" : ""}">3 Mon: ${formatCount(saturdayStats.threeMonths)}${saturdayStats.threeMonthsEstimated ? "*" : ""}</strong>
       </div>
     ` : "";
+    const xoffiComparison = xoffi ? xoffi.actualMinutes - (planned || 0) : null;
+    const effectiveBalance = xoffi?.closingBalanceMinutes === null || xoffi?.closingBalanceMinutes === undefined
+      ? xoffiBalance : { minutes: xoffi.closingBalanceMinutes, weekStart: state.data.weekStart };
+    const xoffiHtml = xoffi ? `
+      <div class="hours-xoffi-summary">
+        <span><small>xoffi Ist</small><strong>${formatHours(xoffi.actualMinutes)}</strong></span>
+        <span><small>xoffi gewertet</small><strong>${formatHours(xoffi.valuedMinutes)}</strong></span>
+        <span><small>Planabweichung</small><strong class="${xoffiComparison < 0 ? "negative" : "positive"}">${xoffiComparison > 0 ? "+" : ""}${formatHours(xoffiComparison)}</strong></span>
+        <em>${xoffi.useAsActual ? "Als Ist-Zeit aktiv" : "Nur Vergleichsdaten"}</em>
+      </div>` : "";
+    const balanceHtml = effectiveBalance ? `<div class="hours-xoffi-balance"><small>Stundenkonto laut xoffi${effectiveBalance.weekStart ? ` · Stand KW ${getIsoWeek(effectiveBalance.weekStart)}` : ""}</small><strong class="${effectiveBalance.minutes < 0 ? "negative" : "positive"}">${effectiveBalance.minutes > 0 ? "+" : ""}${formatHours(effectiveBalance.minutes)}</strong></div>` : "";
     return `<article class="hours-card">
       <div class="hours-person">
         <span class="hours-color" style="background:${employee.color}"></span>
@@ -3591,6 +3632,8 @@ function renderHoursOverview() {
         <span class="${difference === null ? "hours-under" : difference > 0 ? "hours-over" : difference < 0 ? "hours-under" : "hours-exact"}"><small>Differenz</small><strong>${difference === null ? '<span class="status-badge danger">Berechnungsfehler</span>' : `${difference > 0 ? "+" : ""}${formatHours(difference)}`}</strong></span>
       </div>
       ${calculationError ? '<p class="calculation-note">Die Wochenstunden konnten nicht vollständig berechnet werden. Bitte den Dienstplan neu laden.</p>' : ""}
+      ${xoffiHtml}
+      ${balanceHtml}
       ${saturdayStatsHtml}
       <div class="hours-progress"><span style="width:${percentage}%;background:${employee.color}"></span></div>
     </article>`;
@@ -13661,6 +13704,28 @@ function normalizePersonnelDashboardLayout(value) {
   return { version: 1, order, hidden };
 }
 
+function filialDashboardCatalog() {
+  const features = state.portalStatus?.installationFeatures || {};
+  return [
+    { id: "team", symbol: "◎", eyebrow: "Organisation", label: "Teams & Standorte", description: "Team, Farben, Spitznamen und operative Filialdaten verwalten.", view: "personnel", available: true },
+    { id: "loans", symbol: "▣", eyebrow: "Leihe", label: "Leihverwaltung", description: "Leihvorgänge und Rücknahmen im freigegebenen Bereich bearbeiten.", view: "loans", available: canReadLoanManagement() },
+    { id: "branchOrders", symbol: "▤", eyebrow: "Beschaffung", label: "Filialbestellungen", description: "Bestellgruppen, Ziele und Nachweise im erlaubten Bereich verwalten.", view: "branchOrders", available: canManageBranchOrders() },
+    { id: "planning", symbol: "▦", eyebrow: "Einsatzplanung", label: "Dienstplanung", description: "Wochenpläne, Filialeinsätze und Stundenübersicht öffnen.", view: "planning", available: true },
+    { id: "vacations", symbol: "☀", eyebrow: "Abwesenheit", label: "Urlaubsplanung", description: "Genehmigte Urlaube im Filialkalender anzeigen und planen.", view: "vacations", available: features.vacation !== false },
+  ];
+}
+
+function renderFilialDashboard() {
+  if (!elements.filialDashboardGrid) return;
+  const items = filialDashboardCatalog().filter((item) => item.available);
+  elements.filialDashboardGrid.innerHTML = items.map((item) => `
+    <button class="personnel-dashboard-card" type="button" data-filial-dashboard-view="${escapeHtmlAttribute(item.view)}">
+      <span class="personnel-dashboard-card-symbol" aria-hidden="true">${escapeHtml(item.symbol)}</span>
+      <span class="personnel-dashboard-card-copy"><small>${escapeHtml(item.eyebrow)}</small><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.description)}</span></span>
+      <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
+    </button>`).join("");
+}
+
 function personnelDashboardCatalog() {
   const features = state.portalStatus?.installationFeatures || {};
   return [
@@ -14624,6 +14689,239 @@ const permissionDependencyRules = Object.freeze([
   }),
 ]);
 
+function populateMobilePortalLocationDisplayLocations() {
+  if (!elements.mobilePortalLocationDisplayLocation) return "";
+  const locations = activeLocations();
+  const previous = elements.mobilePortalLocationDisplayLocation.value;
+  const preferred = [
+    previous,
+    state.mobilePortalLocationDisplay?.locationId,
+    state.portalSession?.user?.homeLocationId,
+    state.locationId,
+    locations[0]?.id,
+  ].map((value) => String(value || "")).find((id) => locations.some((location) => location.id === id)) || "";
+  elements.mobilePortalLocationDisplayLocation.innerHTML = locations.map((location) =>
+    `<option value="${escapeHtmlAttribute(location.id)}" ${location.id === preferred ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
+  ).join("");
+  return preferred;
+}
+
+function renderMobilePortalLocationDisplay() {
+  if (!elements.mobilePortalLocationDisplayModules) return;
+  const configuration = state.mobilePortalLocationDisplay;
+  if (!configuration) {
+    elements.mobilePortalLocationDisplayModules.innerHTML = "";
+    return;
+  }
+  const allowed = new Set(configuration.allowedModules || []);
+  elements.mobilePortalLocationDisplayModules.innerHTML = (configuration.modules || []).map((module) => `
+    <label>
+      <input type="checkbox" value="${escapeHtmlAttribute(module.id)}" ${allowed.has(module.id) ? "checked" : ""} />
+      <span><strong>${escapeHtml(module.label)}</strong><small>${escapeHtml(module.description || "")}</small></span>
+    </label>
+  `).join("");
+}
+
+async function loadMobilePortalLocationDisplay() {
+  if (!canManageMobilePortalLocationDisplay() || !elements.mobilePortalLocationDisplayCard) return;
+  const locationId = populateMobilePortalLocationDisplayLocations();
+  if (!locationId) {
+    state.mobilePortalLocationDisplay = null;
+    renderMobilePortalLocationDisplay();
+    elements.mobilePortalLocationDisplayHint.textContent = "Kein verwaltbarer aktiver Standort verfügbar.";
+    return;
+  }
+  elements.mobilePortalLocationDisplayHint.textContent = "Mobile Ansicht wird geladen.";
+  elements.saveMobilePortalLocationDisplayButton.disabled = true;
+  try {
+    const result = await api(`/api/portal/v1/mobile-portal-location-display?locationId=${encodeURIComponent(locationId)}`);
+    if (elements.mobilePortalLocationDisplayLocation.value !== locationId) return;
+    state.mobilePortalLocationDisplay = result;
+    renderMobilePortalLocationDisplay();
+    elements.mobilePortalLocationDisplayHint.textContent = result.configured
+      ? "Filialauswahl gespeichert. Persönliche Fachrechte bleiben zusätzlich maßgeblich."
+      : "Noch keine Filialauswahl gespeichert; derzeit sind alle fachlich erlaubten Bereiche sichtbar.";
+  } catch (error) {
+    state.mobilePortalLocationDisplay = null;
+    renderMobilePortalLocationDisplay();
+    elements.mobilePortalLocationDisplayHint.textContent = error.message;
+  } finally {
+    elements.saveMobilePortalLocationDisplayButton.disabled = false;
+  }
+}
+
+function xoffiHoursInput(minutes) {
+  return Number.isFinite(Number(minutes)) ? (Number(minutes) / 60).toFixed(2) : "";
+}
+
+function xoffiMinutesInput(input, { nullable = false } = {}) {
+  const value = String(input?.value || "").trim().replace(",", ".");
+  if (!value && nullable) return null;
+  const hours = Number(value);
+  if (!Number.isFinite(hours)) throw new Error("Bitte alle xoffi-Stundenwerte vollständig prüfen.");
+  return Math.round(hours * 60);
+}
+
+function resetXoffiImport() {
+  state.xoffiImportPreview = null;
+  if (elements.xoffiImportForm) elements.xoffiImportForm.reset();
+  if (elements.xoffiUseAsActual) elements.xoffiUseAsActual.checked = true;
+  if (elements.xoffiImportPreview) elements.xoffiImportPreview.innerHTML = "";
+  elements.xoffiImportConfirmation?.classList.add("hidden");
+  if (elements.xoffiApplyButton) elements.xoffiApplyButton.disabled = true;
+  if (elements.xoffiImportStatus) elements.xoffiImportStatus.textContent = `KW ${state.data?.calendarWeek || getIsoWeek(state.weekStart)} · Bilddatei auswählen und lokal auslesen.`;
+}
+
+function renderXoffiImportPreview() {
+  const preview = state.xoffiImportPreview;
+  if (!preview || !elements.xoffiImportPreview) return;
+  const candidateOptions = (selected) => preview.candidates.map((employee) => `
+    <option value="${escapeHtmlAttribute(employee.employeeNumber)}" ${employee.employeeNumber === selected ? "selected" : ""}>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</option>
+  `).join("");
+  elements.xoffiImportPreview.innerHTML = `
+    <div class="xoffi-preview-heading"><strong>KW ${Number(preview.calendarWeek)} · ${escapeHtml(preview.context.locationName || preview.context.locationId)}</strong><span>${formatDate(preview.weekStart)}–${formatDate(preview.weekEnd)}</span></div>
+    ${(preview.warnings || []).map((warning) => `<p class="calculation-note">${escapeHtml(warning)}</p>`).join("")}
+    <div class="xoffi-preview-rows">${preview.employees.map((employee, rowIndex) => `
+      <article class="xoffi-preview-row" data-xoffi-row="${rowIndex}" data-source-name="${escapeHtmlAttribute(employee.sourceName)}" data-match-confidence="${Number(employee.matchConfidence || 0)}">
+        <div class="xoffi-row-heading">
+          <div><strong>${escapeHtml(employee.sourceName)}</strong><small>OCR-Zuordnung ${Number(employee.matchConfidence || 0)} %</small></div>
+          <label>Teammitglied<select data-xoffi-employee><option value="">Bitte zuordnen</option>${candidateOptions(employee.employeeNumber)}</select></label>
+        </div>
+        <div class="xoffi-week-values">
+          <label>Ist gesamt (h)<input data-xoffi-week-actual type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklyActualMinutes)}" /></label>
+          <label>Gewertet (h)<input data-xoffi-week-valued type="number" step="0.01" min="0" max="336" value="${xoffiHoursInput(employee.weeklyValuedMinutes)}" /></label>
+          <label>Zuschläge (h)<input data-xoffi-week-surcharge type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklySurchargeMinutes)}" /></label>
+          <label>Stundenkonto (h)<input data-xoffi-balance type="number" step="0.01" min="-10000" max="10000" value="${xoffiHoursInput(employee.closingBalanceMinutes)}" /></label>
+        </div>
+        <div class="xoffi-days">${employee.days.map((day, dayIndex) => `
+          <div class="xoffi-day" data-xoffi-day="${dayIndex}" data-work-date="${escapeHtmlAttribute(day.workDate)}" data-confidence="${Number(day.confidence || 0)}">
+            <strong>${weekdayNames[dayIndex]} <small>${formatDate(day.workDate, { day: "2-digit", month: "2-digit" })}</small></strong>
+            <label>Zeiten<input data-xoffi-intervals type="text" value="${escapeHtmlAttribute((day.intervals || []).join(", "))}" placeholder="09:00-12:30, 13:00-17:00" /></label>
+            <label>Ist (h)<input data-xoffi-day-actual type="number" step="0.01" min="0" max="24" value="${xoffiHoursInput(day.actualMinutes)}" /></label>
+            <label>Gewertet (h)<input data-xoffi-day-valued type="number" step="0.01" min="0" max="48" value="${xoffiHoursInput(day.valuedMinutes)}" /></label>
+            <label>Zuschlag (h)<input data-xoffi-day-surcharge type="number" step="0.01" min="0" max="24" value="${xoffiHoursInput(day.surchargeMinutes)}" /></label>
+          </div>`).join("")}</div>
+        ${(employee.warnings || []).map((warning) => `<p class="settings-note">${escapeHtml(warning)}</p>`).join("")}
+      </article>`).join("")}</div>`;
+  elements.xoffiImportConfirmation?.classList.remove("hidden");
+}
+
+async function inspectXoffiImportFile() {
+  const file = elements.xoffiImportFile?.files?.[0];
+  if (!file) {
+    elements.xoffiImportStatus.textContent = "Bitte zuerst eine JPG-, PNG- oder WebP-Datei auswählen.";
+    return;
+  }
+  if (!state.data?.isPastWeek) {
+    elements.xoffiImportStatus.textContent = "Der Import ist nur in einer vergangenen Kalenderwoche möglich.";
+    return;
+  }
+  elements.xoffiInspectButton.disabled = true;
+  elements.xoffiApplyButton.disabled = true;
+  elements.xoffiImportStatus.textContent = "Bild wird lokal ausgelesen. Das kann kurz dauern.";
+  try {
+    const parameters = new URLSearchParams({
+      weekStart: state.data.weekStart,
+      locationId: state.data.context.locationId,
+    });
+    if (state.data.context.departmentId) parameters.set("departmentId", state.data.context.departmentId);
+    const response = await rawApi(`/api/portal/v1/xoffi-time-import/inspect?${parameters}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+        "X-Import-Filename": encodeURIComponent(file.name || "xoffi.png"),
+      },
+      body: file,
+    });
+    state.xoffiImportPreview = await response.json();
+    elements.xoffiImportConfirmed.checked = false;
+    renderXoffiImportPreview();
+    elements.xoffiImportStatus.textContent = "OCR-Vorschlag erstellt. Bitte sämtliche Werte und Zuordnungen prüfen.";
+  } catch (error) {
+    state.xoffiImportPreview = null;
+    elements.xoffiImportPreview.innerHTML = "";
+    elements.xoffiImportConfirmation?.classList.add("hidden");
+    elements.xoffiImportStatus.textContent = error.message;
+  } finally {
+    elements.xoffiInspectButton.disabled = false;
+  }
+}
+
+function collectXoffiReviewedRows() {
+  const preview = state.xoffiImportPreview;
+  if (!preview) throw new Error("Bitte das Bild zuerst auslesen.");
+  return [...elements.xoffiImportPreview.querySelectorAll("[data-xoffi-row]")].map((row) => ({
+    sourceName: row.dataset.sourceName,
+    employeeNumber: row.querySelector("[data-xoffi-employee]").value,
+    matchConfidence: Number(row.dataset.matchConfidence || 0),
+    weeklyActualMinutes: xoffiMinutesInput(row.querySelector("[data-xoffi-week-actual]")),
+    weeklyValuedMinutes: xoffiMinutesInput(row.querySelector("[data-xoffi-week-valued]")),
+    weeklySurchargeMinutes: xoffiMinutesInput(row.querySelector("[data-xoffi-week-surcharge]")),
+    closingBalanceMinutes: xoffiMinutesInput(row.querySelector("[data-xoffi-balance]"), { nullable: true }),
+    days: [...row.querySelectorAll("[data-xoffi-day]")].map((day) => ({
+      workDate: day.dataset.workDate,
+      intervals: String(day.querySelector("[data-xoffi-intervals]").value || "").split(/[,;]+/).map((value) => value.trim()).filter(Boolean),
+      actualMinutes: xoffiMinutesInput(day.querySelector("[data-xoffi-day-actual]")),
+      valuedMinutes: xoffiMinutesInput(day.querySelector("[data-xoffi-day-valued]")),
+      surchargeMinutes: xoffiMinutesInput(day.querySelector("[data-xoffi-day-surcharge]")),
+      absence: preview.employees[Number(row.dataset.xoffiRow)]?.days?.[Number(day.dataset.xoffiDay)]?.absence || "",
+      confidence: Number(day.dataset.confidence || 0),
+    })),
+  }));
+}
+
+async function applyXoffiImport(event) {
+  event.preventDefault();
+  if (!state.xoffiImportPreview || !elements.xoffiImportConfirmed.checked) return;
+  elements.xoffiApplyButton.disabled = true;
+  elements.xoffiInspectButton.disabled = true;
+  elements.xoffiImportStatus.textContent = "Geprüfte xoffi-Werte werden gespeichert.";
+  try {
+    const result = await api("/api/portal/v1/xoffi-time-import/apply", {
+      method: "POST",
+      body: JSON.stringify({
+        previewId: state.xoffiImportPreview.previewId,
+        confirmed: true,
+        useAsActual: elements.xoffiUseAsActual.checked,
+        employees: collectXoffiReviewedRows(),
+      }),
+    });
+    state.data = result.schedule;
+    state.weekStart = result.schedule.weekStart;
+    render();
+    elements.xoffiImportDialog.close();
+    showToast("xoffi-Zeiterfassung wurde revisionssicher übernommen.");
+  } catch (error) {
+    elements.xoffiImportStatus.textContent = error.message;
+    elements.xoffiApplyButton.disabled = !elements.xoffiImportConfirmed.checked;
+  } finally {
+    elements.xoffiInspectButton.disabled = false;
+  }
+}
+
+async function saveMobilePortalLocationDisplay() {
+  if (!canManageMobilePortalLocationDisplay() || !state.mobilePortalLocationDisplay) return;
+  const locationId = elements.mobilePortalLocationDisplayLocation.value;
+  const allowedModules = [...elements.mobilePortalLocationDisplayModules.querySelectorAll('input[type="checkbox"]:checked')]
+    .map((input) => input.value);
+  elements.saveMobilePortalLocationDisplayButton.disabled = true;
+  elements.mobilePortalLocationDisplayHint.textContent = "Mobile Ansicht wird gespeichert.";
+  try {
+    state.mobilePortalLocationDisplay = await api("/api/portal/v1/mobile-portal-location-display", {
+      method: "PUT",
+      body: JSON.stringify({ locationId, allowedModules }),
+    });
+    renderMobilePortalLocationDisplay();
+    elements.mobilePortalLocationDisplayHint.textContent = "Mobile Mitarbeiteransicht gespeichert.";
+    showToast("Mobile Mitarbeiteransicht gespeichert.");
+  } catch (error) {
+    elements.mobilePortalLocationDisplayHint.textContent = error.message;
+    showToast(error.message, true);
+  } finally {
+    elements.saveMobilePortalLocationDisplayButton.disabled = false;
+  }
+}
+
 async function loadPortalUsers() {
   if (!elements.portalUserList) return;
   try {
@@ -15239,6 +15537,7 @@ async function saveUserRights(event) {
 }
 
 const UI_APPEARANCE_VIEWS = Object.freeze([
+  "filialAdministration",
   "planning",
   "requests",
   "timeTracking",
@@ -15299,6 +15598,7 @@ function applyWorkRuleAssessmentExpanded(value) {
 
 function pageViewElement(view) {
   return ({
+    filialAdministration: elements.filialAdministrationView,
     planning: elements.planningView,
     requests: elements.requestsView,
     timeTracking: elements.timeTrackingView,
@@ -22356,6 +22656,7 @@ function setView(view) {
     button.classList.toggle("active", active);
   });
   renderContextNavigation();
+  elements.filialAdministrationView?.classList.toggle("active", view === "filialAdministration");
   elements.planningView.classList.toggle("active", view === "planning");
   elements.requestsView.classList.toggle("active", view === "requests");
   elements.timeTrackingView?.classList.toggle("active", view === "timeTracking");
@@ -22390,7 +22691,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) return;
+  if (!["filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) return;
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -22443,7 +22744,8 @@ function setSettingsTab(tab) {
     || serverBackupTab
     || (activeTab === "backup" ? !canSaveBackupSettings : !(canSaveGeneralSettings || (activeTab === "general" && canSaveBranding))));
   if (activeTab === "access") {
-    loadPortalUsers();
+    if (!elements.portalUserAccessCard?.classList.contains("hidden")) loadPortalUsers();
+    if (canManageMobilePortalLocationDisplay()) loadMobilePortalLocationDisplay();
     loadOrganizationAccounts();
     loadAmuSettings();
     loadAmuAccessPolicy();
@@ -25943,6 +26245,8 @@ elements.currentWeekAutoLock?.addEventListener("change", updateWeekLockSettings)
 elements.currentWeekLockMode?.addEventListener("change", updateWeekLockSettings);
 elements.currentWeekLockDay?.addEventListener("change", updateWeekLockSettings);
 elements.adminSetupButton?.addEventListener("click", openAdminSetup);
+elements.mobilePortalLocationDisplayLocation?.addEventListener("change", loadMobilePortalLocationDisplay);
+elements.saveMobilePortalLocationDisplayButton?.addEventListener("click", saveMobilePortalLocationDisplay);
 elements.adminSetupForm?.addEventListener("submit", setupPortalAdmin);
 elements.portalUserList?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-portal-user]");
@@ -25982,6 +26286,18 @@ elements.delegationList?.addEventListener("click", async (event) => {
   try { await api(`/api/portal/v1/approval-delegations/${row.dataset.delegationId}`, { method: "DELETE" }); await loadApprovalDelegations(); } catch (error) { showToast(error.message, true); }
 });
 elements.refreshRequestsButton?.addEventListener("click", loadManagerVacationRequests);
+elements.xoffiImportButton?.addEventListener("click", () => {
+  if (!state.data?.isPastWeek) return;
+  resetXoffiImport();
+  elements.xoffiImportDialog?.showModal();
+});
+elements.xoffiImportClose?.addEventListener("click", () => elements.xoffiImportDialog?.close());
+elements.xoffiImportCancel?.addEventListener("click", () => elements.xoffiImportDialog?.close());
+elements.xoffiInspectButton?.addEventListener("click", inspectXoffiImportFile);
+elements.xoffiImportConfirmed?.addEventListener("change", () => {
+  elements.xoffiApplyButton.disabled = !state.xoffiImportPreview || !elements.xoffiImportConfirmed.checked;
+});
+elements.xoffiImportForm?.addEventListener("submit", applyXoffiImport);
 elements.refreshTimePresenceButton?.addEventListener("click", () => Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]));
 elements.loadTimeDayReviewButton?.addEventListener("click", loadTimeDayReview);
 elements.timeReviewFilter?.addEventListener("change", renderTimeDayReview);
@@ -26858,6 +27174,14 @@ document.querySelector("#addEmployeeButton").addEventListener("click", async () 
   openEmployeeModal();
 });
 elements.addCentralEmployeeButton?.addEventListener("click", () => openEmployeeModal());
+elements.filialDashboardGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-filial-dashboard-view]");
+  if (button) setView(button.dataset.filialDashboardView);
+});
+elements.salesDashboardGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-sales-dashboard-view]");
+  if (button) setView(button.dataset.salesDashboardView);
+});
 elements.personnelDashboardGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-personnel-dashboard-item]");
   if (button) navigateFromPersonnelDashboard(button.dataset.personnelDashboardItem);

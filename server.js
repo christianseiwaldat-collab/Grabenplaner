@@ -24,6 +24,11 @@ const {
   inspectTradeFotoOcrReportBuffer,
 } = require("./lib/sales-analytics-tradefoto-ocr");
 const {
+  XOFFI_IMAGE_MAX_BYTES,
+  XoffiTimeImportError,
+  inspectXoffiImageBuffer,
+} = require("./lib/xoffi-time-import");
+const {
   SalesAnalyticsReportSeriesError,
   aggregateSalesAnalyticsReportSeries,
   classifySalesAnalyticsReportArchive,
@@ -528,8 +533,26 @@ const ORGANIZATION_SCHEDULE_PERMISSION = "schedule:location:view";
 const BRANCH_ORDER_SUBMIT_PERMISSION = "branch_orders:submit";
 const BRANCH_ORDER_MANAGE_PERMISSION = "branch_orders:manage";
 const BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION = "branch_portal:display:manage";
+const MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION = "mobile_portal:location_display:manage";
+const XOFFI_TIME_IMPORT_PERMISSION = "xoffi_time_import:manage";
 const STAFF_ASSIGNMENTS_MANAGE_PERMISSION = "staff_assignments:manage";
 const BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION = "organization_accounts:password:manage";
+const mobilePortalLocationDisplayModules = Object.freeze([
+  { id: "time", label: "Zeit", description: "Zeiterfassung und Zeitkonto" },
+  { id: "tasks", label: "Aufgaben", description: "Persönliche Prozessschritte" },
+  { id: "team", label: "Team", description: "Anwesenheit im zuständigen Bereich" },
+  { id: "approvals", label: "Freigaben", description: "Offene Entscheidungen" },
+  { id: "schedule", label: "Dienstplan", description: "Eigener Dienstplan" },
+  { id: "requests", label: "Anträge", description: "Urlaub, Zeitausgleich und Verlauf" },
+  { id: "loan", label: "Leihe", description: "Persönliche Ausgaben und Rücknahmen" },
+  { id: "sickness", label: "Krank & AUM", description: "Krankmeldung und AUM" },
+  { id: "branchOrders", label: "Filialbestellung", description: "Bestellungen des Standorts" },
+  { id: "branchVacation", label: "Urlaubsplanung", description: "Genehmigte Urlaubstage des Standorts" },
+]);
+const mobilePortalLocationDisplayModuleIds = Object.freeze(
+  mobilePortalLocationDisplayModules.map((module) => module.id),
+);
+const mobilePortalLocationDisplayModuleIdSet = new Set(mobilePortalLocationDisplayModuleIds);
 const branchOrganizationAccountBasePermissions = Object.freeze([
   LOAN_OVERVIEW_PERMISSION,
   ORGANIZATION_SCHEDULE_PERMISSION,
@@ -748,6 +771,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: BRANCH_ORDER_SUBMIT_PERMISSION, label: "Filialbestellungen für die eigene Filiale erfassen", description: "Erlaubt einer persönlich freigeschalteten Person Bestellungen ausschließlich für sich selbst und ihre Stammfiliale zu erfassen.", group: "Filialbestellungen", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["employee", "location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "developer"] },
   { id: BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION, label: "Anzeige des Filialkontos festlegen", description: "Dienstplanansicht, mobile Tagesausblendung und automatisches Speichern für den zugewiesenen Standort einstellen.", group: "Filialkonto", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION, label: "Mobile Mitarbeiteransicht des Standorts festlegen", description: "Legt fest, welche fachlich freigegebenen Bereiche Mitarbeitende der eigenen Filiale in ihrer mobilen Portalansicht sehen.", group: "Mitarbeiterportal", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: XOFFI_TIME_IMPORT_PERMISSION, label: "xoffi-Zeiterfassung importieren", description: "Geprüfte xoffi-Bilddaten ausschließlich für vergangene Wochen im eigenen Verantwortungsbereich als Ist-Zeit übernehmen.", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION, label: "Passwort eines Filialkontos neu vergeben", description: "Passwort ausschließlich für aktive Filialkonten im zugewiesenen Standort zurücksetzen; beendet bestehende Filialkonto-Sitzungen.", group: "Zugänge & Rechte", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -1566,7 +1591,12 @@ for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
 }
 for (const roleId of ["manager", "hr", "admin", "developer"]) {
-  addBuiltinRolePermissions(roleId, [STAFF_ASSIGNMENTS_MANAGE_PERMISSION, BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION]);
+  addBuiltinRolePermissions(roleId, [
+    STAFF_ASSIGNMENTS_MANAGE_PERMISSION,
+    BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
+    MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION,
+    XOFFI_TIME_IMPORT_PERMISSION,
+  ]);
 }
 for (const roleId of ["hr", "admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -3052,6 +3082,85 @@ async function setPortalSetting(key, value) {
   return refreshPortalSettingsSnapshot();
 }
 
+function mobilePortalLocationDisplaySettingKey(locationId) {
+  return `mobile_portal_location_display_v1_${normalizeLocationId(locationId)}`;
+}
+
+function defaultMobilePortalLocationDisplay(locationId = "") {
+  return {
+    version: 1,
+    locationId: String(locationId || ""),
+    allowedModules: [...mobilePortalLocationDisplayModuleIds],
+    configured: false,
+  };
+}
+
+function mobilePortalLocationDisplayForLocation(locationId) {
+  const normalizedLocationId = String(locationId || "").trim();
+  if (!normalizedLocationId) return defaultMobilePortalLocationDisplay();
+  let settingKey;
+  try {
+    settingKey = mobilePortalLocationDisplaySettingKey(normalizedLocationId);
+  } catch {
+    return { version: 1, locationId: normalizedLocationId, allowedModules: [], configured: true };
+  }
+  const settings = getPortalSettings();
+  if (!Object.prototype.hasOwnProperty.call(settings, settingKey)) {
+    return defaultMobilePortalLocationDisplay(normalizedLocationId);
+  }
+  try {
+    const stored = JSON.parse(settings[settingKey]);
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)
+      || Number(stored.version) !== 1 || !Array.isArray(stored.allowedModules)
+      || stored.allowedModules.length > mobilePortalLocationDisplayModuleIds.length
+      || new Set(stored.allowedModules.map(String)).size !== stored.allowedModules.length
+      || stored.allowedModules.some((id) => !mobilePortalLocationDisplayModuleIdSet.has(String(id)))) {
+      throw new Error("invalid mobile portal location display policy");
+    }
+    const requested = new Set(stored.allowedModules.map(String));
+    return {
+      version: 1,
+      locationId: normalizedLocationId,
+      allowedModules: mobilePortalLocationDisplayModuleIds.filter((id) => requested.has(id)),
+      configured: true,
+    };
+  } catch {
+    return { version: 1, locationId: normalizedLocationId, allowedModules: [], configured: true };
+  }
+}
+
+function validateMobilePortalLocationDisplay(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["locationId", "allowedModules"].includes(key))
+    || !Array.isArray(value.allowedModules)
+    || value.allowedModules.length > mobilePortalLocationDisplayModuleIds.length
+    || new Set(value.allowedModules.map(String)).size !== value.allowedModules.length
+    || value.allowedModules.some((id) => !mobilePortalLocationDisplayModuleIdSet.has(String(id)))) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Auswahl für die mobile Mitarbeiteransicht übermitteln.",
+      "MOBILE_PORTAL_LOCATION_DISPLAY_INVALID",
+    );
+  }
+  const requested = new Set(value.allowedModules.map(String));
+  return {
+    version: 1,
+    allowedModules: mobilePortalLocationDisplayModuleIds.filter((id) => requested.has(id)),
+  };
+}
+
+function mobilePortalLocationDisplayForSession(session) {
+  if (!session || isLocalSystemSession(session) || session.sessionKind === "organization" || session.isEmployee === false) {
+    return defaultMobilePortalLocationDisplay();
+  }
+  return mobilePortalLocationDisplayForLocation(session.homeLocationId);
+}
+
+function mobilePortalLocationDisplayAllows(session, moduleId) {
+  if (!mobilePortalLocationDisplayModuleIdSet.has(moduleId)) return true;
+  return mobilePortalLocationDisplayForSession(session).allowedModules.includes(moduleId);
+}
+
 function initializeApplicationPersistence() {
   if (!applicationInitialization) {
     applicationInitialization = (async () => {
@@ -3162,12 +3271,32 @@ app.use((request, response, next) => {
   next();
 });
 app.use(express.json({ limit: "1mb" }));
-app.use(async (request, _response, next) => {
+app.use(async (request, response, next) => {
   if (!request.path.startsWith("/api")) return next();
   try {
     await refreshPortalSettingsSnapshot();
     request.portalSession = await loadPortalSessionFromRequest(request);
     request.portalSessionLoaded = true;
+    if (request.portalSession) {
+      const cookies = parseCookies(request);
+      const maxAge = portalSessionTimeoutMinutes() * 60;
+      if (cookies[PORTAL_SESSION_COOKIE]) {
+        appendCookie(response, portalCookie(
+          PORTAL_SESSION_COOKIE,
+          cookies[PORTAL_SESSION_COOKIE],
+          request,
+          { httpOnly: true, maxAge },
+        ));
+      }
+      if (cookies[PORTAL_CSRF_COOKIE]) {
+        appendCookie(response, portalCookie(
+          PORTAL_CSRF_COOKIE,
+          cookies[PORTAL_CSRF_COOKIE],
+          request,
+          { maxAge },
+        ));
+      }
+    }
     if (request.path.startsWith("/api/work-rules")
       || request.path.startsWith("/api/collective-agreements")) {
       await refreshPortalScopeProjectionSnapshot();
@@ -3661,6 +3790,26 @@ const personalEmailVerificationIpRateLimits = createBoundedRateLimitStore({
   windowMs: 15 * 60 * 1000,
   maxKeys: 2048,
   maxEventsPerKey: 30,
+});
+const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+const PASSWORD_RESET_RATE_WINDOW_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_RATE_MAX_PER_TARGET = 3;
+const PASSWORD_RESET_RATE_MAX_PER_IP = 10;
+const PASSWORD_RESET_CONFIRM_RATE_MAX_PER_IP = 15;
+const passwordResetIpRateLimits = createBoundedRateLimitStore({
+  windowMs: PASSWORD_RESET_RATE_WINDOW_MS,
+  maxKeys: 2048,
+  maxEventsPerKey: PASSWORD_RESET_RATE_MAX_PER_IP,
+});
+const passwordResetTargetRateLimits = createBoundedRateLimitStore({
+  windowMs: PASSWORD_RESET_RATE_WINDOW_MS,
+  maxKeys: 4096,
+  maxEventsPerKey: PASSWORD_RESET_RATE_MAX_PER_TARGET,
+});
+const passwordResetConfirmRateLimits = createBoundedRateLimitStore({
+  windowMs: LOGIN_RATE_WINDOW_MS,
+  maxKeys: 2048,
+  maxEventsPerKey: PASSWORD_RESET_CONFIRM_RATE_MAX_PER_IP,
 });
 
 function backupAdminOriginAllowed(request) {
@@ -4175,6 +4324,8 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   const currentDate = new Date();
   const now = currentDate.toISOString();
   const tokenHash = sha256(token);
+  const timeoutMinutes = portalSessionTimeoutMinutes();
+  const refreshedExpiresAt = new Date(currentDate.getTime() + timeoutMinutes * 60000).toISOString();
   const session = await portalAccessRepository.getEmployeeSessionByToken({
     tokenHash,
     now,
@@ -4182,7 +4333,10 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   });
   if (session) {
     if (isReservedEmployeePrincipal(session.employee_number)) return null;
-    if (touch) await portalAccessRepository.touchEmployeeSession({ id: session.id });
+    if (touch) {
+      await portalAccessRepository.touchEmployeeSession({ id: session.id, expiresAt: refreshedExpiresAt });
+      session.expires_at = refreshedExpiresAt;
+    }
     const explicitScopes = portalAccessScopesForPrincipal({
       role: "employee",
       scopesValue: session.access_scopes,
@@ -4238,7 +4392,8 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
     .getOrganizationSessionByToken({ tokenHash, now });
   if (!organizationSession) return null;
   if (touch) {
-    await portalAccessRepository.touchOrganizationSession({ id: organizationSession.id });
+    await portalAccessRepository.touchOrganizationSession({ id: organizationSession.id, expiresAt: refreshedExpiresAt });
+    organizationSession.expires_at = refreshedExpiresAt;
   }
   const scopes = portalAccessScopesForPrincipal({
     role: "organization_account",
@@ -5522,6 +5677,10 @@ async function settingsForLocation(locationId, repository = null) {
 
 function getPortalSettings() {
   return { ...portalSettingsSnapshot };
+}
+
+function portalSessionTimeoutMinutes() {
+  return Math.min(1440, Math.max(15, Number(getPortalSettings().session_timeout_minutes || 480)));
 }
 
 function portalGreetingSettings() {
@@ -9662,6 +9821,37 @@ function actualDayMetrics(entries, date, settings, now = new Date()) {
   };
 }
 
+function xoffiDayMetrics(row) {
+  let intervals = [];
+  try {
+    const parsed = JSON.parse(String(row?.intervals_json || "[]"));
+    intervals = Array.isArray(parsed) ? parsed.filter((value) => /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(String(value))) : [];
+  } catch {}
+  const minute = (clock) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+  const ordered = intervals.map((value) => {
+    const [start, end] = value.split("-");
+    return { value, startMinute: minute(start), endMinute: minute(end) };
+  }).filter((value) => value.endMinute > value.startMinute).sort((left, right) => left.startMinute - right.startMinute);
+  const breakMinutes = ordered.reduce((sum, interval, index) => (
+    index === 0 ? sum : sum + Math.max(0, interval.startMinute - ordered[index - 1].endMinute)
+  ), 0);
+  return {
+    source: "xoffi",
+    importId: row.import_id,
+    intervals: ordered.map((interval) => interval.value),
+    workedMinutes: Math.max(0, finiteScheduleMinutes(row.actual_minutes)),
+    valuedMinutes: Math.max(0, finiteScheduleMinutes(row.valued_minutes)),
+    breakMinutes: Math.max(0, finiteScheduleMinutes(breakMinutes)),
+    saturdayBonusMinutes: Math.max(0, finiteScheduleMinutes(row.surcharge_minutes)),
+    saturdayEligibleMinutes: 0,
+    segments: [],
+    errors: [],
+    incomplete: false,
+    ongoing: false,
+    state: "off",
+  };
+}
+
 async function excusedTimeForEmployeeDate(
   employeeNumber,
   date,
@@ -9800,6 +9990,13 @@ async function evaluateTimeDay(
   const entries = (providedEntries || await timeEntriesForDay(employeeNumber, date, repository))
     .filter((entry) => (!departmentId || Number(entry.department_id || 0) === Number(departmentId))
       && (!filterLocation || String(entry.location_id || context.locationId) === evaluationLocationId));
+  const xoffiDay = await repository.getActiveXoffiDay({
+    employeeNumber,
+    workDate: date,
+    locationId: evaluationLocationId,
+    departmentId: departmentId || context.departmentId || null,
+  });
+  const useXoffiActual = Number(xoffiDay?.use_as_actual || 0) === 1;
   const planned = await plannedDayMetrics(
     employeeNumber,
     date,
@@ -9808,7 +10005,8 @@ async function evaluateTimeDay(
     filterLocation,
     repository,
   );
-  const actual = actualDayMetrics(entries, date, settings, now);
+  const actual = useXoffiActual ? xoffiDayMetrics(xoffiDay) : actualDayMetrics(entries, date, settings, now);
+  const hasActualData = useXoffiActual || entries.length > 0;
   const excused = await excusedTimeForEmployeeDate(
     employeeNumber,
     date,
@@ -9836,7 +10034,7 @@ async function evaluateTimeDay(
   const addIssue = (code, severity, label, message) => issues.push({ code, severity, label, message });
   if (actual.errors.length) addIssue("invalid_sequence", "error", "Buchungsfolge prüfen", "Mindestens eine Buchung passt nicht zur zeitlichen Reihenfolge.");
   if (isPast && actual.incomplete) addIssue("incomplete", "error", "Abschluss fehlt", "Der Arbeitstag wurde nicht vollständig mit „Gehen“ abgeschlossen.");
-  if (bookingWindowEnded && planned.netMinutes > 0 && entries.length === 0 && !excused.excused) {
+  if (bookingWindowEnded && planned.netMinutes > 0 && !hasActualData && !excused.excused) {
     addIssue("missing_entries", "error", "Buchungen fehlen", "Für den geplanten Dienst wurden keine Zeitbuchungen erfasst.");
   }
   if (!isFuture && actual.workedMinutes > 0 && planned.netMinutes === 0 && !excused.excused) {
@@ -9845,7 +10043,7 @@ async function evaluateTimeDay(
   if (!isFuture && !actual.incomplete && requiredBreakMinutes > actual.breakMinutes) {
     addIssue("break_short", "error", "Pause zu kurz", `Erfasst sind ${actual.breakMinutes} statt mindestens ${requiredBreakMinutes} Pausenminuten.`);
   }
-  if (!isFuture && !actual.incomplete && planned.netMinutes > 0 && entries.length > 0 && Math.abs(differenceMinutes) > toleranceMinutes) {
+  if (!isFuture && !actual.incomplete && planned.netMinutes > 0 && hasActualData && Math.abs(differenceMinutes) > toleranceMinutes) {
     addIssue("variance", "warning", "Zeitabweichung", `Die Ist-Zeit weicht um mehr als ${toleranceMinutes} Minuten vom Dienstplan ab.`);
   }
   const pendingCorrection = Boolean(await repository.hasPendingCorrection({
@@ -9863,6 +10061,7 @@ async function evaluateTimeDay(
     departmentId: Number(departmentId || 0) || 0,
     planned: planned.blocks.map((block) => [block.id, block.department_id, block.start_time, block.end_time]),
     entries: entries.map((entry) => [entry.id, entry.department_id, entry.entry_type, entry.entry_timestamp]),
+    xoffi: useXoffiActual ? [xoffiDay.import_id, xoffiDay.work_date, xoffiDay.actual_minutes, xoffiDay.valued_minutes, xoffiDay.intervals_json] : null,
     excused: excused.options.map((option) => [option.option_type, option.all_day, option.start_time, option.end_time]),
     excusedStatus: excused.excused ? excused.label || "excused" : "",
     excusedCreditedMinutes: Number(excused.creditedMinutes || 0),
@@ -9883,9 +10082,9 @@ async function evaluateTimeDay(
     if (review.stale) addIssue("review_stale", "info", "Prüfung veraltet", "Plan, Buchungen oder Bewertungsregeln wurden seit der Prüfung geändert.");
   }
   let code = isFuture ? "future" : date === today && actual.ongoing ? actual.state : "complete";
-  if (!entries.length && excused.excused) code = "excused_absence";
-  else if (!entries.length && planned.netMinutes > 0) code = isFuture || (date === today && !todayAfterPlannedEnd) ? "planned" : "missing_entries";
-  else if (!entries.length && planned.netMinutes === 0) code = "no_data";
+  if (!hasActualData && excused.excused) code = "excused_absence";
+  else if (!hasActualData && planned.netMinutes > 0) code = isFuture || (date === today && !todayAfterPlannedEnd) ? "planned" : "missing_entries";
+  else if (!hasActualData && planned.netMinutes === 0) code = "no_data";
   else if (issues.some((issue) => issue.severity === "error")) code = issues[0].code;
   else if (issues.length) code = "attention";
   const severity = issues.some((issue) => issue.severity === "error") ? "error"
@@ -10927,6 +11126,13 @@ const mobileLeadershipModules = Object.freeze([
   { id: "more", label: "Mehr" },
 ]);
 const mobileLeadershipModuleIds = new Set(mobileLeadershipModules.map((module) => module.id));
+const mobileLeadershipLocationDisplayModules = Object.freeze({
+  timeTracking: "time",
+  team: "team",
+  approvals: "approvals",
+  schedule: "schedule",
+  requests: "requests",
+});
 
 function mobileLeadershipLayouts() {
   const fallback = JSON.parse(defaultPortalSettings.mobile_leadership_layouts);
@@ -10945,6 +11151,8 @@ function mobileLeadershipLayouts() {
 
 function mobileModuleAllowedForSession(session, id) {
   const permissions = session.permissions || [];
+  const locationDisplayModule = mobileLeadershipLocationDisplayModules[id];
+  if (locationDisplayModule && !mobilePortalLocationDisplayAllows(session, locationDisplayModule)) return false;
   if (id === "timeTracking") return permissions.includes("own_time:read");
   if (id === "team") return permissions.includes("time:read");
   if (id === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "sickness:read"].includes(permission));
@@ -10959,9 +11167,10 @@ function mobileLayoutPayload(session) {
   const modules = roleLayout.filter((id) => mobileModuleAllowedForSession(session, id));
   return {
     modules,
-    availableModules: mobileLeadershipModules,
+    availableModules: mobileLeadershipModules.filter((module) => mobileModuleAllowedForSession(session, module.id)),
     layouts,
     canChange: isLocalSystemSession(session) || RIGHTS_ADMIN_PORTAL_ROLES.has(session.role),
+    locationDisplay: mobilePortalLocationDisplayForSession(session),
   };
 }
 
@@ -11136,11 +11345,21 @@ function mobileNavigationPayload(session, status = getPortalStatus()) {
       "settings",
     ].filter(Boolean);
   }
+  modules = modules.filter((id) => {
+    const locationDisplayModule = {
+      timeTracking: "time",
+      schedule: "schedule",
+      requests: "requests",
+      sicknessAndAmu: "sickness",
+    }[id];
+    return !locationDisplayModule || mobilePortalLocationDisplayAllows(session, locationDisplayModule);
+  });
   const normalized = [...new Set(modules)].filter((id) => mobileNavigationLabels[id] && id !== "settings").slice(0, 6);
   normalized.unshift("settings");
   return {
     defaultModule: normalized.includes("timeTracking") ? "timeTracking" : (normalized[0] || "settings"),
     items: normalized.map((id) => ({ id, label: mobileNavigationLabels[id], badgeCount: null })),
+    locationDisplay: mobilePortalLocationDisplayForSession(session),
   };
 }
 
@@ -11169,7 +11388,7 @@ async function mobilePersonalSettingsPayload(session, now = new Date()) {
   };
 }
 
-async function mobileHomePayload(session, request = null, now = new Date()) {
+async function mobileHomePayload(session, request = null, now = new Date(), { applyLocationDisplay = false } = {}) {
   const date = viennaTodayIso(now);
   let timeTracking = {
     enabled: false,
@@ -11179,7 +11398,8 @@ async function mobileHomePayload(session, request = null, now = new Date()) {
     allowedActions: [],
     reason: "Die Zeiterfassung ist für diesen Zugang nicht verfügbar.",
   };
-  if (session.permissions?.includes("own_time:read")) {
+  if (session.permissions?.includes("own_time:read")
+    && (!applyLocationDisplay || mobilePortalLocationDisplayAllows(session, "time"))) {
     try {
       const context = await employeeTimeTrackingContext(session.employeeNumber, date);
   const location = await validateLocationExists(context.locationId);
@@ -11222,7 +11442,7 @@ async function mobileBootstrapPayload(session, request = null, now = new Date())
     user: mobileUserPayload(session),
     branding: mobileBrandingPayload(session),
     navigation: mobileNavigationPayload(session, portalStatus),
-    home: await mobileHomePayload(session, request, now),
+    home: await mobileHomePayload(session, request, now, { applyLocationDisplay: true }),
     settings: await mobilePersonalSettingsPayload(session, now),
   };
 }
@@ -16704,11 +16924,20 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     weekStart,
     weekEnd,
   };
-  const [employeeRows, shiftRows, storedWeekOptions, employeeLendings] = await Promise.all([
+  const xoffiQuery = {
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+    filterDepartment: context.departmentId ? 1 : 0,
+    weekStart,
+  };
+  const [employeeRows, shiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listScheduleWeekOptions(planningQuery),
     planningSettingsRepository.listScheduleLendings(planningQuery),
+    timeTrackingRepository.listActiveXoffiWeekRows(xoffiQuery),
+    timeTrackingRepository.listActiveXoffiWeekDays(xoffiQuery),
+    timeTrackingRepository.listLatestXoffiBalances(xoffiQuery),
   ]);
   const employees = employeeRows.map(serializeEmployee);
   const shifts = await Promise.all(
@@ -16872,6 +17101,45 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
   const workRuleAssessment = sessionCanReadWorkRules(session)
     ? (await evaluateScheduleWorkRules(weekStart, context, employees)).assessment
     : null;
+  const xoffiWeekByEmployee = {};
+  const selectedXoffiImports = new Set();
+  for (const row of xoffiWeekRows) {
+    if (xoffiWeekByEmployee[row.employee_number]) continue;
+    xoffiWeekByEmployee[row.employee_number] = {
+      importId: row.import_id,
+      useAsActual: Number(row.use_as_actual || 0) === 1,
+      importedAt: row.imported_at,
+      actualMinutes: Number(row.weekly_actual_minutes || 0),
+      valuedMinutes: Number(row.weekly_valued_minutes || 0),
+      surchargeMinutes: Number(row.weekly_surcharge_minutes || 0),
+      closingBalanceMinutes: row.closing_balance_minutes === null ? null : Number(row.closing_balance_minutes),
+      days: [],
+    };
+    selectedXoffiImports.add(`${row.import_id}|${row.employee_number}`);
+  }
+  for (const row of xoffiWeekDays) {
+    if (!selectedXoffiImports.has(`${row.import_id}|${row.employee_number}`)) continue;
+    const target = xoffiWeekByEmployee[row.employee_number];
+    if (!target) continue;
+    let intervals = [];
+    try { intervals = JSON.parse(row.intervals_json || "[]"); } catch {}
+    target.days.push({
+      workDate: row.work_date,
+      actualMinutes: Number(row.actual_minutes || 0),
+      valuedMinutes: Number(row.valued_minutes || 0),
+      surchargeMinutes: Number(row.surcharge_minutes || 0),
+      intervals: Array.isArray(intervals) ? intervals : [],
+      absence: row.absence_code || "",
+    });
+  }
+  const xoffiBalanceByEmployee = {};
+  for (const row of xoffiBalanceRows) {
+    if (xoffiBalanceByEmployee[row.employee_number]) continue;
+    xoffiBalanceByEmployee[row.employee_number] = {
+      minutes: Number(row.closing_balance_minutes || 0),
+      weekStart: row.balance_week_start,
+    };
+  }
 
   return {
     weekStart,
@@ -16901,6 +17169,10 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     sicknessCredits,
     sicknessCreditTotals,
     saturdayStats,
+    xoffiTime: {
+      weekByEmployee: xoffiWeekByEmployee,
+      balanceByEmployee: xoffiBalanceByEmployee,
+    },
     workRuleAssessment,
   };
 }
@@ -19944,6 +20216,176 @@ function tradeFotoReportHttpError(error) {
   );
   result.details = error.details;
   return result;
+}
+
+function xoffiTimeImportHttpError(error) {
+  if (!(error instanceof XoffiTimeImportError)) return error;
+  const messages = {
+    XOFFI_IMAGE_SIZE_INVALID: "Die Bilddatei ist leer oder größer als 18 MB.",
+    XOFFI_IMAGE_INVALID: "Die Datei ist kein lesbares JPG-, PNG- oder WebP-Bild.",
+    XOFFI_IMAGE_LAYOUT_INVALID: "Das Bild ist für eine sichere xoffi-Auswertung zu klein oder ungeeignet.",
+    XOFFI_WEEK_NOT_DETECTED: "Die Kalenderwoche konnte im xoffi-Bild nicht sicher erkannt werden.",
+    XOFFI_EMPLOYEES_NOT_DETECTED: "Im xoffi-Bild wurden keine Teamzeilen sicher erkannt.",
+    XOFFI_DAY_COLUMNS_NOT_DETECTED: "Die sieben Tagesspalten konnten im xoffi-Bild nicht sicher erkannt werden.",
+    XOFFI_OCR_BUSY: "Die lokale Bilderkennung ist ausgelastet. Bitte den Import in Kürze erneut starten.",
+    XOFFI_OCR_TIMEOUT: "Die lokale Bilderkennung hat das Zeitlimit erreicht.",
+  };
+  const status = error.code === "XOFFI_OCR_BUSY" ? 429
+    : error.code === "XOFFI_OCR_TIMEOUT" ? 503
+      : error.code === "XOFFI_IMAGE_SIZE_INVALID" ? 413 : 422;
+  const result = httpError(status, messages[error.code] || "Das xoffi-Bild konnte nicht sicher ausgewertet werden.", error.code);
+  result.details = error.details;
+  return result;
+}
+
+async function xoffiTimeImportContext(session, input = {}) {
+  if (!["department_manager", "manager", "hr", "admin", "developer"].includes(session.role)) {
+    throw httpError(403, "Diese Funktion ist nur für berechtigte lokale Leitungen oder PL+ verfügbar.", "XOFFI_IMPORT_ROLE_DENIED");
+  }
+  const context = await resolvePlanningContext(input);
+  assertSessionContextScope(session, context);
+  return context;
+}
+
+function assertPastXoffiWeek(weekStart) {
+  if (!isIsoDate(weekStart) || getMonday(weekStart) !== weekStart) {
+    throw httpError(400, "Bitte eine vergangene Kalenderwoche mit Montag als Wochenbeginn auswählen.", "XOFFI_WEEK_INVALID");
+  }
+  if (weekStart >= currentWeekStart()) {
+    throw httpError(409, "xoffi-Daten dürfen ausschließlich für bereits abgeschlossene Kalenderwochen importiert werden.", "XOFFI_WEEK_NOT_PAST");
+  }
+  return weekStart;
+}
+
+function xoffiCandidateProjection(rows = []) {
+  return rows.map((employee) => ({
+    employeeNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    nickname: employee.nickname,
+  }));
+}
+
+function xoffiInteger(value, minimum, maximum, code = "XOFFI_REVIEW_INVALID") {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < minimum || number > maximum) {
+    throw httpError(400, "Bitte alle erkannten xoffi-Werte vollständig prüfen.", code);
+  }
+  return number;
+}
+
+function validateXoffiReviewedRows(inputRows, preview) {
+  if (!Array.isArray(inputRows) || inputRows.length !== preview.employees.length || inputRows.length > 250) {
+    throw httpError(400, "Die geprüften Teamzeilen stimmen nicht mit der OCR-Vorschau überein.", "XOFFI_REVIEW_INVALID");
+  }
+  const candidates = new Set(preview.candidates.map((employee) => employee.employeeNumber));
+  const employeeNumbers = new Set();
+  return inputRows.map((row, rowIndex) => {
+    const sourceName = String(row?.sourceName || "").trim().slice(0, 120);
+    const employeeNumber = String(row?.employeeNumber || "").trim();
+    const original = preview.employees[rowIndex];
+    if (sourceName !== original?.sourceName || !candidates.has(employeeNumber) || employeeNumbers.has(employeeNumber)) {
+      throw httpError(400, "Jede xoffi-Zeile muss genau einem Teammitglied des ausgewählten Bereichs zugeordnet sein.", "XOFFI_EMPLOYEE_MAPPING_INVALID");
+    }
+    employeeNumbers.add(employeeNumber);
+    if (!Array.isArray(row.days) || row.days.length !== 7) {
+      throw httpError(400, "Für jede Teamzeile werden genau sieben geprüfte Tageswerte benötigt.", "XOFFI_REVIEW_INVALID");
+    }
+    const dates = new Set();
+    const days = row.days.map((day, index) => {
+      const workDate = String(day?.workDate || "");
+      if (workDate !== addDays(preview.weekStart, index) || dates.has(workDate)) {
+        throw httpError(400, "Die xoffi-Tageswerte passen nicht zur erkannten Kalenderwoche.", "XOFFI_REVIEW_INVALID");
+      }
+      dates.add(workDate);
+      const intervals = Array.isArray(day.intervals) ? day.intervals.map((value) => String(value).trim()) : [];
+      if (intervals.length > 12 || intervals.some((value) => !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(value))) {
+        throw httpError(400, "Mindestens ein xoffi-Zeitintervall ist ungültig.", "XOFFI_REVIEW_INVALID");
+      }
+      return {
+        workDate,
+        actualMinutes: xoffiInteger(day.actualMinutes, 0, 1440),
+        valuedMinutes: xoffiInteger(day.valuedMinutes, 0, 2880),
+        surchargeMinutes: xoffiInteger(day.surchargeMinutes, 0, 1440),
+        intervals: [...new Set(intervals)],
+        absence: ["", "vacation", "sick"].includes(String(day.absence || "")) ? String(day.absence || "") : "",
+        confidence: xoffiInteger(day.confidence ?? 0, 0, 100),
+      };
+    });
+    const closingBalanceValue = row.closingBalanceMinutes;
+    const closingBalanceMinutes = closingBalanceValue === null || closingBalanceValue === "" || closingBalanceValue === undefined
+      ? null : xoffiInteger(closingBalanceValue, -600000, 600000);
+    return {
+      sourceName,
+      employeeNumber,
+      matchConfidence: employeeNumber === original?.employeeNumber ? xoffiInteger(original.matchConfidence || 0, 0, 100) : 0,
+      weeklyActualMinutes: xoffiInteger(row.weeklyActualMinutes, 0, 10080),
+      weeklyValuedMinutes: xoffiInteger(row.weeklyValuedMinutes, 0, 20160),
+      weeklySurchargeMinutes: xoffiInteger(row.weeklySurchargeMinutes, 0, 10080),
+      closingBalanceMinutes,
+      days,
+    };
+  });
+}
+
+async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual) {
+  const importId = crypto.randomUUID();
+  const departmentId = Number(preview.context.departmentId || 0) || null;
+  await timeTrackingRepository.transaction(async (repository) => {
+    await repository.supersedeActiveXoffiImport({
+      locationId: preview.context.locationId,
+      weekStart: preview.weekStart,
+      departmentKey: departmentId || 0,
+      newImportId: importId,
+      actor: portalActorId(session),
+    });
+    await repository.insertXoffiImport({
+      id: importId,
+      locationId: preview.context.locationId,
+      departmentId,
+      departmentKey: departmentId || 0,
+      weekStart: preview.weekStart,
+      weekEnd: preview.weekEnd,
+      sourceSha256: preview.sourceSha256,
+      sourceFileName: preview.sourceFileName,
+      ocrEngineVersion: preview.engineVersion,
+      useAsActual: useAsActual ? 1 : 0,
+      actor: portalActorId(session),
+    });
+    for (const row of reviewedRows) {
+      const inserted = await repository.insertXoffiEmployeeRow({
+        importId,
+        employeeNumber: row.employeeNumber,
+        sourceName: row.sourceName,
+        matchConfidence: row.matchConfidence,
+        weeklyActualMinutes: row.weeklyActualMinutes,
+        weeklyValuedMinutes: row.weeklyValuedMinutes,
+        weeklySurchargeMinutes: row.weeklySurchargeMinutes,
+        closingBalanceMinutes: row.closingBalanceMinutes,
+      });
+      const employeeRowId = Number(inserted.inserted?.id || 0);
+      if (!employeeRowId) throw new Error("XOFFI_ROW_INSERT_FAILED");
+      for (const day of row.days) {
+        await repository.insertXoffiDay({
+          employeeRowId,
+          workDate: day.workDate,
+          actualMinutes: day.actualMinutes,
+          valuedMinutes: day.valuedMinutes,
+          surchargeMinutes: day.surchargeMinutes,
+          intervalsJson: JSON.stringify(day.intervals),
+          absenceCode: day.absence,
+          ocrConfidence: day.confidence,
+        });
+      }
+    }
+    await repository.invalidateDayReviewsForRange({
+      locationId: preview.context.locationId,
+      dateFrom: preview.weekStart,
+      dateTo: preview.weekEnd,
+      departmentId,
+      filterDepartment: departmentId ? 1 : 0,
+    });
+  });
+  return importId;
 }
 
 function publicSalesAnalyticsReport(row, archive = null) {
@@ -25734,6 +26176,27 @@ app.post("/api/portal/v1/auth/branding", async (request, response) => {
   response.json({ branding });
 });
 
+app.post("/api/portal/v1/auth/password-reset/request", (request, response) => {
+  const resetRequest = {
+    email: String(request.body?.email || "").trim(),
+    ipKey: loginRateKey(request),
+  };
+  response.status(202).json(passwordResetGenericPayload());
+  if (!getPortalStatus().portalEnabled) return;
+  setImmediate(() => {
+    void requestPersonalPasswordReset(resetRequest).catch(() => {
+      // The public response must not reveal account, verification or provider state.
+    });
+  });
+});
+
+app.post("/api/portal/v1/auth/password-reset/confirm", async (request, response) => {
+  if (!getPortalStatus().portalEnabled) return sendPortalInactive(request, response);
+  await completePersonalPasswordReset(request);
+  clearPortalCookies(request, response);
+  response.json({ ok: true });
+});
+
 app.post("/api/portal/v1/setup/admin", async (request, response) => {
   if ((serverModeActive && !productionBootstrapActive) || !isLoopbackRequest(request)) {
     throw httpError(403, "Die Admin-Ersteinrichtung ist nur im lokalen Einrichtungsmodus direkt am Grabenplaner-PC möglich.");
@@ -25819,7 +26282,7 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   clearLoginRate(request);
   const rawToken = crypto.randomBytes(32).toString("base64url");
   const csrfToken = crypto.randomBytes(24).toString("base64url");
-  const timeoutMinutes = Math.min(1440, Math.max(15, Number(getPortalSettings().session_timeout_minutes || 480)));
+  const timeoutMinutes = portalSessionTimeoutMinutes();
   const expiresAt = new Date(now.getTime() + timeoutMinutes * 60000).toISOString();
   if (sessionKind === "organization") {
     await portalAccessRepository.transaction(async (repository) => {
@@ -26320,6 +26783,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
+    mobilePortalLocationDisplay: mobilePortalLocationDisplayForSession(actor),
     mobilePortalNavigationCustomized,
     mobilePortalAppearanceCustomized,
     mobilePortalHomeCustomized,
@@ -30745,6 +31209,44 @@ async function branchPortalDisplaySettingsLocation(session, input = {}) {
   return locationId;
 }
 
+async function mobilePortalLocationDisplayManagementLocation(session, input = {}) {
+  if (!session.permissions?.includes(MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION)) {
+    throw httpError(403, "Für die mobile Mitarbeiteransicht fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (session.sessionKind === "organization" || session.isEmployee === false) {
+    throw httpError(
+      403,
+      "Die mobile Mitarbeiteransicht wird ausschließlich über einen persönlichen Leitungszugang verwaltet.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
+  const eligibleRoles = new Set(["department_manager", "manager", "hr", "admin", "developer"]);
+  if (!eligibleRoles.has(session.role)) {
+    throw httpError(
+      403,
+      "Die mobile Mitarbeiteransicht benötigt eine berechtigte Filial-, Abteilungs- oder Personalleitung.",
+      "MOBILE_PORTAL_LOCATION_DISPLAY_ROLE_DENIED",
+    );
+  }
+  const locationId = normalizeLocationId(input.locationId || input.location || session.homeLocationId || "");
+  if (!GLOBAL_SCOPE_PORTAL_ROLES.has(session.role)) {
+    if (locationId !== String(session.homeLocationId || "")) {
+      throw httpError(403, "Die mobile Mitarbeiteransicht darf nur für die eigene Filiale verwaltet werden.", "PORTAL_SCOPE_DENIED");
+    }
+    assertSessionLocationAdministrationScope(session, locationId);
+  }
+  return validateActiveLocationExists(locationId);
+}
+
+function publicMobilePortalLocationDisplay(location) {
+  const policy = mobilePortalLocationDisplayForLocation(location.id);
+  return {
+    ...policy,
+    locationName: location.name,
+    modules: mobilePortalLocationDisplayModules,
+  };
+}
+
 async function branchOrderHistoryAccess(request, input = {}) {
   const session = requirePortalSession(request);
   if (session.permissions?.includes(BRANCH_ORDER_MANAGE_PERMISSION)) {
@@ -32502,6 +33004,194 @@ async function publicLoanReturnPreparation(row) {
       .filter((attachment) => attachment.phase === "return" && photoAttachmentIds.has(attachment.id))
       .map(publicLoanPhotoAttachment),
   };
+}
+
+function canonicalPasswordResetEmail(value) {
+  const normalized = normalizePersonalEmailAddress(value);
+  return normalized ? normalized.toLowerCase() : "";
+}
+
+function passwordResetGenericPayload() {
+  return {
+    ok: true,
+    message: "Falls die E-Mail-Adresse einem aktiven persönlichen Zugang zugeordnet ist, wurde ein Link versendet.",
+  };
+}
+
+function passwordResetRequestRateAllowed(ipKey, email) {
+  const now = Date.now();
+  const normalizedIpKey = String(ipKey || "unknown").slice(0, 256);
+  const targetKey = sha256(`password-reset-rate\0${String(email || "").slice(0, 320)}`);
+  const allowed = passwordResetIpRateLimits.get(normalizedIpKey, now).length < PASSWORD_RESET_RATE_MAX_PER_IP
+    && passwordResetTargetRateLimits.get(targetKey, now).length < PASSWORD_RESET_RATE_MAX_PER_TARGET;
+  passwordResetIpRateLimits.record(normalizedIpKey, now);
+  passwordResetTargetRateLimits.record(targetKey, now);
+  return allowed;
+}
+
+function assertPasswordResetConfirmRateLimit(request) {
+  const key = loginRateKey(request);
+  const now = Date.now();
+  const events = passwordResetConfirmRateLimits.get(key, now);
+  if (events.length >= PASSWORD_RESET_CONFIRM_RATE_MAX_PER_IP) {
+    const error = httpError(
+      429,
+      "Zu viele Versuche. Bitte später erneut versuchen.",
+      "PORTAL_PASSWORD_RESET_RATE_LIMITED",
+    );
+    error.retryAfter = Math.max(1, Math.ceil((LOGIN_RATE_WINDOW_MS - (now - events[0])) / 1000));
+    throw error;
+  }
+  passwordResetConfirmRateLimits.record(key, now);
+}
+
+async function personalPasswordResetCandidate(requestedEmail) {
+  const canonicalRequested = canonicalPasswordResetEmail(requestedEmail);
+  if (!canonicalRequested) return null;
+  const candidates = await portalAccessRepository.listPasswordResetCandidates({});
+  const matches = [];
+  for (const candidate of candidates) {
+    let profile;
+    try {
+      profile = await personnelSensitiveProfile(candidate.employee_number);
+    } catch {
+      continue;
+    }
+    const storedEmail = normalizePersonalEmailAddress(profile.privateEmail);
+    if (!storedEmail) continue;
+    const currentFingerprint = personalNotificationTargetFingerprint("email", storedEmail);
+    if (!safeHashEquals(currentFingerprint, candidate.email_target_fingerprint)) continue;
+    if (storedEmail.toLowerCase() !== canonicalRequested) continue;
+    matches.push({
+      employeeNumber: candidate.employee_number,
+      email: storedEmail,
+      emailFingerprint: currentFingerprint,
+    });
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function requestPersonalPasswordReset(input = {}) {
+  const submittedEmail = String(input.email || "").trim();
+  const canonicalEmail = canonicalPasswordResetEmail(submittedEmail);
+  if (!passwordResetRequestRateAllowed(input.ipKey, canonicalEmail || submittedEmail.toLowerCase())) return;
+  if (!canonicalEmail
+    || !normalizedPublicOrigin?.startsWith("https://")
+    || !externalNotificationEventAvailable("email", "password_reset")) return;
+
+  let candidate;
+  try {
+    candidate = await personalPasswordResetCandidate(canonicalEmail);
+  } catch {
+    return;
+  }
+  if (!candidate) return;
+
+  const now = new Date();
+  const recent = await portalAccessRepository.countRecentPasswordResetTokens({
+    employeeNumber: candidate.employeeNumber,
+    since: new Date(now.getTime() - PASSWORD_RESET_RATE_WINDOW_MS).toISOString(),
+  });
+  if (Number(recent?.count || 0) >= PASSWORD_RESET_RATE_MAX_PER_TARGET) return;
+
+  const id = crypto.randomUUID();
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = sha256(rawToken);
+  const expiresAt = new Date(now.getTime() + PASSWORD_RESET_TOKEN_TTL_MS).toISOString();
+  try {
+    await portalAccessRepository.transaction(async (repository) => {
+      await repository.purgePasswordResetTokens({
+        cutoff: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+      });
+      await repository.revokePasswordResetTokensForEmployee({
+        employeeNumber: candidate.employeeNumber,
+        exceptId: null,
+      });
+      const inserted = await repository.insertPasswordResetToken({
+        id,
+        employeeNumber: candidate.employeeNumber,
+        tokenHash,
+        emailFingerprint: candidate.emailFingerprint,
+        expiresAt,
+      });
+      if (!inserted.rowsAffected) throw new Error("PASSWORD_RESET_TARGET_CHANGED");
+    });
+    await externalNotificationAdapter.sendPasswordReset({
+      recipient: candidate.email,
+      resetUrl: `${normalizedPublicOrigin}/portal.html#password-reset=${rawToken}`,
+    });
+    auditPortal("password-reset-public", "portal.password-reset.requested", "portal_user", candidate.employeeNumber);
+  } catch {
+    try { await portalAccessRepository.revokePasswordResetTokenById({ id }); } catch {}
+    auditPortal("password-reset-public", "portal.password-reset.delivery-failed", "portal_user", candidate.employeeNumber);
+  }
+}
+
+function invalidPasswordResetTokenError() {
+  return httpError(
+    410,
+    "Der Link ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Link an.",
+    "PORTAL_PASSWORD_RESET_INVALID",
+  );
+}
+
+async function completePersonalPasswordReset(request) {
+  assertPasswordResetConfirmRateLimit(request);
+  const browserSession = portalSessionFromRequest(request);
+  const rawToken = String(request.body?.token || "").trim();
+  if (!/^[A-Za-z0-9_-]{43}$/.test(rawToken)) throw invalidPasswordResetTokenError();
+  const newPassword = String(request.body?.newPassword || "");
+  const repeatPassword = String(request.body?.repeatPassword || "");
+  if (!repeatPassword || newPassword !== repeatPassword) {
+    throw httpError(400, "Die Passwortwiederholung stimmt nicht überein.", "PORTAL_PASSWORD_REPEAT_MISMATCH");
+  }
+  const tokenHash = sha256(rawToken);
+  const now = new Date().toISOString();
+  const available = await portalAccessRepository.getPasswordResetTokenByHash({ tokenHash, now });
+  if (!available) throw invalidPasswordResetTokenError();
+  const passwordHash = await hashPortalPassword(newPassword);
+  const completed = await portalAccessRepository.transaction(async (repository) => {
+    const current = await repository.getPasswordResetTokenByHash({ tokenHash, now });
+    if (!current) throw invalidPasswordResetTokenError();
+    const consumed = await repository.consumePasswordResetToken({
+      id: current.id,
+      tokenHash,
+      usedAt: now,
+    });
+    if (!consumed.rowsAffected) throw invalidPasswordResetTokenError();
+    const changed = await repository.updatePasswordFromReset({
+      employeeNumber: current.employee_number,
+      passwordHash,
+      changedAt: now,
+    });
+    if (!changed.rowsAffected) throw invalidPasswordResetTokenError();
+    await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: current.employee_number });
+    await repository.revokeMobileSessionsForPasswordReset({ employeeNumber: current.employee_number });
+    if (browserSession?.id
+      && browserSession.sessionKind === "organization") {
+      await repository.revokeOrganizationSessionById({ id: browserSession.id });
+    } else if (browserSession?.id
+      && browserSession.employeeNumber !== current.employee_number) {
+      await repository.revokeEmployeeSessionById({ id: browserSession.id });
+    }
+    await repository.revokePasswordResetTokensForEmployee({
+      employeeNumber: current.employee_number,
+      exceptId: current.id,
+    });
+    return current;
+  });
+  auditPortal(completed.employee_number, "portal.password-reset.completed", "portal_user", completed.employee_number);
+  if (browserSession?.id
+    && (browserSession.sessionKind === "organization"
+      || browserSession.employeeNumber !== completed.employee_number)) {
+    auditPortal(
+      portalActorId(browserSession),
+      "portal.password-reset.browser-session-revoked",
+      browserSession.sessionKind === "organization" ? "portal_organization_account" : "portal_user",
+      browserSession.accountId || browserSession.employeeNumber,
+    );
+  }
+  return completed;
 }
 
 async function publicLoanReturnConfirmation(row, { includeLoan = true } = {}) {
@@ -34889,7 +35579,7 @@ app.get("/api/mobile/v1/bootstrap", async (request, response) => {
 
 app.get("/api/mobile/v1/me/home", async (request, response) => {
   const session = await requireMobileSession(request);
-  response.json(await mobileHomePayload(session, request, new Date()));
+  response.json(await mobileHomePayload(session, request, new Date(), { applyLocationDisplay: true }));
 });
 
 app.get("/api/mobile/v1/me/settings", async (request, response) => {
@@ -42973,6 +43663,109 @@ app.get("/api/portal/v1/time-summary", async (request, response) => {
   response.json({ summary: { period: "range", from: dateFrom, to: dateTo, dateFrom, dateTo, context, employees } });
 });
 
+app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
+  type: ["image/jpeg", "image/png", "image/webp", "application/octet-stream"],
+  limit: XOFFI_IMAGE_MAX_BYTES,
+}), async (request, response) => {
+  const session = requirePortalSession(request, XOFFI_TIME_IMPORT_PERMISSION);
+  assertPortalCsrf(request);
+  const expectedWeekStart = assertPastXoffiWeek(String(request.query?.weekStart || ""));
+  const context = await xoffiTimeImportContext(session, request.query || {});
+  const candidateRows = await planningSettingsRepository.listScheduleEmployees({
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+    weekStart: expectedWeekStart,
+    weekEnd: addDays(expectedWeekStart, 6),
+  });
+  let fileName = String(request.get("X-Import-Filename") || "xoffi.png");
+  try { fileName = decodeURIComponent(fileName); } catch {}
+  let inspected;
+  try {
+    inspected = await inspectXoffiImageBuffer(request.body, {
+      fileName,
+      employees: candidateRows,
+    });
+  } catch (error) {
+    throw xoffiTimeImportHttpError(error);
+  }
+  if (inspected.weekStart !== expectedWeekStart) {
+    throw httpError(409, `Das Bild enthält KW ${getIsoWeek(inspected.weekStart)}, ausgewählt ist jedoch KW ${getIsoWeek(expectedWeekStart)}.`, "XOFFI_WEEK_MISMATCH");
+  }
+  if (inspected.locationCode) {
+    let detectedLocationId = "";
+    try { detectedLocationId = normalizeLocationId(inspected.locationCode); } catch {}
+    if (detectedLocationId && detectedLocationId !== context.locationId) {
+      throw httpError(409, "Die im Bild erkannte Filiale stimmt nicht mit der ausgewählten Dienstplanung überein.", "XOFFI_LOCATION_MISMATCH");
+    }
+  }
+  const candidates = xoffiCandidateProjection(candidateRows);
+  const cachedPreview = { ...inspected, context, candidates };
+  const actor = portalActorId(session);
+  integrationCache.deleteKind(actor, "xoffi-time-preview");
+  const previewSession = integrationCache.create(actor, "xoffi-time-preview", cachedPreview);
+  await auditPortal(actor, "xoffi-time.image.inspect", "xoffi_time_preview", previewSession.id, JSON.stringify({
+    locationId: context.locationId,
+    departmentId: context.departmentId,
+    weekStart: inspected.weekStart,
+    sourceSha256: inspected.sourceSha256,
+    employeeRows: inspected.employees.length,
+    originalRetained: false,
+  }));
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json({
+    previewId: previewSession.id,
+    weekStart: inspected.weekStart,
+    weekEnd: inspected.weekEnd,
+    calendarWeek: getIsoWeek(inspected.weekStart),
+    context,
+    detectedLocation: { code: inspected.locationCode, name: inspected.locationName },
+    engineVersion: inspected.engineVersion,
+    employees: inspected.employees,
+    candidates,
+    warnings: inspected.warnings,
+  });
+});
+
+app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => {
+  const session = requirePortalSession(request, XOFFI_TIME_IMPORT_PERMISSION);
+  assertPortalCsrf(request);
+  if (request.body?.confirmed !== true || typeof request.body?.useAsActual !== "boolean") {
+    throw httpError(400, "Der geprüfte xoffi-Import muss ausdrücklich bestätigt werden.", "XOFFI_CONFIRMATION_REQUIRED");
+  }
+  const actor = portalActorId(session);
+  let entry;
+  try {
+    entry = integrationCache.get(String(request.body?.previewId || ""), actor, "xoffi-time-preview");
+  } catch (error) {
+    if (error instanceof IntegrationCacheError) {
+      throw httpError(410, "Die xoffi-Vorschau ist abgelaufen. Bitte das Bild erneut auswählen.", "XOFFI_PREVIEW_EXPIRED");
+    }
+    throw error;
+  }
+  const preview = entry.value;
+  assertPastXoffiWeek(preview.weekStart);
+  const context = await xoffiTimeImportContext(session, preview.context);
+  if (context.locationId !== preview.context.locationId || Number(context.departmentId || 0) !== Number(preview.context.departmentId || 0)) {
+    throw httpError(403, "Der geprüfte Import liegt nicht mehr im freigegebenen Bereich.", "XOFFI_SCOPE_CHANGED");
+  }
+  const reviewedRows = validateXoffiReviewedRows(request.body?.employees, preview);
+  const importId = await storeXoffiTimeImport(session, preview, reviewedRows, request.body.useAsActual);
+  integrationCache.delete(entry.id, actor);
+  await auditPortal(actor, "xoffi-time.import.apply", "xoffi_time_import", importId, JSON.stringify({
+    locationId: context.locationId,
+    departmentId: context.departmentId,
+    weekStart: preview.weekStart,
+    employeeRows: reviewedRows.length,
+    useAsActual: request.body.useAsActual,
+    sourceSha256: preview.sourceSha256,
+  }));
+  response.status(201).json({
+    ok: true,
+    importId,
+    schedule: await getSchedule(preview.weekStart, context, session),
+  });
+});
+
 app.get("/api/portal/v1/time-day-evaluations", async (request, response) => {
   const session = requirePortalReadOrLocal(request, "time:read");
   const context = await resolvePlanningContext(request.query || {});
@@ -43021,6 +43814,35 @@ app.put("/api/portal/v1/time-corrections/:id/decision", async (request, response
 app.get("/api/portal/v1/mobile-layout", (request, response) => {
   const session = requirePortalAnyPermissionOrLocal(request, ["own_time:read", "own_schedule:read"]);
   response.json(mobileLayoutPayload(session));
+});
+
+app.get("/api/portal/v1/mobile-portal-location-display", async (request, response) => {
+  const session = requirePortalSession(request, MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION);
+  const location = await mobilePortalLocationDisplayManagementLocation(session, request.query || {});
+  response.json(publicMobilePortalLocationDisplay(location));
+});
+
+app.put("/api/portal/v1/mobile-portal-location-display", async (request, response) => {
+  const session = requirePortalSession(request, MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION);
+  assertPortalCsrf(request);
+  const location = await mobilePortalLocationDisplayManagementLocation(session, request.body || {});
+  const previous = mobilePortalLocationDisplayForLocation(location.id);
+  const policy = validateMobilePortalLocationDisplay(request.body || {});
+  await setPortalSetting(
+    mobilePortalLocationDisplaySettingKey(location.id),
+    JSON.stringify(policy),
+  );
+  await auditPortal(
+    session.employeeNumber,
+    "mobile-portal.location-display.update",
+    "location",
+    location.id,
+    JSON.stringify({
+      previousAllowedModules: previous.allowedModules,
+      allowedModules: policy.allowedModules,
+    }),
+  );
+  response.json(publicMobilePortalLocationDisplay(location));
 });
 
 app.put("/api/portal/v1/mobile-layout", async (request, response) => {
@@ -46260,6 +47082,9 @@ async function startServer() {
         backupAdminGlobalRateLimits.prune(now);
         articleLookupRateLimits.prune(now);
         personalEmailVerificationIpRateLimits.prune(now);
+        passwordResetIpRateLimits.prune(now);
+        passwordResetTargetRateLimits.prune(now);
+        passwordResetConfirmRateLimits.prune(now);
       }, 5 * 60 * 1000);
       rateLimitCleanupInterval.unref();
     }
