@@ -238,9 +238,9 @@ function protectedStateSnapshot() {
     assert.match(tableName, /^[a-z0-9_]+$/);
     const rows = db.prepare(`SELECT * FROM "${tableName}"`).all()
       .map((row) => Object.fromEntries(Object.entries(row)
-        // Die zentrale Portal-Authentisierung beruehrt diesen Heartbeat bei jedem Request.
-        // Identitaet, Token, Ablauf und Widerruf der Sitzung bleiben vollstaendig im Snapshot.
-        .filter(([key]) => tableName !== "portal_sessions" || key !== "last_seen_at")
+        // Die zentrale Portal-Authentisierung aktualisiert Heartbeat und gleitendes Ablaufdatum.
+        // Identitaet, Token und Widerruf der Sitzung bleiben vollstaendig im Snapshot.
+        .filter(([key]) => tableName !== "portal_sessions" || !["last_seen_at", "expires_at"].includes(key))
         .map(([key, value]) => [key, normalizeSnapshotValue(value)])))
       .map((row) => JSON.stringify(row))
       .sort();

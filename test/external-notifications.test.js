@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const {
   SMTP_OPTIONAL_PACKAGE,
+  PASSWORD_RESET_SUBJECT,
   PROCESS_ALERT_TEXT,
   STAFFING_ALERT_SUBJECT,
   STAFFING_ALERT_TEXT,
@@ -225,6 +226,56 @@ test("Zielbestätigung sendet nur Einmalcode und neutralen Verifizierungstext", 
   assert.match(payload.message, /042815/);
   assert.doesNotMatch(calls[0].options.body, /252|illness|krank/i);
   assert.doesNotMatch(JSON.stringify(calls[0].options.headers), /042815/);
+});
+
+test("Passwortreset versendet nur einen HTTPS-Fragmentlink mit 32-Byte-Token", async () => {
+  let mail;
+  const token = Buffer.alloc(32, 7).toString("base64url");
+  const adapter = createExternalNotificationAdapter({
+    configuration: { email: enabledSmtp("password_reset") },
+    smtpTransport: {
+      async sendMail(value) {
+        mail = value;
+        return { accepted: [value.to] };
+      },
+    },
+  });
+
+  await adapter.sendPasswordReset({
+    recipient: "verified@example.test",
+    resetUrl: `https://beta.grabenplaner.eu/portal.html#password-reset=${token}`,
+  });
+  assert.equal(mail.to, "verified@example.test");
+  assert.equal(mail.subject, PASSWORD_RESET_SUBJECT);
+  assert.ok(mail.text.includes(`#password-reset=${token}`));
+  assert.match(mail.text, /30 Minuten/);
+  assert.doesNotMatch(mail.text, /\?password-reset=|\?token=/);
+
+  const notExplicitlyAllowed = createExternalNotificationAdapter({
+    configuration: { email: enabledSmtp("branch_order") },
+    smtpTransport: { async sendMail() { throw new Error("must not send"); } },
+  });
+  assert.equal(notExplicitlyAllowed.canSendEvent("email", "password_reset"), false);
+  await assert.rejects(
+    notExplicitlyAllowed.sendPasswordReset({
+      recipient: "verified@example.test",
+      resetUrl: `https://beta.grabenplaner.eu/portal.html#password-reset=${token}`,
+    }),
+    { code: "EXTERNAL_NOTIFICATION_EVENT_DISABLED" },
+  );
+
+  for (const resetUrl of [
+    `http://beta.grabenplaner.eu/portal.html#password-reset=${token}`,
+    `https://beta.grabenplaner.eu/portal.html?token=${token}`,
+    `https://user:secret@beta.grabenplaner.eu/portal.html#password-reset=${token}`,
+    `https://beta.grabenplaner.eu/other.html#password-reset=${token}`,
+    "https://beta.grabenplaner.eu/portal.html#password-reset=too-short",
+  ]) {
+    await assert.rejects(
+      adapter.sendPasswordReset({ recipient: "verified@example.test", resetUrl }),
+      { code: "EXTERNAL_NOTIFICATION_PASSWORD_RESET_URL_INVALID" },
+    );
+  }
 });
 
 test("SMTP-Versand nutzt TLS-Zeitlimits und nur den neutralen Nachrichtentext", async () => {

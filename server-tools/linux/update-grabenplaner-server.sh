@@ -48,7 +48,7 @@ build_user="$GP_DEFAULT_BUILD_USER"
 build_group="$GP_DEFAULT_BUILD_GROUP"
 build_cache_arg=""
 backup_keep_arg=""
-health_timeout=120
+health_timeout=1500
 maximum_expanded_bytes=2147483648
 allow_downgrade=0
 lock_already_held=0
@@ -92,7 +92,7 @@ gp_require_root
 for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
 [[ "$(uname -m)" == "x86_64" ]] || gp_die "Das Serverpaket wird derzeit nur auf Linux x86_64 unterstuetzt."
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
-[[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 600 )) || gp_die "--health-timeout muss zwischen 30 und 600 liegen."
+[[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 1500 )) || gp_die "--health-timeout muss zwischen 30 und 1500 liegen."
 [[ "$maximum_expanded_bytes" =~ ^[0-9]+$ ]] && (( maximum_expanded_bytes >= 1048576 && maximum_expanded_bytes <= 4294967296 )) \
   || gp_die "--maximum-expanded-bytes liegt ausserhalb des erlaubten Bereichs."
 [[ -z "$sha256_arg" || -z "$sha256_file_arg" ]] || gp_die "--sha256 und --sha256-file duerfen nicht gleichzeitig verwendet werden."

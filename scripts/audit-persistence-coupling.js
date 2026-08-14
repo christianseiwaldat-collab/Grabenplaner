@@ -280,6 +280,10 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/v092-branch-order-cleanup-cli.test.js",
   "test/v0921-staff-assignment-absences.test.js",
   "test/v0921-staff-assignments.test.js",
+  "test/v0925-mobile-location-display.test.js",
+  "test/v0925-password-reset-backend.test.js",
+  "test/v0925-sliding-portal-session.test.js",
+  "test/v0925-xoffi-time-import.test.js",
 ]);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_TEST_FILES);
 const PHASE_3_SQLITE_DRIVER_FILES = Object.freeze([
@@ -325,10 +329,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1051;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1069;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 24;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1027;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 954;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1045;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 972;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -452,8 +456,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 945;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 106;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 958;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 111;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
