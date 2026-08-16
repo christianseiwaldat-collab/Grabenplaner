@@ -135,6 +135,22 @@ test("v0.71: Jede Hauptseite bietet eine eigene gespeicherte Darstellung", () =>
   assert.doesNotMatch(styles, /data-dashboard-font-size=/);
 });
 
+test("v0.92.6: Antragssperren nutzen unter dem Urlaubskalender einen einklappbaren Zeitraumkalender", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
+  const calendarPosition = html.indexOf('id="vacationCalendar"');
+  const blackoutPosition = html.indexOf('id="requestBlackoutPanel"');
+  assert.ok(calendarPosition >= 0 && blackoutPosition > calendarPosition);
+  assert.match(html, /<details class="vacation-panel request-blackout-panel" id="requestBlackoutPanel">/);
+  assert.match(html, /id="requestBlackoutDateFrom" type="hidden"/);
+  assert.match(html, /id="requestBlackoutDateTo" type="hidden"/);
+  assert.match(html, /id="requestBlackoutDateRangeButton"[^>]+aria-controls="requestBlackoutDateRangeDialog"/);
+  assert.ok(html.indexOf('/date-range-calendar.js') < html.indexOf('/app.js'));
+  assert.match(script, /initializeRequestBlackoutDateRangeCalendar/);
+  assert.match(script, /vacation-calendar-view-v1/);
+  assert.match(script, /vacationCalendarView:\s*submitted/);
+});
+
 test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbezogen", async () => {
   const admin = createPortalSession("v071-admin", "admin");
   const manager = createPortalSession("v071-manager", "manager");
@@ -149,6 +165,8 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(defaults.payload.dashboardFontSize, undefined);
   assert.ok(defaults.payload.employeeDisplayColumns.includes("name"));
   assert.deepEqual(defaults.payload.employeeDisplaySort, { key: "personnel_number", direction: "asc" });
+  assert.equal(defaults.payload.vacationCalendarView.version, 1);
+  assert.equal(defaults.payload.vacationCalendarView.view, "year");
   assert.deepEqual(defaults.payload.personnelDashboardLayout, {
     version: 1,
     order: ["employees", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
@@ -159,6 +177,13 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     version: 1,
     order: ["requests", "employees", "applications", "workflows", "tasks", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements", "dataRequests"],
     hidden: ["collectiveAgreements"],
+  };
+  const vacationCalendarView = {
+    version: 1,
+    year: 2034,
+    view: "quarter",
+    quarter: 3,
+    month: 8,
   };
   const changed = await requestJson("/api/portal/v1/ui-preferences", {
     method: "PUT",
@@ -182,6 +207,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
       appFontScalePercent: 115,
       employeeDisplayColumns: ["name", "phone", "assignment"],
       employeeDisplaySort: { key: "name", direction: "desc" },
+      vacationCalendarView,
       personnelDashboardLayout,
     },
   });
@@ -193,6 +219,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(changed.payload.appFontScalePercent, 115);
   assert.deepEqual(changed.payload.employeeDisplayColumns, ["name", "phone", "assignment"]);
   assert.deepEqual(changed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
+  assert.deepEqual(changed.payload.vacationCalendarView, vacationCalendarView);
   assert.deepEqual(changed.payload.personnelDashboardLayout, personnelDashboardLayout);
 
   const refreshed = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
@@ -202,6 +229,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(refreshed.payload.appFontScalePercent, 115);
   assert.deepEqual(refreshed.payload.employeeDisplayColumns, ["name", "phone", "assignment"]);
   assert.deepEqual(refreshed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
+  assert.deepEqual(refreshed.payload.vacationCalendarView, vacationCalendarView);
   assert.deepEqual(refreshed.payload.personnelDashboardLayout, personnelDashboardLayout);
 
   const managerDefaults = await requestJson("/api/portal/v1/ui-preferences", { session: manager });
@@ -210,6 +238,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(managerDefaults.payload.pageThemes.personnelAdministration, "light");
   assert.equal(managerDefaults.payload.appFontScalePercent, 100);
   assert.ok(managerDefaults.payload.employeeDisplayColumns.includes("name"));
+  assert.equal(managerDefaults.payload.vacationCalendarView.view, "year");
   assert.deepEqual(managerDefaults.payload.personnelDashboardLayout.hidden, []);
 
   for (const appFontScalePercent of [75, 150]) {
@@ -252,6 +281,21 @@ test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen
     body: { employeeDisplaySort: { key: "name", direction: "sideways" } },
   });
   assert.equal(invalidSort.response.status, 400, JSON.stringify(invalidSort.payload));
+  for (const vacationCalendarView of [
+    null,
+    { version: 2, year: 2034, view: "quarter", quarter: 3, month: 8 },
+    { version: 1, year: 1999, view: "quarter", quarter: 3, month: 8 },
+    { version: 1, year: 2034, view: "week", quarter: 3, month: 8 },
+    { version: 1, year: 2034, view: "quarter", quarter: 5, month: 8 },
+    { version: 1, year: 2034, view: "quarter", quarter: 3, month: 13 },
+  ]) {
+    const invalidVacationView = await requestJson("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      session: admin,
+      body: { vacationCalendarView },
+    });
+    assert.equal(invalidVacationView.response.status, 400, JSON.stringify(invalidVacationView.payload));
+  }
   for (const personnelDashboardLayout of [
     null,
     { version: 2, order: [], hidden: [] },

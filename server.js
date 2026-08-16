@@ -11801,22 +11801,38 @@ function vacationCoverageCountsAt(input, unavailable, context, pointTime) {
   };
 }
 
-async function assessVacationAvailability(
+async function assessApprovedAbsenceAvailability(
   employeeNumber,
   body = {},
+  requestType = "vacation",
   repository = absenceManagementRepository,
 ) {
   const dateFrom = String(body.dateFrom || "");
   const dateTo = String(body.dateTo || "");
   const excludeGroupId = String(body.excludeGroupId || "").trim() || null;
+  const timeOff = requestType === "time_off";
+  const requestLabel = timeOff ? "Zeitausgleich" : "Urlaub";
+  const codePrefix = timeOff ? "TIME_OFF" : "VACATION";
+  const allDay = !timeOff || body.allDay !== false;
+  const startTime = String(body.startTime || "");
+  const endTime = String(body.endTime || "");
   if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > 366) {
     return {
-      trafficLight: "red", allowed: false, code: "VACATION_DATES_INVALID",
-      reason: "Bitte einen gültigen Urlaubszeitraum von höchstens 366 Kalendertagen eingeben.",
+      trafficLight: "red", allowed: false, code: `${codePrefix}_DATES_INVALID`,
+      reason: timeOff
+        ? "Bitte einen gültigen ZA-Zeitraum von höchstens 366 Kalendertagen eingeben."
+        : "Bitte einen gültigen Urlaubszeitraum von höchstens 366 Kalendertagen eingeben.",
       manualReview: false, blockingSlots: [], contexts: [],
     };
   }
-  if (await vacationLendingConflict(employeeNumber, dateFrom, dateTo, repository)) {
+  if (timeOff && !allDay && (!isTime(startTime) || !isTime(endTime) || endTime <= startTime)) {
+    return {
+      trafficLight: "red", allowed: false, code: "TIME_OFF_TIMES_INVALID",
+      reason: "Bitte eine gültige Uhrzeit für den Zeitausgleich eingeben.",
+      manualReview: false, blockingSlots: [], contexts: [],
+    };
+  }
+  if (!timeOff && await vacationLendingConflict(employeeNumber, dateFrom, dateTo, repository)) {
     return {
       trafficLight: "red", allowed: false, code: "VACATION_EMPLOYEE_LENDING_CONFLICT",
       reason: "Für diesen Zeitraum besteht bereits ein temporärer Filialeinsatz. Während dieses Einsatzes kann kein Urlaub beantragt oder eingetragen werden.",
@@ -11826,14 +11842,14 @@ async function assessVacationAvailability(
   const context = await vacationEmployeeGovernanceContext(employeeNumber, repository);
   if (!context) {
     return {
-      trafficLight: "red", allowed: false, code: "VACATION_EMPLOYEE_NOT_FOUND",
+      trafficLight: "red", allowed: false, code: `${codePrefix}_EMPLOYEE_NOT_FOUND`,
       reason: "Das aktive Teammitglied wurde nicht gefunden.", manualReview: false, blockingSlots: [], contexts: [],
     };
   }
   if (context.locationId) {
     const blackout = await findRequestBlackout(
       employeeNumber,
-      "vacation",
+      requestType,
       dateFrom,
       dateTo,
       null,
@@ -11842,14 +11858,14 @@ async function assessVacationAvailability(
     if (blackout) {
       return {
         trafficLight: "red", allowed: false, code: "REQUEST_BLACKOUT",
-        reason: requestBlackoutReason(blackout, "Urlaub"), manualReview: false,
+        reason: requestBlackoutReason(blackout, requestLabel), manualReview: false,
         blockingSlots: [], contexts: [{ locationId: context.locationId, departmentId: context.departmentId }],
       };
     }
   }
   if (!context.branchPlanned) {
     return {
-      trafficLight: "green", allowed: true, code: "VACATION_NO_BRANCH_STAFFING",
+      trafficLight: "green", allowed: true, code: `${codePrefix}_NO_BRANCH_STAFFING`,
       reason: "Für diesen Zeitraum besteht keine Antragssperre; eine Filial-Mindestbesetzung ist nicht anzuwenden.",
       manualReview: false, blockingSlots: [], contexts: [],
     };
@@ -11869,6 +11885,9 @@ async function assessVacationAvailability(
     if (isVacationHoliday(date, context.locationId) || getGlobalDayBlockForDate(date, context.locationId)) continue;
     const config = await dayConfiguration(date, settings, { locationId: context.locationId, departmentId: null });
     if (!config?.open || !isTime(config.minFrom) || !isTime(config.minTo) || config.minTo <= config.minFrom) continue;
+    const coverageFrom = timeOff && !allDay && startTime > config.minFrom ? startTime : config.minFrom;
+    const coverageTo = timeOff && !allDay && endTime < config.minTo ? endTime : config.minTo;
+    if (coverageTo <= coverageFrom) continue;
     const locationRequired = Number(config.minStaff || 0);
     if (locationRequired <= 0 && departmentRequired <= 0) continue;
     const input = await vacationCoverageInputForDate(
@@ -11879,10 +11898,10 @@ async function assessVacationAvailability(
       repository,
     );
     const hasConcretePlan = input.shifts.length > 0;
-    for (let minute = timeToMinutes(config.minFrom); minute < timeToMinutes(config.minTo); minute += 15) {
+    for (let minute = timeToMinutes(coverageFrom); minute < timeToMinutes(coverageTo); minute += 15) {
       checkedSlots += 1;
       const pointTime = minutesToTime(minute);
-      const nextPointTime = minutesToTime(Math.min(timeToMinutes(config.minTo), minute + 15));
+      const nextPointTime = minutesToTime(Math.min(timeToMinutes(coverageTo), minute + 15));
       const unavailable = vacationUnavailableAt(input, employeeNumber, pointTime, nextPointTime);
       const counts = vacationCoverageCountsAt(input, unavailable, context, pointTime);
       const capacityEnough = counts.locationCapacity >= locationRequired
@@ -11909,7 +11928,7 @@ async function assessVacationAvailability(
     const departmentText = context.departmentId && first.departmentRequired > first.departmentCount
       ? `; die Abteilung erreicht ${first.departmentCount} von ${first.departmentRequired}` : "";
     return {
-      trafficLight: "red", allowed: false, code: "VACATION_STAFFING_INSUFFICIENT",
+      trafficLight: "red", allowed: false, code: `${codePrefix}_STAFFING_INSUFFICIENT`,
       reason: `Am ${first.date} um ${first.time} Uhr ist die Mindestbesetzung nicht gesichert (${first.locationCount} von ${first.locationRequired}${departmentText}).`,
       manualReview: true, blockingSlots,
       contexts: [{ locationId: context.locationId, departmentId: context.departmentId }],
@@ -11917,18 +11936,34 @@ async function assessVacationAvailability(
   }
   if (requiresManualReview) {
     return {
-      trafficLight: "yellow", allowed: true, code: "VACATION_STAFFING_MANUAL_REVIEW",
+      trafficLight: "yellow", allowed: true, code: `${codePrefix}_STAFFING_MANUAL_REVIEW`,
       reason: "Die verfügbare Personalkapazität reicht aus; der konkrete Dienstplan ist noch unvollständig und muss bei der Freigabe geprüft werden.",
       manualReview: true, blockingSlots: [],
       contexts: [{ locationId: context.locationId, departmentId: context.departmentId }], checkedSlots,
     };
   }
   return {
-    trafficLight: "green", allowed: true, code: "VACATION_STAFFING_CONFIRMED",
+    trafficLight: "green", allowed: true, code: `${codePrefix}_STAFFING_CONFIRMED`,
     reason: "Antragssperren und Mindestbesetzung sind nach dem aktuellen Plan geprüft.",
     manualReview: false, blockingSlots: [],
     contexts: [{ locationId: context.locationId, departmentId: context.departmentId }], checkedSlots,
   };
+}
+
+async function assessVacationAvailability(
+  employeeNumber,
+  body = {},
+  repository = absenceManagementRepository,
+) {
+  return assessApprovedAbsenceAvailability(employeeNumber, body, "vacation", repository);
+}
+
+async function assessDirectTimeOffAvailability(
+  employeeNumber,
+  body = {},
+  repository = absenceManagementRepository,
+) {
+  return assessApprovedAbsenceAvailability(employeeNumber, body, "time_off", repository);
 }
 
 async function evaluateVacationRequest(
@@ -11952,6 +11987,32 @@ async function assertVacationGovernanceAvailable(
   }, repository);
   if (!assessment.allowed) {
     const error = httpError(409, assessment.reason, assessment.code || "VACATION_NOT_POSSIBLE");
+    error.details = {
+      trafficLight: assessment.trafficLight,
+      manualReview: Boolean(assessment.manualReview),
+      blockingSlots: assessment.blockingSlots || [],
+    };
+    throw error;
+  }
+  return assessment;
+}
+
+async function assertDirectTimeOffGovernanceAvailable(
+  employeeNumber,
+  option,
+  excludeGroupId = null,
+  repository = absenceManagementRepository,
+) {
+  const assessment = await assessDirectTimeOffAvailability(employeeNumber, {
+    dateFrom: option.dateFrom || option.date_from,
+    dateTo: option.dateTo || option.date_to,
+    allDay: Boolean(option.allDay ?? option.all_day),
+    startTime: option.startTime || option.start_time,
+    endTime: option.endTime || option.end_time,
+    excludeGroupId,
+  }, repository);
+  if (!assessment.allowed) {
+    const error = httpError(409, assessment.reason, assessment.code || "TIME_OFF_NOT_POSSIBLE");
     error.details = {
       trafficLight: assessment.trafficLight,
       manualReview: Boolean(assessment.manualReview),
@@ -16092,6 +16153,22 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
     throw httpError(
       409,
       `Für ${existingShift.shift_date} ist bereits ein Dienst von ${existingShift.start_time} bis ${existingShift.end_time} Uhr eingetragen.`,
+    );
+  }
+
+  const governanceExcludeGroupId = String(body.groupId || "").trim()
+    || (existingId ? `legacy-${existingId}` : null);
+  if (optionType === "vacation") {
+    await assertVacationGovernanceAvailable(
+      employeeNumber,
+      { dateFrom, dateTo },
+      governanceExcludeGroupId,
+    );
+  } else if (optionType === "time_off") {
+    await assertDirectTimeOffGovernanceAvailable(
+      employeeNumber,
+      { dateFrom, dateTo, allDay, startTime, endTime },
+      governanceExcludeGroupId,
     );
   }
 
@@ -26453,6 +26530,7 @@ const UI_PREFERENCE_VIEWS = Object.freeze([
   "settings",
 ]);
 const UI_PAGE_THEMES = new Set(["light", "dark"]);
+const UI_VACATION_CALENDAR_VIEWS = new Set(["year", "quarter", "month", "employees"]);
 const UI_EMPLOYEE_DISPLAY_COLUMNS = new Set([
   "color", "personnel_number", "name", "nickname", "position", "cost_center", "assignment", "location", "department",
   "workload", "preferred_day", "fixed_days", "status", "phone", "private_email", "employment_start", "employment_end",
@@ -26507,6 +26585,49 @@ const UI_MOBILE_PORTAL_HOME_DEFAULT_COLORS = Object.freeze({
 });
 const UI_MOBILE_PORTAL_PALETTES = new Set(["forest", "ocean", "plum", "sand", "berry", "amber", "slate", "teal"]);
 const UI_MOBILE_PORTAL_SURFACES = new Set(["soft", "compact"]);
+
+function defaultVacationCalendarView() {
+  const [yearText, monthText] = viennaTodayIso().split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  return {
+    version: 1,
+    year,
+    view: "year",
+    quarter: Math.floor((month - 1) / 3) + 1,
+    month,
+  };
+}
+
+function normalizeVacationCalendarView(value) {
+  const fallback = defaultVacationCalendarView();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return fallback;
+  }
+  const year = Number(value.year);
+  const quarter = Number(value.quarter);
+  const month = Number(value.month);
+  return {
+    version: 1,
+    year: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : fallback.year,
+    view: UI_VACATION_CALENDAR_VIEWS.has(String(value.view)) ? String(value.view) : fallback.view,
+    quarter: Number.isInteger(quarter) && quarter >= 1 && quarter <= 4 ? quarter : fallback.quarter,
+    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : fallback.month,
+  };
+}
+
+function validateVacationCalendarView(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["version", "year", "view", "quarter", "month"].includes(key))
+    || value.version !== 1
+    || !Number.isInteger(value.year) || value.year < 2000 || value.year > 2100
+    || !UI_VACATION_CALENDAR_VIEWS.has(String(value.view || ""))
+    || !Number.isInteger(value.quarter) || value.quarter < 1 || value.quarter > 4
+    || !Number.isInteger(value.month) || value.month < 1 || value.month > 12) {
+    throw httpError(400, "Bitte eine gültige Urlaubskalender-Ansicht übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  return normalizeVacationCalendarView(value);
+}
 
 function defaultPersonnelDashboardLayout() {
   return { version: 1, order: [...UI_PERSONNEL_DASHBOARD_ITEMS], hidden: [] };
@@ -26686,6 +26807,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let allowPastWeekEditing = isLocalSystemSession(actor)
     ? settingEnabled(getSettings(), "allow_past_week_editing")
     : false;
+  let vacationCalendarView = defaultVacationCalendarView();
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
@@ -26720,6 +26842,11 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     allowPastWeekEditing = Boolean(actor.permissions?.includes("schedule:write")
       && actor.permissions?.includes("settings:write")
       && lookup.get("allow_past_week_editing") === "1");
+    try {
+      vacationCalendarView = normalizeVacationCalendarView(
+        JSON.parse(lookup.get("vacation_calendar_view_v1") || "null"),
+      );
+    } catch {}
     try {
       personnelDashboardLayout = normalizePersonnelDashboardLayout(
         JSON.parse(lookup.get("personnel_dashboard_layout_v1") || "null"),
@@ -26757,6 +26884,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (typeof overrides.allowPastWeekEditing === "boolean") {
     allowPastWeekEditing = overrides.allowPastWeekEditing;
   }
+  if (overrides.vacationCalendarView) {
+    vacationCalendarView = normalizeVacationCalendarView(overrides.vacationCalendarView);
+  }
   if (overrides.personnelDashboardLayout) {
     personnelDashboardLayout = normalizePersonnelDashboardLayout(overrides.personnelDashboardLayout);
   }
@@ -26780,6 +26910,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     employeeDisplaySort,
     workRuleAssessmentExpanded,
     allowPastWeekEditing,
+    vacationCalendarView,
     personnelDashboardLayout,
     mobilePortalNavigation,
     mobilePortalAppearance,
@@ -26848,6 +26979,9 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     : isLocalSystemSession(actor)
       ? settingEnabled(getSettings(), "allow_past_week_editing")
       : (await uiPreferencesRepository.get(actor.employeeNumber, "allow_past_week_editing"))?.value === "1";
+  const vacationCalendarView = input.vacationCalendarView === undefined
+    ? undefined
+    : validateVacationCalendarView(input.vacationCalendarView);
   const personnelDashboardLayout = input.personnelDashboardLayout === undefined
     ? undefined
     : validatePersonnelDashboardLayout(input.personnelDashboardLayout);
@@ -26863,6 +26997,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   if (!Object.keys(pageThemes).length && appFontScalePercent === undefined && employeeDisplayColumns === undefined
     && employeeDisplaySort === undefined && workRuleAssessmentExpanded === undefined
     && allowPastWeekEditing === undefined
+    && vacationCalendarView === undefined
     && personnelDashboardLayout === undefined && mobilePortalNavigation === undefined
     && mobilePortalAppearance === undefined && mobilePortalHome === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
@@ -26903,6 +27038,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
       upserts.push({
         preferenceKey: "allow_past_week_editing",
         value: allowPastWeekEditing ? "1" : "0",
+      });
+    }
+    if (vacationCalendarView !== undefined) {
+      upserts.push({
+        preferenceKey: "vacation_calendar_view_v1",
+        value: JSON.stringify(vacationCalendarView),
       });
     }
     if (personnelDashboardLayout !== undefined) {
@@ -26950,6 +27091,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     employeeDisplaySort,
     workRuleAssessmentExpanded,
     allowPastWeekEditing,
+    vacationCalendarView,
     personnelDashboardLayout,
     mobilePortalNavigation,
     mobilePortalAppearance,
@@ -44994,6 +45136,10 @@ app.delete("/api/schedule", async (request, response) => {
 });
 
 app.post("/api/week-options", async (request, response) => {
+  const requestedEmployeeNumber = String(request.body?.employeeNumber || "").trim();
+  const requestedOptionType = String(request.body?.optionType || "");
+  assertApprovedAbsenceEntryAccess(request.portalSession, requestedOptionType);
+  await assertSessionEmployeeScope(request.portalSession, requestedEmployeeNumber);
   const option = await validateWeekOption(request.body, 0, request.portalSession);
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
@@ -45022,6 +45168,10 @@ app.put("/api/week-options/:id", async (request, response) => {
     employeeNumber: existing.employee_number,
   }))?.home_location_id;
   await assertWeekEditable(existing.week_start, await settingsForLocation(existingLocation), request.portalSession);
+  const requestedEmployeeNumber = String(request.body?.employeeNumber || existing.employee_number).trim();
+  const requestedOptionType = String(request.body?.optionType || existing.option_type);
+  assertApprovedAbsenceEntryAccess(request.portalSession, requestedOptionType);
+  await assertSessionEmployeeScope(request.portalSession, requestedEmployeeNumber);
   const option = await validateWeekOption({
     ...request.body,
     groupId: request.body.groupId === undefined ? existing.group_id : request.body.groupId,

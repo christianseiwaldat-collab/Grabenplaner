@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.6 Beta · Antragssperren und gespeicherte Kalenderansicht
+
+- Aktive Urlaubs- und ZA-Sperren gelten auch für neue direkte Einträge durch berechtigte Leitungen in der Dienstplanung; bereits genehmigte Einträge bleiben unverändert bestehen.
+- Unterschreitet ein neuer direkter Urlaubs- oder ZA-Eintrag die Filial- oder Abteilungs-Mindestbesetzung, wird er mit Datum, Uhrzeit und konkretem Soll-/Ist-Grund abgewiesen.
+- Antragssperren verwenden einen kompakten Zeitraumkalender für einzelne oder mehrere, auch kalenderwochenübergreifende Tage und stehen einklappbar unter dem Urlaubskalender.
+- Die zuletzt gewählte Jahres-, Quartals-, Monats- oder Teamansicht des Urlaubskalenders wird benutzerbezogen gespeichert und beim nächsten Öffnen wiederhergestellt.
+
 ## v0.92.5 Beta · Xoffi-Zeiten, Portalzugang und Navigation
 
 - Vergangene Xoffi-Wochen können als lokal ausgelesene, vor der Übernahme prüfbare Ist-Zeiten importiert und mit dem Dienstplan verglichen werden; der Stundenstand bleibt in der aktuellen Wochenübersicht sichtbar.

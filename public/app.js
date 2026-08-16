@@ -54,6 +54,7 @@ const state = {
   portalPermissionCatalog: [],
   approvalDelegations: [],
   requestBlackouts: [],
+  requestBlackoutDateRangeCalendar: null,
   absenceRequests: [],
   sicknessCases: [],
   amuReports: [],
@@ -403,6 +404,8 @@ let scheduleNoteSanitizing = false;
 let shiftRulePreviewTimer = null;
 let shiftRulePreviewRequest = null;
 let workRuleAssessmentPreferenceRequestId = 0;
+let vacationCalendarPreferenceRequestId = 0;
+let vacationCalendarPreferenceSave = Promise.resolve();
 
 const optionLabels = {
   vacation: "Urlaub",
@@ -432,7 +435,7 @@ const elements = Object.fromEntries(
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount", "vacationAccountsButton", "vacationAccountsModal", "vacationAccountsYear", "loadVacationAccountsButton", "vacationAccountsSummary", "vacationAccountsList",
-    "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
+    "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutDateRangeButton", "requestBlackoutDateRangeText", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList", "requestBlackoutDateRangeDialog", "requestBlackoutDateRangeForm", "requestBlackoutDateRangeStartText", "requestBlackoutDateRangeEndText", "requestBlackoutDateRangePreviousMonth", "requestBlackoutDateRangeMonthLabel", "requestBlackoutDateRangeNextMonth", "requestBlackoutDateRangeGrid", "requestBlackoutDateRangeOpenEnd", "requestBlackoutDateRangeClose", "requestBlackoutDateRangeCancel", "requestBlackoutDateRangeApply",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
     "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
@@ -1861,7 +1864,8 @@ async function bootstrapApplication() {
     hideLoginGate();
     applyShellBranding();
     applyRoleVisibility();
-    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference(), loadUiPreferences()]);
+    await loadUiPreferences();
+    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
     applyRequestedView();
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
@@ -1890,7 +1894,8 @@ async function loginToAdministration(event) {
     applyShellBranding(result.status?.branding || result.branding || {});
     hideLoginGate();
     applyRoleVisibility();
-    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference(), loadUiPreferences()]);
+    await loadUiPreferences();
+    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
     applyRequestedView();
   } catch (error) {
     showLoginGate(error.message);
@@ -15588,6 +15593,80 @@ function personnelDashboardLayoutStorageKey() {
   return `grabenplaner:personnel-dashboard-layout-v1:${uiPreferenceActorKey()}`;
 }
 
+function vacationCalendarViewStorageKey() {
+  return `grabenplaner:vacation-calendar-view-v1:${uiPreferenceActorKey()}`;
+}
+
+function defaultVacationCalendarView() {
+  const now = new Date();
+  return {
+    version: 1,
+    year: now.getFullYear(),
+    view: "year",
+    quarter: Math.floor(now.getMonth() / 3) + 1,
+    month: now.getMonth() + 1,
+  };
+}
+
+function normalizeVacationCalendarView(value) {
+  const fallback = defaultVacationCalendarView();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) return fallback;
+  const year = Number(value.year);
+  const quarter = Number(value.quarter);
+  const month = Number(value.month);
+  return {
+    version: 1,
+    year: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : fallback.year,
+    view: ["year", "quarter", "month", "employees"].includes(String(value.view)) ? String(value.view) : fallback.view,
+    quarter: Number.isInteger(quarter) && quarter >= 1 && quarter <= 4 ? quarter : fallback.quarter,
+    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : fallback.month,
+  };
+}
+
+function currentVacationCalendarView() {
+  return normalizeVacationCalendarView({
+    version: 1,
+    year: state.vacationYear,
+    view: state.vacationViewMode,
+    quarter: state.vacationQuarter,
+    month: state.vacationMonth,
+  });
+}
+
+function applyVacationCalendarView(value) {
+  const normalized = normalizeVacationCalendarView(value);
+  state.vacationYear = normalized.year;
+  state.vacationViewMode = normalized.view;
+  state.vacationQuarter = normalized.quarter;
+  state.vacationMonth = normalized.month;
+  if (elements.vacationYear) elements.vacationYear.value = String(normalized.year);
+  if (elements.vacationViewMode) elements.vacationViewMode.value = normalized.view;
+  if (elements.vacationQuarter) elements.vacationQuarter.value = String(normalized.quarter);
+  if (elements.vacationMonth) elements.vacationMonth.value = String(normalized.month);
+  return normalized;
+}
+
+function persistVacationCalendarView() {
+  const submitted = currentVacationCalendarView();
+  const requestId = ++vacationCalendarPreferenceRequestId;
+  localStorage.setItem(vacationCalendarViewStorageKey(), JSON.stringify(submitted));
+  vacationCalendarPreferenceSave = vacationCalendarPreferenceSave.catch(() => {}).then(async () => {
+    if (requestId !== vacationCalendarPreferenceRequestId) return;
+    try {
+      const result = await api("/api/portal/v1/ui-preferences", {
+        method: "PUT",
+        body: JSON.stringify({ vacationCalendarView: submitted }),
+      });
+      if (requestId !== vacationCalendarPreferenceRequestId) return;
+      const stored = applyVacationCalendarView(result.vacationCalendarView || submitted);
+      localStorage.setItem(vacationCalendarViewStorageKey(), JSON.stringify(stored));
+    } catch (error) {
+      if (requestId === vacationCalendarPreferenceRequestId) showToast(error.message, true);
+    }
+  });
+  return vacationCalendarPreferenceSave;
+}
+
 function applyWorkRuleAssessmentExpanded(value) {
   const expanded = value === true;
   state.workRuleAssessmentExpanded = expanded;
@@ -15863,6 +15942,16 @@ async function loadUiPreferences() {
   }
   const localOnly = preferences?.actor === "local"
     || state.portalStatus?.portalEnabled !== true;
+  let storedVacationCalendarView = preferences?.vacationCalendarView;
+  if (localOnly) {
+    try {
+      storedVacationCalendarView = JSON.parse(localStorage.getItem(vacationCalendarViewStorageKey()) || "null");
+    } catch {}
+  }
+  const loadedVacationCalendarView = applyVacationCalendarView(storedVacationCalendarView);
+  if (localOnly) {
+    localStorage.setItem(vacationCalendarViewStorageKey(), JSON.stringify(loadedVacationCalendarView));
+  }
   if (!localOnly && typeof preferences?.allowPastWeekEditing === "boolean") {
     state.allowPastWeekEditing = preferences.allowPastWeekEditing;
     const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing");
@@ -19701,6 +19790,57 @@ function refreshRequestBlackoutDepartments(selectedDepartmentId = "") {
   elements.requestBlackoutDepartment.value = departments.some((department) => String(department.id) === String(selectedDepartmentId)) ? String(selectedDepartmentId) : "";
 }
 
+function requestBlackoutDateRangeLabel() {
+  const dateFrom = elements.requestBlackoutDateFrom?.value || "";
+  const dateTo = elements.requestBlackoutDateTo?.value || "";
+  if (!dateFrom) return "Zeitraum auswählen";
+  if (dateFrom === dateTo) return formatDate(dateFrom);
+  return window.GrabenplanerDateRangeCalendar?.rangeLabel(dateFrom, dateTo)
+    || `${formatDate(dateFrom)} – ${formatDate(dateTo)}`;
+}
+
+function updateRequestBlackoutDateRangeLabel() {
+  if (elements.requestBlackoutDateRangeText) {
+    elements.requestBlackoutDateRangeText.textContent = requestBlackoutDateRangeLabel();
+  }
+}
+
+function openRequestBlackoutDateRangeCalendar() {
+  if (!state.requestBlackoutDateRangeCalendar) {
+    showToast("Der Zeitraumkalender konnte nicht geladen werden.", true);
+    return;
+  }
+  state.requestBlackoutDateRangeCalendar.open({
+    start: elements.requestBlackoutDateFrom.value,
+    end: elements.requestBlackoutDateTo.value,
+    allowOpenEnd: false,
+    onCommit: (dateFrom, dateTo) => {
+      elements.requestBlackoutDateFrom.value = dateFrom;
+      elements.requestBlackoutDateTo.value = dateTo;
+      updateRequestBlackoutDateRangeLabel();
+    },
+  });
+}
+
+function initializeRequestBlackoutDateRangeCalendar() {
+  const factory = window.GrabenplanerDateRangeCalendar?.createDateRangeCalendar;
+  if (!factory || !elements.requestBlackoutDateRangeDialog) return;
+  state.requestBlackoutDateRangeCalendar = factory({
+    dialog: elements.requestBlackoutDateRangeDialog,
+    form: elements.requestBlackoutDateRangeForm,
+    grid: elements.requestBlackoutDateRangeGrid,
+    title: elements.requestBlackoutDateRangeMonthLabel,
+    startText: elements.requestBlackoutDateRangeStartText,
+    endText: elements.requestBlackoutDateRangeEndText,
+    previousButton: elements.requestBlackoutDateRangePreviousMonth,
+    nextButton: elements.requestBlackoutDateRangeNextMonth,
+    openEndCheckbox: elements.requestBlackoutDateRangeOpenEnd,
+    applyButton: elements.requestBlackoutDateRangeApply,
+    closeButtons: [elements.requestBlackoutDateRangeClose, elements.requestBlackoutDateRangeCancel],
+  });
+  elements.requestBlackoutDateRangeButton?.addEventListener("click", openRequestBlackoutDateRangeCalendar);
+}
+
 function resetRequestBlackoutForm() {
   state.editingRequestBlackoutId = null;
   elements.requestBlackoutForm?.reset();
@@ -19708,6 +19848,7 @@ function resetRequestBlackoutForm() {
   if (elements.requestBlackoutActive) elements.requestBlackoutActive.checked = true;
   if (elements.requestBlackoutLocation) elements.requestBlackoutLocation.value = state.locationId || state.locations.find((location) => location.active)?.id || "";
   refreshRequestBlackoutDepartments();
+  updateRequestBlackoutDateRangeLabel();
   elements.cancelRequestBlackoutEdit?.classList.add("hidden");
   if (elements.requestBlackoutSubmit) elements.requestBlackoutSubmit.textContent = "Sperre speichern";
   elements.requestBlackoutForm?.classList.add("hidden");
@@ -19743,11 +19884,13 @@ function editRequestBlackout(id) {
   const item = state.requestBlackouts.find((entry) => Number(entry.id) === Number(id));
   if (!item) return;
   state.editingRequestBlackoutId = item.id;
+  if (elements.requestBlackoutPanel) elements.requestBlackoutPanel.open = true;
   elements.requestBlackoutForm.classList.remove("hidden");
   elements.requestBlackoutLocation.value = item.locationId;
   refreshRequestBlackoutDepartments(item.departmentId || "");
   elements.requestBlackoutDateFrom.value = item.dateFrom;
   elements.requestBlackoutDateTo.value = item.dateTo;
+  updateRequestBlackoutDateRangeLabel();
   elements.requestBlackoutReason.value = item.reason;
   elements.requestBlackoutVacation.checked = item.blockVacation;
   elements.requestBlackoutTimeOff.checked = item.blockTimeOff;
@@ -19760,6 +19903,10 @@ function editRequestBlackout(id) {
 async function saveRequestBlackout(event) {
   event.preventDefault();
   const id = state.editingRequestBlackoutId;
+  if (!elements.requestBlackoutDateFrom.value || !elements.requestBlackoutDateTo.value) {
+    showToast("Bitte einen Sperrzeitraum auswählen.", true);
+    return;
+  }
   try {
     const result = await api(id ? `/api/portal/v1/request-blackouts/${id}` : "/api/portal/v1/request-blackouts", {
       method: id ? "PUT" : "POST",
@@ -26762,7 +26909,11 @@ elements.requestActionForm?.addEventListener("click", (event) => {
   if (sicknessButton) decideSicknessCase(sicknessButton.dataset.sicknessAction);
 });
 elements.requestBlackoutForm?.addEventListener("submit", saveRequestBlackout);
-elements.addRequestBlackoutButton?.addEventListener("click", () => { resetRequestBlackoutForm(); elements.requestBlackoutForm.classList.remove("hidden"); });
+elements.addRequestBlackoutButton?.addEventListener("click", () => {
+  if (elements.requestBlackoutPanel) elements.requestBlackoutPanel.open = true;
+  resetRequestBlackoutForm();
+  elements.requestBlackoutForm.classList.remove("hidden");
+});
 elements.requestBlackoutLocation?.addEventListener("change", () => refreshRequestBlackoutDepartments());
 elements.cancelRequestBlackoutEdit?.addEventListener("click", resetRequestBlackoutForm);
 elements.requestBlackoutList?.addEventListener("click", (event) => {
@@ -27078,20 +27229,24 @@ elements.vacationYear.addEventListener("change", () => {
     return;
   }
   state.vacationYear = year;
+  void persistVacationCalendarView();
   loadAll();
 });
 elements.vacationViewMode.addEventListener("change", () => {
   state.vacationViewMode = elements.vacationViewMode.value;
+  void persistVacationCalendarView();
   renderVacations();
   updatePdfPreview();
 });
 elements.vacationQuarter.addEventListener("change", () => {
   state.vacationQuarter = Number(elements.vacationQuarter.value);
+  void persistVacationCalendarView();
   renderVacations();
   updatePdfPreview();
 });
 elements.vacationMonth.addEventListener("change", () => {
   state.vacationMonth = Number(elements.vacationMonth.value);
+  void persistVacationCalendarView();
   renderVacations();
   updatePdfPreview();
 });
@@ -27860,6 +28015,7 @@ elements.vacationCalendar.addEventListener("click", (event) => {
   deleteVacation(button.dataset.deleteVacation);
 });
 
+initializeRequestBlackoutDateRangeCalendar();
 bootstrapApplication();
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked")) loadSystemInfo();
