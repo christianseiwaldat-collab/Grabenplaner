@@ -301,9 +301,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     BASELINE.productionTotals.directNodeSqliteImport,
   );
 
-  // Personalmodul-, Filialbestellungs- und Verkaufsanalyse-Schemaoperationen sind explizit als SQLite-Phase-3-Dateien klassifiziert.
+  // Personalmodul-, Filialbestellungs- und Verkaufsanalyse-Schemaoperationen sowie die persistenzfreie Funktionssuche sind explizit klassifiziert.
   assert.equal(report.summary.productionDirectFiles, 60);
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 1);
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 5);
   assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 3);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);

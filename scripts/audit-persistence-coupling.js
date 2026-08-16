@@ -709,6 +709,21 @@ const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
     laterPhase: "3-6",
   }),
   Object.freeze({
+    id: "function-search-projection",
+    files: Object.freeze([
+      "public/function-search-catalog.js",
+      "public/function-search-navigation.js",
+      "public/function-search-ui.js",
+      "public/function-search.js",
+    ]),
+    scope: "product-runtime",
+    owner: "navigation-and-access-projection",
+    targetLayer: "provider-neutral read-only navigation catalog and permission-gated client search",
+    risk: "medium",
+    transitionException: "UI target descriptors are navigation metadata only and must not activate a persistence provider or database operation",
+    laterPhase: "not-applicable",
+  }),
+  Object.freeze({
     id: "linux-server-orchestration",
     files: Object.freeze([
       "server-tools/linux/backup-grabenplaner.sh",

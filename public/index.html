@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.6 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.7 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -42,6 +42,38 @@
           <span id="sidebarSessionPosition"></span>
           <button id="portalLogoutButton" type="button">(Logout)</button>
         </div>
+
+        <section class="function-search hidden" id="functionSearch" aria-label="Funktionen durchsuchen">
+          <label class="visually-hidden" for="functionSearchInput">Funktion suchen</label>
+          <div class="function-search-field">
+            <svg class="function-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="6.5"></circle>
+              <path d="m16 16 4 4"></path>
+            </svg>
+            <input
+              id="functionSearchInput"
+              type="search"
+              role="combobox"
+              placeholder="Suche"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              enterkeyhint="search"
+              aria-autocomplete="list"
+              aria-controls="functionSearchResults"
+              aria-describedby="functionSearchHint"
+              aria-expanded="false"
+              aria-haspopup="listbox"
+              aria-keyshortcuts="Control+K Meta+K"
+            />
+            <button class="function-search-clear hidden" id="functionSearchClear" type="button" aria-label="Suche leeren">×</button>
+          </div>
+          <p class="visually-hidden" id="functionSearchHint">Suchbegriff eingeben. Treffer mit den Pfeiltasten auswählen.</p>
+          <div class="function-search-popover hidden" id="functionSearchPopover">
+            <p class="function-search-status" id="functionSearchStatus" role="status" aria-live="polite"></p>
+            <div class="function-search-results" id="functionSearchResults" role="listbox" aria-label="Gefundene Funktionen"></div>
+          </div>
+        </section>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
           <button class="nav-item hidden" data-view="rightsDashboard" id="rightsDashboardNavButton">
@@ -300,7 +332,7 @@
           <section class="request-workflow-summary" id="requestWorkflowSummary"></section>
           <section class="vacation-panel request-management-panel">
             <div class="request-management-toolbar">
-              <div class="request-kind-tabs"><button class="active" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button><button data-request-kind-tab="amu" type="button">Krank & AUM <span id="amuRequestCount">0</span></button></div>
+              <div class="request-kind-tabs"><button class="active" id="requestVacationTab" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button id="requestTimeOffTab" data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button><button id="requestAmuTab" data-request-kind-tab="amu" type="button">Krank & AUM <span id="amuRequestCount">0</span></button></div>
               <label class="field request-status-filter"><span>Status</span><select id="requestStatusFilter"><option value="actionable">Zu bearbeiten</option><option value="pending_local">Offen</option><option value="preliminary_local">Vorläufig genehmigt</option><option value="pending_hr">Wartet auf Personalleitung</option><option value="approved">Genehmigt</option><option value="rejected">Abgelehnt</option><option value="cancelled">Storniert</option><option value="reported">Krank gemeldet</option><option value="aum_received">AUM eingelangt</option><option value="recovered">Abgeschlossen</option><option value="withdrawn">Zurückgezogen</option><option value="submitted">AUM eingereicht</option><option value="returned">AUM zu ergänzen</option><option value="reviewed">AUM geprüft</option><option value="all">Alle</option></select></label>
             </div>
             <div class="manager-request-list" id="managerVacationRequestList"><p class="settings-note">Anträge werden geladen.</p></div>
@@ -1214,8 +1246,8 @@
           </header>
 
           <div class="settings-tabs personnel-tabs" role="tablist">
-            <button class="settings-tab active" data-personnel-tab="employees">Team</button>
-            <button class="settings-tab" data-personnel-tab="locations">Standortverwaltung</button>
+            <button class="settings-tab active" id="filialTeamTab" data-personnel-tab="employees">Team</button>
+            <button class="settings-tab" id="filialLocationsTab" data-personnel-tab="locations">Standortverwaltung</button>
           </div>
 
           <section id="employeeSettings" class="personnel-section active">
@@ -1347,11 +1379,11 @@
             <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte, Personalregeln, betriebliche Abläufe und technischen Zustand verständlich im Blick behalten.</p></div>
             <div class="rights-dashboard-header-actions">
               <div class="rights-dashboard-mode-switch" role="tablist" aria-label="Dashboard-Bereich">
-                <button type="button" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="true">Filialübersicht</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="rights" data-dashboard-capability="rights" aria-selected="false">Rechteübersicht</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="personnelRules" data-dashboard-capability="workRules" aria-selected="false">Personal-Regelwerk</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="processes" data-dashboard-capability="rights" aria-selected="false">Abläufe &amp; Prozesse</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system" aria-selected="false">System-Center</button>
+                <button type="button" id="rightsLocationsDashboardTab" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="true">Filialübersicht</button>
+                <button type="button" id="rightsPermissionsDashboardTab" role="tab" data-rights-dashboard-mode="rights" data-dashboard-capability="rights" aria-selected="false">Rechteübersicht</button>
+                <button type="button" id="personnelRulesDashboardTab" role="tab" data-rights-dashboard-mode="personnelRules" data-dashboard-capability="workRules" aria-selected="false">Personal-Regelwerk</button>
+                <button type="button" id="rightsProcessesDashboardTab" role="tab" data-rights-dashboard-mode="processes" data-dashboard-capability="rights" aria-selected="false">Abläufe &amp; Prozesse</button>
+                <button type="button" id="systemCenterDashboardTab" role="tab" data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system" aria-selected="false">System-Center</button>
               </div>
               <div class="page-theme-switch dashboard-theme-switch" role="group" aria-label="Darstellung der Dashboards">
                 <span>Darstellung</span>
@@ -1540,15 +1572,15 @@
           </header>
 
           <div class="settings-tabs" role="tablist">
-            <button class="settings-tab active" data-settings-tab="general">Grundeinstellungen</button>
-            <button class="settings-tab" data-settings-tab="personnel">Personal</button>
-            <button class="settings-tab" data-settings-tab="vacation">Urlaub</button>
-            <button class="settings-tab" data-settings-tab="timeTracking">Zeiterfassung</button>
-            <button class="settings-tab" data-settings-tab="integrations">Import &amp; Lohnverrechnung</button>
-            <button class="settings-tab" data-settings-tab="access">Zugänge</button>
-            <button class="settings-tab" data-settings-tab="rights">Rechtemanagement</button>
-            <button class="settings-tab hidden" data-settings-tab="dataProtection">Datenschutz</button>
-            <button class="settings-tab" data-settings-tab="backup">System &amp; Backups</button>
+            <button class="settings-tab active" id="settingsGeneralTab" data-settings-tab="general">Grundeinstellungen</button>
+            <button class="settings-tab" id="settingsPersonnelTab" data-settings-tab="personnel">Personal</button>
+            <button class="settings-tab" id="settingsVacationTab" data-settings-tab="vacation">Urlaub</button>
+            <button class="settings-tab" id="settingsTimeTrackingTab" data-settings-tab="timeTracking">Zeiterfassung</button>
+            <button class="settings-tab" id="settingsIntegrationsTab" data-settings-tab="integrations">Import &amp; Lohnverrechnung</button>
+            <button class="settings-tab" id="settingsAccessTab" data-settings-tab="access">Zugänge</button>
+            <button class="settings-tab" id="settingsRightsTab" data-settings-tab="rights">Rechtemanagement</button>
+            <button class="settings-tab hidden" id="settingsDataProtectionTab" data-settings-tab="dataProtection">Datenschutz</button>
+            <button class="settings-tab" id="settingsBackupTab" data-settings-tab="backup">System &amp; Backups</button>
           </div>
 
           <section id="generalSettings" class="settings-section settings-two-column active">
@@ -2220,7 +2252,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.6 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.7 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -3138,6 +3170,10 @@
     <script src="/api-errors.js"></script>
     <script src="/vendor/quill/quill.js"></script>
     <script src="/date-range-calendar.js"></script>
+    <script src="/function-search-catalog.js"></script>
+    <script src="/function-search.js"></script>
+    <script src="/function-search-ui.js"></script>
+    <script src="/function-search-navigation.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

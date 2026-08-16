@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.7 Beta · Berechtigungsgefilterte Funktionssuche
+
+- Ein Suchfeld unter der angemeldeten Person erschließt ausschließlich Funktionen, deren bestehende UI- und Berechtigungsgates im aktuellen Sitzungskontext vollständig sichtbar sind.
+- 90 präzise Navigationsziele unterstützen gewichtete deutsche Suchbegriffe, umfangreiche Synonyme, gebräuchliche Abkürzungen, ASCII-Umlaute und begrenzte Tippfehler.
+- Treffer öffnen die richtige Ansicht, Registerkarte und gegebenenfalls den zugehörigen Klappbereich, fokussieren das Ziel und markieren es kurz, ohne Schaltflächen, Downloads, Dialoge oder Formularaktionen auszulösen.
+- Tastatursteuerung, mobile Darstellung, reduzierte Bewegung sowie erneute Zugriffsprüfungen vor und nach dem Ansichtswechsel sind fail-closed abgesichert.
+
 ## v0.92.6 Beta · Antragssperren und gespeicherte Kalenderansicht
 
 - Aktive Urlaubs- und ZA-Sperren gelten auch für neue direkte Einträge durch berechtigte Leitungen in der Dienstplanung; bereits genehmigte Einträge bleiben unverändert bestehen.
