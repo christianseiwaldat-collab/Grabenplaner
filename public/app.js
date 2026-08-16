@@ -429,7 +429,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 const elements = Object.fromEntries(
   [
     "filialAdministrationView", "filialDashboardGrid", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
@@ -841,6 +841,7 @@ function showLoginGate(message = "") {
     elements.adminLoginError.textContent = message;
     elements.adminLoginError.classList.toggle("hidden", !message);
   }
+  refreshFunctionSearchAccess();
   setTimeout(() => elements.adminLoginPersonnelNumber?.focus(), 50);
 }
 
@@ -857,6 +858,178 @@ function renderSidebarSession() {
   elements.sidebarSessionRole.textContent = user.roleName || user.role || "Angemeldet";
   elements.sidebarSessionIdentity.textContent = `${user.employeeNumber} · ${user.fullName || user.nickname || ""}`;
   elements.sidebarSessionPosition.textContent = user.positionName ? `Position: ${user.positionName}` : "Position: nicht hinterlegt";
+}
+
+let functionSearchController = null;
+let functionSearchNavigationSequence = 0;
+let functionSearchTargetCleanup = null;
+
+function functionSearchIsAuthenticated() {
+  return state.portalStatus?.portalEnabled === true
+    && state.portalSession?.authenticated === true
+    && Boolean(state.portalSession?.user)
+    && !document.body.classList.contains("portal-locked");
+}
+
+function functionSearchGateAvailable(gateId) {
+  const navigationApi = window.GrabenplanerFunctionSearchNavigation;
+  return typeof navigationApi?.functionSearchDomGateIsAvailable === "function"
+    && navigationApi.functionSearchDomGateIsAvailable(gateId, { document });
+}
+
+function functionSearchAccessOptions() {
+  return {
+    authenticated: functionSearchIsAuthenticated(),
+    isGateAvailable: functionSearchGateAvailable,
+  };
+}
+
+function availableFunctionSearchResults(query) {
+  const searchApi = window.GrabenplanerFunctionSearch;
+  if (!functionSearchIsAuthenticated() || typeof searchApi?.searchAvailableFunctions !== "function") return [];
+  return searchApi.searchAvailableFunctions(query, functionSearchAccessOptions(), { limit: 8 });
+}
+
+function availableFunctionSearchNavigationEntry(entryId) {
+  const catalogApi = window.GrabenplanerFunctionSearchCatalog;
+  if (!functionSearchIsAuthenticated() || typeof catalogApi?.availableFunctionSearchEntry !== "function") return null;
+  return catalogApi.availableFunctionSearchEntry(entryId, functionSearchAccessOptions());
+}
+
+function refreshFunctionSearchAccess() {
+  const available = functionSearchIsAuthenticated()
+    && typeof window.GrabenplanerFunctionSearch?.searchAvailableFunctions === "function"
+    && Boolean(functionSearchController);
+  elements.functionSearch?.classList.toggle("hidden", !available);
+  functionSearchController?.setVisible(available);
+  if (available && elements.functionSearchInput?.value) functionSearchController.refresh();
+}
+
+function initializeFunctionSearchUi() {
+  if (functionSearchController || !elements.functionSearch) return;
+  const uiApi = window.GrabenplanerFunctionSearchUi;
+  if (typeof uiApi?.createFunctionSearchUi !== "function") return;
+  try {
+    functionSearchController = uiApi.createFunctionSearchUi({
+      container: elements.functionSearch,
+      input: elements.functionSearchInput,
+      clearButton: elements.functionSearchClear,
+      popover: elements.functionSearchPopover,
+      status: elements.functionSearchStatus,
+      results: elements.functionSearchResults,
+      search: availableFunctionSearchResults,
+      onSelect(entry) {
+        if (!entry?.id || !functionSearchIsAuthenticated()) return;
+        elements.functionSearch.dispatchEvent(new CustomEvent("grabenplaner:function-search-result-selected", {
+          bubbles: true,
+          detail: Object.freeze({ id: entry.id }),
+        }));
+      },
+    });
+  } catch (_error) {
+    elements.functionSearch.classList.add("hidden");
+  }
+}
+
+function functionSearchSettingsTabButton(tab) {
+  return [...document.querySelectorAll("[data-settings-tab]")]
+    .find((button) => button.dataset.settingsTab === tab) || null;
+}
+
+function applyFunctionSearchNavigationState(target) {
+  if (!target || target.kind !== "navigation" || typeof target.view !== "string") return false;
+  if (target.personnelAdministrationTab) state.personnelAdministrationTab = target.personnelAdministrationTab;
+  if (target.dashboardMode) state.rightsDashboardMode = target.dashboardMode;
+  if (target.requestKind) state.requestKindTab = target.requestKind;
+
+  const contextChanged = restoreRememberedOverallContext(target.view);
+  setView(target.view);
+  if (state.currentView !== target.view) return false;
+
+  if (target.personnelAdministrationTab) {
+    setPersonnelAdministrationTab(target.personnelAdministrationTab);
+    if (state.personnelAdministrationTab !== target.personnelAdministrationTab) return false;
+  }
+  if (target.personnelTab) {
+    setPersonnelTab(target.personnelTab);
+    if (state.personnelTab !== target.personnelTab) return false;
+  }
+  if (target.settingsTab) {
+    const tabButton = functionSearchSettingsTabButton(target.settingsTab);
+    if (!tabButton || tabButton.classList.contains("hidden")) return false;
+    setSettingsTab(target.settingsTab);
+    if (!tabButton.classList.contains("active")) return false;
+  }
+  if (target.dashboardMode) {
+    setRightsDashboardMode(target.dashboardMode);
+    if (state.rightsDashboardMode !== target.dashboardMode) return false;
+  }
+  if (target.requestKind && !setManagerRequestKindTab(target.requestKind)) return false;
+  if (contextChanged) loadAll();
+  return true;
+}
+
+function waitForFunctionSearchTargetLayout() {
+  return new Promise((resolve) => {
+    const nextFrame = typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame
+      : (callback) => setTimeout(callback, 0);
+    nextFrame(() => nextFrame(() => setTimeout(resolve, 80)));
+  });
+}
+
+async function navigateToFunctionSearchEntry(entryId) {
+  const entry = availableFunctionSearchNavigationEntry(entryId);
+  const navigationApi = window.GrabenplanerFunctionSearchNavigation;
+  if (!entry || typeof navigationApi?.presentFunctionSearchTarget !== "function") return false;
+  const sequence = ++functionSearchNavigationSequence;
+  functionSearchTargetCleanup?.();
+  functionSearchTargetCleanup = null;
+  if (!applyFunctionSearchNavigationState(entry.target)) {
+    if (functionSearchIsAuthenticated()) showToast("Das Suchziel ist derzeit nicht verfügbar.", true);
+    return false;
+  }
+
+  closeMobileNavigation({ restoreFocus: false });
+  await waitForFunctionSearchTargetLayout();
+  if (sequence !== functionSearchNavigationSequence) return false;
+  const currentEntry = availableFunctionSearchNavigationEntry(entry.id);
+  if (currentEntry !== entry || state.currentView !== entry.target.view) return false;
+
+  const result = navigationApi.presentFunctionSearchTarget(entry.target, {
+    document,
+    window,
+    afterReveal: scheduleAllSettingsPackedGrids,
+  });
+  if (!result?.ok) {
+    if (functionSearchIsAuthenticated()) showToast("Das Suchziel ist derzeit nicht verfügbar.", true);
+    return false;
+  }
+  functionSearchTargetCleanup = result.cleanup;
+  functionSearchController?.clear();
+  showToast(`Geöffnet: ${entry.label}`);
+  return true;
+}
+
+function handleFunctionSearchResultSelection(event) {
+  const entryId = event?.detail?.id;
+  if (typeof entryId !== "string" || !entryId) return;
+  navigateToFunctionSearchEntry(entryId).catch(() => {
+    if (functionSearchIsAuthenticated()) showToast("Das Suchziel ist derzeit nicht verfügbar.", true);
+  });
+}
+
+function focusFunctionSearchFromShortcut(event) {
+  const shortcut = (event.ctrlKey || event.metaKey)
+    && !event.altKey
+    && String(event.key || "").toLowerCase() === "k";
+  if (!shortcut || elements.functionSearch?.classList.contains("hidden") || !functionSearchIsAuthenticated()) return;
+  event.preventDefault();
+  if (mobileNavigationMedia.matches) openMobileNavigation();
+  requestAnimationFrame(() => {
+    elements.functionSearchInput?.focus({ preventScroll: true });
+    if (elements.functionSearchInput?.value) functionSearchController?.refresh();
+  });
 }
 
 function canReadCentralPersonnel() {
@@ -1007,6 +1180,19 @@ function ensureAccessibleManagerRequestTab() {
     }
   }
   return state.requestKindTab;
+}
+
+function setManagerRequestKindTab(kind) {
+  if (!accessibleManagerRequestTabs().includes(kind)) return false;
+  state.requestKindTab = kind;
+  if (kind === "amu" && elements.requestStatusFilter && !["actionable", "all"].includes(elements.requestStatusFilter.value)) {
+    elements.requestStatusFilter.value = "actionable";
+  }
+  document.querySelectorAll("[data-request-kind-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.requestKindTab === kind);
+  });
+  renderManagerRequests();
+  return true;
 }
 
 function canReadManagerRequests() {
@@ -1836,6 +2022,7 @@ function applyRoleVisibility() {
   if (!branchOrderManagementAccess && state.currentView === "branchOrders") setView("planning");
   if (!salesAnalyticsAccess && state.currentView === "salesAnalytics") setView("planning");
   renderSidebarSession();
+  refreshFunctionSearchAccess();
 }
 
 async function bootstrapApplication() {
@@ -26219,6 +26406,7 @@ if (typeof MutationObserver === "function" && (elements.deploymentBanner || elem
   [elements.deploymentBanner, elements.compactAdminNotice].filter(Boolean)
     .forEach((banner) => deploymentBannerMutationObserver.observe(banner, { attributes: true, attributeFilter: ["class"] }));
 }
+document.addEventListener("keydown", focusFunctionSearchFromShortcut);
 document.addEventListener("keydown", (event) => {
   if (!document.body.classList.contains("mobile-navigation-open")) return;
   if (event.key === "Escape") {
@@ -26242,6 +26430,8 @@ document.addEventListener("keydown", (event) => {
 syncMobileNavigationMode();
 integrateLegacyUsbProvisioning();
 initializeSettingsCardDisclosures();
+initializeFunctionSearchUi();
+elements.functionSearch?.addEventListener("grabenplaner:function-search-result-selected", handleFunctionSearchResultSelection);
 initializeSettingsPackedGrids();
 elements.settingsView?.addEventListener("invalid", (event) => {
   const card = event.target.closest?.(".settings-field-disclosure");
@@ -26515,10 +26705,7 @@ elements.managerVacationRequestList?.addEventListener("click", (event) => {
   if (sicknessButton && sicknessRow) openSicknessAction(sicknessRow.dataset.sicknessCase);
 });
 document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.addEventListener("click", () => {
-  state.requestKindTab = button.dataset.requestKindTab;
-  if (state.requestKindTab === "amu" && !["actionable", "all"].includes(elements.requestStatusFilter.value)) elements.requestStatusFilter.value = "actionable";
-  document.querySelectorAll("[data-request-kind-tab]").forEach((item) => item.classList.toggle("active", item === button));
-  renderManagerRequests();
+  setManagerRequestKindTab(button.dataset.requestKindTab);
 }));
 elements.requestStatusFilter?.addEventListener("change", renderManagerRequests);
 elements.requestWorkflowSummary?.addEventListener("click", (event) => {
