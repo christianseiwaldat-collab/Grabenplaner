@@ -5,11 +5,11 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  brace-expansion: 5.0.8
+  brace-expansion: 5.0.9
   uuid: 11.1.1
 
 patchedDependencies:
-  brace-expansion@5.0.8: d53d6cf382bc307f1270e64519650f22737f4970b472c12169d979943dcb5378
+  brace-expansion@5.0.9: 8609b7ad63ef1633e51cb8b2b920d58cf5d5bd4c7f79ee383ef86a6979278688
 
 importers:
 
@@ -28,8 +28,8 @@ importers:
         specifier: 9.0.3
         version: 9.0.3
       pdfjs-dist:
-        specifier: 6.1.200
-        version: 6.1.200
+        specifier: 6.2.108
+        version: 6.2.108
       pdfkit:
         specifier: ^0.17.1
         version: 0.17.2
@@ -41,7 +41,7 @@ importers:
         version: 2.0.0
       sharp:
         specifier: 0.35.3
-        version: 0.35.3
+        version: 0.35.3(@types/node@26.1.1)
       tedious:
         specifier: 20.0.0
         version: 20.0.0
@@ -444,8 +444,8 @@ packages:
     resolution: {integrity: sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw==}
     engines: {node: '>=18'}
 
-  brace-expansion@5.0.8:
-    resolution: {integrity: sha512-JZyDyq3D4AUifKTPOB7DELf6XsB3WdPuNxCtob1vFXPsSXhdAiHBWJ/tJ8HAc9aH84BK+5JFZLNkJKx3G9kzQg==}
+  brace-expansion@5.0.9:
+    resolution: {integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==}
     engines: {node: 20 || >=22}
 
   brotli@1.3.3:
@@ -535,6 +535,7 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   dayjs@1.11.21:
     resolution: {integrity: sha512-98IT+HOahAisibz/yjKbzuOBwYcjJ7BCLPzARyHiyEBmRz4fatF+KPJszEHXsGYjUG234aH/cOjW1wwTbKUZlA==}
@@ -948,8 +949,8 @@ packages:
   path-to-regexp@8.4.2:
     resolution: {integrity: sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA==}
 
-  pdfjs-dist@6.1.200:
-    resolution: {integrity: sha512-o8MolyzirkkLrcdsae/HEOiIcXWI7DS5zGpvqW8xTC2YUsW30rltFw2bDGvw/fskUdEMrQm2br68jzDS5BH2vw==}
+  pdfjs-dist@6.2.108:
+    resolution: {integrity: sha512-YxFb+SQcodN2rnX9Tn3dHYlqfb7NjlzzfONPpJd+AKoKtUjEdevTfbC07d5TcczzOK6261auRkP/M8OBHs9vFQ==}
     engines: {node: '>=22.13.0 || >=24'}
 
   pdfkit@0.17.2:
@@ -1675,7 +1676,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  brace-expansion@5.0.8(patch_hash=d53d6cf382bc307f1270e64519650f22737f4970b472c12169d979943dcb5378):
+  brace-expansion@5.0.9(patch_hash=8609b7ad63ef1633e51cb8b2b920d58cf5d5bd4c7f79ee383ef86a6979278688):
     dependencies:
       balanced-match: 4.0.4
 
@@ -2108,11 +2109,11 @@ snapshots:
 
   minimatch@3.1.5:
     dependencies:
-      brace-expansion: 5.0.8(patch_hash=d53d6cf382bc307f1270e64519650f22737f4970b472c12169d979943dcb5378)
+      brace-expansion: 5.0.9(patch_hash=8609b7ad63ef1633e51cb8b2b920d58cf5d5bd4c7f79ee383ef86a6979278688)
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 5.0.8(patch_hash=d53d6cf382bc307f1270e64519650f22737f4970b472c12169d979943dcb5378)
+      brace-expansion: 5.0.9(patch_hash=8609b7ad63ef1633e51cb8b2b920d58cf5d5bd4c7f79ee383ef86a6979278688)
 
   minimist@1.2.8: {}
 
@@ -2165,7 +2166,7 @@ snapshots:
 
   path-to-regexp@8.4.2: {}
 
-  pdfjs-dist@6.1.200:
+  pdfjs-dist@6.2.108:
     optionalDependencies:
       '@napi-rs/canvas': 1.0.2
 
@@ -2351,7 +2352,7 @@ snapshots:
 
   setprototypeof@1.2.0: {}
 
-  sharp@0.35.3:
+  sharp@0.35.3(@types/node@26.1.1):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -2382,6 +2383,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.3
       '@img/sharp-win32-ia32': 0.35.3
       '@img/sharp-win32-x64': 0.35.3
+      '@types/node': 26.1.1
 
   side-channel-list@1.0.1:
     dependencies:

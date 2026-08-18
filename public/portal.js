@@ -24,6 +24,12 @@ const portalState = {
   processTaskRequestedRunId: "",
   processTaskRequestedStepId: "",
   processTaskFlash: "",
+  personnelLearningDashboard: null,
+  personnelLearningDashboardLoading: false,
+  personnelLearningDashboardAvailable: false,
+  personnelLearningDashboardEmployeeNumber: "",
+  personnelLearningProgressAssignment: null,
+  personnelLearningProgressMutationPending: false,
   amuReports: [],
   amuPolicy: null,
   sicknessAumAllowance: null,
@@ -195,6 +201,7 @@ const el = Object.fromEntries([
   "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderSaveDraft", "branchOrderDraftPanel", "branchOrderDraftTitle", "branchOrderDraftDetail", "branchOrderContinueDraft", "branchOrderDiscardDraft", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList", "branchOrderReview", "branchOrderReviewList", "branchOrderBackToEdit", "branchMobileActionBar", "branchMobileBack", "branchMobileReview", "branchMobileSubmit", "branchMobileSave",
   "branchVacationTab", "branchVacationView", "branchVacationPrevious", "branchVacationCurrent", "branchVacationNext", "branchVacationWeek", "branchVacationList", "branchVacationMessage",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
+  "personnelLearningDashboardTab", "personnelLearningDashboardView", "refreshPortalLearningDashboard", "portalLearningDashboardScope", "portalLearningDashboardMessage", "portalLearningDashboardSummary", "portalLearningDashboardAssignments", "portalLearningDashboardEmployee", "portalLearningSkillTree", "portalLearningProgressDialog", "portalLearningProgressForm", "portalLearningProgressTitle", "portalLearningProgressAssignmentId", "portalLearningProgressAssignmentReceipt", "portalLearningProgressExpectedReceipt", "portalLearningProgressSummary", "portalLearningProgressSteps", "portalLearningProgressAssessment", "portalLearningProgressFinalized", "portalLearningProgressResult", "portalLearningProgressAssessmentNote", "portalLearningProgressCorrectionReasonField", "portalLearningProgressCorrectionReason", "portalLearningProgressMessage", "savePortalLearningProgress",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
   "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
@@ -534,6 +541,7 @@ const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "loan", "
 mobileMoreSecondaryTabs.add("processTasks");
 mobileMoreSecondaryTabs.add("branchOrders");
 mobileMoreSecondaryTabs.add("branchVacation");
+mobileMoreSecondaryTabs.add("learningDashboard");
 const mobileModuleCatalog = Object.freeze([
   { id: "time", tab: "timeTracking", label: "Zeit", description: "Zeiterfassung und Zeitkonto" },
   { id: "tasks", tab: "processTasks", label: "Aufgaben", description: "Offene persönliche Prozessschritte" },
@@ -543,6 +551,7 @@ const mobileModuleCatalog = Object.freeze([
   { id: "requests", tab: "history", label: "Anträge", description: "Status und Verlauf meiner Anträge" },
   { id: "loan", tab: "loan", label: "Leihe", description: "Ausgaben und Rücknahmen" },
   { id: "sickness", tab: "amu", label: "Krank & AUM", description: "Krankmeldung und Dokumente" },
+  { id: "learning", tab: "learningDashboard", label: "Schulungen", description: "Fortschritte und Fähigkeiten" },
   { id: "more", tab: "leadershipMore", label: "Mehr", description: "Alle weiteren Bereiche" },
 ]);
 const mobileModuleIds = new Set(mobileModuleCatalog.map((item) => item.id));
@@ -579,6 +588,7 @@ const mobileHomeDefaultColors = Object.freeze({
   requests: [128, 82, 108],
   loan: [129, 91, 48],
   sickness: [173, 75, 66],
+  learning: [55, 118, 93],
   branchOrders: [42, 122, 99],
   branchVacation: [76, 112, 167],
 });
@@ -604,6 +614,9 @@ const mobileModuleAliases = {
   loans: "loan",
   sickness: "sickness",
   amu: "sickness",
+  learning: "learning",
+  learningDashboard: "learning",
+  training: "learning",
   more: "more",
 };
 
@@ -635,6 +648,7 @@ function mobileModuleAllowed(module, permissions = portalUser()?.permissions || 
   if (module === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
   if (module === "loan") return loanCapabilityEnabled();
   if (module === "sickness") return portalTabAllowed("amu");
+  if (module === "learning") return portalTabAllowed("learningDashboard");
   return module === "more";
 }
 
@@ -647,6 +661,10 @@ function portalTabAllowed(tab, user = portalUser()) {
   if (tab === "schedule") return scheduleCapabilityEnabled(user);
   if (tab === "branchOrders") return branchOrderCapabilityEnabled(user);
   if (tab === "branchVacation") return branchVacationCapabilityEnabled(user);
+  if (tab === "learningDashboard") {
+    return portalState.personnelLearningDashboardAvailable === true
+      || permissions.includes("personnel_learning:location:dashboard");
+  }
   if (tab === "leadershipMore") return !isOrganizationAccount(user);
   if (tab === "timeTracking") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (tab === "timeOff") return permissions.includes("own_vacation:request");
@@ -835,7 +853,7 @@ function applyMobileLeadershipLayout() {
       button.classList.add("hidden");
       button.classList.add("mobile-navigation-hidden");
     });
-    ["home", "schedule", "branchOrders", "loan", "branchVacation"]
+    ["home", "schedule", "learningDashboard", "branchOrders", "loan", "branchVacation"]
       .filter((tab) => portalTabAllowed(tab))
       .forEach((tab, index) => {
         const button = document.querySelector(`[data-tab="${tab}"]`);
@@ -849,7 +867,7 @@ function applyMobileLeadershipLayout() {
     if (portalState.scheduleData) renderSchedule(portalState.scheduleData);
     return;
   }
-  const regularTabs = ["settings", "schedule", "branchVacation", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu"];
+  const regularTabs = ["settings", "schedule", "branchVacation", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactMobile) {
     document.querySelectorAll("[data-tab]").forEach((button) => button.classList.remove("mobile-navigation-hidden"));
@@ -1319,6 +1337,7 @@ function defaultPortalTab(user = portalUser()) {
   if (portalTabAllowed("schedule", user)) return "schedule";
   if (portalTabAllowed("loan", user)) return "loan";
   if (portalTabAllowed("branchOrders", user)) return "branchOrders";
+  if (portalTabAllowed("learningDashboard", user)) return "learningDashboard";
   return "settings";
 }
 
@@ -1351,7 +1370,7 @@ async function initialize() {
     }
     showPortal(session);
     if (!session.user.mustChangePassword) {
-      await loadMobileLayout();
+      await Promise.allSettled([loadMobileLayout(), loadPersonnelLearningDashboard()]);
       chooseInitialPortalTab();
       await loadPortalData();
     }
@@ -1363,6 +1382,7 @@ async function initialize() {
 
 async function loadPortalData() {
   const requests = [];
+  requests.push(loadPersonnelLearningDashboard());
   if (!isOrganizationAccount()) requests.push(loadPortalHome(), loadNotifications());
   if (portalTabAllowed("schedule")) requests.push(loadSchedule());
   if (portalTabAllowed("branchVacation")) requests.push(loadBranchVacationOverview());
@@ -1378,6 +1398,271 @@ async function loadPortalData() {
   if (portalTabAllowed("branchOrders")) requests.push(loadBranchOrderCatalog(), loadBranchOrderPortalHistory());
   if (branchPortalDisplaySettingsEnabled()) requests.push(loadBranchPortalDisplaySettings());
   await Promise.allSettled(requests);
+}
+
+function portalLearningProgressStatusLabel(progress) {
+  if (!progress || progress.status === "not_started") return "Noch nicht begonnen";
+  if (progress.status === "in_progress") return "In Durchführung";
+  return ({
+    passed: "Alles erfüllt",
+    follow_up_required: "Nachschulung erforderlich",
+    not_passed: "Nicht bestanden",
+    pending: "Noch nicht bewertet",
+  })[progress.result] || "Abgeschlossen";
+}
+
+function portalLearningSelectedProfile() {
+  const profiles = portalState.personnelLearningDashboard?.profiles || [];
+  return profiles.find((profile) => (
+    profile.employee?.employeeNumber === portalState.personnelLearningDashboardEmployeeNumber
+  )) || profiles[0] || null;
+}
+
+function renderPortalLearningSkillTree() {
+  if (!el.portalLearningSkillTree || !el.portalLearningDashboardEmployee) return;
+  const profiles = portalState.personnelLearningDashboard?.profiles || [];
+  const profile = portalLearningSelectedProfile();
+  if (profile && portalState.personnelLearningDashboardEmployeeNumber
+    !== profile.employee.employeeNumber) {
+    portalState.personnelLearningDashboardEmployeeNumber = profile.employee.employeeNumber;
+  }
+  el.portalLearningDashboardEmployee.innerHTML = profiles.length
+    ? profiles.map((entry) => `<option value="${esc(entry.employee.employeeNumber)}">${esc(entry.employee.fullName)} · ${esc(entry.employee.locationName || entry.employee.employeeNumber)}</option>`).join("")
+    : '<option value="">Keine Kompetenzprofile sichtbar</option>';
+  el.portalLearningDashboardEmployee.value =
+    portalState.personnelLearningDashboardEmployeeNumber || "";
+  el.portalLearningDashboardEmployee.disabled = profiles.length < 2;
+  if (!profile) {
+    el.portalLearningSkillTree.innerHTML = '<p class="empty-state">Noch kein aktives Fähigkeitsprofil vorhanden.</p>';
+    return;
+  }
+  const categories = new Map();
+  for (const competency of profile.competencies || []) {
+    const category = String(competency.skillCategory || "Allgemein");
+    const rows = categories.get(category) || [];
+    rows.push(competency);
+    categories.set(category, rows);
+  }
+  el.portalLearningSkillTree.innerHTML = [...categories.entries()].map(([category, rows]) => `
+    <section class="portal-learning-skill-branch">
+      <header><span aria-hidden="true">◆</span><div><strong>${esc(category)}</strong><small>${rows.length} Fähigkeit${rows.length === 1 ? "" : "en"}</small></div></header>
+      <div>${rows.map((competency) => {
+        const definitions = Array.isArray(competency.levelDefinitions)
+          ? competency.levelDefinitions : [];
+        const current = competency.levelDefinition || {};
+        return `<article class="portal-learning-skill-node">
+          <div class="portal-learning-skill-node-heading"><div><span>${esc(competency.skillCode)}</span><h3>${esc(competency.skillTitle)}</h3></div><div><strong>Stufe ${Number(competency.level)}</strong>${competency.trainerAuthorized ? "<em>Trainerfreigabe</em>" : ""}</div></div>
+          <div class="portal-learning-level-rail" role="img" aria-label="${esc(competency.skillTitle)}: Stufe ${Number(competency.level)} von 10">${definitions.map((definition) => `<span class="${Number(definition.level) <= Number(competency.level) ? "reached" : ""}${Number(definition.level) === Number(competency.level) ? " current" : ""}" title="Stufe ${Number(definition.level)} · ${esc(definition.label)}"><b>${Number(definition.level)}</b></span>`).join("")}</div>
+          <div class="portal-learning-current-level"><strong>${esc(current.label || `Stufe ${Number(competency.level)}`)}</strong><p>${esc(current.description || competency.skillSummary || "Verbindlicher Kompetenzstand")}</p></div>
+        </article>`;
+      }).join("")}</div>
+    </section>`).join("");
+}
+
+function renderPersonnelLearningDashboardPortal() {
+  if (!el.personnelLearningDashboardView) return;
+  const dashboard = portalState.personnelLearningDashboard;
+  const summary = dashboard?.summary || {};
+  if (el.portalLearningDashboardSummary) {
+    el.portalLearningDashboardSummary.innerHTML = [
+      ["Aktiv", Number(summary.activeAssignments || 0), "Schulungen"],
+      ["In Arbeit", Number(summary.inProgress || 0), "aus Schritten"],
+      ["Erledigt", Number(summary.completed || 0), "bewertet"],
+      ["Klärung", Number(summary.attentionRequired || 0), "offene Punkte"],
+      ["Fähigkeiten", Number(summary.competencies || 0), `${Number(summary.trainerSkills || 0)} Trainerfreigaben`],
+    ].map(([label, value, detail]) => `<article><span>${label}</span><strong>${value}</strong><small>${detail}</small></article>`).join("");
+  }
+  const scope = dashboard?.viewer?.scope;
+  if (el.portalLearningDashboardScope) {
+    el.portalLearningDashboardScope.textContent = scope
+      ? `Sichtbarer Bereich: ${[scope.locationName, scope.departmentName].filter(Boolean).join(" · ")}. Die Ansicht erweitert keine Rechte.`
+      : dashboard?.capabilities?.canViewTeam
+        ? "Sichtbar ist ausschließlich der aktuell wirksame Verantwortungsbereich. Die Ansicht erweitert keine Rechte."
+        : "Sichtbar sind ausschließlich eigene Schulungen, Trainerbindungen und Kompetenzprofile.";
+  }
+  if (portalState.personnelLearningDashboardLoading) {
+    el.portalLearningDashboardAssignments.innerHTML = '<p class="empty-state">Schulungsstände werden geladen.</p>';
+    el.portalLearningSkillTree.innerHTML = '<p class="empty-state">Fähigkeitsprofile werden geladen.</p>';
+    return;
+  }
+  const assignments = dashboard?.assignments || [];
+  el.portalLearningDashboardAssignments.innerHTML = assignments.length
+    ? assignments.map((assignment) => {
+        const progress = assignment.progress || {};
+        const attention = ["follow_up_required", "not_passed"].includes(progress.result)
+          || (assignment.trainers || []).some((trainer) => trainer.currentEligible !== true);
+        const mayWrite = progress.capabilities?.canRecord === true
+          || progress.capabilities?.canCorrect === true;
+        return `<article class="portal-learning-assignment${attention ? " attention" : ""}">
+          <header><div><span>${esc(assignment.learner?.fullName || assignment.learner?.employeeNumber)}</span><h3>${esc(assignment.process?.title || "Schulung")}</h3></div><strong>${esc(portalLearningProgressStatusLabel(progress))}</strong></header>
+          <div class="portal-learning-progress-track"><span style="width:${Math.max(0, Math.min(100, Number(progress.percent || 0)))}%"></span></div>
+          <p>${Number(progress.completedStepCount || 0)} von ${Number(progress.totalStepCount || 0)} Schritten · ${Number(progress.percent || 0)} %</p>
+          <small>${esc((assignment.trainers || []).map((trainer) => `${trainer.trainerName} · ${trainer.skillTitle}`).join(" · ") || "Keine Trainerbindung")}</small>
+          <button class="${mayWrite ? "primary" : "text-button"}" data-portal-learning-progress="${esc(assignment.id)}" type="button">${mayWrite ? "Fortschritt erfassen" : "Fortschritt ansehen"}</button>
+        </article>`;
+      }).join("")
+    : '<p class="empty-state">Im sichtbaren Bereich gibt es noch keine Schulungszuweisung.</p>';
+  renderPortalLearningSkillTree();
+}
+
+async function loadPersonnelLearningDashboard({ force = false } = {}) {
+  if (portalState.personnelLearningDashboardLoading) return;
+  if (portalState.personnelLearningDashboard && !force) {
+    renderPersonnelLearningDashboardPortal();
+    return;
+  }
+  portalState.personnelLearningDashboardLoading = true;
+  message(el.portalLearningDashboardMessage, "");
+  renderPersonnelLearningDashboardPortal();
+  try {
+    const dashboard = await api("/api/portal/v1/personnel-learning/dashboard");
+    if (!dashboard || !Array.isArray(dashboard.assignments)
+      || !Array.isArray(dashboard.profiles)) {
+      throw new Error("Das Schulungsdashboard ist unvollständig.");
+    }
+    portalState.personnelLearningDashboard = dashboard;
+    portalState.personnelLearningDashboardAvailable = dashboard.available === true;
+    const profiles = dashboard.profiles || [];
+    if (!profiles.some((profile) => (
+      profile.employee?.employeeNumber === portalState.personnelLearningDashboardEmployeeNumber
+    ))) {
+      portalState.personnelLearningDashboardEmployeeNumber =
+        profiles[0]?.employee?.employeeNumber || "";
+    }
+  } catch (error) {
+    portalState.personnelLearningDashboard = null;
+    portalState.personnelLearningDashboardAvailable = false;
+    if (![401, 403].includes(error.status)) {
+      message(el.portalLearningDashboardMessage, error.message, true);
+    }
+  } finally {
+    portalState.personnelLearningDashboardLoading = false;
+    renderPersonnelLearningDashboardPortal();
+    applySelfServiceVisibility();
+    applyMobileLeadershipLayout();
+    renderMobileHome();
+    if (portalState.activeTab === "learningDashboard"
+      && !portalTabAllowed("learningDashboard")) setTab(defaultPortalTab());
+  }
+}
+
+function renderPortalLearningProgressDialog() {
+  const assignment = portalState.personnelLearningProgressAssignment;
+  if (!assignment || !el.portalLearningProgressDialog) return;
+  const progress = assignment.progress || {};
+  const canRecord = progress.capabilities?.canRecord === true;
+  const canFinalize = progress.capabilities?.canFinalize === true;
+  const canCorrect = progress.capabilities?.canCorrect === true;
+  const mayWrite = canRecord || canCorrect;
+  el.portalLearningProgressTitle.textContent =
+    `${assignment.process?.title || "Schulung"} · ${assignment.learner?.fullName || assignment.learner?.employeeNumber}`;
+  el.portalLearningProgressAssignmentId.value = assignment.id;
+  el.portalLearningProgressAssignmentReceipt.value =
+    assignment.currentAssignmentRevisionReceipt || "";
+  el.portalLearningProgressExpectedReceipt.value = progress.currentRevisionReceipt || "";
+  el.portalLearningProgressSummary.innerHTML = `<strong>${esc(portalLearningProgressStatusLabel(progress))}</strong><p>Gebundene Prozessversion ${Number(assignment.process?.versionNumber || 0)} · Fortschritt wird ausschließlich aus den erledigten Schritten berechnet.</p>`;
+  el.portalLearningProgressSteps.innerHTML = (progress.steps || []).map((step) => `
+    <label class="portal-learning-progress-step${step.completed ? " completed" : ""}">
+      <input type="checkbox" data-portal-learning-step="${esc(step.stepId)}" data-required="${step.required ? "true" : "false"}" ${step.completed ? "checked" : ""} ${mayWrite ? "" : "disabled"} />
+      <span><strong>${Number(step.order)}. ${esc(step.title)}</strong><small>${esc(step.completionCriteria || step.instruction || (step.required ? "Pflichtschritt" : "Optional"))}</small></span><em>${step.required ? "Pflicht" : "Optional"}</em>
+    </label>`).join("");
+  el.portalLearningProgressAssessment.classList.toggle("hidden", !canFinalize && !canCorrect);
+  el.portalLearningProgressFinalized.checked = Boolean(progress.finalized);
+  el.portalLearningProgressFinalized.disabled = !canFinalize && !canCorrect;
+  el.portalLearningProgressResult.value = progress.finalized ? progress.result : "pending";
+  el.portalLearningProgressResult.disabled = !canFinalize && !canCorrect;
+  el.portalLearningProgressAssessmentNote.value = progress.assessmentNote || "";
+  el.portalLearningProgressAssessmentNote.disabled = !canFinalize && !canCorrect;
+  el.portalLearningProgressCorrectionReasonField.classList.toggle("hidden", !canCorrect);
+  el.portalLearningProgressCorrectionReason.required = canCorrect;
+  el.portalLearningProgressCorrectionReason.value = "";
+  el.savePortalLearningProgress.classList.toggle("hidden", !mayWrite);
+  updatePortalLearningProgressAvailability();
+}
+
+function updatePortalLearningProgressAvailability() {
+  const assignment = portalState.personnelLearningProgressAssignment;
+  if (!assignment || !el.savePortalLearningProgress) return;
+  const progress = assignment.progress || {};
+  const canRecord = progress.capabilities?.canRecord === true;
+  const canFinalize = progress.capabilities?.canFinalize === true;
+  const canCorrect = progress.capabilities?.canCorrect === true;
+  const mayWrite = canRecord || canCorrect;
+  const assessmentWritable = canFinalize || canCorrect;
+  const finalized = assessmentWritable && el.portalLearningProgressFinalized.checked;
+  const requiredComplete = [...el.portalLearningProgressSteps.querySelectorAll(
+    'input[type="checkbox"][data-required="true"]',
+  )].every((checkbox) => checkbox.checked);
+  const resultSelected = el.portalLearningProgressResult.value !== "pending";
+  const correctionReasonPresent = !progress.hasFinalizedRevision
+    || el.portalLearningProgressCorrectionReason.value.trim().length > 0;
+  el.portalLearningProgressResult.disabled = !assessmentWritable || !finalized;
+  el.portalLearningProgressAssessmentNote.disabled = !assessmentWritable || !finalized;
+  el.savePortalLearningProgress.disabled = portalState.personnelLearningProgressMutationPending
+    || !mayWrite
+    || (finalized && (!requiredComplete || !resultSelected))
+    || (canCorrect && !correctionReasonPresent);
+}
+
+async function openPortalLearningProgress(assignmentId) {
+  message(el.portalLearningProgressMessage, "");
+  const result = await api(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignmentId)}/progress`);
+  portalState.personnelLearningProgressAssignment = result.assignment || null;
+  if (!portalState.personnelLearningProgressAssignment) {
+    throw new Error("Der Schulungsfortschritt ist nicht verfügbar.");
+  }
+  renderPortalLearningProgressDialog();
+  el.portalLearningProgressDialog.showModal();
+  el.portalLearningProgressSteps.querySelector("input:not(:disabled)")?.focus();
+}
+
+async function savePortalLearningProgress(event) {
+  event.preventDefault();
+  const assignment = portalState.personnelLearningProgressAssignment;
+  if (!assignment || portalState.personnelLearningProgressMutationPending) return;
+  const completedStepIds = [...el.portalLearningProgressSteps.querySelectorAll(
+    'input[type="checkbox"][data-portal-learning-step]:checked',
+  )].map((checkbox) => checkbox.dataset.portalLearningStep);
+  const finalized = !el.portalLearningProgressAssessment.classList.contains("hidden")
+    && el.portalLearningProgressFinalized.checked;
+  const requiredComplete = [...el.portalLearningProgressSteps.querySelectorAll(
+    'input[type="checkbox"][data-required="true"]',
+  )].every((checkbox) => checkbox.checked);
+  if (finalized && !requiredComplete) {
+    message(el.portalLearningProgressMessage, "Vor dem Abschluss müssen alle Pflichtschritte erledigt sein.", true);
+    return;
+  }
+  if (finalized && el.portalLearningProgressResult.value === "pending") {
+    message(el.portalLearningProgressMessage, "Bitte ein Abschlussergebnis auswählen.", true);
+    return;
+  }
+  portalState.personnelLearningProgressMutationPending = true;
+  el.savePortalLearningProgress.disabled = true;
+  message(el.portalLearningProgressMessage, "Der neue Fortschrittsstand wird revisionssicher gespeichert.");
+  try {
+    const result = await api(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignment.id)}/progress`, {
+      method: "PUT",
+      body: JSON.stringify({
+        expectedAssignmentRevisionReceipt: el.portalLearningProgressAssignmentReceipt.value,
+        expectedProgressRevisionReceipt: el.portalLearningProgressExpectedReceipt.value,
+        completedStepIds,
+        finalized,
+        result: finalized ? el.portalLearningProgressResult.value : "pending",
+        assessmentNote: finalized ? el.portalLearningProgressAssessmentNote.value : "",
+        correctionReason: assignment.progress?.hasFinalizedRevision
+          ? el.portalLearningProgressCorrectionReason.value : "",
+      }),
+    });
+    portalState.personnelLearningProgressAssignment = result.assignment;
+    el.portalLearningProgressDialog.close();
+    portalState.personnelLearningDashboard = null;
+    await loadPersonnelLearningDashboard({ force: true });
+  } catch (error) {
+    message(el.portalLearningProgressMessage, error.message, true);
+  } finally {
+    portalState.personnelLearningProgressMutationPending = false;
+    renderPortalLearningProgressDialog();
+  }
 }
 
 function renderPortalGreeting() {
@@ -1526,6 +1811,9 @@ function showLogin(error = "") {
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
   portalState.session = null;
+  portalState.personnelLearningDashboard = null;
+  portalState.personnelLearningDashboardAvailable = false;
+  portalState.personnelLearningProgressAssignment = null;
   document.body.classList.remove("branch-organization-account", "branch-mobile-account");
   stopBranchOrderAutosave();
   clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
@@ -1574,6 +1862,10 @@ function applySelfServiceVisibility() {
   el.branchVacationTab?.classList.toggle("hidden", !portalTabAllowed("branchVacation"));
   el.amuTab?.classList.toggle("hidden", !portalTabAllowed("amu"));
   el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
+  el.personnelLearningDashboardTab?.classList.toggle(
+    "hidden",
+    !portalTabAllowed("learningDashboard"),
+  );
   if (!portalTabAllowed("processTasks")) {
     clearProcessTaskState({ clearRequest: true });
   }
@@ -1842,6 +2134,7 @@ function setTab(tab) {
   el.branchVacationView?.classList.toggle("active", tab === "branchVacation");
   el.amuView.classList.toggle("active", tab === "amu");
   el.processTasksView?.classList.toggle("active", tab === "processTasks");
+  el.personnelLearningDashboardView?.classList.toggle("active", tab === "learningDashboard");
   el.leadershipTeamView?.classList.toggle("active", tab === "leadershipTeam");
   el.leadershipApprovalsView?.classList.toggle("active", tab === "leadershipApprovals");
   el.leadershipMoreView?.classList.toggle("active", tab === "leadershipMore");
@@ -1865,6 +2158,7 @@ function setTab(tab) {
   if (tab === "branchVacation") loadBranchVacationOverview();
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
   if (tab === "processTasks") loadProcessTasks();
+  if (tab === "learningDashboard") loadPersonnelLearningDashboard();
   if (tab === "leadershipTeam") loadLeadershipOverview();
   if (tab === "leadershipApprovals") {
     document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item.dataset.leadershipKind === portalState.leadershipKind));
@@ -2310,7 +2604,7 @@ function configureBranchOrderAutosave() {
 function mobileHomeTilesForCurrentAccount() {
   const user = portalUser();
   if (isOrganizationAccount(user)) {
-    return ["schedule", "branchOrders", "loan", "branchVacation"]
+    return ["schedule", "learningDashboard", "branchOrders", "loan", "branchVacation"]
       .map((tab) => mobileHomeTileCatalog.find((tile) => tile.tab === tab)
         || { id: tab, tab, label: tab === "schedule" ? "Dienstplan" : tab, description: "" })
       .filter((tile) => portalTabAllowed(tile.tab, user))
@@ -6269,6 +6563,42 @@ document.querySelectorAll("[data-settings-focus]").forEach((button) => button.ad
   window.setTimeout(() => focusPortalSettingsSection(button.dataset.settingsFocus), 0);
 }));
 document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
+el.refreshPortalLearningDashboard?.addEventListener("click", () => {
+  portalState.personnelLearningDashboard = null;
+  loadPersonnelLearningDashboard({ force: true });
+});
+el.portalLearningDashboardEmployee?.addEventListener("change", (event) => {
+  portalState.personnelLearningDashboardEmployeeNumber = event.target.value;
+  renderPortalLearningSkillTree();
+});
+el.portalLearningDashboardAssignments?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-portal-learning-progress]");
+  if (!button) return;
+  openPortalLearningProgress(button.dataset.portalLearningProgress)
+    .catch((error) => message(el.portalLearningDashboardMessage, error.message, true));
+});
+el.portalLearningProgressForm?.addEventListener("submit", savePortalLearningProgress);
+el.portalLearningProgressSteps?.addEventListener("change", (event) => {
+  event.target.closest(".portal-learning-progress-step")?.classList.toggle(
+    "completed",
+    event.target.checked,
+  );
+  updatePortalLearningProgressAvailability();
+});
+[
+  el.portalLearningProgressFinalized,
+  el.portalLearningProgressResult,
+  el.portalLearningProgressCorrectionReason,
+].forEach((field) => {
+  field?.addEventListener(field === el.portalLearningProgressCorrectionReason ? "input" : "change", updatePortalLearningProgressAvailability);
+});
+document.querySelectorAll("[data-close-portal-learning-progress]").forEach((button) => {
+  button.addEventListener("click", () => el.portalLearningProgressDialog.close());
+});
+el.portalLearningProgressDialog?.addEventListener("close", () => {
+  portalState.personnelLearningProgressAssignment = null;
+  message(el.portalLearningProgressMessage, "");
+});
 document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   const tabs = [...document.querySelectorAll("[data-tab]:not(.hidden)")];

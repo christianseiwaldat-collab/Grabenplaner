@@ -121,8 +121,8 @@ function availableIds(availableGateIds) {
 }
 
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
-  assert.equal(catalogApi.FUNCTION_SEARCH_CATALOG.length, 90);
-  assert.equal(ALL_GATE_IDS.size, 85);
+  assert.equal(catalogApi.FUNCTION_SEARCH_CATALOG.length, 94);
+  assert.equal(ALL_GATE_IDS.size, 89);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 
@@ -228,10 +228,11 @@ test("Block 5: Tastatur-, Screenreader-, Mobile- und Bewegungsreduktion sind vol
 
 test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenzfrei klassifiziert", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.92.7-beta");
-  assert.match(read("README.md"), /v0\.92\.7 Beta/);
+  assert.equal(packageJson.version, "0.92.8-beta");
+  assert.match(read("README.md"), /v0\.92\.8 Beta/);
+  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.8 Beta · Schulungsprozesse und Fähigkeitsprofile/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.7 Beta · Berechtigungsgefilterte Funktionssuche/);
-  assert.equal(JSON.parse(read(".devcontainer/devcontainer.json")).name, "Grabenplaner v0.92.7 Codespaces-Demo");
+  assert.equal(JSON.parse(read(".devcontainer/devcontainer.json")).name, "Grabenplaner v0.92.8 Codespaces-Demo");
 
   const runtimeFiles = [
     "public/function-search-catalog.js",

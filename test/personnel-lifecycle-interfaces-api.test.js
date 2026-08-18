@@ -408,7 +408,7 @@ test("O6 Schnittstellenkatalog bleibt rechtegetrennt, datensparsam und ohne Auss
   });
 
   await t.test("alle zwolf reservierten Rechte sind katalogisiert; nur developer erhält sie automatisch", async () => {
-    const roles = await request("/api/portal/v1/roles");
+    const roles = await request("/api/portal/v1/roles", { auth: sessions["O6-ASSET-ACCESS"] });
     assert.equal(roles.response.status, 200, roles.text);
     const entries = (roles.payload?.catalog || [])
       .filter(({ id }) => String(id).startsWith("personnel:lifecycle:interfaces:"));

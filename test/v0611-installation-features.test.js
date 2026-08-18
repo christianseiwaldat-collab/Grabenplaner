@@ -22,6 +22,9 @@ const {
   validateUsbEmployees,
   validateUsbFeatures,
 } = require("../server");
+const {
+  PERSONNEL_LEARNING_PERMISSIONS,
+} = require("../lib/personnel-learning-access");
 
 test.after(() => {
   try { db.close(); } catch {}
@@ -83,9 +86,70 @@ test("v0.61.1 USB-Rollen: Abteilungsleitung benoetigt zwingend eine gueltige Abt
     validateUsbEmployees(
       [{ sourcePersonnelNumber: employee.personnel_number, role: "department_manager" }],
       [employee.home_location_id],
-      { personnelNumber: "999999", role: "admin" },
+      {
+        personnelNumber: "999999",
+        role: "admin",
+        permissions: [PERSONNEL_LEARNING_PERMISSIONS.DELEGATE],
+      },
     ),
     { code: "USB_EMPLOYEE_DEPARTMENT_REQUIRED" },
+  );
+});
+
+test("Learning-Rechte: IT-Admin und Admin ohne Delegate können USB-Profile nicht ausweiten", async () => {
+  const employee = db.prepare(`
+    SELECT personnel_number, home_location_id
+    FROM employees
+    WHERE active = 1 AND home_location_id IS NOT NULL
+    ORDER BY personnel_number LIMIT 1
+  `).get();
+  assert.ok(employee);
+  for (const creator of [
+    { personnelNumber: "999998", role: "it_admin", permissions: [] },
+    { personnelNumber: "999997", role: "admin", permissions: [] },
+  ]) {
+    for (const role of ["manager", "department_manager", "hr", "admin"]) {
+      await assert.rejects(
+        validateUsbEmployees(
+          [{
+            sourcePersonnelNumber: employee.personnel_number,
+            role,
+            startPassword: "Nicht-Uebernehmen-2026!",
+          }],
+          [employee.home_location_id],
+          creator,
+        ),
+        { code: "USB_EMPLOYEE_ROLE_DENIED" },
+      );
+    }
+    await assert.rejects(
+      validateUsbEmployees(
+        [{
+          sourcePersonnelNumber: employee.personnel_number,
+          role: "employee",
+          additionalPermissions: [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_READ],
+        }],
+        [employee.home_location_id],
+        creator,
+      ),
+      { code: "USB_EMPLOYEE_PERMISSION_DENIED" },
+    );
+  }
+  await assert.rejects(
+    validateUsbEmployees(
+      [{
+        sourcePersonnelNumber: employee.personnel_number,
+        role: "employee",
+        additionalPermissions: [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_READ],
+      }],
+      [employee.home_location_id],
+      {
+        personnelNumber: "999996",
+        role: "admin",
+        permissions: [PERSONNEL_LEARNING_PERMISSIONS.DELEGATE],
+      },
+    ),
+    { code: "PERSONNEL_LEARNING_PERMISSION_ROLE_RESTRICTED" },
   );
 });
 
@@ -104,7 +168,11 @@ test("v0.80 USB-Rechte: entzogenes Dienstplan-Leserecht entzieht auch das Schrei
       deniedPermissions: ["schedule:read"],
     }],
     [employee.home_location_id],
-    { personnelNumber: "999999", role: "admin" },
+    {
+      personnelNumber: "999999",
+      role: "admin",
+      permissions: [PERSONNEL_LEARNING_PERMISSIONS.DELEGATE],
+    },
   );
   assert.deepEqual(
     validated.deniedPermissions.filter((permission) => permission.startsWith("schedule:")).sort(),

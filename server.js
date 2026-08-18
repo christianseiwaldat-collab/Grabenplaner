@@ -387,6 +387,58 @@ const {
   createPersonnelProfileAccessSnapshot,
 } = require("./lib/personnel-profile-access");
 const {
+  PERSONNEL_LEARNING_PERMISSIONS,
+  PERSONNEL_LEARNING_PERMISSION_IDS,
+  PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS,
+  PERSONNEL_LEARNING_DENIAL_AUTHORITIES,
+  PERSONNEL_LEARNING_DELEGATION_CODES,
+  personnelLearningDefaultPermissionsForRole,
+  resolvePersonnelLearningPermissionDependencies,
+  createPersonnelLearningAccessSnapshot,
+  evaluatePersonnelLearningCrossLocationDelegation,
+  projectPersonnelLearningCrossLocationDelegates,
+} = require("./lib/personnel-learning-access");
+const {
+  PersonnelLearningCatalogError,
+  buildPersonnelLearningModuleState,
+  normalizePersonnelLearningTemplateInput,
+  personnelLearningScopeAccess,
+  scopeFromVersion: personnelLearningScopeFromVersion,
+  stableJsonStringify: stablePersonnelLearningJson,
+} = require("./lib/personnel-learning-catalog");
+const {
+  buildPersonnelLearningSkillState,
+  isPersonnelLearningSkillContent,
+  normalizePersonnelLearningSkillInput,
+} = require("./lib/personnel-learning-skills");
+const {
+  buildPersonnelLearningCompetencyState,
+  competencyReceiptSha256: personnelLearningCompetencyReceiptSha256,
+  competencyRevisionReceiptSha256: personnelLearningCompetencyRevisionReceiptSha256,
+  levelDefinitionForSkillVersion,
+  normalizedCompetencyMutation,
+} = require("./lib/personnel-learning-competencies");
+const {
+  assignmentReceiptSha256: personnelLearningAssignmentReceiptSha256,
+  assignmentRevisionReceiptSha256: personnelLearningAssignmentRevisionReceiptSha256,
+  buildPersonnelLearningAssignmentState,
+  normalizePersonnelLearningAssignmentMutation,
+  normalizePersonnelLearningTrainerBindings,
+  trainerBindingsSha256: personnelLearningTrainerBindingsSha256,
+} = require("./lib/personnel-learning-assignments");
+const {
+  buildPersonnelLearningProgressState,
+  normalizePersonnelLearningProgressMutation,
+  personnelLearningProgressRevisionReceiptSha256,
+  progressStepStatesSha256: personnelLearningProgressStepStatesSha256,
+} = require("./lib/personnel-learning-progress");
+const {
+  moduleEventReceiptSha256: personnelLearningEventReceiptSha256,
+  moduleReceiptSha256: personnelLearningModuleReceiptSha256,
+  moduleVersionReceiptSha256: personnelLearningVersionReceiptSha256,
+  sha256Text: personnelLearningSha256,
+} = require("./lib/persistence/sqlite/operations/personnel-learning-schema");
+const {
   PERSONNEL_LIFECYCLE_CASE_PERMISSIONS,
   PERSONNEL_LIFECYCLE_CASE_PERMISSION_IDS,
   PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES,
@@ -530,6 +582,8 @@ const defaultPersonalLoanOverviewColumns = Object.freeze([
   "dueDate",
 ]);
 const ORGANIZATION_SCHEDULE_PERMISSION = "schedule:location:view";
+const PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION =
+  "personnel_learning:location:dashboard";
 const BRANCH_ORDER_SUBMIT_PERMISSION = "branch_orders:submit";
 const BRANCH_ORDER_MANAGE_PERMISSION = "branch_orders:manage";
 const BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION = "branch_portal:display:manage";
@@ -556,6 +610,7 @@ const mobilePortalLocationDisplayModuleIdSet = new Set(mobilePortalLocationDispl
 const branchOrganizationAccountBasePermissions = Object.freeze([
   LOAN_OVERVIEW_PERMISSION,
   ORGANIZATION_SCHEDULE_PERMISSION,
+  PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION,
 ]);
 const organizationAccountPermissionCatalog = Object.freeze([
   {
@@ -567,6 +622,12 @@ const organizationAccountPermissionCatalog = Object.freeze([
     id: ORGANIZATION_SCHEDULE_PERMISSION,
     label: "Dienstplan des Standorts ansehen",
     description: "Reduzierte Dienstplanansicht des ausdrücklich zugewiesenen Standorts.",
+  },
+  {
+    id: PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION,
+    label: "Schulungsdashboard des Standorts verwenden",
+    description: "Transparente standortgebundene Fortschritts- und Fähigkeitsübersicht; Schritte können erfasst, Abschlüsse aber nicht bewertet oder korrigiert werden.",
+    accountTypes: ["branch"],
   },
   {
     id: BRANCH_ORDER_SUBMIT_PERMISSION,
@@ -690,6 +751,13 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ, label: "Mitarbeiter-Stammdaten im freigegebenen Bereich lesen", description: "Nur die zusätzlich im Feldrechteprofil freigegebenen Personalstammdaten im fachlich freigegebenen Bereich lesen.", group: "Mitarbeiterprofile", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr"] },
   { id: PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ, label: "Personalakt-Dokumente lesen", description: "Geschützte Dokumentmetadaten ausschließlich über einen persönlichen Personalleitungszugang lesen; nicht an lokale oder technische Rollen delegierbar.", group: "Mitarbeiterprofile", warningLevel: "critical", eligibleRoles: ["hr"] },
   { id: PERSONNEL_PROFILE_PERMISSIONS.DELEGATE, label: "Lokale Mitarbeiterprofil-Rechte freigeben", description: "Kennzeichnet PL+ für die fachrechtgebundene Freigabe lokaler Profilrechte; nicht weiterdelegierbar und ohne eigenen Profildatenzugriff.", group: "Mitarbeiterprofile", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.CATALOG_READ, label: "Schulungs- und Wissenskatalog lesen", description: "Veröffentlichte Schulungs- und Wissensprozesse im freigegebenen Verantwortungsbereich lesen.", group: "Schulung & Wissen", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE, label: "Schulungs- und Wissenskatalog bearbeiten", description: "Schulungs- und Wissensprozesse im freigegebenen Verantwortungsbereich versioniert anlegen und bearbeiten.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH, label: "Schulungs- und Wissensprozesse veröffentlichen", description: "Geprüfte Prozessversionen im freigegebenen Verantwortungsbereich veröffentlichen oder archivieren.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE, label: "Schulungs- und Wissensprozesse zuweisen", description: "Bestehende Mitarbeitende als Lernende oder einschulende Personen im freigegebenen Verantwortungsbereich zuordnen.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN, label: "Lernende und Trainer filialübergreifend zuweisen", description: "Mitarbeitende verschiedener Filialen transparent in Schulungs- und Wissensprozessen zusammenführen; kann von PL+ und innerhalb der Hierarchie gezielt entzogen werden.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.AUDIT_READ, label: "Schulungs- und Wissensprüfspur lesen", description: "Revisionsbelege des freigegebenen Schulungs- und Wissensbereichs ohne technische Geheimnisse lesen.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.DELEGATE, label: "Schulungs- und Wissensrechte verwalten", description: "Kennzeichnet PL+ für die fachliche Rechteverwaltung; erzeugt selbst keinen Zugriff auf Kataloge, Zuweisungen oder Prüfspuren.", group: "Schulung & Wissen", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ, label: "Onboarding-Vorschau im Mitarbeiterprofil lesen", description: "Serverseitig aufgelöste Onboarding-Pakete, Startblocker und Zuweisungskandidaten ausschließlich read-only lesen; kein Start- oder Aufgabenrecht.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ, label: "Lifecycle-Pakete lesen", description: "Veröffentlichte Lifecycle-Paketmetadaten für ausdrücklich freigegebene Vorschauen lesen; kein Fallzugriff und keine Paketmutation.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_PREPARE, label: "Onboarding-Fall vorbereiten", description: "Referenztermine, Fallverantwortung und die kontrollierte Paketauflösung vorbereiten; kein Startrecht.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -822,6 +890,7 @@ const personnelLifecyclePermissionIds = new Set([
   ...Object.values(PERSONNEL_LIFECYCLE_PERMISSIONS),
   ...PERSONNEL_WORKFLOW_PERMISSION_IDS,
   ...PERSONNEL_PROFILE_PERMISSION_IDS,
+  ...PERSONNEL_LEARNING_PERMISSION_IDS,
   ...PERSONNEL_LIFECYCLE_CASE_PERMISSION_IDS,
   ...PERSONNEL_LIFECYCLE_INTERFACE_PERMISSION_IDS,
   ...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
@@ -900,6 +969,9 @@ function portalPermissionRoleRestrictionError(permissions) {
   if (restricted.length && restricted.every((permission) => SALES_ANALYTICS_PERMISSION_IDS.includes(permission))) {
     return httpError(403, "Verkaufsanalyse-Rechte dürfen nur dafür vorgesehenen kaufmännischen Rollen zugewiesen werden.", "SALES_ANALYTICS_PERMISSION_ROLE_RESTRICTED");
   }
+  if (restricted.length && restricted.every((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))) {
+    return httpError(403, "Schulungs- und Wissensrechte dürfen nur den dafür vorgesehenen persönlichen Fachrollen zugewiesen werden.", "PERSONNEL_LEARNING_PERMISSION_ROLE_RESTRICTED");
+  }
   return httpError(403, "Diese Personalakt-Rechte sind für die gewählte App-Rolle nicht zulässig.", "PORTAL_PERMISSION_ROLE_RESTRICTED");
 }
 
@@ -920,6 +992,16 @@ function assertPortalPermissionDependencies(permissions) {
       throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
     }
   };
+  const personnelLearningDependencies = resolvePersonnelLearningPermissionDependencies(
+    [...projected],
+  );
+  if (!personnelLearningDependencies.valid) {
+    throw httpError(
+      400,
+      "Schulungs- und Wissensrechte können nur zusammen mit ihren erforderlichen Basisrechten vergeben werden.",
+      "PORTAL_PERMISSION_DEPENDENCY",
+    );
+  }
   for (const permission of SALES_ANALYTICS_PERMISSION_IDS.filter(
     (permission) => permission !== SALES_ANALYTICS_PERMISSIONS.ACCESS,
   )) {
@@ -1628,6 +1710,12 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "collective_agreements:assign",
   ]);
 }
+for (const role of builtinPortalRoles) {
+  addBuiltinRolePermissions(
+    role.id,
+    personnelLearningDefaultPermissionsForRole(role.id),
+  );
+}
 // Die geschuetzte Developer-Rolle ist der technische Eigentuerzugang der
 // Installation. Sie erhaelt jede bekannte App-Berechtigung direkt aus dem
 // Katalog, damit neue Personal-, Lifecycle- und Regelrechte nicht versehentlich
@@ -2067,6 +2155,7 @@ const {
   organizationPersonnel: organizationPersonnelRepository,
   personalNotificationContacts: personalNotificationContactsRepository,
   personnelLifecycle: personnelLifecycleRepository,
+  personnelLearning: personnelLearningRepository,
   planningSettings: planningSettingsRepository,
   portalAccess: portalAccessRepository,
   runtimeRecovery: runtimeRecoveryRepository,
@@ -3212,7 +3301,7 @@ app.use((request, response, next) => {
 app.use((request, response, next) => {
   const embeddedPdfPreview = request.path === "/api/schedule-preview.pdf" || request.path === "/api/vacations-preview.pdf";
   const ocrClientAsset = request.path === "/portal" || request.path === "/portal/" || request.path === "/portal.html"
-    || request.path.startsWith("/vendor/tesseract") || request.path.startsWith("/vendor/pdfjs-v6.1.200");
+    || request.path.startsWith("/vendor/tesseract") || request.path.startsWith("/vendor/pdfjs-v6.2.108");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
@@ -3316,11 +3405,11 @@ const immutableVendorAssets = { maxAge: "365d", immutable: true, fallthrough: fa
 app.use("/vendor/tesseract-v7", express.static(path.join(tesseractPackageDirectory, "dist"), immutableVendorAssets));
 app.use("/vendor/tesseract-core-v7", express.static(tesseractCoreDirectory, immutableVendorAssets));
 app.use("/vendor/tesseract-data-deu-v1", express.static(tesseractGermanDataDirectory, immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/build", express.static(path.join(pdfjsPackageDirectory, "build"), immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/cmaps", express.static(path.join(pdfjsPackageDirectory, "cmaps"), immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/standard_fonts", express.static(path.join(pdfjsPackageDirectory, "standard_fonts"), immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/wasm", express.static(path.join(pdfjsPackageDirectory, "wasm"), immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/iccs", express.static(path.join(pdfjsPackageDirectory, "iccs"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/build", express.static(path.join(pdfjsPackageDirectory, "build"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/cmaps", express.static(path.join(pdfjsPackageDirectory, "cmaps"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/standard_fonts", express.static(path.join(pdfjsPackageDirectory, "standard_fonts"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/wasm", express.static(path.join(pdfjsPackageDirectory, "wasm"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/iccs", express.static(path.join(pdfjsPackageDirectory, "iccs"), immutableVendorAssets));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/api", enforceAdminApiAccess);
 app.use("/api", enforceInstallationFeatures);
@@ -4318,6 +4407,38 @@ function parsePortalPermissionScopes(value) {
   }
 }
 
+function sessionPortalAccessScopeProjection(row = {}) {
+  const explicitScopes = portalAccessScopesForPrincipal({
+    role: "employee",
+    scopesValue: row.access_scopes,
+  });
+  if (Number(row.access_scope_assignment_count || 0) > 0) {
+    return {
+      explicitScopes,
+      scopes: portalAccessScopesForPrincipal({
+        role: row.role,
+        scopesValue: row.access_scopes,
+      }),
+    };
+  }
+  const homeLocationActive = row.home_location_active === true
+    || Number(row.home_location_active || 0) === 1;
+  const preferredDepartmentActive = row.preferred_department_active === true
+    || Number(row.preferred_department_active || 0) === 1;
+  return {
+    explicitScopes,
+    scopes: portalAccessScopesForPrincipal({
+      employeeNumber: row.employee_number,
+      role: row.role,
+      homeLocationId: homeLocationActive ? row.home_location_id : "",
+      preferredDepartmentId: preferredDepartmentActive
+        ? row.preferred_department_id
+        : null,
+      scopesValue: [],
+    }),
+  };
+}
+
 async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
   if (!token) return null;
@@ -4337,17 +4458,7 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
       await portalAccessRepository.touchEmployeeSession({ id: session.id, expiresAt: refreshedExpiresAt });
       session.expires_at = refreshedExpiresAt;
     }
-    const explicitScopes = portalAccessScopesForPrincipal({
-      role: "employee",
-      scopesValue: session.access_scopes,
-    });
-    const scopes = portalAccessScopesForPrincipal({
-      employeeNumber: session.employee_number,
-      role: session.role,
-      homeLocationId: session.home_location_id,
-      preferredDepartmentId: session.preferred_department_id,
-      scopesValue: session.access_scopes,
-    });
+    const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session);
     const permissionState = effectivePortalPermissionState(
       session.employee_number,
       session.role,
@@ -4787,13 +4898,7 @@ function validateMobileDevice(input = {}) {
 
 function mobileSessionPrincipal(row) {
   if (!row || isReservedEmployeePrincipal(row.employee_number)) return null;
-  const scopes = portalAccessScopesForPrincipal({
-    employeeNumber: row.employee_number,
-    role: row.role,
-    homeLocationId: row.home_location_id,
-    preferredDepartmentId: row.preferred_department_id,
-    scopesValue: row.access_scopes,
-  });
+  const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(row);
   const permissionState = effectivePortalPermissionState(
     row.employee_number,
     row.role,
@@ -4819,6 +4924,8 @@ function mobileSessionPrincipal(row) {
     rolePermissions: permissionState.rolePermissions,
     grantedPermissions: permissionState.grantedPermissions,
     deniedPermissions: permissionState.deniedPermissions,
+    explicitScopes,
+    permissionScopes: parsePortalPermissionScopes(row.permission_scopes),
     scopes,
     timeConfirmationLevel: normalizeTimeConfirmationLevel(row.time_confirmation_level),
     amuLocalAccessMode: normalizedManagerAmuAccessMode(row.amu_local_access_mode),
@@ -8827,6 +8934,27 @@ async function preparePersonnelRecordMutation(
   };
 }
 
+function revalidatePreparedPersonnelRecordMutation(request, liveActor, prepared) {
+  if (!prepared) return;
+  if (!liveActor || liveActor.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  const access = personnelRecordAccess(liveActor);
+  if (!access.canReadSensitive && !access.canReadPhone
+    && !access.canReadDocuments && !access.canReadAmu) {
+    throw httpError(403, "Für den Personalakt fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  assertPersonnelRecordFieldsWritable(
+    request,
+    liveActor,
+    access,
+    prepared.submittedFields,
+    prepared.employeeNumber,
+    { auditDenied: false },
+  );
+  prepared.session = liveActor;
+}
+
 async function persistPersonnelRecordMutationWithRepository(repository, prepared, action = "update") {
   if (!prepared) return [];
   const before = prepared.assumeNew
@@ -8981,6 +9109,15 @@ function manageablePortalPermissionsForActor(actor) {
     manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.READ);
     manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ);
     manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ);
+    if (actor.role === "admin") {
+      manageable.delete(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
+    }
+    if (actor.role === "admin"
+      && !actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE)) {
+      for (const permission of PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS) {
+        manageable.delete(permission);
+      }
+    }
     return manageable;
   }
   if (actor.role === "it_admin") {
@@ -8989,11 +9126,13 @@ function manageablePortalPermissionsForActor(actor) {
       && !permission.startsWith("personnel:workflows:")
       && !permission.startsWith("personnel:profiles:")
       && !permission.startsWith("personnel:lifecycle:")
+      && !permission.startsWith("personnel:learning:")
       && permission !== "personnel:applications:write"
     )));
   }
   if (actor.role === "hr") {
     const manageable = new Set(hrDelegablePortalPermissions);
+    manageable.delete(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
     if (!actor.permissions?.includes("personnel:candidates:delegate")) {
       manageable.delete("personnel:candidates:read");
       manageable.delete("personnel:applications:write");
@@ -9008,6 +9147,11 @@ function manageablePortalPermissionsForActor(actor) {
       manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.READ);
       manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ);
     }
+    if (!actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE)) {
+      for (const permission of PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS) {
+        manageable.delete(permission);
+      }
+    }
     return manageable;
   }
   return new Set();
@@ -9015,10 +9159,12 @@ function manageablePortalPermissionsForActor(actor) {
 
 function portalPermissionCatalogForActor(actor) {
   const manageable = manageablePortalPermissionsForActor(actor);
-  return delegablePortalPermissionCatalog.map(({ hrDelegable: _hrDelegable, ...permission }) => ({
-    ...permission,
-    editable: manageable.has(permission.id),
-  }));
+  return delegablePortalPermissionCatalog
+    .filter((permission) => portalPermissionVisibleToActor(permission.id, actor))
+    .map(({ hrDelegable: _hrDelegable, ...permission }) => ({
+      ...permission,
+      editable: manageable.has(permission.id),
+    }));
 }
 
 function actorCanManagePermissionGrants(actor, target) {
@@ -9072,12 +9218,184 @@ async function portalTargetHasPersonnelLifecycleDelegation(
   role = "",
   repository = organizationPersonnelRepository,
 ) {
-  const [grants, scopes] = await Promise.all([
+  const [grants, denials, scopes] = await Promise.all([
     portalPermissionGrantsForEmployee(employeeNumber, role, repository),
+    portalPermissionDenialsForEmployee(employeeNumber, repository),
     repository.listPortalPermissionScopeGrants(employeeNumber),
   ]);
-  return grants.some((permission) => personnelLifecyclePermissionIds.has(permission))
+  const hasPersonnelLearningRoleAccess = personnelLearningDefaultPermissionsForRole(role)
+    .some((permission) => PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS.includes(permission));
+  return hasPersonnelLearningRoleAccess
+    || grants.some((permission) => personnelLifecyclePermissionIds.has(permission))
+    || denials.some((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))
     || scopes.length > 0;
+}
+
+function roleHasPersonnelLearningOperationalDefaults(role) {
+  return personnelLearningDefaultPermissionsForRole(role)
+    .some((permission) => PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS.includes(permission));
+}
+
+function roleHasPersonnelLearningDefaults(role) {
+  return personnelLearningDefaultPermissionsForRole(role).length > 0;
+}
+
+function actorCanAdministerPersonnelLearningRoleAccount(actor) {
+  if (!actor) return false;
+  if (isLocalSystemSession(actor) || actor.role === "developer") return true;
+  if (["admin", "hr"].includes(actor.role)) {
+    return actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE) === true;
+  }
+  if (actor.role === "manager") {
+    return actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN) === true;
+  }
+  return false;
+}
+
+async function livePersonnelLearningRoleAdministrationActor(
+  actor,
+  repository = organizationPersonnelRepository,
+) {
+  if (!actor || isLocalSystemSession(actor)) return actor;
+  const [user, scopeContext] = await Promise.all([
+    personnelLearningPortalUser(actor.employeeNumber, repository),
+    personnelLearningScopeContext(repository),
+  ]);
+  if (!user?.active || !user.employeeActive) {
+    return {
+      employeeNumber: String(actor.employeeNumber || ""),
+      role: "",
+      permissions: [],
+      explicitScopes: [],
+      homeLocationId: "",
+    };
+  }
+  const permissionState = effectivePortalPermissionState(
+    user.employeeNumber,
+    user.role,
+    user.rolePermissions,
+    user.grantedPermissions,
+    user.deniedPermissions,
+  );
+  const storedExplicitScopes = Array.isArray(user.scopes) ? user.scopes : [];
+  const activeExplicitScopes = personnelLearningEffectiveScopes(user, scopeContext)
+    .filter((scope) => scope.valid)
+    .map((scope) => ({
+      locationId: scope.locationId,
+      departmentId: scope.departmentId,
+    }));
+  const requestHadExplicitScopes = Array.isArray(actor.explicitScopes)
+    && actor.explicitScopes.length > 0;
+  const fallbackScopes = portalAccessScopesForPrincipal({
+    role: user.role,
+    homeLocationId: user.homeLocationId,
+    preferredDepartmentId: user.preferredDepartmentId,
+    scopesValue: [],
+  }).filter((scope) => (
+    scopeContext.locations.has(scope.locationId)
+      && (!scope.departmentId
+        || scopeContext.departments.get(Number(scope.departmentId)) === scope.locationId)
+  ));
+  return {
+    ...actor,
+    employeeNumber: user.employeeNumber,
+    role: user.role,
+    permissions: permissionState.effectivePermissions,
+    scopes: storedExplicitScopes.length || requestHadExplicitScopes
+      ? activeExplicitScopes
+      : fallbackScopes,
+    explicitScopes: activeExplicitScopes,
+    permissionScopes: user.permissionScopes,
+    homeLocationId: user.homeLocationId,
+    preferredDepartmentId: user.preferredDepartmentId,
+    timeConfirmationLevel: user.timeConfirmationLevel,
+    personnelFieldPermissions: user.personnelFieldPermissions,
+    mustChangePassword: user.mustChangePassword,
+  };
+}
+
+function assertLivePortalRoutePermission(actor, permission, { allowedRoles = null } = {}) {
+  if (isLocalSystemSession(actor)) return;
+  if (!actor?.permissions?.includes(permission)
+    || (allowedRoles && !allowedRoles.has(actor.role))) {
+    throw httpError(
+      403,
+      "Für diese Aktion fehlt die aktuell wirksame Berechtigung.",
+      "PORTAL_PERMISSION_DENIED",
+    );
+  }
+}
+
+function personnelLearningOrganizationAssignment(value = {}) {
+  return Object.freeze({
+    homeLocationId: String(value.homeLocationId ?? value.home_location_id ?? "").trim(),
+    preferredDepartmentId: Number(
+      value.preferredDepartmentId ?? value.preferred_department_id ?? 0,
+    ) || null,
+  });
+}
+
+function personnelLearningOrganizationAssignmentChanged(before, after) {
+  const previous = personnelLearningOrganizationAssignment(before);
+  const desired = personnelLearningOrganizationAssignment(after);
+  return previous.homeLocationId !== desired.homeLocationId
+    || previous.preferredDepartmentId !== desired.preferredDepartmentId;
+}
+
+function personnelLearningManagerExplicitLocationId(actor) {
+  if (actor?.role !== "manager") return "";
+  const homeLocationId = String(actor.homeLocationId || "").trim();
+  if (!homeLocationId || !Array.isArray(actor.explicitScopes)) return "";
+  return actor.explicitScopes.some((scope) => (
+    String(scope?.locationId || "") === homeLocationId
+      && !Number(scope?.departmentId || 0)
+  )) ? homeLocationId : "";
+}
+
+function assertPersonnelLearningRoleAccountAdministrationAllowed(actor, target = {}) {
+  const targetRole = String(target.role || "employee");
+  if (!roleHasPersonnelLearningDefaults(targetRole)) return;
+  if (!actorCanAdministerPersonnelLearningRoleAccount(actor)) {
+    throw httpError(
+      403,
+      "Ein Schulungs- und Wissenszugang darf nur mit wirksamer fachlicher Delegationsbefugnis verwaltet werden.",
+      "PORTAL_ROLE_HIERARCHY_DENIED",
+    );
+  }
+  if (actor.role !== "manager") return;
+  const managerLocationId = personnelLearningManagerExplicitLocationId(actor);
+  const targetLocationId = personnelLearningOrganizationAssignment(target).homeLocationId;
+  if (!managerLocationId || targetRole !== "department_manager"
+    || targetLocationId !== managerLocationId) {
+    throw httpError(
+      403,
+      "Eine Filialleitung darf Schulungs- und Wissenszugänge nur für Abteilungsleitungen ihrer explizit zugewiesenen Filiale verwalten.",
+      "PORTAL_ROLE_HIERARCHY_DENIED",
+    );
+  }
+}
+
+function assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+  actor,
+  beforeEmployee,
+  afterEmployee,
+  beforeRole = "employee",
+  afterRole = beforeRole,
+} = {}) {
+  if (!personnelLearningOrganizationAssignmentChanged(beforeEmployee, afterEmployee)) return false;
+  if (roleHasPersonnelLearningDefaults(beforeRole)) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      ...personnelLearningOrganizationAssignment(beforeEmployee),
+      role: beforeRole,
+    });
+  }
+  if (roleHasPersonnelLearningDefaults(afterRole)) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      ...personnelLearningOrganizationAssignment(afterEmployee),
+      role: afterRole,
+    });
+  }
+  return true;
 }
 
 async function assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, target, repository) {
@@ -9144,6 +9462,14 @@ async function assertEmployeeDestructiveMutationAllowed(
       JSON.stringify({ targetRole: target.role }));
     throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
   }
+  if (roleHasPersonnelLearningDefaults(target.role)) {
+    const employeeScope = await repository.getEmployeeScopeProjection(employeeNumber);
+    assertPersonnelLearningRoleAccountAdministrationAllowed(normalizedActor, {
+      role: target.role,
+      homeLocationId: employeeScope?.home_location_id || "",
+      preferredDepartmentId: employeeScope?.preferred_department_id || null,
+    });
+  }
   if (target.role === "admin" && target.active) {
     const otherSystemOwners = Number(
       await repository.countOtherSystemOwners(target.employee_number),
@@ -9207,6 +9533,77 @@ async function portalAccessProfileForEmployee(
   };
 }
 
+function actorMayInspectPersonnelLearningRights(actor) {
+  return Boolean(actor && (
+    isLocalSystemSession(actor)
+      || actor.role === "developer"
+      || (["admin", "hr"].includes(actor.role)
+        && actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE))
+  ));
+}
+
+function isPersonnelLearningPermission(permission) {
+  return String(permission || "").startsWith("personnel:learning:");
+}
+
+function portalPermissionVisibleToActor(permission, actor) {
+  return actorMayInspectPersonnelLearningRights(actor)
+    || !isPersonnelLearningPermission(permission);
+}
+
+function projectPortalRolesForActor(roles = [], actor = null) {
+  return roles.map((role) => ({
+    ...role,
+    permissions: (role.permissions || []).filter(
+      (permission) => portalPermissionVisibleToActor(permission, actor),
+    ),
+  }));
+}
+
+function projectPortalPermissionCatalogForActor(catalog = [], actor = null) {
+  return catalog.filter((permission) => portalPermissionVisibleToActor(permission?.id, actor));
+}
+
+function projectPortalAccessProfileForActor(profile = {}, actor = null) {
+  const projected = {
+    ...profile,
+    rolePermissions: [...(profile.rolePermissions || [])],
+    grantedPermissions: [...(profile.grantedPermissions || [])],
+    deniedPermissions: [...(profile.deniedPermissions || [])],
+    effectivePermissions: [...(profile.effectivePermissions || [])],
+    scopes: (profile.scopes || []).map((scope) => ({ ...scope })),
+    personnelLifecyclePermissionScopes: (profile.personnelLifecyclePermissionScopes || [])
+      .map((scope) => ({ ...scope })),
+  };
+  if (actorMayInspectPersonnelLearningRights(actor)) return projected;
+  for (const field of [
+    "rolePermissions",
+    "grantedPermissions",
+    "deniedPermissions",
+    "effectivePermissions",
+  ]) {
+    projected[field] = projected[field].filter(
+      (permission) => !isPersonnelLearningPermission(permission),
+    );
+  }
+  projected.personnelLifecyclePermissionScopes = projected.personnelLifecyclePermissionScopes
+    .filter((scope) => !isPersonnelLearningPermission(scope.permission));
+  delete projected.personnelLearningDenialAuthority;
+  delete projected.personnelLearningCrossLocationDenialAuthority;
+  return projected;
+}
+
+async function publicPortalAccessProfileForEmployee(
+  employeeNumber,
+  actor,
+  repository = organizationPersonnelRepository,
+) {
+  return projectPortalAccessProfileForActor(
+    await portalAccessProfileForEmployee(employeeNumber, repository),
+    actor,
+  );
+}
+
 function personnelAccessProfileConcurrencySignature(snapshot = {}) {
   return sha256(JSON.stringify({
     configured: Boolean(snapshot.configured),
@@ -9225,22 +9622,59 @@ function personnelAccessProfileConcurrencySignature(snapshot = {}) {
 
 function employeeMutationConcurrencySignature(employee = {}) {
   return sha256(JSON.stringify({
-    personnelNumber: String(employee.personnel_number || ""),
-    fullName: String(employee.full_name || ""),
-    nickname: String(employee.nickname || ""),
+    personnelNumber: String(employee.personnel_number ?? employee.personnelNumber ?? ""),
+    fullName: String(employee.full_name ?? employee.fullName ?? ""),
+    nickname: String(employee.nickname ?? ""),
     color: String(employee.color || ""),
-    contractedHours: String(employee.contracted_hours ?? ""),
-    targetWorkdaysPerWeek: Number(employee.target_workdays_per_week || 0),
-    preferredDayOff: String(employee.preferred_day_off || ""),
-    fixedWorkdays: String(employee.fixed_workdays || ""),
-    positionId: String(employee.position_id || ""),
-    timeConfirmationLevel: String(employee.time_confirmation_level || ""),
-    sicknessWithoutAumEnabled: Boolean(employee.sickness_without_aum_enabled),
-    homeLocationId: String(employee.home_location_id || ""),
-    preferredDepartmentId: Number(employee.preferred_department_id || 0) || null,
-    costCenterId: String(employee.cost_center_id || ""),
+    contractedHours: String(employee.contracted_hours ?? employee.contractedHours ?? ""),
+    targetWorkdaysPerWeek: Number(
+      employee.target_workdays_per_week ?? employee.targetWorkdaysPerWeek ?? 0,
+    ),
+    preferredDayOff: String(employee.preferred_day_off ?? employee.preferredDayOff ?? ""),
+    fixedWorkdays: String(employee.fixed_workdays ?? employee.fixedWorkdays ?? ""),
+    positionId: String(employee.position_id ?? employee.positionId ?? ""),
+    timeConfirmationLevel: String(
+      employee.time_confirmation_level ?? employee.timeConfirmationLevel ?? "",
+    ),
+    sicknessWithoutAumEnabled: Boolean(
+      employee.sickness_without_aum_enabled ?? employee.sicknessWithoutAumEnabled,
+    ),
+    homeLocationId: String(employee.home_location_id ?? employee.homeLocationId ?? ""),
+    preferredDepartmentId: Number(
+      employee.preferred_department_id ?? employee.preferredDepartmentId ?? 0,
+    ) || null,
+    costCenterId: String(employee.cost_center_id ?? employee.costCenterId ?? ""),
     active: Boolean(employee.active),
   }));
+}
+
+function personnelAccessProfileChanged(profile, before = {}) {
+  if (!profile) return false;
+  if (!before.configured) return true;
+  const desiredScopes = ["location_planner", "manager", "department_manager"].includes(profile.role)
+    ? [{
+      locationId: profile.homeLocationId,
+      departmentId: profile.role === "department_manager"
+        ? Number(profile.preferredDepartmentId || 0) || null
+        : null,
+    }]
+    : [];
+  return String(before.role || "") !== String(profile.role || "")
+    || setDifference(
+      before.grantedPermissions || [],
+      profile.permissions || [],
+      (permission) => String(permission || ""),
+    ).added.length > 0
+    || setDifference(
+      before.grantedPermissions || [],
+      profile.permissions || [],
+      (permission) => String(permission || ""),
+    ).removed.length > 0
+    || (before.deniedPermissions || []).some(
+      (permission) => permission !== PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    )
+    || setDifference(before.scopes || [], desiredScopes, portalAccessScopeKey).added.length > 0
+    || setDifference(before.scopes || [], desiredScopes, portalAccessScopeKey).removed.length > 0;
 }
 
 async function validatePersonnelAccessProfile(
@@ -9290,12 +9724,26 @@ async function validatePersonnelAccessProfile(
       "PERSONNEL_LIFECYCLE_RIGHTS_ROUTE_REQUIRED",
     );
   }
+  if (roleHasPersonnelLearningDefaults(existing?.role)) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      ...personnelLearningOrganizationAssignment(employee),
+      role: existing.role,
+    });
+  }
+  if (roleHasPersonnelLearningDefaults(role)) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      ...personnelLearningOrganizationAssignment(employee),
+      role,
+    });
+  }
   if (existing) {
-    const [existingGrants, existingPermissionScopes] = await Promise.all([
+    const [existingGrants, existingDenials, existingPermissionScopes] = await Promise.all([
       portalPermissionGrantsForEmployee(employeeNumber, existing.role, repository),
+      portalPermissionDenialsForEmployee(employeeNumber, repository),
       repository.listPortalPermissionScopeGrants(employeeNumber),
     ]);
     if (existingGrants.some((permission) => personnelLifecyclePermissionIds.has(permission))
+      || existingDenials.some((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))
       || existingPermissionScopes.length) {
       throw httpError(
         409,
@@ -9328,7 +9776,7 @@ async function validatePersonnelAccessProfile(
 }
 
 async function applyPersonnelAccessProfileWithRepository(repository, actor, profile, before = null) {
-  if (!profile) return;
+  if (!profile) return false;
   const liveBefore = await portalAccessProfileForEmployee(profile.employeeNumber, repository);
   assertRightsMutationSnapshotCurrent(
     personnelAccessProfileConcurrencySignature(before || {}),
@@ -9347,6 +9795,9 @@ async function applyPersonnelAccessProfileWithRepository(repository, actor, prof
     }
   }
   if (liveBefore.grantedPermissions.some((permission) => personnelLifecyclePermissionIds.has(permission))
+    || liveBefore.deniedPermissions.some(
+      (permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission),
+    )
     || liveBefore.personnelLifecyclePermissionScopes.length) {
     throw httpError(
       409,
@@ -9370,12 +9821,14 @@ async function applyPersonnelAccessProfileWithRepository(repository, actor, prof
       );
     }
   }
+  if (!personnelAccessProfileChanged(profile, liveBefore)) return false;
   try {
     await repository.applyAccessProfile(actor, profile, liveBefore);
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw personnelLifecycleConcurrentChangeError();
     throw error;
   }
+  return true;
 }
 
 function getPortalStatus(locationId = "", request = null) {
@@ -9531,13 +9984,23 @@ function requirePortalAnyPermission(request, permissions) {
 async function portalUsersForAdmin() {
   return Promise.all((await organizationPersonnelRepository.listPortalUsersForAdmin()).map(async (row) => {
     const role = row.role || "employee";
-    const [grantedPermissions, deniedPermissions, scopeRows, permissionScopeRows] = await Promise.all([
+    const [
+      grantedPermissions,
+      deniedPermissions,
+      scopeRows,
+      permissionScopeRows,
+      personnelLearningDenialAuthority,
+    ] = await Promise.all([
       portalPermissionGrantsForEmployee(row.personnel_number, role),
       portalPermissionDenialsForEmployee(row.personnel_number),
       organizationPersonnelRepository.listPortalAccessScopes(row.personnel_number),
       organizationPersonnelRepository.listPortalPermissionScopeGrants(row.personnel_number),
+      organizationPersonnelRepository.getPersonnelLearningPermissionDenialAuthority(
+        row.personnel_number,
+        PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      ),
     ]);
-    return {
+    const user = {
       employeeNumber: row.personnel_number,
       fullName: row.full_name,
       nickname: row.nickname,
@@ -9574,14 +10037,2143 @@ async function portalUsersForAdmin() {
         approvedBy: scope.approved_by,
       })),
     };
+    Object.defineProperty(user, "personnelLearningDenialAuthority", {
+      configurable: false,
+      enumerable: false,
+      writable: false,
+      value: personnelLearningDenialAuthority || null,
+    });
+    return user;
   }));
 }
 
 async function portalUsersForActor(actor) {
+  if (!isLocalSystemSession(actor)
+    && !["users:write", "scopes:write"].some(
+      (permission) => actor?.permissions?.includes(permission),
+    )) {
+    return [];
+  }
   const users = await portalUsersForAdmin();
-  if (actor?.role !== "manager") return users;
+  const mayInspectPersonnelLearningRights = actorMayInspectPersonnelLearningRights(actor);
+  const projected = users.map((user) => ({
+    ...user,
+    rolePermissions: mayInspectPersonnelLearningRights
+      ? user.rolePermissions
+      : user.rolePermissions.filter(
+        (permission) => !isPersonnelLearningPermission(permission),
+      ),
+    grantedPermissions: mayInspectPersonnelLearningRights
+      ? user.grantedPermissions
+      : user.grantedPermissions.filter(
+        (permission) => !isPersonnelLearningPermission(permission),
+      ),
+    deniedPermissions: mayInspectPersonnelLearningRights
+      ? user.deniedPermissions
+      : user.deniedPermissions.filter(
+        (permission) => !isPersonnelLearningPermission(permission),
+      ),
+    personnelLifecyclePermissionScopes: mayInspectPersonnelLearningRights
+      ? user.personnelLifecyclePermissionScopes
+      : user.personnelLifecyclePermissionScopes.filter(
+        (scope) => !isPersonnelLearningPermission(scope.permission),
+      ),
+  }));
+  if (actor?.role !== "manager") return projected;
   const locations = new Set((actor.scopes || []).map((scope) => scope.locationId));
-  return users.filter((user) => user.role === "department_manager" && locations.has(user.homeLocationId));
+  return projected.filter(
+    (user) => user.role === "department_manager" && locations.has(user.homeLocationId),
+  );
+}
+
+async function portalRolesForUserAdministrationActor(actor) {
+  if (!isLocalSystemSession(actor)
+    && !["users:write", "scopes:write"].some(
+      (permission) => actor?.permissions?.includes(permission),
+    )) {
+    return [];
+  }
+  return projectPortalRolesForActor(await getPortalRoles(), actor);
+}
+
+async function personnelLearningScopeContext(
+  repository = organizationPersonnelRepository,
+) {
+  const [locations, departments] = await Promise.all([
+    repository.listLocations(false),
+    repository.listDepartments(false),
+  ]);
+  return personnelLearningScopeContextFromRows(locations, departments);
+}
+
+function personnelLearningScopeContextFromRows(locations = [], departments = []) {
+  return {
+    locations: new Set(locations.filter((location) => location.active)
+      .map((location) => String(location.id || ""))),
+    departments: new Map(departments.filter((department) => department.active)
+      .map((department) => [Number(department.id), String(department.location_id || "")])),
+  };
+}
+
+function personnelLearningEffectiveScopes(user, context) {
+  const source = Array.isArray(user?.scopes) ? user.scopes : [];
+  return source.map((scope) => {
+    const locationId = String(scope?.locationId ?? scope?.location_id ?? "");
+    const departmentId = Number(scope?.departmentId ?? scope?.department_id ?? 0) || null;
+    const locationActive = context.locations.has(locationId);
+    const departmentLocationId = departmentId
+      ? String(context.departments.get(departmentId) || "")
+      : "";
+    return {
+      type: departmentId ? "department" : "location",
+      locationId,
+      departmentId,
+      valid: Boolean(locationId && locationActive
+        && (!departmentId || departmentLocationId === locationId)),
+      active: true,
+      locationActive,
+      departmentActive: departmentId ? Boolean(departmentLocationId) : false,
+      departmentLocationId,
+    };
+  });
+}
+
+function personnelLearningPrincipalForUser(user, context) {
+  if (!user) return null;
+  const deniedPermissions = Array.isArray(user.deniedPermissions)
+    ? user.deniedPermissions
+    : [];
+  const crossLocationDenied = deniedPermissions.includes(
+    PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+  );
+  const authority = user.personnelLearningDenialAuthority || null;
+  return {
+    employeeNumber: String(user.employeeNumber ?? user.employee_number ?? ""),
+    role: String(user.role || "employee"),
+    active: Boolean(user.active && (user.employeeActive ?? user.employee_active ?? true)),
+    configured: Boolean(user.configured ?? user.role),
+    sessionKind: "employee",
+    isEmployee: true,
+    homeLocationId: String(user.homeLocationId ?? user.home_location_id ?? ""),
+    preferredDepartmentId: Number(
+      user.preferredDepartmentId ?? user.preferred_department_id ?? 0,
+    ) || null,
+    rolePermissions: Array.isArray(user.rolePermissions) ? user.rolePermissions : [],
+    grantedPermissions: Array.isArray(user.grantedPermissions)
+      ? user.grantedPermissions
+      : [],
+    deniedPermissions,
+    effectiveScopes: personnelLearningEffectiveScopes(user, context),
+    permissionDenials: crossLocationDenied ? [{
+      permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      authorityLevel: String(authority?.authority_level || ""),
+      scopeLocationId: String(authority?.scope_location_id || ""),
+      revision: personnelLearningDenialRevision(user),
+    }] : [],
+  };
+}
+
+async function personnelLearningPortalUser(
+  employeeNumber,
+  repository = organizationPersonnelRepository,
+) {
+  const account = await repository.getPortalUserAccountProjection(employeeNumber);
+  if (!account) return null;
+  const role = String(account.role || "employee");
+  const [
+    employee,
+    scopeProjection,
+    roleProjection,
+    grantedPermissions,
+    deniedPermissions,
+    scopeRows,
+    permissionScopeRows,
+    personnelFieldPermissions,
+    personnelLearningDenialAuthority,
+  ] = await Promise.all([
+    repository.getEmployeeForUpdate(employeeNumber),
+    repository.getEmployeeScopeProjection(employeeNumber),
+    repository.getPortalRoleProjection(role),
+    portalPermissionGrantsForEmployee(employeeNumber, role, repository),
+    portalPermissionDenialsForEmployee(employeeNumber, repository),
+    repository.listPortalAccessScopes(employeeNumber),
+    repository.listPortalPermissionScopeGrants(employeeNumber),
+    repository.listPersonnelFieldPermissions(role),
+    repository.getPersonnelLearningPermissionDenialAuthority(
+      employeeNumber,
+      PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    ),
+  ]);
+  return {
+    employeeNumber: String(account.employee_number || employeeNumber),
+    employeeActive: Boolean(employee?.active),
+    configured: true,
+    role,
+    active: Boolean(account.active),
+    mustChangePassword: Boolean(account.must_change_password),
+    homeLocationId: String(scopeProjection?.home_location_id || ""),
+    preferredDepartmentId: Number(scopeProjection?.preferred_department_id || 0) || null,
+    timeConfirmationLevel: normalizeTimeConfirmationLevel(employee?.time_confirmation_level),
+    personnelFieldPermissions: parsePersonnelFieldPermissionProjection(personnelFieldPermissions),
+    rolePermissions: parsePortalPermissions(roleProjection?.permissions),
+    grantedPermissions,
+    deniedPermissions,
+    scopes: scopeRows.map((scope) => ({
+      locationId: String(scope.location_id || ""),
+      departmentId: Number(scope.department_id || 0) || null,
+    })),
+    permissionScopes: permissionScopeRows.map(publicPortalPermissionScopeGrant),
+    personnelLearningDenialAuthority,
+  };
+}
+
+function personnelLearningOrganizationScopeValue(principal, context) {
+  const scope = createPersonnelLearningAccessSnapshot(
+    personnelLearningPrincipalForUser(principal, context) || {},
+  ).organizationScope;
+  return scope ? Object.freeze({
+    locationId: String(scope.locationId || ""),
+    departmentId: Number(scope.departmentId || 0) || null,
+  }) : null;
+}
+
+function personnelLearningOrganizationScopeKey(scope) {
+  return scope ? `${scope.locationId}\0${scope.departmentId || 0}` : "";
+}
+
+function personnelLearningCatalogError(error) {
+  if (error instanceof PersonnelLearningCatalogError) {
+    return httpError(400, error.message, error.code);
+  }
+  return error;
+}
+
+function normalizePersonnelLearningCatalogInput(value, options = {}) {
+  try {
+    return normalizePersonnelLearningTemplateInput(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function normalizePersonnelLearningSkillCatalogInput(value, options = {}) {
+  try {
+    return normalizePersonnelLearningSkillInput(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+async function personnelLearningCatalogActor(
+  session,
+  repository = organizationPersonnelRepository,
+) {
+  const organizationSession = session?.sessionKind === "organization"
+    || session?.isEmployee === false;
+  const [locations, departments, user, organizationAccount] = await Promise.all([
+    repository.listLocations(false),
+    repository.listDepartments(false),
+    isLocalSystemSession(session) || organizationSession
+      ? Promise.resolve(null)
+      : personnelLearningPortalUser(session?.employeeNumber, repository),
+    organizationSession && session?.accountId
+      ? repository.getOrganizationAccount(String(session.accountId))
+      : Promise.resolve(null),
+  ]);
+  const context = personnelLearningScopeContextFromRows(locations, departments);
+  if (isLocalSystemSession(session)) {
+    return Object.freeze({
+      actorId: "local",
+      session,
+      access: Object.freeze({
+        actorId: "local",
+        role: "developer",
+        localSystem: true,
+        plPlus: true,
+        organizationScope: null,
+        canReadCatalog: true,
+        canManageCatalog: true,
+        canPublishCatalog: true,
+        canReadAudit: true,
+        canWriteAssignments: true,
+        canAssignCrossLocation: true,
+      }),
+      context,
+      locations: Object.freeze(locations),
+      departments: Object.freeze(departments),
+    });
+  }
+  if (organizationSession) {
+    const accountType = organizationAccount?.active
+      ? String(organizationAccount.account_type || "") : "";
+    const permissions = organizationAccount?.active
+      ? normalizedOrganizationAccountPermissions(
+          accountType,
+          parsePortalPermissions(organizationAccount.permissions_json),
+        )
+      : [];
+    const liveScopes = organizationAccount?.active
+      ? portalAccessScopesForPrincipal({
+          role: "organization_account",
+          scopesValue: organizationAccount.scopes_json,
+        })
+      : [];
+    const activeScopes = liveScopes.filter((scope) => (
+      !scope?.departmentId
+      && context.locations.has(String(scope?.locationId || ""))
+    ));
+    const branchDashboard = accountType === "branch"
+      && permissions.includes(PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION)
+      && activeScopes.length === 1;
+    const locationId = branchDashboard ? String(activeScopes[0].locationId) : "";
+    const actorId = organizationAccount?.active
+      ? `account:${String(organizationAccount.id || "")}` : "";
+    const liveSession = Object.freeze({
+      ...session,
+      actorId,
+      accountId: String(organizationAccount?.id || session?.accountId || ""),
+      accountType,
+      fullName: String(organizationAccount?.display_name || session?.fullName || ""),
+      permissions: Object.freeze([...permissions]),
+      explicitScopes: Object.freeze([...activeScopes]),
+      scopes: Object.freeze([...activeScopes]),
+    });
+    return Object.freeze({
+      actorId,
+      session: liveSession,
+      user: null,
+      access: Object.freeze({
+        actorId,
+        role: "organization_account",
+        localSystem: false,
+        plPlus: false,
+        organizationScope: branchDashboard
+          ? Object.freeze({ locationId, departmentId: null }) : null,
+        canReadCatalog: false,
+        canManageCatalog: false,
+        canPublishCatalog: false,
+        canReadAudit: false,
+        canWriteAssignments: false,
+        canAssignCrossLocation: false,
+        branchDashboard,
+        branchDashboardLocationId: locationId,
+      }),
+      context,
+      locations: Object.freeze(locations),
+      departments: Object.freeze(departments),
+    });
+  }
+  const principal = personnelLearningPrincipalForUser(user, context);
+  const access = createPersonnelLearningAccessSnapshot(principal || {});
+  return Object.freeze({
+    actorId: access.actorId,
+    session,
+    user,
+    access,
+    context,
+    locations: Object.freeze(locations),
+    departments: Object.freeze(departments),
+  });
+}
+
+function assertPersonnelLearningCatalogCapability(actor, capability) {
+  if (!actor?.actorId || actor.access?.[capability] !== true) {
+    throw httpError(
+      403,
+      "Für diesen Schulungs- und Wissensbereich fehlt die aktuell wirksame Berechtigung.",
+      "PERSONNEL_LEARNING_CATALOG_PERMISSION_DENIED",
+    );
+  }
+}
+
+function personnelLearningCatalogScopeSnapshot(scope, actor) {
+  if (!personnelLearningScopeAccess(actor.access, scope, { manage: true })) {
+    throw httpError(
+      403,
+      "Der Geltungsbereich liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+      "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+    );
+  }
+  if (scope.type === "organization") {
+    return Object.freeze({ type: "organization", label: "Gesamte Organisation" });
+  }
+  const location = actor.locations.find((entry) => String(entry.id) === scope.locationId);
+  if (!location?.active) {
+    throw httpError(
+      409,
+      "Die ausgewählte Filiale ist nicht mehr aktiv.",
+      "PERSONNEL_LEARNING_CATALOG_SCOPE_INACTIVE",
+    );
+  }
+  if (scope.type === "location") {
+    return Object.freeze({
+      type: "location",
+      locationId: scope.locationId,
+      locationName: String(location.name || scope.locationId),
+    });
+  }
+  const department = actor.departments.find((entry) => (
+    Number(entry.id) === Number(scope.departmentId)
+      && String(entry.location_id) === scope.locationId
+  ));
+  if (!department?.active) {
+    throw httpError(
+      409,
+      "Die ausgewählte Abteilung ist nicht mehr aktiv oder gehört nicht zur Filiale.",
+      "PERSONNEL_LEARNING_CATALOG_SCOPE_INACTIVE",
+    );
+  }
+  return Object.freeze({
+    type: "department",
+    locationId: scope.locationId,
+    locationName: String(location.name || scope.locationId),
+    departmentId: Number(scope.departmentId),
+    departmentName: String(department.name || scope.departmentId),
+  });
+}
+
+function personnelLearningCatalogScopeOptions(actor) {
+  if (actor.access?.canManageCatalog !== true) return Object.freeze([]);
+  const candidates = [];
+  if (actor.access.localSystem === true || actor.access.plPlus === true) {
+    candidates.push(Object.freeze({
+      type: "organization",
+      locationId: null,
+      departmentId: null,
+      label: "Gesamte Organisation",
+    }));
+  }
+  for (const location of actor.locations) {
+    const locationScope = {
+      type: "location",
+      locationId: String(location.id),
+      departmentId: null,
+    };
+    if (personnelLearningScopeAccess(actor.access, locationScope, { manage: true })) {
+      candidates.push(Object.freeze({
+        ...locationScope,
+        label: String(location.name || location.id),
+      }));
+    }
+    for (const department of actor.departments.filter((entry) => (
+      String(entry.location_id) === String(location.id)
+    ))) {
+      const departmentScope = {
+        type: "department",
+        locationId: String(location.id),
+        departmentId: Number(department.id),
+      };
+      if (personnelLearningScopeAccess(actor.access, departmentScope, { manage: true })) {
+        candidates.push(Object.freeze({
+          ...departmentScope,
+          label: `${String(location.name || location.id)} · ${String(department.name || department.id)}`,
+        }));
+      }
+    }
+  }
+  return Object.freeze(candidates);
+}
+
+async function personnelLearningModuleBundle(
+  moduleId,
+  repository = personnelLearningRepository,
+) {
+  const module = await repository.getModule(moduleId);
+  if (!module) {
+    throw httpError(
+      404,
+      "Der Schulungs- oder Wissensprozess wurde nicht gefunden.",
+      "PERSONNEL_LEARNING_MODULE_NOT_FOUND",
+    );
+  }
+  const [versions, events] = await Promise.all([
+    repository.listVersions(moduleId),
+    repository.listEvents(moduleId),
+  ]);
+  let state;
+  let catalogEntity = "process";
+  try {
+    const skillVersions = versions.filter((version) => (
+      isPersonnelLearningSkillContent(version.content)
+    )).length;
+    if (skillVersions > 0 && skillVersions !== versions.length) {
+      throw new PersonnelLearningCatalogError(
+        "PERSONNEL_LEARNING_HISTORY_INVALID",
+        "Die Kataloghistorie enthält widersprüchliche Entitätstypen.",
+      );
+    }
+    if (skillVersions === versions.length) {
+      catalogEntity = "skill";
+      state = buildPersonnelLearningSkillState({ module, versions, events });
+    } else {
+      state = buildPersonnelLearningModuleState({ module, versions, events });
+    }
+  } catch (error) {
+    if (error instanceof PersonnelLearningCatalogError) {
+      throw httpError(
+        503,
+        "Die revisionsgebundene Prozesshistorie ist inkonsistent.",
+        "PERSONNEL_LEARNING_HISTORY_INVALID",
+      );
+    }
+    throw error;
+  }
+  return Object.freeze({ module, versions, events, state, catalogEntity });
+}
+
+function assertPersonnelLearningCatalogEntity(bundle, expectedEntity) {
+  if (bundle?.catalogEntity !== expectedEntity) {
+    throw httpError(
+      404,
+      expectedEntity === "skill"
+        ? "Die Fähigkeit wurde nicht gefunden."
+        : "Der Schulungs- oder Wissensprozess wurde nicht gefunden.",
+      expectedEntity === "skill"
+        ? "PERSONNEL_LEARNING_SKILL_NOT_FOUND"
+        : "PERSONNEL_LEARNING_MODULE_NOT_FOUND",
+    );
+  }
+  return bundle;
+}
+
+function publicPersonnelLearningVersion(version, { audit = false } = {}) {
+  if (!version) return null;
+  const scopeSnapshot = version.scopeSnapshot && typeof version.scopeSnapshot === "object"
+    ? version.scopeSnapshot
+    : {};
+  const projected = {
+    versionNumber: Number(version.versionNumber),
+    title: String(version.title || ""),
+    content: version.content,
+    scope: {
+      type: String(version.scopeType || ""),
+      locationId: version.scopeLocationId === null ? null : String(version.scopeLocationId || ""),
+      departmentId: Number(version.scopeDepartmentId || 0) || null,
+      label: String(
+        scopeSnapshot.label
+          || scopeSnapshot.departmentName
+          || scopeSnapshot.locationName
+          || "Gesamte Organisation",
+      ),
+      locationName: scopeSnapshot.locationName ? String(scopeSnapshot.locationName) : null,
+      departmentName: scopeSnapshot.departmentName
+        ? String(scopeSnapshot.departmentName) : null,
+    },
+    createdAt: String(version.createdAt || ""),
+  };
+  if (audit) {
+    projected.createdBy = String(version.createdBy || "");
+    projected.contentSha256 = String(version.contentSha256 || "");
+    projected.scopeSnapshotSha256 = String(version.scopeSnapshotSha256 || "");
+    projected.receiptSha256 = String(version.receiptSha256 || "");
+  }
+  return projected;
+}
+
+function publicPersonnelLearningModule(bundle, actor) {
+  const { module, state } = bundle;
+  const latestScope = personnelLearningScopeFromVersion(state.latestVersion);
+  const publishedScope = personnelLearningScopeFromVersion(state.publishedVersion);
+  const canManage = actor.access.canManageCatalog === true
+    && personnelLearningScopeAccess(actor.access, latestScope, { manage: true });
+  const canReadPublished = Boolean(state.publishedVersion)
+    && personnelLearningScopeAccess(actor.access, publishedScope);
+  if (!canManage && (!canReadPublished || state.archived)) return null;
+  const canPublish = canManage && actor.access.canPublishCatalog === true;
+  const audit = actor.access.canReadAudit === true
+    && personnelLearningScopeAccess(actor.access, latestScope);
+  const visibleVersions = canManage
+    ? state.versions
+    : state.publishedVersion ? [state.publishedVersion] : [];
+  const visibleHistory = canManage
+    ? state.events
+    : state.events.filter((event) => {
+        const eventType = String(event.eventType || "");
+        const versionNumber = Number(event.moduleVersionNumber || 0) || null;
+        return eventType === "created"
+          || versionNumber === state.publishedVersionNumber;
+      });
+  return {
+    id: String(module.id),
+    moduleCode: String(module.moduleCode),
+    moduleType: String(module.moduleType),
+    status: canManage ? state.status : "published",
+    archived: state.archived,
+    latestVersionNumber: canManage
+      ? state.latestVersionNumber
+      : state.publishedVersionNumber,
+    publishedVersionNumber: state.publishedVersionNumber,
+    currentEventReceipt: canManage ? state.currentEventReceipt : null,
+    latestVersion: canManage
+      ? publicPersonnelLearningVersion(state.latestVersion, { audit })
+      : publicPersonnelLearningVersion(state.publishedVersion, { audit }),
+    publishedVersion: publicPersonnelLearningVersion(state.publishedVersion, { audit }),
+    versions: visibleVersions.map((version) => ({
+      ...publicPersonnelLearningVersion(version, { audit }),
+      published: Number(version.versionNumber) === state.publishedVersionNumber,
+      latest: Number(version.versionNumber) === state.latestVersionNumber,
+    })),
+    history: visibleHistory.map((event) => ({
+      sequenceNumber: Number(event.sequenceNumber),
+      eventType: String(event.eventType || ""),
+      versionNumber: Number(event.moduleVersionNumber || 0) || null,
+      occurredAt: String(event.occurredAt || ""),
+      ...(audit ? {
+        actorId: String(event.actorId || ""),
+        receiptSha256: String(event.receiptSha256 || ""),
+      } : {}),
+    })),
+    capabilities: {
+      canEdit: canManage && !state.archived,
+      canPublish: canPublish && !state.archived
+        && state.latestVersionNumber !== state.publishedVersionNumber,
+      canArchive: canPublish && !state.archived,
+      canRestore: canPublish && state.archived,
+      canReadAudit: audit,
+    },
+  };
+}
+
+async function personnelLearningCatalogPayload(
+  actor,
+  repository = personnelLearningRepository,
+) {
+  assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
+  const modules = await repository.listModules();
+  const projected = (await Promise.all(modules.map(async (module) => {
+    const bundle = await personnelLearningModuleBundle(module.id, repository);
+    if (bundle.catalogEntity !== "process") return null;
+    return publicPersonnelLearningModule(bundle, actor);
+  }))).filter(Boolean).sort((left, right) => (
+    String(left.latestVersion?.title || left.moduleCode)
+      .localeCompare(String(right.latestVersion?.title || right.moduleCode), "de-AT", {
+        sensitivity: "base",
+      })
+  ));
+  const scopes = personnelLearningCatalogScopeOptions(actor);
+  return {
+    generatedAt: new Date().toISOString(),
+    capabilities: {
+      canRead: actor.access.canReadCatalog === true,
+      canManage: actor.access.canManageCatalog === true,
+      canPublish: actor.access.canPublishCatalog === true,
+      canReadAudit: actor.access.canReadAudit === true,
+      canCreate: actor.access.canManageCatalog === true && scopes.length > 0,
+    },
+    scopes,
+    summary: {
+      visible: projected.length,
+      published: projected.filter((module) => (
+        ["published", "published_with_draft"].includes(module.status)
+      )).length,
+      drafts: projected.filter((module) => (
+        ["draft", "published_with_draft"].includes(module.status)
+      )).length,
+      archived: projected.filter((module) => module.archived).length,
+    },
+    modules: projected,
+  };
+}
+
+function publicPersonnelLearningSkill(bundle, actor) {
+  if (bundle.catalogEntity !== "skill") return null;
+  const projected = publicPersonnelLearningModule(bundle, actor);
+  if (!projected) return null;
+  const { moduleCode, moduleType: _moduleType, ...skill } = projected;
+  return {
+    ...skill,
+    skillCode: moduleCode,
+  };
+}
+
+async function personnelLearningSkillCatalogPayload(
+  actor,
+  repository = personnelLearningRepository,
+) {
+  assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
+  const modules = await repository.listModules();
+  const projected = (await Promise.all(modules.map(async (module) => {
+    const bundle = await personnelLearningModuleBundle(module.id, repository);
+    return publicPersonnelLearningSkill(bundle, actor);
+  }))).filter(Boolean).sort((left, right) => (
+    String(left.latestVersion?.title || left.skillCode)
+      .localeCompare(String(right.latestVersion?.title || right.skillCode), "de-AT", {
+        sensitivity: "base",
+      })
+  ));
+  const scopes = personnelLearningCatalogScopeOptions(actor);
+  return {
+    generatedAt: new Date().toISOString(),
+    capabilities: {
+      canRead: actor.access.canReadCatalog === true,
+      canManage: actor.access.canManageCatalog === true,
+      canPublish: actor.access.canPublishCatalog === true,
+      canReadAudit: actor.access.canReadAudit === true,
+      canCreate: actor.access.canManageCatalog === true && scopes.length > 0,
+    },
+    scopes,
+    summary: {
+      visible: projected.length,
+      published: projected.filter((skill) => (
+        ["published", "published_with_draft"].includes(skill.status)
+      )).length,
+      drafts: projected.filter((skill) => (
+        ["draft", "published_with_draft"].includes(skill.status)
+      )).length,
+      archived: projected.filter((skill) => skill.archived).length,
+    },
+    skills: projected,
+  };
+}
+
+function assertPersonnelLearningCompetencyCapability(actor) {
+  if (!actor?.actorId || actor.access?.canWriteAssignments !== true) {
+    throw httpError(
+      403,
+      "Für Mitarbeiter-Kompetenzprofile fehlt die aktuell wirksame Berechtigung.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_PERMISSION_DENIED",
+    );
+  }
+}
+
+function personnelLearningCompetencyEmployeeScope(employee, actor) {
+  const locationId = String(employee?.home_location_id || "").trim();
+  const departmentId = Number(employee?.preferred_department_id || 0) || null;
+  if (!locationId || !actor.context.locations.has(locationId)) return null;
+  if (departmentId && actor.context.departments.get(departmentId) !== locationId) return null;
+  return Object.freeze({ locationId, departmentId });
+}
+
+function personnelLearningCompetencyEmployeeAllowed(actor, employee) {
+  if (!employee?.active || actor.access?.canWriteAssignments !== true) return false;
+  const targetScope = personnelLearningCompetencyEmployeeScope(employee, actor);
+  if (!targetScope) return false;
+  if (actor.access.localSystem === true || actor.access.plPlus === true
+    || actor.access.canAssignCrossLocation === true) return true;
+  const actorScope = actor.access.organizationScope;
+  if (!actorScope || actorScope.locationId !== targetScope.locationId) return false;
+  if (actor.access.role === "manager") return true;
+  return actor.access.role === "department_manager"
+    && Number(actorScope.departmentId || 0) === Number(targetScope.departmentId || 0);
+}
+
+function personnelLearningCompetencyEmployeeProjection(employee) {
+  return {
+    employeeNumber: String(employee.personnel_number || ""),
+    fullName: String(employee.full_name || ""),
+    positionName: String(employee.position_name || ""),
+    locationId: String(employee.home_location_id || ""),
+    locationName: String(employee.home_location_name || employee.home_location_id || ""),
+    departmentId: Number(employee.preferred_department_id || 0) || null,
+    departmentName: String(employee.preferred_department_name || ""),
+  };
+}
+
+function personnelLearningCompetencySkillProjection(bundle) {
+  const version = bundle.state.publishedVersion;
+  if (!version) return null;
+  const projectedVersion = publicPersonnelLearningVersion(version);
+  return {
+    id: String(bundle.module.id),
+    skillCode: String(bundle.module.moduleCode || ""),
+    title: String(version.title || ""),
+    category: String(version.content?.category || ""),
+    summary: String(version.content?.summary || ""),
+    scope: projectedVersion.scope,
+    publishedVersionNumber: Number(bundle.state.publishedVersionNumber),
+    levelDefinitions: Array.isArray(version.content?.levelDefinitions)
+      ? version.content.levelDefinitions.map((definition) => ({
+          level: Number(definition.level),
+          label: String(definition.label || ""),
+          description: String(definition.description || ""),
+        }))
+      : [],
+  };
+}
+
+function personnelLearningCompetencyStateOrUnavailable(competency, revisions) {
+  try {
+    return buildPersonnelLearningCompetencyState({ competency, revisions });
+  } catch (error) {
+    if (error instanceof PersonnelLearningCatalogError) {
+      throw httpError(
+        503,
+        "Die revisionsgebundene Kompetenzhistorie ist inkonsistent.",
+        "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+      );
+    }
+    throw error;
+  }
+}
+
+function publicPersonnelLearningCompetency({
+  competency,
+  state: competencyState,
+  employee,
+  bundle,
+  actor,
+}) {
+  const current = competencyState.current;
+  const skillVersion = bundle.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(current.skillVersionNumber)
+  ));
+  if (!skillVersion) {
+    throw httpError(
+      503,
+      "Die gebundene Fähigkeitsversion des Kompetenzprofils fehlt.",
+      "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+    );
+  }
+  const levelDefinition = levelDefinitionForSkillVersion(
+    skillVersion,
+    current.competencyLevel,
+  );
+  const canManageTarget = personnelLearningCompetencyEmployeeAllowed(actor, employee);
+  const canReadAudit = actor.access.canReadAudit === true;
+  return {
+    id: String(competency.id),
+    employeeNumber: String(competency.employeeNumber),
+    skillId: String(competency.skillModuleId),
+    skillCode: String(bundle.module.moduleCode || ""),
+    skillTitle: String(skillVersion.title || ""),
+    skillCategory: String(skillVersion.content?.category || ""),
+    skillVersionNumber: Number(current.skillVersionNumber),
+    currentPublishedVersionNumber: Number(bundle.state.publishedVersionNumber || 0) || null,
+    usesCurrentPublishedVersion: Number(current.skillVersionNumber)
+      === Number(bundle.state.publishedVersionNumber || 0),
+    level: Number(current.competencyLevel),
+    levelDefinition,
+    trainerAuthorized: Boolean(current.trainerAuthorized),
+    active: Boolean(current.active),
+    revisionNumber: Number(current.revisionNumber),
+    currentRevisionReceipt: String(current.receiptSha256 || ""),
+    updatedAt: String(current.changedAt || ""),
+    capabilities: {
+      canEdit: canManageTarget && !bundle.state.archived,
+      canWithdraw: canManageTarget && Boolean(current.active),
+      canRestore: canManageTarget && !current.active && !bundle.state.archived,
+      canReadAudit,
+    },
+    history: (canReadAudit ? competencyState.revisions : [current]).map((revision) => ({
+      revisionNumber: Number(revision.revisionNumber),
+      skillVersionNumber: Number(revision.skillVersionNumber),
+      level: Number(revision.competencyLevel),
+      trainerAuthorized: Boolean(revision.trainerAuthorized),
+      active: Boolean(revision.active),
+      changeType: String(revision.changeType || ""),
+      changedAt: String(revision.changedAt || ""),
+      ...(canReadAudit ? {
+        changedBy: String(revision.changedBy || ""),
+        receiptSha256: String(revision.receiptSha256 || ""),
+      } : {}),
+    })),
+  };
+}
+
+async function personnelLearningCompetencyPayload(
+  actor,
+  {
+    learningRepository = personnelLearningRepository,
+    organizationRepository = organizationPersonnelRepository,
+  } = {},
+) {
+  assertPersonnelLearningCompetencyCapability(actor);
+  const [employees, modules, competencies, revisions] = await Promise.all([
+    organizationRepository.listEmployees(),
+    learningRepository.listModules(),
+    learningRepository.listCompetencies(),
+    learningRepository.listCompetencyRevisions(),
+  ]);
+  const visibleEmployees = employees.filter((employee) => (
+    personnelLearningCompetencyEmployeeAllowed(actor, employee)
+  ));
+  const employeeByNumber = new Map(visibleEmployees.map((employee) => [
+    String(employee.personnel_number),
+    employee,
+  ]));
+  const bundles = new Map();
+  for (const module of modules) {
+    const bundle = await personnelLearningModuleBundle(module.id, learningRepository);
+    if (bundle.catalogEntity === "skill") bundles.set(String(module.id), bundle);
+  }
+  const revisionsByCompetency = new Map();
+  for (const revision of revisions) {
+    const rows = revisionsByCompetency.get(revision.competencyId) || [];
+    rows.push(revision);
+    revisionsByCompetency.set(revision.competencyId, rows);
+  }
+  const projectedCompetencies = [];
+  for (const competency of competencies) {
+    const employee = employeeByNumber.get(String(competency.employeeNumber));
+    const bundle = bundles.get(String(competency.skillModuleId));
+    if (!employee || !bundle) continue;
+    const state = personnelLearningCompetencyStateOrUnavailable(
+      competency,
+      revisionsByCompetency.get(competency.id) || [],
+    );
+    const boundVersion = bundle.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(state.current.skillVersionNumber)
+    ));
+    if (!boundVersion || !personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(boundVersion),
+    )) continue;
+    projectedCompetencies.push(publicPersonnelLearningCompetency({
+      competency,
+      state,
+      employee,
+      bundle,
+      actor,
+    }));
+  }
+  const skillOptions = [...bundles.values()].filter((bundle) => {
+    if (bundle.state.archived || !bundle.state.publishedVersion) return false;
+    return personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(bundle.state.publishedVersion),
+    );
+  }).map(personnelLearningCompetencySkillProjection).filter(Boolean)
+    .sort((left, right) => left.title.localeCompare(right.title, "de-AT", {
+      sensitivity: "base",
+    }));
+  const profileCounts = new Map();
+  const trainerCounts = new Map();
+  for (const competency of projectedCompetencies.filter((entry) => entry.active)) {
+    profileCounts.set(
+      competency.employeeNumber,
+      (profileCounts.get(competency.employeeNumber) || 0) + 1,
+    );
+    if (competency.trainerAuthorized) {
+      trainerCounts.set(
+        competency.employeeNumber,
+        (trainerCounts.get(competency.employeeNumber) || 0) + 1,
+      );
+    }
+  }
+  return {
+    generatedAt: new Date().toISOString(),
+    capabilities: {
+      canRead: true,
+      canWriteAssignments: actor.access.canWriteAssignments === true,
+      canAssignCrossLocation: actor.access.canAssignCrossLocation === true,
+      canReadAudit: actor.access.canReadAudit === true,
+    },
+    summary: {
+      employees: visibleEmployees.length,
+      activeCompetencies: projectedCompetencies.filter((entry) => entry.active).length,
+      trainers: projectedCompetencies.filter((entry) => (
+        entry.active && entry.trainerAuthorized
+      )).length,
+    },
+    employees: visibleEmployees.map((employee) => ({
+      ...personnelLearningCompetencyEmployeeProjection(employee),
+      competencyCount: profileCounts.get(String(employee.personnel_number)) || 0,
+      trainerSkillCount: trainerCounts.get(String(employee.personnel_number)) || 0,
+    })),
+    skills: skillOptions,
+    competencies: projectedCompetencies.sort((left, right) => (
+      left.employeeNumber.localeCompare(right.employeeNumber, "de-AT", { numeric: true })
+      || left.skillTitle.localeCompare(right.skillTitle, "de-AT", { sensitivity: "base" })
+    )),
+  };
+}
+
+function normalizePersonnelLearningCompetencyInput(value, options = {}) {
+  try {
+    return normalizedCompetencyMutation(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function personnelLearningCompetencyExpectedReceipt(value) {
+  const receipt = String(value || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(receipt)) {
+    throw httpError(
+      400,
+      "Bitte den aktuellen Revisionsbeleg des Kompetenzprofils übermitteln.",
+      "PERSONNEL_LEARNING_COMPETENCY_REVISION_REQUIRED",
+    );
+  }
+  return receipt;
+}
+
+function personnelLearningCompetencyIdentityRow({
+  id,
+  employeeNumber,
+  skillModuleId,
+  actorId,
+  occurredAt,
+}) {
+  const row = {
+    id,
+    employeeNumber,
+    skillModuleId,
+    receiptSha256: "",
+    createdBy: actorId,
+    createdAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningCompetencyReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningCompetencyRevisionRow({
+  competencyId,
+  revisionNumber,
+  skillModuleId,
+  skillVersionNumber,
+  input,
+  changeType,
+  previousReceiptSha256 = "",
+  actorId,
+  occurredAt,
+}) {
+  const row = {
+    competencyId,
+    revisionNumber,
+    skillModuleId,
+    skillVersionNumber,
+    competencyLevel: input.competencyLevel,
+    trainerAuthorized: input.trainerAuthorized,
+    active: input.active,
+    changeType,
+    previousReceiptSha256,
+    receiptSha256: "",
+    changedBy: actorId,
+    changedAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningCompetencyRevisionReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningCompetencyAuditDetail({ revision, action }) {
+  return stablePersonnelLearningJson({
+    schemaVersion: 1,
+    action,
+    employeeNumber: String(revision.employeeNumber || ""),
+    skillModuleId: String(revision.skillModuleId || ""),
+    skillVersionNumber: Number(revision.skillVersionNumber),
+    competencyLevel: Number(revision.competencyLevel),
+    trainerAuthorized: Boolean(revision.trainerAuthorized),
+    active: Boolean(revision.active),
+    revisionNumber: Number(revision.revisionNumber),
+    receiptSha256: String(revision.receiptSha256 || ""),
+  });
+}
+
+function personnelLearningAssignmentStateOrUnavailable(assignment, revisions) {
+  try {
+    return buildPersonnelLearningAssignmentState({ assignment, revisions });
+  } catch (error) {
+    if (error instanceof PersonnelLearningCatalogError) {
+      throw httpError(
+        503,
+        "Die revisionsgebundene Schulungszuweisung ist inkonsistent.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+      );
+    }
+    throw error;
+  }
+}
+
+function personnelLearningProcessAppliesToEmployee(version, employee, actor) {
+  const employeeScope = personnelLearningCompetencyEmployeeScope(employee, actor);
+  if (!employeeScope) return false;
+  const processScope = personnelLearningScopeFromVersion(version);
+  if (processScope.type === "organization") return true;
+  if (processScope.locationId !== employeeScope.locationId) return false;
+  if (processScope.type === "location") return true;
+  return processScope.type === "department"
+    && Number(processScope.departmentId || 0) === Number(employeeScope.departmentId || 0);
+}
+
+function personnelLearningAssignmentExpectedReceipt(value) {
+  const receipt = String(value || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(receipt)) {
+    throw httpError(
+      400,
+      "Bitte den aktuellen Revisionsbeleg der Schulungszuweisung übermitteln.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_REVISION_REQUIRED",
+    );
+  }
+  return receipt;
+}
+
+function normalizePersonnelLearningAssignmentInput(value, options = {}) {
+  try {
+    return normalizePersonnelLearningAssignmentMutation(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function personnelLearningAssignmentIdentityRow({
+  id,
+  processModuleId,
+  learnerEmployeeNumber,
+  actorId,
+  occurredAt,
+}) {
+  const row = {
+    id,
+    processModuleId,
+    learnerEmployeeNumber,
+    receiptSha256: "",
+    createdBy: actorId,
+    createdAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningAssignmentReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningAssignmentRevisionRow({
+  assignmentId,
+  revisionNumber,
+  processModuleId,
+  processVersionNumber,
+  active,
+  trainerBindings,
+  changeType,
+  previousReceiptSha256 = "",
+  actorId,
+  occurredAt,
+}) {
+  const normalizedBindings = normalizePersonnelLearningTrainerBindings(trainerBindings);
+  const row = {
+    assignmentId,
+    revisionNumber,
+    processModuleId,
+    processVersionNumber,
+    active,
+    trainerBindings: normalizedBindings,
+    trainerBindingsSha256: personnelLearningTrainerBindingsSha256(normalizedBindings),
+    changeType,
+    previousReceiptSha256,
+    receiptSha256: "",
+    changedBy: actorId,
+    changedAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningAssignmentRevisionReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningAssignmentAuditDetail({ assignment, revision, action }) {
+  return stablePersonnelLearningJson({
+    schemaVersion: 1,
+    action,
+    assignmentId: String(assignment.id || ""),
+    processModuleId: String(assignment.processModuleId || ""),
+    processVersionNumber: Number(revision.processVersionNumber),
+    learnerEmployeeNumber: String(assignment.learnerEmployeeNumber || ""),
+    active: Boolean(revision.active),
+    revisionNumber: Number(revision.revisionNumber),
+    trainerBindingCount: revision.trainerBindings.length,
+    trainerEmployeeCount: new Set(revision.trainerBindings.map((binding) => (
+      binding.trainerEmployeeNumber
+    ))).size,
+    trainerCompetencyIds: revision.trainerBindings.map((binding) => binding.competencyId),
+    trainerBindingsSha256: String(revision.trainerBindingsSha256 || ""),
+    receiptSha256: String(revision.receiptSha256 || ""),
+  });
+}
+
+function personnelLearningProgressStateOrUnavailable(revisions, processSteps) {
+  try {
+    return buildPersonnelLearningProgressState({ revisions, processSteps });
+  } catch (error) {
+    if (error instanceof PersonnelLearningCatalogError) {
+      throw httpError(
+        503,
+        "Die revisionsgebundene Fortschrittshistorie ist inkonsistent.",
+        "PERSONNEL_LEARNING_PROGRESS_HISTORY_INVALID",
+      );
+    }
+    throw error;
+  }
+}
+
+function personnelLearningProgressExpectedReceipt(value, current) {
+  const receipt = String(value || "").trim().toLowerCase();
+  if (!current) {
+    if (receipt) {
+      throw httpError(
+        409,
+        "Der Schulungsfortschritt wurde zwischenzeitlich angelegt. Bitte neu laden.",
+        "PERSONNEL_LEARNING_PROGRESS_CONCURRENT_CHANGE",
+      );
+    }
+    return "";
+  }
+  if (!/^[a-f0-9]{64}$/.test(receipt)) {
+    throw httpError(
+      400,
+      "Bitte den aktuellen Revisionsbeleg des Schulungsfortschritts übermitteln.",
+      "PERSONNEL_LEARNING_PROGRESS_REVISION_REQUIRED",
+    );
+  }
+  if (receipt !== String(current.currentReceipt || "")) {
+    throw httpError(
+      409,
+      "Der Schulungsfortschritt wurde zwischenzeitlich geändert. Bitte neu laden.",
+      "PERSONNEL_LEARNING_PROGRESS_CONCURRENT_CHANGE",
+    );
+  }
+  return receipt;
+}
+
+function normalizePersonnelLearningProgressInput(value, options = {}) {
+  try {
+    return normalizePersonnelLearningProgressMutation(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function personnelLearningProgressRevisionRow({
+  assignment,
+  assignmentState,
+  progressState,
+  processVersion,
+  input,
+  actorId,
+  actorKind,
+  occurredAt,
+}) {
+  const processSteps = processVersion.content?.steps || [];
+  const row = {
+    assignmentId: String(assignment.id),
+    revisionNumber: Number(progressState?.revisionNumber || 0) + 1,
+    assignmentRevisionReceiptSha256: String(assignmentState.currentReceipt || ""),
+    processModuleId: String(assignment.processModuleId),
+    processVersionNumber: Number(assignmentState.current.processVersionNumber),
+    stepStates: input.stepStates,
+    stepStatesSha256: personnelLearningProgressStepStatesSha256(
+      input.stepStates,
+      processSteps,
+    ),
+    totalStepCount: Number(input.totalStepCount),
+    completedStepCount: Number(input.completedStepCount),
+    requiredStepCount: Number(input.requiredStepCount),
+    requiredCompletedCount: Number(input.requiredCompletedCount),
+    finalized: Boolean(input.finalized),
+    result: String(input.result),
+    assessmentNote: String(input.assessmentNote || ""),
+    changeType: String(input.changeType),
+    correctionReason: String(input.correctionReason || ""),
+    previousReceiptSha256: String(progressState?.currentReceipt || ""),
+    receiptSha256: "",
+    actorKind,
+    changedBy: actorId,
+    changedAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningProgressRevisionReceiptSha256(
+    row,
+    processSteps,
+  );
+  return row;
+}
+
+function personnelLearningProgressAuditDetail({ assignment, revision }) {
+  return stablePersonnelLearningJson({
+    schemaVersion: 1,
+    assignmentId: String(assignment.id || ""),
+    processModuleId: String(assignment.processModuleId || ""),
+    processVersionNumber: Number(revision.processVersionNumber),
+    learnerEmployeeNumber: String(assignment.learnerEmployeeNumber || ""),
+    revisionNumber: Number(revision.revisionNumber),
+    changeType: String(revision.changeType || ""),
+    actorKind: String(revision.actorKind || ""),
+    completedStepCount: Number(revision.completedStepCount),
+    totalStepCount: Number(revision.totalStepCount),
+    requiredCompletedCount: Number(revision.requiredCompletedCount),
+    requiredStepCount: Number(revision.requiredStepCount),
+    finalized: Boolean(revision.finalized),
+    result: String(revision.result || ""),
+    assessmentNotePresent: Boolean(revision.assessmentNote),
+    correctionReasonPresent: Boolean(revision.correctionReason),
+    stepStatesSha256: String(revision.stepStatesSha256 || ""),
+    receiptSha256: String(revision.receiptSha256 || ""),
+  });
+}
+
+function personnelLearningAssignmentProcessProjection(bundle) {
+  const version = bundle.state.publishedVersion;
+  if (!version || bundle.catalogEntity !== "process") return null;
+  return {
+    id: String(bundle.module.id),
+    moduleCode: String(bundle.module.moduleCode || ""),
+    moduleType: String(bundle.module.moduleType || ""),
+    title: String(version.title || ""),
+    summary: String(version.content?.summary || ""),
+    objective: String(version.content?.objective || ""),
+    estimatedMinutes: Number(version.content?.estimatedMinutes || 0),
+    verificationMode: String(version.content?.verificationMode || ""),
+    scope: publicPersonnelLearningVersion(version).scope,
+    publishedVersionNumber: Number(bundle.state.publishedVersionNumber),
+  };
+}
+
+function personnelLearningAssignmentTrainerEvidence({
+  competency,
+  competencyState,
+  employee,
+  skillBundle,
+}) {
+  const current = competencyState.current;
+  const skillVersion = skillBundle.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(current.skillVersionNumber)
+  ));
+  if (!skillVersion) return null;
+  return {
+    competencyId: String(competency.id),
+    competencyRevisionNumber: Number(current.revisionNumber),
+    competencyRevisionReceipt: String(current.receiptSha256 || ""),
+    trainerEmployeeNumber: String(employee.personnel_number || ""),
+    trainerName: String(employee.full_name || ""),
+    trainerLocationId: String(employee.home_location_id || ""),
+    trainerLocationName: String(employee.home_location_name || employee.home_location_id || ""),
+    trainerDepartmentId: Number(employee.preferred_department_id || 0) || null,
+    trainerDepartmentName: String(employee.preferred_department_name || ""),
+    skillModuleId: String(competency.skillModuleId),
+    skillCode: String(skillBundle.module.moduleCode || ""),
+    skillTitle: String(skillVersion.title || ""),
+    skillCategory: String(skillVersion.content?.category || ""),
+    skillVersionNumber: Number(current.skillVersionNumber),
+    competencyLevel: Number(current.competencyLevel),
+  };
+}
+
+async function personnelLearningAssignmentProjectionContext(
+  actor,
+  {
+    learningRepository = personnelLearningRepository,
+    organizationRepository = organizationPersonnelRepository,
+    requireCapability = true,
+  } = {},
+) {
+  if (requireCapability) assertPersonnelLearningCompetencyCapability(actor);
+  const [employees, modules, competencies, competencyRevisions, assignments,
+    assignmentRevisions, progressRevisions] = await Promise.all([
+    organizationRepository.listEmployees(),
+    learningRepository.listModules(),
+    learningRepository.listCompetencies(),
+    learningRepository.listCompetencyRevisions(),
+    learningRepository.listAssignments(),
+    learningRepository.listAssignmentRevisions(),
+    learningRepository.listProgressRevisions(),
+  ]);
+  const employeeByNumber = new Map(employees.map((employee) => [
+    String(employee.personnel_number),
+    employee,
+  ]));
+  const bundles = new Map();
+  for (const module of modules) {
+    bundles.set(
+      String(module.id),
+      await personnelLearningModuleBundle(module.id, learningRepository),
+    );
+  }
+  const competencyRevisionsById = new Map();
+  for (const revision of competencyRevisions) {
+    const rows = competencyRevisionsById.get(revision.competencyId) || [];
+    rows.push(revision);
+    competencyRevisionsById.set(revision.competencyId, rows);
+  }
+  const competencyStateById = new Map();
+  const competencyById = new Map();
+  for (const competency of competencies) {
+    competencyById.set(String(competency.id), competency);
+    competencyStateById.set(
+      String(competency.id),
+      personnelLearningCompetencyStateOrUnavailable(
+        competency,
+        competencyRevisionsById.get(competency.id) || [],
+      ),
+    );
+  }
+  const assignmentRevisionsById = new Map();
+  for (const revision of assignmentRevisions) {
+    const rows = assignmentRevisionsById.get(revision.assignmentId) || [];
+    rows.push(revision);
+    assignmentRevisionsById.set(revision.assignmentId, rows);
+  }
+  const progressRevisionsByAssignmentId = new Map();
+  for (const revision of progressRevisions) {
+    const rows = progressRevisionsByAssignmentId.get(revision.assignmentId) || [];
+    rows.push(revision);
+    progressRevisionsByAssignmentId.set(revision.assignmentId, rows);
+  }
+  return Object.freeze({
+    actor,
+    learningRepository,
+    organizationRepository,
+    employees: Object.freeze(employees),
+    employeeByNumber,
+    bundles,
+    competencies: Object.freeze(competencies),
+    competencyById,
+    competencyStateById,
+    assignments: Object.freeze(assignments),
+    assignmentRevisionsById,
+    progressRevisionsByAssignmentId,
+  });
+}
+
+function personnelLearningCurrentTrainerEvidence(context) {
+  const evidence = [];
+  for (const competency of context.competencies) {
+    const state = context.competencyStateById.get(String(competency.id));
+    const employee = context.employeeByNumber.get(String(competency.employeeNumber));
+    const skillBundle = context.bundles.get(String(competency.skillModuleId));
+    if (!state?.active || !state.trainerAuthorized || !employee?.active
+      || !skillBundle || skillBundle.catalogEntity !== "skill"
+      || !personnelLearningCompetencyEmployeeAllowed(context.actor, employee)) continue;
+    const boundVersion = skillBundle.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(state.current.skillVersionNumber)
+    ));
+    if (!boundVersion || !personnelLearningScopeAccess(
+      context.actor.access,
+      personnelLearningScopeFromVersion(boundVersion),
+    )) continue;
+    const row = personnelLearningAssignmentTrainerEvidence({
+      competency,
+      competencyState: state,
+      employee,
+      skillBundle,
+    });
+    if (row) evidence.push(row);
+  }
+  return evidence.sort((left, right) => (
+    left.trainerName.localeCompare(right.trainerName, "de-AT", { sensitivity: "base" })
+    || left.skillTitle.localeCompare(right.skillTitle, "de-AT", { sensitivity: "base" })
+  ));
+}
+
+function personnelLearningProgressLeadershipAllowed(actor, learner) {
+  if (!learner || actor.access?.canWriteAssignments !== true) return false;
+  const targetScope = personnelLearningCompetencyEmployeeScope(learner, actor);
+  if (!targetScope) return false;
+  if (actor.access.localSystem === true || actor.access.plPlus === true
+    || actor.access.canAssignCrossLocation === true) return true;
+  const actorScope = actor.access.organizationScope;
+  if (!actorScope || actorScope.locationId !== targetScope.locationId) return false;
+  if (actor.access.role === "manager") return true;
+  return actor.access.role === "department_manager"
+    && Number(actorScope.departmentId || 0) === Number(targetScope.departmentId || 0);
+}
+
+function personnelLearningProgressAccess({
+  actor,
+  assignmentState,
+  progressState,
+  learner,
+  processVersion,
+  context,
+}) {
+  const actorId = String(actor.actorId || "");
+  const leadership = personnelLearningProgressLeadershipAllowed(actor, learner);
+  const branchAccount = actor.access?.branchDashboard === true
+    && String(actor.access.branchDashboardLocationId || "")
+      === String(learner?.home_location_id || "");
+  const learnerSelf = actorId === String(learner?.personnel_number || "");
+  const trainerBinding = assignmentState.trainerBindings.find((binding) => (
+    binding.trainerEmployeeNumber === actorId
+  ));
+  const trainerEmployee = context.employeeByNumber.get(actorId);
+  const trainerState = trainerBinding
+    ? context.competencyStateById.get(trainerBinding.competencyId) : null;
+  const trainer = Boolean(trainerBinding)
+    && Boolean(trainerEmployee?.active)
+    && Boolean(trainerState?.active)
+    && Boolean(trainerState?.trainerAuthorized)
+    && String(trainerState?.currentReceipt || "")
+      === String(trainerBinding.competencyRevisionReceipt || "");
+  const verificationMode = String(processVersion.content?.verificationMode || "");
+  const finalizer = !branchAccount && (leadership
+    || (verificationMode === "self_confirmation" ? learnerSelf : trainer));
+  const active = Boolean(assignmentState.active);
+  const canRead = branchAccount || leadership || learnerSelf || trainer;
+  const canCorrect = Boolean(progressState?.hasFinalizedRevision)
+    && !branchAccount
+    && (leadership || (active && finalizer));
+  const canRecord = active
+    && canRead
+    && (!progressState?.hasFinalizedRevision || canCorrect);
+  return Object.freeze({
+    canRead,
+    canRecord,
+    canFinalize: active && finalizer,
+    canCorrect,
+    actorKind: branchAccount
+      ? "branch_account" : leadership ? "leadership" : trainer ? "trainer" : "learner",
+    branchAccount,
+    leadership,
+    trainer,
+    learnerSelf,
+  });
+}
+
+function personnelLearningProgressStatus(progressState) {
+  if (!progressState?.current) return "not_started";
+  if (!progressState.finalized) return "in_progress";
+  if (progressState.result === "passed") return "completed_passed";
+  if (progressState.result === "follow_up_required") return "completed_follow_up_required";
+  return "completed_not_passed";
+}
+
+function publicPersonnelLearningProgress({
+  progressState,
+  processVersion,
+  access,
+  canReadAudit = false,
+}) {
+  const stateByStepId = new Map(progressState.stepStates.map((step) => [
+    step.stepId,
+    Boolean(step.completed),
+  ]));
+  return {
+    status: personnelLearningProgressStatus(progressState),
+    revisionNumber: Number(progressState.revisionNumber),
+    currentRevisionReceipt: progressState.currentReceipt || null,
+    completedStepCount: Number(progressState.completedStepCount),
+    totalStepCount: Number(progressState.totalStepCount),
+    requiredCompletedCount: Number(progressState.requiredCompletedCount),
+    requiredStepCount: Number(progressState.requiredStepCount),
+    percent: Number(progressState.progressPercent),
+    finalized: Boolean(progressState.finalized),
+    hasFinalizedRevision: Boolean(progressState.hasFinalizedRevision),
+    result: String(progressState.result || "pending"),
+    assessmentNote: String(progressState.current?.assessmentNote || ""),
+    correctionReason: String(progressState.current?.correctionReason || ""),
+    updatedAt: progressState.current ? String(progressState.current.changedAt || "") : null,
+    verificationMode: String(processVersion.content?.verificationMode || ""),
+    steps: (processVersion.content?.steps || []).map((step, index) => ({
+      stepId: String(step.stepId || ""),
+      order: index + 1,
+      title: String(step.title || ""),
+      instruction: String(step.instruction || ""),
+      completionCriteria: String(step.completionCriteria || ""),
+      required: step.required !== false,
+      completed: stateByStepId.get(String(step.stepId || "")) === true,
+    })),
+    capabilities: {
+      canRecord: access.canRecord,
+      canFinalize: access.canFinalize,
+      canCorrect: access.canCorrect,
+    },
+    history: progressState.revisions.map((revision) => ({
+      revisionNumber: Number(revision.revisionNumber),
+      changeType: String(revision.changeType || ""),
+      actorKind: String(revision.actorKind || ""),
+      completedStepCount: Number(revision.completedStepCount),
+      totalStepCount: Number(revision.totalStepCount),
+      finalized: Boolean(revision.finalized),
+      result: String(revision.result || "pending"),
+      assessmentNote: String(revision.assessmentNote || ""),
+      correctionReason: String(revision.correctionReason || ""),
+      changedAt: String(revision.changedAt || ""),
+      ...(canReadAudit ? {
+        changedBy: String(revision.changedBy || ""),
+        receiptSha256: String(revision.receiptSha256 || ""),
+      } : {}),
+    })),
+  };
+}
+
+function publicPersonnelLearningAssignment(assignment, state, context) {
+  const learner = context.employeeByNumber.get(String(assignment.learnerEmployeeNumber));
+  const processBundle = context.bundles.get(String(assignment.processModuleId));
+  const processVersion = processBundle?.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(state.current.processVersionNumber)
+  ));
+  if (!learner || !processBundle || processBundle.catalogEntity !== "process" || !processVersion) {
+    throw httpError(
+      503,
+      "Die gebundene Prozessversion der Schulungszuweisung fehlt.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+    );
+  }
+  const progressState = personnelLearningProgressStateOrUnavailable(
+    context.progressRevisionsByAssignmentId.get(String(assignment.id)) || [],
+    processVersion.content?.steps || [],
+  );
+  const progressAccess = personnelLearningProgressAccess({
+    actor: context.actor,
+    assignmentState: state,
+    progressState,
+    learner,
+    processVersion,
+    context,
+  });
+  const canManageLearner = personnelLearningCompetencyEmployeeAllowed(context.actor, learner);
+  const trainerBindings = state.trainerBindings.map((binding) => {
+    const employee = context.employeeByNumber.get(binding.trainerEmployeeNumber);
+    const competency = context.competencyById.get(binding.competencyId);
+    const currentState = context.competencyStateById.get(binding.competencyId);
+    const skillBundle = context.bundles.get(binding.skillModuleId);
+    const boundSkillVersion = skillBundle?.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(binding.skillVersionNumber)
+    ));
+    if (!employee || !competency || !skillBundle || !boundSkillVersion) {
+      throw httpError(
+        503,
+        "Ein gebundener Trainer-Kompetenzbeleg fehlt.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+      );
+    }
+    const usesCurrentCompetencyRevision = String(currentState?.currentReceipt || "")
+      === String(binding.competencyRevisionReceipt || "");
+    const currentEligible = Boolean(employee.active)
+      && Boolean(currentState?.active)
+      && Boolean(currentState?.trainerAuthorized)
+      && usesCurrentCompetencyRevision;
+    return {
+      ...binding,
+      trainerName: String(employee.full_name || binding.trainerEmployeeNumber),
+      trainerLocationName: String(
+        employee.home_location_name || employee.home_location_id || "",
+      ),
+      trainerDepartmentName: String(employee.preferred_department_name || ""),
+      skillCode: String(skillBundle.module.moduleCode || ""),
+      skillTitle: String(boundSkillVersion.title || ""),
+      skillCategory: String(boundSkillVersion.content?.category || ""),
+      currentEligible,
+      usesCurrentCompetencyRevision,
+    };
+  });
+  const canReadAudit = context.actor.access.canReadAudit === true;
+  return {
+    id: String(assignment.id),
+    processId: String(assignment.processModuleId),
+    processCode: String(processBundle.module.moduleCode || ""),
+    processType: String(processBundle.module.moduleType || ""),
+    processTitle: String(processVersion.title || ""),
+    processSummary: String(processVersion.content?.summary || ""),
+    processVerificationMode: String(processVersion.content?.verificationMode || ""),
+    processVersionNumber: Number(state.current.processVersionNumber),
+    currentPublishedVersionNumber: Number(processBundle.state.publishedVersionNumber || 0) || null,
+    usesCurrentPublishedVersion: Number(state.current.processVersionNumber)
+      === Number(processBundle.state.publishedVersionNumber || 0),
+    learner: personnelLearningCompetencyEmployeeProjection(learner),
+    active: Boolean(state.active),
+    revisionNumber: Number(state.revisionNumber),
+    currentRevisionReceipt: String(state.currentReceipt || ""),
+    updatedAt: String(state.current.changedAt || ""),
+    trainersCurrent: trainerBindings.every((binding) => binding.currentEligible),
+    trainerBindings,
+    capabilities: {
+      canEdit: canManageLearner && !processBundle.state.archived,
+      canCancel: canManageLearner && Boolean(state.active),
+      canRestore: canManageLearner && !state.active && !processBundle.state.archived,
+      canRecordProgress: progressAccess.canRecord,
+      canFinalizeProgress: progressAccess.canFinalize,
+      canCorrectProgress: progressAccess.canCorrect,
+      canReadAudit,
+    },
+    progress: publicPersonnelLearningProgress({
+      progressState,
+      processVersion,
+      access: progressAccess,
+      canReadAudit,
+    }),
+    history: (canReadAudit ? state.revisions : [state.current]).map((revision) => ({
+      revisionNumber: Number(revision.revisionNumber),
+      processVersionNumber: Number(revision.processVersionNumber),
+      active: Boolean(revision.active),
+      changeType: String(revision.changeType || ""),
+      trainerBindingCount: revision.trainerBindings.length,
+      trainerEmployeeCount: new Set(revision.trainerBindings.map((binding) => (
+        binding.trainerEmployeeNumber
+      ))).size,
+      changedAt: String(revision.changedAt || ""),
+      ...(canReadAudit ? {
+        changedBy: String(revision.changedBy || ""),
+        receiptSha256: String(revision.receiptSha256 || ""),
+      } : {}),
+    })),
+  };
+}
+
+async function personnelLearningAssignmentPayload(
+  actor,
+  repositories = {},
+) {
+  const context = await personnelLearningAssignmentProjectionContext(actor, repositories);
+  const visibleLearners = context.employees.filter((employee) => (
+    personnelLearningCompetencyEmployeeAllowed(actor, employee)
+  ));
+  const visibleLearnerNumbers = new Set(visibleLearners.map((employee) => (
+    String(employee.personnel_number)
+  )));
+  const processes = [...context.bundles.values()].filter((bundle) => (
+    bundle.catalogEntity === "process"
+    && !bundle.state.archived
+    && bundle.state.publishedVersion
+    && personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(bundle.state.publishedVersion),
+    )
+  )).map(personnelLearningAssignmentProcessProjection).filter(Boolean)
+    .map((process) => ({
+      ...process,
+      applicableLearnerEmployeeNumbers: visibleLearners.filter((employee) => (
+        personnelLearningProcessAppliesToEmployee(
+          context.bundles.get(process.id).state.publishedVersion,
+          employee,
+          actor,
+        )
+      )).map((employee) => String(employee.personnel_number)),
+    })).sort((left, right) => left.title.localeCompare(right.title, "de-AT", {
+      sensitivity: "base",
+    }));
+  const assignments = [];
+  for (const assignment of context.assignments) {
+    if (!visibleLearnerNumbers.has(String(assignment.learnerEmployeeNumber))) continue;
+    const state = personnelLearningAssignmentStateOrUnavailable(
+      assignment,
+      context.assignmentRevisionsById.get(assignment.id) || [],
+    );
+    const bundle = context.bundles.get(String(assignment.processModuleId));
+    const version = bundle?.state.versions.find((candidate) => (
+      Number(candidate.versionNumber) === Number(state.current.processVersionNumber)
+    ));
+    if (!version || !personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(version),
+    )) continue;
+    assignments.push(publicPersonnelLearningAssignment(assignment, state, context));
+  }
+  const trainers = personnelLearningCurrentTrainerEvidence(context);
+  return {
+    generatedAt: new Date().toISOString(),
+    capabilities: {
+      canWriteAssignments: actor.access.canWriteAssignments === true,
+      canAssignCrossLocation: actor.access.canAssignCrossLocation === true,
+      canReadAudit: actor.access.canReadAudit === true,
+    },
+    summary: {
+      activeAssignments: assignments.filter((assignment) => assignment.active).length,
+      learners: new Set(assignments.filter((assignment) => assignment.active)
+        .map((assignment) => assignment.learner.employeeNumber)).size,
+      trainerEmployees: new Set(assignments.filter((assignment) => assignment.active)
+        .flatMap((assignment) => assignment.trainerBindings)
+        .map((binding) => binding.trainerEmployeeNumber)).size,
+      notStarted: assignments.filter((assignment) => (
+        assignment.active && assignment.progress.status === "not_started"
+      )).length,
+      inProgress: assignments.filter((assignment) => (
+        assignment.active && assignment.progress.status === "in_progress"
+      )).length,
+      completed: assignments.filter((assignment) => (
+        assignment.progress.finalized
+      )).length,
+      followUpRequired: assignments.filter((assignment) => (
+        assignment.progress.result === "follow_up_required"
+      )).length,
+      attentionRequired: assignments.filter((assignment) => (
+        assignment.active && (!assignment.trainersCurrent
+          || ["follow_up_required", "not_passed"].includes(assignment.progress.result))
+      )).length,
+    },
+    learners: visibleLearners.map(personnelLearningCompetencyEmployeeProjection),
+    processes,
+    trainers,
+    assignments: assignments.sort((left, right) => (
+      left.learner.fullName.localeCompare(right.learner.fullName, "de-AT", {
+        sensitivity: "base",
+      }) || left.processTitle.localeCompare(right.processTitle, "de-AT", {
+        sensitivity: "base",
+      })
+    )),
+  };
+}
+
+function resolvedPersonnelLearningTrainerBindings({
+  actor,
+  learnerEmployeeNumber,
+  trainerCompetencyIds,
+  context,
+}) {
+  const resolved = trainerCompetencyIds.map((competencyId) => {
+    const competency = context.competencyById.get(String(competencyId));
+    const competencyState = context.competencyStateById.get(String(competencyId));
+    const employee = competency
+      ? context.employeeByNumber.get(String(competency.employeeNumber)) : null;
+    const skillBundle = competency
+      ? context.bundles.get(String(competency.skillModuleId)) : null;
+    if (!competency || !competencyState || !employee?.active
+      || String(employee.personnel_number) === String(learnerEmployeeNumber)
+      || !competencyState.active || !competencyState.trainerAuthorized
+      || !skillBundle || skillBundle.catalogEntity !== "skill"
+      || !personnelLearningCompetencyEmployeeAllowed(actor, employee)) {
+      throw httpError(
+        409,
+        "Mindestens eine ausgewählte Trainerfreigabe ist nicht mehr wirksam.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_TRAINER_NOT_ELIGIBLE",
+      );
+    }
+    const skillVersion = skillBundle.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(competencyState.current.skillVersionNumber)
+    ));
+    if (!skillVersion || !personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(skillVersion),
+    )) {
+      throw httpError(
+        403,
+        "Mindestens eine Trainerfähigkeit liegt außerhalb des aktuell freigegebenen Bereichs.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_TRAINER_SCOPE_DENIED",
+      );
+    }
+    return {
+      competencyId: String(competency.id),
+      competencyRevisionNumber: Number(competencyState.revisionNumber),
+      competencyRevisionReceipt: String(competencyState.currentReceipt),
+      trainerEmployeeNumber: String(employee.personnel_number),
+      skillModuleId: String(competency.skillModuleId),
+      skillVersionNumber: Number(competencyState.current.skillVersionNumber),
+      competencyLevel: Number(competencyState.current.competencyLevel),
+    };
+  });
+  try {
+    return normalizePersonnelLearningTrainerBindings(resolved);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function personnelLearningExpectedEventReceipt(value) {
+  const receipt = String(value || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(receipt)) {
+    throw httpError(
+      400,
+      "Bitte den aktuellen Revisionsbeleg des Katalogeintrags übermitteln.",
+      "PERSONNEL_LEARNING_REVISION_REQUIRED",
+    );
+  }
+  return receipt;
+}
+
+function assertPersonnelLearningEventRevision(state, expectedReceipt) {
+  if (state.currentEventReceipt !== expectedReceipt) {
+    throw httpError(
+      409,
+      "Der Katalogeintrag wurde zwischenzeitlich geändert. Bitte den aktuellen Stand neu laden.",
+      "PERSONNEL_LEARNING_CONCURRENT_CHANGE",
+    );
+  }
+}
+
+function personnelLearningModuleRow({ id, input, actorId, occurredAt }) {
+  const row = {
+    id,
+    moduleCode: input.moduleCode,
+    moduleType: input.moduleType,
+    receiptSha256: "",
+    createdBy: actorId,
+    createdAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningModuleReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningVersionRow({
+  moduleId,
+  versionNumber,
+  input,
+  scopeSnapshot,
+  previousReceiptSha256 = "",
+  actorId,
+  occurredAt,
+}) {
+  const contentSha256 = personnelLearningSha256(stablePersonnelLearningJson(input.content));
+  const scopeSnapshotSha256 = personnelLearningSha256(
+    stablePersonnelLearningJson(scopeSnapshot),
+  );
+  const row = {
+    moduleId,
+    versionNumber,
+    title: input.title,
+    content: input.content,
+    contentSha256,
+    scopeType: input.scope.type,
+    scopeLocationId: input.scope.locationId,
+    scopeDepartmentId: input.scope.departmentId,
+    scopeSnapshot,
+    scopeSnapshotSha256,
+    previousReceiptSha256,
+    receiptSha256: "",
+    createdBy: actorId,
+    createdAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningVersionReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningEventRow({
+  moduleId,
+  sequenceNumber,
+  eventType,
+  moduleVersionNumber = null,
+  eventPayload,
+  previousReceiptSha256 = "",
+  actorId,
+  occurredAt,
+}) {
+  const row = {
+    id: `learning-event:${crypto.randomUUID()}`,
+    moduleId,
+    sequenceNumber,
+    eventType,
+    moduleVersionNumber,
+    eventPayload,
+    eventPayloadSha256: personnelLearningSha256(stablePersonnelLearningJson(eventPayload)),
+    previousReceiptSha256,
+    receiptSha256: "",
+    actorId,
+    occurredAt,
+  };
+  row.receiptSha256 = personnelLearningEventReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningAuditDetail({ bundle, action, version = null }) {
+  const state = bundle.state;
+  return stablePersonnelLearningJson({
+    schemaVersion: 1,
+    action,
+    moduleType: bundle.module.moduleType,
+    versionNumber: version ? Number(version.versionNumber) : null,
+    scopeType: version ? String(version.scopeType) : null,
+    contentSha256: version ? String(version.contentSha256) : null,
+    scopeSnapshotSha256: version ? String(version.scopeSnapshotSha256) : null,
+    eventReceiptSha256: state.currentEventReceipt,
+  });
+}
+
+async function personnelLearningCatalogSerializableTransaction(work) {
+  try {
+    return await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      return work(repositories);
+    }, { isolation: "serializable" });
+  } catch (error) {
+    if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)
+      || isUniquePersistenceViolation(error)) {
+      throw httpError(
+        409,
+        "Der Schulungs- und Wissenskatalog wurde gleichzeitig geändert. Bitte neu laden.",
+        "PERSONNEL_LEARNING_CONCURRENT_CHANGE",
+      );
+    }
+    throw error;
+  }
+}
+
+async function personnelLearningOrganizationScopeDeltas(
+  repository,
+  { locationAfter = null, departmentAfter = null, portalUserRows = null } = {},
+) {
+  const [locations, departments, users] = await Promise.all([
+    repository.listLocations(true),
+    repository.listDepartments(true),
+    portalUserRows ? Promise.resolve(portalUserRows) : repository.listPortalUsersForAdmin(),
+  ]);
+  const afterLocations = locationAfter ? locations.map((location) => (
+    String(location.id) === String(locationAfter.id)
+      ? { ...location, active: Boolean(locationAfter.active) }
+      : location
+  )) : locations;
+  const afterDepartments = departmentAfter ? departments.map((department) => (
+    Number(department.id) === Number(departmentAfter.id)
+      ? {
+          ...department,
+          location_id: String(departmentAfter.locationId),
+          active: Boolean(departmentAfter.active),
+        }
+      : department
+  )) : departments;
+  const beforeContext = personnelLearningScopeContextFromRows(locations, departments);
+  const afterContext = personnelLearningScopeContextFromRows(afterLocations, afterDepartments);
+  const candidates = users.filter((user) => (
+    ["manager", "department_manager"].includes(String(user.role || ""))
+      && Boolean(user.active)
+      && Boolean(user.employee_active)
+  ));
+  const principals = await Promise.all(candidates.map(async (user) => ({
+    employeeNumber: String(user.personnel_number || ""),
+    employeeActive: true,
+    configured: true,
+    role: String(user.role),
+    active: true,
+    homeLocationId: String(user.home_location_id || ""),
+    preferredDepartmentId: Number(user.preferred_department_id || 0) || null,
+    scopes: (await repository.listPortalAccessScopes(user.personnel_number)).map((scope) => ({
+      locationId: String(scope.location_id || ""),
+      departmentId: Number(scope.department_id || 0) || null,
+    })),
+  })));
+  return principals.map((principal) => {
+    const scopeBefore = personnelLearningOrganizationScopeValue(principal, beforeContext);
+    const scopeAfter = personnelLearningOrganizationScopeValue(principal, afterContext);
+    return {
+      employeeNumber: principal.employeeNumber,
+      role: principal.role,
+      homeLocationId: principal.homeLocationId,
+      preferredDepartmentId: principal.preferredDepartmentId,
+      scopeBefore,
+      scopeAfter,
+    };
+  }).filter((delta) => (
+    personnelLearningOrganizationScopeKey(delta.scopeBefore)
+      !== personnelLearningOrganizationScopeKey(delta.scopeAfter)
+  )).sort((left, right) => left.employeeNumber.localeCompare(right.employeeNumber, "de-AT"));
+}
+
+function assertPersonnelLearningOrganizationScopeDeltasAllowed(actor, deltas = []) {
+  for (const delta of deltas) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      role: delta.role,
+      homeLocationId: delta.homeLocationId,
+      preferredDepartmentId: delta.preferredDepartmentId,
+    });
+  }
+}
+
+async function persistPersonnelLearningOrganizationScopeDeltas(
+  repository,
+  actor,
+  sourceType,
+  sourceId,
+  deltas = [],
+  reasonCode = "ORGANIZATION_TOPOLOGY_CHANGED",
+) {
+  for (const delta of deltas) {
+    await repository.revokePortalSessions(delta.employeeNumber);
+    await repository.revokeMobileSessions(
+      delta.employeeNumber,
+      "learning_organization_scope_changed",
+    );
+    await repository.insertAudit(
+      actor.employeeNumber,
+      "personnel.learning.organization-scope.update",
+      "portal_user",
+      delta.employeeNumber,
+      JSON.stringify({
+        schemaVersion: 1,
+        sourceType,
+        sourceId: String(sourceId),
+        scopeBefore: delta.scopeBefore,
+        scopeAfter: delta.scopeAfter,
+        reasonCode,
+      }),
+    );
+  }
+}
+
+async function personnelLearningEmployeeOrganizationScopeSnapshot(
+  repository,
+  employeeNumber,
+) {
+  const [principal, context] = await Promise.all([
+    personnelLearningPortalUser(employeeNumber, repository),
+    personnelLearningScopeContext(repository),
+  ]);
+  const role = String(principal?.role || "employee");
+  const inLearningScope = Boolean(
+    principal?.active
+      && principal?.employeeActive
+      && roleHasPersonnelLearningDefaults(role),
+  );
+  return Object.freeze({
+    role,
+    scope: inLearningScope
+      ? personnelLearningOrganizationScopeValue(principal, context)
+      : null,
+  });
+}
+
+function personnelLearningEmployeeOrganizationScopeDelta(
+  employeeNumber,
+  before,
+  after,
+) {
+  if (personnelLearningOrganizationScopeKey(before?.scope)
+    === personnelLearningOrganizationScopeKey(after?.scope)) return null;
+  return Object.freeze({
+    employeeNumber: String(employeeNumber),
+    role: String(after?.role || before?.role || "employee"),
+    scopeBefore: before?.scope || null,
+    scopeAfter: after?.scope || null,
+  });
+}
+
+function livePersonnelLearningAdministrationSession(actor) {
+  if (!actor || isLocalSystemSession(actor)) return actor;
+  return {
+    ...actor,
+    scopes: Array.isArray(actor.explicitScopes) ? actor.explicitScopes : [],
+  };
+}
+
+function locationAdministrationConcurrencySignature(location = {}) {
+  return JSON.stringify({
+    id: String(location.id || ""),
+    name: String(location.name || ""),
+    costCenterId: String(location.cost_center_id || ""),
+    minStaff: Number(location.min_staff || 0),
+    daySettingsJson: String(location.day_settings_json || ""),
+    timeTrackingEnabled: Boolean(location.time_tracking_enabled),
+    timeTrackingAccessMode: String(location.time_tracking_access_mode || "anywhere"),
+    timeTrackingAllowedNetworks: String(location.time_tracking_allowed_networks || ""),
+    timeTrackingVarianceMinutes: Number(location.time_tracking_variance_minutes ?? 15),
+    active: Boolean(location.active),
+  });
+}
+
+function departmentAdministrationConcurrencySignature(department = {}) {
+  return JSON.stringify({
+    id: Number(department.id || 0),
+    locationId: String(department.location_id || ""),
+    name: String(department.name || ""),
+    minStaff: Number(department.min_staff || 0),
+    active: Boolean(department.active),
+  });
+}
+
+function personnelLearningDenialRevision(user) {
+  const authority = user?.personnelLearningDenialAuthority;
+  if (!authority) return "";
+  const generationId = String(authority.generation_id || "").trim();
+  const revision = Number(authority.revision || 0);
+  return /^[0-9a-f]{32}$/.test(generationId) && Number.isSafeInteger(revision) && revision > 0
+    ? `${generationId}:${revision}`
+    : "";
+}
+
+function personnelLearningDelegationError(decision) {
+  const messages = {
+    [PERSONNEL_LEARNING_DELEGATION_CODES.INVALID_REQUEST]: "Bitte einen gültigen Rechtewert übermitteln.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.ACTOR_REQUIRED]: "Diese Rechtehierarchie steht nur aktiven persönlichen Zugängen zur Verfügung.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.ACTOR_ROLE_DENIED]: "Diese Rolle darf das filialübergreifende Schulungsrecht nicht verwalten.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.ACTOR_PERMISSION_DENIED]: "Das eigene filialübergreifende Schulungsrecht ist nicht wirksam.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.DEPARTMENT_MANAGER_CANNOT_DELEGATE]: "Eine Abteilungsleitung darf dieses Recht nicht weiterdelegieren.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.TARGET_NOT_FOUND]: "Der aktive Zielzugang wurde nicht gefunden.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.TARGET_ROLE_DENIED]: "Eine Filialleitung darf dieses Recht nur für Abteilungsleitungen verwalten.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.SELF_DELEGATION_DENIED]: "Das eigene Recht kann hier nicht verändert werden.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.TARGET_SCOPE_DENIED]: "Die Abteilungsleitung gehört nicht zur eigenen Filiale.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.PL_PLUS_DENIAL_PROTECTED]: "Ein von PL+ entzogener Zugriff kann durch die Filialleitung nicht wieder freigegeben werden.",
+  };
+  const status = decision?.code === PERSONNEL_LEARNING_DELEGATION_CODES.INVALID_REQUEST
+    ? 400
+    : decision?.code === PERSONNEL_LEARNING_DELEGATION_CODES.TARGET_NOT_FOUND
+      ? 404
+      : 403;
+  return httpError(
+    status,
+    messages[decision?.code] || "Die Änderung ist in dieser Rechtehierarchie nicht zulässig.",
+    decision?.code || "PERSONNEL_LEARNING_DELEGATION_DENIED",
+  );
 }
 
 async function validateVacationRequestDates(employeeNumber, body) {
@@ -11123,6 +13715,7 @@ const mobileLeadershipModules = Object.freeze([
   { id: "approvals", label: "Freigaben" },
   { id: "schedule", label: "Mein Dienstplan" },
   { id: "requests", label: "Meine Anträge" },
+  { id: "learning", label: "Schulungen" },
   { id: "more", label: "Mehr" },
 ]);
 const mobileLeadershipModuleIds = new Set(mobileLeadershipModules.map((module) => module.id));
@@ -11158,6 +13751,7 @@ function mobileModuleAllowedForSession(session, id) {
   if (id === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "sickness:read"].includes(permission));
   if (id === "schedule") return permissions.includes("own_schedule:read");
   if (id === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
+  if (id === "learning") return session?.isEmployee !== false;
   return id === "more";
 }
 
@@ -14259,10 +16853,13 @@ async function assertCostCenterTypeChangeAllowed(existing, value) {
   }
 }
 
-async function defaultCostCenterId(locationId = "") {
+async function defaultCostCenterId(
+  locationId = "",
+  repository = organizationPersonnelRepository,
+) {
   const [locations, costCenters] = await Promise.all([
-    organizationPersonnelRepository.listLocations(true),
-    organizationPersonnelRepository.listCostCenters(false),
+    repository.listLocations(true),
+    repository.listCostCenters(false),
   ]);
   const locationCostCenterId = locationId
     ? locations.find((location) => String(location.id) === String(locationId))?.cost_center_id
@@ -18502,8 +21099,13 @@ async function integrationConnectionRows(kind = "") {
   })).map(serializeIntegrationConnection);
 }
 
-async function integrationConnectionById(id, kind = "", options = {}) {
-  const row = await integrationRuntimeRepository.getConnection({
+async function integrationConnectionById(
+  id,
+  kind = "",
+  options = {},
+  repository = integrationRuntimeRepository,
+) {
+  const row = await repository.getConnection({
     id: String(id || ""),
     includeInactive: Boolean(options.includeInactive),
   });
@@ -18652,11 +21254,11 @@ function allowedSqlPersonnelColumns(configuration, columns) {
   return selected;
 }
 
-async function sqlPersonnelScopeContext(input = {}) {
+async function sqlPersonnelScopeContext(input = {}, repository = integrationRuntimeRepository) {
   if (!input || typeof input !== "object" || Array.isArray(input)) input = {};
   const costCenterId = String(input.costCenterId || input.defaultCostCenterId || "");
   const derivedLocationId = costCenterId
-    ? String((await integrationRuntimeRepository.locationForCostCenter({
+    ? String((await repository.locationForCostCenter({
       costCenterId,
     }))?.id || "")
     : "";
@@ -18692,7 +21294,11 @@ function integrationConnectionConfigurationFingerprint(connection) {
   }));
 }
 
-async function revalidateSqlPersonnelPreviewConnection(actor, preview) {
+async function revalidateSqlPersonnelPreviewConnection(
+  actor,
+  preview,
+  repository = integrationRuntimeRepository,
+) {
   assertGlobalSqlPersonnelImportActor(actor);
   assertIntegrationPermission(actor, "integrations:connections:read");
   if (!preview.connectionId || !preview.connectionFingerprint) {
@@ -18700,7 +21306,12 @@ async function revalidateSqlPersonnelPreviewConnection(actor, preview) {
   }
   let connection;
   try {
-    connection = await integrationConnectionById(preview.connectionId, "personnel_sql_source");
+    connection = await integrationConnectionById(
+      preview.connectionId,
+      "personnel_sql_source",
+      {},
+      repository,
+    );
   } catch (error) {
     if (error.code === "INTEGRATION_CONNECTION_NOT_FOUND") {
       throw httpError(409, "Die SQL-Verbindung wurde deaktiviert oder entfernt. Bitte die Daten erneut einlesen.", "INTEGRATION_CONNECTION_CHANGED");
@@ -18710,7 +21321,11 @@ async function revalidateSqlPersonnelPreviewConnection(actor, preview) {
   if (connection.public.status !== "ready") {
     throw httpError(409, "Die SQL-Verbindung ist nicht mehr einsatzbereit. Bitte die Verbindung erneut pr\u00fcfen und die Daten neu einlesen.", "INTEGRATION_CONNECTION_CHANGED");
   }
-  assertIntegrationConnectionScope(actor, connection, await sqlPersonnelScopeContext(preview.connectionScopeContext));
+  assertIntegrationConnectionScope(
+    actor,
+    connection,
+    await sqlPersonnelScopeContext(preview.connectionScopeContext, repository),
+  );
   if (integrationConnectionConfigurationFingerprint(connection) !== preview.connectionFingerprint) {
     throw httpError(409, "Die SQL-Verbindung wurde seit der Vorschau ge\u00e4ndert. Bitte die Daten erneut einlesen.", "INTEGRATION_CONNECTION_CHANGED");
   }
@@ -19106,6 +21721,17 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
   if (existing && existing.active && !candidate.active) {
     await assertEmployeeDestructiveMutationAllowed(actor, existing.personnel_number);
   }
+  if (existing) {
+    const portalTarget = await organizationPersonnelRepository
+      .getPortalMutationTarget(existing.personnel_number);
+    assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+      actor,
+      beforeEmployee: existing,
+      afterEmployee: candidate,
+      beforeRole: portalTarget?.role || "employee",
+      afterRole: portalTarget?.role || "employee",
+    });
+  }
   assertSessionContextScope(actor, { locationId: candidate.homeLocationId, departmentId: candidate.preferredDepartmentId });
   return candidate;
 }
@@ -19295,6 +21921,18 @@ async function applyPersonnelImport(actor, preview) {
     if (row.action === "update" && current.active && !validated.active) {
       await assertEmployeeDestructiveMutationAllowed(actor, current.personnel_number);
     }
+    const portalTarget = current
+      ? await organizationPersonnelRepository.getPortalMutationTarget(validated.personnelNumber)
+      : null;
+    if (current) {
+      assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+        actor,
+        beforeEmployee: current,
+        afterEmployee: validated,
+        beforeRole: portalTarget?.role || "employee",
+        afterRole: portalTarget?.role || "employee",
+      });
+    }
     preparedRows.push({
       action: row.action,
       expectedFingerprint: row.existingFingerprint,
@@ -19309,6 +21947,19 @@ async function applyPersonnelImport(actor, preview) {
       const repositories = createApplicationRepositories(executor);
       const repository = repositories.integrationRuntime;
       const organization = repositories.organizationPersonnel;
+      const liveLearningActor = await livePersonnelLearningRoleAdministrationActor(
+        actor,
+        organization,
+      );
+      assertLivePortalRoutePermission(liveLearningActor, "employees:import");
+      if (preview.sourceTransport === "sql_view") {
+        await revalidateSqlPersonnelPreviewConnection(
+          liveLearningActor,
+          preview,
+          repository,
+        );
+      }
+      const learningOrganizationScopeDeltas = [];
       for (const row of preparedRows) {
         const preparedCandidate = row.validated;
         const currentMatches = await employeeImportRowsCaseInsensitive(preparedCandidate.personnelNumber, repository);
@@ -19319,7 +21970,7 @@ async function applyPersonnelImport(actor, preview) {
           throw httpError(409, "Die Importvorschau ist veraltet. Stammdaten wurden inzwischen ge\u00e4ndert.", "IMPORT_PREVIEW_STALE");
         }
         if (current) {
-          assertSessionContextScope(actor, {
+          assertSessionContextScope(liveLearningActor, {
             locationId: current.home_location_id,
             departmentId: current.preferred_department_id,
           });
@@ -19332,7 +21983,38 @@ async function applyPersonnelImport(actor, preview) {
           allowInactiveDepartmentId: current?.preferred_department_id || 0,
           repository: organization,
         });
-        assertSessionContextScope(actor, {
+        const centralCostCenterDelta = importFieldMapped(preview.mapping, "costCenterId")
+          && (!current
+            || String(current.cost_center_id || "") !== String(candidate.costCenterId || ""));
+        if (centralCostCenterDelta && !sessionCanManageCentralPersonnel(liveLearningActor)) {
+          throw httpError(
+            403,
+            "Kostenstellen können nur in der zentralen Personalverwaltung importiert werden.",
+            "PERSONNEL_CENTRAL_WRITE_REQUIRED",
+          );
+        }
+        const livePortalTarget = current
+          ? await organization.getPortalMutationTarget(candidate.personnelNumber)
+          : null;
+        if (current) {
+          assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+            actor: liveLearningActor,
+            beforeEmployee: current,
+            afterEmployee: candidate,
+            beforeRole: livePortalTarget?.role || "employee",
+            afterRole: livePortalTarget?.role || "employee",
+          });
+        }
+        const observeLearningOrganizationScope = Boolean(
+          roleHasPersonnelLearningDefaults(livePortalTarget?.role),
+        );
+        const learningOrganizationScopeBefore = observeLearningOrganizationScope
+          ? await personnelLearningEmployeeOrganizationScopeSnapshot(
+            organization,
+            candidate.personnelNumber,
+          )
+          : null;
+        assertSessionContextScope(liveLearningActor, {
           locationId: candidate.homeLocationId,
           departmentId: candidate.preferredDepartmentId,
         });
@@ -19359,7 +22041,7 @@ async function applyPersonnelImport(actor, preview) {
         } else {
           if (deactivate) {
             await assertEmployeeDestructiveMutationAllowed(
-              actor,
+              liveLearningActor,
               candidate.personnelNumber,
               organization,
             );
@@ -19374,7 +22056,24 @@ async function applyPersonnelImport(actor, preview) {
             });
           }
         }
+        if (observeLearningOrganizationScope) {
+          const learningOrganizationScopeAfter = await personnelLearningEmployeeOrganizationScopeSnapshot(
+            organization,
+            candidate.personnelNumber,
+          );
+          const learningOrganizationScopeDelta = personnelLearningEmployeeOrganizationScopeDelta(
+            candidate.personnelNumber,
+            learningOrganizationScopeBefore,
+            learningOrganizationScopeAfter,
+          );
+          if (learningOrganizationScopeDelta) {
+            learningOrganizationScopeDeltas.push(learningOrganizationScopeDelta);
+          }
+        }
       }
+      learningOrganizationScopeDeltas.sort(
+        (left, right) => left.employeeNumber.localeCompare(right.employeeNumber, "de-AT"),
+      );
       await insertIntegrationRun({
         id: runId,
         profileId: preview.profileId,
@@ -19397,6 +22096,28 @@ async function applyPersonnelImport(actor, preview) {
         },
         result: { rows: preview.rows.map((row) => ({ rowNumber: row.rowNumber, action: row.action })) },
       }, repository);
+      await persistPersonnelLearningOrganizationScopeDeltas(
+        organization,
+        liveLearningActor,
+        "personnel-import",
+        runId,
+        learningOrganizationScopeDeltas,
+        "PRINCIPAL_ORGANIZATION_SCOPE_CHANGED",
+      );
+      await organization.insertAudit(
+        liveLearningActor.employeeNumber,
+        "integration.personnel.import.applied",
+        "integration_run",
+        runId,
+        JSON.stringify({
+          profileId: preview.profileId,
+          total: preview.summary.total,
+          created: preview.summary.create,
+          updated: preview.summary.update,
+          skipped: preview.summary.skip,
+          contentSha256: preview.contentSha256,
+        }),
+      );
     }, { isolation: "serializable" }));
   } catch (error) {
     if (isUniquePersistenceViolation(error)) {
@@ -19408,8 +22129,6 @@ async function applyPersonnelImport(actor, preview) {
     }
     throw error;
   }
-  auditPortal(actor.employeeNumber, "integration.personnel.import.applied", "integration_run", runId,
-    JSON.stringify({ profileId: preview.profileId, total: preview.summary.total, created: preview.summary.create, updated: preview.summary.update, skipped: preview.summary.skip, contentSha256: preview.contentSha256 }));
   return { runId, ...preview.summary };
 }
 
@@ -20200,7 +22919,6 @@ app.post("/api/integrations/personnel-import/preview", async (request, response)
 app.post("/api/integrations/personnel-import/apply", async (request, response) => {
   const actor = integrationActor(request, "employees:import");
   const entry = integrationCache.get(request.body.previewId, actor.employeeNumber, "personnel-preview");
-  if (entry.value.sourceTransport === "sql_view") await revalidateSqlPersonnelPreviewConnection(actor, entry.value);
   const result = await applyPersonnelImport(actor, entry.value);
   integrationCache.delete(entry.id, actor.employeeNumber);
   if (entry.value.inspectionId) integrationCache.delete(entry.value.inspectionId, actor.employeeNumber);
@@ -20302,6 +23020,7 @@ function xoffiTimeImportHttpError(error) {
     XOFFI_IMAGE_INVALID: "Die Datei ist kein lesbares JPG-, PNG- oder WebP-Bild.",
     XOFFI_IMAGE_LAYOUT_INVALID: "Das Bild ist für eine sichere xoffi-Auswertung zu klein oder ungeeignet.",
     XOFFI_WEEK_NOT_DETECTED: "Die Kalenderwoche konnte im xoffi-Bild nicht sicher erkannt werden.",
+    XOFFI_WEEK_SELECTION_INVALID: "Die ausgewählte GP-Kalenderwoche ist ungültig.",
     XOFFI_EMPLOYEES_NOT_DETECTED: "Im xoffi-Bild wurden keine Teamzeilen sicher erkannt.",
     XOFFI_DAY_COLUMNS_NOT_DETECTED: "Die sieben Tagesspalten konnten im xoffi-Bild nicht sicher erkannt werden.",
     XOFFI_OCR_BUSY: "Die lokale Bilderkennung ist ausgelastet. Bitte den Import in Kürze erneut starten.",
@@ -20404,16 +23123,58 @@ function validateXoffiReviewedRows(inputRows, preview) {
   });
 }
 
-async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual) {
+function assertXoffiScreenshotWeekConfirmation(preview, input = {}) {
+  const resolution = preview?.weekResolution;
+  const selectedWeekValid = isIsoDate(preview?.weekStart)
+    && getMonday(preview.weekStart) === preview.weekStart
+    && preview.weekEnd === addDays(preview.weekStart, 6)
+    && resolution?.selectedWeekStart === preview.weekStart
+    && resolution?.selectedWeekEnd === preview.weekEnd;
+  const detectedWeekValid = isIsoDate(resolution?.detectedWeekStart)
+    && getMonday(resolution.detectedWeekStart) === resolution.detectedWeekStart
+    && resolution.detectedWeekEnd === addDays(resolution.detectedWeekStart, 6)
+    && Number.isInteger(resolution.matchedDateColumns)
+    && resolution.matchedDateColumns >= 6
+    && resolution.matchedDateColumns <= 7;
+  const statusValid = resolution?.status === "matched"
+    ? resolution.source === "header_date_columns" && detectedWeekValid
+      && resolution.detectedWeekStart === preview.weekStart && resolution.matchedDateColumns === 7
+      && resolution.confirmationRequired === false
+    : resolution?.status === "uncertain"
+      ? resolution.source === "header_date_columns" && detectedWeekValid
+        && resolution.detectedWeekStart === preview.weekStart && resolution.matchedDateColumns === 6
+        && resolution.confirmationRequired === true
+      : resolution?.status === "conflict"
+        ? resolution.source === "header_date_columns" && detectedWeekValid
+          && resolution.detectedWeekStart !== preview.weekStart && resolution.confirmationRequired === true
+        : resolution?.status === "unrecognized"
+          ? resolution.source === "none" && resolution.detectedWeekStart === ""
+            && resolution.detectedWeekEnd === "" && resolution.matchedDateColumns === 0
+            && resolution.confirmationRequired === true
+          : false;
+  if (!selectedWeekValid || !statusValid) {
+    throw httpError(409, "Die geprüfte xoffi-Wochenzuordnung ist nicht mehr gültig. Bitte das Bild erneut auslesen.", "XOFFI_WEEK_PREVIEW_INVALID");
+  }
+  if (resolution.confirmationRequired && input.screenshotWeekConfirmed !== true) {
+    throw httpError(409, "Bitte ausdrücklich bestätigen, dass der Screenshot zur ausgewählten GP-Kalenderwoche gehört.", "XOFFI_SCREENSHOT_WEEK_CONFIRMATION_REQUIRED");
+  }
+  return resolution;
+}
+
+async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual, screenshotWeekConfirmed = false) {
   const importId = crypto.randomUUID();
   const departmentId = Number(preview.context.departmentId || 0) || null;
-  await timeTrackingRepository.transaction(async (repository) => {
+  const actor = portalActorId(session);
+  const weekResolution = assertXoffiScreenshotWeekConfirmation(preview, { screenshotWeekConfirmed });
+  await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const repository = repositories.timeTracking;
     await repository.supersedeActiveXoffiImport({
       locationId: preview.context.locationId,
       weekStart: preview.weekStart,
       departmentKey: departmentId || 0,
       newImportId: importId,
-      actor: portalActorId(session),
+      actor,
     });
     await repository.insertXoffiImport({
       id: importId,
@@ -20426,7 +23187,7 @@ async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual)
       sourceFileName: preview.sourceFileName,
       ocrEngineVersion: preview.engineVersion,
       useAsActual: useAsActual ? 1 : 0,
-      actor: portalActorId(session),
+      actor,
     });
     for (const row of reviewedRows) {
       const inserted = await repository.insertXoffiEmployeeRow({
@@ -20461,6 +23222,17 @@ async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual)
       departmentId,
       filterDepartment: departmentId ? 1 : 0,
     });
+    await repositories.organizationPersonnel.insertAudit(actor, "xoffi-time.import.apply", "xoffi_time_import", importId, JSON.stringify({
+      locationId: preview.context.locationId,
+      departmentId: preview.context.departmentId,
+      weekStart: preview.weekStart,
+      weekResolutionStatus: weekResolution.status,
+      detectedWeekStart: weekResolution.detectedWeekStart,
+      screenshotWeekConfirmed: weekResolution.confirmationRequired,
+      employeeRows: reviewedRows.length,
+      useAsActual: Boolean(useAsActual),
+      sourceSha256: preview.sourceSha256,
+    }));
   });
   return importId;
 }
@@ -25097,13 +27869,19 @@ app.post("/api/locations", async (request, response) => {
 });
 
 app.put("/api/locations/:id", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["locations:write", "locations:operational:write"],
+    { csrf: true },
+  );
+  request.portalSession = mutationActor;
   const id = normalizeLocationId(request.params.id);
-  assertSessionLocationAdministrationScope(request.portalSession, id);
+  assertSessionLocationAdministrationScope(mutationActor, id);
   const current = await validateLocationExists(id);
   const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
     ? request.body : {};
-  const fullLocationWrite = isLocalSystemSession(request.portalSession)
-    || request.portalSession?.permissions?.includes("locations:write");
+  const fullLocationWrite = isLocalSystemSession(mutationActor)
+    || mutationActor.permissions?.includes("locations:write");
   const submittedLocation = fullLocationWrite ? body : {
     id,
     name: current.name,
@@ -25130,35 +27908,102 @@ app.put("/api/locations/:id", async (request, response) => {
   if (timeSettingsChanged) assertRequestPermission(request, "time:settings");
   const costCenterId = location.costCenterSubmitted ? location.costCenterId : current.cost_center_id;
   if (costCenterId !== current.cost_center_id) requireAdminHrOrLocal(request, "cost_centers:write");
-  const result = await organizationPersonnelRepository.updateLocation({
-    ...location,
-    id,
-    costCenterId,
-    daySettingsJson: JSON.stringify(location.daySettings),
-  });
-  if (!result.rowsAffected) throw httpError(404, "Die Filiale wurde nicht gefunden.");
-  if (costCenterId !== current.cost_center_id) {
-    auditPortal(request.portalSession?.employeeNumber || "local", "location.cost-center.assign", "location", id,
-      JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }));
-  }
+  const daySettingsJson = JSON.stringify(location.daySettings);
   const changedFields = [
     String(current.name || "") !== location.name ? "name" : "",
     Number(current.min_staff || 0) !== location.minStaff ? "minStaff" : "",
-    String(current.day_settings_json || "{}") !== JSON.stringify(location.daySettings) ? "daySettings" : "",
+    String(current.day_settings_json || "{}") !== daySettingsJson ? "daySettings" : "",
     Boolean(current.active) !== Boolean(location.active) ? "active" : "",
     timeSettingsChanged ? "timeTracking" : "",
     costCenterId !== current.cost_center_id ? "costCenter" : "",
   ].filter(Boolean);
-  auditPortal(request.portalSession?.employeeNumber || "local", "location.update", "location", id,
-    JSON.stringify({ changedFields, operationalOnly: !fullLocationWrite }));
-  response.json(await getLocationsForSession(request.portalSession, true));
+  if (!changedFields.length) {
+    response.json(await getLocationsForSession(request.portalSession, true));
+    return;
+  }
+  const update = {
+    ...location,
+    id,
+    costCenterId,
+    daySettingsJson,
+  };
+  if (!changedFields.includes("active")) {
+    const result = await organizationPersonnelRepository.updateLocation(update);
+    if (!result.rowsAffected) throw httpError(404, "Die Filiale wurde nicht gefunden.");
+    if (costCenterId !== current.cost_center_id) {
+      auditPortal(request.portalSession?.employeeNumber || "local", "location.cost-center.assign", "location", id,
+        JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }));
+    }
+    auditPortal(request.portalSession?.employeeNumber || "local", "location.update", "location", id,
+      JSON.stringify({ changedFields, operationalOnly: !fullLocationWrite }));
+  } else {
+    const expectedSignature = locationAdministrationConcurrencySignature(current);
+    await personnelLifecycleSerializableTransaction(async (organization) => {
+      const liveActor = await livePersonnelLearningRoleAdministrationActor(
+        mutationActor,
+        organization,
+      );
+      assertLivePortalRoutePermission(liveActor, "locations:write");
+      const liveSession = livePersonnelLearningAdministrationSession(liveActor);
+      assertSessionLocationAdministrationScope(liveSession, id);
+      if (timeSettingsChanged) assertLivePortalRoutePermission(liveActor, "time:settings");
+      if (costCenterId !== current.cost_center_id) {
+        assertLivePortalRoutePermission(
+          liveActor,
+          "cost_centers:write",
+          { allowedRoles: RIGHTS_ADMIN_PORTAL_ROLES },
+        );
+      }
+      const liveLocation = await validateLocationExists(id, organization);
+      if (locationAdministrationConcurrencySignature(liveLocation) !== expectedSignature) {
+        throw personnelLifecycleConcurrentChangeError();
+      }
+      const deltas = await personnelLearningOrganizationScopeDeltas(organization, {
+        locationAfter: { id, active: Boolean(location.active) },
+      });
+      assertPersonnelLearningOrganizationScopeDeltasAllowed(liveActor, deltas);
+      const result = await organization.updateLocation(update);
+      if (!result.rowsAffected) throw httpError(404, "Die Filiale wurde nicht gefunden.");
+      if (costCenterId !== current.cost_center_id) {
+        await organization.insertAudit(
+          liveActor.employeeNumber || "local",
+          "location.cost-center.assign",
+          "location",
+          id,
+          JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }),
+        );
+      }
+      await persistPersonnelLearningOrganizationScopeDeltas(
+        organization,
+        liveActor,
+        "location",
+        id,
+        deltas,
+      );
+      await organization.insertAudit(
+        liveActor.employeeNumber || "local",
+        "location.update",
+        "location",
+        id,
+        JSON.stringify({ changedFields, operationalOnly: false }),
+      );
+    });
+  }
+  response.json(await getLocationsForSession(mutationActor, true));
 });
 
 app.post("/api/departments", async (request, response) => {
   const department = await validateDepartmentPayload(request.body);
-  const departmentManagerCreatingInAssignedLocation = request.portalSession?.role === "department_manager"
-    && (request.portalSession.scopes || []).some((scope) => scope.locationId === department.locationId);
-  if (!departmentManagerCreatingInAssignedLocation) {
+  if (request.portalSession?.role === "department_manager") {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(
+      request.portalSession,
+      {
+        role: request.portalSession.role,
+        homeLocationId: request.portalSession.homeLocationId,
+        preferredDepartmentId: request.portalSession.preferredDepartmentId,
+      },
+    );
+  } else {
     assertSessionContextScope(request.portalSession, { locationId: department.locationId });
   }
   let departmentId;
@@ -25166,52 +28011,152 @@ app.post("/api/departments", async (request, response) => {
     await organizationPersonnelRepository.transaction(async (organization) => {
       const sortOrder = await organization.nextDepartmentSortOrder(department.locationId);
       departmentId = await organization.insertDepartment(department, sortOrder);
-      if (departmentManagerCreatingInAssignedLocation) {
-        await organization.insertAccessScopeIgnore({
-          employeeNumber: request.portalSession.employeeNumber,
-          locationId: department.locationId,
-          departmentId,
-          assignedBy: request.portalSession.employeeNumber,
-        });
-      }
     });
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Abteilung gibt es in der Filiale bereits.");
     throw error;
   }
-  if (departmentManagerCreatingInAssignedLocation) {
-    request.portalSession.scopes = [...(request.portalSession.scopes || []), {
-      locationId: department.locationId,
-      departmentId,
-    }];
-  }
   response.status(201).json(await getLocationsForSession(request.portalSession, true));
 });
 
 app.put("/api/departments/:id", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["departments:write"],
+    { csrf: true },
+  );
+  request.portalSession = mutationActor;
   const id = normalizeDepartmentId(request.params.id, false);
   const existing = await validateDepartmentExists(id);
-  assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: id });
+  assertSessionContextScope(mutationActor, { locationId: existing.location_id, departmentId: id });
   const department = await validateDepartmentPayload(request.body, id);
-  assertSessionContextScope(request.portalSession, { locationId: department.locationId, departmentId: id });
-  if (existing.location_id !== department.locationId) {
-    const referencedShiftCount = Number(await organizationPersonnelRepository.countDepartmentShifts(id) || 0);
-    if (referencedShiftCount) {
-      throw httpError(
-        409,
-        "Eine Abteilung mit vorhandenen Diensten kann nicht in eine andere Filiale verschoben werden.",
-        "SHIFT_DEPARTMENT_LOCATION_CONFLICT",
-      );
-    }
+  assertSessionContextScope(mutationActor, { locationId: department.locationId, departmentId: id });
+  const changedFields = [
+    String(existing.location_id || "") !== department.locationId ? "location" : "",
+    String(existing.name || "") !== department.name ? "name" : "",
+    Number(existing.min_staff || 0) !== department.minStaff ? "minStaff" : "",
+    Boolean(existing.active) !== Boolean(department.active) ? "active" : "",
+  ].filter(Boolean);
+  if (!changedFields.length) {
+    response.json(await getLocationsForSession(request.portalSession, true));
+    return;
   }
+  const topologyChanged = changedFields.includes("location") || changedFields.includes("active");
   try {
-    const result = await organizationPersonnelRepository.updateDepartment(department, id);
-    if (!result.rowsAffected) throw httpError(404, "Die Abteilung wurde nicht gefunden.");
+    if (!topologyChanged) {
+      const result = await organizationPersonnelRepository.updateDepartment(department, id);
+      if (!result.rowsAffected) throw httpError(404, "Die Abteilung wurde nicht gefunden.");
+    } else {
+      const expectedSignature = departmentAdministrationConcurrencySignature(existing);
+      await personnelLifecycleSerializableTransaction(async (organization) => {
+        const liveActor = await livePersonnelLearningRoleAdministrationActor(
+          mutationActor,
+          organization,
+        );
+        assertLivePortalRoutePermission(liveActor, "departments:write");
+        const liveSession = livePersonnelLearningAdministrationSession(liveActor);
+        const liveDepartment = await validateDepartmentExists(id, null, organization);
+        if (departmentAdministrationConcurrencySignature(liveDepartment) !== expectedSignature) {
+          throw personnelLifecycleConcurrentChangeError();
+        }
+        assertSessionContextScope(liveSession, {
+          locationId: liveDepartment.location_id,
+          departmentId: id,
+        });
+        assertSessionContextScope(liveSession, {
+          locationId: department.locationId,
+          departmentId: id,
+        });
+        await validateLocationExists(department.locationId, organization);
+        let deltas = [];
+        if (changedFields.includes("location")) {
+          const [
+            referencedShiftCount,
+            referencedLearningModuleVersionCount,
+            portalUserRows,
+            liveDepartments,
+          ] = await Promise.all([
+            organization.countDepartmentShifts(id),
+            organization.countDepartmentLearningModuleVersionScopes(id),
+            organization.listPortalUsersForAdmin(),
+            organization.listDepartments(true),
+          ]);
+          if (Number(referencedShiftCount || 0)) {
+            throw httpError(
+              409,
+              "Eine Abteilung mit vorhandenen Diensten kann nicht in eine andere Filiale verschoben werden.",
+              "SHIFT_DEPARTMENT_LOCATION_CONFLICT",
+            );
+          }
+          if (Number(referencedLearningModuleVersionCount || 0)) {
+            throw httpError(
+              409,
+              "Eine Abteilung mit referenzierten Schulungs- oder Wissensversionen kann nicht in eine andere Filiale verschoben werden.",
+              "DEPARTMENT_LEARNING_SCOPE_REFERENCE_CONFLICT",
+            );
+          }
+          if (portalUserRows.some((user) => (
+            Number(user.preferred_department_id || 0) === id
+          ))) {
+            throw httpError(
+              409,
+              "Eine Abteilung mit zugeordneten Mitarbeitenden kann nicht in eine andere Filiale verschoben werden.",
+              "DEPARTMENT_EMPLOYEE_REFERENCE_CONFLICT",
+            );
+          }
+          const destinationDepartmentCount = liveDepartments.filter((entry) => (
+            String(entry.location_id || "") === department.locationId
+              && Number(entry.id) !== id
+          )).length;
+          if (destinationDepartmentCount >= 3) {
+            throw httpError(400, "Pro Filiale können maximal 3 Abteilungen angelegt werden.");
+          }
+        } else {
+          deltas = await personnelLearningOrganizationScopeDeltas(organization, {
+            departmentAfter: {
+              id,
+              locationId: department.locationId,
+              active: Boolean(department.active),
+            },
+          });
+          assertPersonnelLearningOrganizationScopeDeltasAllowed(liveActor, deltas);
+        }
+        let result;
+        try {
+          result = await organization.updateDepartment(department, id);
+        } catch (error) {
+          if (changedFields.includes("location")
+            && error?.code === "PERSISTENCE_CHECK_VIOLATION") {
+            throw httpError(
+              409,
+              "Eine Abteilung mit zugewiesenen Berechtigungsbereichen kann nicht in eine andere Filiale verschoben werden.",
+              "DEPARTMENT_SCOPE_REFERENCE_CONFLICT",
+            );
+          }
+          throw error;
+        }
+        if (!result.rowsAffected) throw httpError(404, "Die Abteilung wurde nicht gefunden.");
+        await persistPersonnelLearningOrganizationScopeDeltas(
+          organization,
+          liveActor,
+          "department",
+          id,
+          deltas,
+        );
+        await organization.insertAudit(
+          liveActor.employeeNumber || "local",
+          "department.update",
+          "department",
+          String(id),
+          JSON.stringify({ changedFields }),
+        );
+      });
+    }
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Abteilung gibt es in der Filiale bereits.");
     throw error;
   }
-  response.json(await getLocationsForSession(request.portalSession, true));
+  response.json(await getLocationsForSession(mutationActor, true));
 });
 
 async function assertCostCenterCanBeArchived(id) {
@@ -25517,7 +28462,10 @@ app.get("/api/employees", async (request, response) => {
           includeTimeConfirmationLevel: sessionCanViewTimeConfirmationLevel(session),
           includeSicknessAllowance: sessionCanManageTimeConfirmationLevel(session),
         }),
-        portal_access: await portalAccessProfileForEmployee(row.personnel_number),
+        portal_access: await publicPortalAccessProfileForEmployee(
+          row.personnel_number,
+          session,
+        ),
       })));
   if (!sessionHasGlobalScope(session)) {
     const scopesByLocation = new Map();
@@ -25545,14 +28493,15 @@ app.get("/api/employees", async (request, response) => {
 });
 
 app.post("/api/employees", async (request, response) => {
-  const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
+  const mutationActor = requirePortalAnyPermissionOrLocal(request, ["employees:write"]);
+  let centralWrite = sessionCanManageCentralPersonnel(mutationActor);
   const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
   const submittedCostCenter = String(request.body.costCenterId ?? request.body.cost_center_id ?? "").trim();
   const legacySubmittedHomeLocation = String(
     request.body.homeLocationId ?? request.body.home_location_id ?? "",
   ).trim();
-  const scopedCostCenterId = await defaultCostCenterId(
-    legacySubmittedHomeLocation || request.portalSession?.homeLocationId || "",
+  let scopedCostCenterId = await defaultCostCenterId(
+    legacySubmittedHomeLocation || mutationActor?.homeLocationId || "",
   );
   if (centralWrite && !submittedCostCenter && !legacySubmittedHomeLocation) {
     throw httpError(400, "Bitte eine Kostenstelle auswählen.", "COST_CENTER_REQUIRED");
@@ -25567,19 +28516,19 @@ app.post("/api/employees", async (request, response) => {
   let employee = await validateEmployee(request.body, true, {
     defaultCostCenterId: scopedCostCenterId,
   });
-  const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
+  let canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(mutationActor);
   if (!canManageTimeConfirmationLevel) {
     employee.timeConfirmationLevel = "C";
     employee.sicknessWithoutAumEnabled = 0;
   }
   if (request.body.personnelRecord !== undefined) {
-    assertPersonnelRecordContextScope(request.portalSession, {
+    assertPersonnelRecordContextScope(mutationActor, {
       locationId: employee.homeLocationId,
       departmentId: employee.preferredDepartmentId,
     }, request, employee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
   }
-  assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
-  const accessProfile = await validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, employee);
+  assertSessionContextScope(mutationActor, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
+  const accessProfile = await validatePersonnelAccessProfile(mutationActor, request.body.accessProfile, employee);
   const accessProfileBefore = accessProfile
     ? await portalAccessProfileForEmployee(accessProfile.employeeNumber)
     : null;
@@ -25588,28 +28537,52 @@ app.post("/api/employees", async (request, response) => {
     employee.personnelNumber,
     request.body.personnelRecord,
   );
+  let responseProjectionActor = mutationActor;
   try {
     await personnelLifecycleSerializableTransaction(async (organization) => {
+      const liveLearningActor = await livePersonnelLearningRoleAdministrationActor(
+        mutationActor,
+        organization,
+      );
+      responseProjectionActor = liveLearningActor;
+      assertLivePortalRoutePermission(liveLearningActor, "employees:write");
+      centralWrite = sessionCanManageCentralPersonnel(liveLearningActor);
+      scopedCostCenterId = await defaultCostCenterId(
+        legacySubmittedHomeLocation || liveLearningActor?.homeLocationId || "",
+        organization,
+      );
+      if (centralWrite && !submittedCostCenter && !legacySubmittedHomeLocation) {
+        throw httpError(400, "Bitte eine Kostenstelle auswählen.", "COST_CENTER_REQUIRED");
+      }
+      if (!centralWrite && costCenterSubmitted && submittedCostCenter !== scopedCostCenterId) {
+        throw httpError(
+          403,
+          "Kostenstellen können außerhalb der zentralen Personalverwaltung nicht geändert werden.",
+          "PERSONNEL_CENTRAL_WRITE_REQUIRED",
+        );
+      }
       const liveEmployee = await validateEmployee(request.body, true, {
         defaultCostCenterId: scopedCostCenterId,
         repository: organization,
       });
+      canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(liveLearningActor);
       if (!canManageTimeConfirmationLevel) {
         liveEmployee.timeConfirmationLevel = "C";
         liveEmployee.sicknessWithoutAumEnabled = 0;
       }
       if (request.body.personnelRecord !== undefined) {
-        assertPersonnelRecordContextScope(request.portalSession, {
+        assertPersonnelRecordContextScope(liveLearningActor, {
           locationId: liveEmployee.homeLocationId,
           departmentId: liveEmployee.preferredDepartmentId,
         }, request, liveEmployee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
       }
-      assertSessionContextScope(request.portalSession, {
+      assertSessionContextScope(liveLearningActor, {
         locationId: liveEmployee.homeLocationId,
         departmentId: liveEmployee.preferredDepartmentId,
       });
+      revalidatePreparedPersonnelRecordMutation(request, liveLearningActor, personnelRecordMutation);
       const liveAccessProfile = await validatePersonnelAccessProfile(
-        request.portalSession,
+        liveLearningActor,
         request.body.accessProfile,
         liveEmployee,
         organization,
@@ -25618,7 +28591,7 @@ app.post("/api/employees", async (request, response) => {
       await organization.insertEmployee(employee);
       await applyPersonnelAccessProfileWithRepository(
         organization,
-        request.portalSession,
+        liveLearningActor,
         liveAccessProfile,
         accessProfileBefore,
       );
@@ -25626,6 +28599,17 @@ app.post("/api/employees", async (request, response) => {
         await organization.deactivatePortalAccess(employee.personnelNumber);
       }
       await persistPersonnelRecordMutationWithRepository(organization, personnelRecordMutation, "create");
+      await organization.insertAudit(
+        liveLearningActor?.employeeNumber || "local",
+        "employee.create",
+        "employee",
+        employee.personnelNumber,
+        JSON.stringify({
+          timeConfirmationLevel: employee.timeConfirmationLevel,
+          costCenterId: employee.costCenterId,
+          personnelRecordFields: personnelRecordMutation?.changedFields || [],
+        }),
+      );
     });
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Personalnummer ist bereits vergeben.");
@@ -25635,21 +28619,18 @@ app.post("/api/employees", async (request, response) => {
     await reconcilePersonalNotificationTargets(
       employee.personnelNumber,
       null,
-      request.portalSession?.employeeNumber || "local",
+      responseProjectionActor?.employeeNumber || "local",
     );
   }
   await refreshConfiguredAdminSnapshot();
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.create", "employee", employee.personnelNumber,
-    JSON.stringify({
-      timeConfirmationLevel: employee.timeConfirmationLevel,
-      costCenterId: employee.costCenterId,
-      personnelRecordFields: personnelRecordMutation?.changedFields || [],
-    }));
-  await reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
+  await reconcileOpenAmuResponsibilities(responseProjectionActor?.employeeNumber || "local");
   const responseEmployee = {
     ...employee,
     active: Boolean(employee.active),
-    portal_access: await portalAccessProfileForEmployee(employee.personnelNumber),
+    portal_access: await publicPortalAccessProfileForEmployee(
+      employee.personnelNumber,
+      responseProjectionActor,
+    ),
   };
   if (!canManageTimeConfirmationLevel) {
     delete responseEmployee.timeConfirmationLevel;
@@ -25659,22 +28640,25 @@ app.post("/api/employees", async (request, response) => {
 });
 
 app.put("/api/employees/:personnelNumber", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(request, ["employees:write"]);
   const personnelNumber = request.params.personnelNumber;
   if (request.body.personnelRecord !== undefined) {
-    await assertPersonnelRecordEmployeeScope(request.portalSession, personnelNumber, request,
+    await assertPersonnelRecordEmployeeScope(mutationActor, personnelNumber, request,
       submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
   }
-  await assertSessionEmployeeScope(request.portalSession, personnelNumber);
+  await assertSessionEmployeeScope(mutationActor, personnelNumber);
   const existing = await organizationPersonnelRepository.getEmployeeForUpdate(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
+  const existingPortalTarget = await organizationPersonnelRepository
+    .getPortalMutationTarget(personnelNumber);
   const expectedEmployeeConcurrencySignature = employeeMutationConcurrencySignature(existing);
-  const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
+  let centralWrite = sessionCanManageCentralPersonnel(mutationActor);
   const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
   const submittedCostCenter = String(request.body.costCenterId ?? request.body.cost_center_id ?? existing.cost_center_id ?? "").trim();
   if (!centralWrite && costCenterSubmitted && submittedCostCenter !== String(existing.cost_center_id || "")) {
     throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung geändert werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
   }
-  const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
+  let canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(mutationActor);
   let employee = await validateEmployee({
     ...request.body,
     personnelNumber,
@@ -25691,30 +28675,48 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
     allowInactiveLocationId: existing.home_location_id || "",
     allowInactiveDepartmentId: existing.preferred_department_id || 0,
   });
-  assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
-  const accessProfile = await validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, {
+  assertSessionContextScope(mutationActor, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
+  const accessProfile = await validatePersonnelAccessProfile(mutationActor, request.body.accessProfile, {
     ...employee,
     personnelNumber,
   });
   const accessProfileBefore = accessProfile
     ? await portalAccessProfileForEmployee(accessProfile.employeeNumber)
     : null;
+  assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+    actor: mutationActor,
+    beforeEmployee: existing,
+    afterEmployee: employee,
+    beforeRole: existingPortalTarget?.role || "employee",
+    afterRole: accessProfile?.role || existingPortalTarget?.role || "employee",
+  });
   const personnelRecordMutation = await preparePersonnelRecordMutation(
     request,
     personnelNumber,
     request.body.personnelRecord,
   );
   if (existing.active && !employee.active) {
-    await assertEmployeeDestructiveMutationAllowed(request.portalSession, personnelNumber);
+    await assertEmployeeDestructiveMutationAllowed(mutationActor, personnelNumber);
   }
+  let responseProjectionActor = mutationActor;
+  let employeeMutationChanged = false;
   await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveLearningActor = await livePersonnelLearningRoleAdministrationActor(
+      mutationActor,
+      organization,
+    );
+    responseProjectionActor = liveLearningActor;
+    assertLivePortalRoutePermission(liveLearningActor, "employees:write");
+    centralWrite = sessionCanManageCentralPersonnel(liveLearningActor);
+    canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(liveLearningActor);
     const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
     if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
-    if (!sessionHasGlobalScope(request.portalSession)) {
+    const livePortalTarget = await organization.getPortalMutationTarget(personnelNumber);
+    if (!sessionHasGlobalScope(liveLearningActor)) {
       if (!String(liveEmployee.home_location_id || "").trim()) {
         throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
       }
-      assertSessionContextScope(request.portalSession, {
+      assertSessionContextScope(liveLearningActor, {
         locationId: liveEmployee.home_location_id,
         departmentId: liveEmployee.preferred_department_id,
       });
@@ -25723,9 +28725,28 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
       !== expectedEmployeeConcurrencySignature) {
       throw personnelLifecycleConcurrentChangeError();
     }
+    if (!centralWrite && costCenterSubmitted
+      && submittedCostCenter !== String(liveEmployee.cost_center_id || "")) {
+      throw httpError(
+        403,
+        "Kostenstellen können nur in der zentralen Personalverwaltung geändert werden.",
+        "PERSONNEL_CENTRAL_WRITE_REQUIRED",
+      );
+    }
     const liveValidatedEmployee = await validateEmployee({
-      ...employee,
+      ...request.body,
       personnelNumber,
+      targetWorkdaysPerWeek: request.body.targetWorkdaysPerWeek
+        ?? request.body.target_workdays_per_week
+        ?? liveEmployee.target_workdays_per_week
+        ?? 5,
+      ...(canManageTimeConfirmationLevel
+        ? {}
+        : { timeConfirmationLevel: liveEmployee.time_confirmation_level || "C" }),
+      ...((canManageTimeConfirmationLevel && (Object.hasOwn(request.body, "sicknessWithoutAumEnabled")
+        || Object.hasOwn(request.body, "sickness_without_aum_enabled")))
+        ? {}
+        : { sicknessWithoutAumEnabled: Boolean(liveEmployee.sickness_without_aum_enabled) }),
     }, false, {
       defaultTimeConfirmationLevel: liveEmployee.time_confirmation_level || "C",
       defaultCostCenterId: liveEmployee.cost_center_id || "",
@@ -25734,71 +28755,128 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
       allowInactiveDepartmentId: liveEmployee.preferred_department_id || 0,
       repository: organization,
     });
-    assertSessionContextScope(request.portalSession, {
+    assertSessionContextScope(liveLearningActor, {
       locationId: liveValidatedEmployee.homeLocationId,
       departmentId: liveValidatedEmployee.preferredDepartmentId,
     });
     if (request.body.personnelRecord !== undefined) {
-      assertPersonnelRecordContextScope(request.portalSession, {
+      assertPersonnelRecordContextScope(liveLearningActor, {
         locationId: liveValidatedEmployee.homeLocationId,
         departmentId: liveValidatedEmployee.preferredDepartmentId,
       }, request, personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
     }
+    revalidatePreparedPersonnelRecordMutation(request, liveLearningActor, personnelRecordMutation);
     const liveAccessProfile = await validatePersonnelAccessProfile(
-      request.portalSession,
+      liveLearningActor,
       request.body.accessProfile,
       liveValidatedEmployee,
       organization,
     );
+    assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+      actor: liveLearningActor,
+      beforeEmployee: liveEmployee,
+      afterEmployee: liveValidatedEmployee,
+      beforeRole: livePortalTarget?.role || "employee",
+      afterRole: liveAccessProfile?.role || livePortalTarget?.role || "employee",
+    });
+    const observeLearningOrganizationScope = Boolean(
+      roleHasPersonnelLearningDefaults(livePortalTarget?.role)
+        || roleHasPersonnelLearningDefaults(liveAccessProfile?.role),
+    );
+    const learningOrganizationScopeBefore = observeLearningOrganizationScope
+      ? await personnelLearningEmployeeOrganizationScopeSnapshot(organization, personnelNumber)
+      : null;
     const deactivatingLiveEmployee = Boolean(liveEmployee.active) && !liveValidatedEmployee.active;
     if (deactivatingLiveEmployee) {
       await assertEmployeeDestructiveMutationAllowed(
-        request.portalSession,
+        liveLearningActor,
         personnelNumber,
         organization,
       );
     }
     employee = liveValidatedEmployee;
-    const result = await organization.updateEmployee({ ...employee, personnelNumber });
-    if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
-    await applyPersonnelAccessProfileWithRepository(
+    const employeeChanged = employeeMutationConcurrencySignature(liveEmployee)
+      !== employeeMutationConcurrencySignature(liveValidatedEmployee);
+    if (employeeChanged) {
+      const result = await organization.updateEmployee({ ...employee, personnelNumber });
+      if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
+    }
+    const accessProfileChanged = await applyPersonnelAccessProfileWithRepository(
       organization,
-      request.portalSession,
+      liveLearningActor,
       liveAccessProfile,
       accessProfileBefore,
     );
     if (deactivatingLiveEmployee) {
       await organization.deactivatePortalAccess(personnelNumber);
     }
-    await persistPersonnelRecordMutationWithRepository(organization, personnelRecordMutation, "update");
+    const personnelRecordChangedFields = await persistPersonnelRecordMutationWithRepository(
+      organization,
+      personnelRecordMutation,
+      "update",
+    );
+    if (observeLearningOrganizationScope) {
+      const learningOrganizationScopeAfter = await personnelLearningEmployeeOrganizationScopeSnapshot(
+        organization,
+        personnelNumber,
+      );
+      const learningOrganizationScopeDelta = personnelLearningEmployeeOrganizationScopeDelta(
+        personnelNumber,
+        learningOrganizationScopeBefore,
+        learningOrganizationScopeAfter,
+      );
+      await persistPersonnelLearningOrganizationScopeDeltas(
+        organization,
+        liveLearningActor,
+        "employee",
+        personnelNumber,
+        learningOrganizationScopeDelta ? [learningOrganizationScopeDelta] : [],
+        "PRINCIPAL_ORGANIZATION_SCOPE_CHANGED",
+      );
+    }
+    employeeMutationChanged = Boolean(
+      employeeChanged || accessProfileChanged || personnelRecordChangedFields.length,
+    );
+    if (employeeMutationChanged) {
+      await organization.insertAudit(
+        liveLearningActor?.employeeNumber || "local",
+        "employee.update",
+        "employee",
+        personnelNumber,
+        JSON.stringify({
+          timeConfirmationLevelBefore: liveEmployee.time_confirmation_level || "C",
+          timeConfirmationLevelAfter: liveValidatedEmployee.timeConfirmationLevel,
+          targetWorkdaysBefore: normalizeTargetWorkdays(liveEmployee.target_workdays_per_week),
+          targetWorkdaysAfter: liveValidatedEmployee.targetWorkdaysPerWeek,
+          sicknessWithoutAumBefore: Boolean(liveEmployee.sickness_without_aum_enabled),
+          sicknessWithoutAumAfter: Boolean(liveValidatedEmployee.sicknessWithoutAumEnabled),
+          costCenterBefore: String(liveEmployee.cost_center_id || ""),
+          costCenterAfter: liveValidatedEmployee.costCenterId,
+          portalAccessDisabled: deactivatingLiveEmployee,
+          personnelRecordFields: personnelRecordChangedFields,
+        }),
+      );
+    }
   });
   if (personalNotificationMasterFieldsChanged(personnelRecordMutation?.changedFields)) {
     await reconcilePersonalNotificationTargets(
       personnelNumber,
       null,
-      request.portalSession?.employeeNumber || "local",
+      responseProjectionActor?.employeeNumber || "local",
     );
   }
-  await refreshConfiguredAdminSnapshot();
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.update", "employee", personnelNumber,
-    JSON.stringify({
-      timeConfirmationLevelBefore: existing.time_confirmation_level || "C",
-      timeConfirmationLevelAfter: employee.timeConfirmationLevel,
-      targetWorkdaysBefore: normalizeTargetWorkdays(existing.target_workdays_per_week),
-      targetWorkdaysAfter: employee.targetWorkdaysPerWeek,
-      sicknessWithoutAumBefore: Boolean(existing.sickness_without_aum_enabled),
-      sicknessWithoutAumAfter: Boolean(employee.sicknessWithoutAumEnabled),
-      costCenterBefore: String(existing.cost_center_id || ""),
-      costCenterAfter: employee.costCenterId,
-      portalAccessDisabled: Boolean(existing.active && !employee.active),
-      personnelRecordFields: personnelRecordMutation?.changedFields || [],
-    }));
-  await reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
+  if (employeeMutationChanged) {
+    await refreshConfiguredAdminSnapshot();
+    await reconcileOpenAmuResponsibilities(responseProjectionActor?.employeeNumber || "local");
+  }
   const responseEmployee = {
     ...employee,
     personnelNumber,
     active: Boolean(employee.active),
-    portal_access: await portalAccessProfileForEmployee(personnelNumber),
+    portal_access: await publicPortalAccessProfileForEmployee(
+      personnelNumber,
+      responseProjectionActor,
+    ),
   };
   if (!canManageTimeConfirmationLevel) {
     delete responseEmployee.timeConfirmationLevel;
@@ -25808,8 +28886,9 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
 });
 
 app.patch("/api/employees/:personnelNumber/display", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(request, ["employees:display:write"]);
   const personnelNumber = String(request.params.personnelNumber || "").trim();
-  await assertSessionEmployeeScope(request.portalSession, personnelNumber);
+  await assertSessionEmployeeScope(mutationActor, personnelNumber);
   const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
     ? request.body : {};
   const colorSubmitted = own(body, "color");
@@ -25817,7 +28896,7 @@ app.patch("/api/employees/:personnelNumber/display", async (request, response) =
   if (!colorSubmitted && !nicknameSubmitted) {
     throw httpError(400, "Bitte mindestens ein freigegebenes Darstellungsfeld übermitteln.", "EMPLOYEE_DISPLAY_INVALID");
   }
-  if (nicknameSubmitted && !request.portalSession?.permissions?.includes("employees:nickname:write")) {
+  if (nicknameSubmitted && !mutationActor?.permissions?.includes("employees:nickname:write")) {
     throw httpError(403, "Der Dienstplan-Spitzname darf mit diesem Zugang nicht bearbeitet werden.", "EMPLOYEE_NICKNAME_WRITE_DENIED");
   }
   const submittedColor = colorSubmitted ? String(body.color || "").trim().toLowerCase() : null;
@@ -25832,67 +28911,121 @@ app.patch("/api/employees/:personnelNumber/display", async (request, response) =
   let nickname = "";
   let changedFields = [];
   await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(
+      mutationActor,
+      organization,
+    );
+    assertLivePortalRoutePermission(liveActor, "employees:display:write");
+    if (nicknameSubmitted && !liveActor?.permissions?.includes("employees:nickname:write")) {
+      throw httpError(403, "Der Dienstplan-Spitzname darf mit diesem Zugang nicht bearbeitet werden.", "EMPLOYEE_NICKNAME_WRITE_DENIED");
+    }
     const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
     if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
-    if (!sessionHasGlobalScope(request.portalSession)) {
+    if (!sessionHasGlobalScope(liveActor)) {
       if (!String(liveEmployee.home_location_id || "").trim()) {
         throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
       }
-      assertSessionContextScope(request.portalSession, {
+      assertSessionContextScope(liveActor, {
         locationId: liveEmployee.home_location_id,
         departmentId: liveEmployee.preferred_department_id,
       });
     }
     color = colorSubmitted ? submittedColor : liveEmployee.color;
     nickname = nicknameSubmitted ? submittedNickname : liveEmployee.nickname;
-    const result = await organization.updateEmployeeDisplay(personnelNumber, color, nickname);
-    if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
     changedFields = [
       colorSubmitted && color !== liveEmployee.color ? "color" : "",
       nicknameSubmitted && nickname !== liveEmployee.nickname ? "nickname" : "",
     ].filter(Boolean);
+    if (!changedFields.length) return;
+    const result = await organization.updateEmployeeDisplay(personnelNumber, color, nickname);
+    if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
+    await organization.insertAudit(
+      liveActor?.employeeNumber || "local",
+      "employee.display.update",
+      "employee",
+      personnelNumber,
+      JSON.stringify({ changedFields }),
+    );
   });
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.display.update", "employee", personnelNumber,
-    JSON.stringify({ changedFields }));
   response.json({ personnelNumber, color, nickname });
 });
 
 app.delete("/api/employees/:personnelNumber", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(request, ["employees:write"]);
   const personnelNumber = String(request.params.personnelNumber || "").trim();
-  await assertSessionEmployeeScope(request.portalSession, personnelNumber);
-  await assertEmployeeDestructiveMutationAllowed(request.portalSession, personnelNumber);
+  await assertSessionEmployeeScope(mutationActor, personnelNumber);
+  await assertEmployeeDestructiveMutationAllowed(mutationActor, personnelNumber);
   const existing = await organizationPersonnelRepository.getEmployeeActivation(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
   let previousActive = Boolean(existing.active);
+  let deactivated = false;
   await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(
+      mutationActor,
+      organization,
+    );
+    assertLivePortalRoutePermission(liveActor, "employees:write");
     const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
     if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
-    if (!sessionHasGlobalScope(request.portalSession)) {
+    previousActive = Boolean(liveEmployee.active);
+    if (!previousActive) return;
+    if (!sessionHasGlobalScope(liveActor)) {
       if (!String(liveEmployee.home_location_id || "").trim()) {
         throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
       }
-      assertSessionContextScope(request.portalSession, {
+      assertSessionContextScope(liveActor, {
         locationId: liveEmployee.home_location_id,
         departmentId: liveEmployee.preferred_department_id,
       });
     }
-    previousActive = Boolean(liveEmployee.active);
+    const livePortalTarget = await organization.getPortalMutationTarget(personnelNumber);
+    const observeLearningOrganizationScope = roleHasPersonnelLearningDefaults(livePortalTarget?.role);
+    const learningOrganizationScopeBefore = observeLearningOrganizationScope
+      ? await personnelLearningEmployeeOrganizationScopeSnapshot(organization, personnelNumber)
+      : null;
     await assertEmployeeDestructiveMutationAllowed(
-      request.portalSession,
+      liveActor,
       personnelNumber,
       organization,
     );
     await organization.deactivateEmployee(personnelNumber);
     await organization.deactivatePortalAccess(personnelNumber);
+    if (observeLearningOrganizationScope) {
+      const learningOrganizationScopeAfter = await personnelLearningEmployeeOrganizationScopeSnapshot(
+        organization,
+        personnelNumber,
+      );
+      const learningOrganizationScopeDelta = personnelLearningEmployeeOrganizationScopeDelta(
+        personnelNumber,
+        learningOrganizationScopeBefore,
+        learningOrganizationScopeAfter,
+      );
+      await persistPersonnelLearningOrganizationScopeDeltas(
+        organization,
+        liveActor,
+        "employee",
+        personnelNumber,
+        learningOrganizationScopeDelta ? [learningOrganizationScopeDelta] : [],
+        "PRINCIPAL_ORGANIZATION_SCOPE_CHANGED",
+      );
+    }
+    await organization.insertAudit(
+      liveActor?.employeeNumber || "local",
+      "employee.deactivate",
+      "employee",
+      personnelNumber,
+      JSON.stringify({
+        previousActive,
+        reason: "controlled-deactivation",
+        personalHistoryPreserved: true,
+      }),
+    );
+    deactivated = true;
   });
-  await refreshConfiguredAdminSnapshot();
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.deactivate", "employee", personnelNumber,
-    JSON.stringify({
-      previousActive,
-      reason: "controlled-deactivation",
-      personalHistoryPreserved: true,
-    }));
-  await reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
+  if (deactivated) {
+    await refreshConfiguredAdminSnapshot();
+    await reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
+  }
   response.status(204).end();
 });
 
@@ -25986,11 +29119,31 @@ app.post("/api/mobile/v1/auth/logout", async (request, response) => {
   response.json({ ok: true });
 });
 
-app.get("/api/portal/v1/roles", async (_request, response) => {
+app.get("/api/portal/v1/roles", async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(request, [
+    "roles:read",
+    "users:write",
+    "rights:read",
+    "rights:write",
+    "scopes:write",
+  ]);
+  if (!isLocalSystemSession(actor)
+    && (actor.sessionKind === "organization" || actor.isEmployee === false)) {
+    throw httpError(
+      403,
+      "Diese Funktion ist ausschließlich für persönliche Mitarbeiterzugänge verfügbar.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
   response.json({
     apiVersion: PORTAL_API_VERSION,
-    roles: await getPortalRoles(),
-    catalog: delegablePortalPermissionCatalog.map(({ hrDelegable: _hrDelegable, ...permission }) => permission),
+    roles: projectPortalRolesForActor(await getPortalRoles(), actor),
+    catalog: projectPortalPermissionCatalogForActor(
+      delegablePortalPermissionCatalog.map(
+        ({ hrDelegable: _hrDelegable, ...permission }) => permission,
+      ),
+      actor,
+    ),
   });
 });
 
@@ -26563,6 +29716,7 @@ const UI_MOBILE_PORTAL_NAVIGATION_ITEMS = Object.freeze([
   "requests",
   "loan",
   "sickness",
+  "learning",
 ]);
 const UI_MOBILE_PORTAL_NAVIGATION_ITEM_SET = new Set(UI_MOBILE_PORTAL_NAVIGATION_ITEMS);
 const UI_MOBILE_PORTAL_HOME_ITEMS = Object.freeze([
@@ -26580,6 +29734,7 @@ const UI_MOBILE_PORTAL_HOME_DEFAULT_COLORS = Object.freeze({
   requests: [128, 82, 108],
   loan: [129, 91, 48],
   sickness: [173, 75, 66],
+  learning: [55, 118, 93],
   branchOrders: [42, 122, 99],
   branchVacation: [76, 112, 167],
 });
@@ -29020,13 +32175,17 @@ async function rightsDashboardPayload(actor) {
     .map((department) => ({ id: Number(department.id), locationId: department.location_id, name: department.name, active: Boolean(department.active) }));
   const locationLookup = new Map(locations.map((location) => [String(location.id), location]));
   const departmentLookup = new Map(departments.map((department) => [Number(department.id), department]));
-  const catalog = rightsDashboardPermissionCatalog(roles);
+  const catalog = projectPortalPermissionCatalogForActor(
+    rightsDashboardPermissionCatalog(roles),
+    actor,
+  );
   const catalogLookup = new Map(catalog.map((permission) => [permission.id, permission]));
+  const visiblePermission = (permission) => portalPermissionVisibleToActor(permission, actor);
   const users = adminUsers.filter((user) => user.employeeActive).map((user) => {
     const role = roleLookup.get(user.role) || roleLookup.get("employee") || { id: "employee", name: "Mitarbeiter", permissions: [] };
-    const rolePermissions = new Set(role.permissions || []);
-    const grantedPermissions = new Set(user.grantedPermissions || []);
-    const deniedPermissions = new Set(user.deniedPermissions || []);
+    const rolePermissions = new Set((role.permissions || []).filter(visiblePermission));
+    const grantedPermissions = new Set((user.grantedPermissions || []).filter(visiblePermission));
+    const deniedPermissions = new Set((user.deniedPermissions || []).filter(visiblePermission));
     const scope = rightsDashboardScopes(user, locationLookup, departmentLookup);
     const accessActive = Boolean(user.configured && user.active && user.passwordConfigured);
     const assignedPermissionIds = [...new Set([...rolePermissions, ...grantedPermissions, ...deniedPermissions])].sort();
@@ -29122,12 +32281,21 @@ async function rightsDashboardPayload(actor) {
 async function rightsManagementPayload(actor) {
   const [roleRows, adminUsers] = await Promise.all([getPortalRoles(), portalUsersForAdmin()]);
   const roles = new Map(roleRows.map((role) => [role.id, role]));
+  const mayInspectPersonnelLearningRights = actorMayInspectPersonnelLearningRights(actor);
+  const visiblePermission = (permission) => mayInspectPersonnelLearningRights
+    || !isPersonnelLearningPermission(permission);
   const users = adminUsers
     .filter((user) => user.employeeActive)
     .map((user) => {
-      const rolePermissions = roles.get(user.role)?.permissions || [];
-      const denied = new Set(user.deniedPermissions || []);
-      const effectivePermissions = [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])]
+      const {
+        personnelLearningDenialAuthority: _personnelLearningDenialAuthority,
+        ...publicUser
+      } = user;
+      const rolePermissions = (roles.get(user.role)?.permissions || [])
+        .filter(visiblePermission);
+      const grantedPermissions = (user.grantedPermissions || []).filter(visiblePermission);
+      const denied = new Set((user.deniedPermissions || []).filter(visiblePermission));
+      const effectivePermissions = [...new Set([...rolePermissions, ...grantedPermissions])]
         .filter((permission) => !denied.has(permission))
         .filter((permission) => permission !== "amu:local:manage"
           || managerAmuAccessEffective(
@@ -29136,8 +32304,9 @@ async function rightsManagementPayload(actor) {
             user.amuLocalAccessMode,
           ));
       return {
-        ...user,
+        ...publicUser,
         rolePermissions,
+        grantedPermissions,
         deniedPermissions: [...denied].sort(),
         effectivePermissions,
         personnelFieldAccess: personnelFieldEffectiveAccess({
@@ -29913,6 +33082,8 @@ function rightsAuditSummary(snapshot = {}) {
       snapshot.personnelLifecyclePermissionScopes || [],
       canonicalPermissionScopeValue,
     ),
+    personnelLearningCrossLocationDenialAuthority:
+      snapshot.personnelLearningCrossLocationDenialAuthority || null,
   });
 }
 
@@ -30056,6 +33227,8 @@ function rightsConcurrencySignature({ target, rolePermissions = [], snapshot = {
       snapshot.personnelLifecyclePermissionScopes || [],
       canonicalPermissionScopeValue,
     ),
+    personnelLearningCrossLocationDenialAuthority:
+      snapshot.personnelLearningCrossLocationDenialAuthority || null,
   }));
 }
 
@@ -30103,6 +33276,21 @@ function setDifference(currentValues, desiredValues, key) {
     added: [...desired].filter(([scopeKey]) => !current.has(scopeKey)).map(([, value]) => value),
     removed: [...current].filter(([scopeKey]) => !desired.has(scopeKey)).map(([, value]) => value),
   });
+}
+
+function assertPersonnelLearningPortalScopeDeltaAllowed(
+  actor,
+  target,
+  currentScopes,
+  desiredScopes,
+) {
+  const delta = setDifference(currentScopes, desiredScopes, portalAccessScopeKey);
+  if ((!delta.added.length && !delta.removed.length)
+    || !roleHasPersonnelLearningDefaults(target?.role)) {
+    return delta;
+  }
+  assertPersonnelLearningRoleAccountAdministrationAllowed(actor, target);
+  return delta;
 }
 
 function personnelLifecycleScopeMatchesTarget(target, scope, portalScopes) {
@@ -30237,7 +33425,13 @@ async function rightsMutationSnapshot(
   amuLocalAccessMode = "inherit",
   repository = organizationPersonnelRepository,
 ) {
-  const [grantedPermissions, deniedPermissions, scopes, permissionScopeRows] = await Promise.all([
+  const [
+    grantedPermissions,
+    deniedPermissions,
+    scopes,
+    permissionScopeRows,
+    personnelLearningDenialAuthority,
+  ] = await Promise.all([
     portalPermissionGrantsForEmployee(employeeNumber, role, repository),
     portalPermissionDenialsForEmployee(employeeNumber, repository),
     repository.listPortalAccessScopes(employeeNumber).then((rows) => rows.map((scope) => ({
@@ -30245,6 +33439,10 @@ async function rightsMutationSnapshot(
       departmentId: Number(scope.department_id || 0) || null,
     }))),
     repository.listPortalPermissionScopeGrants(employeeNumber),
+    repository.getPersonnelLearningPermissionDenialAuthority(
+      employeeNumber,
+      PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    ),
   ]);
   const permissionState = effectivePortalPermissionState(
     employeeNumber,
@@ -30260,6 +33458,12 @@ async function rightsMutationSnapshot(
     effectivePermissions: permissionState.effectivePermissions,
     scopes,
     personnelLifecyclePermissionScopes: permissionScopeRows.map(publicPortalPermissionScopeGrant),
+    personnelLearningCrossLocationDenialAuthority: personnelLearningDenialAuthority ? {
+      authorityLevel: String(personnelLearningDenialAuthority.authority_level || ""),
+      scopeLocationId: String(personnelLearningDenialAuthority.scope_location_id || ""),
+      generationId: String(personnelLearningDenialAuthority.generation_id || ""),
+      revision: Number(personnelLearningDenialAuthority.revision || 0),
+    } : null,
   };
 }
 
@@ -30346,6 +33550,14 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   const scopes = await normalizeRightsScopesForTarget(target,
     scopesInputProvided ? request.body.scopes : currentPortalScopes,
     projectedPermissions);
+  if (scopesInputProvided) {
+    assertPersonnelLearningPortalScopeDeltaAllowed(
+      actor,
+      target,
+      currentPortalScopes,
+      scopes,
+    );
+  }
   const finalDirectGrants = new Set([
     ...[...currentGrants].filter((permission) => !manageablePermissions.has(permission)),
     ...submitted.filter((permission) => manageablePermissions.has(permission)),
@@ -30407,6 +33619,8 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     scopes: currentPortalScopes,
     personnelLifecyclePermissionScopes: currentPermissionScopeRows
       .map(publicPortalPermissionScopeGrant),
+    personnelLearningCrossLocationDenialAuthority:
+      before.personnelLearningCrossLocationDenialAuthority,
   };
   assertRightsMutationSnapshotCurrent(
     rightsConcurrencySignature({ target, rolePermissions, snapshot: prePlanSnapshot }),
@@ -30417,6 +33631,22 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     rolePermissions,
     snapshot: before,
   });
+  const learningCrossPermission = PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN;
+  const learningCrossDeniedBefore = before.deniedPermissions.includes(
+    learningCrossPermission,
+  );
+  const learningCrossDeniedAfter = normalizedDenials.has(learningCrossPermission);
+  let plannedLearningDenialAuthority = before.personnelLearningCrossLocationDenialAuthority;
+  if (denialInputProvided && manageablePermissions.has(learningCrossPermission)) {
+    if (!learningCrossDeniedAfter) plannedLearningDenialAuthority = null;
+    else if (!learningCrossDeniedBefore) {
+      plannedLearningDenialAuthority = {
+        authorityLevel: PERSONNEL_LEARNING_DENIAL_AUTHORITIES.PL_PLUS,
+        scopeLocationId: "",
+        revision: 1,
+      };
+    }
+  }
   const plannedAfter = {
     grantedPermissions: [...finalDirectGrants].sort(),
     deniedPermissions: [...normalizedDenials].sort(),
@@ -30424,9 +33654,12 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     scopes,
     personnelLifecyclePermissionScopes: plannedPermissionScopes
       .map(publicPortalPermissionScopeGrant),
+    personnelLearningCrossLocationDenialAuthority: plannedLearningDenialAuthority,
   };
+  let rightsChanged = false;
+  let responseProjectionActor = actor;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const [liveTarget, liveRoleProjection, liveBefore] = await Promise.all([
+    const [liveTarget, liveRoleProjection, liveBefore, liveLearningActor] = await Promise.all([
       organization.getPortalUserAccountProjection(employeeNumber),
       organization.getPortalRoleProjection(target.role),
       rightsMutationSnapshot(
@@ -30436,7 +33669,19 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         target.amuLocalAccessMode,
         organization,
       ),
+      livePersonnelLearningRoleAdministrationActor(actor, organization),
     ]);
+    responseProjectionActor = liveLearningActor;
+    assertLivePortalRoutePermission(liveLearningActor, "rights:write", {
+      allowedRoles: RIGHTS_ADMIN_PORTAL_ROLES,
+    });
+    const liveTargetAccess = {
+      employeeNumber,
+      role: String(liveTarget?.role || ""),
+      roleLocked: Boolean(liveTarget?.role_locked),
+      configured: Boolean(liveTarget),
+      active: Boolean(liveTarget?.active),
+    };
     const liveRolePermissions = parsePortalPermissions(liveRoleProjection?.permissions)
       .filter((permission) => portalPermissionAllowedForRole(permission, target.role));
     assertRightsMutationSnapshotCurrent(
@@ -30447,6 +33692,44 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         snapshot: liveBefore,
       }),
     );
+    const grantDelta = setDifference(
+      before.grantedPermissions,
+      plannedAfter.grantedPermissions,
+      (permission) => permission,
+    );
+    const denialDelta = denialInputProvided
+      ? setDifference(
+        before.deniedPermissions,
+        plannedAfter.deniedPermissions,
+        (permission) => permission,
+      )
+      : { added: [], removed: [] };
+    const accessScopeDelta = scopesInputProvided
+      ? setDifference(before.scopes, scopes, portalAccessScopeKey)
+      : { added: [], removed: [] };
+    const permissionScopeDelta = setDifference(
+      before.personnelLifecyclePermissionScopes,
+      plannedPermissionScopes,
+      personnelLifecyclePermissionScopeKey,
+    );
+    rightsChanged = [grantDelta, denialDelta, accessScopeDelta, permissionScopeDelta]
+      .some((delta) => delta.added.length || delta.removed.length);
+    if (!rightsChanged) return;
+    if (!actorCanManagePermissionGrants(liveLearningActor, liveTargetAccess)) {
+      throw httpError(
+        403,
+        "Für diesen Zugang dürfen keine individuellen Rechte geändert werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    if (scopesInputProvided) {
+      assertPersonnelLearningPortalScopeDeltaAllowed(
+        liveLearningActor,
+        liveTarget,
+        liveBefore.scopes,
+        scopes,
+      );
+    }
     const liveScopeValidation = new Map();
     for (const scope of [
       ...(scopesInputProvided ? scopes : []),
@@ -30460,11 +33743,38 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         await validateActiveDepartmentExists(scope.departmentId, scope.locationId, organization);
       }
     }
-    const grantDelta = setDifference(
-      before.grantedPermissions,
-      plannedAfter.grantedPermissions,
-      (permission) => permission,
-    );
+    const learningPermissionDelta = [
+      ...grantDelta.added,
+      ...grantDelta.removed,
+      ...denialDelta.added,
+      ...denialDelta.removed,
+      ...permissionScopeDelta.added.map((scope) => scope.permission),
+      ...permissionScopeDelta.removed.map((scope) => scope.permission),
+    ].filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
+    const liveManageablePermissions = manageablePortalPermissionsForActor(liveLearningActor);
+    const actualPermissionDelta = [
+      ...grantDelta.added,
+      ...grantDelta.removed,
+      ...denialDelta.added,
+      ...denialDelta.removed,
+      ...permissionScopeDelta.added.map((scope) => scope.permission),
+      ...permissionScopeDelta.removed.map((scope) => scope.permission),
+    ];
+    if (actualPermissionDelta.some((permission) => !liveManageablePermissions.has(permission))) {
+      throw httpError(
+        403,
+        "Mindestens eine tatsächliche Rechteänderung liegt außerhalb der aktuell wirksamen Verwaltungsbefugnis.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    if (learningPermissionDelta.length
+      && !actorCanAdministerPersonnelLearningRoleAccount(liveLearningActor)) {
+      throw httpError(
+        403,
+        "Schulungs- und Wissensrechte dürfen nur mit aktuell wirksamer fachlicher Delegationsbefugnis geändert werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
     for (const permission of grantDelta.added) {
       await organization.insertPermissionGrant(employeeNumber, permission, actor.employeeNumber);
     }
@@ -30472,19 +33782,30 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
       await organization.deletePermissionGrant(employeeNumber, permission);
     }
     if (denialInputProvided) {
-      const denialDelta = setDifference(
-        before.deniedPermissions,
-        plannedAfter.deniedPermissions,
-        (permission) => permission,
-      );
       for (const permission of denialDelta.added) {
         await organization.insertPermissionDenial(employeeNumber, permission, actor.employeeNumber);
+        if (permission === PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN
+          && liveManageablePermissions.has(permission)) {
+          await organization.upsertPersonnelLearningPermissionDenialAuthority({
+            employeeNumber,
+            permission,
+            authorityLevel: PERSONNEL_LEARNING_DENIAL_AUTHORITIES.PL_PLUS,
+            scopeLocationId: "",
+            actor: actor.employeeNumber,
+          });
+        }
       }
       for (const permission of denialDelta.removed) {
+        if (permission === PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN
+          && liveManageablePermissions.has(permission)) {
+          await organization.deletePersonnelLearningPermissionDenialAuthority(
+            employeeNumber,
+            permission,
+          );
+        }
         await organization.deletePermissionDenial(employeeNumber, permission);
       }
     }
-    const accessScopeDelta = setDifference(before.scopes, scopes, portalAccessScopeKey);
     if (scopesInputProvided) {
       for (const scope of accessScopeDelta.added) {
         await organization.insertAccessScope({
@@ -30495,11 +33816,6 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         });
       }
     }
-    const permissionScopeDelta = setDifference(
-      before.personnelLifecyclePermissionScopes,
-      plannedPermissionScopes,
-      personnelLifecyclePermissionScopeKey,
-    );
     for (const permissionScope of permissionScopeDelta.removed) {
       await organization.deletePermissionScopeGrant({
         employeeNumber,
@@ -30520,6 +33836,13 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     for (const permissionScope of permissionScopeDelta.added) {
       await organization.insertPermissionScopeGrant(permissionScope);
     }
+    const actualAfter = await rightsMutationSnapshot(
+      employeeNumber,
+      target.role,
+      liveRolePermissions,
+      target.amuLocalAccessMode,
+      organization,
+    );
     await organization.revokePortalSessions(employeeNumber);
     await organization.revokeMobileSessions(employeeNumber, "rights_changed");
     await organization.insertAudit(
@@ -30527,8 +33850,45 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
       "portal.rights.update",
       "portal_user",
       employeeNumber,
-      compactRightsAuditDetail(before, plannedAfter),
+      compactRightsAuditDetail(before, actualAfter),
     );
+    const learningAuthorityChanged = JSON.stringify(
+      before.personnelLearningCrossLocationDenialAuthority || null,
+    ) !== JSON.stringify(
+      actualAfter.personnelLearningCrossLocationDenialAuthority || null,
+    );
+    const learningDenialChanged = before.deniedPermissions.includes(
+      PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    ) !== actualAfter.deniedPermissions.includes(
+      PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    );
+    if (denialInputProvided
+      && liveManageablePermissions.has(
+        PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      )
+      && (learningAuthorityChanged || learningDenialChanged)) {
+      await organization.insertAudit(
+        actor.employeeNumber,
+        "personnel.learning.cross-location-right.update",
+        "portal_user",
+        employeeNumber,
+        JSON.stringify({
+          schemaVersion: 1,
+          permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          enabledBefore: !before.deniedPermissions.includes(
+            PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          ),
+          enabledAfter: !actualAfter.deniedPermissions.includes(
+            PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          ),
+          authorityBefore: before.personnelLearningCrossLocationDenialAuthority
+            ?.authorityLevel || null,
+          authorityAfter: actualAfter.personnelLearningCrossLocationDenialAuthority
+            ?.authorityLevel || null,
+          reasonCode: "PL_PLUS_RIGHTS_MANAGEMENT",
+        }),
+      );
+    }
   }, { uniqueAsConcurrent: true });
   const after = await rightsMutationSnapshot(
     employeeNumber,
@@ -30538,8 +33898,1845 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   );
   const amuRoutingChanged = ["amu:local:manage", "sickness:read"].some((permission) =>
     before.effectivePermissions.includes(permission) !== after.effectivePermissions.includes(permission));
-  if (scopesInputProvided || amuRoutingChanged) await reconcileOpenAmuResponsibilities(actor.employeeNumber);
-  response.json(await rightsManagementPayload(actor));
+  if (rightsChanged && (scopesInputProvided || amuRoutingChanged)) {
+    await reconcileOpenAmuResponsibilities(actor.employeeNumber);
+  }
+  response.json(await rightsManagementPayload(responseProjectionActor));
+});
+
+app.get("/api/portal/v1/personnel-learning/modules", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_READ],
+  );
+  const actor = await personnelLearningCatalogActor(session);
+  assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
+  response.json(await personnelLearningCatalogPayload(actor));
+});
+
+app.post("/api/portal/v1/personnel-learning/modules", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE],
+    { csrf: true },
+  );
+  const input = normalizePersonnelLearningCatalogInput(request.body);
+  const moduleId = `learning-module:${crypto.randomUUID()}`;
+  const created = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
+    const occurredAt = new Date().toISOString();
+    const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
+    const module = personnelLearningModuleRow({
+      id: moduleId,
+      input,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const version = personnelLearningVersionRow({
+      moduleId,
+      versionNumber: 1,
+      input,
+      scopeSnapshot,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const createdEvent = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: 1,
+      eventType: "created",
+      eventPayload: {
+        schemaVersion: 1,
+        moduleReceiptSha256: module.receiptSha256,
+      },
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const versionEvent = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: 2,
+      eventType: "version_added",
+      moduleVersionNumber: 1,
+      eventPayload: {
+        schemaVersion: 1,
+        versionReceiptSha256: version.receiptSha256,
+        contentSha256: version.contentSha256,
+        scopeSnapshotSha256: version.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: createdEvent.receiptSha256,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertModule(module);
+    await repositories.personnelLearning.insertVersion(version);
+    await repositories.personnelLearning.insertEvent(createdEvent);
+    await repositories.personnelLearning.insertEvent(versionEvent);
+    const bundle = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.module.create",
+      "personnel_learning_module",
+      moduleId,
+      personnelLearningAuditDetail({ bundle, action: "create", version }),
+    );
+    return publicPersonnelLearningModule(bundle, actor);
+  });
+  response.status(201).json({ module: created });
+});
+
+app.post("/api/portal/v1/personnel-learning/modules/:moduleId/versions", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const moduleId = String(request.params.moduleId || "").trim();
+  const changed = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
+    const current = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    if (current.state.archived) {
+      throw httpError(
+        409,
+        "Ein archivierter Prozess muss vor einer Bearbeitung wiederhergestellt werden.",
+        "PERSONNEL_LEARNING_MODULE_ARCHIVED",
+      );
+    }
+    const currentScope = personnelLearningScopeFromVersion(current.state.latestVersion);
+    if (!personnelLearningScopeAccess(actor.access, currentScope, { manage: true })) {
+      throw httpError(
+        403,
+        "Der Prozess liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    const input = normalizePersonnelLearningCatalogInput(request.body, {
+      moduleCode: current.module.moduleCode,
+      moduleType: current.module.moduleType,
+    });
+    const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
+    const occurredAt = new Date().toISOString();
+    const version = personnelLearningVersionRow({
+      moduleId,
+      versionNumber: current.state.latestVersionNumber + 1,
+      input,
+      scopeSnapshot,
+      previousReceiptSha256: current.state.latestVersion.receiptSha256,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const latest = current.state.latestVersion;
+    if (String(latest.title) === version.title
+      && String(latest.contentSha256) === version.contentSha256
+      && String(latest.scopeType) === version.scopeType
+      && String(latest.scopeLocationId || "") === String(version.scopeLocationId || "")
+      && Number(latest.scopeDepartmentId || 0) === Number(version.scopeDepartmentId || 0)
+      && String(latest.scopeSnapshotSha256) === version.scopeSnapshotSha256) {
+      throw httpError(
+        409,
+        "Die Prozessvorlage enthält gegenüber der aktuellen Version keine Änderung.",
+        "PERSONNEL_LEARNING_VERSION_NO_CHANGE",
+      );
+    }
+    const event = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType: "version_added",
+      moduleVersionNumber: version.versionNumber,
+      eventPayload: {
+        schemaVersion: 1,
+        versionReceiptSha256: version.receiptSha256,
+        contentSha256: version.contentSha256,
+        scopeSnapshotSha256: version.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertVersion(version);
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.module.version.add",
+      "personnel_learning_module",
+      moduleId,
+      personnelLearningAuditDetail({ bundle, action: "version_add", version }),
+    );
+    return publicPersonnelLearningModule(bundle, actor);
+  });
+  response.json({ module: changed });
+});
+
+app.post("/api/portal/v1/personnel-learning/modules/:moduleId/publish", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const requestedVersionNumber = Number(request.body?.versionNumber);
+  if (!Number.isSafeInteger(requestedVersionNumber) || requestedVersionNumber < 1) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Prozessversion zur Veröffentlichung auswählen.",
+      "PERSONNEL_LEARNING_VERSION_INVALID",
+    );
+  }
+  const moduleId = String(request.params.moduleId || "").trim();
+  const published = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canPublishCatalog");
+    const current = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    if (current.state.archived) {
+      throw httpError(
+        409,
+        "Ein archivierter Prozess kann nicht veröffentlicht werden.",
+        "PERSONNEL_LEARNING_MODULE_ARCHIVED",
+      );
+    }
+    const latest = current.state.latestVersion;
+    const latestScope = personnelLearningScopeFromVersion(latest);
+    if (!personnelLearningScopeAccess(actor.access, latestScope, { manage: true })) {
+      throw httpError(
+        403,
+        "Der Prozess liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    if (requestedVersionNumber !== current.state.latestVersionNumber) {
+      throw httpError(
+        409,
+        "Nur die aktuelle Prozessversion kann veröffentlicht werden.",
+        "PERSONNEL_LEARNING_VERSION_NOT_LATEST",
+      );
+    }
+    if (current.state.publishedVersionNumber === requestedVersionNumber) {
+      return publicPersonnelLearningModule(current, actor);
+    }
+    const occurredAt = new Date().toISOString();
+    const event = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType: "published",
+      moduleVersionNumber: requestedVersionNumber,
+      eventPayload: {
+        schemaVersion: 1,
+        versionReceiptSha256: latest.receiptSha256,
+        contentSha256: latest.contentSha256,
+        scopeSnapshotSha256: latest.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.module.publish",
+      "personnel_learning_module",
+      moduleId,
+      personnelLearningAuditDetail({ bundle, action: "publish", version: latest }),
+    );
+    return publicPersonnelLearningModule(bundle, actor);
+  });
+  response.json({ module: published });
+});
+
+async function changePersonnelLearningModuleLifecycle(request, response, eventType) {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const moduleId = String(request.params.moduleId || "").trim();
+  const archivedAfter = eventType === "archived";
+  const result = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canPublishCatalog");
+    const current = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    const latest = current.state.latestVersion;
+    if (!personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(latest),
+      { manage: true },
+    )) {
+      throw httpError(
+        403,
+        "Der Prozess liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    if (current.state.archived === archivedAfter) {
+      return publicPersonnelLearningModule(current, actor);
+    }
+    const occurredAt = new Date().toISOString();
+    const event = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType,
+      eventPayload: {
+        schemaVersion: 1,
+        latestVersionNumber: current.state.latestVersionNumber,
+        publishedVersionNumber: current.state.publishedVersionNumber,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      eventType === "archived"
+        ? "personnel.learning.module.archive"
+        : "personnel.learning.module.restore",
+      "personnel_learning_module",
+      moduleId,
+      personnelLearningAuditDetail({
+        bundle,
+        action: eventType === "archived" ? "archive" : "restore",
+        version: latest,
+      }),
+    );
+    return publicPersonnelLearningModule(bundle, actor);
+  });
+  response.json({ module: result });
+}
+
+app.post("/api/portal/v1/personnel-learning/modules/:moduleId/archive", async (request, response) => {
+  await changePersonnelLearningModuleLifecycle(request, response, "archived");
+});
+
+app.post("/api/portal/v1/personnel-learning/modules/:moduleId/restore", async (request, response) => {
+  await changePersonnelLearningModuleLifecycle(request, response, "restored");
+});
+
+app.get("/api/portal/v1/personnel-learning/skills", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_READ],
+  );
+  const actor = await personnelLearningCatalogActor(session);
+  assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
+  response.json(await personnelLearningSkillCatalogPayload(actor));
+});
+
+app.post("/api/portal/v1/personnel-learning/skills", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE],
+    { csrf: true },
+  );
+  const input = normalizePersonnelLearningSkillCatalogInput(request.body);
+  const skillId = `learning-skill:${crypto.randomUUID()}`;
+  const created = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
+    const occurredAt = new Date().toISOString();
+    const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
+    const module = personnelLearningModuleRow({
+      id: skillId,
+      input,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const version = personnelLearningVersionRow({
+      moduleId: skillId,
+      versionNumber: 1,
+      input,
+      scopeSnapshot,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const createdEvent = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: 1,
+      eventType: "created",
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        moduleReceiptSha256: module.receiptSha256,
+      },
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const versionEvent = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: 2,
+      eventType: "version_added",
+      moduleVersionNumber: 1,
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        versionReceiptSha256: version.receiptSha256,
+        contentSha256: version.contentSha256,
+        scopeSnapshotSha256: version.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: createdEvent.receiptSha256,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertModule(module);
+    await repositories.personnelLearning.insertVersion(version);
+    await repositories.personnelLearning.insertEvent(createdEvent);
+    await repositories.personnelLearning.insertEvent(versionEvent);
+    const bundle = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.skill.create",
+      "personnel_learning_skill",
+      skillId,
+      personnelLearningAuditDetail({ bundle, action: "skill_create", version }),
+    );
+    return publicPersonnelLearningSkill(bundle, actor);
+  });
+  response.status(201).json({ skill: created });
+});
+
+app.post("/api/portal/v1/personnel-learning/skills/:skillId/versions", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const skillId = String(request.params.skillId || "").trim();
+  const changed = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
+    const current = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    if (current.state.archived) {
+      throw httpError(
+        409,
+        "Eine archivierte Fähigkeit muss vor einer Bearbeitung wiederhergestellt werden.",
+        "PERSONNEL_LEARNING_SKILL_ARCHIVED",
+      );
+    }
+    const currentScope = personnelLearningScopeFromVersion(current.state.latestVersion);
+    if (!personnelLearningScopeAccess(actor.access, currentScope, { manage: true })) {
+      throw httpError(
+        403,
+        "Die Fähigkeit liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    const input = normalizePersonnelLearningSkillCatalogInput(request.body, {
+      skillCode: current.module.moduleCode,
+    });
+    const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
+    const occurredAt = new Date().toISOString();
+    const version = personnelLearningVersionRow({
+      moduleId: skillId,
+      versionNumber: current.state.latestVersionNumber + 1,
+      input,
+      scopeSnapshot,
+      previousReceiptSha256: current.state.latestVersion.receiptSha256,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const latest = current.state.latestVersion;
+    if (String(latest.title) === version.title
+      && String(latest.contentSha256) === version.contentSha256
+      && String(latest.scopeType) === version.scopeType
+      && String(latest.scopeLocationId || "") === String(version.scopeLocationId || "")
+      && Number(latest.scopeDepartmentId || 0) === Number(version.scopeDepartmentId || 0)
+      && String(latest.scopeSnapshotSha256) === version.scopeSnapshotSha256) {
+      throw httpError(
+        409,
+        "Die Fähigkeit enthält gegenüber der aktuellen Version keine Änderung.",
+        "PERSONNEL_LEARNING_SKILL_VERSION_NO_CHANGE",
+      );
+    }
+    const event = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType: "version_added",
+      moduleVersionNumber: version.versionNumber,
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        versionReceiptSha256: version.receiptSha256,
+        contentSha256: version.contentSha256,
+        scopeSnapshotSha256: version.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertVersion(version);
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.skill.version.add",
+      "personnel_learning_skill",
+      skillId,
+      personnelLearningAuditDetail({ bundle, action: "skill_version_add", version }),
+    );
+    return publicPersonnelLearningSkill(bundle, actor);
+  });
+  response.json({ skill: changed });
+});
+
+app.post("/api/portal/v1/personnel-learning/skills/:skillId/publish", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const requestedVersionNumber = Number(request.body?.versionNumber);
+  if (!Number.isSafeInteger(requestedVersionNumber) || requestedVersionNumber < 1) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Fähigkeitsversion zur Veröffentlichung auswählen.",
+      "PERSONNEL_LEARNING_SKILL_VERSION_INVALID",
+    );
+  }
+  const skillId = String(request.params.skillId || "").trim();
+  const published = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canPublishCatalog");
+    const current = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    if (current.state.archived) {
+      throw httpError(
+        409,
+        "Eine archivierte Fähigkeit kann nicht veröffentlicht werden.",
+        "PERSONNEL_LEARNING_SKILL_ARCHIVED",
+      );
+    }
+    const latest = current.state.latestVersion;
+    if (!personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(latest),
+      { manage: true },
+    )) {
+      throw httpError(
+        403,
+        "Die Fähigkeit liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    if (requestedVersionNumber !== current.state.latestVersionNumber) {
+      throw httpError(
+        409,
+        "Nur die aktuelle Fähigkeitsversion kann veröffentlicht werden.",
+        "PERSONNEL_LEARNING_SKILL_VERSION_NOT_LATEST",
+      );
+    }
+    if (current.state.publishedVersionNumber === requestedVersionNumber) {
+      return publicPersonnelLearningSkill(current, actor);
+    }
+    const occurredAt = new Date().toISOString();
+    const event = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType: "published",
+      moduleVersionNumber: requestedVersionNumber,
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        versionReceiptSha256: latest.receiptSha256,
+        contentSha256: latest.contentSha256,
+        scopeSnapshotSha256: latest.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.skill.publish",
+      "personnel_learning_skill",
+      skillId,
+      personnelLearningAuditDetail({ bundle, action: "skill_publish", version: latest }),
+    );
+    return publicPersonnelLearningSkill(bundle, actor);
+  });
+  response.json({ skill: published });
+});
+
+async function changePersonnelLearningSkillLifecycle(request, response, eventType) {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const skillId = String(request.params.skillId || "").trim();
+  const archivedAfter = eventType === "archived";
+  const result = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canPublishCatalog");
+    const current = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    const latest = current.state.latestVersion;
+    if (!personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(latest),
+      { manage: true },
+    )) {
+      throw httpError(
+        403,
+        "Die Fähigkeit liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    if (current.state.archived === archivedAfter) {
+      return publicPersonnelLearningSkill(current, actor);
+    }
+    const occurredAt = new Date().toISOString();
+    const event = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType,
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        latestVersionNumber: current.state.latestVersionNumber,
+        publishedVersionNumber: current.state.publishedVersionNumber,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      eventType === "archived"
+        ? "personnel.learning.skill.archive"
+        : "personnel.learning.skill.restore",
+      "personnel_learning_skill",
+      skillId,
+      personnelLearningAuditDetail({
+        bundle,
+        action: eventType === "archived" ? "skill_archive" : "skill_restore",
+        version: latest,
+      }),
+    );
+    return publicPersonnelLearningSkill(bundle, actor);
+  });
+  response.json({ skill: result });
+}
+
+app.post("/api/portal/v1/personnel-learning/skills/:skillId/archive", async (request, response) => {
+  await changePersonnelLearningSkillLifecycle(request, response, "archived");
+});
+
+app.post("/api/portal/v1/personnel-learning/skills/:skillId/restore", async (request, response) => {
+  await changePersonnelLearningSkillLifecycle(request, response, "restored");
+});
+
+app.get("/api/portal/v1/personnel-learning/competencies", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
+  );
+  const actor = await personnelLearningCatalogActor(session);
+  response.json(await personnelLearningCompetencyPayload(actor));
+});
+
+app.put(
+  "/api/portal/v1/personnel-learning/competencies/:employeeNumber/:skillId",
+  async (request, response) => {
+    const session = requirePortalAnyPermissionOrLocal(
+      request,
+      [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
+      { csrf: true },
+    );
+    const employeeNumber = String(request.params.employeeNumber || "").trim();
+    const skillId = String(request.params.skillId || "").trim();
+    if (!employeeNumber || employeeNumber.length > 80 || employeeNumber.includes("\0")
+      || !skillId || skillId.length > 180 || skillId.includes("\0")) {
+      throw httpError(
+        400,
+        "Mitarbeiter oder Fähigkeit sind ungültig.",
+        "PERSONNEL_LEARNING_COMPETENCY_TARGET_INVALID",
+      );
+    }
+    const mutation = await personnelLearningCatalogSerializableTransaction(
+      async (repositories) => {
+        const actor = await personnelLearningCatalogActor(
+          session,
+          repositories.organizationPersonnel,
+        );
+        assertPersonnelLearningCompetencyCapability(actor);
+        const employee = (await repositories.organizationPersonnel.listEmployees())
+          .find((entry) => String(entry.personnel_number) === employeeNumber);
+        if (!employee?.active) {
+          throw httpError(
+            404,
+            "Der aktive Mitarbeiter wurde nicht gefunden.",
+            "PERSONNEL_LEARNING_COMPETENCY_EMPLOYEE_NOT_FOUND",
+          );
+        }
+        if (!personnelLearningCompetencyEmployeeAllowed(actor, employee)) {
+          throw httpError(
+            403,
+            "Der Mitarbeiter liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+            "PERSONNEL_LEARNING_COMPETENCY_SCOPE_DENIED",
+          );
+        }
+        const bundle = assertPersonnelLearningCatalogEntity(
+          await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+          "skill",
+        );
+        const competency = await repositories.personnelLearning.getCompetency(
+          employeeNumber,
+          skillId,
+        );
+        const current = competency
+          ? await repositories.personnelLearning.getLatestCompetencyRevision(competency.id)
+          : null;
+        if (competency && !current) {
+          throw httpError(
+            503,
+            "Die revisionsgebundene Kompetenzhistorie ist unvollständig.",
+            "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+          );
+        }
+        const input = normalizePersonnelLearningCompetencyInput(request.body, { current });
+        if (!competency && !input.active) {
+          throw httpError(
+            409,
+            "Eine noch nicht vorhandene Kompetenz kann nicht entzogen werden.",
+            "PERSONNEL_LEARNING_COMPETENCY_NOT_ASSIGNED",
+          );
+        }
+        if (competency) {
+          const expectedReceipt = personnelLearningCompetencyExpectedReceipt(
+            request.body?.expectedRevisionReceipt,
+          );
+          if (String(current.receiptSha256) !== expectedReceipt) {
+            throw httpError(
+              409,
+              "Das Kompetenzprofil wurde zwischenzeitlich geändert. Bitte neu laden.",
+              "PERSONNEL_LEARNING_COMPETENCY_CONCURRENT_CHANGE",
+            );
+          }
+        }
+        let skillVersion;
+        if (input.active) {
+          if (bundle.state.archived || !bundle.state.publishedVersion) {
+            throw httpError(
+              409,
+              "Nur eine aktuell veröffentlichte, nicht archivierte Fähigkeit kann zugeordnet werden.",
+              "PERSONNEL_LEARNING_SKILL_NOT_ASSIGNABLE",
+            );
+          }
+          skillVersion = bundle.state.publishedVersion;
+        } else {
+          skillVersion = bundle.state.versions.find((version) => (
+            Number(version.versionNumber) === Number(current.skillVersionNumber)
+          ));
+        }
+        if (!skillVersion) {
+          throw httpError(
+            503,
+            "Die gebundene Fähigkeitsversion ist nicht mehr verfügbar.",
+            "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+          );
+        }
+        if (!personnelLearningScopeAccess(
+          actor.access,
+          personnelLearningScopeFromVersion(skillVersion),
+        )) {
+          throw httpError(
+            403,
+            "Die Fähigkeit liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+            "PERSONNEL_LEARNING_COMPETENCY_SKILL_SCOPE_DENIED",
+          );
+        }
+        levelDefinitionForSkillVersion(skillVersion, input.competencyLevel);
+        const skillVersionNumber = Number(skillVersion.versionNumber);
+        const noChange = Boolean(current)
+          && Boolean(current.active) === input.active
+          && Number(current.competencyLevel) === input.competencyLevel
+          && Boolean(current.trainerAuthorized) === input.trainerAuthorized
+          && Number(current.skillVersionNumber) === skillVersionNumber;
+        const existingRevisions = competency
+          ? (await repositories.personnelLearning.listCompetencyRevisions())
+            .filter((revision) => revision.competencyId === competency.id)
+          : [];
+        if (noChange) {
+          return {
+            created: false,
+            competency: publicPersonnelLearningCompetency({
+              competency,
+              state: personnelLearningCompetencyStateOrUnavailable(
+                competency,
+                existingRevisions,
+              ),
+              employee,
+              bundle,
+              actor,
+            }),
+          };
+        }
+        const occurredAt = new Date().toISOString();
+        const identity = competency || personnelLearningCompetencyIdentityRow({
+          id: `learning-competency:${crypto.randomUUID()}`,
+          employeeNumber,
+          skillModuleId: skillId,
+          actorId: actor.actorId,
+          occurredAt,
+        });
+        const changeType = !competency
+          ? "assigned"
+          : !input.active
+            ? "withdrawn"
+            : !current.active
+              ? "restored"
+              : "updated";
+        const revision = personnelLearningCompetencyRevisionRow({
+          competencyId: identity.id,
+          revisionNumber: Number(current?.revisionNumber || 0) + 1,
+          skillModuleId: skillId,
+          skillVersionNumber,
+          input,
+          changeType,
+          previousReceiptSha256: String(current?.receiptSha256 || ""),
+          actorId: actor.actorId,
+          occurredAt,
+        });
+        if (!competency) await repositories.personnelLearning.insertCompetency(identity);
+        await repositories.personnelLearning.insertCompetencyRevision(revision);
+        const auditActions = {
+          assigned: "personnel.learning.competency.assign",
+          updated: "personnel.learning.competency.update",
+          withdrawn: "personnel.learning.competency.withdraw",
+          restored: "personnel.learning.competency.restore",
+        };
+        await repositories.organizationPersonnel.insertAudit(
+          actor.actorId,
+          auditActions[changeType],
+          "personnel_learning_employee_competency",
+          identity.id,
+          personnelLearningCompetencyAuditDetail({
+            revision: { ...revision, employeeNumber },
+            action: changeType,
+          }),
+        );
+        return {
+          created: !competency,
+          competency: publicPersonnelLearningCompetency({
+            competency: identity,
+            state: personnelLearningCompetencyStateOrUnavailable(
+              identity,
+              [...existingRevisions, revision],
+            ),
+            employee,
+            bundle,
+            actor,
+          }),
+        };
+      },
+    );
+    response.status(mutation.created ? 201 : 200).json({
+      competency: mutation.competency,
+    });
+  },
+);
+
+app.get("/api/portal/v1/personnel-learning/assignments", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
+  );
+  const actor = await personnelLearningCatalogActor(session);
+  response.json(await personnelLearningAssignmentPayload(actor));
+});
+
+async function mutatePersonnelLearningAssignment(request, response, { create = false } = {}) {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
+    { csrf: true },
+  );
+  const requestedAssignmentId = String(request.params.assignmentId || "").trim();
+  const requestedProcessId = String(request.body?.processId || "").trim();
+  const requestedLearnerEmployeeNumber = String(
+    request.body?.learnerEmployeeNumber || "",
+  ).trim();
+  if ((!create && (!requestedAssignmentId || requestedAssignmentId.length > 180
+      || requestedAssignmentId.includes("\0")))
+    || (create && (!requestedProcessId || requestedProcessId.length > 180
+      || requestedProcessId.includes("\0")
+      || !requestedLearnerEmployeeNumber
+      || requestedLearnerEmployeeNumber.length > 80
+      || requestedLearnerEmployeeNumber.includes("\0")))) {
+    throw httpError(
+      400,
+      "Die Schulungszuweisung enthält kein gültiges Ziel.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_TARGET_INVALID",
+    );
+  }
+  const mutation = await personnelLearningCatalogSerializableTransaction(
+    async (repositories) => {
+      const actor = await personnelLearningCatalogActor(
+        session,
+        repositories.organizationPersonnel,
+      );
+      assertPersonnelLearningCompetencyCapability(actor);
+      const context = await personnelLearningAssignmentProjectionContext(actor, {
+        learningRepository: repositories.personnelLearning,
+        organizationRepository: repositories.organizationPersonnel,
+      });
+      let assignment = create
+        ? await repositories.personnelLearning.getAssignmentForLearner(
+            requestedProcessId,
+            requestedLearnerEmployeeNumber,
+          )
+        : await repositories.personnelLearning.getAssignment(requestedAssignmentId);
+      if (create && assignment) {
+        throw httpError(
+          409,
+          "Für diesen Mitarbeiter besteht bereits eine Schulungszuweisung zu diesem Prozess. Bitte den vorhandenen Eintrag bearbeiten oder wiederherstellen.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_ALREADY_EXISTS",
+        );
+      }
+      if (!create && !assignment) {
+        throw httpError(
+          404,
+          "Die Schulungszuweisung wurde nicht gefunden.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_NOT_FOUND",
+        );
+      }
+      const processId = create ? requestedProcessId : String(assignment.processModuleId);
+      const learnerEmployeeNumber = create
+        ? requestedLearnerEmployeeNumber : String(assignment.learnerEmployeeNumber);
+      const learner = context.employeeByNumber.get(learnerEmployeeNumber);
+      if (!learner?.active) {
+        throw httpError(
+          404,
+          "Der aktive Lernende wurde nicht gefunden.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_LEARNER_NOT_FOUND",
+        );
+      }
+      if (!personnelLearningCompetencyEmployeeAllowed(actor, learner)) {
+        throw httpError(
+          403,
+          "Der Lernende liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_SCOPE_DENIED",
+        );
+      }
+      const processBundle = assertPersonnelLearningCatalogEntity(
+        context.bundles.get(processId),
+        "process",
+      );
+      const current = assignment
+        ? await repositories.personnelLearning.getLatestAssignmentRevision(assignment.id)
+        : null;
+      if (assignment && !current) {
+        throw httpError(
+          503,
+          "Die Schulungszuweisung besitzt keine vollständige Revisionshistorie.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+        );
+      }
+      if (assignment) {
+        const expectedReceipt = personnelLearningAssignmentExpectedReceipt(
+          request.body?.expectedRevisionReceipt,
+        );
+        if (String(current.receiptSha256 || "") !== expectedReceipt) {
+          throw httpError(
+            409,
+            "Die Schulungszuweisung wurde zwischenzeitlich geändert. Bitte neu laden.",
+            "PERSONNEL_LEARNING_ASSIGNMENT_CONCURRENT_CHANGE",
+          );
+        }
+      }
+      const currentTrainerCompetencyIds = current
+        ? current.trainerBindings.map((binding) => binding.competencyId) : [];
+      const input = normalizePersonnelLearningAssignmentInput(request.body, {
+        current: { trainerCompetencyIds: currentTrainerCompetencyIds },
+      });
+      let processVersion;
+      if (assignment) {
+        processVersion = processBundle.state.versions.find((version) => (
+          Number(version.versionNumber) === Number(current.processVersionNumber)
+        ));
+      } else {
+        processVersion = processBundle.state.publishedVersion;
+      }
+      if (!processVersion) {
+        throw httpError(
+          503,
+          "Die gebundene Prozessversion ist nicht verfügbar.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+        );
+      }
+      if (input.active) {
+        if (processBundle.state.archived || (!assignment && !processBundle.state.publishedVersion)) {
+          throw httpError(
+            409,
+            "Nur ein veröffentlichter, nicht archivierter Prozess kann zugewiesen werden.",
+            "PERSONNEL_LEARNING_ASSIGNMENT_PROCESS_NOT_ASSIGNABLE",
+          );
+        }
+        if (!personnelLearningScopeAccess(
+          actor.access,
+          personnelLearningScopeFromVersion(processVersion),
+        ) || !personnelLearningProcessAppliesToEmployee(
+          processVersion,
+          learner,
+          actor,
+        )) {
+          throw httpError(
+            403,
+            "Der Prozess gilt nicht für den freigegebenen Organisationsbereich des Lernenden.",
+            "PERSONNEL_LEARNING_ASSIGNMENT_PROCESS_SCOPE_DENIED",
+          );
+        }
+      }
+      const trainerBindings = input.active
+        ? resolvedPersonnelLearningTrainerBindings({
+            actor,
+            learnerEmployeeNumber,
+            trainerCompetencyIds: input.trainerCompetencyIds,
+            context,
+          })
+        : normalizePersonnelLearningTrainerBindings(current.trainerBindings);
+      const noChange = Boolean(current)
+        && Boolean(current.active) === Boolean(input.active)
+        && stablePersonnelLearningJson(trainerBindings)
+          === stablePersonnelLearningJson(
+            normalizePersonnelLearningTrainerBindings(current.trainerBindings),
+          );
+      const existingRevisions = assignment
+        ? (await repositories.personnelLearning.listAssignmentRevisions())
+          .filter((revision) => revision.assignmentId === assignment.id)
+        : [];
+      if (noChange) {
+        const state = personnelLearningAssignmentStateOrUnavailable(
+          assignment,
+          existingRevisions,
+        );
+        return {
+          created: false,
+          assignment: publicPersonnelLearningAssignment(assignment, state, context),
+        };
+      }
+      const occurredAt = new Date().toISOString();
+      const identity = assignment || personnelLearningAssignmentIdentityRow({
+        id: `learning-assignment:${crypto.randomUUID()}`,
+        processModuleId: processId,
+        learnerEmployeeNumber,
+        actorId: actor.actorId,
+        occurredAt,
+      });
+      const changeType = !assignment
+        ? "assigned"
+        : !input.active
+          ? "cancelled"
+          : !current.active
+            ? "restored"
+            : "trainers_updated";
+      const revision = personnelLearningAssignmentRevisionRow({
+        assignmentId: identity.id,
+        revisionNumber: Number(current?.revisionNumber || 0) + 1,
+        processModuleId: processId,
+        processVersionNumber: Number(processVersion.versionNumber),
+        active: input.active,
+        trainerBindings,
+        changeType,
+        previousReceiptSha256: String(current?.receiptSha256 || ""),
+        actorId: actor.actorId,
+        occurredAt,
+      });
+      if (!assignment) await repositories.personnelLearning.insertAssignment(identity);
+      await repositories.personnelLearning.insertAssignmentRevision(revision);
+      const auditActions = {
+        assigned: "personnel.learning.assignment.assign",
+        trainers_updated: "personnel.learning.assignment.trainers.update",
+        cancelled: "personnel.learning.assignment.cancel",
+        restored: "personnel.learning.assignment.restore",
+      };
+      await repositories.organizationPersonnel.insertAudit(
+        actor.actorId,
+        auditActions[changeType],
+        "personnel_learning_assignment",
+        identity.id,
+        personnelLearningAssignmentAuditDetail({
+          assignment: identity,
+          revision,
+          action: changeType,
+        }),
+      );
+      const refreshedContext = await personnelLearningAssignmentProjectionContext(actor, {
+        learningRepository: repositories.personnelLearning,
+        organizationRepository: repositories.organizationPersonnel,
+      });
+      const refreshedAssignment = refreshedContext.assignments.find((entry) => (
+        entry.id === identity.id
+      ));
+      const state = personnelLearningAssignmentStateOrUnavailable(
+        refreshedAssignment,
+        refreshedContext.assignmentRevisionsById.get(identity.id) || [],
+      );
+      return {
+        created: !assignment,
+        assignment: publicPersonnelLearningAssignment(
+          refreshedAssignment,
+          state,
+          refreshedContext,
+        ),
+      };
+    },
+  );
+  response.status(mutation.created ? 201 : 200).json({
+    assignment: mutation.assignment,
+  });
+}
+
+app.post("/api/portal/v1/personnel-learning/assignments", async (request, response) => {
+  await mutatePersonnelLearningAssignment(request, response, { create: true });
+});
+
+app.put(
+  "/api/portal/v1/personnel-learning/assignments/:assignmentId",
+  async (request, response) => {
+    await mutatePersonnelLearningAssignment(request, response);
+  },
+);
+
+function personnelLearningProgressAssignmentBundleFromContext(
+  actor,
+  assignment,
+  context,
+  { requireRead = true } = {},
+) {
+  const assignmentState = personnelLearningAssignmentStateOrUnavailable(
+    assignment,
+    context.assignmentRevisionsById.get(assignment.id) || [],
+  );
+  const learner = context.employeeByNumber.get(String(assignment.learnerEmployeeNumber));
+  const processBundle = context.bundles.get(String(assignment.processModuleId));
+  const processVersion = processBundle?.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(assignmentState.current.processVersionNumber)
+  ));
+  if (!learner || !processVersion || processBundle?.catalogEntity !== "process") {
+    throw httpError(
+      503,
+      "Die gebundene Prozessversion der Schulungszuweisung fehlt.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+    );
+  }
+  const progressState = personnelLearningProgressStateOrUnavailable(
+    context.progressRevisionsByAssignmentId.get(String(assignment.id)) || [],
+    processVersion.content?.steps || [],
+  );
+  const access = personnelLearningProgressAccess({
+    actor,
+    assignmentState,
+    progressState,
+    learner,
+    processVersion,
+    context,
+  });
+  if (requireRead && !access.canRead) {
+    throw httpError(
+      403,
+      "Der Schulungsfortschritt liegt außerhalb der aktuell wirksamen Zuständigkeit.",
+      "PERSONNEL_LEARNING_PROGRESS_PERMISSION_DENIED",
+    );
+  }
+  return Object.freeze({
+    actor,
+    context,
+    assignment,
+    assignmentState,
+    learner,
+    processBundle,
+    processVersion,
+    progressState,
+    access,
+  });
+}
+
+async function personnelLearningProgressAssignmentBundle(
+  actor,
+  assignmentId,
+  {
+    learningRepository = personnelLearningRepository,
+    organizationRepository = organizationPersonnelRepository,
+  } = {},
+) {
+  const context = await personnelLearningAssignmentProjectionContext(actor, {
+    learningRepository,
+    organizationRepository,
+    requireCapability: false,
+  });
+  const assignment = context.assignments.find((entry) => (
+    String(entry.id) === String(assignmentId)
+  ));
+  if (!assignment) {
+    throw httpError(
+      404,
+      "Die Schulungszuweisung wurde nicht gefunden.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_NOT_FOUND",
+    );
+  }
+  return personnelLearningProgressAssignmentBundleFromContext(
+    actor,
+    assignment,
+    context,
+  );
+}
+
+function publicPersonnelLearningProgressAssignment(bundle) {
+  const canReadAudit = bundle.actor.access?.canReadAudit === true
+    && bundle.access.leadership;
+  const trainerBindings = bundle.assignmentState.trainerBindings.map((binding) => {
+    const employee = bundle.context.employeeByNumber.get(binding.trainerEmployeeNumber);
+    const competencyState = bundle.context.competencyStateById.get(binding.competencyId);
+    const skillBundle = bundle.context.bundles.get(binding.skillModuleId);
+    const skillVersion = skillBundle?.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(binding.skillVersionNumber)
+    ));
+    return {
+      trainerEmployeeNumber: String(binding.trainerEmployeeNumber),
+      trainerName: String(employee?.full_name || binding.trainerEmployeeNumber),
+      skillTitle: String(skillVersion?.title || "Gebundene Trainerfähigkeit"),
+      competencyLevel: Number(binding.competencyLevel),
+      currentEligible: Boolean(employee?.active)
+        && Boolean(competencyState?.active)
+        && Boolean(competencyState?.trainerAuthorized)
+        && String(competencyState?.currentReceipt || "")
+          === String(binding.competencyRevisionReceipt || ""),
+    };
+  });
+  return {
+    id: String(bundle.assignment.id),
+    active: Boolean(bundle.assignmentState.active),
+    currentAssignmentRevisionReceipt: String(bundle.assignmentState.currentReceipt || ""),
+    process: {
+      id: String(bundle.assignment.processModuleId),
+      title: String(bundle.processVersion.title || ""),
+      summary: String(bundle.processVersion.content?.summary || ""),
+      objective: String(bundle.processVersion.content?.objective || ""),
+      versionNumber: Number(bundle.assignmentState.current.processVersionNumber),
+    },
+    learner: personnelLearningCompetencyEmployeeProjection(bundle.learner),
+    trainers: trainerBindings,
+    participantRole: bundle.access.branchAccount
+      ? "branch_account" : bundle.access.leadership
+        ? "leadership" : bundle.access.trainer ? "trainer" : "learner",
+    progress: publicPersonnelLearningProgress({
+      progressState: bundle.progressState,
+      processVersion: bundle.processVersion,
+      access: bundle.access,
+      canReadAudit,
+    }),
+  };
+}
+
+function personnelLearningDashboardEmployeeAllowed(actor, employee) {
+  if (!employee?.active) return false;
+  if (actor.access?.branchDashboard === true) {
+    return String(employee.home_location_id || "")
+      === String(actor.access.branchDashboardLocationId || "");
+  }
+  if (String(employee.personnel_number || "") === String(actor.actorId || "")) return true;
+  return personnelLearningProgressLeadershipAllowed(actor, employee);
+}
+
+function publicPersonnelLearningDashboardCompetency({
+  competency,
+  competencyState,
+  skillBundle,
+}) {
+  const current = competencyState.current;
+  const skillVersion = skillBundle.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(current.skillVersionNumber)
+  ));
+  if (!skillVersion) {
+    throw httpError(
+      503,
+      "Die gebundene Fähigkeitsversion des Kompetenzprofils fehlt.",
+      "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+    );
+  }
+  const levelDefinitions = Array.isArray(skillVersion.content?.levelDefinitions)
+    ? skillVersion.content.levelDefinitions.map((definition) => ({
+        level: Number(definition.level),
+        label: String(definition.label || ""),
+        description: String(definition.description || ""),
+      }))
+    : [];
+  return {
+    competencyId: String(competency.id),
+    skillId: String(competency.skillModuleId),
+    skillCode: String(skillBundle.module.moduleCode || ""),
+    skillTitle: String(skillVersion.title || ""),
+    skillCategory: String(skillVersion.content?.category || "Allgemein"),
+    skillSummary: String(skillVersion.content?.summary || ""),
+    skillVersionNumber: Number(current.skillVersionNumber),
+    level: Number(current.competencyLevel),
+    levelDefinition: levelDefinitions.find((definition) => (
+      Number(definition.level) === Number(current.competencyLevel)
+    )) || null,
+    levelDefinitions,
+    trainerAuthorized: Boolean(current.trainerAuthorized),
+    updatedAt: String(current.changedAt || ""),
+  };
+}
+
+function personnelLearningDashboardViewer(actor) {
+  const organizationScope = actor.access?.organizationScope || null;
+  const location = organizationScope?.locationId
+    ? actor.locations.find((entry) => String(entry.id) === organizationScope.locationId)
+    : null;
+  const department = organizationScope?.departmentId
+    ? actor.departments.find((entry) => (
+        Number(entry.id) === Number(organizationScope.departmentId)
+      ))
+    : null;
+  const kind = actor.access?.branchDashboard === true
+    ? "branch_account" : actor.access?.localSystem === true
+      ? "local" : actor.access?.canWriteAssignments === true ? "leadership" : "personal";
+  return {
+    kind,
+    actorId: String(actor.actorId || ""),
+    label: kind === "branch_account"
+      ? String(actor.session?.fullName || location?.name || "Filialkonto")
+      : kind === "local" ? "Lokale Verwaltung" : String(actor.session?.fullName || ""),
+    scope: organizationScope ? {
+      locationId: String(organizationScope.locationId || ""),
+      locationName: String(location?.name || organizationScope.locationId || ""),
+      departmentId: Number(organizationScope.departmentId || 0) || null,
+      departmentName: String(department?.name || ""),
+    } : null,
+  };
+}
+
+async function personnelLearningDashboardPayload(
+  actor,
+  {
+    learningRepository = personnelLearningRepository,
+    organizationRepository = organizationPersonnelRepository,
+  } = {},
+) {
+  if (!actor?.actorId
+    || ((actor.session?.sessionKind === "organization" || actor.session?.isEmployee === false)
+      && actor.access?.branchDashboard !== true)) {
+    throw httpError(
+      403,
+      "Für dieses Konto ist kein Schulungsdashboard freigegeben.",
+      "PERSONNEL_LEARNING_DASHBOARD_PERMISSION_DENIED",
+    );
+  }
+  const context = await personnelLearningAssignmentProjectionContext(actor, {
+    learningRepository,
+    organizationRepository,
+    requireCapability: false,
+  });
+  const assignments = [];
+  for (const assignment of context.assignments) {
+    const bundle = personnelLearningProgressAssignmentBundleFromContext(
+      actor,
+      assignment,
+      context,
+      { requireRead: false },
+    );
+    if (!bundle.access.canRead) continue;
+    assignments.push(publicPersonnelLearningProgressAssignment(bundle));
+  }
+  const profileByEmployee = new Map();
+  for (const competency of context.competencies) {
+    const competencyState = context.competencyStateById.get(String(competency.id));
+    const employee = context.employeeByNumber.get(String(competency.employeeNumber));
+    const skillBundle = context.bundles.get(String(competency.skillModuleId));
+    if (!competencyState?.active
+      || !employee
+      || !skillBundle
+      || skillBundle.catalogEntity !== "skill"
+      || !personnelLearningDashboardEmployeeAllowed(actor, employee)) continue;
+    const employeeNumber = String(employee.personnel_number || "");
+    const profile = profileByEmployee.get(employeeNumber) || {
+      employee: personnelLearningCompetencyEmployeeProjection(employee),
+      competencies: [],
+    };
+    profile.competencies.push(publicPersonnelLearningDashboardCompetency({
+      competency,
+      competencyState,
+      skillBundle,
+    }));
+    profileByEmployee.set(employeeNumber, profile);
+  }
+  const profiles = [...profileByEmployee.values()].map((profile) => ({
+    ...profile,
+    competencies: profile.competencies.sort((left, right) => (
+      left.skillCategory.localeCompare(right.skillCategory, "de-AT", { sensitivity: "base" })
+      || left.skillTitle.localeCompare(right.skillTitle, "de-AT", { sensitivity: "base" })
+    )),
+  })).sort((left, right) => left.employee.fullName.localeCompare(
+    right.employee.fullName,
+    "de-AT",
+    { sensitivity: "base" },
+  ));
+  assignments.sort((left, right) => (
+    Number(right.active) - Number(left.active)
+    || left.learner.fullName.localeCompare(right.learner.fullName, "de-AT", {
+      sensitivity: "base",
+    })
+    || left.process.title.localeCompare(right.process.title, "de-AT", {
+      sensitivity: "base",
+    })
+  ));
+  const activeAssignments = assignments.filter((assignment) => assignment.active);
+  const summary = {
+    activeAssignments: activeAssignments.length,
+    notStarted: activeAssignments.filter((assignment) => (
+      assignment.progress.status === "not_started"
+    )).length,
+    inProgress: activeAssignments.filter((assignment) => (
+      assignment.progress.status === "in_progress"
+    )).length,
+    completed: assignments.filter((assignment) => assignment.progress.finalized).length,
+    attentionRequired: activeAssignments.filter((assignment) => (
+      assignment.trainers.some((trainer) => trainer.currentEligible !== true)
+      || ["follow_up_required", "not_passed"].includes(assignment.progress.result)
+    )).length,
+    competencyProfiles: profiles.length,
+    competencies: profiles.reduce((total, profile) => total + profile.competencies.length, 0),
+    trainerSkills: profiles.reduce((total, profile) => total
+      + profile.competencies.filter((competency) => competency.trainerAuthorized).length, 0),
+  };
+  return {
+    generatedAt: new Date().toISOString(),
+    available: actor.access?.branchDashboard === true
+      || actor.access?.canWriteAssignments === true
+      || assignments.length > 0
+      || profiles.length > 0,
+    viewer: personnelLearningDashboardViewer(actor),
+    capabilities: {
+      canViewTeam: actor.access?.branchDashboard === true
+        || actor.access?.canWriteAssignments === true,
+      canManageAssignments: actor.access?.canWriteAssignments === true,
+      branchAccount: actor.access?.branchDashboard === true,
+    },
+    summary,
+    assignments,
+    profiles,
+  };
+}
+
+app.get(
+  "/api/portal/v1/personnel-learning/dashboard",
+  async (request, response) => {
+    const session = requirePortalAnyPermissionOrLocal(request, []);
+    const actor = await personnelLearningCatalogActor(session);
+    response.json(await personnelLearningDashboardPayload(actor));
+  },
+);
+
+app.get(
+  "/api/portal/v1/personnel-learning/assignments/:assignmentId/progress",
+  async (request, response) => {
+    const session = requirePortalAnyPermissionOrLocal(request, []);
+    const assignmentId = String(request.params.assignmentId || "").trim();
+    if (!assignmentId || assignmentId.length > 180 || assignmentId.includes("\0")) {
+      throw httpError(
+        400,
+        "Die Schulungszuweisung enthält kein gültiges Ziel.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_TARGET_INVALID",
+      );
+    }
+    const actor = await personnelLearningCatalogActor(session);
+    const bundle = await personnelLearningProgressAssignmentBundle(actor, assignmentId);
+    response.json({ assignment: publicPersonnelLearningProgressAssignment(bundle) });
+  },
+);
+
+app.put(
+  "/api/portal/v1/personnel-learning/assignments/:assignmentId/progress",
+  async (request, response) => {
+    const session = requirePortalAnyPermissionOrLocal(request, [], { csrf: true });
+    const assignmentId = String(request.params.assignmentId || "").trim();
+    if (!assignmentId || assignmentId.length > 180 || assignmentId.includes("\0")) {
+      throw httpError(
+        400,
+        "Die Schulungszuweisung enthält kein gültiges Ziel.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_TARGET_INVALID",
+      );
+    }
+    const expectedAssignmentReceipt = personnelLearningAssignmentExpectedReceipt(
+      request.body?.expectedAssignmentRevisionReceipt,
+    );
+    const mutation = await personnelLearningCatalogSerializableTransaction(
+      async (repositories) => {
+        const actor = await personnelLearningCatalogActor(
+          session,
+          repositories.organizationPersonnel,
+        );
+        const bundle = await personnelLearningProgressAssignmentBundle(actor, assignmentId, {
+          learningRepository: repositories.personnelLearning,
+          organizationRepository: repositories.organizationPersonnel,
+        });
+        if (bundle.assignmentState.currentReceipt !== expectedAssignmentReceipt) {
+          throw httpError(
+            409,
+            "Die Schulungszuweisung wurde zwischenzeitlich geändert. Bitte neu laden.",
+            "PERSONNEL_LEARNING_ASSIGNMENT_CONCURRENT_CHANGE",
+          );
+        }
+        personnelLearningProgressExpectedReceipt(
+          request.body?.expectedProgressRevisionReceipt,
+          bundle.progressState.current ? bundle.progressState : null,
+        );
+        const input = normalizePersonnelLearningProgressInput(request.body, {
+          processSteps: bundle.processVersion.content?.steps || [],
+          current: bundle.progressState,
+          allowMissingCorrectionReason: true,
+        });
+        if (input.changeType === "corrected") {
+          if (!bundle.access.canCorrect) {
+            throw httpError(
+              403,
+              "Für diese begründungspflichtige Korrektur fehlt die aktuell wirksame Zuständigkeit.",
+              "PERSONNEL_LEARNING_PROGRESS_CORRECTION_DENIED",
+            );
+          }
+        } else if (!bundle.access.canRecord) {
+          throw httpError(
+            403,
+            "Für diese Fortschrittserfassung fehlt die aktuell wirksame Zuständigkeit.",
+            "PERSONNEL_LEARNING_PROGRESS_PERMISSION_DENIED",
+          );
+        }
+        if (input.finalized && input.changeType !== "corrected"
+          && !bundle.access.canFinalize) {
+          throw httpError(
+            403,
+            "Der Abschluss darf nur durch die vorgesehene Trainerperson oder eine berechtigte Leitung bewertet werden.",
+            "PERSONNEL_LEARNING_PROGRESS_FINALIZATION_DENIED",
+          );
+        }
+        const current = bundle.progressState.current;
+        const noChange = current
+          ? stablePersonnelLearningJson(current.stepStates)
+              === stablePersonnelLearningJson(input.stepStates)
+            && Boolean(current.finalized) === Boolean(input.finalized)
+            && String(current.result || "") === String(input.result || "")
+            && String(current.assessmentNote || "") === String(input.assessmentNote || "")
+          : input.completedStepCount === 0 && !input.finalized && !input.assessmentNote;
+        if (noChange) {
+          return publicPersonnelLearningProgressAssignment(bundle);
+        }
+        if (input.changeType === "corrected" && !input.correctionReason) {
+          throw httpError(
+            400,
+            "Bitte die spätere Korrektur nachvollziehbar begründen.",
+            "PERSONNEL_LEARNING_PROGRESS_CORRECTION_REASON_REQUIRED",
+          );
+        }
+        const occurredAt = new Date().toISOString();
+        const revision = personnelLearningProgressRevisionRow({
+          assignment: bundle.assignment,
+          assignmentState: bundle.assignmentState,
+          progressState: bundle.progressState,
+          processVersion: bundle.processVersion,
+          input,
+          actorId: actor.actorId,
+          actorKind: bundle.access.actorKind,
+          occurredAt,
+        });
+        await repositories.personnelLearning.insertProgressRevision(revision);
+        const auditActions = {
+          progress_recorded: "personnel.learning.progress.record",
+          completed: "personnel.learning.progress.complete",
+          corrected: "personnel.learning.progress.correct",
+        };
+        await repositories.organizationPersonnel.insertAudit(
+          actor.actorId,
+          auditActions[revision.changeType],
+          "personnel_learning_assignment_progress",
+          bundle.assignment.id,
+          personnelLearningProgressAuditDetail({
+            assignment: bundle.assignment,
+            revision,
+          }),
+        );
+        const refreshed = await personnelLearningProgressAssignmentBundle(
+          actor,
+          assignmentId,
+          {
+            learningRepository: repositories.personnelLearning,
+            organizationRepository: repositories.organizationPersonnel,
+          },
+        );
+        return publicPersonnelLearningProgressAssignment(refreshed);
+      },
+    );
+    response.json({ assignment: mutation });
+  },
+);
+
+app.get("/api/portal/v1/personnel-learning/cross-location-delegates", async (request, response) => {
+  const session = requirePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  const [users, scopeContext] = await Promise.all([
+    portalUsersForAdmin(),
+    personnelLearningScopeContext(),
+  ]);
+  const actorUser = users.find((user) => user.employeeNumber === session.employeeNumber);
+  const actor = personnelLearningPrincipalForUser(actorUser, scopeContext);
+  const access = createPersonnelLearningAccessSnapshot(actor || {});
+  if (!access.canDelegateCrossLocation && !access.canAdministerCrossLocationRight) {
+    throw personnelLearningDelegationError({
+      code: access.role === "department_manager"
+        ? PERSONNEL_LEARNING_DELEGATION_CODES.DEPARTMENT_MANAGER_CANNOT_DELEGATE
+        : PERSONNEL_LEARNING_DELEGATION_CODES.ACTOR_PERMISSION_DENIED,
+    });
+  }
+  const principals = new Map(users.map((user) => [
+    user.employeeNumber,
+    personnelLearningPrincipalForUser(user, scopeContext),
+  ]));
+  const delegates = projectPersonnelLearningCrossLocationDelegates(
+    actor,
+    [...principals.values()],
+  ).map((delegate) => ({
+    ...delegate,
+    revision: personnelLearningDenialRevision(
+      users.find((user) => user.employeeNumber === delegate.employeeNumber),
+    ),
+  }));
+  response.json({
+    permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    delegates,
+  });
+});
+
+app.put("/api/portal/v1/personnel-learning/cross-location-delegates/:employeeNumber", async (request, response) => {
+  const session = requirePortalAnyPermission(request, [
+    PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    PERSONNEL_LEARNING_PERMISSIONS.DELEGATE,
+  ]);
+  if (session.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const enabled = request.body?.enabled;
+  if (!employeeNumber || typeof enabled !== "boolean") {
+    throw httpError(400, "Bitte eine gültige Abteilungsleitung und einen Rechtewert übermitteln.", "PERSONNEL_LEARNING_DELEGATION_INVALID");
+  }
+  const submittedRevision = request.body?.expectedRevision;
+  if (submittedRevision !== undefined
+    && !["string", "number"].includes(typeof submittedRevision)) {
+    throw httpError(400, "Bitte den aktuellen Revisionsstand übermitteln.", "PERSONNEL_LEARNING_DELEGATION_REVISION_INVALID");
+  }
+  const expectedRevision = String(submittedRevision ?? "").trim();
+  const [users, scopeContext] = await Promise.all([
+    portalUsersForAdmin(),
+    personnelLearningScopeContext(),
+  ]);
+  const actorUser = users.find((user) => user.employeeNumber === session.employeeNumber);
+  const targetUser = users.find((user) => user.employeeNumber === employeeNumber);
+  const actor = personnelLearningPrincipalForUser(actorUser, scopeContext);
+  const target = personnelLearningPrincipalForUser(targetUser, scopeContext);
+  const decision = evaluatePersonnelLearningCrossLocationDelegation({
+    actor,
+    target,
+    enabled,
+  });
+  if (!decision.allowed) throw personnelLearningDelegationError(decision);
+  if (personnelLearningDenialRevision(targetUser) !== expectedRevision) {
+    throw httpError(409, "Das Recht wurde zwischenzeitlich geändert. Bitte den aktuellen Stand neu laden.", "PERSONNEL_LEARNING_DELEGATION_CONCURRENT_CHANGE");
+  }
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+      const [
+        liveScopeContext,
+        liveActorUser,
+        liveTargetUser,
+      ] = await Promise.all([
+        personnelLearningScopeContext(organization),
+        personnelLearningPortalUser(session.employeeNumber, organization),
+        personnelLearningPortalUser(employeeNumber, organization),
+      ]);
+      const liveActor = personnelLearningPrincipalForUser(
+        liveActorUser,
+        liveScopeContext,
+      );
+      const liveTarget = personnelLearningPrincipalForUser(
+        liveTargetUser,
+        liveScopeContext,
+      );
+      const liveDecision = evaluatePersonnelLearningCrossLocationDelegation({
+        actor: liveActor,
+        target: liveTarget,
+        enabled,
+      });
+      if (!liveDecision.allowed) throw personnelLearningDelegationError(liveDecision);
+      if (personnelLearningDenialRevision(liveTargetUser) !== expectedRevision) {
+        throw httpError(409, "Das Recht wurde zwischenzeitlich geändert. Bitte den aktuellen Stand neu laden.", "PERSONNEL_LEARNING_DELEGATION_CONCURRENT_CHANGE");
+      }
+      if (liveDecision.operation === "noop") return;
+      const deniedBefore = liveTargetUser.deniedPermissions.includes(
+        PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      );
+      if (liveDecision.operation === "deny") {
+        if (!deniedBefore) {
+          await organization.insertPermissionDenial(
+            employeeNumber,
+            PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+            liveActor.employeeNumber,
+          );
+        }
+        await organization.upsertPersonnelLearningPermissionDenialAuthority({
+          employeeNumber,
+          permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          authorityLevel: liveDecision.authorityLevel,
+          scopeLocationId: liveDecision.scopeLocationId,
+          actor: liveActor.employeeNumber,
+        });
+      } else if (liveDecision.operation === "restore_default") {
+        await organization.deletePersonnelLearningPermissionDenialAuthority(
+          employeeNumber,
+          PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+        );
+        await organization.deletePermissionDenial(
+          employeeNumber,
+          PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+        );
+      }
+      await organization.revokePortalSessions(employeeNumber);
+      await organization.revokeMobileSessions(employeeNumber, "rights_changed");
+      await organization.insertAudit(
+        liveActor.employeeNumber,
+        "personnel.learning.cross-location-right.update",
+        "portal_user",
+        employeeNumber,
+        JSON.stringify({
+          schemaVersion: 1,
+          permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          enabledBefore: !deniedBefore,
+          enabledAfter: enabled,
+          authorityBefore: liveTargetUser.personnelLearningDenialAuthority
+            ?.authority_level || null,
+          authorityAfter: enabled
+            ? null
+            : liveDecision.authorityLevel,
+          scopeLocationId: liveDecision.scopeLocationId,
+          reasonCode: liveDecision.authorityLevel
+            === PERSONNEL_LEARNING_DENIAL_AUTHORITIES.PL_PLUS
+            ? "PL_PLUS_RIGHTS_MANAGEMENT"
+            : "MANAGER_LOCAL_DELEGATION",
+        }),
+      );
+  }, { uniqueAsConcurrent: true });
+  const [freshScopeContext, freshActorUser, freshTargetUser] = await Promise.all([
+    personnelLearningScopeContext(),
+    personnelLearningPortalUser(session.employeeNumber),
+    personnelLearningPortalUser(employeeNumber),
+  ]);
+  const projected = projectPersonnelLearningCrossLocationDelegates(
+    personnelLearningPrincipalForUser(freshActorUser, freshScopeContext),
+    [personnelLearningPrincipalForUser(freshTargetUser, freshScopeContext)],
+  )[0];
+  response.json({
+    permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    delegate: projected ? {
+      ...projected,
+      revision: personnelLearningDenialRevision(freshTargetUser),
+    } : null,
+  });
 });
 
 function normalizedOrganizationAccountLoginName(value) {
@@ -31652,7 +36849,10 @@ app.get("/api/portal/v1/branch-orders/:orderId/pdf", async (request, response) =
 
 app.get("/api/portal/v1/users", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["users:write", "scopes:write"]);
-  const [users, roles] = await Promise.all([portalUsersForActor(actor), getPortalRoles()]);
+  const [users, roles] = await Promise.all([
+    portalUsersForActor(actor),
+    portalRolesForUserAdministrationActor(actor),
+  ]);
   response.json({ users, roles });
 });
 
@@ -31663,11 +36863,6 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
     .getPortalScopeAssignmentTarget(employeeNumber);
   if (!target || !target.active) throw httpError(404, "Der aktive Zugang wurde nicht gefunden.");
   assertPortalUserIsMutable(target, actor);
-  await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
-    actor,
-    target,
-    organizationPersonnelRepository,
-  );
   if (!actorCanManagePortalRole(actor, target.role)) {
     throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
   }
@@ -31694,6 +36889,24 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
     explicitPortalAccessScopesForEmployee(employeeNumber),
     organizationPersonnelRepository.listPortalPermissionScopeGrants(employeeNumber),
   ]);
+  const portalScopeDelta = setDifference(
+    currentPortalScopes,
+    scopes,
+    portalAccessScopeKey,
+  );
+  if (portalScopeDelta.added.length || portalScopeDelta.removed.length) {
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+      actor,
+      target,
+      organizationPersonnelRepository,
+    );
+    assertPersonnelLearningPortalScopeDeltaAllowed(
+      actor,
+      target,
+      currentPortalScopes,
+      scopes,
+    );
+  }
   const currentPermissionScopes = currentPermissionScopeRows.map(publicPortalPermissionScopeGrant);
   const projectedPermissionScopes = currentPermissionScopes.filter((scope) => (
     personnelLifecycleScopeMatchesTarget(
@@ -31738,12 +36951,22 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
     scopes,
     personnelLifecyclePermissionScopes: projectedPermissionScopes,
   };
+  let scopesChanged = false;
+  let responseProjectionActor = actor;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const [liveTarget, livePortalScopeRows, livePermissionScopeRows] = await Promise.all([
+    const [
+      liveTarget,
+      livePortalScopeRows,
+      livePermissionScopeRows,
+      liveLearningActor,
+    ] = await Promise.all([
       organization.getPortalScopeAssignmentTarget(employeeNumber),
       organization.listPortalAccessScopes(employeeNumber),
       organization.listPortalPermissionScopeGrants(employeeNumber),
+      livePersonnelLearningRoleAdministrationActor(actor, organization),
     ]);
+    responseProjectionActor = liveLearningActor;
+    assertLivePortalRoutePermission(liveLearningActor, "scopes:write");
     const livePortalScopes = livePortalScopeRows.map((scope) => ({
       locationId: scope.location_id,
       departmentId: Number(scope.department_id || 0) || null,
@@ -31753,10 +36976,59 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
       expectedConcurrencySignature,
       scopeMutationConcurrencySignature(liveTarget, livePortalScopes, livePermissionScopes),
     );
-    assertPortalUserIsMutable(liveTarget, actor);
-    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveTarget, organization);
-    if (!actorCanManagePortalRole(actor, liveTarget.role)) {
+    const accessScopeDelta = setDifference(
+      livePortalScopes,
+      scopes,
+      portalAccessScopeKey,
+    );
+    const permissionScopeDelta = setDifference(
+      livePermissionScopes,
+      projectedPermissionScopes,
+      personnelLifecyclePermissionScopeKey,
+    );
+    scopesChanged = Boolean(
+      accessScopeDelta.added.length
+      || accessScopeDelta.removed.length
+      || permissionScopeDelta.added.length
+      || permissionScopeDelta.removed.length
+    );
+    if (!scopesChanged) return;
+    assertPortalUserIsMutable(liveTarget, liveLearningActor);
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+      liveLearningActor,
+      liveTarget,
+      organization,
+    );
+    assertPersonnelLearningPortalScopeDeltaAllowed(
+      liveLearningActor,
+      liveTarget,
+      livePortalScopes,
+      scopes,
+    );
+    if (!actorCanManagePortalRole(liveLearningActor, liveTarget.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
+    if (!actorCanManageProtectedPersonnelState(
+      liveLearningActor,
+      [],
+      permissionScopeDelta.removed,
+    )) {
+      throw httpError(
+        403,
+        "Ein von PL+ freigegebener Personalmodul-Geltungsbereich darf hier nicht entfernt werden.",
+        "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+      );
+    }
+    if (liveLearningActor.role === "manager") {
+      if (liveTarget.role !== "department_manager") {
+        throw httpError(403, "Eine Filialleitung darf nur Abteilungsleitungen ihres Standorts zuweisen.");
+      }
+      for (const scope of scopes) {
+        assertSessionContextScope(liveLearningActor, { locationId: scope.locationId });
+        if (String(liveTarget.home_location_id || "") !== String(scope.locationId || "")) {
+          throw httpError(403, "Die Abteilungsleitung gehört nicht zum eigenen Standort.");
+        }
+      }
     }
     for (const scope of scopes) {
       await validateActiveLocationExists(scope.locationId, organization);
@@ -31764,20 +37036,14 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
         await validateActiveDepartmentExists(scope.departmentId, scope.locationId, organization);
       }
     }
-    const accessScopeDelta = setDifference(currentPortalScopes, scopes, portalAccessScopeKey);
     for (const scope of accessScopeDelta.added) {
       await organization.insertAccessScope({
         employeeNumber,
         locationId: scope.locationId,
         departmentId: scope.departmentId || 0,
-        assignedBy: actor.employeeNumber,
+        assignedBy: liveLearningActor.employeeNumber,
       });
     }
-    const permissionScopeDelta = setDifference(
-      currentPermissionScopes,
-      projectedPermissionScopes,
-      personnelLifecyclePermissionScopeKey,
-    );
     for (const permissionScope of permissionScopeDelta.removed) {
       await organization.deletePermissionScopeGrant({
         employeeNumber,
@@ -31796,15 +37062,20 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
     await organization.revokePortalSessions(employeeNumber);
     await organization.revokeMobileSessions(employeeNumber, "scopes_changed");
     await organization.insertAudit(
-      actor.employeeNumber,
+      liveLearningActor.employeeNumber,
       "portal.scope.update",
       "portal_user",
       employeeNumber,
       compactRightsAuditDetail(before, after),
     );
   }, { uniqueAsConcurrent: true });
-  await reconcileOpenAmuResponsibilities(actor.employeeNumber);
-  const [users, roles] = await Promise.all([portalUsersForActor(actor), getPortalRoles()]);
+  if (scopesChanged) {
+    await reconcileOpenAmuResponsibilities(responseProjectionActor.employeeNumber);
+  }
+  const [users, roles] = await Promise.all([
+    portalUsersForActor(responseProjectionActor),
+    portalRolesForUserAdministrationActor(responseProjectionActor),
+  ]);
   response.json({ users, roles });
 });
 
@@ -31823,8 +37094,18 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   }
   const existingUser = await organizationPersonnelRepository
     .getPortalUserAccountProjection(employeeNumber);
+  if (roleHasPersonnelLearningDefaults(role)
+    && (!existingUser || !roleHasPersonnelLearningDefaults(existingUser.role))
+    && !actorCanAdministerPersonnelLearningRoleAccount(actor)) {
+    throw httpError(
+      403,
+      "Ein Zugang mit Schulungs- und Wissensdatenzugriff darf nur mit wirksamer fachlicher Delegationsbefugnis aktiviert werden.",
+      "PORTAL_ROLE_HIERARCHY_DENIED",
+    );
+  }
   let existingPersonnelLifecycleGrants = [];
   let existingPersonnelLifecyclePermissionScopes = [];
+  let existingPersonnelLearningDenials = [];
   if (existingUser) {
     assertPortalUserIsMutable(existingUser, actor);
     await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
@@ -31832,18 +37113,44 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       existingUser,
       organizationPersonnelRepository,
     );
+    if (roleHasPersonnelLearningDefaults(existingUser.role)
+      && !actorCanAdministerPersonnelLearningRoleAccount(actor)) {
+      throw httpError(
+        403,
+        "Ein Zugang mit Schulungs- und Wissensdatenzugriff darf nur mit wirksamer fachlicher Delegationsbefugnis verwaltet werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    if (actor.employeeNumber === employeeNumber && existingUser.role !== role
+      && roleHasPersonnelLearningDefaults(role)) {
+      throw httpError(
+        403,
+        "Das eigene Administrationskonto darf nicht in eine fachlich datenberechtigte Schulungsrolle umgewandelt werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
     if (!actorCanManagePortalRole(actor, existingUser.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
     }
     if (existingUser.role !== role) {
-      const [grantRows, permissionScopeRows] = await Promise.all([
+      const [grantRows, denialRows, permissionScopeRows] = await Promise.all([
         portalPermissionGrantsForEmployee(employeeNumber, existingUser.role),
+        portalPermissionDenialsForEmployee(employeeNumber),
         organizationPersonnelRepository.listPortalPermissionScopeGrants(employeeNumber),
       ]);
       existingPersonnelLifecycleGrants = grantRows
         .filter((permission) => personnelLifecyclePermissionIds.has(permission));
       existingPersonnelLifecyclePermissionScopes = permissionScopeRows
         .map(publicPortalPermissionScopeGrant);
+      existingPersonnelLearningDenials = denialRows
+        .filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
+      if (existingPersonnelLearningDenials.length) {
+        throw httpError(
+          409,
+          "Die Rolle kann erst geändert werden, nachdem PL+ die entzogenen Schulungs- und Wissensrechte in der zentralen Rechteverwaltung bereinigt hat.",
+          "PERSONNEL_LIFECYCLE_RIGHTS_PROFILE_PROTECTED",
+        );
+      }
       if ((existingPersonnelLifecycleGrants.length
           || existingPersonnelLifecyclePermissionScopes.length)
         && !actorCanManageProtectedPersonnelState(
@@ -31891,19 +37198,38 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     existingPersonnelLifecycleGrants,
     existingPersonnelLifecyclePermissionScopes,
   );
+  let responseProjectionActor = actor;
+  let userChanged = false;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const liveUser = await organization.getPortalUserAccountProjection(employeeNumber);
+    const [liveUser, liveLearningActor, liveEmployeeScope] = await Promise.all([
+      organization.getPortalUserAccountProjection(employeeNumber),
+      livePersonnelLearningRoleAdministrationActor(actor, organization),
+      organization.getEmployeeScopeProjection(employeeNumber),
+    ]);
+    responseProjectionActor = liveLearningActor;
+    assertLivePortalRoutePermission(liveLearningActor, "users:write");
     let livePersonnelLifecycleGrants = [];
     let livePersonnelLifecyclePermissionScopes = [];
+    let livePersonnelLearningDenials = [];
     if (liveUser && existingUser?.role !== role) {
-      const [grantRows, permissionScopeRows] = await Promise.all([
+      const [grantRows, denialRows, permissionScopeRows] = await Promise.all([
         portalPermissionGrantsForEmployee(employeeNumber, liveUser.role, organization),
+        portalPermissionDenialsForEmployee(employeeNumber, organization),
         organization.listPortalPermissionScopeGrants(employeeNumber),
       ]);
       livePersonnelLifecycleGrants = grantRows
         .filter((permission) => personnelLifecyclePermissionIds.has(permission));
       livePersonnelLifecyclePermissionScopes = permissionScopeRows
         .map(publicPortalPermissionScopeGrant);
+      livePersonnelLearningDenials = denialRows
+        .filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
+      if (livePersonnelLearningDenials.length) {
+        throw httpError(
+          409,
+          "Die Rolle kann erst geändert werden, nachdem PL+ die entzogenen Schulungs- und Wissensrechte in der zentralen Rechteverwaltung bereinigt hat.",
+          "PERSONNEL_LIFECYCLE_RIGHTS_PROFILE_PROTECTED",
+        );
+      }
     }
     assertRightsMutationSnapshotCurrent(
       expectedConcurrencySignature,
@@ -31913,7 +37239,74 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
         livePersonnelLifecyclePermissionScopes,
       ),
     );
-    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveUser, organization);
+    userChanged = Boolean(
+      !liveUser
+      || String(liveUser.role || "") !== role
+      || Boolean(liveUser.active) !== Boolean(active)
+      || Boolean(liveUser.must_change_password) !== Boolean(mustChangePassword)
+      || password,
+    );
+    if (!userChanged) return;
+    if (liveUser) {
+      assertPortalUserIsMutable(liveUser, liveLearningActor);
+      if (!actorCanManagePortalRole(liveLearningActor, liveUser.role)) {
+        throw httpError(
+          403,
+          "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.",
+          "PORTAL_ROLE_HIERARCHY_DENIED",
+        );
+      }
+    }
+    if (!actorCanAssignPortalRole(liveLearningActor, role, roleExists)) {
+      throw httpError(
+        403,
+        "Diese Rolle darf durch den aktuellen Zugang nicht vergeben werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    const liveLearningTarget = {
+      homeLocationId: liveEmployeeScope?.home_location_id || "",
+      preferredDepartmentId: liveEmployeeScope?.preferred_department_id || null,
+    };
+    if (roleHasPersonnelLearningDefaults(liveUser?.role)) {
+      assertPersonnelLearningRoleAccountAdministrationAllowed(liveLearningActor, {
+        ...liveLearningTarget,
+        role: liveUser.role,
+      });
+    }
+    if (roleHasPersonnelLearningDefaults(role)) {
+      assertPersonnelLearningRoleAccountAdministrationAllowed(liveLearningActor, {
+        ...liveLearningTarget,
+        role,
+      });
+    }
+    if (liveLearningActor?.employeeNumber === employeeNumber
+      && liveUser?.role !== role
+      && roleHasPersonnelLearningDefaults(role)) {
+      throw httpError(
+        403,
+        "Das eigene Administrationskonto darf nicht in eine fachlich datenberechtigte Schulungsrolle umgewandelt werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    if (liveUser?.role !== role
+      && (livePersonnelLifecycleGrants.length || livePersonnelLifecyclePermissionScopes.length)
+      && !actorCanManageProtectedPersonnelState(
+        liveLearningActor,
+        livePersonnelLifecycleGrants,
+        livePersonnelLifecyclePermissionScopes,
+      )) {
+      throw httpError(
+        403,
+        "Die Rolle kann erst geändert werden, nachdem PL+ die Personalmodul-Freigaben angepasst hat.",
+        "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+      );
+    }
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+      liveLearningActor,
+      liveUser,
+      organization,
+    );
     if (liveUser?.role === "admin" && (role !== "admin" || !active)) {
       const liveOtherSystemOwners = Number(
         await organization.countOtherSystemOwners(employeeNumber),
@@ -31930,70 +37323,100 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       mustChangePassword: Boolean(mustChangePassword),
       passwordChanged: Boolean(password),
     });
-    if (existingUser?.role && existingUser.role !== role) {
+    if (liveUser?.role && liveUser.role !== role) {
+      await organization.deletePersonnelLearningPermissionDenialAuthority(
+        employeeNumber,
+        PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      );
       await organization.deletePermissionDenials(employeeNumber);
       for (const permission of personnelLifecyclePermissionIds) {
         await organization.deletePermissionGrant(employeeNumber, permission);
       }
     }
-    if (!active || password || (existingUser?.role && existingUser.role !== role)) {
+    if (!active || password || (liveUser?.role && liveUser.role !== role)) {
       await organization.revokePortalSessions(employeeNumber);
     }
     await organization.revokeMobileSessions(employeeNumber, "account_changed");
     await organization.insertAudit(
-      actor.employeeNumber,
+      liveLearningActor.employeeNumber,
       "portal.user.update",
       "portal_user",
       employeeNumber,
       compactPortalUserAuditDetail({
-        roleBefore: existingUser?.role || null,
+        roleBefore: liveUser?.role || null,
         roleAfter: role,
         active: Boolean(active),
         passwordReset: Boolean(password),
-        personnelLifecycleRightsReset: existingPersonnelLifecycleGrants,
-        personnelLifecyclePermissionScopesBefore: existingPersonnelLifecyclePermissionScopes,
-        personnelLifecyclePermissionScopesAfter: existingUser?.role !== role ? []
-          : existingPersonnelLifecyclePermissionScopes,
+        personnelLifecycleRightsReset: livePersonnelLifecycleGrants,
+        personnelLifecyclePermissionScopesBefore: livePersonnelLifecyclePermissionScopes,
+        personnelLifecyclePermissionScopesAfter: liveUser?.role !== role ? []
+          : livePersonnelLifecyclePermissionScopes,
       }),
     );
   });
-  await refreshConfiguredAdminSnapshot();
-  await reconcileOpenAmuResponsibilities(actor.employeeNumber);
-  const [users, roles] = await Promise.all([portalUsersForAdmin(), getPortalRoles()]);
+  if (userChanged) {
+    await refreshConfiguredAdminSnapshot();
+    await reconcileOpenAmuResponsibilities(responseProjectionActor.employeeNumber);
+    if (String(responseProjectionActor.employeeNumber || "") === employeeNumber) {
+      responseProjectionActor = await livePersonnelLearningRoleAdministrationActor(
+        responseProjectionActor,
+      );
+    }
+  }
+  const [users, roles] = await Promise.all([
+    portalUsersForActor(responseProjectionActor),
+    portalRolesForUserAdministrationActor(responseProjectionActor),
+  ]);
   response.json({ users, roles });
 });
 
 app.post("/api/portal/v1/users/:employeeNumber/unlock", async (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "users:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  const target = await organizationPersonnelRepository
-    .getPortalMutationTarget(employeeNumber);
-  assertPortalUserIsMutable(target, actor);
-  await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
-    actor,
-    target,
-    organizationPersonnelRepository,
-  );
-  if (!actorCanManagePortalRole(actor, target.role)) {
-    throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
-  }
+  let responseProjectionActor = actor;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const liveTarget = await organization.getPortalMutationTarget(employeeNumber);
-    assertPortalUserIsMutable(liveTarget, actor);
-    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveTarget, organization);
-    if (!actorCanManagePortalRole(actor, liveTarget.role)) {
+    const [liveTarget, liveActor, liveEmployeeScope, liveUsers] = await Promise.all([
+      organization.getPortalMutationTarget(employeeNumber),
+      livePersonnelLearningRoleAdministrationActor(actor, organization),
+      organization.getEmployeeScopeProjection(employeeNumber),
+      organization.listPortalUsersForAdmin(),
+    ]);
+    responseProjectionActor = liveActor;
+    assertLivePortalRoutePermission(liveActor, "users:write");
+    if (!liveTarget) throw httpError(404, "Der Zugang wurde nicht gefunden.");
+    const liveUnlockState = liveUsers.find(
+      (user) => String(user.personnel_number || "") === employeeNumber,
+    );
+    const unlockChanged = Boolean(
+      Number(liveUnlockState?.failed_login_attempts || 0)
+        || String(liveUnlockState?.locked_until || "").trim(),
+    );
+    if (!unlockChanged) return;
+    assertPortalUserIsMutable(liveTarget, liveActor);
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(liveActor, liveTarget, organization);
+    if (!actorCanManagePortalRole(liveActor, liveTarget.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
+    if (roleHasPersonnelLearningDefaults(liveTarget.role)) {
+      assertPersonnelLearningRoleAccountAdministrationAllowed(liveActor, {
+        role: liveTarget.role,
+        homeLocationId: liveEmployeeScope?.home_location_id || "",
+        preferredDepartmentId: liveEmployeeScope?.preferred_department_id || null,
+      });
     }
     const result = await organization.unlockPortalUser(employeeNumber);
     if (!result.rowsAffected) throw httpError(404, "Der Zugang wurde nicht gefunden.");
     await organization.insertAudit(
-      actor.employeeNumber,
+      liveActor.employeeNumber,
       "portal.user.unlock",
       "portal_user",
       employeeNumber,
     );
   });
-  const [users, roles] = await Promise.all([portalUsersForAdmin(), getPortalRoles()]);
+  const [users, roles] = await Promise.all([
+    portalUsersForActor(responseProjectionActor),
+    portalRolesForUserAdministrationActor(responseProjectionActor),
+  ]);
   response.json({ users, roles });
 });
 
@@ -43826,13 +49249,11 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
   try {
     inspected = await inspectXoffiImageBuffer(request.body, {
       fileName,
+      selectedWeekStart: expectedWeekStart,
       employees: candidateRows,
     });
   } catch (error) {
     throw xoffiTimeImportHttpError(error);
-  }
-  if (inspected.weekStart !== expectedWeekStart) {
-    throw httpError(409, `Das Bild enthält KW ${getIsoWeek(inspected.weekStart)}, ausgewählt ist jedoch KW ${getIsoWeek(expectedWeekStart)}.`, "XOFFI_WEEK_MISMATCH");
   }
   if (inspected.locationCode) {
     let detectedLocationId = "";
@@ -43850,6 +49271,10 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
     locationId: context.locationId,
     departmentId: context.departmentId,
     weekStart: inspected.weekStart,
+    weekResolutionStatus: inspected.weekResolution.status,
+    detectedWeekStart: inspected.weekResolution.detectedWeekStart,
+    matchedDateColumns: inspected.weekResolution.matchedDateColumns,
+    confirmationRequired: inspected.weekResolution.confirmationRequired,
     sourceSha256: inspected.sourceSha256,
     employeeRows: inspected.employees.length,
     originalRetained: false,
@@ -43860,6 +49285,7 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
     weekStart: inspected.weekStart,
     weekEnd: inspected.weekEnd,
     calendarWeek: getIsoWeek(inspected.weekStart),
+    weekResolution: inspected.weekResolution,
     context,
     detectedLocation: { code: inspected.locationCode, name: inspected.locationName },
     engineVersion: inspected.engineVersion,
@@ -43887,21 +49313,20 @@ app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => 
   }
   const preview = entry.value;
   assertPastXoffiWeek(preview.weekStart);
+  const weekResolution = assertXoffiScreenshotWeekConfirmation(preview, request.body || {});
   const context = await xoffiTimeImportContext(session, preview.context);
   if (context.locationId !== preview.context.locationId || Number(context.departmentId || 0) !== Number(preview.context.departmentId || 0)) {
     throw httpError(403, "Der geprüfte Import liegt nicht mehr im freigegebenen Bereich.", "XOFFI_SCOPE_CHANGED");
   }
   const reviewedRows = validateXoffiReviewedRows(request.body?.employees, preview);
-  const importId = await storeXoffiTimeImport(session, preview, reviewedRows, request.body.useAsActual);
+  const importId = await storeXoffiTimeImport(
+    session,
+    preview,
+    reviewedRows,
+    request.body.useAsActual,
+    request.body?.screenshotWeekConfirmed === true,
+  );
   integrationCache.delete(entry.id, actor);
-  await auditPortal(actor, "xoffi-time.import.apply", "xoffi_time_import", importId, JSON.stringify({
-    locationId: context.locationId,
-    departmentId: context.departmentId,
-    weekStart: preview.weekStart,
-    employeeRows: reviewedRows.length,
-    useAsActual: request.body.useAsActual,
-    sourceSha256: preview.sourceSha256,
-  }));
   response.status(201).json({
     ok: true,
     importId,
@@ -44117,9 +49542,23 @@ async function verifyUsbCreator(request, employeeNumber, password) {
     throw httpError(403, "Das Passwort des Erstellerkontos ist nicht korrekt.", "USB_CREATOR_AUTH_FAILED");
   }
   usbCreatorAuthRateLimits.clear(rateKey);
+  const [roleProjection, grantedPermissions, deniedPermissions] = await Promise.all([
+    organizationPersonnelRepository.getPortalRoleProjection(row.role),
+    portalPermissionGrantsForEmployee(row.employee_number, row.role),
+    portalPermissionDenialsForEmployee(row.employee_number),
+  ]);
+  const permissionState = effectivePortalPermissionState(
+    row.employee_number,
+    row.role,
+    roleProjection?.permissions || "[]",
+    grantedPermissions,
+    deniedPermissions,
+    row.amu_local_access_mode,
+  );
   return {
     personnelNumber: row.employee_number,
     role: row.role,
+    permissions: permissionState.effectivePermissions,
     passwordHash: row.password_hash,
     employee: row,
   };
@@ -44207,9 +49646,18 @@ function validateUsbBrandings(body = {}) {
   return { primaryKitId, primaryKit, kitIds };
 }
 
-function usbRoleAllowedForCreator(creatorRole, requestedRole) {
+function usbCreatorCanDelegatePersonnelLearning(creator = {}) {
+  if (creator.role === "developer") return true;
+  if (creator.role !== "admin") return false;
+  return Array.isArray(creator.permissions)
+    && creator.permissions.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
+}
+
+function usbRoleAllowedForCreator(creator, requestedRole) {
   if (requestedRole === "employee") return true;
-  return Boolean(PORTAL_ROLE_ASSIGNMENTS[creatorRole]?.has(requestedRole));
+  if (!PORTAL_ROLE_ASSIGNMENTS[creator?.role]?.has(requestedRole)) return false;
+  const grantsLearningByDefault = roleHasPersonnelLearningDefaults(requestedRole);
+  return !grantsLearningByDefault || usbCreatorCanDelegatePersonnelLearning(creator);
 }
 
 async function validateUsbEmployees(inputEmployees, selectedLocations, creator) {
@@ -44269,7 +49717,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
       throw httpError(400, `Der Standort von ${personnelNumber} ist nicht für den Stick ausgewählt.`, "USB_EMPLOYEE_LOCATION_INVALID");
     }
     const role = String(input.role || "employee").trim();
-    if (role === "developer" || !portalRoles.some((entry) => entry.id === role) || !usbRoleAllowedForCreator(creator.role, role)) {
+    if (role === "developer" || !portalRoles.some((entry) => entry.id === role) || !usbRoleAllowedForCreator(creator, role)) {
       throw httpError(403, `Die Rolle für Personalnummer ${personnelNumber} darf vom Ersteller nicht vergeben werden.`, "USB_EMPLOYEE_ROLE_DENIED");
     }
     if (role === "department_manager") {
@@ -44285,6 +49733,32 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
     const rolePermissions = new Set(portalRoles.find((entry) => entry.id === role)?.permissions || []);
     const deniedPermissions = new Set((Array.isArray(input.deniedPermissions) ? input.deniedPermissions : [])
       .map(String).filter((permission) => delegablePortalPermissions.has(permission)));
+    const submittedLearningPermissions = [...new Set([
+      ...additionalPermissions,
+      ...deniedPermissions,
+    ].filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission)))];
+    if (submittedLearningPermissions.length && !usbCreatorCanDelegatePersonnelLearning(creator)) {
+      throw httpError(
+        403,
+        "Schulungs- und Wissensrechte dürfen von diesem technischen Zugang nicht in USB-Profile übernommen werden.",
+        "USB_EMPLOYEE_PERMISSION_DENIED",
+      );
+    }
+    if ([...deniedPermissions].some(
+      (permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission),
+    )) {
+      throw httpError(
+        400,
+        "Entzogene Schulungs- und Wissensrechte müssen nach der Inbetriebnahme in der zentralen Rechteverwaltung gesetzt werden.",
+        "USB_EMPLOYEE_PERMISSION_DENIAL_INVALID",
+      );
+    }
+    const roleRestrictedAdditionalPermissions = additionalPermissions.filter(
+      (permission) => !portalPermissionAllowedForRole(permission, role),
+    );
+    if (roleRestrictedAdditionalPermissions.length) {
+      throw portalPermissionRoleRestrictionError(roleRestrictedAdditionalPermissions);
+    }
     const invalidDenials = [...deniedPermissions].filter((permission) => !rolePermissions.has(permission));
     if (invalidDenials.length) {
       throw httpError(400,
@@ -44301,6 +49775,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
         "Dienstpläne können auf dem USB-Profil nur bearbeitet werden, wenn das Leserecht ebenfalls wirksam ist.",
         "USB_EMPLOYEE_PERMISSION_DEPENDENCY");
     }
+    assertPortalPermissionDependencies(projectedPermissions);
     let scopes = Array.isArray(input.scopes) ? input.scopes.map((scope) => ({
       locationId: normalizeLocationId(scope?.locationId),
       departmentId: normalizeDepartmentId(scope?.departmentId, true),
@@ -47339,6 +52814,8 @@ module.exports = {
   mobileSessionPrincipal,
   mobileSessionRow,
   effectivePortalPermissionState,
+  assertXoffiScreenshotWeekConfirmation,
+  storeXoffiTimeImport,
   hashPortalPassword,
   verifyPortalPassword,
   ipMatchesNetwork,

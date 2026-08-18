@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.7 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.8 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -133,6 +133,9 @@
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="workflows" id="workflowCenterNavButton">
                 <span class="nav-symbol">⌘</span><span>Workflow-Center</span>
               </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="learning" id="personnelLearningNavButton">
+                <span class="nav-symbol">◆</span><span>Schulung &amp; Wissen</span>
+              </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="tasks" id="personnelTasksNavButton">
                 <span class="nav-symbol">□</span><span>Personalaufgaben</span>
               </button>
@@ -180,11 +183,6 @@
 
         <div class="sidebar-actions" aria-label="Ansicht und System">
           <a class="sidebar-portal-link hidden" id="employeePortalLink" href="/portal.html">Mitarbeiterportal öffnen</a>
-          <button class="sidebar-update-button" id="updateCheckButton" type="button">
-            <span id="updateCheckIcon">↻</span>
-            <strong id="updateCheckText">Update prüfen</strong>
-            <small id="updateCheckHint">GitHub</small>
-          </button>
           <a class="sidebar-developer-contact" href="mailto:christian.seiwald.at@gmail.com">
             <span>Developer-Kontakt</span>
             <strong>christian.seiwald.at@gmail.com</strong>
@@ -314,6 +312,11 @@
             </div>
             <div class="xoffi-import-preview" id="xoffiImportPreview"></div>
             <div class="xoffi-import-confirmation hidden" id="xoffiImportConfirmation">
+              <section class="xoffi-week-confirmation hidden" id="xoffiScreenshotWeekConfirmation" aria-live="polite">
+                <strong>Kalenderwoche manuell bestätigen</strong>
+                <p id="xoffiScreenshotWeekConfirmationText"></p>
+                <label class="checkbox-line"><input type="checkbox" id="xoffiScreenshotWeekConfirmed" /><span id="xoffiScreenshotWeekConfirmationLabel">Ich bestätige die ausgewählte GP-Kalenderwoche für diesen Screenshot.</span></label>
+              </section>
               <label class="checkbox-line"><input type="checkbox" id="xoffiUseAsActual" checked /><span>xoffi-Werte als maßgebliche Ist-Zeiten für Zeitauswertung und Planvergleich verwenden</span></label>
               <label class="checkbox-line"><input type="checkbox" id="xoffiImportConfirmed" /><span>Ich habe Namen, Tageszeiten, Wochenwerte und Stundenkonten geprüft.</span></label>
             </div>
@@ -490,6 +493,7 @@
             <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
             <button class="settings-tab hidden" id="candidatePreboardingTab" type="button" role="tab" aria-controls="candidatePreboardingSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="applications">Bewerbungen &amp; Preboarding</button>
             <button class="settings-tab hidden" id="workflowCenterTab" type="button" role="tab" aria-controls="workflowCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="workflows">Workflow-Center</button>
+            <button class="settings-tab hidden" id="personnelLearningTab" type="button" role="tab" aria-controls="personnelLearningSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="learning">Schulung &amp; Wissen</button>
             <button class="settings-tab hidden" id="personnelTasksTab" type="button" role="tab" aria-controls="personnelTasksSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="tasks">Personalaufgaben</button>
             <button class="settings-tab" id="costCentersTab" type="button" role="tab" aria-controls="costCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="costCenters">Kostenstellen</button>
             <button class="settings-tab hidden" id="customWorkRulesTab" type="button" role="tab" aria-controls="customWorkRulesSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="ruleDrafts">Regelwerk</button>
@@ -618,6 +622,93 @@
                 <p class="personnel-workflow-empty">Noch keine Instanzen geladen.</p>
               </div>
             </div>
+          </section>
+
+          <section class="personnel-administration-section personnel-learning-catalog" id="personnelLearningSection" role="tabpanel" aria-labelledby="personnelLearningTab">
+            <div class="employee-toolbar personnel-learning-heading">
+              <div><span class="eyebrow">Transparente Lernorganisation</span><h2>Schulung &amp; Wissen</h2><p>Prozessvorlagen und definierte Fähigkeiten nachvollziehbar und versioniert verwalten.</p></div>
+              <div class="personnel-learning-heading-actions"><button class="secondary-button hidden" id="addPersonnelLearningSkillButton" type="button">+ Fähigkeit anlegen</button><button class="primary-button hidden" id="addPersonnelLearningModuleButton" type="button">+ Prozess anlegen</button></div>
+            </div>
+            <article class="personnel-lifecycle-boundary personnel-learning-boundary">
+              <strong>Kataloge, Mitarbeiterprofile und Durchführung bleiben getrennt</strong>
+              <p>Prozessvorlagen, Fähigkeiten, Kompetenzstände, Schulungszuweisungen und Durchführungshistorien bleiben revisionsgebunden getrennt. Dashboard und Fähigkeitsbaum sind datensparsame Ansichten derselben Belege und keine zweite Wahrheit. Dateinachweise bleiben außerhalb dieses Blocks.</p>
+            </article>
+            <section class="personnel-learning-dashboard" id="personnelLearningDashboardPanel" aria-labelledby="personnelLearningDashboardTitle">
+              <header class="personnel-learning-dashboard-heading">
+                <div><span class="eyebrow">Block 7 · Transparente Übersicht</span><h3 id="personnelLearningDashboardTitle">Schulungsdashboard &amp; Fähigkeitsbaum</h3><p>Fortschritte, Klärungsbedarf und vorhandene Fähigkeiten im aktuell freigegebenen Bereich.</p></div>
+                <button class="secondary-button" id="refreshPersonnelLearningDashboardButton" type="button">Dashboard aktualisieren</button>
+              </header>
+              <p class="personnel-learning-status" id="personnelLearningDashboardStatus" role="status" aria-live="polite">Das Schulungsdashboard wird beim Öffnen geladen.</p>
+              <div class="personnel-learning-dashboard-summary" id="personnelLearningDashboardSummary" aria-label="Zusammenfassung der Schulungsfortschritte"></div>
+              <div class="personnel-learning-dashboard-grid">
+                <section class="personnel-learning-dashboard-column" aria-labelledby="personnelLearningDashboardAssignmentsTitle">
+                  <div class="personnel-learning-dashboard-section-heading"><div><span class="eyebrow">Durchführung</span><h4 id="personnelLearningDashboardAssignmentsTitle">Aktuelle Schulungsstände</h4></div><span id="personnelLearningDashboardScope"></span></div>
+                  <div class="personnel-learning-dashboard-assignment-list" id="personnelLearningDashboardAssignments"><p class="personnel-workflow-empty">Noch keine Schulungsstände geladen.</p></div>
+                </section>
+                <section class="personnel-learning-dashboard-column personnel-learning-skill-tree-panel" aria-labelledby="personnelLearningSkillTreeTitle">
+                  <div class="personnel-learning-dashboard-section-heading"><div><span class="eyebrow">Professionelles Fähigkeitsprofil</span><h4 id="personnelLearningSkillTreeTitle">Fähigkeitsbaum · Stufen 1–10</h4></div><label class="field personnel-learning-dashboard-person"><span>Mitarbeiter</span><select id="personnelLearningDashboardEmployee"><option value="">Noch keine Profile geladen</option></select></label></div>
+                  <div class="personnel-learning-skill-tree" id="personnelLearningSkillTree"><p class="personnel-workflow-empty">Noch kein Fähigkeitsprofil geladen.</p></div>
+                </section>
+              </div>
+            </section>
+            <section class="personnel-learning-catalog-panel" id="personnelLearningProcessesPanel" aria-labelledby="personnelLearningProcessesTitle">
+              <div class="personnel-learning-subheading"><div><span class="eyebrow">Versionierte Abläufe</span><h3 id="personnelLearningProcessesTitle">Prozessvorlagen</h3></div><p>Schulungs- und Wissensabläufe mit geordneten Schritten.</p></div>
+              <div class="personnel-learning-summary" id="personnelLearningSummary" aria-label="Zusammenfassung des Schulungs- und Wissenskatalogs"></div>
+              <div class="personnel-learning-toolbar" aria-label="Schulungs- und Wissensprozesse filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningSearch" type="search" autocomplete="off" placeholder="Titel, Code, Lernziel oder Schlagwort" /></label>
+                <label class="field"><span>Art</span><select id="personnelLearningTypeFilter"><option value="all">Alle Arten</option><option value="training">Schulungsprozess</option><option value="knowledge">Wissensprozess</option></select></label>
+                <label class="field"><span>Status</span><select id="personnelLearningStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningButton" type="button">Aktualisieren</button>
+              </div>
+              <p class="personnel-learning-status" id="personnelLearningStatus" role="status" aria-live="polite">Der Prozesskatalog wird beim Öffnen geladen.</p>
+              <div class="personnel-learning-list" id="personnelLearningList">
+                <p class="personnel-workflow-empty">Noch keine Prozessvorlagen geladen.</p>
+              </div>
+            </section>
+            <section class="personnel-learning-catalog-panel personnel-learning-skills-panel" id="personnelLearningSkillsPanel" aria-labelledby="personnelLearningSkillsTitle">
+              <div class="personnel-learning-subheading"><div><span class="eyebrow">Block 3 · Fähigkeitsmodell</span><h3 id="personnelLearningSkillsTitle">Fähigkeitskatalog</h3></div><p>Jede Version definiert die vollständige Entwicklung von Stufe 1 bis Stufe 10.</p></div>
+              <div class="personnel-learning-summary" id="personnelLearningSkillSummary" aria-label="Zusammenfassung des Fähigkeitskatalogs"></div>
+              <div class="personnel-learning-toolbar personnel-learning-skill-toolbar" aria-label="Fähigkeiten filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningSkillSearch" type="search" autocomplete="off" placeholder="Fähigkeit, Kategorie, Code oder Schlagwort" /></label>
+                <label class="field"><span>Status</span><select id="personnelLearningSkillStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningSkillsButton" type="button">Aktualisieren</button>
+              </div>
+              <p class="personnel-learning-status" id="personnelLearningSkillStatus" role="status" aria-live="polite">Der Fähigkeitskatalog wird beim Öffnen geladen.</p>
+              <div class="personnel-learning-list personnel-learning-skill-list" id="personnelLearningSkillList">
+                <p class="personnel-workflow-empty">Noch keine Fähigkeiten geladen.</p>
+              </div>
+            </section>
+            <section class="personnel-learning-catalog-panel personnel-learning-competency-panel" id="personnelLearningCompetenciesPanel" aria-labelledby="personnelLearningCompetenciesTitle">
+              <div class="personnel-learning-subheading"><div><span class="eyebrow">Block 4 · Mitarbeiterprofil</span><h3 id="personnelLearningCompetenciesTitle">Kompetenzprofile &amp; Trainerfreigaben</h3></div><p>Mehrere Fähigkeiten je Mitarbeiter mit verbindlicher Stufe und transparenter Trainerfreigabe.</p></div>
+              <div class="personnel-learning-summary" id="personnelLearningCompetencySummary" aria-label="Zusammenfassung der Kompetenzprofile"></div>
+              <div class="personnel-learning-toolbar personnel-learning-competency-toolbar" aria-label="Kompetenzprofile filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningCompetencySearch" type="search" autocomplete="off" placeholder="Mitarbeiter, Fähigkeit, Kategorie oder Filiale" /></label>
+                <label class="field"><span>Mitarbeiter</span><select id="personnelLearningCompetencyEmployee"><option value="all">Alle sichtbaren Mitarbeiter</option></select></label>
+                <label class="field"><span>Status</span><select id="personnelLearningCompetencyStatusFilter"><option value="active">Aktive Kompetenzen</option><option value="trainers">Trainerfreigaben</option><option value="withdrawn">Entzogene Kompetenzen</option><option value="all">Alle Revisionsstände</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningCompetenciesButton" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="addPersonnelLearningCompetencyButton" type="button">+ Kompetenz zuordnen</button>
+              </div>
+              <p class="personnel-learning-status" id="personnelLearningCompetencyStatus" role="status" aria-live="polite">Kompetenzprofile werden beim Öffnen geladen.</p>
+              <div class="personnel-learning-competency-employee" id="personnelLearningCompetencyEmployeeSummary"></div>
+              <div class="personnel-learning-list personnel-learning-competency-list" id="personnelLearningCompetencyList">
+                <p class="personnel-workflow-empty">Noch keine Kompetenzprofile geladen.</p>
+              </div>
+            </section>
+            <section class="personnel-learning-catalog-panel personnel-learning-assignment-panel" id="personnelLearningAssignmentsPanel" aria-labelledby="personnelLearningAssignmentsTitle">
+              <div class="personnel-learning-subheading"><div><span class="eyebrow">Block 5 + 6 · Durchführung</span><h3 id="personnelLearningAssignmentsTitle">Schulungen zuordnen &amp; durchführen</h3></div><p>Lernende und Trainer verbinden, Schrittfortschritt erfassen sowie Abschlüsse und begründete Korrekturen revisionssicher dokumentieren.</p></div>
+              <div class="personnel-learning-summary" id="personnelLearningAssignmentSummary" aria-label="Zusammenfassung der Schulungszuweisungen"></div>
+              <div class="personnel-learning-toolbar personnel-learning-assignment-toolbar" aria-label="Schulungszuweisungen filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningAssignmentSearch" type="search" autocomplete="off" placeholder="Lernende, Prozess, Trainer, Fähigkeit oder Filiale" /></label>
+                <label class="field"><span>Lernende Person</span><select id="personnelLearningAssignmentLearnerFilter"><option value="all">Alle sichtbaren Lernenden</option></select></label>
+                <label class="field"><span>Status</span><select id="personnelLearningAssignmentStatusFilter"><option value="active">Aktive Zuweisungen</option><option value="not_started">Noch nicht begonnen</option><option value="in_progress">In Durchführung</option><option value="completed">Abgeschlossen</option><option value="attention">Klärungsbedarf</option><option value="cancelled">Abgebrochene Zuweisungen</option><option value="all">Alle Revisionsstände</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningAssignmentsButton" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="addPersonnelLearningAssignmentButton" type="button">+ Schulung zuweisen</button>
+              </div>
+              <p class="personnel-learning-status" id="personnelLearningAssignmentStatus" role="status" aria-live="polite">Schulungszuweisungen werden beim Öffnen geladen.</p>
+              <div class="personnel-learning-list personnel-learning-assignment-list" id="personnelLearningAssignmentList">
+                <p class="personnel-workflow-empty">Noch keine Schulungszuweisungen geladen.</p>
+              </div>
+            </section>
           </section>
 
           <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks" id="personnelTasksSection" role="tabpanel" aria-labelledby="personnelTasksTab">
@@ -1568,7 +1659,7 @@
         <section id="settingsView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Konfiguration</span><h1>Einstellungen</h1></div>
-            <div class="settings-header-actions"><div class="page-theme-switch" role="group" aria-label="Darstellung der Einstellungen"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div><button class="primary-button" id="saveSettingsButton">Einstellungen speichern</button></div>
+            <div class="settings-header-actions"><div class="page-theme-switch" role="group" aria-label="Darstellung der Einstellungen"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div><button class="settings-update-button" id="updateCheckButton" type="button"><span id="updateCheckIcon">↻</span><strong id="updateCheckText">Update prüfen</strong><small id="updateCheckHint">GitHub</small></button><button class="primary-button" id="saveSettingsButton">Einstellungen speichern</button></div>
           </header>
 
           <div class="settings-tabs" role="tablist">
@@ -1819,6 +1910,7 @@
                 <div class="organization-account-permissions" aria-label="Freigegebene Filialfunktionen">
                   <label class="switch-row"><span><strong>Offene Leihen ansehen</strong><small>Name der ausleihenden Person sowie die in der Leihverwaltung für das Filialkonto freigegebenen Gerätedaten.</small></span><input id="organizationAccountLoanOverview" type="checkbox" checked /></label>
                   <label class="switch-row"><span><strong>Dienstplan des Standorts ansehen</strong><small>Reduzierte Ansicht ohne Bearbeitungs-, Personal- oder Abwesenheitsfunktionen; alle vergangenen, aktuelle und kommende Kalenderwochen sind nur lesbar.</small></span><input id="organizationAccountScheduleView" type="checkbox" checked /></label>
+                  <label class="switch-row"><span><strong>Schulungsdashboard des Standorts verwenden</strong><small>Zeigt standortgebundene Schulungsfortschritte und Fähigkeitsstufen. Das Filialkonto kann Schritte dokumentieren, aber keine Abschlüsse bewerten oder korrigieren.</small></span><input id="organizationAccountLearningDashboard" type="checkbox" checked /></label>
                   <label class="switch-row" id="organizationAccountBranchOrdersRow"><span><strong>Filialbestellungen erfassen</strong><small>Optional für dieses Filialkonto: Person auswählen, Mengen erfassen und E-Mail-Übergabe dokumentieren.</small></span><input id="organizationAccountBranchOrders" type="checkbox" /></label>
                   <label class="switch-row"><span><strong>Konto aktiv</strong><small>Deaktivieren beendet bestehende Sitzungen sofort.</small></span><input id="organizationAccountActive" type="checkbox" checked /></label>
                 </div>
@@ -2252,7 +2344,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.7 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.8 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -2851,6 +2943,118 @@
         <p class="calculation-note" id="rightsEditorHint">Persönliche Anpassungen gelten sofort und bleiben an den ausgewählten Verantwortungsbereich gebunden.</p>
         <p class="visually-hidden" id="rightsEditorAnnouncement" role="status" aria-live="polite" aria-atomic="true"></p>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="rightsEditorModal">Abbrechen</button><button type="submit" class="primary-button" id="saveRightsEditorButton">Rechte speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal personnel-learning-modal" id="personnelLearningModal">
+      <form method="dialog" id="personnelLearningForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Versionierte Prozessvorlage</span><h2 id="personnelLearningModalTitle">Schulungsprozess anlegen</h2><p>Änderungen an bestehenden Prozessen werden als neue, unveränderliche Version gespeichert.</p></div><button type="button" class="close-button" data-close="personnelLearningModal">×</button></div>
+        <input id="personnelLearningModuleId" type="hidden" />
+        <input id="personnelLearningExpectedReceipt" type="hidden" />
+        <div class="modal-grid personnel-learning-form-grid">
+          <label class="field"><span>Prozesscode</span><input id="personnelLearningModuleCode" minlength="2" maxlength="80" pattern="[a-z0-9][a-z0-9._-]{1,79}" placeholder="z. B. kassa.grundlagen" required /><small>Stabile technische Kennung; nach dem Anlegen unveränderlich.</small></label>
+          <label class="field"><span>Art</span><select id="personnelLearningModuleType"><option value="training">Schulungsprozess</option><option value="knowledge">Wissensprozess</option></select></label>
+          <label class="field modal-span-2"><span>Geltungsbereich</span><select id="personnelLearningScope" required></select><small>Es werden ausschließlich aktuell berechtigte Filialen und Abteilungen angeboten.</small></label>
+          <label class="field modal-span-3"><span>Titel</span><input id="personnelLearningTitle" minlength="3" maxlength="200" placeholder="z. B. Kassasystem sicher bedienen" required /></label>
+          <label class="field modal-span-3"><span>Kurzbeschreibung</span><textarea id="personnelLearningSummaryInput" rows="2" maxlength="600" placeholder="Worum geht es in diesem Prozess?"></textarea></label>
+          <label class="field modal-span-3"><span>Lernziel</span><textarea id="personnelLearningObjective" rows="3" minlength="3" maxlength="800" placeholder="Was soll nach diesem Prozess sicher beherrscht werden?" required></textarea></label>
+          <label class="field"><span>Geplante Dauer</span><div class="field-with-suffix"><input id="personnelLearningEstimatedMinutes" type="number" min="5" max="1440" step="5" value="30" required /><span>Minuten</span></div></label>
+          <label class="field"><span>Abschlussprüfung</span><select id="personnelLearningVerificationMode"><option value="trainer_confirmation">Bestätigung durch einschulende Person</option><option value="self_confirmation">Selbstbestätigung</option><option value="knowledge_check">Wissenskontrolle</option><option value="practical_check">Praxisprüfung</option></select></label>
+          <label class="field"><span>Schlagwörter</span><input id="personnelLearningTags" maxlength="500" placeholder="z. B. Kassa, Sicherheit, Einstieg" /><small>Mit Beistrich trennen; höchstens zwölf.</small></label>
+          <label class="field modal-span-3"><span>Versionshinweis</span><textarea id="personnelLearningVersionNote" rows="2" maxlength="300" placeholder="Was wurde in dieser Version geändert?"></textarea></label>
+        </div>
+        <section class="personnel-learning-step-editor" aria-labelledby="personnelLearningStepsHeading">
+          <div class="personnel-learning-step-heading"><div><span class="eyebrow">Geordneter Ablauf</span><h3 id="personnelLearningStepsHeading">Prozessschritte</h3><p>Die Reihenfolge wird mit dieser Version revisionssicher eingefroren.</p></div><button type="button" class="secondary-button" id="addPersonnelLearningStepButton">Schritt hinzufügen</button></div>
+          <div class="personnel-learning-steps" id="personnelLearningSteps"></div>
+        </section>
+        <p class="message hidden" id="personnelLearningMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="personnelLearningModal">Abbrechen</button><button type="submit" class="primary-button" id="savePersonnelLearningButton">Prozess anlegen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal personnel-learning-modal personnel-learning-skill-modal" id="personnelLearningSkillModal">
+      <form method="dialog" id="personnelLearningSkillForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Versionierte Fähigkeitsdefinition</span><h2 id="personnelLearningSkillModalTitle">Fähigkeit anlegen</h2><p>Alle zehn Stufen werden gemeinsam als neue, unveränderliche Version gespeichert.</p></div><button type="button" class="close-button" data-close="personnelLearningSkillModal">×</button></div>
+        <input id="personnelLearningSkillId" type="hidden" />
+        <input id="personnelLearningSkillExpectedReceipt" type="hidden" />
+        <div class="modal-grid personnel-learning-form-grid">
+          <label class="field"><span>Fähigkeitscode</span><input id="personnelLearningSkillCode" minlength="2" maxlength="80" pattern="[a-z0-9][a-z0-9._-]{1,79}" placeholder="z. B. drohne.praxis" required /><small>Stabile technische Kennung; nach dem Anlegen unveränderlich.</small></label>
+          <label class="field"><span>Kategorie</span><input id="personnelLearningSkillCategory" minlength="2" maxlength="80" placeholder="z. B. Foto und Video" required /></label>
+          <label class="field"><span>Geltungsbereich</span><select id="personnelLearningSkillScope" required></select><small>Nur aktuell berechtigte Bereiche werden angeboten.</small></label>
+          <label class="field modal-span-3"><span>Titel</span><input id="personnelLearningSkillTitle" minlength="3" maxlength="200" placeholder="z. B. Drohnen inklusive Praxis" required /></label>
+          <label class="field modal-span-3"><span>Kurzbeschreibung</span><textarea id="personnelLearningSkillSummaryInput" rows="2" maxlength="600" placeholder="Welche Fähigkeit wird einheitlich beschrieben?"></textarea></label>
+          <label class="field modal-span-2"><span>Schlagwörter</span><input id="personnelLearningSkillTags" maxlength="500" placeholder="z. B. Drohne, Praxis, Video" /><small>Mit Beistrich trennen; höchstens zwölf.</small></label>
+          <label class="field modal-span-3"><span>Versionshinweis</span><textarea id="personnelLearningSkillVersionNote" rows="2" maxlength="300" placeholder="Was wurde an den Stufendefinitionen geändert?"></textarea></label>
+        </div>
+        <section class="personnel-learning-step-editor personnel-learning-level-editor" aria-labelledby="personnelLearningSkillLevelsHeading">
+          <div class="personnel-learning-step-heading"><div><span class="eyebrow">Verbindliche Kompetenzleiter</span><h3 id="personnelLearningSkillLevelsHeading">Fähigkeitsstufen 1–10</h3><p>Keine Stufe kann ausgelassen, entfernt oder vertauscht werden.</p></div><span class="status-badge">10 Stufen</span></div>
+          <div class="personnel-learning-levels" id="personnelLearningSkillLevels"></div>
+        </section>
+        <p class="message hidden" id="personnelLearningSkillMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="personnelLearningSkillModal">Abbrechen</button><button type="submit" class="primary-button" id="savePersonnelLearningSkillButton">Fähigkeit anlegen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal personnel-learning-modal personnel-learning-competency-modal" id="personnelLearningCompetencyModal">
+      <form method="dialog" id="personnelLearningCompetencyForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundenes Mitarbeiterprofil</span><h2 id="personnelLearningCompetencyModalTitle">Kompetenz zuordnen</h2><p>Die Auswahl wird an die aktuell veröffentlichte Fähigkeitsversion gebunden.</p></div><button type="button" class="close-button" data-close="personnelLearningCompetencyModal">×</button></div>
+        <input id="personnelLearningCompetencyId" type="hidden" />
+        <input id="personnelLearningCompetencyExpectedReceipt" type="hidden" />
+        <input id="personnelLearningCompetencyEmployeeNumber" type="hidden" />
+        <div class="personnel-learning-competency-person" id="personnelLearningCompetencyPerson"></div>
+        <div class="modal-grid personnel-learning-competency-form-grid">
+          <label class="field modal-span-2"><span>Fähigkeit</span><select id="personnelLearningCompetencySkill" required></select><small>Es werden nur veröffentlichte Fähigkeiten im freigegebenen Bereich angeboten.</small></label>
+          <label class="field"><span>Kompetenzstufe</span><select id="personnelLearningCompetencyLevel" required></select></label>
+          <label class="checkbox-field modal-span-3 personnel-learning-trainer-toggle"><input id="personnelLearningCompetencyTrainer" type="checkbox" /><span><strong>Als Trainerin oder Trainer für diese Fähigkeit freigeben</strong><small>Diese Freigabe ist fachbezogen, transparent und jederzeit revisionssicher widerrufbar.</small></span></label>
+        </div>
+        <article class="personnel-learning-competency-level-preview" id="personnelLearningCompetencyLevelPreview" aria-live="polite"></article>
+        <p class="message hidden" id="personnelLearningCompetencyMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="personnelLearningCompetencyModal">Abbrechen</button><button type="submit" class="primary-button" id="savePersonnelLearningCompetencyButton">Kompetenz speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal personnel-learning-modal personnel-learning-assignment-modal" id="personnelLearningAssignmentModal">
+      <form method="dialog" id="personnelLearningAssignmentForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundene Durchführungsvorbereitung</span><h2 id="personnelLearningAssignmentModalTitle">Schulung zuweisen</h2><p>Die Prozessversion und jede ausgewählte Trainerfähigkeit werden exakt mit ihrem aktuellen Revisionsbeleg gespeichert.</p></div><button type="button" class="close-button" data-close="personnelLearningAssignmentModal">×</button></div>
+        <input id="personnelLearningAssignmentId" type="hidden" />
+        <input id="personnelLearningAssignmentExpectedReceipt" type="hidden" />
+        <div class="modal-grid personnel-learning-assignment-form-grid">
+          <label class="field"><span>Prozess</span><select id="personnelLearningAssignmentProcess" required></select><small>Nur veröffentlichte Prozesse im freigegebenen Bereich.</small></label>
+          <label class="field"><span>Lernende Person</span><select id="personnelLearningAssignmentLearner" required></select><small>Die Person muss in den Geltungsbereich des Prozesses fallen.</small></label>
+        </div>
+        <section class="personnel-learning-assignment-trainers" aria-labelledby="personnelLearningAssignmentTrainersTitle">
+          <div class="personnel-learning-step-heading"><div><span class="eyebrow">Fachbezogene Trainerfreigaben</span><h3 id="personnelLearningAssignmentTrainersTitle">Trainerfähigkeiten auswählen</h3><p>Mehrere Fähigkeiten und mehrere Trainerpersonen sind möglich. Eine Person kann mehrere Fähigkeiten beitragen.</p></div><span class="status-badge" id="personnelLearningAssignmentTrainerCount">0 ausgewählt</span></div>
+          <label class="field"><span>Trainerfähigkeiten filtern</span><input id="personnelLearningAssignmentTrainerSearch" type="search" autocomplete="off" placeholder="Trainer, Fähigkeit, Kategorie oder Filiale" /></label>
+          <div class="personnel-learning-assignment-trainer-list" id="personnelLearningAssignmentTrainerList"></div>
+        </section>
+        <article class="personnel-learning-assignment-binding-preview" id="personnelLearningAssignmentBindingPreview" aria-live="polite"></article>
+        <p class="message hidden" id="personnelLearningAssignmentMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="personnelLearningAssignmentModal">Abbrechen</button><button type="submit" class="primary-button" id="savePersonnelLearningAssignmentButton">Schulung zuweisen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal personnel-learning-modal personnel-learning-progress-modal" id="personnelLearningProgressModal">
+      <form method="dialog" id="personnelLearningProgressForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundene Durchführung</span><h2 id="personnelLearningProgressModalTitle">Schulungsfortschritt</h2><p>Der Fortschritt wird ausschließlich aus den erledigten Schritten der gebundenen Prozessversion berechnet.</p></div><button type="button" class="close-button" data-close="personnelLearningProgressModal">×</button></div>
+        <input id="personnelLearningProgressAssignmentId" type="hidden" />
+        <input id="personnelLearningProgressAssignmentReceipt" type="hidden" />
+        <input id="personnelLearningProgressExpectedReceipt" type="hidden" />
+        <article class="personnel-learning-progress-summary" id="personnelLearningProgressSummary" aria-live="polite"></article>
+        <section class="personnel-learning-progress-steps" aria-labelledby="personnelLearningProgressStepsTitle">
+          <div class="personnel-learning-step-heading"><div><span class="eyebrow">Prozessversion</span><h3 id="personnelLearningProgressStepsTitle">Schritte dokumentieren</h3><p>Jede Änderung erzeugt einen neuen unveränderlichen Revisionsstand.</p></div><span class="status-badge" id="personnelLearningProgressCount">0 von 0</span></div>
+          <div class="personnel-learning-progress-step-list" id="personnelLearningProgressStepList"></div>
+        </section>
+        <section class="personnel-learning-progress-assessment">
+          <label class="checkbox-field personnel-learning-progress-finalize"><input id="personnelLearningProgressFinalized" type="checkbox" /><span><strong>Schulungsprozess abschließen und bewerten</strong><small>Ein Abschluss ist erst nach allen Pflichtschritten möglich und bleibt revisionsgebunden nachvollziehbar.</small></span></label>
+          <div class="modal-grid personnel-learning-progress-assessment-grid">
+            <label class="field"><span>Abschlussergebnis</span><select id="personnelLearningProgressResult"><option value="pending">Noch keine Bewertung</option><option value="passed">Alles erfüllt</option><option value="follow_up_required">Nachschulung erforderlich</option><option value="not_passed">Nicht bestanden</option></select></label>
+            <label class="field modal-span-2"><span>Abschlussnotiz (optional)</span><textarea id="personnelLearningProgressAssessmentNote" maxlength="600" rows="3" placeholder="Sachliche Zusammenfassung der Prüfung"></textarea></label>
+            <label class="field modal-span-3 hidden" id="personnelLearningProgressCorrectionReasonField"><span>Korrekturbegründung</span><textarea id="personnelLearningProgressCorrectionReason" maxlength="600" rows="3" placeholder="Warum muss der bereits abgeschlossene Stand berichtigt werden?"></textarea><small>Eine spätere Änderung wird nur als neue Korrekturrevision gespeichert; der frühere Stand bleibt erhalten.</small></label>
+          </div>
+        </section>
+        <details class="personnel-learning-details" id="personnelLearningProgressHistoryDetails"><summary>Fortschrittshistorie</summary><div class="personnel-learning-history" id="personnelLearningProgressHistory"></div></details>
+        <p class="message hidden" id="personnelLearningProgressMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="personnelLearningProgressModal">Abbrechen</button><button type="submit" class="primary-button" id="savePersonnelLearningProgressButton">Fortschritt speichern</button></div>
       </form>
     </dialog>
 

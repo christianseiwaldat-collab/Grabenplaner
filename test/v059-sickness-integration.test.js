@@ -249,13 +249,13 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt lokal und erzeugt keinen 
   const portalPage = await fetch(`${baseUrl}/portal.html`);
   assert.equal(portalPage.status, 200);
   assert.match(portalPage.headers.get("content-security-policy") || "", /script-src 'self' 'wasm-unsafe-eval'/);
-  const pdfModule = await fetch(`${baseUrl}/vendor/pdfjs-v6.1.200/build/pdf.min.mjs`);
+  const pdfModule = await fetch(`${baseUrl}/vendor/pdfjs-v6.2.108/build/pdf.min.mjs`);
   assert.equal(pdfModule.status, 200);
   assert.match(pdfModule.headers.get("content-type") || "", /javascript/);
   assert.match(pdfModule.headers.get("cache-control") || "", /immutable/);
-  const pdfWorker = await fetch(`${baseUrl}/vendor/pdfjs-v6.1.200/build/pdf.worker.min.mjs`);
+  const pdfWorker = await fetch(`${baseUrl}/vendor/pdfjs-v6.2.108/build/pdf.worker.min.mjs`);
   assert.equal(pdfWorker.status, 200);
-  const pdfWasm = await fetch(`${baseUrl}/vendor/pdfjs-v6.1.200/wasm/qcms_bg.wasm`);
+  const pdfWasm = await fetch(`${baseUrl}/vendor/pdfjs-v6.2.108/wasm/qcms_bg.wasm`);
   assert.equal(pdfWasm.status, 200);
   assert.match(pdfWasm.headers.get("content-type") || "", /application\/wasm/);
   const shiftDate = mostRecentPlanningDate();

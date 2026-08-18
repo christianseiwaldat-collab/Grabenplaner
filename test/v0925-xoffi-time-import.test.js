@@ -7,7 +7,15 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { parseXoffiRecognition } = require("../lib/xoffi-time-import");
+const {
+  indexedWeekFromHeaderDates,
+  parseXoffiRecognition,
+  resolveXoffiScreenshotWeek,
+} = require("../lib/xoffi-time-import");
+
+const KW_32_DATES = [
+  "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09",
+];
 
 function recognitionLine(text, x, y, width = 100, height = 12, confidence = 96) {
   return {
@@ -56,6 +64,8 @@ test("v0.92.5: xoffi-OCR erkennt KW, Standort, Teamzeilen, Wochenwerte und Tages
     blocks: recognitionBlocks(lines),
     width: 1400,
     height: 800,
+    headerDates: KW_32_DATES,
+    selectedWeekStart: "2026-08-03",
     employees: [
       { personnel_number: "252", full_name: "Christian Seiwald", nickname: "Chris" },
       { personnel_number: "5", full_name: "Brigitte Usel", nickname: "Brigitte" },
@@ -100,6 +110,7 @@ test("v0.92.5: sieben Spaltendaten bestimmen die KW auch bei einer abweichenden 
       const [day, month, year] = date.split(".");
       return `${year}-${month}-${day}`;
     }),
+    selectedWeekStart: "2026-08-03",
     employees: [
       { personnel_number: "252", full_name: "Christian Seiwald", nickname: "Chris" },
       { personnel_number: "5", full_name: "Brigitte Usel", nickname: "Brigitte" },
@@ -143,6 +154,8 @@ test("v0.92.5: Urlaubstage und Urlaubsguthaben werden vollständig ignoriert", (
     blocks: recognitionBlocks(lines),
     width: 1400,
     height: 800,
+    headerDates: KW_32_DATES,
+    selectedWeekStart: "2026-08-03",
     employees: [
       { personnel_number: "5", full_name: "Brigitte Usel", nickname: "Brigitte" },
       { personnel_number: "6", full_name: "Testperson Zwei", nickname: "Testperson" },
@@ -159,6 +172,69 @@ test("v0.92.5: Urlaubstage und Urlaubsguthaben werden vollständig ignoriert", (
   assert.equal(parsed.employees[0].days[0].absence, "");
   assert.equal(parsed.employees[0].days[0].vacationIgnored, true);
   assert.match(parsed.employees[0].warnings.join(" "), /Urlaubstage und Urlaubsguthaben werden nicht importiert/);
+});
+
+test("xoffi: sechs positionsrichtige Datumsspalten liefern trotz OCR-Ausreißer nur einen bestätigungspflichtigen Vorschlag", () => {
+  const dates = [...KW_32_DATES];
+  dates[5] = "2025-08-08";
+  assert.deepEqual(indexedWeekFromHeaderDates(dates), {
+    weekStart: "2026-08-03",
+    weekEnd: "2026-08-09",
+    matchedDateColumns: 6,
+  });
+  const resolution = resolveXoffiScreenshotWeek({ headerDates: dates, selectedWeekStart: "2026-08-03" });
+  assert.equal(resolution.resolution.status, "uncertain");
+  assert.equal(resolution.resolution.confirmationRequired, true);
+});
+
+test("xoffi: KSt- und Eintrittszahlen sind niemals Wochenbelege", () => {
+  const centers = [150, 300, 450, 600, 750, 900, 1050];
+  const lines = [
+    recognitionLine("Kalenderwoche: Kst. (18)", 10, 20, 180),
+    recognitionLine("Abteilung: Kst. 18 Grabenweg MA:", 500, 20, 300),
+    recognitionLine("1 Testperson Eins", 10, 300, 150),
+    recognitionLine("Eintritt: 03.06.2019", 10, 320, 150),
+  ];
+  for (const center of centers) {
+    lines.push(recognitionLine("Gesamt: 0.00", center - 35, 180, 70));
+    lines.push(recognitionLine("Gesamt: 0.00", center - 35, 480, 70));
+  }
+  const parsed = parseXoffiRecognition({
+    text: "Kalenderwoche: 18 Kst. 18 Eintritt: 03.06.2019",
+    blocks: recognitionBlocks(lines),
+    width: 1400,
+    height: 800,
+    headerDates: ["", "", "", "", "", "", ""],
+    selectedWeekStart: "2026-08-03",
+    employees: [{ personnel_number: "1", full_name: "Testperson Eins", nickname: "Testperson" }],
+  });
+  assert.equal(parsed.weekStart, "2026-08-03");
+  assert.equal(parsed.weekResolution.status, "unrecognized");
+  assert.equal(parsed.weekResolution.detectedWeekStart, "");
+  assert.equal(parsed.weekResolution.confirmationRequired, true);
+  assert.deepEqual(parsed.employees[0].days.map((day) => day.workDate), KW_32_DATES);
+});
+
+test("xoffi: widersprüchliche Spaltendaten bleiben als Konflikt sichtbar und binden die GP-Woche", () => {
+  const resolution = resolveXoffiScreenshotWeek({
+    headerDates: KW_32_DATES.map((date) => {
+      const value = new Date(`${date}T12:00:00Z`);
+      value.setUTCDate(value.getUTCDate() + 7);
+      return value.toISOString().slice(0, 10);
+    }),
+    selectedWeekStart: "2026-08-03",
+  });
+  assert.equal(resolution.weekStart, "2026-08-03");
+  assert.equal(resolution.resolution.detectedWeekStart, "2026-08-10");
+  assert.equal(resolution.resolution.status, "conflict");
+  assert.equal(resolution.resolution.confirmationRequired, true);
+});
+
+test("xoffi: ohne sichere Datumsspalten und ohne serverseitige GP-Auswahl wird abgebrochen", () => {
+  assert.throws(
+    () => resolveXoffiScreenshotWeek({ headerDates: ["", "", "", "", "", "", ""] }),
+    { code: "XOFFI_WEEK_NOT_DETECTED" },
+  );
 });
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v0925-xoffi-"));
@@ -293,6 +369,116 @@ test("v0.92.5: der Server lehnt aktuelle und künftige KW vor jeder Bilderkennun
   const payload = await response.json();
   assert.equal(response.status, 409);
   assert.equal(payload.code, "XOFFI_WEEK_NOT_PAST");
+});
+
+test("xoffi: eine unsichere oder widersprüchliche Screenshot-Woche braucht serverseitig eine eigene Bestätigung", () => {
+  const preview = (status, confirmationRequired, detectedWeekStart = "") => ({
+    weekStart: "2026-08-03",
+    weekEnd: "2026-08-09",
+    weekResolution: {
+      status,
+      source: detectedWeekStart ? "header_date_columns" : "none",
+      selectedWeekStart: "2026-08-03",
+      selectedWeekEnd: "2026-08-09",
+      detectedWeekStart,
+      detectedWeekEnd: detectedWeekStart === "2026-08-03" ? "2026-08-09"
+        : detectedWeekStart === "2026-08-10" ? "2026-08-16" : "",
+      matchedDateColumns: detectedWeekStart ? (status === "uncertain" ? 6 : 7) : 0,
+      confirmationRequired,
+    },
+  });
+
+  assert.equal(
+    subject.assertXoffiScreenshotWeekConfirmation(preview("matched", false, "2026-08-03"), {}).status,
+    "matched",
+  );
+  assert.throws(
+    () => subject.assertXoffiScreenshotWeekConfirmation(preview("unrecognized", true), {}),
+    { code: "XOFFI_SCREENSHOT_WEEK_CONFIRMATION_REQUIRED" },
+  );
+  assert.throws(
+    () => subject.assertXoffiScreenshotWeekConfirmation(preview("uncertain", true, "2026-08-03"), {}),
+    { code: "XOFFI_SCREENSHOT_WEEK_CONFIRMATION_REQUIRED" },
+  );
+  assert.equal(
+    subject.assertXoffiScreenshotWeekConfirmation(
+      preview("uncertain", true, "2026-08-03"),
+      { screenshotWeekConfirmed: true },
+    ).status,
+    "uncertain",
+  );
+  assert.throws(
+    () => subject.assertXoffiScreenshotWeekConfirmation(preview("conflict", true, "2026-08-10"), { screenshotWeekConfirmed: false }),
+    { code: "XOFFI_SCREENSHOT_WEEK_CONFIRMATION_REQUIRED" },
+  );
+  assert.equal(
+    subject.assertXoffiScreenshotWeekConfirmation(
+      preview("conflict", true, "2026-08-10"),
+      { screenshotWeekConfirmed: true },
+    ).status,
+    "conflict",
+  );
+  const manipulated = preview("unrecognized", true);
+  manipulated.weekResolution.selectedWeekStart = "2026-07-27";
+  assert.throws(
+    () => subject.assertXoffiScreenshotWeekConfirmation(manipulated, { screenshotWeekConfirmed: true }),
+    { code: "XOFFI_WEEK_PREVIEW_INVALID" },
+  );
+  const inconsistentDetection = preview("matched", false, "2026-08-03");
+  inconsistentDetection.weekResolution.detectedWeekEnd = "2026-08-16";
+  assert.throws(
+    () => subject.assertXoffiScreenshotWeekConfirmation(inconsistentDetection, {}),
+    { code: "XOFFI_WEEK_PREVIEW_INVALID" },
+  );
+  assert.throws(
+    () => subject.assertXoffiScreenshotWeekConfirmation(preview("detected", false, "2026-08-03"), {}),
+    { code: "XOFFI_WEEK_PREVIEW_INVALID" },
+  );
+});
+
+test("xoffi: Import und Wochenbestätigungs-Audit rollen bei einem Auditfehler gemeinsam zurück", async () => {
+  const sourceSha256 = "b".repeat(64);
+  db.exec(`
+    CREATE TEMP TRIGGER xoffi_audit_rollback_test
+    BEFORE INSERT ON audit_log
+    WHEN NEW.action = 'xoffi-time.import.apply'
+    BEGIN
+      SELECT RAISE(ABORT, 'xoffi-audit-rollback-test');
+    END
+  `);
+  try {
+    await assert.rejects(
+      () => subject.storeXoffiTimeImport(
+        { employeeNumber: MANAGER },
+        {
+          context: { locationId: LOCATION, departmentId },
+          weekStart: "2026-08-03",
+          weekEnd: "2026-08-09",
+          weekResolution: {
+            status: "unrecognized",
+            source: "none",
+            selectedWeekStart: "2026-08-03",
+            selectedWeekEnd: "2026-08-09",
+            detectedWeekStart: "",
+            detectedWeekEnd: "",
+            matchedDateColumns: 0,
+            confirmationRequired: true,
+          },
+          sourceSha256,
+          sourceFileName: "xoffi-test.png",
+          engineVersion: "test",
+        },
+        [],
+        true,
+        true,
+      ),
+      { code: "PERSISTENCE_CHECK_VIOLATION" },
+    );
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS xoffi_audit_rollback_test");
+  }
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM xoffi_time_imports WHERE source_sha256 = ?").get(sourceSha256).count, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action = 'xoffi-time.import.apply' AND detail LIKE ?").get(`%${sourceSha256}%`).count, 0);
 });
 
 test("v0.92.5: xoffi-Rohdaten bleiben revisionssicher und funktionieren auch bei deaktivierter Live-Zeiterfassung", async () => {

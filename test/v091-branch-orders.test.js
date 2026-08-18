@@ -245,6 +245,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(created.payload.account.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
+      "personnel_learning:location:dashboard",
     ]));
 
     db.prepare("DELETE FROM portal_organization_account_permissions WHERE account_id = ?").run(accountId);
@@ -256,6 +257,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(login.payload.user.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
+      "personnel_learning:location:dashboard",
     ]));
     organizationSession = responseSession(login.response);
     const selfChangeDenied = await requestJson("/api/portal/v1/me/password", {
@@ -290,6 +292,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(activeLogin.payload.user.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
+      "personnel_learning:location:dashboard",
     ]));
 
     const activated = await requestJson(`/api/portal/v1/organization-accounts/${encodeURIComponent(accountId)}`, {
@@ -308,6 +311,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(activated.payload.account.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
+      "personnel_learning:location:dashboard",
       "branch_orders:submit",
     ]));
 

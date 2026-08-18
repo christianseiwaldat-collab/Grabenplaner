@@ -35,27 +35,27 @@ Die Verantwortungsgrenzen sind verbindlich:
   bindet jedes Anwendungsstatement genau einmal an sein SQLite-SQL und erzeugt
   die deckungsgleiche PostgreSQL-Plan-Fixture.
 
-Der Stand umfasst 1069 Statementverträge in 23 Fachbereichen. Die
+Der Stand umfasst 1099 Statementverträge in 23 Fachbereichen. Die
 Klassifikation beschreibt ausschließlich die bekannte SQLite-Syntax und ist
 kein Nachweis, dass unverändertes SQL auf einem anderen Provider ausführbar
 wäre:
 
 | Klassifikation | Anzahl | Bedeutung |
 | --- | ---: | --- |
-| geprüfte SQLite-Baseline | 24 | keine vom aktuellen, konservativen Scanner erkannte SQLite-Besonderheit; kein Portabilitätsversprechen |
-| benannte SQLite-Dialektvariante | 1045 | mindestens ein explizites SQLite-Merkmal |
+| geprüfte SQLite-Baseline | 29 | keine vom aktuellen, konservativen Scanner erkannte SQLite-Besonderheit; kein Portabilitätsversprechen |
+| benannte SQLite-Dialektvariante | 1069 | mindestens ein explizites SQLite-Merkmal |
 | ungebundene oder doppelte Statements | 0 | Block-4-Gate |
 
 Als Dialektmerkmale werden unter anderem Upserts, `INSERT OR IGNORE`,
 `COLLATE NOCASE`, SQLite-Datums- und JSON-Funktionen, `julianday()`,
 `RETURNING`, `GLOB`, `AUTOINCREMENT`, SQLite-Katalogzugriffe und
-`RAISE(ABORT)` geführt. 972 der 1045 Varianten verwenden die in der
+`RAISE(ABORT)` geführt. 996 der 1069 Varianten verwenden die in der
 SQLite-Anbindung benannten Dollar-Parameter wie `$employeeNumber`; sie sind ein
 explizites Dialektmerkmal und werden deshalb nie als SQLite-Baseline
 ausgewiesen. Neue Merkmale müssen vor ihrer Aufnahme eindeutig klassifiziert
 werden.
 
-Die PostgreSQL-Fixture besitzt für alle 1069 Statement-IDs denselben Eigentümer
+Die PostgreSQL-Fixture besitzt für alle 1099 Statement-IDs denselben Eigentümer
 und dieselbe SQLite-Ausgangsklassifikation. Das ist lediglich eine
 deckungsgleiche Arbeitsliste, keine Aussage über PostgreSQL-Kompatibilität. Sie
 enthält absichtlich kein SQL, keinen ausführbaren Handler und keinen Treiber.
@@ -129,7 +129,7 @@ behauptet diese Aktivierung nicht.
 
 Die Block-4-Tests prüfen:
 
-- vollständige und eindeutige Bindung aller 1069 Statements;
+- vollständige und eindeutige Bindung aller 1099 Statements;
 - strikte Trennung zwischen konservativer SQLite-Baseline und erkannten
   SQLite-Dialektvarianten;
 - vollständige, nicht ausführbare PostgreSQL-Statement-Fixture;
@@ -166,18 +166,18 @@ Nonprod-Live-Tests gegen PostgreSQL wurden erfolgreich ausgeführt. PostgreSQL
 bleibt dennoch in Produkt- und Serverkonfiguration deaktiviert; der
 produktive Datenbankpfad ist weiterhin ausschließlich SQLite.
 
-Der ergänzte PostgreSQL-Dialektplan ist nicht ausführbar und umfasst alle 1069
+Der ergänzte PostgreSQL-Dialektplan ist nicht ausführbar und umfasst alle 1099
 Anwendungsstatements:
 
-- Compiler v2 erzeugt 958 Syntaxkandidaten (`portable-generated`);
+- Compiler v2 erzeugt 988 Syntaxkandidaten (`portable-generated`);
 - 111 Einträge bleiben `requires-override`;
-- 0 von 1069 bilden einen ausführbaren Vollanwendungskatalog.
+- 0 von 1099 bilden einen ausführbaren Vollanwendungskatalog.
 
 Die generierten Einträge bleiben Kandidaten mit nachvollziehbarer Provenienz,
 Parameterbindung und SQL-Fingerprint; sie sind nicht pauschal live geprüft.
 Der Katalogvertrag fordert für einen für die Vollanwendung ausführbaren
-Katalog 1069 akzeptierte Live- und Paritätsnachweise. Der aktuelle Stand ist
-0/1069; deshalb bleiben selbst 1069 strukturell vollständige Deklarationen ohne
+Katalog 1099 akzeptierte Live- und Paritätsnachweise. Der aktuelle Stand ist
+0/1099; deshalb bleiben selbst 1099 strukturell vollständige Deklarationen ohne
 diese Receipts geschlossen und können nicht `applicationExecutable: true`
 werden.
 
@@ -202,7 +202,7 @@ Die vier Slices umfassen zusammen genau neun fachlich live geprüfte
 Statements. Alle vier tragen `development-contract`, deklarieren
 `fullApplicationCatalog: false` und bleiben
 `applicationExecutable: false` sowie `productActivation: false`. Diese
-Teilnachweise verändern den Vollanwendungsstand 0/1069 nicht und sind keine
+Teilnachweise verändern den Vollanwendungsstand 0/1099 nicht und sind keine
 Produkt- oder Supportfreigabe. Ihre Quellvertrags-Fingerprints binden den
 kanonischen SQLite-SQL-Text an ID, Operation, Parameterarten,
 Nullability/Optionalität sowie Ergebnisarten und -reihenfolge. SQL- oder
@@ -349,8 +349,8 @@ Ohne akzeptierte Live- und Paritätsreceipts blieb der PostgreSQL-Stand
 0/1015; die PostgreSQL-Anwendungsmigrationen blieben unverändert bei 0/10.
 
 Die danach ergänzten, weiterhin additiven Fachslices erhöhen den aktuellen
-geschlossenen Vollanwendungsplan auf 1069 Statements. Compiler v2 klassifiziert
-958 davon als `portable-generated`; 111 benötigen `requires-override`. Ohne
-akzeptierte Live- und Paritätsreceipts bleibt der PostgreSQL-Stand 0/1069; die
+geschlossenen Vollanwendungsplan auf 1099 Statements. Compiler v2 klassifiziert
+988 davon als `portable-generated`; 111 benötigen `requires-override`. Ohne
+akzeptierte Live- und Paritätsreceipts bleibt der PostgreSQL-Stand 0/1099; die
 PostgreSQL-Anwendungsmigrationen bleiben unverändert bei 0/10. Dies ist keine
 Produkt- oder PostgreSQL-Freigabe.

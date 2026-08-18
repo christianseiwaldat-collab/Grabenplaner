@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.92.8 Beta · Schulungsprozesse und Fähigkeitsprofile
+
+- Versionierte Schulungs- und Wissensprozesse bilden verbindliche Ziele, Schritte, Abschlusskriterien, Prüfarten und Geltungsbereiche ab; veröffentlichte Fassungen bleiben unveränderlich nachvollziehbar.
+- Berechtigte FL und AL können Lernende und fachlich freigegebene Trainerpersonen auch filialübergreifend zuweisen. Das filialübergreifende Recht ist hierarchisch entziehbar; technische Rollen erhalten keinen automatischen fachlichen Zugriff.
+- Kompetenzprofile führen mehrere Fähigkeiten je Mitarbeiter mit zehn klar beschriebenen Stufen und einer gesonderten Trainerfreigabe. Zuweisungen bleiben an die exakte Prozess- und Fähigkeitsversion gebunden.
+- Schrittfortschritt, Abschlussbewertung und begründungspflichtige Korrekturen sind revisionsgebunden und auditierbar. Filialkonten dürfen standortgebunden Schritte erfassen, aber weder abschließen noch nachträglich korrigieren.
+- Verwaltungs-, persönliche Portal-, Mobil- und Filialansichten projizieren nur den aktuell wirksamen Bereich. Live-Rechteprüfungen, CSRF-Schutz, datensparsame Antworten und responsive Ansichten sichern den neuen Funktionsbereich fail-closed ab.
+- Der Xoffi-Import bestimmt die Woche ausschließlich aus den sieben Datumsspalten oder der vorab gewählten vergangenen GP-Woche. Unsichere oder widersprüchliche Bilder verlangen eine getrennte ausdrückliche Wochenbestätigung; Kostenstellen- und Eintrittszahlen gelten niemals als Wochenbeleg.
+- Die Navigation richtet „Anträge“ wieder am gemeinsamen Menüraster aus, der Update-Status liegt platzsparend in den Einstellungen und die Rechteerklärung erscheint unmittelbar unter der ausgewählten Rechtezeile.
+- Die produktiven PDF- und Mustererweiterungsabhängigkeiten sind auf die korrigierten Sicherheitsstände PDF.js 6.2.108 und brace-expansion 5.0.9 angehoben.
+
 ## v0.92.7 Beta · Berechtigungsgefilterte Funktionssuche
 
 - Ein Suchfeld unter der angemeldeten Person erschließt ausschließlich Funktionen, deren bestehende UI- und Berechtigungsgates im aktuellen Sitzungskontext vollständig sichtbar sind.

@@ -29,7 +29,7 @@ test("UI Block 1: Personalverwaltung trennt Dashboard-Ziel und Disclosure semant
   assert.match(navigation, /<button(?=[^>]*id="personnelDashboardNavButton")(?=[^>]*data-view="personnelAdministration")(?=[^>]*data-personnel-administration-route="dashboard")[^>]*>/);
   assert.ok(navigation.indexOf("</button>") < navigation.indexOf("personnelDashboardNavButton"), "Disclosure und Navigationsziel dürfen nicht ineinander verschachtelt sein");
   assert.match(app, /personnelAdministrationTab:\s*"dashboard"/);
-  assert.match(app, /\["dashboard", "employees", "applications", "workflows", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
+  assert.match(app, /\["dashboard", "employees", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
 });
 
 test("UI Block 1: Dashboard ist persönlich anpassbar und zeigt nur erlaubte Arbeitsbereiche", () => {
