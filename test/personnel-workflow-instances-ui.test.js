@@ -84,7 +84,7 @@ test("M5-Liste lädt ausschließlich den geschützten GET-Endpunkt", () => {
   const loader = between(
     app,
     "async function loadPersonnelWorkflowInstances(",
-    "function clearPersonnelLifecycleOnboardingTaskState(",
+    "function personnelLearningModuleTypeLabel(",
   );
   assert.match(loader, /api\("\/api\/portal\/v1\/personnel-lifecycle\/workflow-instances"\)/);
   assert.doesNotMatch(loader, /method:\s*"(?:POST|PUT|PATCH|DELETE)"/);
@@ -179,10 +179,10 @@ test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten
     /"lib\/persistence\/sqlite\/operations\/personnel-workflow-instance-schema\.js"/,
   );
   for (const expected of [
-    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1069",
-    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1045",
-    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 972",
-    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 958",
+    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1099",
+    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1069",
+    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 996",
+    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 988",
     "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 111",
   ]) assert.match(persistenceAudit, new RegExp(expected));
 });

@@ -25,7 +25,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1069 Statements genau einmal ab", () => {
+test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1099 Statements genau einmal ab", () => {
   const plan = POSTGRESQL_APPLICATION_DIALECT_PLAN;
   const sqliteEntries = SQLITE_APPLICATION_DIALECT_MANIFEST.entries;
 
@@ -34,8 +34,8 @@ test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1069 Statemen
   assert.equal(plan.status, "implementation-in-progress");
   assert.equal(plan.executable, false);
   assert.match(plan.fingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(plan.entries.length, 1069);
-  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1069);
+  assert.equal(plan.entries.length, 1099);
+  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1099);
 
   for (let index = 0; index < sqliteEntries.length; index += 1) {
     const source = sqliteEntries[index];
@@ -62,8 +62,8 @@ test("Block 5/7: nur portable Einträge enthalten kompiliertes PostgreSQL-SQL", 
   const portable = entries.filter((entry) => entry.strategy === "portable-generated");
   const blocked = entries.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(summary.statementCount, 1069);
-  assert.equal(summary.portableGeneratedCount, 958);
+  assert.equal(summary.statementCount, 1099);
+  assert.equal(summary.portableGeneratedCount, 988);
   assert.equal(summary.requiresOverrideCount, 111);
   assert.equal(portable.length, summary.portableGeneratedCount);
   assert.equal(blocked.length, summary.requiresOverrideCount);
@@ -136,7 +136,7 @@ test("Block 5/7: die Block-4-Plan-Fixture bleibt unverändert nicht ausführbar"
 
   assert.equal(fixture.status, "contract-only");
   assert.equal(fixture.executable, false);
-  assert.equal(fixture.entries.length, 1069);
+  assert.equal(fixture.entries.length, 1099);
   assert.equal(fixture.sourceFingerprint, SQLITE_APPLICATION_DIALECT_MANIFEST.fingerprint);
   for (const entry of fixture.entries) {
     assert.equal(entry.status, "contract-only");

@@ -179,11 +179,15 @@ test("Personalmodul R1: Mobile-Sitzungen blenden inaktive Standort- und Abteilun
     });
 
     let session = await loadSession();
+    assert.equal(Number(session.access_scope_assignment_count), 1);
+    assert.equal(Number(session.home_location_active), 1);
     assert.equal(projectionArray(session.access_scopes).length, 1);
     assert.equal(projectionArray(session.permission_scopes).length, 1);
 
     context.database.prepare("UPDATE locations SET active = 0 WHERE id = '18'").run();
     session = await loadSession();
+    assert.equal(Number(session.access_scope_assignment_count), 1);
+    assert.equal(Number(session.home_location_active), 0);
     assert.deepEqual(projectionArray(session.access_scopes), []);
     assert.deepEqual(projectionArray(session.permission_scopes), []);
 

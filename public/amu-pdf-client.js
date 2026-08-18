@@ -9,12 +9,12 @@
 
   const MAXIMUM_PAGE_COUNT = 3;
   const DEFAULT_ASSET_PATHS = Object.freeze({
-    modulePath: "/vendor/pdfjs-v6.1.200/build/pdf.min.mjs",
-    workerPath: "/vendor/pdfjs-v6.1.200/build/pdf.worker.min.mjs",
-    cMapUrl: "/vendor/pdfjs-v6.1.200/cmaps/",
-    standardFontDataUrl: "/vendor/pdfjs-v6.1.200/standard_fonts/",
-    wasmUrl: "/vendor/pdfjs-v6.1.200/wasm/",
-    iccUrl: "/vendor/pdfjs-v6.1.200/iccs/",
+    modulePath: "/vendor/pdfjs-v6.2.108/build/pdf.min.mjs",
+    workerPath: "/vendor/pdfjs-v6.2.108/build/pdf.worker.min.mjs",
+    cMapUrl: "/vendor/pdfjs-v6.2.108/cmaps/",
+    standardFontDataUrl: "/vendor/pdfjs-v6.2.108/standard_fonts/",
+    wasmUrl: "/vendor/pdfjs-v6.2.108/wasm/",
+    iccUrl: "/vendor/pdfjs-v6.2.108/iccs/",
   });
   const DEFAULT_LIMITS = Object.freeze({
     maxFileBytes: 10 * 1024 * 1024,

@@ -180,7 +180,7 @@ test("v0.92.3: Navigation, Design und Startseite werden ausschließlich pro Mita
   assert.equal(defaults.response.status, 200, JSON.stringify(defaults.payload));
   assert.deepEqual(defaults.payload.mobilePortalNavigation, {
     version: 1,
-    order: ["time", "tasks", "team", "approvals", "schedule", "requests", "loan", "sickness"],
+    order: ["time", "tasks", "team", "approvals", "schedule", "requests", "loan", "sickness", "learning"],
     hidden: [],
   });
   assert.deepEqual(defaults.payload.mobilePortalAppearance, {
@@ -190,10 +190,11 @@ test("v0.92.3: Navigation, Design und Startseite werden ausschließlich pro Mita
   });
   assert.deepEqual(defaults.payload.mobilePortalHome, {
     version: 1,
-    order: ["time", "tasks", "team", "approvals", "schedule", "requests", "loan", "sickness", "branchOrders", "branchVacation"],
+    order: ["time", "tasks", "team", "approvals", "schedule", "requests", "loan", "sickness", "learning", "branchOrders", "branchVacation"],
     colors: {
       time: [39, 110, 85], tasks: [41, 107, 145], team: [98, 84, 151], approvals: [156, 104, 28],
       schedule: [38, 112, 104], requests: [128, 82, 108], loan: [129, 91, 48], sickness: [173, 75, 66],
+      learning: [55, 118, 93],
       branchOrders: [42, 122, 99], branchVacation: [76, 112, 167],
     },
   });
@@ -202,16 +203,17 @@ test("v0.92.3: Navigation, Design und Startseite werden ausschließlich pro Mita
 
   const navigation = {
     version: 1,
-    order: ["schedule", "tasks", "requests", "time", "sickness", "loan", "team", "approvals"],
+    order: ["schedule", "tasks", "requests", "time", "sickness", "learning", "loan", "team", "approvals"],
     hidden: ["loan", "team", "approvals"],
   };
   const appearance = { version: 1, palette: "ocean", surface: "compact" };
   const home = {
     version: 1,
-    order: ["loan", "schedule", "time", "tasks", "requests", "sickness", "team", "approvals", "branchOrders", "branchVacation"],
+    order: ["loan", "schedule", "time", "tasks", "requests", "sickness", "learning", "team", "approvals", "branchOrders", "branchVacation"],
     colors: {
       time: [10, 20, 30], tasks: [40, 50, 60], team: [70, 80, 90], approvals: [100, 110, 120],
       schedule: [130, 140, 150], requests: [160, 170, 180], loan: [190, 200, 210], sickness: [220, 230, 240],
+      learning: [55, 118, 93],
       branchOrders: [24, 122, 99], branchVacation: [76, 112, 167],
     },
   };

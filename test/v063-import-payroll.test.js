@@ -33,7 +33,13 @@ preMigrationDb.prepare("INSERT INTO settings (key, value) VALUES ('installation_
 preMigrationDb.close();
 
 const subject = require("../server");
-const { app, db, evaluateTimeDay, installationFeaturesForApiPath, releaseInstanceLockForTests } = subject;
+const {
+  app,
+  db,
+  evaluateTimeDay,
+  installationFeaturesForApiPath,
+  releaseInstanceLockForTests,
+} = subject;
 const { inspectTabularBuffer, createCsvBuffer, createXlsxBuffer, spreadsheetSafeText } = require("../lib/tabular-data");
 const { IntegrationCache } = require("../lib/integration-cache");
 const { mappedPersonnelRow } = require("../lib/personnel-import");
@@ -52,6 +58,7 @@ test("v0.63: vollständig freigeschaltete Altinstallationen erhalten das neue In
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
   const csrf = crypto.randomBytes(24).toString("hex");
+  const id = crypto.randomUUID();
   db.prepare(`
     INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
     VALUES (?, 'test-only', ?, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -59,8 +66,29 @@ function session(employeeNumber, role) {
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')")
-    .run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
-  return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
+    .run(id, employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
+  return { id, cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
+}
+
+function mobileSession(employeeNumber) {
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO mobile_sessions (
+      id, employee_number, access_token_hash, access_expires_at,
+      refresh_token_hash, refresh_expires_at, installation_id_hash,
+      platform, device_label, app_version
+    ) VALUES (
+      ?, ?, ?, '2099-12-31T23:59:59.000Z',
+      ?, '2099-12-31T23:59:59.000Z', ?, 'android', 'Learning Import', 'test'
+    )
+  `).run(
+    id,
+    employeeNumber,
+    crypto.createHash("sha256").update(`access-${id}`).digest("hex"),
+    crypto.createHash("sha256").update(`refresh-${id}`).digest("hex"),
+    crypto.createHash("sha256").update(`installation-${id}`).digest("hex"),
+  );
+  return id;
 }
 
 async function request(route, { method = "GET", auth = null, body, raw = false, contentType = "application/json", fileName = "" } = {}) {
@@ -93,6 +121,7 @@ function resetFixture() {
     db.prepare("DELETE FROM employee_location_lendings").run();
     db.prepare("DELETE FROM week_options").run();
     db.prepare("DELETE FROM portal_sessions").run();
+    db.prepare("DELETE FROM mobile_sessions WHERE employee_number LIKE '99%' OR employee_number LIKE '00%'").run();
     db.prepare("DELETE FROM portal_permission_grants").run();
     db.prepare("DELETE FROM portal_users WHERE employee_number LIKE '99%' OR employee_number LIKE '00%'").run();
     db.prepare("DELETE FROM employees WHERE personnel_number LIKE '99%' OR personnel_number LIKE '00%'").run();
@@ -102,6 +131,171 @@ function resetFixture() {
     try { db.exec("ROLLBACK"); } catch {}
     throw error;
   }
+}
+
+function sqliteText(value) {
+  return `'${String(value ?? "").replaceAll("'", "''")}'`;
+}
+
+function installSessionTouchRaceMutation(auth, statements) {
+  const triggerName = `test_import_actor_race_${crypto.randomBytes(8).toString("hex")}`;
+  db.exec(`
+    CREATE TRIGGER ${triggerName}
+    AFTER UPDATE OF expires_at ON portal_sessions
+    WHEN NEW.id = ${sqliteText(auth.id)}
+    BEGIN
+      ${statements}
+    END
+  `);
+  return () => db.exec(`DROP TRIGGER IF EXISTS ${triggerName}`);
+}
+
+async function withPermissionRevokedAtNextRequest(
+  auth,
+  employeeNumber,
+  permission,
+  operation,
+) {
+  const dropTrigger = installSessionTouchRaceMutation(auth, `
+    INSERT OR IGNORE INTO portal_permission_denials
+      (employee_number, permission, denied_by)
+    VALUES (${sqliteText(employeeNumber)}, ${sqliteText(permission)}, 'learning-import-race');
+  `);
+  try {
+    return await operation();
+  } finally {
+    dropTrigger();
+    db.prepare(`
+      DELETE FROM portal_permission_denials
+      WHERE employee_number = ? AND permission = ?
+    `).run(employeeNumber, permission);
+  }
+}
+
+function learningImportAssignment() {
+  const assignment = db.prepare(`
+    SELECT home_location_id, cost_center_id, position_id
+    FROM employees WHERE personnel_number = '101'
+  `).get();
+  assert.ok(assignment?.home_location_id);
+  assert.ok(assignment?.cost_center_id);
+  assert.ok(assignment?.position_id);
+  let departments = db.prepare(`
+    SELECT id FROM departments
+    WHERE location_id = ? AND active = 1
+    ORDER BY id LIMIT 2
+  `).all(assignment.home_location_id);
+  for (let index = departments.length; index < 2; index += 1) {
+    db.prepare(`
+      INSERT INTO departments (location_id, name, min_staff, active, sort_order)
+      VALUES (?, ?, 0, 1, ?)
+    `).run(
+      assignment.home_location_id,
+      `Learning Import Atomic ${crypto.randomUUID()}`,
+      9660 + index,
+    );
+  }
+  departments = db.prepare(`
+    SELECT id FROM departments
+    WHERE location_id = ? AND active = 1
+    ORDER BY id LIMIT 2
+  `).all(assignment.home_location_id);
+  assert.equal(departments.length, 2);
+  return {
+    ...assignment,
+    initialDepartmentId: Number(departments[0].id),
+    desiredDepartmentId: Number(departments[1].id),
+  };
+}
+
+function insertLearningImportTarget(employeeNumber, role, assignment) {
+  db.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, color, contracted_hours,
+      target_workdays_per_week, position_id, time_confirmation_level,
+      home_location_id, preferred_department_id, cost_center_id, active
+    ) VALUES (?, ?, ?, '#2c7a68', 38.5, 5, ?, 'C', ?, ?, ?, 1)
+  `).run(
+    employeeNumber,
+    `Learning Import ${employeeNumber}`,
+    employeeNumber,
+    assignment.position_id,
+    assignment.home_location_id,
+    assignment.initialDepartmentId,
+    assignment.cost_center_id,
+  );
+  db.prepare(`
+    INSERT INTO portal_users (
+      employee_number, password_hash, role, active, must_change_password,
+      password_changed_at, updated_at
+    ) VALUES (?, 'test-only', ?, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `).run(employeeNumber, role);
+  db.prepare(`
+    INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+    VALUES (?, ?, ?, '101')
+  `).run(
+    employeeNumber,
+    assignment.home_location_id,
+    role === "manager" ? 0 : assignment.initialDepartmentId,
+  );
+}
+
+async function prepareLearningDepartmentImport(auth, assignment, employeeNumbers, fileName) {
+  const csv = Buffer.from([
+    "Personalnummer;Name;Abteilung-ID",
+    ...employeeNumbers.map(
+      (employeeNumber) => `${employeeNumber};Learning Import ${employeeNumber};${assignment.desiredDepartmentId}`,
+    ),
+    "",
+  ].join("\r\n"), "utf8");
+  const inspected = await request("/api/integrations/personnel-import/inspect", {
+    method: "POST",
+    auth,
+    body: csv,
+    contentType: "text/csv",
+    fileName,
+  });
+  assert.equal(inspected.response.status, 201, JSON.stringify(inspected.payload));
+  const preview = await request("/api/integrations/personnel-import/preview", {
+    method: "POST",
+    auth,
+    body: {
+      inspectionId: inspected.payload.inspectionId,
+      sheetName: "CSV",
+      headerRow: 1,
+      mapping: {
+        personnelNumber: { columnIndex: 0 },
+        fullName: { columnIndex: 1 },
+        preferredDepartmentId: { columnIndex: 2 },
+      },
+      defaults: {
+        homeLocationId: assignment.home_location_id,
+        positionId: assignment.position_id,
+        contractedHours: 38.5,
+        active: true,
+      },
+      duplicateStrategy: "update",
+    },
+  });
+  assert.equal(preview.response.status, 201, JSON.stringify(preview.payload));
+  assert.equal(preview.payload.summary.update, employeeNumbers.length);
+  return {
+    inspectionId: inspected.payload.inspectionId,
+    previewId: preview.payload.previewId,
+  };
+}
+
+function learningImportSessionState(portalSession, mobileSessionId) {
+  const portal = db.prepare("SELECT revoked_at FROM portal_sessions WHERE id = ?")
+    .get(portalSession.id);
+  const mobile = db.prepare(`
+    SELECT revoked_at, revoked_reason FROM mobile_sessions WHERE id = ?
+  `).get(mobileSessionId);
+  return {
+    portalRevokedAt: portal?.revoked_at || null,
+    mobileRevokedAt: mobile?.revoked_at || null,
+    mobileReason: String(mobile?.revoked_reason || ""),
+  };
 }
 
 test.before(async () => {
@@ -220,6 +414,668 @@ test("v0.63: Personalimport benötigt eigenes Recht und übernimmt Vorschau atom
   assert.ok(audit);
   assert.doesNotMatch(audit.detail, /Nova|Beispiel|00991/);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs WHERE direction = 'import'").get().count, 1);
+});
+
+test("Live-Entzug von employees:import stoppt die vorbereitete Mutation atomar", async () => {
+  const employeeNumber = "99Route";
+  const assignment = db.prepare(`
+    SELECT home_location_id, cost_center_id, position_id
+    FROM employees WHERE personnel_number = '101'
+  `).get();
+  db.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, color, contracted_hours,
+      target_workdays_per_week, position_id, time_confirmation_level,
+      home_location_id, cost_center_id, active
+    ) VALUES (?, 'Import Route Bestand', 'Route', '#2c7a68', 38.5, 5, ?, 'C', ?, ?, 1)
+  `).run(employeeNumber, assignment.position_id, assignment.home_location_id, assignment.cost_center_id);
+  db.prepare(`
+    INSERT INTO portal_users (
+      employee_number, password_hash, role, active, must_change_password,
+      password_changed_at, updated_at
+    ) VALUES (?, 'test-only', 'employee', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `).run(employeeNumber);
+  const targetSessionId = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+  `).run(targetSessionId, employeeNumber, crypto.createHash("sha256").update(targetSessionId).digest("hex"));
+
+  const hr = session("103", "hr");
+  const inspected = await request("/api/integrations/personnel-import/inspect", {
+    method: "POST",
+    auth: hr,
+    body: Buffer.from(
+      `Personalnummer;Name\r\n${employeeNumber};Import Route Veraendert\r\n`,
+      "utf8",
+    ),
+    contentType: "text/csv",
+    fileName: "route-live.csv",
+  });
+  assert.equal(inspected.response.status, 201, JSON.stringify(inspected.payload));
+  const preview = await request("/api/integrations/personnel-import/preview", {
+    method: "POST",
+    auth: hr,
+    body: {
+      inspectionId: inspected.payload.inspectionId,
+      sheetName: "CSV",
+      headerRow: 1,
+      mapping: {
+        personnelNumber: { columnIndex: 0 },
+        fullName: { columnIndex: 1 },
+      },
+      defaults: {
+        homeLocationId: assignment.home_location_id,
+        positionId: assignment.position_id,
+        contractedHours: 38.5,
+        active: true,
+      },
+      duplicateStrategy: "update",
+    },
+  });
+  assert.equal(preview.response.status, 201, JSON.stringify(preview.payload));
+  assert.equal(preview.payload.summary.update, 1);
+  const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
+  const denied = await withPermissionRevokedAtNextRequest(
+    hr,
+    "103",
+    "employees:import",
+    () => request("/api/integrations/personnel-import/apply", {
+      method: "POST",
+      auth: hr,
+      body: { previewId: preview.payload.previewId },
+    }),
+  );
+  assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
+  assert.equal(denied.payload.code, "PORTAL_PERMISSION_DENIED");
+  assert.equal(db.prepare(`
+    SELECT full_name FROM employees WHERE personnel_number = ?
+  `).get(employeeNumber).full_name, "Import Route Bestand");
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count, auditBefore);
+  assert.equal(db.prepare("SELECT revoked_at FROM portal_sessions WHERE id = ?")
+    .get(targetSessionId).revoked_at, null);
+  for (const sessionId of [preview.payload.previewId, inspected.payload.inspectionId]) {
+    const cleanup = await request(`/api/integrations/personnel-import/sessions/${sessionId}`, {
+      method: "DELETE",
+      auth: hr,
+    });
+    assert.equal(cleanup.response.status, 204, JSON.stringify(cleanup.payload));
+  }
+});
+
+test("Personalimport prüft zentrale Kostenstellenberechtigung beim Apply live erneut", async () => {
+  const employeeNumber = "99Central";
+  const assignment = db.prepare(`
+    SELECT home_location_id, cost_center_id, position_id
+    FROM employees WHERE personnel_number = '101'
+  `).get();
+  assert.ok(assignment?.home_location_id);
+  assert.ok(assignment?.cost_center_id);
+  assert.ok(assignment?.position_id);
+
+  const hr = session("103", "hr");
+  const inspected = await request("/api/integrations/personnel-import/inspect", {
+    method: "POST",
+    auth: hr,
+    body: Buffer.from(
+      `Personalnummer;Name;Kostenstelle-ID\r\n${employeeNumber};Import Zentral;${assignment.cost_center_id}\r\n`,
+      "utf8",
+    ),
+    contentType: "text/csv",
+    fileName: "central-live.csv",
+  });
+  assert.equal(inspected.response.status, 201, JSON.stringify(inspected.payload));
+  const preview = await request("/api/integrations/personnel-import/preview", {
+    method: "POST",
+    auth: hr,
+    body: {
+      inspectionId: inspected.payload.inspectionId,
+      sheetName: "CSV",
+      headerRow: 1,
+      mapping: {
+        personnelNumber: { columnIndex: 0 },
+        fullName: { columnIndex: 1 },
+        costCenterId: { columnIndex: 2 },
+      },
+      defaults: {
+        homeLocationId: assignment.home_location_id,
+        positionId: assignment.position_id,
+        contractedHours: 38.5,
+        active: true,
+      },
+      duplicateStrategy: "skip",
+    },
+  });
+  assert.equal(preview.response.status, 201, JSON.stringify(preview.payload));
+  assert.equal(preview.payload.summary.create, 1);
+  const auditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
+  const runsBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count);
+
+  const denied = await withPermissionRevokedAtNextRequest(
+    hr,
+    "103",
+    "personnel:central:write",
+    () => request("/api/integrations/personnel-import/apply", {
+      method: "POST",
+      auth: hr,
+      body: { previewId: preview.payload.previewId },
+    }),
+  );
+  assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
+  assert.equal(denied.payload.code, "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+  assert.equal(db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?")
+    .get(employeeNumber), undefined);
+  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count), runsBefore);
+  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), auditBefore);
+
+  for (const sessionId of [preview.payload.previewId, inspected.payload.inspectionId]) {
+    const cleanup = await request(`/api/integrations/personnel-import/sessions/${sessionId}`, {
+      method: "DELETE",
+      auth: hr,
+    });
+    assert.equal(cleanup.response.status, 204, JSON.stringify(cleanup.payload));
+  }
+});
+
+test("Personalimport prüft den expliziten Filialscope beim Apply im Live-Snapshot", async () => {
+  const employeeNumber = "99Scope";
+  const assignment = db.prepare(`
+    SELECT home_location_id, cost_center_id, position_id
+    FROM employees WHERE personnel_number = '101'
+  `).get();
+  db.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, color, contracted_hours,
+      target_workdays_per_week, position_id, time_confirmation_level,
+      home_location_id, cost_center_id, active
+    ) VALUES (?, 'Import Scope Bestand', 'Scope', '#2c7a68', 38.5, 5, ?, 'C', ?, ?, 1)
+  `).run(
+    employeeNumber,
+    assignment.position_id,
+    assignment.home_location_id,
+    assignment.cost_center_id,
+  );
+  const manager = session("102", "manager");
+  db.prepare(`
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+    VALUES ('102', 'employees:import', '101')
+  `).run();
+  const restoreManagerScope = () => {
+    db.prepare("DELETE FROM portal_access_scopes WHERE employee_number = '102'").run();
+    db.prepare(`
+      INSERT INTO portal_access_scopes
+        (employee_number, location_id, department_id, assigned_by)
+      VALUES ('102', ?, 0, '101')
+    `).run(assignment.home_location_id);
+  };
+  restoreManagerScope();
+
+  const inspected = await request("/api/integrations/personnel-import/inspect", {
+    method: "POST",
+    auth: manager,
+    body: Buffer.from(
+      `Personalnummer;Name\r\n${employeeNumber};Import Scope Veraendert\r\n`,
+      "utf8",
+    ),
+    contentType: "text/csv",
+    fileName: "scope-live.csv",
+  });
+  assert.equal(inspected.response.status, 201, JSON.stringify(inspected.payload));
+  const preview = await request("/api/integrations/personnel-import/preview", {
+    method: "POST",
+    auth: manager,
+    body: {
+      inspectionId: inspected.payload.inspectionId,
+      sheetName: "CSV",
+      headerRow: 1,
+      mapping: {
+        personnelNumber: { columnIndex: 0 },
+        fullName: { columnIndex: 1 },
+      },
+      defaults: {
+        homeLocationId: assignment.home_location_id,
+        positionId: assignment.position_id,
+        contractedHours: 38.5,
+        active: true,
+      },
+      duplicateStrategy: "update",
+    },
+  });
+  assert.equal(preview.response.status, 201, JSON.stringify(preview.payload));
+  assert.equal(preview.payload.summary.update, 1);
+  const auditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
+  const runsBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count);
+  const dropTrigger = installSessionTouchRaceMutation(manager, `
+    DELETE FROM portal_access_scopes WHERE employee_number = '102';
+  `);
+  try {
+    const denied = await request("/api/integrations/personnel-import/apply", {
+      method: "POST",
+      auth: manager,
+      body: { previewId: preview.payload.previewId },
+    });
+    assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
+    assert.equal(denied.payload.code, "PORTAL_SCOPE_DENIED");
+    assert.equal(db.prepare("SELECT full_name FROM employees WHERE personnel_number = ?")
+      .get(employeeNumber).full_name, "Import Scope Bestand");
+    assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count), runsBefore);
+    assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), auditBefore);
+  } finally {
+    dropTrigger();
+    restoreManagerScope();
+    for (const sessionId of [preview.payload.previewId, inspected.payload.inspectionId]) {
+      const cleanup = await request(`/api/integrations/personnel-import/sessions/${sessionId}`, {
+        method: "DELETE",
+        auth: manager,
+      });
+      assert.equal(cleanup.response.status, 204, JSON.stringify(cleanup.payload));
+    }
+  }
+});
+
+test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live gegatet", async () => {
+  const employeeNumber = "99Learn";
+  const delegatePermission = "personnel:learning:delegate";
+  const assignment = db.prepare(`
+    SELECT home_location_id, cost_center_id, position_id
+    FROM employees WHERE personnel_number = '101'
+  `).get();
+  assert.ok(assignment?.home_location_id);
+  assert.ok(assignment?.cost_center_id);
+  assert.ok(assignment?.position_id);
+  let departments = db.prepare(`
+    SELECT id FROM departments
+    WHERE location_id = ? AND active = 1
+    ORDER BY id LIMIT 2
+  `).all(assignment.home_location_id);
+  for (let index = departments.length; index < 2; index += 1) {
+    db.prepare(`
+      INSERT INTO departments (location_id, name, min_staff, active, sort_order)
+      VALUES (?, ?, 0, 1, ?)
+    `).run(
+      assignment.home_location_id,
+      `Learning Import ${crypto.randomUUID()}`,
+      9631 + index,
+    );
+  }
+  departments = db.prepare(`
+    SELECT id FROM departments
+    WHERE location_id = ? AND active = 1
+    ORDER BY id LIMIT 2
+  `).all(assignment.home_location_id);
+  assert.equal(departments.length, 2);
+  const initialDepartmentId = Number(departments[0].id);
+  const desiredDepartmentId = Number(departments[1].id);
+  db.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, color, contracted_hours,
+      target_workdays_per_week, position_id, time_confirmation_level,
+      home_location_id, preferred_department_id, cost_center_id, active
+    ) VALUES (?, 'Learning Import Bestand', 'Learning', '#2c7a68', 38.5, 5, ?, 'C', ?, ?, ?, 1)
+  `).run(
+    employeeNumber,
+    assignment.position_id,
+    assignment.home_location_id,
+    initialDepartmentId,
+    assignment.cost_center_id,
+  );
+  db.prepare(`
+    INSERT INTO portal_users (
+      employee_number, password_hash, role, active, must_change_password,
+      password_changed_at, updated_at
+    ) VALUES (?, 'test-only', 'department_manager', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `).run(employeeNumber);
+  db.prepare(`
+    INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+    VALUES (?, ?, ?, '101')
+  `).run(employeeNumber, assignment.home_location_id, initialDepartmentId);
+
+  const csv = Buffer.from(
+    `Personalnummer;Name;Abteilung-ID\r\n${employeeNumber};Learning Import Bestand;${desiredDepartmentId}\r\n`,
+    "utf8",
+  );
+  const previewFor = async (auth, fileName) => {
+    const inspected = await request("/api/integrations/personnel-import/inspect", {
+      method: "POST",
+      auth,
+      body: csv,
+      contentType: "text/csv",
+      fileName,
+    });
+    assert.equal(inspected.response.status, 201, JSON.stringify(inspected.payload));
+    return request("/api/integrations/personnel-import/preview", {
+      method: "POST",
+      auth,
+      body: {
+        inspectionId: inspected.payload.inspectionId,
+        sheetName: "CSV",
+        headerRow: 1,
+        mapping: {
+          personnelNumber: { columnIndex: 0 },
+          fullName: { columnIndex: 1 },
+          preferredDepartmentId: { columnIndex: 2 },
+        },
+        defaults: {
+          homeLocationId: assignment.home_location_id,
+          positionId: assignment.position_id,
+          contractedHours: 38.5,
+          active: true,
+        },
+        duplicateStrategy: "update",
+      },
+    });
+  };
+
+  const hr = session("103", "hr");
+  db.prepare(`
+    INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
+    VALUES ('103', ?, '101')
+  `).run(delegatePermission);
+  try {
+    const deniedPreview = await previewFor(hr, "learning-denied.csv");
+    assert.equal(deniedPreview.response.status, 201, JSON.stringify(deniedPreview.payload));
+    assert.equal(deniedPreview.payload.summary.errors, 1);
+    assert.equal(deniedPreview.payload.rows[0].action, "error");
+    assert.equal(deniedPreview.payload.rows[0].errors.some(
+      (error) => error.code === "PORTAL_ROLE_HIERARCHY_DENIED",
+    ), true);
+    assert.equal(db.prepare(`
+      SELECT preferred_department_id FROM employees WHERE personnel_number = ?
+    `).get(employeeNumber).preferred_department_id, initialDepartmentId);
+
+    db.prepare(`
+      DELETE FROM portal_permission_denials
+      WHERE employee_number = '103' AND permission = ?
+    `).run(delegatePermission);
+    const livePreview = await previewFor(hr, "learning-live.csv");
+    assert.equal(livePreview.response.status, 201, JSON.stringify(livePreview.payload));
+    assert.equal(livePreview.payload.summary.update, 1);
+
+    const targetSessionId = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
+      VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    `).run(targetSessionId, employeeNumber, crypto.createHash("sha256").update(targetSessionId).digest("hex"));
+    const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
+    const runsBefore = db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count;
+    const dropTrigger = installSessionTouchRaceMutation(hr, `
+      INSERT OR IGNORE INTO portal_permission_denials
+        (employee_number, permission, denied_by)
+      VALUES ('103', ${sqliteText(delegatePermission)}, 'learning-import-live-race');
+    `);
+    try {
+      const deniedApply = await request("/api/integrations/personnel-import/apply", {
+        method: "POST",
+        auth: hr,
+        body: { previewId: livePreview.payload.previewId },
+      });
+      assert.equal(deniedApply.response.status, 403, JSON.stringify(deniedApply.payload));
+      assert.equal(deniedApply.payload.code, "PORTAL_ROLE_HIERARCHY_DENIED");
+      assert.equal(db.prepare(`
+        SELECT preferred_department_id FROM employees WHERE personnel_number = ?
+      `).get(employeeNumber).preferred_department_id, initialDepartmentId);
+      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count, runsBefore);
+      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count, auditBefore);
+      assert.equal(db.prepare("SELECT revoked_at FROM portal_sessions WHERE id = ?")
+        .get(targetSessionId).revoked_at, null);
+    } finally {
+      dropTrigger();
+    }
+  } finally {
+    db.prepare(`
+      DELETE FROM portal_permission_denials
+      WHERE employee_number = '103' AND permission = ?
+    `).run(delegatePermission);
+  }
+});
+
+test("Personalimport behandelt reine AL-Deaktivierung als Learning-Organisationsdelta", async () => {
+  const assignment = learningImportAssignment();
+  const employeeNumber = "99Off";
+  insertLearningImportTarget(employeeNumber, "department_manager", assignment);
+  const developer = session("101", "developer");
+  const inspected = await request("/api/integrations/personnel-import/inspect", {
+    method: "POST",
+    auth: developer,
+    body: Buffer.from(
+      `Personalnummer;Name;Aktiv\r\n${employeeNumber};Learning Import ${employeeNumber};Nein\r\n`,
+      "utf8",
+    ),
+    contentType: "text/csv",
+    fileName: "learning-deactivate.csv",
+  });
+  assert.equal(inspected.response.status, 201, JSON.stringify(inspected.payload));
+  const preview = await request("/api/integrations/personnel-import/preview", {
+    method: "POST",
+    auth: developer,
+    body: {
+      inspectionId: inspected.payload.inspectionId,
+      sheetName: "CSV",
+      headerRow: 1,
+      mapping: {
+        personnelNumber: { columnIndex: 0 },
+        fullName: { columnIndex: 1 },
+        active: { columnIndex: 2 },
+      },
+      defaults: {
+        homeLocationId: assignment.home_location_id,
+        positionId: assignment.position_id,
+        contractedHours: 38.5,
+        active: true,
+      },
+      duplicateStrategy: "update",
+    },
+  });
+  assert.equal(preview.response.status, 201, JSON.stringify(preview.payload));
+  assert.equal(preview.payload.summary.update, 1);
+  const targetPortalSession = session(employeeNumber, "department_manager");
+  const targetMobileSession = mobileSession(employeeNumber);
+  const applied = await request("/api/integrations/personnel-import/apply", {
+    method: "POST",
+    auth: developer,
+    body: { previewId: preview.payload.previewId },
+  });
+  assert.equal(applied.response.status, 201, JSON.stringify(applied.payload));
+  assert.equal(Number(db.prepare("SELECT active FROM employees WHERE personnel_number = ?")
+    .get(employeeNumber).active), 0);
+  assert.equal(Number(db.prepare("SELECT active FROM portal_users WHERE employee_number = ?")
+    .get(employeeNumber).active), 0);
+  assert.ok(db.prepare("SELECT revoked_at FROM portal_sessions WHERE id = ?")
+    .get(targetPortalSession.id).revoked_at);
+  const mobile = db.prepare("SELECT revoked_at, revoked_reason FROM mobile_sessions WHERE id = ?")
+    .get(targetMobileSession);
+  assert.ok(mobile.revoked_at);
+  assert.equal(mobile.revoked_reason, "employee_deactivated");
+  const audit = db.prepare(`
+    SELECT detail FROM audit_log
+    WHERE action = 'personnel.learning.organization-scope.update'
+      AND entity_id = ?
+      AND json_extract(detail, '$.sourceId') = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(employeeNumber, applied.payload.runId);
+  assert.ok(audit);
+  const detail = JSON.parse(audit.detail);
+  assert.deepEqual(detail.scopeBefore, {
+    locationId: assignment.home_location_id,
+    departmentId: assignment.initialDepartmentId,
+  });
+  assert.equal(detail.scopeAfter, null);
+  assert.equal(detail.sourceType, "personnel-import");
+  assert.equal(detail.sourceId, applied.payload.runId);
+  assert.equal(detail.reasonCode, "PRINCIPAL_ORGANIZATION_SCOPE_CHANGED");
+});
+
+test("Personalimport widerruft und auditiert nur echte Learning-Scope-Deltas mehrerer Ziele", async () => {
+  const assignment = learningImportAssignment();
+  const learningTargets = ["99LearnA", "99LearnB"];
+  const normalizedNoOpTarget = "99LearnM";
+  for (const employeeNumber of learningTargets) {
+    insertLearningImportTarget(employeeNumber, "department_manager", assignment);
+  }
+  insertLearningImportTarget(normalizedNoOpTarget, "manager", assignment);
+
+  const targetSessions = new Map();
+  for (const [employeeNumber, role] of [
+    ...learningTargets.map((employeeNumber) => [employeeNumber, "department_manager"]),
+    [normalizedNoOpTarget, "manager"],
+  ]) {
+    targetSessions.set(employeeNumber, {
+      portal: session(employeeNumber, role),
+      mobile: mobileSession(employeeNumber),
+    });
+  }
+  const developer = session("101", "developer");
+  const prepared = await prepareLearningDepartmentImport(
+    developer,
+    assignment,
+    [...learningTargets, normalizedNoOpTarget],
+    "learning-multi.csv",
+  );
+  const applied = await request("/api/integrations/personnel-import/apply", {
+    method: "POST",
+    auth: developer,
+    body: { previewId: prepared.previewId },
+  });
+  assert.equal(applied.response.status, 201, JSON.stringify(applied.payload));
+  assert.match(String(applied.payload.runId || ""), /^[a-f0-9-]{36}$/i);
+  for (const employeeNumber of [...learningTargets, normalizedNoOpTarget]) {
+    assert.equal(
+      Number(db.prepare(`
+        SELECT preferred_department_id FROM employees WHERE personnel_number = ?
+      `).get(employeeNumber).preferred_department_id),
+      assignment.desiredDepartmentId,
+    );
+  }
+  for (const employeeNumber of learningTargets) {
+    const state = learningImportSessionState(
+      targetSessions.get(employeeNumber).portal,
+      targetSessions.get(employeeNumber).mobile,
+    );
+    assert.ok(state.portalRevokedAt, employeeNumber);
+    assert.ok(state.mobileRevokedAt, employeeNumber);
+    assert.equal(state.mobileReason, "learning_organization_scope_changed", employeeNumber);
+  }
+  assert.deepEqual(
+    learningImportSessionState(
+      targetSessions.get(normalizedNoOpTarget).portal,
+      targetSessions.get(normalizedNoOpTarget).mobile,
+    ),
+    { portalRevokedAt: null, mobileRevokedAt: null, mobileReason: "" },
+  );
+
+  const learningAudits = db.prepare(`
+    SELECT entity_id, detail
+    FROM audit_log
+    WHERE action = 'personnel.learning.organization-scope.update'
+      AND json_extract(detail, '$.sourceId') = ?
+    ORDER BY entity_id
+  `).all(applied.payload.runId);
+  assert.deepEqual(
+    learningAudits.map((row) => String(row.entity_id)),
+    [...learningTargets].sort(),
+  );
+  for (const row of learningAudits) {
+    const detail = JSON.parse(row.detail);
+    assert.deepEqual(Object.keys(detail).sort(), [
+      "reasonCode",
+      "schemaVersion",
+      "scopeAfter",
+      "scopeBefore",
+      "sourceId",
+      "sourceType",
+    ]);
+    assert.deepEqual(detail, {
+      schemaVersion: 1,
+      sourceType: "personnel-import",
+      sourceId: applied.payload.runId,
+      scopeBefore: {
+        locationId: assignment.home_location_id,
+        departmentId: assignment.initialDepartmentId,
+      },
+      scopeAfter: null,
+      reasonCode: "PRINCIPAL_ORGANIZATION_SCOPE_CHANGED",
+    });
+  }
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM audit_log
+    WHERE action = 'integration.personnel.import.applied'
+      AND entity_type = 'integration_run' AND entity_id = ?
+  `).get(applied.payload.runId).count, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs WHERE id = ?")
+    .get(applied.payload.runId).count, 1);
+});
+
+test("Personalimport rollt Mehrziel-Scope, Sitzungen, Run und Audits bei Auditfehler gemeinsam zurueck", async () => {
+  const assignment = learningImportAssignment();
+  const employeeNumbers = ["99RollA", "99RollB", "99RollM"];
+  for (const employeeNumber of employeeNumbers.slice(0, 2)) {
+    insertLearningImportTarget(employeeNumber, "department_manager", assignment);
+  }
+  insertLearningImportTarget(employeeNumbers[2], "manager", assignment);
+  const targetSessions = new Map();
+  for (const [employeeNumber, role] of [
+    [employeeNumbers[0], "department_manager"],
+    [employeeNumbers[1], "department_manager"],
+    [employeeNumbers[2], "manager"],
+  ]) {
+    targetSessions.set(employeeNumber, {
+      portal: session(employeeNumber, role),
+      mobile: mobileSession(employeeNumber),
+    });
+  }
+  const developer = session("101", "developer");
+  const prepared = await prepareLearningDepartmentImport(
+    developer,
+    assignment,
+    employeeNumbers,
+    "learning-rollback.csv",
+  );
+  const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
+  const runsBefore = db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count;
+  db.exec(`
+    CREATE TRIGGER test_personnel_import_apply_audit_abort
+    BEFORE INSERT ON audit_log
+    WHEN NEW.action = 'integration.personnel.import.applied'
+    BEGIN
+      SELECT RAISE(ABORT, 'test personnel import apply audit abort');
+    END;
+  `);
+  try {
+    const failed = await request("/api/integrations/personnel-import/apply", {
+      method: "POST",
+      auth: developer,
+      body: { previewId: prepared.previewId },
+    });
+    assert.equal(failed.response.status, 500, JSON.stringify(failed.payload));
+    for (const employeeNumber of employeeNumbers) {
+      assert.equal(
+        Number(db.prepare(`
+          SELECT preferred_department_id FROM employees WHERE personnel_number = ?
+        `).get(employeeNumber).preferred_department_id),
+        assignment.initialDepartmentId,
+      );
+      assert.deepEqual(
+        learningImportSessionState(
+          targetSessions.get(employeeNumber).portal,
+          targetSessions.get(employeeNumber).mobile,
+        ),
+        { portalRevokedAt: null, mobileRevokedAt: null, mobileReason: "" },
+      );
+    }
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count, runsBefore);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count, auditBefore);
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS test_personnel_import_apply_audit_abort");
+    for (const sessionId of [prepared.previewId, prepared.inspectionId]) {
+      const cleanup = await request(`/api/integrations/personnel-import/sessions/${sessionId}`, {
+        method: "DELETE",
+        auth: developer,
+      });
+      assert.equal(cleanup.response.status, 204, JSON.stringify(cleanup.payload));
+    }
+  }
 });
 
 test("Personalmodul R1: konkurrierender Unique-Insert macht die Importvorschau kontrolliert veraltet", async () => {
