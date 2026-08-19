@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.9 Beta · Neustartsichere Schulungsbelege
+
+- Schulungs-, Wissens- und Fähigkeitsbelege werden beim Start anhand ihres kanonischen JSON-Fachinhalts geprüft; eine semantisch gleichwertige Schlüsselreihenfolge des SQLite-Providers löst keinen falschen Integritätsalarm mehr aus.
+- Bereits gespeicherte gültige Belege bleiben unverändert erhalten. Tatsächliche Inhalts-, Scope-, Receipt- oder Ereigniskettenmanipulationen werden weiterhin fail-closed abgewiesen.
+- Persistenz- und Neustartregressionen prüfen ausdrücklich die abweichende JSON-Bytefolge bei identischem kanonischem SHA-256-Beleg.
+
 ## v0.92.8 Beta · Schulungsprozesse und Fähigkeitsprofile
 
 - Versionierte Schulungs- und Wissensprozesse bilden verbindliche Ziele, Schritte, Abschlusskriterien, Prüfarten und Geltungsbereiche ab; veröffentlichte Fassungen bleiben unveränderlich nachvollziehbar.

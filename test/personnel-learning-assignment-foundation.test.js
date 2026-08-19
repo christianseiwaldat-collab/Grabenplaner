@@ -45,7 +45,6 @@ const {
   moduleEventReceiptSha256,
   moduleReceiptSha256,
   moduleVersionReceiptSha256,
-  sha256Text,
 } = require("../lib/persistence/sqlite/operations/personnel-learning-schema");
 const {
   runSqliteStartupSchemaMigrations,
@@ -88,14 +87,15 @@ function insertOrganization(database) {
 }
 
 function eventRow({ moduleId, sequenceNumber, eventType, versionNumber = null, previous = "" }) {
-  const payloadJson = JSON.stringify(versionNumber ? { versionNumber } : { created: true });
+  const payload = versionNumber ? { versionNumber } : { created: true };
+  const payloadJson = JSON.stringify(payload);
   const row = {
     id: `${moduleId}:event:${sequenceNumber}`,
     module_id: moduleId,
     sequence_number: sequenceNumber,
     event_type: eventType,
     module_version_number: versionNumber,
-    event_payload_sha256: sha256Text(payloadJson),
+    event_payload_sha256: canonicalSha256(payload),
     previous_receipt_sha256: previous,
     actor_id: ACTOR,
     occurred_at: `2026-08-18T10:0${sequenceNumber}:00.000Z`,
@@ -138,22 +138,23 @@ function insertPublishedModule(database, moduleId, normalized) {
   const created = eventRow({ moduleId, sequenceNumber: 1, eventType: "created" });
   insertEvent(database, created);
   const contentJson = JSON.stringify(normalized.content);
-  const scopeSnapshotJson = JSON.stringify({
+  const scopeSnapshot = {
     type: normalized.scope.type,
     ...(normalized.scope.locationId ? { locationId: normalized.scope.locationId } : {}),
     ...(normalized.scope.departmentId ? { departmentId: normalized.scope.departmentId } : {}),
-  });
+  };
+  const scopeSnapshotJson = JSON.stringify(scopeSnapshot);
   const version = {
     module_id: moduleId,
     version_number: 1,
     title: normalized.title,
     content_json: contentJson,
-    content_sha256: sha256Text(contentJson),
+    content_sha256: canonicalSha256(normalized.content),
     scope_type: normalized.scope.type,
     scope_location_id: normalized.scope.locationId,
     scope_department_id: normalized.scope.departmentId,
     scope_snapshot_json: scopeSnapshotJson,
-    scope_snapshot_sha256: sha256Text(scopeSnapshotJson),
+    scope_snapshot_sha256: canonicalSha256(scopeSnapshot),
     previous_receipt_sha256: "",
     created_by: ACTOR,
     created_at: "2026-08-18T10:02:00.000Z",
@@ -206,22 +207,23 @@ function insertPublishedModuleVersion(database, moduleId, normalized, versionNum
     LIMIT 1
   `).get(moduleId);
   const contentJson = JSON.stringify(normalized.content);
-  const scopeSnapshotJson = JSON.stringify({
+  const scopeSnapshot = {
     type: normalized.scope.type,
     ...(normalized.scope.locationId ? { locationId: normalized.scope.locationId } : {}),
     ...(normalized.scope.departmentId ? { departmentId: normalized.scope.departmentId } : {}),
-  });
+  };
+  const scopeSnapshotJson = JSON.stringify(scopeSnapshot);
   const version = {
     module_id: moduleId,
     version_number: versionNumber,
     title: normalized.title,
     content_json: contentJson,
-    content_sha256: sha256Text(contentJson),
+    content_sha256: canonicalSha256(normalized.content),
     scope_type: normalized.scope.type,
     scope_location_id: normalized.scope.locationId,
     scope_department_id: normalized.scope.departmentId,
     scope_snapshot_json: scopeSnapshotJson,
-    scope_snapshot_sha256: sha256Text(scopeSnapshotJson),
+    scope_snapshot_sha256: canonicalSha256(scopeSnapshot),
     previous_receipt_sha256: previousVersion.receipt_sha256,
     created_by: ACTOR,
     created_at: "2026-08-18T10:04:00.000Z",

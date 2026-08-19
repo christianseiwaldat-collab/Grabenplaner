@@ -23,7 +23,6 @@ const {
   moduleEventReceiptSha256,
   moduleReceiptSha256,
   moduleVersionReceiptSha256,
-  sha256Text,
 } = require("../lib/persistence/sqlite/operations/personnel-learning-schema");
 const {
   runSqliteStartupSchemaMigrations,
@@ -58,15 +57,15 @@ function insertFoundation(database) {
 }
 
 function eventRow({ moduleId, sequenceNumber, eventType, versionNumber = null, previous = "" }) {
-  const payloadJson = JSON.stringify(versionNumber
-    ? { versionNumber } : { catalogEntity: "skill" });
+  const payload = versionNumber ? { versionNumber } : { catalogEntity: "skill" };
+  const payloadJson = JSON.stringify(payload);
   const row = {
     id: `${moduleId}:event:${sequenceNumber}`,
     module_id: moduleId,
     sequence_number: sequenceNumber,
     event_type: eventType,
     module_version_number: versionNumber,
-    event_payload_sha256: sha256Text(payloadJson),
+    event_payload_sha256: canonicalSha256(payload),
     previous_receipt_sha256: previous,
     actor_id: ACTOR,
     occurred_at: `2026-08-18T10:0${sequenceNumber}:00.000Z`,
@@ -125,21 +124,22 @@ function insertPublishedSkill(database, suffix = "base") {
   insertEvent(database, created);
 
   const contentJson = JSON.stringify(normalized.content);
-  const scopeSnapshotJson = JSON.stringify({
+  const scopeSnapshot = {
     type: normalized.scope.type,
     locationId: normalized.scope.locationId,
-  });
+  };
+  const scopeSnapshotJson = JSON.stringify(scopeSnapshot);
   const version = {
     module_id: moduleId,
     version_number: 1,
     title: normalized.title,
     content_json: contentJson,
-    content_sha256: sha256Text(contentJson),
+    content_sha256: canonicalSha256(normalized.content),
     scope_type: normalized.scope.type,
     scope_location_id: normalized.scope.locationId,
     scope_department_id: normalized.scope.departmentId,
     scope_snapshot_json: scopeSnapshotJson,
-    scope_snapshot_sha256: sha256Text(scopeSnapshotJson),
+    scope_snapshot_sha256: canonicalSha256(scopeSnapshot),
     previous_receipt_sha256: "",
     created_by: ACTOR,
     created_at: "2026-08-18T10:02:00.000Z",
