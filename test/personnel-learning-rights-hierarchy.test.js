@@ -26,8 +26,8 @@ const {
 const {
   moduleReceiptSha256,
   moduleVersionReceiptSha256,
-  sha256Text,
 } = require("../lib/persistence/sqlite/operations/personnel-learning-schema");
+const { canonicalSha256 } = require("../lib/work-rules/receipt");
 const {
   app,
   db,
@@ -269,23 +269,25 @@ function insertDepartmentScopedLearningVersion(departmentId, locationId) {
     moduleRow.created_by,
     moduleRow.created_at,
   );
-  const contentJson = JSON.stringify({ blocks: [{ type: "text", text: "Move-Schutz" }] });
-  const scopeSnapshotJson = JSON.stringify({
+  const content = { blocks: [{ type: "text", text: "Move-Schutz" }] };
+  const contentJson = JSON.stringify(content);
+  const scopeSnapshot = {
     type: "department",
     locationId,
     departmentId,
-  });
+  };
+  const scopeSnapshotJson = JSON.stringify(scopeSnapshot);
   const version = {
     module_id: moduleRow.id,
     version_number: 1,
     title: "Unveraenderlicher Abteilungsscope",
     content_json: contentJson,
-    content_sha256: sha256Text(contentJson),
+    content_sha256: canonicalSha256(content),
     scope_type: "department",
     scope_location_id: locationId,
     scope_department_id: departmentId,
     scope_snapshot_json: scopeSnapshotJson,
-    scope_snapshot_sha256: sha256Text(scopeSnapshotJson),
+    scope_snapshot_sha256: canonicalSha256(scopeSnapshot),
     previous_receipt_sha256: "",
     created_by: HR,
     created_at: "2026-08-18T10:01:00.000Z",

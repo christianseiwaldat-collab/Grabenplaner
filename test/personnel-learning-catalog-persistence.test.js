@@ -13,11 +13,13 @@ const {
   ensureSqliteApplicationSchema,
 } = require("../lib/persistence/sqlite/operations/application-schema");
 const {
+  inspectSqlitePersonnelLearningRows,
   moduleEventReceiptSha256,
   moduleReceiptSha256,
   moduleVersionReceiptSha256,
   sha256Text,
 } = require("../lib/persistence/sqlite/operations/personnel-learning-schema");
+const { canonicalSha256 } = require("../lib/work-rules/receipt");
 const {
   createSqlitePersistenceProvider,
   openSqliteLegacyDatabase,
@@ -55,12 +57,12 @@ function fixtureRows() {
     versionNumber: 1,
     title: "Persistenzvertrag",
     content,
-    contentSha256: sha256Text(JSON.stringify(content)),
+    contentSha256: canonicalSha256(content),
     scopeType: "location",
     scopeLocationId: "learning-persistence",
     scopeDepartmentId: null,
     scopeSnapshot,
-    scopeSnapshotSha256: sha256Text(JSON.stringify(scopeSnapshot)),
+    scopeSnapshotSha256: canonicalSha256(scopeSnapshot),
     previousReceiptSha256: "",
     receiptSha256: "",
     createdBy: "TEST",
@@ -74,7 +76,7 @@ function fixtureRows() {
     eventType: "created",
     moduleVersionNumber: null,
     eventPayload: { schemaVersion: 1 },
-    eventPayloadSha256: sha256Text(JSON.stringify({ schemaVersion: 1 })),
+    eventPayloadSha256: canonicalSha256({ schemaVersion: 1 }),
     previousReceiptSha256: "",
     receiptSha256: "",
     actorId: "TEST",
@@ -89,7 +91,7 @@ function fixtureRows() {
     eventType: "version_added",
     moduleVersionNumber: 1,
     eventPayload: versionEventPayload,
-    eventPayloadSha256: sha256Text(JSON.stringify(versionEventPayload)),
+    eventPayloadSha256: canonicalSha256(versionEventPayload),
     previousReceiptSha256: createdEvent.receiptSha256,
     receiptSha256: "",
     actorId: "TEST",
@@ -114,6 +116,14 @@ test("Learning-Katalog-Repository schreibt und liest Modul, Version und Ereignis
     await repositories.personnelLearning.insertVersion(rows.version);
     await repositories.personnelLearning.insertEvent(rows.createdEvent);
     await repositories.personnelLearning.insertEvent(rows.versionEvent);
+
+    const storedContent = database.prepare(`
+      SELECT content_json, content_sha256
+      FROM personnel_learning_module_versions
+      WHERE module_id = ? AND version_number = 1
+    `).get(rows.module.id);
+    assert.notEqual(sha256Text(storedContent.content_json), storedContent.content_sha256);
+    assert.equal(inspectSqlitePersonnelLearningRows(database).valid, true);
 
     assert.deepEqual((await repositories.personnelLearning.listModules()).map((row) => row.id), [
       rows.module.id,

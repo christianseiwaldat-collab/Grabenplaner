@@ -97,14 +97,15 @@ function insertModule(database, suffix = "base") {
     moduleRow.created_at,
   );
 
-  const eventPayloadJson = JSON.stringify({ source: "standalone" });
+  const eventPayload = { source: "standalone", schemaVersion: 1 };
+  const eventPayloadJson = JSON.stringify(eventPayload);
   const eventRow = {
     id: `learning-event-${suffix}-1`,
     module_id: moduleRow.id,
     sequence_number: 1,
     event_type: "created",
     module_version_number: null,
-    event_payload_sha256: sha256Text(eventPayloadJson),
+    event_payload_sha256: canonicalSha256(eventPayload),
     previous_receipt_sha256: "",
     actor_id: "HR-LEARNING",
     occurred_at: "2026-08-18T08:00:00.000Z",
@@ -133,23 +134,28 @@ function insertModule(database, suffix = "base") {
 }
 
 function versionRow({ moduleId, versionNumber = 1, previousReceiptSha256 = "" } = {}) {
-  const contentJson = JSON.stringify({ blocks: [{ type: "text", text: "Testinhalt" }] });
-  const scopeSnapshotJson = JSON.stringify({
+  const content = {
+    summary: "Testinhalt",
+    blocks: [{ type: "text", text: "Testinhalt" }],
+  };
+  const contentJson = JSON.stringify(content);
+  const scopeSnapshot = {
     type: "department",
     locationId: LOCATION_A,
     departmentId: DEPARTMENT_A,
-  });
+  };
+  const scopeSnapshotJson = JSON.stringify(scopeSnapshot);
   const row = {
     module_id: moduleId,
     version_number: versionNumber,
     title: `Lernversion ${versionNumber}`,
     content_json: contentJson,
-    content_sha256: sha256Text(contentJson),
+    content_sha256: canonicalSha256(content),
     scope_type: "department",
     scope_location_id: LOCATION_A,
     scope_department_id: DEPARTMENT_A,
     scope_snapshot_json: scopeSnapshotJson,
-    scope_snapshot_sha256: sha256Text(scopeSnapshotJson),
+    scope_snapshot_sha256: canonicalSha256(scopeSnapshot),
     previous_receipt_sha256: previousReceiptSha256,
     created_by: "HR-LEARNING",
     created_at: `2026-08-18T08:0${versionNumber}:00.000Z`,
@@ -185,14 +191,15 @@ function insertVersion(database, row) {
 }
 
 function insertVersionAddedEvent(database, { moduleId, versionNumber, previousEvent }) {
-  const eventPayloadJson = JSON.stringify({ versionNumber });
+  const eventPayload = { versionNumber, schemaVersion: 1 };
+  const eventPayloadJson = JSON.stringify(eventPayload);
   const row = {
     id: `learning-event-${moduleId}-${versionNumber + 1}`,
     module_id: moduleId,
     sequence_number: Number(previousEvent.sequence_number) + 1,
     event_type: "version_added",
     module_version_number: versionNumber,
-    event_payload_sha256: sha256Text(eventPayloadJson),
+    event_payload_sha256: canonicalSha256(eventPayload),
     previous_receipt_sha256: previousEvent.receipt_sha256,
     actor_id: "HR-LEARNING",
     occurred_at: `2026-08-18T08:1${versionNumber}:00.000Z`,
@@ -276,6 +283,43 @@ test("Lernmodul-Block 1: vier eigenstaendige Tabellen werden ohne O6-/Prozess-Ba
     }
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
     assert.equal(database.prepare("PRAGMA quick_check").get().quick_check, "ok");
+  } finally {
+    database.close();
+  }
+});
+
+test("Lernmodul-Block 1: kanonische JSON-Belege bleiben nach Speicherung und Neustart gültig", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  try {
+    runMigrations(database);
+    const fixture = insertCompleteModule(database, "canonical-restart");
+    const storedVersion = database.prepare(`
+      SELECT content_json, content_sha256, scope_snapshot_json, scope_snapshot_sha256
+      FROM personnel_learning_module_versions
+      WHERE module_id = ? AND version_number = 1
+    `).get(fixture.moduleRow.id);
+    const storedEvents = database.prepare(`
+      SELECT event_payload_json, event_payload_sha256
+      FROM personnel_learning_module_events
+      WHERE module_id = ?
+      ORDER BY sequence_number
+    `).all(fixture.moduleRow.id);
+
+    assert.notEqual(sha256Text(storedVersion.content_json), storedVersion.content_sha256);
+    assert.notEqual(
+      sha256Text(storedVersion.scope_snapshot_json),
+      storedVersion.scope_snapshot_sha256,
+    );
+    assert.equal(
+      storedEvents.every((event) => sha256Text(event.event_payload_json)
+        !== event.event_payload_sha256),
+      true,
+    );
+    assert.equal(inspectSqlitePersonnelLearningRows(database).valid, true);
+
+    const repeated = runMigrations(database, { databaseExistedBeforeOpen: true });
+    assert.equal(repeated.personnelLearningFoundationMigrationRequired, false);
+    assert.equal(inspectSqlitePersonnelLearningRows(database).valid, true);
   } finally {
     database.close();
   }
