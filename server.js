@@ -407,11 +407,17 @@ const {
   PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS,
   PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS,
   PORTAL_BIRTHDAY_PRESENTATIONS,
+  isActivePersonalPortalPrincipal,
   portalBirthdayPresentationDefaultPermissionsForRole,
   createPortalBirthdayPresentationAccessSnapshot,
   validatePortalBirthdayPresentationAssignmentInput,
   validatePortalBirthdayPresentationPolicyInput,
 } = require("./lib/portal-birthday-presentations");
+const {
+  birthdayClaimReceipt,
+  birthdayEventForVienna,
+  birthdayThemeEventForVienna,
+} = require("./lib/portal-birthday-presentation-claim");
 const {
   StaffAssignmentRequestError,
   insertInitialStaffAssignmentRequestHistory,
@@ -2092,7 +2098,6 @@ const wifiWebhookSecret = loadPrivateSecret({
   bytes: 48,
   requiredInServerMode: true,
 });
-
 function loadAmuEncryptionConfiguration() {
   const keyId = String(process.env.GRABENPLANER_AMU_KEY_ID || (serverModeActive ? "" : "local-v1")).trim();
   const environmentKey = String(process.env.GRABENPLANER_AMU_KEY || "").trim();
@@ -2251,6 +2256,7 @@ const {
   personnelLifecycle: personnelLifecycleRepository,
   personnelLearning: personnelLearningRepository,
   planningSettings: planningSettingsRepository,
+  portalBirthdayPresentations: portalBirthdayPresentationsRepository,
   portalAccess: portalAccessRepository,
   runtimeRecovery: runtimeRecoveryRepository,
   salesAnalytics: salesAnalyticsRepository,
@@ -26870,6 +26876,14 @@ async function privacyRequestExportBundle(state) {
       personalNotificationContact,
     } : null;
   }
+  if (scope.has("all_personal_data")) {
+    bundle.data.portalBirthdayPresentationClaims = (
+      await portalBirthdayPresentationsRepository.listClaimsForEmployee(employeeNumber)
+    ).map((claim) => ({
+      eventYear: Number(claim.eventYear),
+      presentationId: String(claim.presentationId || ""),
+    }));
+  }
   if (scope.has("time_records") || scope.has("all_personal_data")) {
     [
       bundle.data.timeRecords,
@@ -43189,6 +43203,154 @@ app.get("/api/portal/v1/amu-access-policy", async (request, response) => {
 app.put("/api/portal/v1/amu-access-policy", async (request, response) => {
   const actor = requireAdminHrOrLocal(request, "hr:settings");
   response.json({ policy: await saveManagerAmuAccessPolicy(actor, request.body || {}), canChange: true });
+});
+
+function portalBirthdayPresentationClaimResponse(presentation = null) {
+  return { presentation: presentation || null };
+}
+
+function portalBirthdayPresentationThemeResponse(theme = null) {
+  return { theme: theme || null };
+}
+
+app.get("/api/portal/v1/me/birthday-presentation/theme", async (request, response) => {
+  response.setHeader("Cache-Control", "private, no-store, max-age=0");
+  response.setHeader("Pragma", "no-cache");
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(
+      428,
+      "Bitte zuerst das persönliche Startpasswort ändern.",
+      "PORTAL_PASSWORD_CHANGE_REQUIRED",
+    );
+  }
+
+  const employeeNumber = String(session.employeeNumber || "").trim();
+  const theme = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const actor = await portalBirthdayPresentationActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    if (!isActivePersonalPortalPrincipal(actor)
+      || String(actor.employeeNumber || "") !== employeeNumber) {
+      throw httpError(
+        401,
+        "Der persönliche Mitarbeiterzugang ist nicht mehr aktiv.",
+        "PORTAL_LOGIN_REQUIRED",
+      );
+    }
+    const [policyRow, assignment] = await Promise.all([
+      repositories.portalBirthdayPresentations.getPolicy(),
+      repositories.portalBirthdayPresentations.getAssignment(employeeNumber),
+    ]);
+    const policy = portalBirthdayPresentationPolicy(policyRow);
+    const presentationId = String(
+      assignment?.presentation_id ?? assignment?.presentationId ?? "off",
+    );
+    const presentation = PORTAL_BIRTHDAY_PRESENTATIONS.find(
+      (item) => item.id === presentationId,
+    );
+    if (!policy.enabled || !presentation) return null;
+
+    const sensitive = await personnelSensitiveProfile(
+      employeeNumber,
+      repositories.organizationPersonnel,
+    );
+    const event = birthdayThemeEventForVienna(sensitive.identity?.birthDate, new Date());
+    return event ? { id: presentation.id } : null;
+  }, { isolation: "serializable", readOnly: true });
+  response.json(portalBirthdayPresentationThemeResponse(theme));
+});
+
+app.post("/api/portal/v1/me/birthday-presentation/claim", async (request, response) => {
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(
+      428,
+      "Bitte zuerst das persönliche Startpasswort ändern.",
+      "PORTAL_PASSWORD_CHANGE_REQUIRED",
+    );
+  }
+  assertPortalCsrf(request);
+  response.setHeader("Cache-Control", "private, no-store, max-age=0");
+  response.setHeader("Pragma", "no-cache");
+  if (!request.body
+    || typeof request.body !== "object"
+    || Array.isArray(request.body)
+    || Object.keys(request.body).length > 0) {
+    throw httpError(
+      400,
+      "Für den Einblendungsabruf sind keine Eingabedaten vorgesehen.",
+      "PORTAL_BIRTHDAY_PRESENTATION_CLAIM_INPUT_INVALID",
+    );
+  }
+
+  const employeeNumber = String(session.employeeNumber || "").trim();
+  const result = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const actor = await portalBirthdayPresentationActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    if (!isActivePersonalPortalPrincipal(actor)
+      || String(actor.employeeNumber || "") !== employeeNumber) {
+      throw httpError(
+        401,
+        "Der persönliche Mitarbeiterzugang ist nicht mehr aktiv.",
+        "PORTAL_LOGIN_REQUIRED",
+      );
+    }
+    const [policyRow, assignment] = await Promise.all([
+      repositories.portalBirthdayPresentations.getPolicy(),
+      repositories.portalBirthdayPresentations.getAssignment(employeeNumber),
+    ]);
+    const policy = portalBirthdayPresentationPolicy(policyRow);
+    const presentationId = String(
+      assignment?.presentation_id ?? assignment?.presentationId ?? "off",
+    );
+    const presentation = PORTAL_BIRTHDAY_PRESENTATIONS.find(
+      (item) => item.id === presentationId,
+    );
+    if (!policy.enabled || !presentation) return null;
+
+    const sensitive = await personnelSensitiveProfile(
+      employeeNumber,
+      repositories.organizationPersonnel,
+    );
+    const event = birthdayEventForVienna(sensitive.identity?.birthDate, new Date());
+    if (!event) return null;
+    if (!amuEncryptionConfiguration?.key) {
+      throw httpError(
+        503,
+        "Der geschützte Einblendungsnachweis ist derzeit nicht verfügbar.",
+        "PORTAL_BIRTHDAY_PRESENTATION_CLAIM_UNAVAILABLE",
+      );
+    }
+    const policyRevision = Number(policy.revision);
+    const assignmentRevision = Number(assignment?.revision || 0);
+    const receiptSha256 = birthdayClaimReceipt(amuEncryptionConfiguration.key, {
+      employeeNumber,
+      eventYear: event.eventYear,
+      presentationId: presentation.id,
+      policyRevision,
+      assignmentRevision,
+    });
+    const claim = await repositories.portalBirthdayPresentations.claimEvent({
+      employeeNumber,
+      eventYear: event.eventYear,
+      presentationId: presentation.id,
+      policyRevision,
+      assignmentRevision,
+      receiptSha256,
+    });
+    return Number(claim?.rowsAffected || 0) === 1 ? {
+      id: presentation.id,
+      label: presentation.label,
+      previewUrl: presentation.previewUrl,
+    } : null;
+  }, { isolation: "serializable" });
+  response.json(portalBirthdayPresentationClaimResponse(result));
 });
 
 function portalBirthdayPresentationInput(value, allowedKeys, label) {

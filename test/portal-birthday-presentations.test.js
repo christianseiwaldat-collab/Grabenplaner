@@ -53,13 +53,51 @@ test("Geburtstagsdarstellungen veröffentlichen nur die feste, neutrale Allowlis
     "portal:birthday:team:write",
     "portal:birthday:settings:write",
   ]);
-  assert.deepEqual(PORTAL_BIRTHDAY_PRESENTATION_IDS, ["standard"]);
+  assert.deepEqual(PORTAL_BIRTHDAY_PRESENTATION_IDS, [
+    "elegant",
+    "farbenfroh",
+    "fotowelt",
+    "technik",
+    "standard",
+  ]);
   assert.deepEqual(PORTAL_BIRTHDAY_PRESENTATIONS, [
-    { id: "standard", label: "Standarddarstellung" },
+    {
+      id: "elegant",
+      label: "Elegant",
+      description: "Ruhige Festlichkeit mit feinen Formen und zurückhaltendem Glanz.",
+      previewUrl: "/assets/birthday-presentations/elegant.svg",
+    },
+    {
+      id: "farbenfroh",
+      label: "Farbenfroh",
+      description: "Lebendige, ausgewogene Farbflächen für einen fröhlichen Auftritt.",
+      previewUrl: "/assets/birthday-presentations/farbenfroh.svg",
+    },
+    {
+      id: "fotowelt",
+      label: "Fotowelt",
+      description: "Fotografisch inspirierte Formen mit Kamera- und Lichtakzenten.",
+      previewUrl: "/assets/birthday-presentations/fotowelt.svg",
+    },
+    {
+      id: "technik",
+      label: "Technik",
+      description: "Präzise geometrische Linien mit modernen digitalen Akzenten.",
+      previewUrl: "/assets/birthday-presentations/technik.svg",
+    },
+    {
+      id: "standard",
+      label: "Dezent",
+      description: "Warme, besonders zurückhaltende Gestaltung ohne starke Effekte.",
+      previewUrl: "/assets/birthday-presentations/dezent.svg",
+    },
   ]);
   assert.equal(PORTAL_BIRTHDAY_PRESENTATION_OFF, "off");
-  assert.equal(Object.isFrozen(PORTAL_BIRTHDAY_PRESENTATIONS[0]), true);
-  assert.equal(normalizePortalBirthdayPresentationId("standard"), "standard");
+  for (const presentation of PORTAL_BIRTHDAY_PRESENTATIONS) {
+    assert.equal(Object.isFrozen(presentation), true);
+    assert.match(presentation.previewUrl, /^\/assets\/birthday-presentations\/[a-z-]+\.svg$/);
+    assert.equal(normalizePortalBirthdayPresentationId(presentation.id), presentation.id);
+  }
   assert.equal(normalizePortalBirthdayPresentationId("off"), "off");
   assert.equal(normalizePortalBirthdayPresentationId(null), "off");
   for (const invalid of [undefined, "", "Standard", "confetti", 1, false]) {

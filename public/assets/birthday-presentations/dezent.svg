@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+  <rect width="1440" height="900" fill="#F4F3ED"/>
+  <path d="M0 0h380c-34 108-111 178-230 209C92 224 42 250 0 286Z" fill="#DDE7DF"/>
+  <path d="M1440 900h-382c34-108 112-179 231-209 60-16 110-41 151-78Z" fill="#DDE7DF"/>
+  <path d="M0 0h192c-18 51-55 86-112 105-30 10-57 24-80 43Z" fill="#476759"/>
+  <path d="M1440 900h-194c18-52 56-87 113-106 31-10 58-24 81-44Z" fill="#476759"/>
+  <g fill="none" stroke="#476759" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M113 320c54-43 110-61 168-54 55 7 105-6 149-39"/>
+    <path d="M1010 673c48-35 99-49 153-42 58 8 113-9 164-49"/>
+    <path d="M172 579c36 18 70 21 103 9 30-12 61-8 94 12"/>
+  </g>
+  <g fill="#A86D58">
+    <circle cx="291" cy="265" r="7"/>
+    <circle cx="1162" cy="631" r="7"/>
+    <circle cx="433" cy="171" r="6"/>
+    <circle cx="1007" cy="724" r="6"/>
+  </g>
+  <g fill="#476759">
+    <path d="m353 123 8 19 19 8-19 8-8 19-8-19-19-8 19-8Z"/>
+    <path d="m1089 747 8 19 19 8-19 8-8 19-8-19-19-8 19-8Z"/>
+  </g>
+  <g transform="translate(1104 111)">
+    <path d="M86 4c43 0 78 35 78 78 0 57-78 137-78 137S8 139 8 82C8 39 43 4 86 4Z" fill="#DDE7DF" stroke="#476759" stroke-width="6"/>
+    <path d="M86 219c-22 39 22 51 0 90" fill="none" stroke="#476759" stroke-width="5" stroke-linecap="round"/>
+    <path d="M56 50c14-15 34-20 53-13" fill="none" stroke="#F4F3ED" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(119 654)">
+    <rect x="0" y="40" width="118" height="91" rx="10" fill="#476759"/>
+    <rect x="51" y="40" width="16" height="91" fill="#F4F3ED"/>
+    <rect x="-8" y="24" width="134" height="32" rx="8" fill="#A86D58"/>
+    <path d="M59 26C32 27 18 14 23 4c5-11 27-1 36 22ZM59 26c27 1 41-11 36-22-5-11-27-1-36 22Z" fill="#476759"/>
+  </g>
+  <path d="M489 78c79 18 141 53 186 105" fill="none" stroke="#A86D58" stroke-width="4" stroke-linecap="round" opacity=".72"/>
+  <path d="M765 817c80-13 149-42 206-87" fill="none" stroke="#A86D58" stroke-width="4" stroke-linecap="round" opacity=".72"/>
+  <g fill="#A86D58" opacity=".75">
+    <rect x="518" y="217" width="13" height="45" rx="6" transform="rotate(-31 525 240)"/>
+    <rect x="916" y="667" width="13" height="45" rx="6" transform="rotate(-31 923 690)"/>
+  </g>
+</svg>

@@ -512,7 +512,7 @@ const elements = Object.fromEntries(
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
-    "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
+    "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationCatalogSection", "birthdayPresentationCatalog", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton", "sicknessCaseFields", "sicknessExpectedEnd", "sicknessReturnDate", "sicknessCaseHint",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordForm", "personnelRecordTitle", "personnelRecordContent", "personnelRecordMessage", "savePersonnelRecordButton",
@@ -21231,13 +21231,34 @@ async function saveGreetingSettings() {
 }
 
 function birthdayPresentationCatalog(result = state.birthdayPresentationSettings) {
+  const previewPaths = {
+    elegant: "/assets/birthday-presentations/elegant.svg",
+    farbenfroh: "/assets/birthday-presentations/farbenfroh.svg",
+    fotowelt: "/assets/birthday-presentations/fotowelt.svg",
+    technik: "/assets/birthday-presentations/technik.svg",
+    standard: "/assets/birthday-presentations/dezent.svg",
+  };
   const seen = new Set();
-  return (Array.isArray(result?.presentations) ? result.presentations : []).filter((presentation) => {
+  return (Array.isArray(result?.presentations) ? result.presentations : []).flatMap((presentation) => {
     const id = String(presentation?.id || "").trim();
-    if (!id || seen.has(id)) return false;
+    const previewUrl = String(presentation?.previewUrl || "").trim();
+    const label = String(presentation?.label || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const description = String(presentation?.description || "").replace(/\s+/g, " ").trim().slice(0, 240);
+    if (!Object.hasOwn(previewPaths, id) || previewUrl !== previewPaths[id] || !label || !description || seen.has(id)) return [];
     seen.add(id);
-    return true;
+    return [{ id, label, description, previewUrl }];
   });
+}
+
+function renderBirthdayPresentationCatalog() {
+  if (!elements.birthdayPresentationCatalog) return;
+  const catalog = birthdayPresentationCatalog();
+  elements.birthdayPresentationCatalog.innerHTML = catalog.length
+    ? catalog.map((presentation) => `<article class="birthday-presentation-preview-card" role="listitem">
+        <div class="birthday-presentation-preview-image"><img src="${escapeHtml(presentation.previewUrl)}" alt="" aria-hidden="true" loading="lazy" decoding="async" /></div>
+        <div class="birthday-presentation-preview-copy"><strong>${escapeHtml(presentation.label)}</strong><p>${escapeHtml(presentation.description)}</p></div>
+      </article>`).join("")
+    : '<p class="settings-note" role="status">Der geprüfte Grafikkatalog ist derzeit nicht verfügbar.</p>';
 }
 
 function birthdayPresentationOptions(selectedId = "") {
@@ -21318,6 +21339,7 @@ function renderBirthdayPresentationSettings(result) {
   if (elements.birthdayPresentationScope) {
     elements.birthdayPresentationScope.textContent = `${scopeLabel}${scope.delegated === true ? " · delegiert" : ""}`;
   }
+  renderBirthdayPresentationCatalog();
 
   elements.birthdayPresentationGlobalSection?.classList.toggle("hidden", capabilities.canManageGlobal !== true);
   if (elements.birthdayPresentationEnabled) {
@@ -21350,7 +21372,7 @@ function renderBirthdayPresentationSettings(result) {
         .join(" ").toLocaleLowerCase("de");
       return `<article class="birthday-presentation-row" data-birthday-presentation-employee-row data-birthday-search-text="${escapeHtml(searchText)}" data-birthday-location-name="${escapeHtml(locationName)}">
         <div><strong>${escapeHtml(employeeNumber)} · ${escapeHtml(displayName)}</strong><small>${escapeHtml(detail)}</small></div>
-        <label><span>Darstellung</span><select data-birthday-presentation-employee="${escapeHtml(employeeNumber)}" data-birthday-presentation-original="${escapeHtml(presentationId)}" data-birthday-presentation-revision="${escapeHtml(String(employee?.revision ?? ""))}">${birthdayPresentationOptions(presentationId)}</select></label>
+        <label><span>Darstellung</span><select aria-label="Geburtstagsdarstellung für ${escapeHtml(employeeNumber)} · ${escapeHtml(displayName)}" data-birthday-presentation-employee="${escapeHtml(employeeNumber)}" data-birthday-presentation-original="${escapeHtml(presentationId)}" data-birthday-presentation-revision="${escapeHtml(String(employee?.revision ?? ""))}">${birthdayPresentationOptions(presentationId)}</select></label>
       </article>`;
     }).join("") + '<p class="settings-note hidden" data-birthday-presentation-empty>Keine passenden Teammitglieder gefunden.</p>';
   }

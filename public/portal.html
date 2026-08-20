@@ -736,6 +736,18 @@
         <div class="dialog-actions"><button type="button" data-close-notifications>Schließen</button></div>
       </form>
     </dialog>
+    <dialog class="birthday-presentation-dialog" id="birthdayPresentationDialog" aria-labelledby="birthdayPresentationTitle" aria-describedby="birthdayPresentationText">
+      <div class="birthday-presentation-panel">
+        <button class="birthday-presentation-close" id="birthdayPresentationClose" type="button" aria-label="Geburtstagsgruß schließen">×</button>
+        <img class="birthday-presentation-graphic" id="birthdayPresentationGraphic" alt="" aria-hidden="true" />
+        <div class="birthday-presentation-copy">
+          <span class="eyebrow">Persönlicher Gruß</span>
+          <h2 id="birthdayPresentationTitle">Alles Gute zum Geburtstag!</h2>
+          <p id="birthdayPresentationText">Wir wünschen dir einen schönen Tag.</p>
+        </div>
+        <button class="primary birthday-presentation-confirm" id="birthdayPresentationConfirm" type="button">Schließen</button>
+      </div>
+    </dialog>
     <dialog class="portal-learning-progress-dialog" id="portalLearningProgressDialog" aria-labelledby="portalLearningProgressTitle">
       <form id="portalLearningProgressForm">
         <div class="dialog-heading"><div><span class="eyebrow">Schulungsdurchführung</span><h2 id="portalLearningProgressTitle">Fortschritt erfassen</h2></div><button type="button" data-close-portal-learning-progress aria-label="Dialog schließen">×</button></div>

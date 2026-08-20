@@ -30,6 +30,14 @@ const portalState = {
   personnelLearningDashboardEmployeeNumber: "",
   personnelLearningProgressAssignment: null,
   personnelLearningProgressMutationPending: false,
+  birthdayPresentationClaimGeneration: 0,
+  birthdayPresentationClaimActor: "",
+  birthdayPresentationReturnFocus: null,
+  birthdayPresentationThemeGeneration: 0,
+  birthdayPresentationThemeActor: "",
+  birthdayPresentationThemeRefreshTimer: null,
+  birthdayPresentationThemeRefreshPromise: null,
+  birthdayPresentationThemeRequestController: null,
   amuReports: [],
   amuPolicy: null,
   sicknessAumAllowance: null,
@@ -227,6 +235,7 @@ const el = Object.fromEntries([
   "timeOffChangeForm", "timeOffChangeTitle", "timeOffChangeOriginal", "timeOffChangeFields", "timeOffChangeFrom", "timeOffChangeTo",
   "timeOffChangeToField", "timeOffChangeTimes", "timeOffChangeStart", "timeOffChangeEnd", "timeOffChangeNote", "timeOffChangeMessage",
   "historyDetailDialog", "historyDetailTitle", "historyDetailSummary", "historyDecisionTimeline", "notificationsDialog", "notificationList",
+  "birthdayPresentationDialog", "birthdayPresentationGraphic", "birthdayPresentationClose", "birthdayPresentationConfirm",
   "markAllNotificationsRead", "sicknessCaseForm", "sicknessStartDate", "sicknessExpectedEnd", "sicknessEmployeeNote", "sicknessMessage", "sicknessSubmitButton", "sicknessCaseList", "sicknessAumAllowance",
   "sicknessAmuPanel", "sicknessAmuDocuments", "sicknessAmuCamera", "sicknessAmuUploadHint", "sicknessAmuOcrStatus", "sicknessAmuOcrStatusTitle", "sicknessAmuOcrStatusText", "sicknessAmuOcrConfirmField", "sicknessAmuOcrConfirmed",
   "amuReportForm", "amuSicknessCaseId", "amuIncapacityFrom", "amuIncapacityTo", "amuEmployeeNote", "amuDocuments",
@@ -394,6 +403,196 @@ async function api(url, options = {}) {
     throw error;
   }
   return response.status === 204 ? null : response.json();
+}
+
+const birthdayPresentationPaths = Object.freeze({
+  elegant: "/assets/birthday-presentations/elegant.svg",
+  farbenfroh: "/assets/birthday-presentations/farbenfroh.svg",
+  fotowelt: "/assets/birthday-presentations/fotowelt.svg",
+  technik: "/assets/birthday-presentations/technik.svg",
+  standard: "/assets/birthday-presentations/dezent.svg",
+});
+
+const birthdayPresentationThemeIds = Object.freeze({
+  standard: true,
+  elegant: true,
+  farbenfroh: true,
+  fotowelt: true,
+  technik: true,
+});
+const BIRTHDAY_PRESENTATION_THEME_REFRESH_MS = 5 * 60 * 1000;
+const BIRTHDAY_PRESENTATION_THEME_REQUEST_TIMEOUT_MS = 8000;
+
+function birthdayPresentationActor(user = portalUser()) {
+  if (!user || user.isEmployee !== true || isOrganizationAccount(user)) return "";
+  return String(user.employeeNumber || "").trim();
+}
+
+function neutralizeBirthdayPresentation({ restoreFocus = false } = {}) {
+  portalState.birthdayPresentationClaimGeneration += 1;
+  portalState.birthdayPresentationClaimActor = "";
+  const returnFocus = portalState.birthdayPresentationReturnFocus;
+  portalState.birthdayPresentationReturnFocus = null;
+  if (el.birthdayPresentationDialog?.open) el.birthdayPresentationDialog.close();
+  if (el.birthdayPresentationGraphic) el.birthdayPresentationGraphic.removeAttribute("src");
+  if (restoreFocus && returnFocus?.isConnected && typeof returnFocus.focus === "function") {
+    returnFocus.focus();
+  }
+}
+
+function validBirthdayPresentation(result) {
+  if (!result?.presentation || typeof result.presentation !== "object") return null;
+  const id = String(result.presentation.id || "");
+  const previewUrl = String(result.presentation.previewUrl || "");
+  if (!Object.hasOwn(birthdayPresentationPaths, id)) return null;
+  if (birthdayPresentationPaths[id] !== previewUrl) return null;
+  return { id, previewUrl };
+}
+
+function showBirthdayPresentation(presentation) {
+  if (!el.birthdayPresentationDialog || !el.birthdayPresentationGraphic || !presentation) return;
+  const generation = portalState.birthdayPresentationClaimGeneration;
+  portalState.birthdayPresentationReturnFocus = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+  el.birthdayPresentationGraphic.src = presentation.previewUrl;
+  el.birthdayPresentationDialog.showModal();
+  window.requestAnimationFrame(() => {
+    if (generation === portalState.birthdayPresentationClaimGeneration
+      && el.birthdayPresentationDialog?.open) {
+      el.birthdayPresentationConfirm?.focus();
+    }
+  });
+}
+
+function closeBirthdayPresentation() {
+  const returnFocus = portalState.birthdayPresentationReturnFocus;
+  portalState.birthdayPresentationReturnFocus = null;
+  if (el.birthdayPresentationDialog?.open) el.birthdayPresentationDialog.close();
+  if (el.birthdayPresentationGraphic) el.birthdayPresentationGraphic.removeAttribute("src");
+  if (returnFocus?.isConnected && typeof returnFocus.focus === "function") returnFocus.focus();
+}
+
+async function claimBirthdayPresentation() {
+  const actor = birthdayPresentationActor();
+  if (!actor) {
+    neutralizeBirthdayPresentation();
+    return;
+  }
+  if (portalState.birthdayPresentationClaimActor === actor) return;
+  neutralizeBirthdayPresentation();
+  portalState.birthdayPresentationClaimActor = actor;
+  const generation = portalState.birthdayPresentationClaimGeneration;
+  try {
+    const result = await api("/api/portal/v1/me/birthday-presentation/claim", {
+      method: "POST",
+      body: "{}",
+    });
+    if (generation !== portalState.birthdayPresentationClaimGeneration) return;
+    if (birthdayPresentationActor() !== actor) return;
+    const presentation = validBirthdayPresentation(result);
+    if (presentation) showBirthdayPresentation(presentation);
+    else if (!Object.hasOwn(result || {}, "presentation") || result.presentation !== null) {
+      neutralizeBirthdayPresentation();
+    }
+  } catch {
+    if (generation === portalState.birthdayPresentationClaimGeneration) neutralizeBirthdayPresentation();
+  }
+}
+
+function clearBirthdayPresentationThemeRefreshTimer() {
+  if (portalState.birthdayPresentationThemeRefreshTimer === null) return;
+  window.clearTimeout(portalState.birthdayPresentationThemeRefreshTimer);
+  portalState.birthdayPresentationThemeRefreshTimer = null;
+}
+
+function neutralizeBirthdayPresentationTheme() {
+  portalState.birthdayPresentationThemeGeneration += 1;
+  portalState.birthdayPresentationThemeActor = "";
+  portalState.birthdayPresentationThemeRefreshPromise = null;
+  portalState.birthdayPresentationThemeRequestController?.abort();
+  portalState.birthdayPresentationThemeRequestController = null;
+  clearBirthdayPresentationThemeRefreshTimer();
+  delete document.documentElement.dataset.portalBirthdayTheme;
+}
+
+function applyBirthdayPresentationTheme(result) {
+  const theme = result?.theme;
+  const id = theme && typeof theme === "object" && !Array.isArray(theme)
+    ? String(theme.id || "")
+    : "";
+  if (result && Object.hasOwn(result, "theme") && Object.hasOwn(birthdayPresentationThemeIds, id)) {
+    document.documentElement.dataset.portalBirthdayTheme = id;
+    return;
+  }
+  delete document.documentElement.dataset.portalBirthdayTheme;
+}
+
+function scheduleBirthdayPresentationThemeRefresh(actor, generation) {
+  clearBirthdayPresentationThemeRefreshTimer();
+  if (!actor
+    || actor !== portalState.birthdayPresentationThemeActor
+    || generation !== portalState.birthdayPresentationThemeGeneration) return;
+  portalState.birthdayPresentationThemeRefreshTimer = window.setTimeout(() => {
+    portalState.birthdayPresentationThemeRefreshTimer = null;
+    if (document.hidden) {
+      scheduleBirthdayPresentationThemeRefresh(actor, generation);
+      return;
+    }
+    refreshBirthdayPresentationTheme();
+  }, BIRTHDAY_PRESENTATION_THEME_REFRESH_MS);
+}
+
+async function refreshBirthdayPresentationTheme() {
+  const actor = birthdayPresentationActor();
+  if (!actor || portalUser()?.mustChangePassword === true) {
+    neutralizeBirthdayPresentationTheme();
+    return;
+  }
+  if (portalState.birthdayPresentationThemeActor !== actor) {
+    neutralizeBirthdayPresentationTheme();
+    portalState.birthdayPresentationThemeActor = actor;
+  }
+  if (portalState.birthdayPresentationThemeRefreshPromise) {
+    return portalState.birthdayPresentationThemeRefreshPromise;
+  }
+  clearBirthdayPresentationThemeRefreshTimer();
+  const generation = portalState.birthdayPresentationThemeGeneration;
+  const controller = new AbortController();
+  portalState.birthdayPresentationThemeRequestController = controller;
+  const requestTimeout = window.setTimeout(
+    () => controller.abort(),
+    BIRTHDAY_PRESENTATION_THEME_REQUEST_TIMEOUT_MS,
+  );
+  const request = (async () => {
+    try {
+      const result = await api("/api/portal/v1/me/birthday-presentation/theme", {
+        signal: controller.signal,
+      });
+      if (generation !== portalState.birthdayPresentationThemeGeneration) return;
+      if (birthdayPresentationActor() !== actor) return;
+      applyBirthdayPresentationTheme(result);
+    } catch {
+      if (generation === portalState.birthdayPresentationThemeGeneration
+        && birthdayPresentationActor() === actor) {
+        delete document.documentElement.dataset.portalBirthdayTheme;
+      }
+    } finally {
+      window.clearTimeout(requestTimeout);
+      if (generation === portalState.birthdayPresentationThemeGeneration
+        && portalState.birthdayPresentationThemeActor === actor) {
+        if (portalState.birthdayPresentationThemeRequestController === controller) {
+          portalState.birthdayPresentationThemeRequestController = null;
+        }
+        if (portalState.birthdayPresentationThemeRefreshPromise === request) {
+          portalState.birthdayPresentationThemeRefreshPromise = null;
+        }
+        scheduleBirthdayPresentationThemeRefresh(actor, generation);
+      }
+    }
+  })();
+  portalState.birthdayPresentationThemeRefreshPromise = request;
+  return request;
 }
 
 function message(node, text, error = false) {
@@ -1373,6 +1572,8 @@ async function initialize() {
       await Promise.allSettled([loadMobileLayout(), loadPersonnelLearningDashboard()]);
       chooseInitialPortalTab();
       await loadPortalData();
+      await refreshBirthdayPresentationTheme();
+      await claimBirthdayPresentation();
     }
     openPasswordResetConfirm();
   } catch (error) {
@@ -1810,6 +2011,8 @@ function showLogin(error = "") {
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
+  neutralizeBirthdayPresentation();
+  neutralizeBirthdayPresentationTheme();
   portalState.session = null;
   portalState.personnelLearningDashboard = null;
   portalState.personnelLearningDashboardAvailable = false;
@@ -1901,6 +2104,10 @@ function populateVacationAccountYears() {
 function showPortal(session) {
   const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
     || processTaskActorFingerprint(portalUser());
+  if (birthdayPresentationActor() !== birthdayPresentationActor(session?.user)) {
+    neutralizeBirthdayPresentation();
+    neutralizeBirthdayPresentationTheme();
+  }
   portalState.session = session;
   document.body.classList.toggle(
     "branch-organization-account",
@@ -1969,6 +2176,8 @@ async function login(event) {
       await loadMobileLayout();
       chooseInitialPortalTab();
       await loadPortalData();
+      await refreshBirthdayPresentationTheme();
+      await claimBirthdayPresentation();
     }
   } catch (error) {
     message(el.loginError, error.message, true);
@@ -2079,6 +2288,7 @@ async function logout() {
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
+  neutralizeBirthdayPresentationTheme();
   el.logoutButton.disabled = true;
   el.logoutButton.setAttribute("aria-busy", "true");
   el.logoutButton.textContent = "Abmelden…";
@@ -2103,6 +2313,7 @@ async function logout() {
       ? "Die Abmeldung wurde nicht rechtzeitig bestätigt. Bitte erneut versuchen."
       : `Die Abmeldung konnte nicht bestätigt werden: ${error.message}`;
     message(el.portalLogoutStatus, detail, true);
+    refreshBirthdayPresentationTheme();
   } finally {
     window.clearTimeout(timeout);
     logoutInProgress = false;
@@ -5687,6 +5898,7 @@ async function changePassword(event) {
       body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
     });
     el.passwordDialog.dataset.required = "false";
+    if (portalState.session?.user) portalState.session.user.mustChangePassword = false;
     el.passwordForm.reset();
     message(el.passwordMessage, "Passwort wurde geändert.");
     setTimeout(async () => {
@@ -5694,6 +5906,8 @@ async function changePassword(event) {
       await loadMobileLayout();
       chooseInitialPortalTab();
       await loadPortalData();
+      await refreshBirthdayPresentationTheme();
+      await claimBirthdayPresentation();
     }, 700);
   } catch (error) { message(el.passwordMessage, error.message, true); }
 }
@@ -7083,6 +7297,13 @@ el.notificationsButton.addEventListener("click", async () => {
 });
 el.notificationsDialog.addEventListener("close", () => el.notificationsButton.setAttribute("aria-expanded", "false"));
 document.querySelectorAll("[data-close-notifications]").forEach((button) => button.addEventListener("click", () => el.notificationsDialog.close()));
+el.birthdayPresentationClose?.addEventListener("click", closeBirthdayPresentation);
+el.birthdayPresentationConfirm?.addEventListener("click", closeBirthdayPresentation);
+el.birthdayPresentationDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeBirthdayPresentation();
+});
+el.birthdayPresentationGraphic?.addEventListener("error", () => neutralizeBirthdayPresentation());
 el.notificationList.addEventListener("click", (event) => {
   const item = event.target.closest("[data-notification-id]");
   if (item) readNotification(item.dataset.notificationId);
@@ -7127,6 +7348,7 @@ el.amuReportList.addEventListener("click", (event) => {
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && portalState.session) {
+    refreshBirthdayPresentationTheme();
     loadNotifications();
     loadProcessTasks();
     if (portalState.activeTab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking()]);

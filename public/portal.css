@@ -137,6 +137,39 @@ dialog form { display:grid; gap:14px; min-width:0; max-width:100%; max-height:mi
 dialog form > *,dialog :is(input,select,textarea,button) { min-width:0; max-width:100%; }
 .dialog-heading { display:flex; justify-content:space-between; gap:12px; }.dialog-heading h2 { margin:0; }.dialog-heading button { width:32px; height:32px; font-size:22px; background:#edf1ee; }
 .dialog-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; min-width:0; max-width:100%; padding-top:8px; }.dialog-actions button { min-width:0; max-width:100%; padding:9px 12px; white-space:normal; }
+.birthday-presentation-dialog { width:min(560px,calc(100% - 24px)); color:#17231f; border:1px solid rgba(49,89,74,.24); background:#fffdfa; }
+.birthday-presentation-dialog::backdrop { background:rgba(13,28,23,.68); }
+.birthday-presentation-panel { position:relative; display:grid; gap:18px; max-height:min(90dvh,820px); padding:24px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; text-align:center; }
+.birthday-presentation-graphic { display:block; width:100%; max-height:min(48dvh,360px); border:1px solid #d7dfda; border-radius:14px; background:#f4f6f3; object-fit:contain; }
+.birthday-presentation-copy { display:grid; justify-items:center; gap:6px; }
+.birthday-presentation-copy .eyebrow,.birthday-presentation-copy h2,.birthday-presentation-copy p { margin:0; }
+.birthday-presentation-copy .eyebrow { color:#1d5944; }
+.birthday-presentation-copy h2 { color:#17231f; font-size:clamp(22px,5vw,32px); line-height:1.15; }
+.birthday-presentation-copy p { color:#596761; }
+.birthday-presentation-close { position:absolute; top:10px; right:10px; z-index:1; display:grid; place-items:center; width:44px; height:44px; color:#173f31; border:1px solid #cbd7d1; border-radius:50%; background:rgba(255,253,250,.94); font-size:25px; line-height:1; }
+.birthday-presentation-close:focus-visible,.birthday-presentation-confirm:focus-visible { outline:3px solid #0b5f43; outline-offset:3px; }
+.birthday-presentation-confirm { justify-self:center; min-width:160px; min-height:44px; }
+.birthday-presentation-dialog[open] .birthday-presentation-panel { animation:birthday-presentation-enter .16s ease-out both; }
+@keyframes birthday-presentation-enter { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-color-scheme:dark) {
+  .birthday-presentation-dialog { color:#f3f7f5; border-color:#60736b; background:#18231f; }
+  .birthday-presentation-graphic { border-color:#60736b; background:#f3f5f2; }
+  .birthday-presentation-copy h2 { color:#fff; }
+  .birthday-presentation-copy p { color:#d5dfda; }
+  .birthday-presentation-copy .eyebrow { color:#b7f0d7; }
+  .birthday-presentation-close { color:#fff; border-color:#71867d; background:rgba(24,35,31,.96); }
+  .birthday-presentation-close:focus-visible,.birthday-presentation-confirm:focus-visible { outline-color:#9ee7c8; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .birthday-presentation-dialog[open] .birthday-presentation-panel { animation:none; }
+}
+@media (max-width:360px) {
+  .birthday-presentation-dialog { width:calc(100% - 12px); max-width:calc(100vw - 12px); }
+  .birthday-presentation-panel { gap:14px; padding:16px 12px 14px; }
+  .birthday-presentation-graphic { max-height:42dvh; border-radius:10px; }
+  .birthday-presentation-copy h2 { font-size:22px; }
+  .birthday-presentation-confirm { width:100%; }
+}
 .history-card { padding:20px; }
 .history-toolbar { display:grid; grid-template-columns:repeat(2,minmax(0,220px)); gap:10px; margin-bottom:16px; }
 .history-list { display:grid; gap:9px; }
@@ -1004,4 +1037,324 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
   body.branch-mobile-account .branch-order-editor-heading > .text-button { width:auto; }
   .branch-vacation-entry { align-items:flex-start; flex-direction:column; gap:5px; }
   .branch-vacation-entry time { text-align:left; }
+}
+
+/* Block 11: servergesteuertes Geburtstagsthema fuer Geburtstag und Folgetag. */
+html[data-portal-birthday-theme="standard"] {
+  --birthday-theme-font:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+  --birthday-theme-accent:#356b57;
+  --birthday-theme-accent-strong:#254e3f;
+  --birthday-theme-highlight:#b8863f;
+  --birthday-theme-ink:#1c2a24;
+  --birthday-theme-muted:#5b6b64;
+  --birthday-theme-line:#c8d8d0;
+  --birthday-theme-surface:rgba(255,253,247,.96);
+  --birthday-theme-surface-strong:#f5f2e8;
+  --birthday-theme-input:#fffefa;
+  --birthday-theme-canvas-top:#fbf3df;
+  --birthday-theme-canvas-bottom:#dceae2;
+  --birthday-theme-shadow:rgba(34,72,57,.14);
+  --birthday-theme-focus:#0b5f43;
+}
+html[data-portal-birthday-theme="elegant"] {
+  --birthday-theme-font:Georgia,Cambria,"Times New Roman",serif;
+  --birthday-theme-accent:#405a7c;
+  --birthday-theme-accent-strong:#2d425f;
+  --birthday-theme-highlight:#a87d3f;
+  --birthday-theme-ink:#202838;
+  --birthday-theme-muted:#626e80;
+  --birthday-theme-line:#d1d8e1;
+  --birthday-theme-surface:rgba(255,253,249,.97);
+  --birthday-theme-surface-strong:#f0f2f6;
+  --birthday-theme-input:#fffefd;
+  --birthday-theme-canvas-top:#f7eddc;
+  --birthday-theme-canvas-bottom:#dfe7f1;
+  --birthday-theme-shadow:rgba(35,52,78,.16);
+  --birthday-theme-focus:#244b7a;
+}
+html[data-portal-birthday-theme="farbenfroh"] {
+  --birthday-theme-font:"Trebuchet MS","Segoe UI",Arial,sans-serif;
+  --birthday-theme-accent:#7a416f;
+  --birthday-theme-accent-strong:#5b2e53;
+  --birthday-theme-highlight:#c45d47;
+  --birthday-theme-ink:#312438;
+  --birthday-theme-muted:#716375;
+  --birthday-theme-line:#dfd0dd;
+  --birthday-theme-surface:rgba(255,252,249,.96);
+  --birthday-theme-surface-strong:#f6edf3;
+  --birthday-theme-input:#fffdfb;
+  --birthday-theme-canvas-top:#fff0da;
+  --birthday-theme-canvas-bottom:#eadced;
+  --birthday-theme-shadow:rgba(95,48,83,.15);
+  --birthday-theme-focus:#6b245d;
+}
+html[data-portal-birthday-theme="fotowelt"] {
+  --birthday-theme-font:Aptos,"Segoe UI",Arial,sans-serif;
+  --birthday-theme-accent:#713f66;
+  --birthday-theme-accent-strong:#512d49;
+  --birthday-theme-highlight:#2d7887;
+  --birthday-theme-ink:#29232d;
+  --birthday-theme-muted:#6e646f;
+  --birthday-theme-line:#d9d0d8;
+  --birthday-theme-surface:rgba(255,253,250,.96);
+  --birthday-theme-surface-strong:#f3edf2;
+  --birthday-theme-input:#fffefd;
+  --birthday-theme-canvas-top:#e9f1f2;
+  --birthday-theme-canvas-bottom:#eadde7;
+  --birthday-theme-shadow:rgba(76,42,68,.16);
+  --birthday-theme-focus:#5f2552;
+}
+html[data-portal-birthday-theme="technik"] {
+  --birthday-theme-font:"Cascadia Sans","Segoe UI",Arial,sans-serif;
+  --birthday-theme-accent:#30677c;
+  --birthday-theme-accent-strong:#204b5c;
+  --birthday-theme-highlight:#597a8a;
+  --birthday-theme-ink:#1f2b31;
+  --birthday-theme-muted:#5d6e76;
+  --birthday-theme-line:#cbd9df;
+  --birthday-theme-surface:rgba(250,253,254,.96);
+  --birthday-theme-surface-strong:#eaf1f4;
+  --birthday-theme-input:#fcfeff;
+  --birthday-theme-canvas-top:#e7f0f3;
+  --birthday-theme-canvas-bottom:#d8e5ea;
+  --birthday-theme-shadow:rgba(29,67,82,.16);
+  --birthday-theme-focus:#15566f;
+}
+html[data-portal-birthday-theme] {
+  --ink:var(--birthday-theme-ink);
+  --muted:var(--birthday-theme-muted);
+  --green:var(--birthday-theme-accent);
+  --green-dark:var(--birthday-theme-accent-strong);
+  --line:var(--birthday-theme-line);
+  --paper:var(--birthday-theme-surface);
+  --bg:var(--birthday-theme-canvas-bottom);
+  --portal-glow-top:var(--birthday-theme-canvas-top);
+  --portal-glow-mid:color-mix(in srgb,var(--birthday-theme-canvas-top) 38%,var(--birthday-theme-canvas-bottom));
+  --portal-glow-bottom:var(--birthday-theme-canvas-bottom);
+  --portal-focus:color-mix(in srgb,var(--birthday-theme-accent) 27%,transparent);
+  --surface-soft:var(--birthday-theme-surface-strong);
+  --panel:var(--birthday-theme-surface);
+  --panel-soft:var(--birthday-theme-surface-strong);
+  --primary:var(--birthday-theme-accent);
+  --soft:color-mix(in srgb,var(--birthday-theme-accent) 12%,var(--birthday-theme-surface));
+  font-family:var(--birthday-theme-font);
+  color-scheme:light;
+}
+html[data-portal-birthday-theme] #portalApp,
+html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) { font-family:var(--birthday-theme-font); }
+html[data-portal-birthday-theme] body {
+  color:var(--birthday-theme-ink);
+  background:
+    radial-gradient(circle at 10% 2%,color-mix(in srgb,var(--birthday-theme-highlight) 17%,transparent),transparent 32%),
+    radial-gradient(circle at 92% 0,color-mix(in srgb,var(--birthday-theme-accent) 15%,transparent),transparent 36%),
+    linear-gradient(145deg,var(--birthday-theme-canvas-top),var(--birthday-theme-canvas-bottom));
+  background-attachment:fixed;
+}
+html[data-portal-birthday-theme] #portalApp .portal-header {
+  border-color:color-mix(in srgb,var(--birthday-theme-accent) 24%,var(--birthday-theme-line));
+  background:color-mix(in srgb,var(--birthday-theme-surface) 94%,transparent);
+  box-shadow:0 8px 28px color-mix(in srgb,var(--birthday-theme-shadow) 58%,transparent);
+}
+html[data-portal-birthday-theme] #portalApp :is(h1,h2),
+html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) :is(h1,h2) { color:var(--birthday-theme-ink); }
+html[data-portal-birthday-theme] #portalApp label,
+html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) label { color:var(--birthday-theme-muted); }
+html[data-portal-birthday-theme] #portalApp :is(.portal-card,.schedule-day,.request-item,.approved-vacation-item,.history-item,.process-task-summary article,.leadership-person,.leadership-request-row,.portal-learning-assignment,.portal-learning-progress-step,.branch-order-review li,.time-period-day) {
+  border-color:var(--birthday-theme-line);
+  background:linear-gradient(145deg,var(--birthday-theme-surface),color-mix(in srgb,var(--birthday-theme-surface-strong) 72%,var(--birthday-theme-surface)));
+  box-shadow:0 12px 34px color-mix(in srgb,var(--birthday-theme-shadow) 62%,transparent);
+}
+html[data-portal-birthday-theme] #portalApp .schedule-day.today {
+  border-color:color-mix(in srgb,var(--birthday-theme-accent) 62%,var(--birthday-theme-line));
+  box-shadow:inset 0 3px var(--birthday-theme-highlight),0 12px 34px color-mix(in srgb,var(--birthday-theme-shadow) 58%,transparent);
+}
+html[data-portal-birthday-theme] #portalApp :is(.portal-tabs,.leadership-filter-tabs) {
+  border-color:var(--birthday-theme-line);
+  background:color-mix(in srgb,var(--birthday-theme-surface) 94%,transparent);
+  box-shadow:0 10px 28px color-mix(in srgb,var(--birthday-theme-shadow) 54%,transparent);
+}
+html[data-portal-birthday-theme] #portalApp :is(.portal-tabs,.leadership-filter-tabs) button:not(.active) { color:var(--birthday-theme-muted); }
+html[data-portal-birthday-theme] #portalApp :is(.portal-tabs,.leadership-filter-tabs) button.active {
+  color:#fff;
+  background:linear-gradient(135deg,var(--birthday-theme-accent),var(--birthday-theme-accent-strong));
+}
+html[data-portal-birthday-theme] #portalApp :is(.text-button,.notification-button,.request-history-tabs button,.approved-vacation-item button,.week-controls button,.portal-settings-shortcut) {
+  color:var(--birthday-theme-accent-strong);
+  background:color-mix(in srgb,var(--birthday-theme-accent) 12%,var(--birthday-theme-surface));
+}
+html[data-portal-birthday-theme] #portalApp :is(.primary,.request-history-tabs button.active,.portal-settings-shortcut.active) {
+  color:#fff;
+  background:linear-gradient(135deg,var(--birthday-theme-accent),var(--birthday-theme-accent-strong));
+}
+html[data-portal-birthday-theme] #portalApp .mobile-home-tiles button {
+  color:var(--birthday-theme-ink);
+  border-color:color-mix(in srgb,var(--mobile-home-tile-color) 34%,var(--birthday-theme-line));
+  background:linear-gradient(115deg,var(--birthday-theme-surface),color-mix(in srgb,var(--mobile-home-tile-color) 17%,var(--birthday-theme-surface-strong)));
+  box-shadow:0 10px 26px color-mix(in srgb,var(--birthday-theme-shadow) 58%,transparent);
+}
+html[data-portal-birthday-theme] #portalApp :is(input,textarea,select,.date-range-trigger,.date-range-toolbar button,.date-range-open-end,.notification-item,.notification-target-row,.notification-channel-choice,.email-category-row,.mobile-navigation-setting-row,.mobile-home-setting-row,.branch-order-group-toggle) {
+  color:var(--birthday-theme-ink);
+  border-color:var(--birthday-theme-line);
+  background:var(--birthday-theme-input);
+}
+html[data-portal-birthday-theme] #portalApp :is(
+  .approval-type label,
+  .request-mode label,
+  .traffic-check:not(.green):not(.yellow):not(.red),
+  .vacation-account-primary article,
+  .vacation-account-details span,
+  .history-detail-summary,
+  .email-settings-panel,
+  .privacy-request-form,
+  .portal-settings-summary:hover,
+  .portal-settings-section[open] > .portal-settings-summary,
+  .portal-palette-options label,
+  .portal-surface-options label,
+  .portal-switch,
+  .wifi-history-row,
+  .time-summary > div,
+  .period-switch,
+  .time-period-summary article,
+  .leadership-summary article,
+  .time-record-notice,
+  .correction-entry-row,
+  .leadership-more-grid button,
+  .leadership-more-grid a,
+  .sickness-inline-amu,
+  .date-range-selection > div,
+  .amu-ocr-status:not(.success):not(.warning):not(.error),
+  .amu-upload-panel > summary:hover,
+  .amu-upload-panel[open] > summary,
+  .amu-summary-icon,
+  .amu-summary-action,
+  .loan-overview-table,
+  .loan-item-row,
+  .loan-list-item,
+  .loan-list-main li,
+  .loan-return-item,
+  .loan-photo-selection > span,
+  .loan-photo-entry a,
+  .loan-photo-placeholder,
+  .portal-learning-progress-summary,
+  .portal-learning-skill-node,
+  .portal-learning-level-rail span,
+  .portal-learning-transparency
+) {
+  color:var(--birthday-theme-ink);
+  border-color:var(--birthday-theme-line);
+  background:var(--birthday-theme-surface-strong);
+}
+html[data-portal-birthday-theme] #portalApp :is(.document-links a,.loan-documents a,.loan-photo-button,.loan-photo-attachment nav a) {
+  color:var(--birthday-theme-accent);
+  border-color:var(--birthday-theme-line);
+  background:var(--birthday-theme-surface-strong);
+}
+html[data-portal-birthday-theme] #portalApp .date-range-day.in-range { background:var(--birthday-theme-surface-strong); }
+html[data-portal-birthday-theme] #portalApp .date-range-day.selected {
+  color:#fff;
+  background:var(--birthday-theme-accent);
+}
+html[data-portal-birthday-theme] #portalApp :is(input,textarea,select,button):focus-visible,
+html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) :is(input,textarea,select,button):focus-visible {
+  outline:3px solid var(--birthday-theme-focus);
+  outline-offset:2px;
+}
+html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) {
+  color:var(--birthday-theme-ink);
+  border:1px solid var(--birthday-theme-line);
+  background:var(--birthday-theme-surface);
+  box-shadow:0 24px 80px color-mix(in srgb,var(--birthday-theme-shadow) 82%,transparent);
+}
+html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog)::backdrop {
+  background:color-mix(in srgb,var(--birthday-theme-accent-strong) 56%,transparent);
+}
+html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) :is(form,input,textarea,select) {
+  color:var(--birthday-theme-ink);
+  border-color:var(--birthday-theme-line);
+  background:var(--birthday-theme-input);
+}
+html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) :is(.dialog-heading button,.dialog-actions) {
+  background:var(--birthday-theme-surface-strong);
+}
+html[data-portal-birthday-theme] #portalApp :is(.portal-tabs,.branch-mobile-action-bar) {
+  border-color:var(--birthday-theme-line);
+  background:color-mix(in srgb,var(--birthday-theme-surface) 96%,transparent);
+}
+
+@media (prefers-color-scheme:dark) {
+  html[data-portal-birthday-theme] {
+    --birthday-theme-ink:#f3f6f5;
+    --birthday-theme-muted:#c0cac6;
+    --birthday-theme-line:#53635d;
+    --birthday-theme-surface:rgba(24,31,29,.97);
+    --birthday-theme-surface-strong:#202b27;
+    --birthday-theme-input:#18221f;
+    --birthday-theme-shadow:rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+  html[data-portal-birthday-theme="standard"] { --birthday-theme-accent:#79c8a8; --birthday-theme-accent-strong:#3d856b; --birthday-theme-highlight:#dfb86d; --birthday-theme-focus:#b8f3d8; --birthday-theme-canvas-top:#242b26; --birthday-theme-canvas-bottom:#17231f; }
+  html[data-portal-birthday-theme="elegant"] { --birthday-theme-accent:#9ab8e0; --birthday-theme-accent-strong:#526f98; --birthday-theme-highlight:#dfbd79; --birthday-theme-focus:#c9dcf6; --birthday-theme-canvas-top:#252833; --birthday-theme-canvas-bottom:#171c25; }
+  html[data-portal-birthday-theme="farbenfroh"] { --birthday-theme-accent:#dfa0d1; --birthday-theme-accent-strong:#884b7a; --birthday-theme-highlight:#f49b7e; --birthday-theme-focus:#ffd1ef; --birthday-theme-canvas-top:#302431; --birthday-theme-canvas-bottom:#211923; }
+  html[data-portal-birthday-theme="fotowelt"] { --birthday-theme-accent:#d99bc8; --birthday-theme-accent-strong:#824d72; --birthday-theme-highlight:#76c2cf; --birthday-theme-focus:#f6cce9; --birthday-theme-canvas-top:#29252d; --birthday-theme-canvas-bottom:#1b191d; }
+  html[data-portal-birthday-theme="technik"] { --birthday-theme-accent:#8ac4d8; --birthday-theme-accent-strong:#477f94; --birthday-theme-highlight:#a7c7d2; --birthday-theme-focus:#c3edfa; --birthday-theme-canvas-top:#222c31; --birthday-theme-canvas-bottom:#151e22; }
+  html[data-portal-birthday-theme] #portalApp :is(.portal-tabs,.leadership-filter-tabs) button.active,
+  html[data-portal-birthday-theme] #portalApp :is(.primary,.request-history-tabs button.active,.portal-settings-shortcut.active) {
+    color:#101a17;
+    background:linear-gradient(135deg,var(--birthday-theme-accent),color-mix(in srgb,var(--birthday-theme-accent) 72%,#fff));
+  }
+  html[data-portal-birthday-theme] #portalApp :is(.text-button,.notification-button,.request-history-tabs button,.approved-vacation-item button,.week-controls button,.portal-settings-shortcut) { color:var(--birthday-theme-accent); }
+  html[data-portal-birthday-theme] #portalApp .date-range-day.selected { color:#101a17; }
+  html[data-portal-birthday-theme] #portalApp :is(.traffic-check.green,.amu-ocr-status.success,.loan-resolved-article,.branch-order-draft-panel) { color:#174c37; }
+  html[data-portal-birthday-theme] #portalApp :is(.traffic-check.yellow,.amu-ocr-status.warning,.wifi-suggestion-row.due_soon,.time-tracking-issues article,.loan-manual-mapping,.loan-pending-confirmation,.loan-confirmation-alert,.leadership-request-row.sickness-severity-warning,.leadership-request-row.sickness-severity-yellow) { color:#5e4309; }
+  html[data-portal-birthday-theme] #portalApp :is(.traffic-check.red,.amu-ocr-status.error,.wifi-suggestion-row.overdue,.time-tracking-issues article.error,.leadership-request-row.sickness-severity-red) { color:#6f2923; }
+  html[data-portal-birthday-theme] #portalApp :is(.leadership-request-row.sickness-severity-warning,.leadership-request-row.sickness-severity-yellow) { background:#fffaf0; }
+  html[data-portal-birthday-theme] #portalApp .leadership-request-row.sickness-severity-red { background:#fff0ee; }
+  html[data-portal-birthday-theme] #portalApp :is(.traffic-check,.amu-ocr-status,.wifi-suggestion-row,.time-tracking-issues article,.loan-manual-mapping,.loan-pending-confirmation,.loan-confirmation-alert,.leadership-request-row.sickness-severity-warning,.leadership-request-row.sickness-severity-yellow,.leadership-request-row.sickness-severity-red) :is(p,small,strong,span) { color:inherit; }
+  html[data-portal-birthday-theme] #portalApp :is(.loan-limit-badge,.loan-condition-pill) { color:#174c37; }
+  html[data-portal-birthday-theme] #portalApp .portal-learning-level-rail span.reached { color:#101a17; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  html[data-portal-birthday-theme] #portalApp *,
+  html[data-portal-birthday-theme] #portalApp *::before,
+  html[data-portal-birthday-theme] #portalApp *::after,
+  html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) * {
+    scroll-behavior:auto !important;
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+}
+
+@media (forced-colors:active) {
+  html[data-portal-birthday-theme] body,
+  html[data-portal-birthday-theme] #portalApp :is(.portal-header,.portal-card,.schedule-day,.portal-tabs,.branch-mobile-action-bar),
+  html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) {
+    color:CanvasText;
+    border-color:CanvasText;
+    background:Canvas;
+    box-shadow:none;
+  }
+  html[data-portal-birthday-theme] #portalApp :is(.portal-tabs,.leadership-filter-tabs) button.active,
+  html[data-portal-birthday-theme] #portalApp :is(.primary,.request-history-tabs button.active,.portal-settings-shortcut.active) {
+    forced-color-adjust:none;
+    color:HighlightText;
+    border:1px solid HighlightText;
+    background:Highlight;
+  }
+  html[data-portal-birthday-theme] #portalApp :is(input,textarea,select,button):focus-visible,
+  html[data-portal-birthday-theme] dialog:not(.birthday-presentation-dialog) :is(input,textarea,select,button):focus-visible {
+    outline:3px solid Highlight;
+    outline-offset:3px;
+    box-shadow:none;
+  }
+}
+
+@media (max-width:360px) {
+  html[data-portal-birthday-theme] #portalApp .portal-tabs {
+    right:4px;
+    left:4px;
+    max-width:calc(100vw - 8px);
+  }
+  html[data-portal-birthday-theme] #portalApp main { width:calc(100% - 12px); }
 }
