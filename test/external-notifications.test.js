@@ -7,6 +7,7 @@ const {
   SMTP_OPTIONAL_PACKAGE,
   PASSWORD_RESET_SUBJECT,
   PROCESS_ALERT_TEXT,
+  STAFF_ASSIGNMENT_REQUEST_MESSAGES,
   STAFFING_ALERT_SUBJECT,
   STAFFING_ALERT_TEXT,
   createExternalNotificationAdapter,
@@ -276,6 +277,40 @@ test("Passwortreset versendet nur einen HTTPS-Fragmentlink mit 32-Byte-Token", a
       { code: "EXTERNAL_NOTIFICATION_PASSWORD_RESET_URL_INVALID" },
     );
   }
+});
+
+test("Einsatzanfragen versenden nur neutrale Prüf- und Entscheidungshinweise", async () => {
+  const mails = [];
+  const adapter = createExternalNotificationAdapter({
+    configuration: { email: enabledSmtp("staff_assignment_request") },
+    smtpTransport: {
+      async sendMail(value) {
+        mails.push(value);
+        return { accepted: [value.to] };
+      },
+    },
+  });
+  for (const kind of ["submitted", "accepted", "rejected"]) {
+    const result = await adapter.sendStaffAssignmentRequestAlert({
+      recipient: "verified@example.test",
+      kind,
+    });
+    assert.deepEqual(result, { delivered: true, channel: "email", kind });
+  }
+  assert.equal(adapter.canSendEvent("email", "staff_assignment_request"), true);
+  assert.deepEqual(mails.map(({ subject, text }) => ({ subject, text })), [
+    STAFF_ASSIGNMENT_REQUEST_MESSAGES.submitted,
+    STAFF_ASSIGNMENT_REQUEST_MESSAGES.accepted,
+    STAFF_ASSIGNMENT_REQUEST_MESSAGES.rejected,
+  ]);
+  assert.doesNotMatch(JSON.stringify(mails), /252|275|27\.08|Fotowelt|Begründung/);
+  await assert.rejects(
+    adapter.sendStaffAssignmentRequestAlert({
+      recipient: "verified@example.test",
+      kind: "unknown",
+    }),
+    { code: "EXTERNAL_NOTIFICATION_EVENT_INVALID" },
+  );
 });
 
 test("SMTP-Versand nutzt TLS-Zeitlimits und nur den neutralen Nachrichtentext", async () => {

@@ -34,6 +34,13 @@ test("Block 3/7: SQLite-Anwendungsschema wird neu aufgebaut und idempotent erhal
     assert.equal(objects.get("work_rule_profiles"), "table");
     assert.equal(objects.get("idx_shifts_date"), "index");
     assert.equal(objects.get("trg_loan_documents_immutable_update"), "trigger");
+    assert.equal(objects.get("staff_assignment_requests"), "table");
+    assert.equal(objects.get("staff_assignment_request_revisions"), "table");
+    assert.equal(objects.get("staff_assignment_request_events"), "table");
+    assert.equal(
+      objects.get("trg_staff_assignment_request_events_immutable_update"),
+      "trigger",
+    );
     assert.equal(objects.has("system_center_trust_metrics"), false);
 
     database.prepare(`

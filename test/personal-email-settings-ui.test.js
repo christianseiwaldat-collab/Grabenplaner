@@ -148,8 +148,8 @@ test("Schlafmodus nutzt die kanonische Berechtigungsgrenze und bleibt darunter r
   assert.doesNotMatch(permissionGate, /employee|manager|department_manager|admin|developer|role/);
 });
 
-test("Fachereignisse bleiben rein informativ und mobil einspaltig", () => {
-  assert.match(notificationCard, /Derzeit wird daraus noch nichts automatisch extern versendet/);
+test("Fachereignisse benennen Einsatzanfragen als erste zentrale Versandart und bleiben mobil einspaltig", () => {
+  assert.match(notificationCard, /Einsatzanfragen können bei ausgewähltem, bestätigtem E-Mail-Kanal automatisch versendet werden/);
   assert.match(notificationScript, /<span>Noch nicht aktiviert<\/span>/);
   assert.doesNotMatch(
     notificationCard.match(/<div class="email-category-list"[\s\S]*?<\/section>/)?.[0] || "",

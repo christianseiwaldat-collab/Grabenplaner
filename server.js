@@ -387,6 +387,43 @@ const {
   createPersonnelProfileAccessSnapshot,
 } = require("./lib/personnel-profile-access");
 const {
+  CROSS_LOCATION_SCHEDULE_PERMISSIONS,
+  CROSS_LOCATION_SCHEDULE_PERMISSION_IDS,
+  CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS,
+  CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS,
+  crossLocationScheduleDefaultPermissionsForRole,
+  resolveCrossLocationSchedulePermissionDependencies,
+  createCrossLocationScheduleAccessSnapshot,
+  canCreateStaffAssignmentRequest,
+  canReviewStaffAssignmentRequest,
+  normalizeCrossLocationScheduleSettings,
+  crossLocationScheduleSettingsValuesFromInput,
+  crossLocationScheduleOperationAllowed,
+  allowedCrossLocationScheduleWeek,
+  projectCrossLocationScheduleView,
+} = require("./lib/cross-location-schedule-access");
+const {
+  PortalBirthdayPresentationError,
+  PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS,
+  PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS,
+  PORTAL_BIRTHDAY_PRESENTATIONS,
+  portalBirthdayPresentationDefaultPermissionsForRole,
+  createPortalBirthdayPresentationAccessSnapshot,
+  validatePortalBirthdayPresentationAssignmentInput,
+  validatePortalBirthdayPresentationPolicyInput,
+} = require("./lib/portal-birthday-presentations");
+const {
+  StaffAssignmentRequestError,
+  insertInitialStaffAssignmentRequestHistory,
+  normalizeStaffAssignmentRequestInput,
+  transitionStaffAssignmentRequestHistory,
+} = require("./lib/staff-assignment-requests");
+const {
+  assertStaffAssignmentRequestAssignmentAvailable,
+  boundAssignmentFromRequest,
+  staffAssignmentRequestIdFromAssignmentId,
+} = require("./lib/staff-assignment-request-fulfillment");
+const {
   PERSONNEL_LEARNING_PERMISSIONS,
   PERSONNEL_LEARNING_PERMISSION_IDS,
   PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS,
@@ -705,6 +742,12 @@ const integrationCache = new IntegrationCache({
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
   { id: "schedule:write", label: "Dienstpläne bearbeiten", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
+  { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.READ, label: "Fremde Dienstpläne eingeschränkt lesen", description: "Aktuelle und nächste Dienstplanwoche anderer Filialen rein lesend und ohne Wochenstunden, Regelprüfungen, Zeitkonten oder Abwesenheitsgründe ansehen.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE, label: "Standortübergreifenden Einsatz für die eigene Filiale anfragen", description: "Aus einem fremden Dienstplan einen stundenweisen, ganztägigen oder mehrtägigen Einsatz für die eigene Filiale und den eigenen Abteilungsbereich anfragen; noch keine Einsatzfreigabe.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW, label: "Einsatzanfragen der eigenen Stammfiliale entscheiden", description: "Anfragen zu Teammitgliedern des eigenen Verantwortungsbereichs prüfen und entscheiden; direkte Filialeinsätze bleiben ein getrenntes Recht.", group: "Dienstplanung", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE, label: "Standortübergreifende Einsatzanfragen konfigurieren", description: "PL+-Metarecht für Sicht-, AL- und Benachrichtigungseinstellungen; vermittelt allein keinen Zugriff auf fremde Dienstpläne oder Anfragen.", group: "Dienstplanung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE, label: "Geburtstagsdarstellung im eigenen Team festlegen", description: "Wählt ausschließlich eine freigegebene Darstellungs-ID für das eigene aktive Filial- oder Abteilungsteam; vermittelt keinen Zugriff auf Geburtsdatum, Alter oder Geburtstagslisten.", group: "Mitarbeiterportal", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "developer"] },
+  { id: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE, label: "Geburtstagsdarstellungen global freigeben", description: "PL+-Metarecht für die globale Aktivierung; vermittelt weder Geburtstagsdaten noch Teamzugriff.", group: "Mitarbeiterportal", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: STAFF_ASSIGNMENTS_MANAGE_PERMISSION, label: "Temporäre Filialeinsätze verwalten", description: "Mitarbeitende des eigenen Verantwortungsbereichs zeitlich begrenzt einer anderen Filiale zuweisen.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "absence_entries:write", label: "Genehmigten Urlaub und ZA direkt eintragen", description: "Bereits betrieblich genehmigte Urlaube und vereinbarte Zeitausgleiche im eigenen Planungsbereich erfassen, bearbeiten und entfernen; keine Antrags- oder Freigaberechte.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Dienstplanung", warningLevel: "high", hrDelegable: true },
@@ -972,6 +1015,16 @@ function portalPermissionRoleRestrictionError(permissions) {
   if (restricted.length && restricted.every((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))) {
     return httpError(403, "Schulungs- und Wissensrechte dürfen nur den dafür vorgesehenen persönlichen Fachrollen zugewiesen werden.", "PERSONNEL_LEARNING_PERMISSION_ROLE_RESTRICTED");
   }
+  if (restricted.length && restricted.every(
+    (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+  )) {
+    return httpError(403, "Standortübergreifende Dienstplan- und Einsatzanfragerechte dürfen nur den dafür vorgesehenen persönlichen Fachrollen zugewiesen werden.", "CROSS_LOCATION_SCHEDULE_PERMISSION_ROLE_RESTRICTED");
+  }
+  if (restricted.length && restricted.every(
+    (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+  )) {
+    return httpError(403, "Rechte für Geburtstagsdarstellungen dürfen nur den dafür vorgesehenen persönlichen Leitungsrollen zugewiesen werden.", "PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_ROLE_RESTRICTED");
+  }
   return httpError(403, "Diese Personalakt-Rechte sind für die gewählte App-Rolle nicht zulässig.", "PORTAL_PERMISSION_ROLE_RESTRICTED");
 }
 
@@ -999,6 +1052,16 @@ function assertPortalPermissionDependencies(permissions) {
     throw httpError(
       400,
       "Schulungs- und Wissensrechte können nur zusammen mit ihren erforderlichen Basisrechten vergeben werden.",
+      "PORTAL_PERMISSION_DEPENDENCY",
+    );
+  }
+  const crossLocationScheduleDependencies = resolveCrossLocationSchedulePermissionDependencies(
+    [...projected],
+  );
+  if (!crossLocationScheduleDependencies.valid) {
+    throw httpError(
+      400,
+      "Standortübergreifende Dienstplan- und Einsatzanfragerechte können nur zusammen mit ihren erforderlichen Leserechten vergeben werden.",
       "PORTAL_PERMISSION_DEPENDENCY",
     );
   }
@@ -1266,7 +1329,9 @@ const portalDashboardPermissionDetails = Object.freeze([
 ]);
 
 const portalGlobalPermissionIds = new Set([
-  "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
+  "settings:write", CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE,
+  PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
+  "positions:write", "hr:approve", "hr:settings", "sickness:settings",
   "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
@@ -1671,6 +1736,35 @@ addBuiltinRolePermissions("developer", [
 ]);
 for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
+}
+
+function cascadeCrossLocationScheduleRolePermissionDenials(
+  rolePermissionSet,
+  deniedPermissionSet,
+) {
+  if (deniedPermissionSet.has("schedule:read")) {
+    if (rolePermissionSet.has("schedule:write")) deniedPermissionSet.add("schedule:write");
+    for (const permission of CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS) {
+      if (rolePermissionSet.has(permission)) deniedPermissionSet.add(permission);
+    }
+  }
+  if (deniedPermissionSet.has(CROSS_LOCATION_SCHEDULE_PERMISSIONS.READ)
+    && rolePermissionSet.has(CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE)) {
+    deniedPermissionSet.add(CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE);
+  }
+  return deniedPermissionSet;
+}
+for (const role of builtinPortalRoles) {
+  addBuiltinRolePermissions(
+    role.id,
+    crossLocationScheduleDefaultPermissionsForRole(role.id),
+  );
+}
+for (const role of builtinPortalRoles) {
+  addBuiltinRolePermissions(
+    role.id,
+    portalBirthdayPresentationDefaultPermissionsForRole(role.id),
+  );
 }
 for (const roleId of ["manager", "hr", "admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -2161,6 +2255,7 @@ const {
   runtimeRecovery: runtimeRecoveryRepository,
   salesAnalytics: salesAnalyticsRepository,
   sicknessAmuManagement: sicknessAmuManagementRepository,
+  staffAssignmentRequests: staffAssignmentRequestRepository,
   systemCenterMetrics: systemCenterMetricsRepository,
   timeTracking: timeTrackingRepository,
   uiPreferences: uiPreferencesRepository,
@@ -3009,6 +3104,7 @@ const defaultSettings = {
   show_sunday: "0",
   remember_last_schedule_overall_plan: "1",
   remember_last_vacation_overall_plan: "1",
+  ...CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS,
 };
 
 const planningDays = [
@@ -5693,7 +5789,7 @@ function getSettings() {
 function installationFeaturesForApiPath(apiPath) {
   const requestPath = String(apiPath || "").toLowerCase();
   const required = new Set();
-  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
+  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule|cross-location-schedules|cross-location-schedule-settings|staff-assignment-requests)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
   if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/personnel-vacations(?:\/|$)/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
@@ -9111,12 +9207,26 @@ function manageablePortalPermissionsForActor(actor) {
     manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ);
     if (actor.role === "admin") {
       manageable.delete(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
+      manageable.delete(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE);
+      manageable.delete(PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE);
     }
     if (actor.role === "admin"
       && !actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE)) {
       for (const permission of PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS) {
         manageable.delete(permission);
       }
+    }
+    if (actor.role === "admin"
+      && !actor.permissions?.includes(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE)) {
+      for (const permission of CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS) {
+        manageable.delete(permission);
+      }
+    }
+    if (actor.role === "admin"
+      && !actor.permissions?.includes(
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
+      )) {
+      manageable.delete(PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE);
     }
     return manageable;
   }
@@ -9127,12 +9237,16 @@ function manageablePortalPermissionsForActor(actor) {
       && !permission.startsWith("personnel:profiles:")
       && !permission.startsWith("personnel:lifecycle:")
       && !permission.startsWith("personnel:learning:")
+      && !CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission)
+      && !PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
       && permission !== "personnel:applications:write"
     )));
   }
   if (actor.role === "hr") {
     const manageable = new Set(hrDelegablePortalPermissions);
     manageable.delete(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
+    manageable.delete(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE);
+    manageable.delete(PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE);
     if (!actor.permissions?.includes("personnel:candidates:delegate")) {
       manageable.delete("personnel:candidates:read");
       manageable.delete("personnel:applications:write");
@@ -9151,6 +9265,16 @@ function manageablePortalPermissionsForActor(actor) {
       for (const permission of PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS) {
         manageable.delete(permission);
       }
+    }
+    if (!actor.permissions?.includes(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE)) {
+      for (const permission of CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS) {
+        manageable.delete(permission);
+      }
+    }
+    if (!actor.permissions?.includes(
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
+    )) {
+      manageable.delete(PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE);
     }
     return manageable;
   }
@@ -9228,6 +9352,12 @@ async function portalTargetHasPersonnelLifecycleDelegation(
   return hasPersonnelLearningRoleAccess
     || grants.some((permission) => personnelLifecyclePermissionIds.has(permission))
     || denials.some((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))
+    || grants.some((permission) => (
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+    ))
+    || denials.some((permission) => (
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+    ))
     || scopes.length > 0;
 }
 
@@ -9542,13 +9672,56 @@ function actorMayInspectPersonnelLearningRights(actor) {
   ));
 }
 
+function actorMayInspectCrossLocationScheduleRights(actor) {
+  return Boolean(actor && (
+    isLocalSystemSession(actor)
+      || actor.role === "developer"
+      || (["hr", "admin"].includes(actor.role)
+        && actor.permissions?.includes(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE))
+      || (["manager", "department_manager"].includes(actor.role)
+        && CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS.some(
+          (permission) => actor.permissions?.includes(permission),
+        ))
+  ));
+}
+
+function actorMayInspectPortalBirthdayPresentationRights(actor) {
+  return Boolean(actor && (
+    actor.role === "developer"
+      || (["hr", "admin"].includes(actor.role)
+        && actor.permissions?.includes(
+          PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
+        ))
+      || (["manager", "department_manager"].includes(actor.role)
+        && actor.permissions?.includes(
+          PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+        ))
+  ));
+}
+
 function isPersonnelLearningPermission(permission) {
   return String(permission || "").startsWith("personnel:learning:");
 }
 
+function isCrossLocationSchedulePermission(permission) {
+  return CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(String(permission || ""));
+}
+
+function isPortalBirthdayPresentationPermission(permission) {
+  return PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(String(permission || ""));
+}
+
 function portalPermissionVisibleToActor(permission, actor) {
-  return actorMayInspectPersonnelLearningRights(actor)
-    || !isPersonnelLearningPermission(permission);
+  if (isPersonnelLearningPermission(permission)) {
+    return actorMayInspectPersonnelLearningRights(actor);
+  }
+  if (isCrossLocationSchedulePermission(permission)) {
+    return actorMayInspectCrossLocationScheduleRights(actor);
+  }
+  if (isPortalBirthdayPresentationPermission(permission)) {
+    return actorMayInspectPortalBirthdayPresentationRights(actor);
+  }
+  return true;
 }
 
 function projectPortalRolesForActor(roles = [], actor = null) {
@@ -9575,7 +9748,6 @@ function projectPortalAccessProfileForActor(profile = {}, actor = null) {
     personnelLifecyclePermissionScopes: (profile.personnelLifecyclePermissionScopes || [])
       .map((scope) => ({ ...scope })),
   };
-  if (actorMayInspectPersonnelLearningRights(actor)) return projected;
   for (const field of [
     "rolePermissions",
     "grantedPermissions",
@@ -9583,13 +9755,15 @@ function projectPortalAccessProfileForActor(profile = {}, actor = null) {
     "effectivePermissions",
   ]) {
     projected[field] = projected[field].filter(
-      (permission) => !isPersonnelLearningPermission(permission),
+      (permission) => portalPermissionVisibleToActor(permission, actor),
     );
   }
   projected.personnelLifecyclePermissionScopes = projected.personnelLifecyclePermissionScopes
-    .filter((scope) => !isPersonnelLearningPermission(scope.permission));
-  delete projected.personnelLearningDenialAuthority;
-  delete projected.personnelLearningCrossLocationDenialAuthority;
+    .filter((scope) => portalPermissionVisibleToActor(scope.permission, actor));
+  if (!actorMayInspectPersonnelLearningRights(actor)) {
+    delete projected.personnelLearningDenialAuthority;
+    delete projected.personnelLearningCrossLocationDenialAuthority;
+  }
   return projected;
 }
 
@@ -9715,6 +9889,24 @@ async function validatePersonnelAccessProfile(
   const submittedPermissions = [...new Set(payload.permissions
     .map((value) => String(value || "").trim())
     .filter(Boolean))];
+  if (actor.role === "it_admin" && submittedPermissions.some(
+    (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+  )) {
+    throw httpError(
+      403,
+      "Standortübergreifende Dienstplan- und Einsatzanfragerechte dürfen nicht über ein technisches Rechteprofil vergeben werden.",
+      "CROSS_LOCATION_SCHEDULE_RIGHTS_ROUTE_REQUIRED",
+    );
+  }
+  if (actor.role === "it_admin" && submittedPermissions.some(
+    (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+  )) {
+    throw httpError(
+      403,
+      "Fachrechte für Geburtstagsdarstellungen dürfen nicht über ein technisches Rechteprofil vergeben werden.",
+      "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_ROUTE_REQUIRED",
+    );
+  }
   const submittedPersonnelLifecyclePermissions = submittedPermissions
     .filter((permission) => personnelLifecyclePermissionIds.has(permission));
   if (submittedPersonnelLifecyclePermissions.length) {
@@ -9742,6 +9934,25 @@ async function validatePersonnelAccessProfile(
       portalPermissionDenialsForEmployee(employeeNumber, repository),
       repository.listPortalPermissionScopeGrants(employeeNumber),
     ]);
+    if (existingGrants.some((permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission))
+      || existingDenials.some((permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission))) {
+      throw httpError(
+        409,
+        "Das Rechteprofil enthält geschützte standortübergreifende Dienstplan- oder Einsatzanfragerechte. Diese müssen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+        "CROSS_LOCATION_SCHEDULE_RIGHTS_PROFILE_PROTECTED",
+      );
+    }
+    if (existingGrants.some(
+      (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+    ) || existingDenials.some(
+      (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+    )) {
+      throw httpError(
+        409,
+        "Das Rechteprofil enthält geschützte Fachrechte für Geburtstagsdarstellungen. Diese müssen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_PROFILE_PROTECTED",
+      );
+    }
     if (existingGrants.some((permission) => personnelLifecyclePermissionIds.has(permission))
       || existingDenials.some((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))
       || existingPermissionScopes.length) {
@@ -9793,6 +10004,28 @@ async function applyPersonnelAccessProfileWithRepository(repository, actor, prof
         "PORTAL_ROLE_HIERARCHY_DENIED",
       );
     }
+  }
+  if (liveBefore.grantedPermissions.some(
+    (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+  ) || liveBefore.deniedPermissions.some(
+    (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+  )) {
+    throw httpError(
+      409,
+      "Das Rechteprofil enthaelt geschuetzte standortuebergreifende Dienstplan- oder Einsatzanfragerechte. Diese muessen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+      "CROSS_LOCATION_SCHEDULE_RIGHTS_PROFILE_PROTECTED",
+    );
+  }
+  if (liveBefore.grantedPermissions.some(
+    (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+  ) || liveBefore.deniedPermissions.some(
+    (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+  )) {
+    throw httpError(
+      409,
+      "Das Rechteprofil enthaelt geschuetzte Fachrechte fuer Geburtstagsdarstellungen. Diese muessen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+      "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_PROFILE_PROTECTED",
+    );
   }
   if (liveBefore.grantedPermissions.some((permission) => personnelLifecyclePermissionIds.has(permission))
     || liveBefore.deniedPermissions.some(
@@ -10055,29 +10288,14 @@ async function portalUsersForActor(actor) {
     return [];
   }
   const users = await portalUsersForAdmin();
-  const mayInspectPersonnelLearningRights = actorMayInspectPersonnelLearningRights(actor);
+  const visiblePermission = (permission) => portalPermissionVisibleToActor(permission, actor);
   const projected = users.map((user) => ({
     ...user,
-    rolePermissions: mayInspectPersonnelLearningRights
-      ? user.rolePermissions
-      : user.rolePermissions.filter(
-        (permission) => !isPersonnelLearningPermission(permission),
-      ),
-    grantedPermissions: mayInspectPersonnelLearningRights
-      ? user.grantedPermissions
-      : user.grantedPermissions.filter(
-        (permission) => !isPersonnelLearningPermission(permission),
-      ),
-    deniedPermissions: mayInspectPersonnelLearningRights
-      ? user.deniedPermissions
-      : user.deniedPermissions.filter(
-        (permission) => !isPersonnelLearningPermission(permission),
-      ),
-    personnelLifecyclePermissionScopes: mayInspectPersonnelLearningRights
-      ? user.personnelLifecyclePermissionScopes
-      : user.personnelLifecyclePermissionScopes.filter(
-        (scope) => !isPersonnelLearningPermission(scope.permission),
-      ),
+    rolePermissions: user.rolePermissions.filter(visiblePermission),
+    grantedPermissions: user.grantedPermissions.filter(visiblePermission),
+    deniedPermissions: user.deniedPermissions.filter(visiblePermission),
+    personnelLifecyclePermissionScopes: user.personnelLifecyclePermissionScopes
+      .filter((scope) => visiblePermission(scope.permission)),
   }));
   if (actor?.role !== "manager") return projected;
   const locations = new Set((actor.scopes || []).map((scope) => scope.locationId));
@@ -19582,6 +19800,970 @@ function runWorkRuleMutationTransaction(callback) {
   return workRuleStoreRepository.transaction(callback);
 }
 
+async function crossLocationSchedulePrincipal(
+  session,
+  repository = organizationPersonnelRepository,
+) {
+  if (!session || session.sessionKind !== "employee" || session.isEmployee !== true) return null;
+  const [employee, scopeContext] = await Promise.all([
+    repository.getEmployeeScopeProjection(session.employeeNumber),
+    personnelLearningScopeContext(repository),
+  ]);
+  if (!employee) return null;
+  return {
+    employeeNumber: session.employeeNumber,
+    role: session.role,
+    active: true,
+    configured: true,
+    sessionKind: "employee",
+    isEmployee: true,
+    homeLocationId: String(employee.home_location_id || session.homeLocationId || ""),
+    preferredDepartmentId: Number(employee.preferred_department_id || 0) || null,
+    permissions: Array.isArray(session.permissions) ? session.permissions : [],
+    effectiveScopes: personnelLearningEffectiveScopes({ scopes: session.scopes || [] }, scopeContext),
+  };
+}
+
+function settingsObjectFromRows(rows = []) {
+  return Object.fromEntries((Array.isArray(rows) ? rows : [])
+    .map((row) => [String(row?.key || ""), String(row?.value ?? "")])
+    .filter(([key]) => key));
+}
+
+async function crossLocationScheduleSettingsFromRepository(repository = planningSettingsRepository) {
+  return normalizeCrossLocationScheduleSettings(
+    settingsObjectFromRows(await repository.listSettings()),
+  );
+}
+
+async function assertCrossLocationScheduleSettingsManagement(
+  session,
+  repository = organizationPersonnelRepository,
+) {
+  if (isLocalSystemSession(session)) return session;
+  const actor = await crossLocationSchedulePrincipal(session, repository);
+  const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+  if (!access.canManageSettings) {
+    throw httpError(
+      403,
+      "Die Dienstplan-Einstellungen dürfen nur von einer persönlichen PL+-Sitzung mit wirksamem Einstellungsrecht geändert werden.",
+      "CROSS_LOCATION_SCHEDULE_SETTINGS_DENIED",
+    );
+  }
+  return actor;
+}
+
+function publicCrossLocationScheduleSettings(configurationValue) {
+  const configuration = configurationValue?.horizonWeeks
+    ? configurationValue
+    : normalizeCrossLocationScheduleSettings(configurationValue);
+  return {
+    enabled: configuration.enabled,
+    horizonWeeks: configuration.horizonWeeks,
+    managerRequestCreateEnabled: configuration.managerRequestCreateEnabled,
+    departmentManagerRequestCreateEnabled: configuration.departmentManagerRequestCreateEnabled,
+    departmentManagerRequestReviewEnabled: configuration.departmentManagerRequestReviewEnabled,
+    emailSubmittedEnabled: configuration.emailSubmittedEnabled,
+    emailDecisionEnabled: configuration.emailDecisionEnabled,
+    changePolicy: configuration.changePolicy,
+    cancellationPolicy: configuration.cancellationPolicy,
+  };
+}
+
+async function crossLocationScheduleSettingsPayload(session) {
+  await assertCrossLocationScheduleSettingsManagement(
+    session,
+    organizationPersonnelRepository,
+  );
+  return publicCrossLocationScheduleSettings(
+    normalizeCrossLocationScheduleSettings(getSettings()),
+  );
+}
+
+async function updateCrossLocationScheduleSettings(session, input = {}) {
+  let proposed;
+  try {
+    proposed = crossLocationScheduleSettingsValuesFromInput(input);
+  } catch (error) {
+    throw httpError(
+      400,
+      String(error?.message || "Die Dienstplan-Einstellungen sind ungültig."),
+      "CROSS_LOCATION_SCHEDULE_SETTINGS_INVALID",
+    );
+  }
+  const outcome = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const organization = repositories.organizationPersonnel;
+    let liveSession = session;
+    if (!isLocalSystemSession(session)) {
+      liveSession = await livePersonnelLearningRoleAdministrationActor(session, organization);
+      assertLivePortalRoutePermission(
+        liveSession,
+        CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE,
+      );
+    }
+    await assertCrossLocationScheduleSettingsManagement(liveSession, organization);
+    const currentRows = await repositories.planningSettings.listSettings();
+    const currentValues = settingsObjectFromRows(currentRows);
+    const changedKeys = Object.keys(proposed).filter(
+      (key) => String(currentValues[key] ?? CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS[key] ?? "")
+        !== String(proposed[key]),
+    ).sort();
+    if (!changedKeys.length) {
+      return normalizeCrossLocationScheduleSettings({ ...currentValues, ...proposed });
+    }
+    for (const key of changedKeys) {
+      await repositories.planningSettings.upsertSetting({ key, value: proposed[key] });
+    }
+    const before = normalizeCrossLocationScheduleSettings(currentValues);
+    const after = normalizeCrossLocationScheduleSettings({ ...currentValues, ...proposed });
+    await organization.insertAudit(
+      liveSession?.employeeNumber || "local",
+      "schedule.cross-location.settings.update",
+      "schedule_settings",
+      "cross_location",
+      JSON.stringify({ changedKeys, before, after }),
+    );
+    return after;
+  }, { isolation: "serializable" });
+  await refreshPlanningSettingsReadModel();
+  return publicCrossLocationScheduleSettings(outcome);
+}
+
+function publicCrossLocationScheduleLocations(locations, access) {
+  const ownLocationId = String(access.organizationScope?.locationId || "");
+  return locations
+    .filter((location) => location.active && String(location.id || "") !== ownLocationId)
+    .map((location) => ({
+      id: String(location.id || ""),
+      name: String(location.name || ""),
+      departments: (location.departments || [])
+        .filter((department) => department.active)
+        .map((department) => ({ id: Number(department.id), name: String(department.name || "") })),
+    }))
+    .filter((location) => location.id && location.name)
+    .sort((left, right) => left.name.localeCompare(right.name, "de-AT") || left.id.localeCompare(right.id));
+}
+
+function crossLocationScheduleEmployeeDepartment(employee, sourceLocationId, shifts, lendings) {
+  const preferredDepartmentId = Number(employee.preferred_department_id || 0) || null;
+  if (String(employee.home_location_id || "") === sourceLocationId && preferredDepartmentId) {
+    return preferredDepartmentId;
+  }
+  const assignedShift = shifts.find((shift) => (
+    String(shift.employee_number || "") === String(employee.personnel_number || "")
+      && Number(shift.department_id || 0) > 0
+  ));
+  if (assignedShift) return Number(assignedShift.department_id);
+  const incoming = lendings.find((lending) => (
+    String(lending.employee_number || "") === String(employee.personnel_number || "")
+      && String(lending.destination_location_id || "") === sourceLocationId
+      && Number(lending.destination_department_id || 0) > 0
+  ));
+  return incoming ? Number(incoming.destination_department_id) : null;
+}
+
+async function crossLocationScheduleSource(location, weekStart) {
+  const weekEnd = addDays(weekStart, 6);
+  const locationId = String(location.id || "");
+  const planningQuery = {
+    locationId,
+    departmentId: null,
+    weekStart,
+    weekEnd,
+  };
+  const [employees, shifts, weekOptions, lendings] = await Promise.all([
+    planningSettingsRepository.listScheduleEmployees(planningQuery),
+    planningSettingsRepository.listScheduleShifts(planningQuery),
+    planningSettingsRepository.listScheduleWeekOptions(planningQuery),
+    planningSettingsRepository.listScheduleLendings(planningQuery),
+  ]);
+  const departments = (location.departments || []).filter((department) => department.active);
+  const departmentNames = new Map(
+    departments.map((department) => [Number(department.id), String(department.name || "")]),
+  );
+  const teamMembers = employees.map((employee) => {
+    const departmentId = crossLocationScheduleEmployeeDepartment(
+      employee,
+      locationId,
+      shifts,
+      lendings,
+    );
+    return {
+      employeeNumber: String(employee.personnel_number || ""),
+      displayName: String(employee.nickname || `MA ${employee.personnel_number || ""}`).trim(),
+      departmentId,
+      departmentName: departmentId ? departmentNames.get(departmentId) || "" : "",
+      color: employee.color,
+      requestEligible: String(employee.home_location_id || "") === locationId,
+    };
+  });
+  const unavailability = [
+    ...weekOptions.map((option) => ({
+      employeeNumber: option.employee_number,
+      dateFrom: option.date_from,
+      dateTo: option.date_to,
+      allDay: Number(option.all_day ?? 1) === 1,
+      startTime: option.start_time,
+      endTime: option.end_time,
+    })),
+    ...lendings
+      .filter((lending) => String(lending.home_location_id || "") === locationId)
+      .map((lending) => ({
+        employeeNumber: lending.employee_number,
+        dateFrom: lending.date_from,
+        dateTo: lending.date_to,
+        allDay: Number(lending.all_day ?? 1) === 1,
+        startTime: lending.start_time,
+        endTime: lending.end_time,
+      })),
+  ];
+  return {
+    location: { id: locationId, name: String(location.name || ""), active: Boolean(location.active) },
+    departments,
+    teamMembers,
+    shifts: shifts.map((shift) => ({
+      employeeNumber: shift.employee_number,
+      date: shift.shift_date,
+      startTime: shift.start_time,
+      endTime: shift.end_time,
+      departmentId: Number(shift.department_id || 0) || null,
+      departmentName: String(shift.department_name || ""),
+    })),
+    unavailability,
+  };
+}
+
+async function crossLocationSchedulePayload(session, input = {}) {
+  const actor = await crossLocationSchedulePrincipal(session);
+  const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+  const configuration = normalizeCrossLocationScheduleSettings(getSettings());
+  if (!crossLocationScheduleOperationAllowed(access, configuration, "read")) {
+    throw httpError(
+      403,
+      configuration.enabled
+        ? "Für die eingeschränkte Ansicht fremder Dienstpläne fehlt die fachliche Berechtigung oder ein gültiger Verantwortungsbereich."
+        : "Die standortübergreifende Dienstplanansicht ist in den Dienstplan-Einstellungen deaktiviert.",
+      "CROSS_LOCATION_SCHEDULE_READ_DENIED",
+    );
+  }
+  const current = currentWeekStart();
+  const requestedWeek = String(input.week || current).trim();
+  const weekStart = isIsoDate(requestedWeek) ? getMonday(requestedWeek) : "";
+  if (!weekStart || requestedWeek !== weekStart
+    || !allowedCrossLocationScheduleWeek(
+      weekStart,
+      viennaTodayIso(),
+      configuration.horizonWeeks,
+    )) {
+    throw httpError(
+      400,
+      configuration.horizonWeeks === 1
+        ? "Fremde Dienstpläne können ausschließlich für die aktuelle Kalenderwoche geöffnet werden."
+        : "Fremde Dienstpläne können ausschließlich für die aktuelle oder die nächste Kalenderwoche geöffnet werden.",
+      "CROSS_LOCATION_SCHEDULE_WEEK_DENIED",
+    );
+  }
+  const allLocations = await getLocations(false);
+  const locations = publicCrossLocationScheduleLocations(allLocations, access);
+  const destinationLocation = allLocations.find((location) => (
+    location.active
+      && String(location.id || "") === String(access.organizationScope?.locationId || "")
+  ));
+  const destinationDepartmentId = access.role === "department_manager"
+    ? Number(access.organizationScope?.departmentId || 0) || null
+    : null;
+  const requestDestination = crossLocationScheduleOperationAllowed(
+    access,
+    configuration,
+    "create",
+  ) && destinationLocation ? {
+    id: String(destinationLocation.id || ""),
+    name: String(destinationLocation.name || ""),
+    departments: (destinationLocation.departments || [])
+      .filter((department) => department.active
+        && (!destinationDepartmentId || Number(department.id) === destinationDepartmentId))
+      .map((department) => ({ id: Number(department.id), name: String(department.name || "") })),
+  } : null;
+  const requestedLocationId = String(input.locationId || input.location || "").trim();
+  const selectedLocationId = requestedLocationId || locations[0]?.id || "";
+  const selectedLocation = allLocations.find((location) => (
+    String(location.id || "") === selectedLocationId
+      && locations.some((visible) => visible.id === selectedLocationId)
+  ));
+  if (requestedLocationId && !selectedLocation) {
+    throw httpError(
+      403,
+      "Diese Filiale ist für die eingeschränkte Fremdansicht nicht verfügbar.",
+      "CROSS_LOCATION_SCHEDULE_LOCATION_DENIED",
+    );
+  }
+  let schedule = null;
+  if (selectedLocation) {
+    schedule = projectCrossLocationScheduleView({
+      actor,
+      sourceLocationId: selectedLocationId,
+      weekStart,
+      today: viennaTodayIso(),
+      settings: configuration,
+      schedule: await crossLocationScheduleSource(selectedLocation, weekStart),
+    });
+    if (!schedule) {
+      throw httpError(
+        403,
+        "Der fremde Dienstplan konnte nicht datensparsam freigegeben werden.",
+        "CROSS_LOCATION_SCHEDULE_PROJECTION_DENIED",
+      );
+    }
+  }
+  return {
+    mode: "foreign_read_only",
+    locations,
+    weeks: Array.from(
+      { length: configuration.horizonWeeks },
+      (_, index) => addDays(current, index * 7),
+    ).map((start) => ({
+      weekStart: start,
+      weekEnd: addDays(start, 6),
+      calendarWeek: getIsoWeek(start),
+    })),
+    configuration: {
+      horizonWeeks: configuration.horizonWeeks,
+      changePolicy: configuration.changePolicy,
+      cancellationPolicy: configuration.cancellationPolicy,
+    },
+    selectedLocationId: selectedLocation?.id ? String(selectedLocation.id) : null,
+    requestDestination,
+    schedule,
+  };
+}
+
+function publicSubmittedStaffAssignmentRequest(history) {
+  const current = history?.current;
+  const request = history?.request;
+  if (!request || !current || current.status !== "submitted") {
+    throw httpError(
+      503,
+      "Die eingereichte Einsatzanfrage konnte nicht sicher bestätigt werden.",
+      "STAFF_ASSIGNMENT_REQUEST_SUBMISSION_INTEGRITY_FAILED",
+    );
+  }
+  return {
+    id: String(request.id || ""),
+    status: "submitted",
+    revisionNumber: Number(current.revisionNumber),
+    sourceLocationId: String(current.sourceLocationId || ""),
+    destinationLocationId: String(current.destinationLocationId || ""),
+    destinationDepartmentId: Number(current.destinationDepartmentId),
+    periodStartDate: String(current.periodStartDate || ""),
+    periodEndDate: String(current.periodEndDate || ""),
+    timeKind: String(current.timeKind || ""),
+    startTime: current.startTime || null,
+    endTime: current.endTime || null,
+    preferredEmployeeNumber: current.preferredEmployeeNumber || null,
+  };
+}
+
+function staffAssignmentRequestHttpError(error) {
+  if (!(error instanceof StaffAssignmentRequestError)) return error;
+  const conflictCodes = new Set([
+    "STAFF_ASSIGNMENT_REQUEST_REVISION_CONFLICT",
+    "EMPLOYEE_LENDING_OVERLAP",
+    "EMPLOYEE_LENDING_APPROVED_ABSENCE_CONFLICT",
+    "EMPLOYEE_LENDING_PENDING_ABSENCE_REQUEST_CONFLICT",
+    "EMPLOYEE_LENDING_SHIFT_CONFLICT",
+  ]);
+  const status = conflictCodes.has(error.code) ? 409
+    : error.code === "STAFF_ASSIGNMENT_REQUEST_NOT_FOUND" ? 404
+      : 400;
+  return httpError(status, error.message, error.code);
+}
+
+function staffAssignmentRequestEmployeeMap(employees = []) {
+  return new Map(employees.map((employee) => [
+    String(employee.personnel_number || employee.employeeNumber || ""),
+    employee,
+  ]).filter(([employeeNumber]) => employeeNumber));
+}
+
+function staffAssignmentRequestSourceDepartmentId(current, employeesByNumber) {
+  const preferredEmployeeNumber = String(current?.preferredEmployeeNumber || "");
+  if (!preferredEmployeeNumber) return null;
+  const preferred = employeesByNumber.get(preferredEmployeeNumber);
+  if (!preferred?.active
+    || String(preferred.home_location_id || "") !== String(current.sourceLocationId || "")) {
+    return null;
+  }
+  return Number(preferred.preferred_department_id || 0) || null;
+}
+
+function staffAssignmentRequestReviewerPrincipal(user, scopeContext) {
+  return {
+    employeeNumber: String(user.employeeNumber || ""),
+    role: String(user.role || ""),
+    active: Boolean(user.active && user.employeeActive),
+    configured: Boolean(user.configured),
+    sessionKind: "employee",
+    isEmployee: true,
+    homeLocationId: String(user.homeLocationId || ""),
+    preferredDepartmentId: Number(user.preferredDepartmentId || 0) || null,
+    rolePermissions: user.rolePermissions || [],
+    grantedPermissions: user.grantedPermissions || [],
+    deniedPermissions: user.deniedPermissions || [],
+    effectiveScopes: personnelLearningEffectiveScopes({ scopes: user.scopes || [] }, scopeContext),
+  };
+}
+
+async function staffAssignmentRequestReviewerEmployeeNumbers(
+  sourceLocationId,
+  sourceDepartmentId,
+  configuration = normalizeCrossLocationScheduleSettings(getSettings()),
+) {
+  const [users, scopeContext] = await Promise.all([
+    portalUsersForAdmin(),
+    personnelLearningScopeContext(),
+  ]);
+  return [...new Set(users
+    .filter((user) => ["manager", "department_manager"].includes(user.role))
+    .filter((user) => {
+      const actor = staffAssignmentRequestReviewerPrincipal(user, scopeContext);
+      return crossLocationScheduleOperationAllowed(actor, configuration, "review")
+        && canReviewStaffAssignmentRequest({
+          actor,
+          sourceLocationId,
+          sourceDepartmentId,
+        });
+    })
+    .map((user) => String(user.employeeNumber || ""))
+    .filter(Boolean))];
+}
+
+async function notifyStaffAssignmentRequest(
+  kind,
+  employeeNumbers,
+  requestId,
+  { enabled = true } = {},
+) {
+  const recipients = [...new Set((Array.isArray(employeeNumbers) ? employeeNumbers : [])
+    .map((employeeNumber) => String(employeeNumber || "").trim())
+    .filter(Boolean))];
+  const result = { kind, eligible: recipients.length, delivered: 0, skipped: 0, failed: 0 };
+  const failureCodes = new Set();
+  if (!enabled) {
+    result.skipped = recipients.length;
+    failureCodes.add("disabled_by_schedule_settings");
+  } else if (!externalNotificationAdapter.canSendEvent("email", "staff_assignment_request")) {
+    result.skipped = recipients.length;
+    failureCodes.add("event_unavailable");
+  } else {
+    for (const employeeNumber of recipients) {
+      try {
+        const target = await verifiedPersonalNotificationTarget(employeeNumber, "email", {
+          requireEnabled: true,
+        });
+        if (!target) {
+          result.skipped += 1;
+          failureCodes.add("verified_enabled_target_missing");
+          continue;
+        }
+        await externalNotificationAdapter.sendStaffAssignmentRequestAlert({
+          recipient: target.destination,
+          kind,
+        });
+        result.delivered += 1;
+      } catch (error) {
+        result.failed += 1;
+        failureCodes.add(String(error?.code || "delivery_failed").slice(0, 120));
+      }
+    }
+  }
+  try {
+    auditPortal(
+      "system",
+      "staff-assignment-request.email",
+      "staff_assignment_request",
+      requestId,
+      JSON.stringify({ ...result, failureCodes: [...failureCodes].sort() }),
+    );
+  } catch {}
+  return result;
+}
+
+function staffAssignmentRequestReviewProjection({
+  current,
+  actor,
+  employeesByNumber,
+  locationsById,
+  departmentsById,
+}) {
+  const sourceDepartmentId = staffAssignmentRequestSourceDepartmentId(
+    current,
+    employeesByNumber,
+  );
+  if (!canReviewStaffAssignmentRequest({
+    actor,
+    sourceLocationId: current.sourceLocationId,
+    sourceDepartmentId,
+  })) return null;
+  const access = createCrossLocationScheduleAccessSnapshot(actor);
+  const requester = employeesByNumber.get(String(current.createdByEmployeeNumber || ""));
+  const preferred = employeesByNumber.get(String(current.preferredEmployeeNumber || ""));
+  const candidates = [...employeesByNumber.values()]
+    .filter((employee) => employee.active
+      && String(employee.home_location_id || "") === String(current.sourceLocationId || "")
+      && (access.role !== "department_manager"
+        || Number(employee.preferred_department_id || 0) === access.organizationScope.departmentId))
+    .map((employee) => {
+      const departmentId = Number(employee.preferred_department_id || 0) || null;
+      return {
+        employeeNumber: String(employee.personnel_number || ""),
+        displayName: String(employee.nickname || `MA ${employee.personnel_number || ""}`).trim(),
+        departmentId,
+        departmentName: departmentId
+          ? String(departmentsById.get(departmentId)?.name || "")
+          : "",
+      };
+    })
+    .filter((employee) => employee.employeeNumber)
+    .sort((left, right) => left.displayName.localeCompare(right.displayName, "de-AT")
+      || left.employeeNumber.localeCompare(right.employeeNumber));
+  const sourceLocation = locationsById.get(String(current.sourceLocationId || ""));
+  const destinationLocation = locationsById.get(String(current.destinationLocationId || ""));
+  const destinationDepartment = departmentsById.get(Number(current.destinationDepartmentId));
+  return {
+    id: String(current.requestId || ""),
+    status: "submitted",
+    revisionNumber: Number(current.revisionNumber),
+    createdAt: String(current.createdAt || ""),
+    submittedAt: String(current.changedAt || ""),
+    sourceLocation: {
+      id: String(current.sourceLocationId || ""),
+      name: String(sourceLocation?.name || current.sourceLocationId || ""),
+    },
+    destinationLocation: {
+      id: String(current.destinationLocationId || ""),
+      name: String(destinationLocation?.name || current.destinationLocationId || ""),
+    },
+    destinationDepartment: {
+      id: Number(current.destinationDepartmentId),
+      name: String(destinationDepartment?.name || current.destinationDepartmentId || ""),
+    },
+    periodStartDate: String(current.periodStartDate || ""),
+    periodEndDate: String(current.periodEndDate || ""),
+    timeKind: String(current.timeKind || ""),
+    startTime: current.startTime || null,
+    endTime: current.endTime || null,
+    requestReason: String(current.requestReason || ""),
+    requestedBy: {
+      employeeNumber: String(current.createdByEmployeeNumber || ""),
+      displayName: String(requester?.nickname
+        || `MA ${current.createdByEmployeeNumber || ""}`).trim(),
+    },
+    preferredEmployee: current.preferredEmployeeNumber ? {
+      employeeNumber: String(current.preferredEmployeeNumber),
+      displayName: String(preferred?.nickname
+        || `MA ${current.preferredEmployeeNumber}`).trim(),
+      departmentId: sourceDepartmentId,
+    } : null,
+    candidates,
+  };
+}
+
+async function staffAssignmentRequestReviewPayload(session) {
+  const liveSession = await livePersonnelLearningRoleAdministrationActor(
+    session,
+    organizationPersonnelRepository,
+  );
+  assertLivePortalRoutePermission(
+    liveSession,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW,
+  );
+  const actor = await crossLocationSchedulePrincipal(
+    liveSession,
+    organizationPersonnelRepository,
+  );
+  const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+  const configuration = normalizeCrossLocationScheduleSettings(getSettings());
+  if (!crossLocationScheduleOperationAllowed(access, configuration, "review")) {
+    throw httpError(
+      403,
+      access.role === "department_manager" && !configuration.departmentManagerRequestReviewEnabled
+        ? "Abteilungsleitungen sind in den Dienstplan-Einstellungen nicht für Entscheidungen freigeschaltet."
+        : "Für die Prüfung von Einsatzanfragen fehlt ein gültiger fachlicher Verantwortungsbereich.",
+      "STAFF_ASSIGNMENT_REQUEST_REVIEW_DENIED",
+    );
+  }
+  const [requestRows, employees, locations, departments] = await Promise.all([
+    staffAssignmentRequestRepository.listRequests(),
+    organizationPersonnelRepository.listEmployees(),
+    organizationPersonnelRepository.listLocations(false),
+    organizationPersonnelRepository.listDepartments(false),
+  ]);
+  const rows = (await Promise.all(requestRows.map(async (request) => {
+    const current = await staffAssignmentRequestRepository.getLatestRevision(request.id);
+    return current?.status === "submitted" ? {
+      ...current,
+      createdByEmployeeNumber: request.createdByEmployeeNumber,
+      createdAt: request.createdAt,
+    } : null;
+  }))).filter(Boolean);
+  const employeesByNumber = staffAssignmentRequestEmployeeMap(employees);
+  const locationsById = new Map(locations.map((location) => [String(location.id || ""), location]));
+  const departmentsById = new Map(departments.map((department) => [Number(department.id), department]));
+  return {
+    requests: rows.map((current) => staffAssignmentRequestReviewProjection({
+      current,
+      actor,
+      employeesByNumber,
+      locationsById,
+      departmentsById,
+    })).filter(Boolean),
+  };
+}
+
+async function decideStaffAssignmentRequest(session, requestId, input = {}) {
+  try {
+    const decision = String(input.decision || "").trim().toLowerCase();
+    if (!(["accepted", "rejected"].includes(decision))) {
+      throw httpError(
+        400,
+        "Bitte die Einsatzanfrage genehmigen oder ablehnen.",
+        "STAFF_ASSIGNMENT_REQUEST_DECISION_INVALID",
+      );
+    }
+    const expectedRevision = Number(input.expectedRevision);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+      throw httpError(
+        400,
+        "Die erwartete Anfragerevision ist ungültig.",
+        "STAFF_ASSIGNMENT_REQUEST_REVISION_INVALID",
+      );
+    }
+    const outcome = await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const organization = repositories.organizationPersonnel;
+      const requests = repositories.staffAssignmentRequests;
+      const liveSession = await livePersonnelLearningRoleAdministrationActor(session, organization);
+      assertLivePortalRoutePermission(
+        liveSession,
+        CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW,
+      );
+      const actor = await crossLocationSchedulePrincipal(liveSession, organization);
+      const configuration = await crossLocationScheduleSettingsFromRepository(
+        repositories.planningSettings,
+      );
+      if (!crossLocationScheduleOperationAllowed(actor, configuration, "review")) {
+        throw httpError(
+          403,
+          "Die Entscheidung ist nach den aktuellen Dienstplan-Einstellungen nicht freigegeben.",
+          "STAFF_ASSIGNMENT_REQUEST_REVIEW_DENIED",
+        );
+      }
+      const current = await requests.getLatestRevision(requestId);
+      const request = await requests.getRequest(requestId);
+      if (!current || !request) {
+        throw new StaffAssignmentRequestError(
+          "STAFF_ASSIGNMENT_REQUEST_NOT_FOUND",
+          "Die Einsatzanfrage wurde nicht gefunden.",
+        );
+      }
+      const [employees, locations, departments] = await Promise.all([
+        organization.listEmployees(),
+        organization.listLocations(false),
+        organization.listDepartments(false),
+      ]);
+      const employeesByNumber = staffAssignmentRequestEmployeeMap(employees);
+      const sourceDepartmentId = staffAssignmentRequestSourceDepartmentId(
+        current,
+        employeesByNumber,
+      );
+      if (!canReviewStaffAssignmentRequest({
+        actor,
+        sourceLocationId: current.sourceLocationId,
+        sourceDepartmentId,
+      })) {
+        throw httpError(
+          403,
+          "Diese Einsatzanfrage liegt außerhalb des eigenen Prüfbereichs.",
+          "STAFF_ASSIGNMENT_REQUEST_REVIEW_DENIED",
+        );
+      }
+      const sourceLocation = locations.find((location) => (
+        location.active && String(location.id || "") === String(current.sourceLocationId || "")
+      ));
+      const destinationLocation = locations.find((location) => (
+        location.active
+          && String(location.id || "") === String(current.destinationLocationId || "")
+      ));
+      const destinationDepartment = departments.find((department) => (
+        department.active
+          && Number(department.id) === Number(current.destinationDepartmentId)
+          && String(department.location_id || "") === String(current.destinationLocationId || "")
+      ));
+      if (!sourceLocation || !destinationLocation || !destinationDepartment) {
+        throw httpError(
+          409,
+          "Die Organisationsstruktur der Einsatzanfrage hat sich geändert.",
+          "STAFF_ASSIGNMENT_REQUEST_TOPOLOGY_CHANGED",
+        );
+      }
+      const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+      let confirmedEmployeeNumber = null;
+      let preparedAssignment = null;
+      if (decision === "accepted") {
+        confirmedEmployeeNumber = String(input.confirmedEmployeeNumber || "").trim();
+        const confirmed = employeesByNumber.get(confirmedEmployeeNumber);
+        if (!confirmed?.active
+          || String(confirmed.home_location_id || "") !== String(current.sourceLocationId || "")
+          || (access.role === "department_manager"
+            && Number(confirmed.preferred_department_id || 0)
+              !== Number(access.organizationScope?.departmentId || 0))) {
+          throw httpError(
+            409,
+            "Das bestätigte Teammitglied gehört nicht aktiv zum eigenen Prüfbereich der Quellfiliale.",
+            "STAFF_ASSIGNMENT_REQUEST_CONFIRMED_EMPLOYEE_INVALID",
+          );
+        }
+        preparedAssignment = boundAssignmentFromRequest({
+          requestId,
+          current,
+          confirmedEmployeeNumber,
+          actorEmployeeNumber: liveSession.employeeNumber,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      const history = await transitionStaffAssignmentRequestHistory(
+        requests,
+        requestId,
+        decision,
+        {
+          confirmedEmployeeNumber,
+          decisionReason: String(input.decisionReason || "").trim(),
+        },
+        liveSession.employeeNumber,
+        { expectedRevision },
+      );
+      const result = history.current;
+      let assignmentId = null;
+      if (decision === "accepted") {
+        await assertStaffAssignmentRequestAssignmentAvailable(
+          preparedAssignment,
+          repositories.absenceManagement,
+        );
+        const assignment = boundAssignmentFromRequest({
+          requestId,
+          current,
+          confirmedEmployeeNumber,
+          actorEmployeeNumber: liveSession.employeeNumber,
+          timestamp: result.changedAt,
+        });
+        const insertion = await requests.insertBoundAssignment(assignment);
+        if (Number(insertion?.rowsAffected) !== 1) {
+          throw new StaffAssignmentRequestError(
+            "STAFF_ASSIGNMENT_REQUEST_FULFILLMENT_FAILED",
+            "Der temporäre Filialeinsatz konnte nicht verbindlich angelegt werden.",
+          );
+        }
+        assignmentId = assignment.id;
+      }
+      await organization.insertAudit(
+        liveSession.employeeNumber,
+        `staff-assignment-request.${decision}`,
+        "staff_assignment_request",
+        requestId,
+        JSON.stringify({
+          revisionNumber: Number(result.revisionNumber),
+          sourceLocationId: String(result.sourceLocationId || ""),
+          destinationLocationId: String(result.destinationLocationId || ""),
+          confirmedEmployeeSelected: Boolean(result.confirmedEmployeeNumber),
+          decisionReasonRecorded: Boolean(result.decisionReason),
+          assignmentCreated: Boolean(assignmentId),
+          assignmentId,
+        }),
+      );
+      return {
+        request: {
+          id: String(requestId),
+          status: decision,
+          revisionNumber: Number(result.revisionNumber),
+          confirmedEmployeeNumber: result.confirmedEmployeeNumber || null,
+          decisionReason: String(result.decisionReason || ""),
+          assignmentId,
+        },
+        requesterEmployeeNumber: String(request.createdByEmployeeNumber || ""),
+        emailDecisionEnabled: configuration.emailDecisionEnabled,
+      };
+    }, { isolation: "serializable" });
+    await notifyStaffAssignmentRequest(
+      decision,
+      [outcome.requesterEmployeeNumber],
+      requestId,
+      { enabled: outcome.emailDecisionEnabled },
+    );
+    return outcome.request;
+  } catch (error) {
+    throw staffAssignmentRequestHttpError(error);
+  }
+}
+
+async function submitStaffAssignmentRequest(session, input = {}) {
+  try {
+    const outcome = await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const organization = repositories.organizationPersonnel;
+      const liveSession = await livePersonnelLearningRoleAdministrationActor(session, organization);
+      assertLivePortalRoutePermission(
+        liveSession,
+        CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE,
+      );
+      const actor = await crossLocationSchedulePrincipal(liveSession, organization);
+      const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+      const configuration = await crossLocationScheduleSettingsFromRepository(
+        repositories.planningSettings,
+      );
+      const sourceLocationId = String(input.sourceLocationId || "").trim();
+      const destinationLocationId = String(access.organizationScope?.locationId || "");
+      const destinationDepartmentId = Number(input.destinationDepartmentId || 0);
+      if (!crossLocationScheduleOperationAllowed(access, configuration, "create")
+        || !canCreateStaffAssignmentRequest({
+        actor,
+        sourceLocationId,
+        destinationLocationId,
+        destinationDepartmentId,
+      })) {
+        throw httpError(
+          403,
+          access.role === "department_manager" && !configuration.departmentManagerRequestCreateEnabled
+            ? "Abteilungsleitungen sind in den Dienstplan-Einstellungen nicht für neue Einsatzanfragen freigeschaltet."
+            : "Die Einsatzanfrage darf nicht für diese Quellfiliale oder Zielabteilung erstellt werden.",
+          "STAFF_ASSIGNMENT_REQUEST_SCOPE_DENIED",
+        );
+      }
+
+      const [locations, departments] = await Promise.all([
+        organization.listLocations(false),
+        organization.listDepartments(false),
+      ]);
+      const sourceLocation = locations.find((location) => (
+        String(location.id || "") === sourceLocationId && location.active
+      ));
+      const destinationLocation = locations.find((location) => (
+        String(location.id || "") === destinationLocationId && location.active
+      ));
+      const destinationDepartment = departments.find((department) => (
+        Number(department.id) === destinationDepartmentId
+          && department.active
+          && String(department.location_id || "") === destinationLocationId
+      ));
+      if (!sourceLocation || !destinationLocation || !destinationDepartment) {
+        throw httpError(
+          409,
+          "Quellfiliale oder Zielabteilung ist nicht mehr aktiv verfügbar.",
+          "STAFF_ASSIGNMENT_REQUEST_TOPOLOGY_CHANGED",
+        );
+      }
+
+      const normalized = normalizeStaffAssignmentRequestInput({
+        sourceLocationId,
+        destinationLocationId,
+        destinationDepartmentId,
+        periodStartDate: input.periodStartDate,
+        periodEndDate: input.periodEndDate,
+        timeKind: input.timeKind,
+        startTime: input.startTime ?? null,
+        endTime: input.endTime ?? null,
+        preferredEmployeeNumber: input.preferredEmployeeNumber || null,
+        confirmedEmployeeNumber: null,
+        requestReason: input.requestReason,
+        decisionReason: "",
+      }, { requestStatus: "submitted" });
+      const today = viennaTodayIso();
+      const maximum = addDays(
+        currentWeekStart(),
+        configuration.horizonWeeks * 7 - 1,
+      );
+      if (normalized.periodStartDate < today || normalized.periodEndDate > maximum) {
+        throw httpError(
+          400,
+          configuration.horizonWeeks === 1
+            ? "Einsatzanfragen sind nur ab heute bis zum Ende der aktuellen Kalenderwoche möglich."
+            : "Einsatzanfragen sind nur ab heute bis zum Ende der nächsten Kalenderwoche möglich.",
+          "STAFF_ASSIGNMENT_REQUEST_PERIOD_OUT_OF_RANGE",
+        );
+      }
+      let sourceDepartmentId = null;
+      if (normalized.preferredEmployeeNumber) {
+        const preferred = await organization.getEmployeeForUpdate(
+          normalized.preferredEmployeeNumber,
+        );
+        if (!preferred?.active
+          || String(preferred.home_location_id || "") !== sourceLocationId) {
+          throw httpError(
+            409,
+            "Das bevorzugte Teammitglied gehört nicht mehr aktiv zur Quellfiliale.",
+            "STAFF_ASSIGNMENT_REQUEST_PREFERRED_EMPLOYEE_INVALID",
+          );
+        }
+        sourceDepartmentId = Number(preferred.preferred_department_id || 0) || null;
+      }
+
+      const history = await insertInitialStaffAssignmentRequestHistory(
+        repositories.staffAssignmentRequests,
+        normalized,
+        liveSession.employeeNumber,
+        { submit: true },
+      );
+      const result = publicSubmittedStaffAssignmentRequest(history);
+      await organization.insertAudit(
+        liveSession.employeeNumber,
+        "staff-assignment-request.submit",
+        "staff_assignment_request",
+        result.id,
+        JSON.stringify({
+          sourceLocationId: result.sourceLocationId,
+          destinationLocationId: result.destinationLocationId,
+          destinationDepartmentId: result.destinationDepartmentId,
+          periodStartDate: result.periodStartDate,
+          periodEndDate: result.periodEndDate,
+          timeKind: result.timeKind,
+          preferredEmployeeRequested: Boolean(result.preferredEmployeeNumber),
+        }),
+      );
+      return {
+        request: result,
+        sourceDepartmentId,
+        configuration,
+      };
+    }, { isolation: "serializable" });
+    try {
+      const reviewers = await staffAssignmentRequestReviewerEmployeeNumbers(
+        outcome.request.sourceLocationId,
+        outcome.sourceDepartmentId,
+        outcome.configuration,
+      );
+      await notifyStaffAssignmentRequest(
+        "submitted",
+        reviewers,
+        outcome.request.id,
+        { enabled: outcome.configuration.emailSubmittedEnabled },
+      );
+    } catch {
+      try {
+        auditPortal(
+          "system",
+          "staff-assignment-request.email",
+          "staff_assignment_request",
+          outcome.request.id,
+          JSON.stringify({ kind: "submitted", eligible: 0, delivered: 0, skipped: 0, failed: 1, failureCodes: ["recipient_resolution_failed"] }),
+        );
+      } catch {}
+    }
+    return outcome.request;
+  } catch (error) {
+    throw staffAssignmentRequestHttpError(error);
+  }
+}
+
 async function getSchedule(weekValue, contextInput = {}, session = null) {
   const weekStart = getMonday(isIsoDate(weekValue) ? weekValue : undefined);
   const weekEnd = addDays(weekStart, 6);
@@ -27768,6 +28950,79 @@ app.get("/api/schedule", async (request, response) => {
   response.json(await getSchedule(request.query.week, request.query, request.portalSession));
 });
 
+app.get("/api/portal/v1/cross-location-schedules", async (request, response) => {
+  const session = requireEmployeePortalSession(
+    request,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.READ,
+  );
+  const payload = await crossLocationSchedulePayload(session, request.query);
+  if (payload.schedule) {
+    auditPortal(
+      session.employeeNumber,
+      "schedule.cross-location.view",
+      "location",
+      payload.schedule.location.id,
+      JSON.stringify({
+        weekStart: payload.schedule.weekStart,
+        teamMemberCount: payload.schedule.teamMembers.length,
+        shiftCount: payload.schedule.shifts.length,
+      }),
+    );
+  }
+  response.json(payload);
+});
+
+app.get("/api/portal/v1/cross-location-schedule-settings", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE],
+  );
+  response.json(await crossLocationScheduleSettingsPayload(session));
+});
+
+app.put("/api/portal/v1/cross-location-schedule-settings", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE],
+    { csrf: true },
+  );
+  response.json(await updateCrossLocationScheduleSettings(session, request.body || {}));
+});
+
+app.post("/api/portal/v1/staff-assignment-requests", async (request, response) => {
+  const session = requireEmployeePortalSession(
+    request,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE,
+  );
+  assertPortalCsrf(request);
+  response.status(201).json({
+    request: await submitStaffAssignmentRequest(session, request.body || {}),
+  });
+});
+
+app.get("/api/portal/v1/staff-assignment-requests", async (request, response) => {
+  const session = requireEmployeePortalSession(
+    request,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW,
+  );
+  response.json(await staffAssignmentRequestReviewPayload(session));
+});
+
+app.put("/api/portal/v1/staff-assignment-requests/:requestId/decision", async (request, response) => {
+  const session = requireEmployeePortalSession(
+    request,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW,
+  );
+  assertPortalCsrf(request);
+  response.json({
+    request: await decideStaffAssignmentRequest(
+      session,
+      String(request.params.requestId || ""),
+      request.body || {},
+    ),
+  });
+});
+
 app.put("/api/schedule-note", async (request, response) => {
   const note = await validateScheduleNote(request.body, request.portalSession);
   assertSessionContextScope(request.portalSession, note.context);
@@ -32281,9 +33536,7 @@ async function rightsDashboardPayload(actor) {
 async function rightsManagementPayload(actor) {
   const [roleRows, adminUsers] = await Promise.all([getPortalRoles(), portalUsersForAdmin()]);
   const roles = new Map(roleRows.map((role) => [role.id, role]));
-  const mayInspectPersonnelLearningRights = actorMayInspectPersonnelLearningRights(actor);
-  const visiblePermission = (permission) => mayInspectPersonnelLearningRights
-    || !isPersonnelLearningPermission(permission);
+  const visiblePermission = (permission) => portalPermissionVisibleToActor(permission, actor);
   const users = adminUsers
     .filter((user) => user.employeeActive)
     .map((user) => {
@@ -33249,7 +34502,12 @@ function scopeMutationConcurrencySignature(target, scopes, permissionScopes) {
   }));
 }
 
-function portalUserMutationConcurrencySignature(user, lifecycleGrants = [], lifecycleScopes = []) {
+function portalUserMutationConcurrencySignature(
+  user,
+  lifecycleGrants = [],
+  lifecycleScopes = [],
+  protectedBirthdayPresentationRights = [],
+) {
   return sha256(JSON.stringify({
     user: user ? {
       employeeNumber: String(user.employee_number ?? user.employeeNumber ?? ""),
@@ -33261,6 +34519,9 @@ function portalUserMutationConcurrencySignature(user, lifecycleGrants = [], life
     } : null,
     lifecycleGrants: sortedUniqueValues(lifecycleGrants),
     lifecycleScopes: sortedUniqueValues(lifecycleScopes, canonicalPermissionScopeValue),
+    protectedBirthdayPresentationRights: sortedUniqueValues(
+      protectedBirthdayPresentationRights,
+    ),
   }));
 }
 
@@ -33528,9 +34789,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     ...[...currentDenials].filter((permission) => !manageablePermissions.has(permission)),
     ...submittedDenials.filter((permission) => manageablePermissions.has(permission)),
   ]);
-  if (normalizedDenials.has("schedule:read") && rolePermissionSet.has("schedule:write")) {
-    normalizedDenials.add("schedule:write");
-  }
+  cascadeCrossLocationScheduleRolePermissionDenials(rolePermissionSet, normalizedDenials);
   const projectedPermissions = [...new Set([
     ...rolePermissions,
     ...[...currentGrants].filter((permission) => !manageablePermissions.has(permission)),
@@ -36359,10 +37618,16 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
       candidateLookup.get(assignment.employeeNumber)
         || sqliteEmployeeLocationLendingOperations.employee(assignment.employeeNumber),
     ))
-    .map((assignment) => ({
-      ...assignment,
-      canEdit: candidates.some((employee) => employee.employeeNumber === assignment.employeeNumber),
-    }));
+    .map((assignment) => {
+      const requestBound = Boolean(staffAssignmentRequestIdFromAssignmentId(assignment.id));
+      return {
+        ...assignment,
+        requestBound,
+        canEdit: !requestBound && candidates.some(
+          (employee) => employee.employeeNumber === assignment.employeeNumber,
+        ),
+      };
+    });
   response.json({
     assignments,
     candidates,
@@ -36402,6 +37667,13 @@ app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, respon
   const existing = sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId);
   if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
   assertStaffAssignmentEmployeeScope(session, existing.employeeNumber);
+  if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
+    throw httpError(
+      409,
+      "Dieser verbindliche Filialeinsatz stammt aus einer genehmigten Einsatzanfrage und kann hier nicht geändert werden.",
+      "STAFF_ASSIGNMENT_REQUEST_BOUND",
+    );
+  }
   const input = normalizeStaffAssignmentInput(request.body || {}, existing);
   const revision = staffAssignmentRevision(request.body?.revision);
   let assignment;
@@ -36430,6 +37702,13 @@ app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request
   const existing = sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId);
   if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
   assertStaffAssignmentEmployeeScope(session, existing.employeeNumber);
+  if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
+    throw httpError(
+      409,
+      "Dieser verbindliche Filialeinsatz stammt aus einer genehmigten Einsatzanfrage und kann hier nicht getrennt storniert werden.",
+      "STAFF_ASSIGNMENT_REQUEST_BOUND",
+    );
+  }
   const revision = staffAssignmentRevision(request.body?.revision);
   let assignment;
   try {
@@ -37106,6 +38385,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   let existingPersonnelLifecycleGrants = [];
   let existingPersonnelLifecyclePermissionScopes = [];
   let existingPersonnelLearningDenials = [];
+  let existingPortalBirthdayPresentationRights = [];
   if (existingUser) {
     assertPortalUserIsMutable(existingUser, actor);
     await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
@@ -37144,11 +38424,22 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
         .map(publicPortalPermissionScopeGrant);
       existingPersonnelLearningDenials = denialRows
         .filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
+      existingPortalBirthdayPresentationRights = [...grantRows, ...denialRows]
+        .filter((permission) => (
+          PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+        ));
       if (existingPersonnelLearningDenials.length) {
         throw httpError(
           409,
           "Die Rolle kann erst geändert werden, nachdem PL+ die entzogenen Schulungs- und Wissensrechte in der zentralen Rechteverwaltung bereinigt hat.",
           "PERSONNEL_LIFECYCLE_RIGHTS_PROFILE_PROTECTED",
+        );
+      }
+      if (existingPortalBirthdayPresentationRights.length) {
+        throw httpError(
+          409,
+          "Die Rolle kann erst geändert werden, nachdem die Fachrechte für Geburtstagsdarstellungen in der zentralen Rechteverwaltung bereinigt wurden.",
+          "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_PROFILE_PROTECTED",
         );
       }
       if ((existingPersonnelLifecycleGrants.length
@@ -37197,6 +38488,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     existingUser,
     existingPersonnelLifecycleGrants,
     existingPersonnelLifecyclePermissionScopes,
+    existingPortalBirthdayPresentationRights,
   );
   let responseProjectionActor = actor;
   let userChanged = false;
@@ -37211,6 +38503,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     let livePersonnelLifecycleGrants = [];
     let livePersonnelLifecyclePermissionScopes = [];
     let livePersonnelLearningDenials = [];
+    let livePortalBirthdayPresentationRights = [];
     if (liveUser && existingUser?.role !== role) {
       const [grantRows, denialRows, permissionScopeRows] = await Promise.all([
         portalPermissionGrantsForEmployee(employeeNumber, liveUser.role, organization),
@@ -37223,11 +38516,22 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
         .map(publicPortalPermissionScopeGrant);
       livePersonnelLearningDenials = denialRows
         .filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
+      livePortalBirthdayPresentationRights = [...grantRows, ...denialRows]
+        .filter((permission) => (
+          PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+        ));
       if (livePersonnelLearningDenials.length) {
         throw httpError(
           409,
           "Die Rolle kann erst geändert werden, nachdem PL+ die entzogenen Schulungs- und Wissensrechte in der zentralen Rechteverwaltung bereinigt hat.",
           "PERSONNEL_LIFECYCLE_RIGHTS_PROFILE_PROTECTED",
+        );
+      }
+      if (livePortalBirthdayPresentationRights.length) {
+        throw httpError(
+          409,
+          "Die Rolle kann erst geändert werden, nachdem die Fachrechte für Geburtstagsdarstellungen in der zentralen Rechteverwaltung bereinigt wurden.",
+          "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_PROFILE_PROTECTED",
         );
       }
     }
@@ -37237,6 +38541,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
         liveUser,
         livePersonnelLifecycleGrants,
         livePersonnelLifecyclePermissionScopes,
+        livePortalBirthdayPresentationRights,
       ),
     );
     userChanged = Boolean(
@@ -41884,6 +43189,598 @@ app.get("/api/portal/v1/amu-access-policy", async (request, response) => {
 app.put("/api/portal/v1/amu-access-policy", async (request, response) => {
   const actor = requireAdminHrOrLocal(request, "hr:settings");
   response.json({ policy: await saveManagerAmuAccessPolicy(actor, request.body || {}), canChange: true });
+});
+
+function portalBirthdayPresentationInput(value, allowedKeys, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !allowedKeys.includes(key))) {
+    throw httpError(
+      400,
+      `${label} enthält ungültige oder unbekannte Felder.`,
+      "PORTAL_BIRTHDAY_PRESENTATION_INPUT_INVALID",
+    );
+  }
+  return value;
+}
+
+function portalBirthdayPresentationValidationError(error) {
+  if (error instanceof PortalBirthdayPresentationError) {
+    return httpError(400, error.message, error.code);
+  }
+  return error;
+}
+
+function portalBirthdayPresentationAccess(actor) {
+  const access = createPortalBirthdayPresentationAccessSnapshot(actor || {});
+  if (!access.personal
+    || (!access.canManageGlobal && !access.canManageTeam && !access.canDelegateTeam)) {
+    throw httpError(
+      403,
+      "Für die Konfiguration der Geburtstagsdarstellungen fehlt die Berechtigung.",
+      "PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_DENIED",
+    );
+  }
+  return access;
+}
+
+function requirePortalBirthdayPresentationSession(request, { csrf = false } = {}) {
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(
+      428,
+      "Bitte zuerst das persönliche Startpasswort ändern.",
+      "PORTAL_PASSWORD_CHANGE_REQUIRED",
+    );
+  }
+  if (!PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.some(
+    (permission) => session.permissions?.includes(permission),
+  )) {
+    throw httpError(
+      403,
+      "Für die Konfiguration der Geburtstagsdarstellungen fehlt die Berechtigung.",
+      "PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_DENIED",
+    );
+  }
+  if (csrf) assertPortalCsrf(request);
+  return session;
+}
+
+async function portalBirthdayPresentationActor(
+  session,
+  organization = organizationPersonnelRepository,
+) {
+  const [user, context] = await Promise.all([
+    personnelLearningPortalUser(session?.employeeNumber, organization),
+    personnelLearningScopeContext(organization),
+  ]);
+  return personnelLearningPrincipalForUser(user, context);
+}
+
+function portalBirthdayPresentationPolicy(row) {
+  if (!row || !Number.isSafeInteger(Number(row.revision)) || Number(row.revision) < 1) {
+    throw httpError(
+      503,
+      "Die globale Geburtstagsrichtlinie ist derzeit nicht konsistent verfügbar.",
+      "PORTAL_BIRTHDAY_PRESENTATION_POLICY_UNAVAILABLE",
+    );
+  }
+  return Object.freeze({
+    enabled: row.enabled === true || Number(row.enabled) === 1,
+    revision: Number(row.revision),
+  });
+}
+
+function portalBirthdayPresentationPublicId(value) {
+  return String(value || "") === "off" ? null : String(value || "") || null;
+}
+
+function activePortalBirthdayPresentationTopology(locations, departments) {
+  const locationById = new Map((locations || [])
+    .filter((location) => location?.active !== false && Number(location?.active) !== 0)
+    .map((location) => [String(location.id || ""), location]));
+  const departmentById = new Map((departments || [])
+    .filter((department) => department?.active !== false && Number(department?.active) !== 0)
+    .filter((department) => locationById.has(String(department.location_id ?? department.locationId ?? "")))
+    .map((department) => [Number(department.id), department]));
+  return Object.freeze({ locationById, departmentById });
+}
+
+function portalBirthdayPresentationSubject(employee, assignment, topology) {
+  const employeeNumber = String(employee?.personnel_number ?? employee?.personnelNumber ?? "").trim();
+  const locationId = String(employee?.home_location_id ?? employee?.homeLocationId ?? "").trim();
+  const departmentId = Number(
+    employee?.preferred_department_id ?? employee?.preferredDepartmentId ?? 0,
+  ) || null;
+  const location = topology.locationById.get(locationId);
+  const department = departmentId ? topology.departmentById.get(departmentId) : null;
+  const validDepartment = !departmentId
+    || (department && String(department.location_id ?? department.locationId ?? "") === locationId);
+  return {
+    employeeNumber,
+    displayName: String(
+      employee?.nickname || employee?.full_name || employee?.fullName || employeeNumber,
+    ).replace(/\s+/g, " ").trim().slice(0, 160),
+    locationId,
+    departmentId,
+    active: Boolean(employee?.active) && Boolean(location) && validDepartment,
+    presentationId: assignment?.presentation_id ?? assignment?.presentationId ?? null,
+    revision: Number(assignment?.revision || 0),
+    locationName: String(location?.name || locationId),
+    departmentName: String(department?.name || ""),
+  };
+}
+
+function portalBirthdayPresentationScopePayload(access, topology) {
+  if (access.role === "developer") {
+    return Object.freeze({ kind: "installation", label: "Gesamte Installation", delegated: false });
+  }
+  if (access.canManageGlobal && !access.canManageTeam) {
+    return Object.freeze({ kind: "global-settings", label: "Globale Freigabe", delegated: false });
+  }
+  if (access.role === "manager") {
+    const names = [...new Set(access.scopes
+      .filter((scope) => scope.departmentId === null)
+      .map((scope) => topology.locationById.get(scope.locationId)?.name)
+      .filter(Boolean))];
+    return Object.freeze({
+      kind: "location",
+      label: names.length === 1 ? names[0] : names.length ? `${names.length} Filialen` : "Kein aktiver Filialbereich",
+      delegated: false,
+    });
+  }
+  if (access.role === "department_manager") {
+    const names = [...new Set(access.scopes
+      .filter((scope) => scope.departmentId !== null)
+      .map((scope) => topology.departmentById.get(Number(scope.departmentId))?.name)
+      .filter(Boolean))];
+    return Object.freeze({
+      kind: "department",
+      label: names.length === 1 ? names[0] : names.length ? `${names.length} Abteilungen` : "Kein aktiver Abteilungsbereich",
+      delegated: true,
+    });
+  }
+  return Object.freeze({ kind: "global-settings", label: "Globale Freigabe", delegated: false });
+}
+
+async function portalBirthdayPresentationDelegates(access, organization, topology) {
+  if (!access.canDelegateTeam) return [];
+  const users = await organization.listPortalUsersForAdmin();
+  const candidates = users.filter((user) => (
+    String(user.role || "") === "department_manager"
+      && Boolean(user.active)
+      && Boolean(user.employee_active)
+  ));
+  const projected = [];
+  for (const user of candidates) {
+    const subject = portalBirthdayPresentationSubject({
+      personnel_number: user.personnel_number,
+      full_name: user.full_name,
+      nickname: user.nickname,
+      home_location_id: user.home_location_id,
+      preferred_department_id: user.preferred_department_id,
+      active: user.employee_active,
+    }, null, topology);
+    if (!access.canDelegateSubject(subject) || subject.departmentId === null) continue;
+    const [grantedPermissions, deniedPermissions, scopeRows] = await Promise.all([
+      organization.listPortalPermissionGrants(subject.employeeNumber),
+      organization.listPortalPermissionDenials(subject.employeeNumber),
+      organization.listPortalAccessScopes(subject.employeeNumber),
+    ]);
+    const hasOwnDepartmentScope = scopeRows.some((scope) => (
+      String(scope.location_id ?? scope.locationId ?? "") === subject.locationId
+        && Number(scope.department_id ?? scope.departmentId ?? 0) === subject.departmentId
+    ));
+    if (!hasOwnDepartmentScope) continue;
+    const denied = deniedPermissions.includes(
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+    );
+    projected.push({
+      employeeNumber: subject.employeeNumber,
+      displayName: subject.displayName,
+      departmentName: subject.departmentName,
+      enabled: !denied && grantedPermissions.includes(
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+      ),
+      denied,
+    });
+  }
+  return projected.sort((left, right) => (
+    left.displayName.localeCompare(right.displayName, "de-AT")
+      || left.employeeNumber.localeCompare(right.employeeNumber, "de-AT", { numeric: true })
+  ));
+}
+
+async function portalBirthdayPresentationSettingsPayload(actor, repositories) {
+  const access = portalBirthdayPresentationAccess(actor);
+  const [policyRow, assignments, employees, locations, departments] = await Promise.all([
+    repositories.portalBirthdayPresentations.getPolicy(),
+    repositories.portalBirthdayPresentations.listAssignments(),
+    repositories.organizationPersonnel.listEmployees(),
+    repositories.organizationPersonnel.listLocations(false),
+    repositories.organizationPersonnel.listDepartments(false),
+  ]);
+  const topology = activePortalBirthdayPresentationTopology(locations, departments);
+  const assignmentByEmployee = new Map(assignments.map((assignment) => [
+    String(assignment.employee_number ?? assignment.employeeNumber ?? ""),
+    assignment,
+  ]));
+  const visibleEmployees = access.canManageTeam
+    ? employees.map((employee) => portalBirthdayPresentationSubject(
+      employee,
+      assignmentByEmployee.get(String(employee.personnel_number ?? employee.personnelNumber ?? "")),
+      topology,
+    )).filter((subject) => access.canManageSubject(subject)).map((subject) => ({
+      employeeNumber: subject.employeeNumber,
+      displayName: subject.displayName,
+      locationName: subject.locationName,
+      departmentName: subject.departmentName,
+      presentationId: portalBirthdayPresentationPublicId(subject.presentationId),
+      revision: subject.revision,
+    }))
+    : [];
+  visibleEmployees.sort((left, right) => (
+    left.locationName.localeCompare(right.locationName, "de-AT")
+      || left.departmentName.localeCompare(right.departmentName, "de-AT")
+      || left.displayName.localeCompare(right.displayName, "de-AT")
+      || left.employeeNumber.localeCompare(right.employeeNumber, "de-AT", { numeric: true })
+  ));
+  return {
+    capabilities: {
+      canManageGlobal: access.canManageGlobal,
+      canManageTeam: access.canManageTeam,
+      canDelegateTeam: access.canDelegateTeam,
+    },
+    scope: portalBirthdayPresentationScopePayload(access, topology),
+    policy: portalBirthdayPresentationPolicy(policyRow),
+    presentations: PORTAL_BIRTHDAY_PRESENTATIONS.map((presentation) => ({ ...presentation })),
+    employees: visibleEmployees,
+    delegates: await portalBirthdayPresentationDelegates(
+      access,
+      repositories.organizationPersonnel,
+      topology,
+    ),
+  };
+}
+
+async function portalBirthdayPresentationLiveContext(session, repositories, capability) {
+  const actor = await portalBirthdayPresentationActor(
+    session,
+    repositories.organizationPersonnel,
+  );
+  const access = portalBirthdayPresentationAccess(actor);
+  if (access[capability] !== true) {
+    throw httpError(
+      403,
+      "Die erforderliche Berechtigung ist nicht mehr wirksam.",
+      "PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_DENIED",
+    );
+  }
+  return Object.freeze({ actor, access });
+}
+
+async function portalBirthdayPresentationSerializableMutation(work) {
+  try {
+    return await persistenceProvider.transaction(async (executor) => (
+      work(createApplicationRepositories(executor))
+    ), { isolation: "serializable" });
+  } catch (error) {
+    if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)
+      || isUniquePersistenceViolation(error)) {
+      throw httpError(
+        409,
+        "Die Geburtstagseinstellung wurde gleichzeitig geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_CONCURRENT_CHANGE",
+      );
+    }
+    throw error;
+  }
+}
+
+async function portalBirthdayPresentationTarget(
+  employeeNumber,
+  access,
+  organization,
+  subjectCapability = "canManageSubject",
+) {
+  const [employee, locations, departments] = await Promise.all([
+    organization.getEmployeeForUpdate(employeeNumber),
+    organization.listLocations(false),
+    organization.listDepartments(false),
+  ]);
+  const topology = activePortalBirthdayPresentationTopology(locations, departments);
+  const subject = portalBirthdayPresentationSubject(employee, null, topology);
+  if (!employee || typeof access[subjectCapability] !== "function"
+    || !access[subjectCapability](subject)) {
+    throw httpError(
+      404,
+      "Das aktive Teammitglied wurde im berechtigten Bereich nicht gefunden.",
+      "PORTAL_BIRTHDAY_PRESENTATION_EMPLOYEE_NOT_FOUND",
+    );
+  }
+  return Object.freeze({ employee, subject, topology });
+}
+
+app.get("/api/portal/v1/birthday-presentation-settings", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request);
+  const result = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const actor = await portalBirthdayPresentationActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  }, { isolation: "serializable", readOnly: true });
+  response.json(result);
+});
+
+app.put("/api/portal/v1/birthday-presentation-settings/global", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request, { csrf: true });
+  const body = portalBirthdayPresentationInput(
+    request.body,
+    ["enabled", "expectedRevision"],
+    "Die globale Geburtstagsrichtlinie",
+  );
+  let input;
+  try {
+    input = validatePortalBirthdayPresentationPolicyInput(body);
+  } catch (error) {
+    throw portalBirthdayPresentationValidationError(error);
+  }
+  const result = await portalBirthdayPresentationSerializableMutation(async (repositories) => {
+    const { actor } = await portalBirthdayPresentationLiveContext(
+      session,
+      repositories,
+      "canManageGlobal",
+    );
+    const current = portalBirthdayPresentationPolicy(
+      await repositories.portalBirthdayPresentations.getPolicy(),
+    );
+    if (current.revision !== input.expectedRevision) {
+      throw httpError(
+        409,
+        "Die globale Freigabe wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_REVISION_CONFLICT",
+      );
+    }
+    if (current.enabled === input.enabled) {
+      return portalBirthdayPresentationSettingsPayload(actor, repositories);
+    }
+    const updated = await repositories.portalBirthdayPresentations.updatePolicy({
+      enabled: input.enabled,
+      expectedRevision: input.expectedRevision,
+      updatedAt: new Date().toISOString(),
+    });
+    if (Number(updated?.rowsAffected || 0) !== 1) {
+      throw httpError(
+        409,
+        "Die globale Freigabe wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_REVISION_CONFLICT",
+      );
+    }
+    await repositories.organizationPersonnel.insertAudit(
+      actor.employeeNumber,
+      "portal.birthday-presentation.policy.update",
+      "portal_birthday_presentation_policy",
+      "global",
+      JSON.stringify({
+        schemaVersion: 1,
+        previousEnabled: current.enabled,
+        enabled: input.enabled,
+        previousRevision: current.revision,
+        revision: current.revision + 1,
+      }),
+    );
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  });
+  response.json(result);
+});
+
+app.put("/api/portal/v1/birthday-presentation-settings/employees/:employeeNumber", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request, { csrf: true });
+  const body = portalBirthdayPresentationInput(
+    request.body,
+    ["presentationId", "expectedRevision"],
+    "Die Geburtstagsdarstellung",
+  );
+  let input;
+  try {
+    input = validatePortalBirthdayPresentationAssignmentInput({
+      employeeNumber: String(request.params.employeeNumber || ""),
+      ...body,
+    });
+  } catch (error) {
+    throw portalBirthdayPresentationValidationError(error);
+  }
+  const result = await portalBirthdayPresentationSerializableMutation(async (repositories) => {
+    const { actor, access } = await portalBirthdayPresentationLiveContext(
+      session,
+      repositories,
+      "canManageTeam",
+    );
+    await portalBirthdayPresentationTarget(
+      input.employeeNumber,
+      access,
+      repositories.organizationPersonnel,
+    );
+    const currentRow = await repositories.portalBirthdayPresentations.getAssignment(
+      input.employeeNumber,
+    );
+    const current = {
+      presentationId: String(
+        currentRow?.presentation_id ?? currentRow?.presentationId ?? "off",
+      ),
+      revision: Number(currentRow?.revision || 0),
+    };
+    if (current.revision !== input.expectedRevision) {
+      throw httpError(
+        409,
+        "Die Darstellung wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_REVISION_CONFLICT",
+      );
+    }
+    if (current.presentationId === input.presentationId) {
+      return portalBirthdayPresentationSettingsPayload(actor, repositories);
+    }
+    const mutation = currentRow
+      ? await repositories.portalBirthdayPresentations.updateAssignment({
+          employeeNumber: input.employeeNumber,
+          presentationId: input.presentationId,
+          expectedRevision: input.expectedRevision,
+          updatedAt: new Date().toISOString(),
+        })
+      : await repositories.portalBirthdayPresentations.insertAssignment({
+          employeeNumber: input.employeeNumber,
+          presentationId: input.presentationId,
+          updatedAt: new Date().toISOString(),
+        });
+    if (Number(mutation?.rowsAffected || 0) !== 1) {
+      throw httpError(
+        409,
+        "Die Darstellung wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_REVISION_CONFLICT",
+      );
+    }
+    await repositories.organizationPersonnel.insertAudit(
+      actor.employeeNumber,
+      "portal.birthday-presentation.assignment.update",
+      "portal_birthday_presentation_assignment",
+      input.employeeNumber,
+      JSON.stringify({
+        schemaVersion: 1,
+        previousPresentationId: portalBirthdayPresentationPublicId(current.presentationId),
+        presentationId: portalBirthdayPresentationPublicId(input.presentationId),
+        previousRevision: current.revision,
+        revision: current.revision + 1,
+      }),
+    );
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  });
+  response.json(result);
+});
+
+app.put("/api/portal/v1/birthday-presentation-settings/delegates/:employeeNumber", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request, { csrf: true });
+  const body = portalBirthdayPresentationInput(
+    request.body,
+    ["enabled"],
+    "Die Delegation",
+  );
+  if (typeof body.enabled !== "boolean") {
+    throw httpError(
+      400,
+      "Bitte den gewünschten Delegationsstatus angeben.",
+      "PORTAL_BIRTHDAY_PRESENTATION_DELEGATION_INVALID",
+    );
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  if (!employeeNumber || /[\u0000-\u001f\u007f]/u.test(employeeNumber)
+    || employeeNumber.length > 120) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Abteilungsleitung auswählen.",
+      "PORTAL_BIRTHDAY_PRESENTATION_DELEGATION_INVALID",
+    );
+  }
+  const result = await portalBirthdayPresentationSerializableMutation(async (repositories) => {
+    const { actor, access } = await portalBirthdayPresentationLiveContext(
+      session,
+      repositories,
+      "canDelegateTeam",
+    );
+    const targetUser = await personnelLearningPortalUser(
+      employeeNumber,
+      repositories.organizationPersonnel,
+    );
+    const { subject: target } = await portalBirthdayPresentationTarget(
+      employeeNumber,
+      access,
+      repositories.organizationPersonnel,
+      "canDelegateSubject",
+    );
+    const hasOwnDepartmentScope = targetUser?.scopes?.some((scope) => (
+      String(scope.locationId ?? scope.location_id ?? "") === target.locationId
+        && Number(scope.departmentId ?? scope.department_id ?? 0) === target.departmentId
+    ));
+    if (targetUser?.role !== "department_manager"
+      || target.departmentId === null
+      || !hasOwnDepartmentScope
+      || !access.canDelegateSubject(target)
+      || (body.enabled && targetUser.active !== true)) {
+      throw httpError(
+        404,
+        "Die aktive Abteilungsleitung wurde im berechtigten Bereich nicht gefunden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_DELEGATE_NOT_FOUND",
+      );
+    }
+    const denied = targetUser.deniedPermissions.includes(
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+    );
+    const granted = targetUser.grantedPermissions.includes(
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+    );
+    const globalAuthority = access.canManageGlobal === true;
+    if (!globalAuthority && body.enabled && denied) {
+      throw httpError(
+        409,
+        "Das Recht wurde übergeordnet gesperrt und kann hier nicht aktiviert werden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_DELEGATION_LOCKED",
+      );
+    }
+    const desiredDenied = globalAuthority ? !body.enabled : denied;
+    const desiredGranted = body.enabled && !desiredDenied;
+    if (granted === desiredGranted && denied === desiredDenied) {
+      return portalBirthdayPresentationSettingsPayload(actor, repositories);
+    }
+    if (granted && !desiredGranted) {
+      await repositories.organizationPersonnel.deletePermissionGrant(
+        employeeNumber,
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+      );
+    } else if (!granted && desiredGranted) {
+      await repositories.organizationPersonnel.insertPermissionGrant(
+        employeeNumber,
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+        actor.employeeNumber,
+      );
+    }
+    if (denied && !desiredDenied) {
+      await repositories.organizationPersonnel.deletePermissionDenial(
+        employeeNumber,
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+      );
+    } else if (!denied && desiredDenied) {
+      await repositories.organizationPersonnel.insertPermissionDenial(
+        employeeNumber,
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+        actor.employeeNumber,
+      );
+    }
+    await repositories.organizationPersonnel.revokePortalSessions(employeeNumber);
+    await repositories.organizationPersonnel.revokeMobileSessions(
+      employeeNumber,
+      "birthday_presentation_permission_changed",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.employeeNumber,
+      globalAuthority && !body.enabled
+        ? "portal.birthday-presentation.permission.deny"
+        : globalAuthority && denied
+          ? "portal.birthday-presentation.permission.restore"
+          : body.enabled
+            ? "portal.birthday-presentation.permission.grant"
+            : "portal.birthday-presentation.permission.revoke",
+      "portal_user",
+      employeeNumber,
+      JSON.stringify({
+        schemaVersion: 1,
+        permission: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+        enabled: body.enabled,
+        authority: globalAuthority ? "pl_plus" : "manager",
+      }),
+    );
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  });
+  response.json(result);
 });
 
 app.get("/api/portal/v1/greeting-settings", (request, response) => {
@@ -49653,6 +51550,13 @@ function usbCreatorCanDelegatePersonnelLearning(creator = {}) {
     && creator.permissions.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
 }
 
+function usbCreatorCanDelegateCrossLocationSchedule(creator = {}) {
+  if (creator.role === "developer") return true;
+  return creator.role === "admin"
+    && Array.isArray(creator.permissions)
+    && creator.permissions.includes(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE);
+}
+
 function usbRoleAllowedForCreator(creator, requestedRole) {
   if (requestedRole === "employee") return true;
   if (!PORTAL_ROLE_ASSIGNMENTS[creator?.role]?.has(requestedRole)) return false;
@@ -49744,6 +51648,18 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
         "USB_EMPLOYEE_PERMISSION_DENIED",
       );
     }
+    const submittedCrossLocationSchedulePermissions = [...new Set([
+      ...additionalPermissions,
+      ...deniedPermissions,
+    ].filter((permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission)))];
+    if (submittedCrossLocationSchedulePermissions.length
+      && !usbCreatorCanDelegateCrossLocationSchedule(creator)) {
+      throw httpError(
+        403,
+        "Standortübergreifende Dienstplan- und Einsatzanfragerechte dürfen von diesem Zugang nicht in USB-Profile übernommen werden.",
+        "USB_EMPLOYEE_PERMISSION_DENIED",
+      );
+    }
     if ([...deniedPermissions].some(
       (permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission),
     )) {
@@ -49765,9 +51681,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
         `Auf dem USB-Profil können nur Grundrechte der Rolle entzogen werden: ${invalidDenials.join(", ")}`,
         "USB_EMPLOYEE_PERMISSION_DENIAL_INVALID");
     }
-    if (deniedPermissions.has("schedule:read") && rolePermissions.has("schedule:write")) {
-      deniedPermissions.add("schedule:write");
-    }
+    cascadeCrossLocationScheduleRolePermissionDenials(rolePermissions, deniedPermissions);
     const projectedPermissions = [...new Set([...rolePermissions, ...additionalPermissions])]
       .filter((permission) => !deniedPermissions.has(permission));
     if (projectedPermissions.includes("schedule:write") && !projectedPermissions.includes("schedule:read")) {
@@ -50263,6 +52177,33 @@ function assertRequestPermission(request, permission) {
 app.put("/api/settings", async (request, response) => {
   const body = request.body;
   const currentSettings = getSettings();
+  const crossLocationScheduleSettingsSubmitted = body.crossLocationSchedule !== undefined;
+  let crossLocationScheduleValues = null;
+  if (crossLocationScheduleSettingsSubmitted) {
+    try {
+      crossLocationScheduleValues = crossLocationScheduleSettingsValuesFromInput(
+        body.crossLocationSchedule,
+      );
+    } catch (error) {
+      throw httpError(
+        400,
+        String(error?.message || "Die Dienstplan-Einstellungen sind ungültig."),
+        "CROSS_LOCATION_SCHEDULE_SETTINGS_INVALID",
+      );
+    }
+  }
+  let crossLocationScheduleSettingsSession = null;
+  if (crossLocationScheduleSettingsSubmitted) {
+    crossLocationScheduleSettingsSession = requirePortalAnyPermissionOrLocal(
+      request,
+      [CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE],
+      { csrf: true },
+    );
+    await assertCrossLocationScheduleSettingsManagement(
+      crossLocationScheduleSettingsSession,
+      organizationPersonnelRepository,
+    );
+  }
   const scheduleContext = await resolvePlanningContext(body);
   const vacationContext = await resolvePlanningContext({ ...body, departmentId: null, department: null });
   const scheduleDefaults = defaultSchedulePdfSettings(scheduleContext);
@@ -50355,11 +52296,42 @@ app.put("/api/settings", async (request, response) => {
     show_sunday: body.showSunday === true ? "1" : "0",
     remember_last_schedule_overall_plan: rememberLastScheduleOverallPlan ? "1" : "0",
     remember_last_vacation_overall_plan: rememberLastVacationOverallPlan ? "1" : "0",
+    ...(crossLocationScheduleValues || {}),
   };
   if (!getPortalStatus().portalEnabled) {
     values.allow_past_week_editing = body.allowPastWeekEditing === true ? "1" : "0";
   }
-  await planningSettingsRepository.transaction(async (repository) => {
+  await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const repository = repositories.planningSettings;
+    let liveCrossLocationScheduleSettingsSession = crossLocationScheduleSettingsSession;
+    if (crossLocationScheduleSettingsSubmitted
+      && !isLocalSystemSession(crossLocationScheduleSettingsSession)) {
+      liveCrossLocationScheduleSettingsSession = await livePersonnelLearningRoleAdministrationActor(
+        crossLocationScheduleSettingsSession,
+        repositories.organizationPersonnel,
+      );
+      assertLivePortalRoutePermission(
+        liveCrossLocationScheduleSettingsSession,
+        CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE,
+      );
+      await assertCrossLocationScheduleSettingsManagement(
+        liveCrossLocationScheduleSettingsSession,
+        repositories.organizationPersonnel,
+      );
+    }
+    const liveCrossLocationScheduleValues = crossLocationScheduleSettingsSubmitted
+      ? settingsObjectFromRows(await repository.listSettings())
+      : null;
+    const liveCrossLocationScheduleChangedKeys = crossLocationScheduleValues
+      ? Object.keys(crossLocationScheduleValues).filter(
+        (key) => String(
+          liveCrossLocationScheduleValues?.[key]
+            ?? CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS[key]
+            ?? "",
+        ) !== String(crossLocationScheduleValues[key]),
+      )
+      : [];
     for (const [key, value] of Object.entries(values)) {
       await repository.upsertSetting({ key, value });
     }
@@ -50389,7 +52361,25 @@ app.put("/api/settings", async (request, response) => {
       vacation_pdf_balance_show_consumed: body.vacationPdfBalanceShowConsumed === true ? "1" : "0",
       vacation_pdf_calendar_style: vacationPdfCalendarStyle,
     }, repository);
-  });
+    if (liveCrossLocationScheduleChangedKeys.length) {
+      const before = normalizeCrossLocationScheduleSettings(liveCrossLocationScheduleValues);
+      const after = normalizeCrossLocationScheduleSettings({
+        ...liveCrossLocationScheduleValues,
+        ...crossLocationScheduleValues,
+      });
+      await repositories.organizationPersonnel.insertAudit(
+        liveCrossLocationScheduleSettingsSession?.employeeNumber || "local",
+        "schedule.cross-location.settings.update",
+        "schedule_settings",
+        "cross_location",
+        JSON.stringify({
+          changedKeys: liveCrossLocationScheduleChangedKeys.sort(),
+          before,
+          after,
+        }),
+      );
+    }
+  }, { isolation: "serializable" });
   await refreshPlanningSettingsReadModel();
   scheduleAutomaticBackups();
   await setPortalSetting("login_required", "1");
