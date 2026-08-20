@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+  <rect width="1440" height="900" fill="#F7F1E7"/>
+  <path d="M0 0h410c-38 94-119 156-229 183C112 200 52 235 0 289Z" fill="#183A46"/>
+  <path d="M1440 900h-430c42-98 130-159 240-183 73-16 136-50 190-106Z" fill="#183A46"/>
+  <path d="M0 0h278c-28 48-70 81-124 98C95 116 44 142 0 178Z" fill="#C58A2B"/>
+  <path d="M1440 900h-292c31-51 77-84 136-99 60-15 112-42 156-83Z" fill="#C58A2B"/>
+  <circle cx="1195" cy="167" r="82" fill="#183A46"/>
+  <circle cx="1195" cy="167" r="59" fill="#F7F1E7" stroke="#C58A2B" stroke-width="5"/>
+  <circle cx="1195" cy="167" r="35" fill="#C58A2B"/>
+  <path d="m1195 103 10 40 39-12-31 27 26 31-37-17-17 37 5-41-41-4 40-10Z" fill="#F7F1E7"/>
+  <path d="M107 697c73-51 145-63 214-37 47 18 90 18 130 0" fill="none" stroke="#C58A2B" stroke-width="7" stroke-linecap="round"/>
+  <path d="M95 733c77-45 151-51 222-19 44 20 86 23 126 9" fill="none" stroke="#183A46" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#C58A2B">
+    <circle cx="106" cy="629" r="7"/>
+    <circle cx="356" cy="735" r="6"/>
+    <circle cx="1287" cy="327" r="7"/>
+    <circle cx="1335" cy="275" r="5"/>
+  </g>
+  <g fill="#183A46">
+    <path d="m245 246 9 22 23 8-23 9-9 22-9-22-23-9 23-8Z"/>
+    <path d="m1316 410 7 17 17 7-17 7-7 17-7-17-17-7 17-7Z"/>
+  </g>
+  <g transform="translate(112 357)">
+    <rect x="0" y="42" width="116" height="88" rx="10" fill="#183A46"/>
+    <rect x="50" y="42" width="16" height="88" fill="#C58A2B"/>
+    <rect x="-8" y="25" width="132" height="31" rx="8" fill="#C58A2B"/>
+    <path d="M58 27C31 28 17 15 22 4c5-11 27-1 36 23ZM58 27c27 1 41-12 36-23-5-11-27-1-36 23Z" fill="#183A46"/>
+  </g>
+  <path d="M1017 67c47 27 85 68 110 117" fill="none" stroke="#C58A2B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1014 84c39 25 70 59 92 101" fill="none" stroke="#183A46" stroke-width="3" stroke-linecap="round"/>
+  <path d="M455 847c159-34 337-39 504-10" fill="none" stroke="#C58A2B" stroke-width="3" stroke-linecap="round" opacity=".65"/>
+</svg>

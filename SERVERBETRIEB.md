@@ -112,7 +112,7 @@ sudo grabenplaner-backup
 sudo grabenplaner-test
 sudo grabenplaner-monitor
 sudo grabenplaner-stop
-sudo grabenplaner-update --package /pfad/neues-paket.zip --sha256 '<SHA256>'
+sudo grabenplaner-update --package /pfad/neues-paket.zip --sha256 '<SHA256>' --health-timeout 1500
 sudo grabenplaner-uninstall --yes
 ```
 
@@ -123,6 +123,7 @@ sudo grabenplaner-uninstall --yes
 - `grabenplaner-monitor` führt dieselbe freigegebene Betriebsprüfung für den systemd-Timer aus und veröffentlicht nur fest definierte Prüfergebnisse ohne URLs, Pfade oder Antwortinhalte.
 - `grabenplaner-stop` beendet die Anwendung kontrolliert und prüft, dass der interne Listener geschlossen ist.
 - `grabenplaner-update` lädt nichts selbst herunter. Es akzeptiert nur ein lokales Linux-Serverpaket samt SHA-256, sichert vor dem Austausch und rollt bei fehlgeschlagener Bereitschaftsprüfung automatisch zurück.
+- Der Updater verwendet dauerhaft 1500 Sekunden als Standard und Obergrenze für die Bereitschaftsprüfung. Das betrifft nicht die getrennten SSH-Verbindungs- und Keepalive-Grenzen.
 - `grabenplaner-uninstall --yes` entfernt App-Code, eigene systemd-Units und Befehlslinks. Daten, Schlüsselkonfiguration, Logs und Backups bleiben erhalten; Caddy selbst wird nicht deinstalliert und eine zuvor gesicherte, gültige Konfiguration wird wiederhergestellt.
 
 `grabenplaner-monitor.timer` startet die Prüfung alle fünf Minuten. Ausschließlich drei aufeinanderfolgende Fehler des internen Live-Endpunkts dürfen `grabenplaner.service` einmalig neu starten; zwischen zwei solchen Versuchen liegen mindestens 30 Minuten. Fehler von Ready, HTTPS, Sicherungen, Offsite-Ziel, Speicherplatz oder Virenscanner erzeugen nur einen Wartungsalarm und niemals einen automatischen Neustart. Der Monitorstatus ist kein Bestandteil des Ready-Endpunkts und kann deshalb keine Rückkopplung erzeugen.
@@ -502,6 +503,8 @@ GRABENPLANER_EMAIL_ALLOWED_EVENTS=
 Solange `GRABENPLANER_EMAIL_DISPATCH_ENABLED=0` oder die Ereignisliste leer ist, kann keine Transaktionsmail versendet oder eingereiht werden. Grabenplaner richtet kein eingehendes Postfach und keine Antwortadresse ein. Die konkreten Ereignisse, Empfängerregeln und Inhalte werden separat freigegeben.
 
 Filialbestellungen verwenden keinen durch die Filialleitung frei wählbaren Absender. Die Anwendung leitet ihn ausschließlich aus dem aktiven Filialkonto ab, zum Beispiel `fil18-noreply@grabenplaner.eu`. Die Versanddomain `grabenplaner.eu` muss im gewählten Provider verifiziert sein. Für diesen Vorgang ist zusätzlich `GRABENPLANER_EMAIL_SENDER_APPROVED=1`, `GRABENPLANER_EMAIL_DISPATCH_ENABLED=1` und die eng begrenzte Positivliste `GRABENPLANER_EMAIL_ALLOWED_EVENTS=branch_order` erforderlich. Zieladresse, Antwortadresse und Vorlage bleiben je Ziel durch die berechtigte Filialleitung konfigurierbar.
+
+Das Zurücksetzen eines persönlichen Portalpassworts versendet einen einmalig verwendbaren, 30 Minuten gültigen HTTPS-Link ausschließlich an die aktuell bestätigte private E-Mail-Adresse. Dieses Ereignis wird getrennt als `password_reset` freigegeben. Sollen Filialbestellungen und Passwort-Reset über denselben Versandweg laufen, lautet die Positivliste `GRABENPLANER_EMAIL_ALLOWED_EVENTS=branch_order,password_reset`. Eine leere Liste oder eine Liste ohne `password_reset` lässt die öffentliche Reset-Anfrage aus Datenschutzgründen weiterhin generisch antworten, versendet aber keine Reset-Mail.
 
 E-Mail kann über einen vorhandenen HTTPS-Benachrichtigungsdienst angebunden werden:
 

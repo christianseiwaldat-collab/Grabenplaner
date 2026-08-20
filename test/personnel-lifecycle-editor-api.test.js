@@ -335,7 +335,7 @@ test("O8-Katalog verlangt persönliche zentrale Rechte und filtert Quelltypen", 
 });
 
 test("alle sechs O8-Rechte sind katalogisiert; nur developer erhält sie automatisch", async () => {
-  const result = await request("/api/portal/v1/roles");
+  const result = await request("/api/portal/v1/roles", { auth: sessions["O8-DEV-ROLE"] });
   assert.equal(result.response.status, 200, result.text);
   const entries = (result.payload?.catalog || []).filter(({ id }) => (
     String(id).startsWith("personnel:lifecycle:editor:")

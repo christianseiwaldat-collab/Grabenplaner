@@ -115,12 +115,12 @@ function canvasFixture() {
 
 test("verwendet ausschlie\u00dflich versionierte, gleichurspr\u00fcngliche PDF.js-v6-Pfade", () => {
   assert.deepEqual(DEFAULT_ASSET_PATHS, {
-    modulePath: "/vendor/pdfjs-v6.1.200/build/pdf.min.mjs",
-    workerPath: "/vendor/pdfjs-v6.1.200/build/pdf.worker.min.mjs",
-    cMapUrl: "/vendor/pdfjs-v6.1.200/cmaps/",
-    standardFontDataUrl: "/vendor/pdfjs-v6.1.200/standard_fonts/",
-    wasmUrl: "/vendor/pdfjs-v6.1.200/wasm/",
-    iccUrl: "/vendor/pdfjs-v6.1.200/iccs/",
+    modulePath: "/vendor/pdfjs-v6.2.108/build/pdf.min.mjs",
+    workerPath: "/vendor/pdfjs-v6.2.108/build/pdf.worker.min.mjs",
+    cMapUrl: "/vendor/pdfjs-v6.2.108/cmaps/",
+    standardFontDataUrl: "/vendor/pdfjs-v6.2.108/standard_fonts/",
+    wasmUrl: "/vendor/pdfjs-v6.2.108/wasm/",
+    iccUrl: "/vendor/pdfjs-v6.2.108/iccs/",
   });
   assert.ok(Object.values(DEFAULT_ASSET_PATHS).every((value) => value.startsWith("/") && !value.startsWith("//")));
   assert.throws(() => createAmuPdfClient({ paths: { modulePath: "https://cdn.invalid/pdf.mjs" }, pdfjs: {} }), /gleichurspr/);

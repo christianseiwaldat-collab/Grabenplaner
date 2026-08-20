@@ -23,6 +23,7 @@ test("v0.71 Block 7 UI: Filialverwaltung fasst Teams, Dienst- und Urlaubsplanung
   const navigation = between(html, '<section class="nav-module" id="filialManagementNav"', '<section class="nav-module hidden" id="personnelAdministrationNav"');
   assert.match(navigation, /aria-label="Filialverwaltung"/);
   assert.match(navigation, /id="filialManagementToggle"[^>]*data-nav-toggle="filialManagement"[^>]*aria-controls="filialManagementNavChildren"[^>]*aria-expanded="true"/);
+  assert.match(navigation, /<button(?=[^>]*id="filialDashboardNavButton")(?=[^>]*data-view="filialAdministration")[^>]*>/);
   assert.match(navigation, /id="filialManagementNavChildren"/);
   assert.match(navigation, /<button[^>]*data-view="personnel"[^>]*id="filialTeamsNavButton"/);
   assert.match(navigation, /data-nav-toggle="planning"[^>]*aria-controls="planningNavChildren"/);
@@ -34,6 +35,11 @@ test("v0.71 Block 7 UI: Filialverwaltung fasst Teams, Dienst- und Urlaubsplanung
   assert.match(app, /setNavigationCurrent\(elements\.filialTeamsNavButton, state\.currentView === "personnel"\)/);
   assert.match(app, /setNavigationCurrent\(elements\.planningNavButton, state\.currentView === "planning"\)/);
   assert.match(app, /setNavigationCurrent\(elements\.vacationsNavButton, state\.currentView === "vacations"\)/);
+  const dashboard = between(html, '<section id="filialAdministrationView"', '<section id="planningView"');
+  assert.match(dashboard, /Filialverwaltung im/);
+  assert.match(dashboard, /id="filialDashboardGrid"/);
+  assert.match(app, /function renderFilialDashboard\(\)[\s\S]*data-filial-dashboard-view/);
+  assert.match(app, /filialDashboardGrid\?\.addEventListener\("click"[\s\S]*setView\(button\.dataset\.filialDashboardView\)/);
 });
 
 test("v0.71 Block 7 UI: alle Navigationsgruppen verwenden dieselbe Toggle-Map", () => {
@@ -55,7 +61,7 @@ test("v0.71 Block 7 UI: bestehende Views und View-Deep-Links bleiben kompatibel"
   const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
   assert.match(requestedView, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(requestedView, /parameters\.get\("view"\)/);
-  assert.match(requestedView, /\["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"\]\.includes\(requestedView\)/);
+  assert.match(requestedView, /\["filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"\]\.includes\(requestedView\)/);
   assert.match(requestedView, /setView\(requestedView\)/);
 });
 
@@ -108,6 +114,8 @@ test("v0.71 Block 7 UI: globale Dienstplanung behält Standort und kennt filialf
 
 test("v0.71 Block 7 UI: Navigation und zentrale Urlaubstabelle reagieren auf kleinere Ansichten", () => {
   assert.match(styles, /\.nav-module \{ display:grid; min-width:0; \}/);
+  assert.match(styles, /\.nav-item\.nav-module-route \{ display:grid; grid-template-columns:14px 22px minmax\(0,1fr\) auto/);
+  assert.match(styles, /\.nav-branch \{[^}]*grid-template-columns: 14px minmax\(0,1fr\)/);
   assert.match(styles, /\.nav-module-children \{[^}]*border-left:/);
   assert.match(styles, /\.main-nav \{[^}]*overflow-x:clip;[^}]*overflow-y:\s*auto;/);
   assert.match(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.sidebar \{[^}]*position:fixed;[^}]*transform:translateX\(-105%\);[^}]*\}[\s\S]*?\.main-nav \{[^}]*display:grid;[^}]*overflow-x:clip;[^}]*overflow-y:auto;/);

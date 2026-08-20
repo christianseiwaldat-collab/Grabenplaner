@@ -91,6 +91,7 @@ function resetFixture() {
     db.prepare(`DELETE FROM request_blackouts WHERE location_id IN (?, ?)`).run(LOCATION, OTHER_LOCATION);
     db.prepare(`DELETE FROM week_options WHERE employee_number LIKE '${PREFIX}%'`).run();
     db.prepare(`DELETE FROM shifts WHERE employee_number LIKE '${PREFIX}%'`).run();
+    db.prepare(`DELETE FROM employee_location_lendings WHERE employee_number LIKE '${PREFIX}%'`).run();
     db.prepare(`DELETE FROM employees WHERE personnel_number LIKE '${PREFIX}%'`).run();
     db.prepare("DELETE FROM departments WHERE location_id IN (?, ?)").run(LOCATION, OTHER_LOCATION);
     db.prepare("DELETE FROM locations WHERE id IN (?, ?)").run(LOCATION, OTHER_LOCATION);
@@ -221,6 +222,87 @@ test("v0.71 Block 7: Antragssperre gilt auch für Direktanlage und fehlgeschlage
     .get(`${PREFIX}target`).count, 0);
 });
 
+test("v0.92.6: Antragssperren blockieren neue direkte Urlaub- und ZA-Einträge, bestehende bleiben erhalten", async () => {
+  const admin = createSession(`${PREFIX}hr`, "admin");
+  db.prepare(`INSERT INTO week_options
+    (employee_number, group_id, week_start, date_from, date_to, option_type, note, all_day)
+    VALUES (?, 'v0926-approved-before-blackout', ?, ?, ?, 'vacation', 'Bereits genehmigt', 1)`)
+    .run(`${PREFIX}support`, DATE, DATE, DATE);
+  db.prepare(`INSERT INTO request_blackouts
+    (location_id, date_from, date_to, block_vacation, block_time_off, reason, active, created_by)
+    VALUES (?, ?, ?, 1, 1, 'Inventur und Mindestbesetzung', 1, ?)`)
+    .run(LOCATION, DATE, DATE, `${PREFIX}hr`);
+
+  for (const optionType of ["vacation", "time_off"]) {
+    const blocked = await request("/api/week-options", {
+      method: "POST",
+      auth: admin,
+      body: {
+        employeeNumber: `${PREFIX}target`,
+        weekStart: DATE,
+        dateFrom: DATE,
+        dateTo: DATE,
+        optionType,
+        allDay: true,
+        note: "Darf nicht angelegt werden",
+      },
+    });
+    assert.equal(blocked.response.status, 409, blocked.text);
+    assert.equal(blocked.payload.code, "REQUEST_BLACKOUT");
+    assert.match(blocked.payload.error, optionType === "vacation" ? /Urlaub ist/ : /Zeitausgleich ist/);
+  }
+
+  const existing = db.prepare("SELECT option_type, note FROM week_options WHERE group_id = ?")
+    .get("v0926-approved-before-blackout");
+  assert.equal(existing.option_type, "vacation");
+  assert.equal(existing.note, "Bereits genehmigt");
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM week_options WHERE employee_number = ?")
+    .get(`${PREFIX}target`).count, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM week_options WHERE employee_number = ?")
+    .get(`${PREFIX}support`).count, 1);
+});
+
+test("v0.92.6: direkte Dienstplan-Einträge melden eine unterschrittene Mindestbesetzung konkret", async () => {
+  const admin = createSession(`${PREFIX}hr`, "admin");
+  for (const [optionType, expectedCode] of [
+    ["vacation", "VACATION_STAFFING_INSUFFICIENT"],
+    ["time_off", "TIME_OFF_STAFFING_INSUFFICIENT"],
+  ]) {
+    const blocked = await request("/api/week-options", {
+      method: "POST",
+      auth: admin,
+      body: {
+        employeeNumber: `${PREFIX}target`,
+        weekStart: DATE,
+        dateFrom: DATE,
+        dateTo: DATE,
+        optionType,
+        allDay: true,
+      },
+    });
+    assert.equal(blocked.response.status, 409, blocked.text);
+    assert.equal(blocked.payload.code, expectedCode);
+    assert.match(blocked.payload.error, /Mindestbesetzung nicht gesichert/);
+    assert.match(blocked.payload.error, /1 von 2/);
+  }
+
+  addEmployee("second-support");
+  const allowed = await request("/api/week-options", {
+    method: "POST",
+    auth: admin,
+    body: {
+      employeeNumber: `${PREFIX}target`,
+      weekStart: DATE,
+      dateFrom: DATE,
+      dateTo: DATE,
+      optionType: "time_off",
+      allDay: true,
+      note: "Kapazität reicht aus",
+    },
+  });
+  assert.equal(allowed.response.status, 201, allowed.text);
+});
+
 test("v0.71 Block 7: Abteilungsminimum und bestätigte filialfremde Ersatzschicht werden berücksichtigt", async () => {
   assert.equal(hasColumn("shifts", "location_id"), true, "Block 7 benötigt shifts.location_id für belastbare Ersatzkräfte");
   const hr = createSession(`${PREFIX}hr`, "hr");
@@ -237,6 +319,14 @@ test("v0.71 Block 7: Abteilungsminimum und bestätigte filialfremde Ersatzschich
   const foreign = addEmployee("foreign", {
     locationId: OTHER_LOCATION, department: otherDepartmentId, costCenterId: "cc-v071-vac-72",
   });
+  db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, note,
+      status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES ('v071-vacation-replacement', ?, ?, ?, ?, ?, ?, 1, '',
+      'active', 1, 'test', CURRENT_TIMESTAMP, 'test', CURRENT_TIMESTAMP)
+  `).run(foreign, OTHER_LOCATION, LOCATION, departmentId, DATE, DATE);
   const insertShift = db.prepare(`INSERT INTO shifts
     (employee_number, location_id, department_id, shift_date, start_time, end_time)
     VALUES (?, ?, ?, ?, '09:00', '18:00')`);

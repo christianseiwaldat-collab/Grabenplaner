@@ -157,7 +157,7 @@ test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () =>
 test("Portal: mobiles Scroll-Resize lässt AUM als Unterbereich von Mehr geöffnet", () => {
   const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
 
-  assert.match(source, /const mobileMoreSecondaryTabs = new Set\(\["timeOff", "vacation", "amu", "loan", "settings"\]\)/);
+  assert.match(source, /const mobileMoreSecondaryTabs = new Set\(\["timeOff", "vacation", "amu", "loan", "settings"\]\)[\s\S]*?mobileMoreSecondaryTabs\.add\("branchOrders"\)[\s\S]*?mobileMoreSecondaryTabs\.add\("branchVacation"\)/);
   assert.match(source, /const secondaryViaMore = modules\.includes\("more"\) && mobileMoreSecondaryTabs\.has\(portalState\.activeTab\)/);
   assert.match(source, /activeButton\?\.classList\.contains\("hidden"\) && modules\.length && !secondaryViaMore/);
   assert.match(source, /representedByMore[\s\S]*?button\.dataset\.tab === "leadershipMore"/);

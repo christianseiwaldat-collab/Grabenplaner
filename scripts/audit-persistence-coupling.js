@@ -139,6 +139,9 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/organization-personnel.js",
   "lib/persistence/repositories/personal-notification-contacts.js",
   "lib/persistence/repositories/personnel-lifecycle.js",
+  "lib/persistence/repositories/personnel-learning.js",
+  "lib/persistence/repositories/portal-birthday-presentations.js",
+  "lib/persistence/repositories/staff-assignment-requests.js",
   "lib/persistence/repositories/planning-settings.js",
   "lib/persistence/repositories/portal-access.js",
   "lib/persistence/repositories/runtime-recovery.js",
@@ -165,6 +168,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/branch-orders.js",
   "lib/persistence/sqlite/operations/application-schema.js",
   "lib/persistence/sqlite/operations/database-import.js",
+  "lib/persistence/sqlite/operations/employee-location-lendings.js",
   "lib/persistence/sqlite/operations/feature-compatibility-migrations.js",
   "lib/persistence/sqlite/operations/historical-compatibility-migrations.js",
   "lib/persistence/sqlite/operations/maintenance.js",
@@ -174,6 +178,13 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/personnel-lifecycle-offboarding-schema.js",
   "lib/persistence/sqlite/operations/personnel-lifecycle-onboarding-schema.js",
   "lib/persistence/sqlite/operations/personnel-lifecycle-schema.js",
+  "lib/persistence/sqlite/operations/personnel-learning-competency-schema.js",
+  "lib/persistence/sqlite/operations/personnel-learning-assignment-schema.js",
+  "lib/persistence/sqlite/operations/personnel-learning-progress-schema.js",
+  "lib/persistence/sqlite/operations/personnel-learning-schema.js",
+  "lib/persistence/sqlite/operations/portal-birthday-presentation-claim-schema.js",
+  "lib/persistence/sqlite/operations/portal-birthday-presentation-schema.js",
+  "lib/persistence/sqlite/operations/staff-assignment-request-schema.js",
   "lib/persistence/sqlite/operations/personnel-workflow-instance-schema.js",
   "lib/persistence/sqlite/operations/personnel-workflow-schema.js",
   "lib/persistence/sqlite/operations/protected-record-migrations.js",
@@ -184,6 +195,9 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/organization-personnel-catalog.js",
   "lib/persistence/sqlite/personal-notification-contacts-catalog.js",
   "lib/persistence/sqlite/personnel-lifecycle-catalog.js",
+  "lib/persistence/sqlite/personnel-learning-catalog.js",
+  "lib/persistence/sqlite/portal-birthday-presentations.js",
+  "lib/persistence/sqlite/staff-assignment-request-catalog.js",
   "lib/persistence/sqlite/planning-settings-catalog.js",
   "lib/persistence/sqlite/portal-access-catalog.js",
   "lib/persistence/sqlite/provider.js",
@@ -207,6 +221,9 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/organization-personnel.js",
   "lib/persistence/statements/personal-notification-contacts.js",
   "lib/persistence/statements/personnel-lifecycle.js",
+  "lib/persistence/statements/personnel-learning.js",
+  "lib/persistence/statements/portal-birthday-presentations.js",
+  "lib/persistence/statements/staff-assignment-requests.js",
   "lib/persistence/statements/planning-settings.js",
   "lib/persistence/statements/portal-access.js",
   "lib/persistence/statements/runtime-recovery.js",
@@ -258,6 +275,24 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/personnel-workflow-lifecycle-onboarding-schema.test.js",
   "test/personnel-lifecycle-data-foundation.test.js",
   "test/personnel-lifecycle-scoped-rights-persistence.test.js",
+  "test/personnel-learning-foundation.test.js",
+  "test/personnel-learning-competency-foundation.test.js",
+  "test/personnel-learning-assignment-foundation.test.js",
+  "test/personnel-learning-catalog-api.test.js",
+  "test/personnel-learning-catalog-persistence.test.js",
+  "test/personnel-learning-rights-hierarchy.test.js",
+  "test/portal-birthday-presentation-claim-api.test.js",
+  "test/portal-birthday-presentation-claim-startup-migration.test.js",
+  "test/portal-birthday-presentation-claim.test.js",
+  "test/portal-birthday-presentation-schema.test.js",
+  "test/portal-birthday-presentation-settings-api.test.js",
+  "test/portal-birthday-presentation-startup-migration.test.js",
+  "test/portal-birthday-presentations-persistence.test.js",
+  "test/portal-birthday-theme-api.test.js",
+  "test/staff-assignment-request-foundation.test.js",
+  "test/staff-assignment-request-startup-migration.test.js",
+  "test/cross-location-schedule-rights-api.test.js",
+  "test/cross-location-schedule-view-api.test.js",
   "test/personnel-document-history-persistence.test.js",
   "test/personnel-profile-overview-api.test.js",
   "test/personnel-profile-scoped-rights-persistence.test.js",
@@ -276,6 +311,13 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/v087-wifi-automation-persistence.test.js",
   "test/v088-personal-email-settings.test.js",
   "test/v091-branch-orders.test.js",
+  "test/v092-branch-order-cleanup-cli.test.js",
+  "test/v0921-staff-assignment-absences.test.js",
+  "test/v0921-staff-assignments.test.js",
+  "test/v0925-mobile-location-display.test.js",
+  "test/v0925-password-reset-backend.test.js",
+  "test/v0925-sliding-portal-session.test.js",
+  "test/v0925-xoffi-time-import.test.js",
 ]);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_TEST_FILES);
 const PHASE_3_SQLITE_DRIVER_FILES = Object.freeze([
@@ -321,10 +363,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1044;
-const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 24;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1020;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 947;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1117;
+const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 33;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1084;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1011;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -448,8 +490,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 938;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 106;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1006;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 111;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -606,6 +648,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
   Object.freeze({
     id: "development-sqlite-tools",
     files: Object.freeze([
+      "scripts/cleanup-branch-order-test-data.js",
       "scripts/codespaces-runner.js",
       "scripts/set-developer.js",
     ]),
@@ -698,6 +741,21 @@ const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
     risk: "high",
     transitionException: "existing SQLite check IDs remain truthful; missing provider evidence must never be reported as green",
     laterPhase: "3-6",
+  }),
+  Object.freeze({
+    id: "function-search-projection",
+    files: Object.freeze([
+      "public/function-search-catalog.js",
+      "public/function-search-navigation.js",
+      "public/function-search-ui.js",
+      "public/function-search.js",
+    ]),
+    scope: "product-runtime",
+    owner: "navigation-and-access-projection",
+    targetLayer: "provider-neutral read-only navigation catalog and permission-gated client search",
+    risk: "medium",
+    transitionException: "UI target descriptors are navigation metadata only and must not activate a persistence provider or database operation",
+    laterPhase: "not-applicable",
   }),
   Object.freeze({
     id: "linux-server-orchestration",
@@ -946,6 +1004,7 @@ const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   ...BASELINE_DIRECT_PRODUCTION_DRIVER_FILES.filter((file) => file !== "server.js"),
   ...PHASE_3_SQLITE_DRIVER_FILES,
   ...MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES,
+  "scripts/cleanup-branch-order-test-data.js",
 ]);
 const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
   ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![
@@ -953,6 +1012,10 @@ const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
     "test/work-rule-store.test.js",
   ].includes(file)),
   "test/personnel-workflow-lifecycle-onboarding-schema.test.js",
+  "test/v092-branch-order-cleanup-cli.test.js",
+]);
+const SQLITE_MAINTENANCE_CLI_FILES = new Set([
+  "scripts/cleanup-branch-order-test-data.js",
 ]);
 const SIGNALS = Object.freeze([
   { id: "directNodeSqliteImport", operation: "driver import", sqliteFeature: "node:sqlite", directDiscovery: true },
@@ -3811,6 +3874,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const legacyProductionRecords = productionDirect
     .filter((record) => (
       !PHASE_3_SQLITE_PROVIDER_FILE_SET.has(record.file)
+      && !SQLITE_MAINTENANCE_CLI_FILES.has(record.file)
       && !PHASE_4_PERSISTENCE_FILE_SET.has(record.file)
       && !PHASE_5_POSTGRESQL_FILE_SET.has(record.file)
       && !SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET.has(record.file)

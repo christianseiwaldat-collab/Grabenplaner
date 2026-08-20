@@ -265,6 +265,14 @@ test("v0.87 Block 2: Filialkostenstelle leitet Standort ab und lässt Einsatzort
 
   const shiftLocationId = conflictingLocationId;
   db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, note,
+      status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES ('v087-b2-branch-assignment', ?, ?, ?, NULL, '2035-03-12', '2035-03-12',
+      1, '', 'active', 1, 'v087-test', CURRENT_TIMESTAMP, 'v087-test', CURRENT_TIMESTAMP)
+  `).run("v087-b2-branch", locationId, shiftLocationId);
+  db.prepare(`
     INSERT INTO shifts
       (employee_number, shift_date, start_time, end_time, location_id)
     VALUES (?, '2035-03-12', '09:00', '17:00', ?)

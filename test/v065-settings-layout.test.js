@@ -42,7 +42,7 @@ test("v0.65: Einstellungen sind fachlich in Urlaub, Zeiterfassung und Personal g
 test("Block 7: Leihe, Branding und PDF sind geschlossene Bereiche der Grundeinstellungen", () => {
   const general = section("generalSettings");
   const viewBehavior = general.match(
-    /<div class="settings-card" id="viewBehaviorSettingsCard">[\s\S]*?<\/div>\s*<div class="settings-card past-week-card">/,
+    /<div class="settings-card" id="viewBehaviorSettingsCard">[\s\S]*?<\/div>\s*<details/,
   )?.[0] || "";
 
   assert.match(viewBehavior, /id="toastDuration"/);

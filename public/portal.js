@@ -24,6 +24,20 @@ const portalState = {
   processTaskRequestedRunId: "",
   processTaskRequestedStepId: "",
   processTaskFlash: "",
+  personnelLearningDashboard: null,
+  personnelLearningDashboardLoading: false,
+  personnelLearningDashboardAvailable: false,
+  personnelLearningDashboardEmployeeNumber: "",
+  personnelLearningProgressAssignment: null,
+  personnelLearningProgressMutationPending: false,
+  birthdayPresentationClaimGeneration: 0,
+  birthdayPresentationClaimActor: "",
+  birthdayPresentationReturnFocus: null,
+  birthdayPresentationThemeGeneration: 0,
+  birthdayPresentationThemeActor: "",
+  birthdayPresentationThemeRefreshTimer: null,
+  birthdayPresentationThemeRefreshPromise: null,
+  birthdayPresentationThemeRequestController: null,
   amuReports: [],
   amuPolicy: null,
   sicknessAumAllowance: null,
@@ -56,6 +70,7 @@ const portalState = {
   mobileLayout: null,
   uiPreferences: null,
   mobileNavigationDraft: null,
+  mobileHomeDraft: null,
   mobileLeadership: false,
   leadershipOverview: null,
   leadershipLocations: [],
@@ -83,11 +98,25 @@ const portalState = {
   activeLoanConfirmation: null,
   loanConfirmationLoading: false,
   branchOrderCatalog: null,
+  branchOrderDraft: null,
+  branchOrderDraftPending: null,
+  branchOrderDraftRevision: 0,
+  branchOrderDraftDirty: false,
+  branchOrderDraftLoading: false,
+  branchOrderDraftSaving: false,
+  branchOrderSubmitting: false,
+  branchOrderDraftEmployeeNumber: "",
+  branchOrderSelection: new Map(),
+  branchOrderReviewVisible: false,
+  branchOrderAutosaveTimer: null,
   branchOrderPortalHistory: [],
   branchOrderSettings: null,
   branchOrderSettingsDraft: null,
   branchOrderHistory: [],
   branchOrderSettingsLoading: false,
+  branchPortalDisplaySettings: null,
+  branchPortalDisplaySettingsLoading: false,
+  scheduleData: null,
   branchVacationWeekStart: mondayOf(new Date()),
   branchVacationLoading: false,
 };
@@ -168,24 +197,25 @@ applyDeviceMode();
 window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
-  "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
-  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
+  "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "forgotPasswordButton", "passwordResetRequestDialog", "passwordResetRequestForm", "passwordResetEmail", "passwordResetRequestMessage", "passwordResetRequestSubmit", "passwordResetConfirmDialog", "passwordResetConfirmForm", "passwordResetToken", "passwordResetNewPassword", "passwordResetRepeatPassword", "passwordResetConfirmMessage", "passwordResetConfirmSubmit", "portalApp", "portalLogo", "portalAccessModeLabel",
+  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "portalLogoutStatus", "notificationsButton", "notificationBadge", "mobileHomeTab", "mobileHomeView", "mobileHomeTiles", "mobileSettingsHome", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
   "loanOpenOverview", "loanOverviewDescription", "loanOverviewSearchField", "loanOverviewSearch", "loanOverviewTableHeader", "loanOverviewTableBody", "loanPersonalOverview",
   "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoPolicy", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
-  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoPolicy", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
+  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnWitnessHint", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoPolicy", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
-  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList",
+  "branchOrdersTab", "branchOrderSettingsTab", "branchOrdersView", "branchOrderRefresh", "branchOrderForm", "branchOrderEmployee", "branchOrderWeek", "branchOrderGroups", "branchOrderMessage", "branchOrderSubmit", "branchOrderSaveDraft", "branchOrderDraftPanel", "branchOrderDraftTitle", "branchOrderDraftDetail", "branchOrderContinueDraft", "branchOrderDiscardDraft", "branchOrderPortalHistoryRefresh", "branchOrderPortalHistoryList", "branchOrderReview", "branchOrderReviewList", "branchOrderBackToEdit", "branchMobileActionBar", "branchMobileBack", "branchMobileReview", "branchMobileSubmit", "branchMobileSave",
   "branchVacationTab", "branchVacationView", "branchVacationPrevious", "branchVacationCurrent", "branchVacationNext", "branchVacationWeek", "branchVacationList", "branchVacationMessage",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
+  "personnelLearningDashboardTab", "personnelLearningDashboardView", "refreshPortalLearningDashboard", "portalLearningDashboardScope", "portalLearningDashboardMessage", "portalLearningDashboardSummary", "portalLearningDashboardAssignments", "portalLearningDashboardEmployee", "portalLearningSkillTree", "portalLearningProgressDialog", "portalLearningProgressForm", "portalLearningProgressTitle", "portalLearningProgressAssignmentId", "portalLearningProgressAssignmentReceipt", "portalLearningProgressExpectedReceipt", "portalLearningProgressSummary", "portalLearningProgressSteps", "portalLearningProgressAssessment", "portalLearningProgressFinalized", "portalLearningProgressResult", "portalLearningProgressAssessmentNote", "portalLearningProgressCorrectionReasonField", "portalLearningProgressCorrectionReason", "portalLearningProgressMessage", "savePortalLearningProgress",
   "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
   "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
   "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
   "privacyRequestsCard", "privacyRequestsNotice", "privacyRequestForm", "privacyRequestType", "privacyRequestSubmit", "privacyRequestMessage", "privacyRequestsRefresh", "privacyExportHint", "privacyRequestList",
-  "mobileNavigationSettingsCard", "mobileNavigationSettingsList", "mobileNavigationSettingsMessage", "resetMobileNavigationButton", "saveMobileNavigationButton",
+  "mobileHomeSettingsCard", "mobileHomeSettingsList", "mobileHomeSettingsMessage", "resetMobileHomeButton", "saveMobileHomeButton", "mobileNavigationSettingsCard", "mobileNavigationSettingsList", "mobileNavigationSettingsMessage", "resetMobileNavigationButton", "saveMobileNavigationButton",
   "mobileAppearanceSettingsCard", "mobileAppearanceSettingsMessage", "saveMobileAppearanceButton",
   "vacationAccountCard", "vacationAccountYear", "vacationAccountSummary", "vacationAccountNotice",
   "timeRecordStatementsPanel", "timeRecordStatementList",
@@ -205,6 +235,7 @@ const el = Object.fromEntries([
   "timeOffChangeForm", "timeOffChangeTitle", "timeOffChangeOriginal", "timeOffChangeFields", "timeOffChangeFrom", "timeOffChangeTo",
   "timeOffChangeToField", "timeOffChangeTimes", "timeOffChangeStart", "timeOffChangeEnd", "timeOffChangeNote", "timeOffChangeMessage",
   "historyDetailDialog", "historyDetailTitle", "historyDetailSummary", "historyDecisionTimeline", "notificationsDialog", "notificationList",
+  "birthdayPresentationDialog", "birthdayPresentationGraphic", "birthdayPresentationClose", "birthdayPresentationConfirm",
   "markAllNotificationsRead", "sicknessCaseForm", "sicknessStartDate", "sicknessExpectedEnd", "sicknessEmployeeNote", "sicknessMessage", "sicknessSubmitButton", "sicknessCaseList", "sicknessAumAllowance",
   "sicknessAmuPanel", "sicknessAmuDocuments", "sicknessAmuCamera", "sicknessAmuUploadHint", "sicknessAmuOcrStatus", "sicknessAmuOcrStatusTitle", "sicknessAmuOcrStatusText", "sicknessAmuOcrConfirmField", "sicknessAmuOcrConfirmed",
   "amuReportForm", "amuSicknessCaseId", "amuIncapacityFrom", "amuIncapacityTo", "amuEmployeeNote", "amuDocuments",
@@ -213,7 +244,7 @@ const el = Object.fromEntries([
   "dateRangeDialog", "dateRangeForm", "dateRangeDialogTitle", "dateRangeStartText", "dateRangeEndText", "dateRangePreviousMonth", "dateRangeMonthLabel", "dateRangeNextMonth", "dateRangeCalendarGrid", "dateRangeOpenEnd", "dateRangeMessage", "dateRangeClose", "dateRangeCancel", "dateRangeApply",
   "sicknessRecoveryDialog", "sicknessRecoveryForm", "sicknessRecoveryTitle", "sicknessRecoveryCaseId", "sicknessRecoveryDate", "sicknessRecoveryMessage", "sicknessRecoveryClose", "sicknessRecoveryCancel", "sicknessRecoverySubmit",
   "emailSettingsCard", "emailSettingsSummary", "notificationPreferencesForm", "notificationTargetList", "notificationChannelSelection", "notificationPreferencesSaveButton", "notificationEarliestTime", "notificationQuietHoursBadge", "notificationQuietHoursHint", "emailSettingsMessage", "emailCategoryList",
-  "branchOrderSettingsCard", "branchOrderSettingsSummary", "branchOrderSettingsMessage", "branchOrderSettingsWorkspace", "refreshBranchOrderSettings", "saveBranchOrderSettings", "refreshBranchOrderHistory", "branchOrderHistoryList",
+  "branchOrderSettingsCard", "branchOrderSettingsSummary", "branchOrderSettingsMessage", "branchOrderSettingsWorkspace", "refreshBranchOrderSettings", "saveBranchOrderSettings", "refreshBranchOrderHistory", "branchOrderHistoryList", "branchPortalDisplaySettingsCard", "branchPortalDisplaySettingsSummary", "branchPortalDisplaySettingsForm", "branchPortalHideElapsedDays", "branchOrderAutosaveEnabled", "branchOrderAutosaveMinutes", "branchPortalDisplaySettingsMessage", "saveBranchPortalDisplaySettings",
 ].map((id) => [id, document.querySelector(`#${id}`)]));
 
 function mondayOf(value) {
@@ -374,6 +405,196 @@ async function api(url, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+const birthdayPresentationPaths = Object.freeze({
+  elegant: "/assets/birthday-presentations/elegant.svg",
+  farbenfroh: "/assets/birthday-presentations/farbenfroh.svg",
+  fotowelt: "/assets/birthday-presentations/fotowelt.svg",
+  technik: "/assets/birthday-presentations/technik.svg",
+  standard: "/assets/birthday-presentations/dezent.svg",
+});
+
+const birthdayPresentationThemeIds = Object.freeze({
+  standard: true,
+  elegant: true,
+  farbenfroh: true,
+  fotowelt: true,
+  technik: true,
+});
+const BIRTHDAY_PRESENTATION_THEME_REFRESH_MS = 5 * 60 * 1000;
+const BIRTHDAY_PRESENTATION_THEME_REQUEST_TIMEOUT_MS = 8000;
+
+function birthdayPresentationActor(user = portalUser()) {
+  if (!user || user.isEmployee !== true || isOrganizationAccount(user)) return "";
+  return String(user.employeeNumber || "").trim();
+}
+
+function neutralizeBirthdayPresentation({ restoreFocus = false } = {}) {
+  portalState.birthdayPresentationClaimGeneration += 1;
+  portalState.birthdayPresentationClaimActor = "";
+  const returnFocus = portalState.birthdayPresentationReturnFocus;
+  portalState.birthdayPresentationReturnFocus = null;
+  if (el.birthdayPresentationDialog?.open) el.birthdayPresentationDialog.close();
+  if (el.birthdayPresentationGraphic) el.birthdayPresentationGraphic.removeAttribute("src");
+  if (restoreFocus && returnFocus?.isConnected && typeof returnFocus.focus === "function") {
+    returnFocus.focus();
+  }
+}
+
+function validBirthdayPresentation(result) {
+  if (!result?.presentation || typeof result.presentation !== "object") return null;
+  const id = String(result.presentation.id || "");
+  const previewUrl = String(result.presentation.previewUrl || "");
+  if (!Object.hasOwn(birthdayPresentationPaths, id)) return null;
+  if (birthdayPresentationPaths[id] !== previewUrl) return null;
+  return { id, previewUrl };
+}
+
+function showBirthdayPresentation(presentation) {
+  if (!el.birthdayPresentationDialog || !el.birthdayPresentationGraphic || !presentation) return;
+  const generation = portalState.birthdayPresentationClaimGeneration;
+  portalState.birthdayPresentationReturnFocus = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+  el.birthdayPresentationGraphic.src = presentation.previewUrl;
+  el.birthdayPresentationDialog.showModal();
+  window.requestAnimationFrame(() => {
+    if (generation === portalState.birthdayPresentationClaimGeneration
+      && el.birthdayPresentationDialog?.open) {
+      el.birthdayPresentationConfirm?.focus();
+    }
+  });
+}
+
+function closeBirthdayPresentation() {
+  const returnFocus = portalState.birthdayPresentationReturnFocus;
+  portalState.birthdayPresentationReturnFocus = null;
+  if (el.birthdayPresentationDialog?.open) el.birthdayPresentationDialog.close();
+  if (el.birthdayPresentationGraphic) el.birthdayPresentationGraphic.removeAttribute("src");
+  if (returnFocus?.isConnected && typeof returnFocus.focus === "function") returnFocus.focus();
+}
+
+async function claimBirthdayPresentation() {
+  const actor = birthdayPresentationActor();
+  if (!actor) {
+    neutralizeBirthdayPresentation();
+    return;
+  }
+  if (portalState.birthdayPresentationClaimActor === actor) return;
+  neutralizeBirthdayPresentation();
+  portalState.birthdayPresentationClaimActor = actor;
+  const generation = portalState.birthdayPresentationClaimGeneration;
+  try {
+    const result = await api("/api/portal/v1/me/birthday-presentation/claim", {
+      method: "POST",
+      body: "{}",
+    });
+    if (generation !== portalState.birthdayPresentationClaimGeneration) return;
+    if (birthdayPresentationActor() !== actor) return;
+    const presentation = validBirthdayPresentation(result);
+    if (presentation) showBirthdayPresentation(presentation);
+    else if (!Object.hasOwn(result || {}, "presentation") || result.presentation !== null) {
+      neutralizeBirthdayPresentation();
+    }
+  } catch {
+    if (generation === portalState.birthdayPresentationClaimGeneration) neutralizeBirthdayPresentation();
+  }
+}
+
+function clearBirthdayPresentationThemeRefreshTimer() {
+  if (portalState.birthdayPresentationThemeRefreshTimer === null) return;
+  window.clearTimeout(portalState.birthdayPresentationThemeRefreshTimer);
+  portalState.birthdayPresentationThemeRefreshTimer = null;
+}
+
+function neutralizeBirthdayPresentationTheme() {
+  portalState.birthdayPresentationThemeGeneration += 1;
+  portalState.birthdayPresentationThemeActor = "";
+  portalState.birthdayPresentationThemeRefreshPromise = null;
+  portalState.birthdayPresentationThemeRequestController?.abort();
+  portalState.birthdayPresentationThemeRequestController = null;
+  clearBirthdayPresentationThemeRefreshTimer();
+  delete document.documentElement.dataset.portalBirthdayTheme;
+}
+
+function applyBirthdayPresentationTheme(result) {
+  const theme = result?.theme;
+  const id = theme && typeof theme === "object" && !Array.isArray(theme)
+    ? String(theme.id || "")
+    : "";
+  if (result && Object.hasOwn(result, "theme") && Object.hasOwn(birthdayPresentationThemeIds, id)) {
+    document.documentElement.dataset.portalBirthdayTheme = id;
+    return;
+  }
+  delete document.documentElement.dataset.portalBirthdayTheme;
+}
+
+function scheduleBirthdayPresentationThemeRefresh(actor, generation) {
+  clearBirthdayPresentationThemeRefreshTimer();
+  if (!actor
+    || actor !== portalState.birthdayPresentationThemeActor
+    || generation !== portalState.birthdayPresentationThemeGeneration) return;
+  portalState.birthdayPresentationThemeRefreshTimer = window.setTimeout(() => {
+    portalState.birthdayPresentationThemeRefreshTimer = null;
+    if (document.hidden) {
+      scheduleBirthdayPresentationThemeRefresh(actor, generation);
+      return;
+    }
+    refreshBirthdayPresentationTheme();
+  }, BIRTHDAY_PRESENTATION_THEME_REFRESH_MS);
+}
+
+async function refreshBirthdayPresentationTheme() {
+  const actor = birthdayPresentationActor();
+  if (!actor || portalUser()?.mustChangePassword === true) {
+    neutralizeBirthdayPresentationTheme();
+    return;
+  }
+  if (portalState.birthdayPresentationThemeActor !== actor) {
+    neutralizeBirthdayPresentationTheme();
+    portalState.birthdayPresentationThemeActor = actor;
+  }
+  if (portalState.birthdayPresentationThemeRefreshPromise) {
+    return portalState.birthdayPresentationThemeRefreshPromise;
+  }
+  clearBirthdayPresentationThemeRefreshTimer();
+  const generation = portalState.birthdayPresentationThemeGeneration;
+  const controller = new AbortController();
+  portalState.birthdayPresentationThemeRequestController = controller;
+  const requestTimeout = window.setTimeout(
+    () => controller.abort(),
+    BIRTHDAY_PRESENTATION_THEME_REQUEST_TIMEOUT_MS,
+  );
+  const request = (async () => {
+    try {
+      const result = await api("/api/portal/v1/me/birthday-presentation/theme", {
+        signal: controller.signal,
+      });
+      if (generation !== portalState.birthdayPresentationThemeGeneration) return;
+      if (birthdayPresentationActor() !== actor) return;
+      applyBirthdayPresentationTheme(result);
+    } catch {
+      if (generation === portalState.birthdayPresentationThemeGeneration
+        && birthdayPresentationActor() === actor) {
+        delete document.documentElement.dataset.portalBirthdayTheme;
+      }
+    } finally {
+      window.clearTimeout(requestTimeout);
+      if (generation === portalState.birthdayPresentationThemeGeneration
+        && portalState.birthdayPresentationThemeActor === actor) {
+        if (portalState.birthdayPresentationThemeRequestController === controller) {
+          portalState.birthdayPresentationThemeRequestController = null;
+        }
+        if (portalState.birthdayPresentationThemeRefreshPromise === request) {
+          portalState.birthdayPresentationThemeRefreshPromise = null;
+        }
+        scheduleBirthdayPresentationThemeRefresh(actor, generation);
+      }
+    }
+  })();
+  portalState.birthdayPresentationThemeRefreshPromise = request;
+  return request;
+}
+
 function message(node, text, error = false) {
   node.textContent = text;
   node.classList.toggle("hidden", !text);
@@ -442,14 +663,23 @@ function branchVacationCapabilityEnabled(user = portalUser()) {
 
 function branchOrderManagementEnabled(user = portalUser()) {
   return !isOrganizationAccount(user)
-    && ["hr", "admin", "it_admin", "developer"].includes(user?.role)
+    && ["hr", "admin", "developer"].includes(user?.role)
     && (user?.permissions || []).includes("branch_orders:manage");
+}
+
+function branchPortalDisplaySettingsEnabled(user = portalUser()) {
+  if (isOrganizationAccount(user) || user?.isEmployee === false || isMobileUi()) return false;
+  const allowed = (user?.permissions || []).includes("branch_portal:display:manage");
+  return allowed && ["department_manager", "manager", "hr", "admin", "developer"].includes(user?.role);
 }
 
 function applyPortalCapabilities() {
   const timeTrackingEnabled = timeTrackingCapabilityEnabled();
   el.timeTrackingTab?.classList.toggle("hidden", !timeTrackingEnabled);
-  el.wifiAutomationCard?.classList.toggle("hidden", !wifiTimeSuggestionsCapabilityEnabled());
+  el.wifiAutomationCard?.classList.toggle(
+    "hidden",
+    !wifiTimeSuggestionsCapabilityEnabled() || !mobileLocationDisplayAllows("time"),
+  );
   if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab(defaultPortalTab());
   const sicknessEnabled = portalState.status?.capabilities?.sicknessReports === true;
   document.querySelector('[data-tab="amu"]')?.classList.toggle("hidden", !sicknessEnabled);
@@ -508,6 +738,9 @@ function isLeadershipUser(user = portalUser()) {
 
 const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "loan", "settings"]);
 mobileMoreSecondaryTabs.add("processTasks");
+mobileMoreSecondaryTabs.add("branchOrders");
+mobileMoreSecondaryTabs.add("branchVacation");
+mobileMoreSecondaryTabs.add("learningDashboard");
 const mobileModuleCatalog = Object.freeze([
   { id: "time", tab: "timeTracking", label: "Zeit", description: "Zeiterfassung und Zeitkonto" },
   { id: "tasks", tab: "processTasks", label: "Aufgaben", description: "Offene persönliche Prozessschritte" },
@@ -517,11 +750,47 @@ const mobileModuleCatalog = Object.freeze([
   { id: "requests", tab: "history", label: "Anträge", description: "Status und Verlauf meiner Anträge" },
   { id: "loan", tab: "loan", label: "Leihe", description: "Ausgaben und Rücknahmen" },
   { id: "sickness", tab: "amu", label: "Krank & AUM", description: "Krankmeldung und Dokumente" },
+  { id: "learning", tab: "learningDashboard", label: "Schulungen", description: "Fortschritte und Fähigkeiten" },
   { id: "more", tab: "leadershipMore", label: "Mehr", description: "Alle weiteren Bereiche" },
 ]);
 const mobileModuleIds = new Set(mobileModuleCatalog.map((item) => item.id));
 const mobileModuleById = new Map(mobileModuleCatalog.map((item) => [item.id, item]));
 const mobileModuleByTab = new Map(mobileModuleCatalog.map((item) => [item.tab, item.id]));
+const mobileHomeTileCatalog = Object.freeze([
+  ...mobileModuleCatalog.filter((item) => item.id !== "more"),
+  { id: "branchOrders", tab: "branchOrders", label: "Filialbestellung", description: "Bestellung erfassen oder fortsetzen" },
+  { id: "branchVacation", tab: "branchVacation", label: "Urlaubsplanung", description: "Genehmigte Urlaubstage ansehen" },
+]);
+const mobileHomeTileById = new Map(mobileHomeTileCatalog.map((item) => [item.id, item]));
+const mobileHomeTileIds = Object.freeze(mobileHomeTileCatalog.map((item) => item.id));
+const mobileLocationDisplayManagedModuleIds = new Set([
+  "time", "tasks", "team", "approvals", "schedule", "requests", "loan", "sickness", "branchOrders", "branchVacation",
+]);
+const mobileLocationDisplayTabModules = Object.freeze({
+  timeTracking: "time",
+  processTasks: "tasks",
+  schedule: "schedule",
+  timeOff: "requests",
+  vacation: "requests",
+  history: "requests",
+  loan: "loan",
+  amu: "sickness",
+  branchOrders: "branchOrders",
+  branchVacation: "branchVacation",
+});
+const mobileHomeDefaultColors = Object.freeze({
+  time: [39, 110, 85],
+  tasks: [41, 107, 145],
+  team: [98, 84, 151],
+  approvals: [156, 104, 28],
+  schedule: [38, 112, 104],
+  requests: [128, 82, 108],
+  loan: [129, 91, 48],
+  sickness: [173, 75, 66],
+  learning: [55, 118, 93],
+  branchOrders: [42, 122, 99],
+  branchVacation: [76, 112, 167],
+});
 
 const mobileModuleAliases = {
   time: "time",
@@ -544,6 +813,9 @@ const mobileModuleAliases = {
   loans: "loan",
   sickness: "sickness",
   amu: "sickness",
+  learning: "learning",
+  learningDashboard: "learning",
+  training: "learning",
   more: "more",
 };
 
@@ -557,7 +829,16 @@ function normalizedMobileModules(value) {
   return [...new Set(normalized)].filter((id) => mobileModuleIds.has(id));
 }
 
+function mobileLocationDisplayAllows(moduleId, user = portalUser()) {
+  if (!isMobileUi() || isOrganizationAccount(user) || !mobileLocationDisplayManagedModuleIds.has(moduleId)) {
+    return true;
+  }
+  const allowedModules = portalState.uiPreferences?.mobilePortalLocationDisplay?.allowedModules;
+  return Array.isArray(allowedModules) && allowedModules.includes(moduleId);
+}
+
 function mobileModuleAllowed(module, permissions = portalUser()?.permissions || []) {
+  if (!mobileLocationDisplayAllows(module)) return false;
   if (module === "time") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (module === "tasks") return portalTabAllowed("processTasks");
   if (module === "team") return permissions.includes("time:read");
@@ -566,15 +847,23 @@ function mobileModuleAllowed(module, permissions = portalUser()?.permissions || 
   if (module === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
   if (module === "loan") return loanCapabilityEnabled();
   if (module === "sickness") return portalTabAllowed("amu");
+  if (module === "learning") return portalTabAllowed("learningDashboard");
   return module === "more";
 }
 
 function portalTabAllowed(tab, user = portalUser()) {
   const permissions = user?.permissions || [];
+  if (tab === "home") return isMobileUi();
   if (tab === "settings") return true;
+  const locationDisplayModule = mobileLocationDisplayTabModules[tab];
+  if (locationDisplayModule && !mobileLocationDisplayAllows(locationDisplayModule, user)) return false;
   if (tab === "schedule") return scheduleCapabilityEnabled(user);
   if (tab === "branchOrders") return branchOrderCapabilityEnabled(user);
   if (tab === "branchVacation") return branchVacationCapabilityEnabled(user);
+  if (tab === "learningDashboard") {
+    return portalState.personnelLearningDashboardAvailable === true
+      || permissions.includes("personnel_learning:location:dashboard");
+  }
   if (tab === "leadershipMore") return !isOrganizationAccount(user);
   if (tab === "timeTracking") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (tab === "timeOff") return permissions.includes("own_vacation:request");
@@ -598,6 +887,53 @@ function portalTabAllowed(tab, user = portalUser()) {
   if (tab === "leadershipTeam") return mobileModuleAllowed("team", permissions);
   if (tab === "leadershipApprovals") return mobileModuleAllowed("approvals", permissions);
   return false;
+}
+
+function mobileHomeTileAllowed(tile, user = portalUser()) {
+  if (!tile) return false;
+  if (tile.id === "branchOrders" || tile.id === "branchVacation") return portalTabAllowed(tile.tab, user);
+  return mobileModuleAllowed(tile.id, user?.permissions || []);
+}
+
+function availableMobileHomeTiles(user = portalUser()) {
+  return mobileHomeTileCatalog.filter((tile) => mobileHomeTileAllowed(tile, user));
+}
+
+function normalizedRgb(value, fallback) {
+  if (!Array.isArray(value) || value.length !== 3
+    || value.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+    return [...fallback];
+  }
+  return value.map(Number);
+}
+
+function defaultMobilePortalHome() {
+  return {
+    version: 1,
+    order: [...mobileHomeTileIds],
+    colors: Object.fromEntries(mobileHomeTileIds.map((id) => [id, [...mobileHomeDefaultColors[id]]])),
+  };
+}
+
+function normalizedMobilePortalHome(value) {
+  const fallback = defaultMobilePortalHome();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) return fallback;
+  const order = Array.isArray(value.order)
+    ? [...new Set(value.order.map(String))].filter((id) => mobileHomeTileById.has(id))
+    : [];
+  for (const id of mobileHomeTileIds) if (!order.includes(id)) order.push(id);
+  const submittedColors = value.colors && typeof value.colors === "object" && !Array.isArray(value.colors)
+    ? value.colors
+    : {};
+  const colors = Object.fromEntries(mobileHomeTileIds.map((id) => [
+    id,
+    normalizedRgb(submittedColors[id], mobileHomeDefaultColors[id]),
+  ]));
+  return { version: 1, order, colors };
+}
+
+function rgbToHex(rgb) {
+  return `#${rgb.map((channel) => Number(channel).toString(16).padStart(2, "0")).join("")}`;
 }
 
 function availablePersonalMobileModules() {
@@ -689,18 +1025,53 @@ function renderMobileMoreShortcuts(modules = effectiveMobileModules()) {
   });
 }
 
+function isBranchMobileAccount(user = portalUser()) {
+  return isMobileUi() && isOrganizationAccount(user) && user?.accountType === "branch";
+}
+
 function applyMobileLeadershipLayout() {
   const navigation = document.querySelector(".portal-tabs");
   if (!navigation) return;
+  const branchMobile = isBranchMobileAccount();
   const compactMobile = isMobileUi() && !isOrganizationAccount();
+  const mobilePortal = branchMobile || compactMobile;
   portalState.mobileLeadership = compactMobile;
+  document.body.classList.toggle("branch-mobile-account", branchMobile);
+  document.body.classList.toggle("portal-mobile-session", mobilePortal);
+  document.body.classList.toggle(
+    "branch-mobile-action-active",
+    branchMobile && portalState.activeTab === "branchOrders",
+  );
+  navigation.classList.toggle("branch-mobile-navigation", branchMobile);
   navigation.classList.toggle("mobile-personal", compactMobile);
   navigation.classList.toggle("mobile-leadership", compactMobile && isLeadershipUser());
-  el.portalSettingsShortcut?.classList.toggle("hidden", !compactMobile);
-  const regularTabs = ["settings", "schedule", "branchVacation", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu"];
+  navigation.classList.toggle("mobile-settings-hidden", mobilePortal && portalState.activeTab === "settings");
+  el.portalSettingsShortcut?.classList.toggle("hidden", !mobilePortal);
+  if (branchMobile) {
+    document.querySelectorAll("[data-tab]").forEach((button) => {
+      button.classList.add("hidden");
+      button.classList.add("mobile-navigation-hidden");
+    });
+    ["home", "schedule", "learningDashboard", "branchOrders", "loan", "branchVacation"]
+      .filter((tab) => portalTabAllowed(tab))
+      .forEach((tab, index) => {
+        const button = document.querySelector(`[data-tab="${tab}"]`);
+        button?.classList.remove("hidden");
+        button?.classList.remove("mobile-navigation-hidden");
+        if (button) button.style.order = String(index);
+      });
+    syncPortalTabButtons(portalState.activeTab);
+    renderMobileHome();
+    renderBranchMobileActionBar();
+    if (portalState.scheduleData) renderSchedule(portalState.scheduleData);
+    return;
+  }
+  const regularTabs = ["settings", "schedule", "branchVacation", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactMobile) {
     document.querySelectorAll("[data-tab]").forEach((button) => button.classList.remove("mobile-navigation-hidden"));
+    el.mobileHomeTab?.classList.add("hidden");
+    el.mobileHomeTab?.style.removeProperty("order");
     regularTabs.forEach((tab) => {
       const button = document.querySelector(`[data-tab="${tab}"]`);
       const unavailable = !portalTabAllowed(tab);
@@ -712,6 +1083,10 @@ function applyMobileLeadershipLayout() {
       setTab("timeTracking");
       return;
     }
+    if (portalState.activeTab === "home") {
+      setTab(defaultPortalTab());
+      return;
+    }
     syncPortalTabButtons(portalState.activeTab);
     return;
   }
@@ -720,6 +1095,10 @@ function applyMobileLeadershipLayout() {
     button.classList.add("mobile-navigation-hidden");
   });
   const modules = effectiveMobileModules();
+  const homeButton = el.mobileHomeTab;
+  homeButton?.classList.remove("hidden");
+  homeButton?.classList.remove("mobile-navigation-hidden");
+  if (homeButton) homeButton.style.order = "-1";
   modules.forEach((module, index) => {
     const button = document.querySelector(`[data-tab="${mobileModuleById.get(module)?.tab}"]`);
     button?.classList.remove("hidden");
@@ -737,6 +1116,7 @@ function applyMobileLeadershipLayout() {
     return;
   }
   syncPortalTabButtons(portalState.activeTab);
+  renderMobileHome();
 }
 
 async function loadMobileLayout() {
@@ -750,22 +1130,36 @@ async function loadMobileLayout() {
   portalState.mobileLayout = layoutResult.status === "fulfilled"
     ? layoutResult.value
     : { modules: ["time", "team", "approvals", "schedule", "requests", "more"] };
+  const locationDisplay = preferencesResult.status === "fulfilled"
+    ? preferencesResult.value?.mobilePortalLocationDisplay
+    : layoutResult.status === "fulfilled"
+      ? layoutResult.value?.locationDisplay
+      : null;
   portalState.uiPreferences = preferencesResult.status === "fulfilled"
     ? preferencesResult.value
     : {
       mobilePortalNavigation: { version: 1, order: mobileModuleCatalog.filter((item) => item.id !== "more").map((item) => item.id), hidden: [] },
       mobilePortalAppearance: { version: 1, palette: "forest", surface: "soft" },
+      mobilePortalHome: defaultMobilePortalHome(),
+      mobilePortalLocationDisplay: locationDisplay || { version: 1, locationId: "", allowedModules: [] },
       mobilePortalNavigationCustomized: false,
     };
+  if (!portalState.uiPreferences.mobilePortalLocationDisplay) {
+    portalState.uiPreferences.mobilePortalLocationDisplay = locationDisplay
+      || { version: 1, locationId: "", allowedModules: [] };
+  }
   portalState.mobileNavigationDraft = null;
+  portalState.mobileHomeDraft = null;
   applyMobilePortalAppearance(portalState.uiPreferences.mobilePortalAppearance);
   renderMobileAppearanceSettings();
   renderMobileNavigationSettings();
+  renderMobileHomeSettings();
+  renderMobileHome();
   applyMobileLeadershipLayout();
 }
 
 function normalizedMobilePortalAppearance(value) {
-  const palettes = new Set(["forest", "ocean", "plum", "sand"]);
+  const palettes = new Set(["forest", "ocean", "plum", "sand", "berry", "amber", "slate", "teal"]);
   const surfaces = new Set(["soft", "compact"]);
   return {
     version: 1,
@@ -813,6 +1207,130 @@ async function saveMobileAppearanceSettings() {
     message(el.mobileAppearanceSettingsMessage, error.message, true);
   } finally {
     el.saveMobileAppearanceButton.disabled = false;
+  }
+}
+
+function currentMobileHomeDraft() {
+  if (!portalState.mobileHomeDraft) {
+    const stored = normalizedMobilePortalHome(portalState.uiPreferences?.mobilePortalHome);
+    portalState.mobileHomeDraft = {
+      order: [...stored.order],
+      colors: Object.fromEntries(Object.entries(stored.colors).map(([id, rgb]) => [id, [...rgb]])),
+    };
+  }
+  return portalState.mobileHomeDraft;
+}
+
+function mobileHomeItemsForSettings() {
+  const draft = currentMobileHomeDraft();
+  const allowed = new Set(availableMobileHomeTiles().map((tile) => tile.id));
+  return draft.order
+    .filter((id) => allowed.has(id))
+    .map((id) => mobileHomeTileById.get(id))
+    .filter(Boolean);
+}
+
+function renderMobileHomeSettings() {
+  if (!el.mobileHomeSettingsList) return;
+  if (isOrganizationAccount()) {
+    el.mobileHomeSettingsList.innerHTML = "";
+    return;
+  }
+  const draft = currentMobileHomeDraft();
+  const items = mobileHomeItemsForSettings();
+  if (!items.length) {
+    el.mobileHomeSettingsList.innerHTML = '<p class="empty-state">Für dein Konto ist derzeit kein Bereich für die Startseite freigeschaltet.</p>';
+    if (el.saveMobileHomeButton) el.saveMobileHomeButton.disabled = true;
+    return;
+  }
+  if (el.saveMobileHomeButton) el.saveMobileHomeButton.disabled = false;
+  el.mobileHomeSettingsList.innerHTML = items.map((item, index) => {
+    const rgb = normalizedRgb(draft.colors[item.id], mobileHomeDefaultColors[item.id]);
+    return `
+      <div class="mobile-home-setting-row" data-mobile-home-item="${esc(item.id)}">
+        <div class="mobile-home-setting-copy"><span class="mobile-home-color-preview" style="--mobile-home-tile-color:rgb(${rgb.join(",")})"></span><span><strong>${esc(item.label)}</strong><small>${esc(item.description)}</small></span></div>
+        <label class="mobile-home-color-picker"><span>Farbe</span><input type="color" data-mobile-home-color-picker value="${rgbToHex(rgb)}" aria-label="${esc(item.label)} Farbwahl" /></label>
+        <div class="mobile-home-rgb-fields" aria-label="${esc(item.label)} RGB-Werte"><label><span>R</span><input data-mobile-home-rgb="r" type="number" min="0" max="255" step="1" inputmode="numeric" value="${rgb[0]}" /></label><label><span>G</span><input data-mobile-home-rgb="g" type="number" min="0" max="255" step="1" inputmode="numeric" value="${rgb[1]}" /></label><label><span>B</span><input data-mobile-home-rgb="b" type="number" min="0" max="255" step="1" inputmode="numeric" value="${rgb[2]}" /></label></div>
+        <div class="mobile-home-order-actions" aria-label="${esc(item.label)} anordnen"><button type="button" data-mobile-home-move="-1" aria-label="${esc(item.label)} nach oben verschieben" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-mobile-home-move="1" aria-label="${esc(item.label)} nach unten verschieben" ${index === items.length - 1 ? "disabled" : ""}>↓</button></div>
+      </div>`;
+  }).join("");
+}
+
+function mobileHomeRgbFromRow(row) {
+  const values = ["r", "g", "b"].map((channel) => Number(row.querySelector(`[data-mobile-home-rgb="${channel}"]`)?.value));
+  if (values.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) return null;
+  return values;
+}
+
+function updateMobileHomeColor(itemId, row, rgb) {
+  if (!mobileHomeTileById.has(itemId) || !rgb) return false;
+  const draft = currentMobileHomeDraft();
+  draft.colors[itemId] = [...rgb];
+  row?.querySelector("[data-mobile-home-color-picker]")?.setAttribute("value", rgbToHex(rgb));
+  if (row?.querySelector("[data-mobile-home-color-picker]")) row.querySelector("[data-mobile-home-color-picker]").value = rgbToHex(rgb);
+  row?.querySelector(".mobile-home-color-preview")?.style.setProperty("--mobile-home-tile-color", `rgb(${rgb.join(",")})`);
+  renderMobileHome();
+  message(el.mobileHomeSettingsMessage, "Vorschau aktiv. Bitte speichern, um die Auswahl zu behalten.");
+  return true;
+}
+
+function updateMobileHomeColorFromPicker(row) {
+  const picker = row?.querySelector("[data-mobile-home-color-picker]");
+  const itemId = String(row?.dataset.mobileHomeItem || "");
+  const match = String(picker?.value || "").match(/^#([0-9a-f]{6})$/i);
+  if (!match) return;
+  const hex = match[1];
+  const rgb = [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+  ["r", "g", "b"].forEach((channel, index) => {
+    const input = row.querySelector(`[data-mobile-home-rgb="${channel}"]`);
+    if (input) input.value = String(rgb[index]);
+  });
+  updateMobileHomeColor(itemId, row, rgb);
+}
+
+function moveMobileHomeItem(itemId, direction) {
+  const draft = currentMobileHomeDraft();
+  const visibleOrder = mobileHomeItemsForSettings().map((item) => item.id);
+  const index = visibleOrder.indexOf(itemId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= visibleOrder.length) return;
+  [visibleOrder[index], visibleOrder[target]] = [visibleOrder[target], visibleOrder[index]];
+  const visible = new Set(visibleOrder);
+  draft.order = [...visibleOrder, ...draft.order.filter((id) => !visible.has(id))];
+  renderMobileHomeSettings();
+  renderMobileHome();
+  message(el.mobileHomeSettingsMessage, "Vorschau aktiv. Bitte speichern, um die Reihenfolge zu behalten.");
+}
+
+function resetMobileHomeSettings() {
+  const defaults = defaultMobilePortalHome();
+  portalState.mobileHomeDraft = {
+    order: [...defaults.order],
+    colors: Object.fromEntries(Object.entries(defaults.colors).map(([id, rgb]) => [id, [...rgb]])),
+  };
+  renderMobileHomeSettings();
+  renderMobileHome();
+  message(el.mobileHomeSettingsMessage, "Der Rollenstandard ist als Vorschau eingestellt. Bitte noch speichern.");
+}
+
+async function saveMobileHomeSettings() {
+  const draft = currentMobileHomeDraft();
+  const home = normalizedMobilePortalHome({ version: 1, order: draft.order, colors: draft.colors });
+  if (el.saveMobileHomeButton) el.saveMobileHomeButton.disabled = true;
+  message(el.mobileHomeSettingsMessage, "");
+  try {
+    portalState.uiPreferences = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ mobilePortalHome: home }),
+    });
+    portalState.mobileHomeDraft = null;
+    renderMobileHomeSettings();
+    renderMobileHome();
+    message(el.mobileHomeSettingsMessage, "Deine persönliche Startseite wurde gespeichert.");
+  } catch (error) {
+    message(el.mobileHomeSettingsMessage, error.message, true);
+  } finally {
+    if (el.saveMobileHomeButton) el.saveMobileHomeButton.disabled = false;
   }
 }
 
@@ -934,7 +1452,7 @@ function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
   if (["leadershipTeam", "leadershipApprovals"].includes(tab) && !isLeadershipUser()) return "";
-  return ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "loan", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+  return ["home", "settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "loan", "branchOrders", "branchVacation", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
 const portalTabStorageKey = "grabenplaner.portal.active-tab";
@@ -1003,19 +1521,22 @@ function clearRememberedPortalTab() {
 function chooseInitialPortalTab() {
   const requested = requestedPortalTab();
   const parameters = new URLSearchParams(location.search);
+  const explicitTab = normalizedPortalTab(parameters.get("tab"));
   const requestedKind = parameters.get("kind");
   portalState.processTaskRequestedRunId = String(parameters.get("run") || "").slice(0, 120);
   portalState.processTaskRequestedStepId = String(parameters.get("step") || "").slice(0, 120);
   if (["absence", "sickness", "amu", "time_correction"].includes(requestedKind)) portalState.leadershipKind = requestedKind;
-  setTab(requested || defaultPortalTab());
+  setTab(explicitTab || (isMobileUi() ? "home" : requested || defaultPortalTab()));
   return requested;
 }
 
 function defaultPortalTab(user = portalUser()) {
+  if (isMobileUi()) return "home";
   if (portalTabAllowed("timeTracking", user)) return "timeTracking";
   if (portalTabAllowed("schedule", user)) return "schedule";
   if (portalTabAllowed("loan", user)) return "loan";
   if (portalTabAllowed("branchOrders", user)) return "branchOrders";
+  if (portalTabAllowed("learningDashboard", user)) return "learningDashboard";
   return "settings";
 }
 
@@ -1033,7 +1554,8 @@ async function initialize() {
     el.portalDeploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
     applyPortalCapabilities();
     const minimum = Number(status.passwordMinLength || 6);
-    [el.loginPassword, el.newPassword, el.repeatPassword].forEach((input) => { if (input) input.minLength = minimum; });
+    [el.loginPassword, el.newPassword, el.repeatPassword, el.passwordResetNewPassword, el.passwordResetRepeatPassword]
+      .forEach((input) => { if (input) input.minLength = minimum; });
     if (el.portalAccessModeLabel) el.portalAccessModeLabel.textContent = status.operationMode === "server" ? "Mitarbeiterportal · HTTPS" : "Mitarbeiterportal";
     if (!status.portalEnabled) {
       message(el.loginError, "Das Mitarbeiterportal ist für diese Installation nicht freigeschaltet.", true);
@@ -1042,14 +1564,18 @@ async function initialize() {
     const session = await api("/api/portal/v1/session");
     if (!session.authenticated) {
       showLogin();
+      openPasswordResetConfirm();
       return;
     }
     showPortal(session);
     if (!session.user.mustChangePassword) {
-      await loadMobileLayout();
+      await Promise.allSettled([loadMobileLayout(), loadPersonnelLearningDashboard()]);
       chooseInitialPortalTab();
       await loadPortalData();
+      await refreshBirthdayPresentationTheme();
+      await claimBirthdayPresentation();
     }
+    openPasswordResetConfirm();
   } catch (error) {
     showLogin(error.message);
   }
@@ -1057,6 +1583,7 @@ async function initialize() {
 
 async function loadPortalData() {
   const requests = [];
+  requests.push(loadPersonnelLearningDashboard());
   if (!isOrganizationAccount()) requests.push(loadPortalHome(), loadNotifications());
   if (portalTabAllowed("schedule")) requests.push(loadSchedule());
   if (portalTabAllowed("branchVacation")) requests.push(loadBranchVacationOverview());
@@ -1068,9 +1595,275 @@ async function loadPortalData() {
   if (portalTabAllowed("timeTracking")) requests.push(loadTimeTracking());
   if (hasPortalPermission("own_privacy_requests:read")) requests.push(loadPrivacyRequests());
   if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
-  if (loanCapabilityEnabled()) requests.push(loadLoanModule());
-  if (branchOrderCapabilityEnabled()) requests.push(loadBranchOrderCatalog(), loadBranchOrderPortalHistory());
+  if (portalTabAllowed("loan")) requests.push(loadLoanModule());
+  if (portalTabAllowed("branchOrders")) requests.push(loadBranchOrderCatalog(), loadBranchOrderPortalHistory());
+  if (branchPortalDisplaySettingsEnabled()) requests.push(loadBranchPortalDisplaySettings());
   await Promise.allSettled(requests);
+}
+
+function portalLearningProgressStatusLabel(progress) {
+  if (!progress || progress.status === "not_started") return "Noch nicht begonnen";
+  if (progress.status === "in_progress") return "In Durchführung";
+  return ({
+    passed: "Alles erfüllt",
+    follow_up_required: "Nachschulung erforderlich",
+    not_passed: "Nicht bestanden",
+    pending: "Noch nicht bewertet",
+  })[progress.result] || "Abgeschlossen";
+}
+
+function portalLearningSelectedProfile() {
+  const profiles = portalState.personnelLearningDashboard?.profiles || [];
+  return profiles.find((profile) => (
+    profile.employee?.employeeNumber === portalState.personnelLearningDashboardEmployeeNumber
+  )) || profiles[0] || null;
+}
+
+function renderPortalLearningSkillTree() {
+  if (!el.portalLearningSkillTree || !el.portalLearningDashboardEmployee) return;
+  const profiles = portalState.personnelLearningDashboard?.profiles || [];
+  const profile = portalLearningSelectedProfile();
+  if (profile && portalState.personnelLearningDashboardEmployeeNumber
+    !== profile.employee.employeeNumber) {
+    portalState.personnelLearningDashboardEmployeeNumber = profile.employee.employeeNumber;
+  }
+  el.portalLearningDashboardEmployee.innerHTML = profiles.length
+    ? profiles.map((entry) => `<option value="${esc(entry.employee.employeeNumber)}">${esc(entry.employee.fullName)} · ${esc(entry.employee.locationName || entry.employee.employeeNumber)}</option>`).join("")
+    : '<option value="">Keine Kompetenzprofile sichtbar</option>';
+  el.portalLearningDashboardEmployee.value =
+    portalState.personnelLearningDashboardEmployeeNumber || "";
+  el.portalLearningDashboardEmployee.disabled = profiles.length < 2;
+  if (!profile) {
+    el.portalLearningSkillTree.innerHTML = '<p class="empty-state">Noch kein aktives Fähigkeitsprofil vorhanden.</p>';
+    return;
+  }
+  const categories = new Map();
+  for (const competency of profile.competencies || []) {
+    const category = String(competency.skillCategory || "Allgemein");
+    const rows = categories.get(category) || [];
+    rows.push(competency);
+    categories.set(category, rows);
+  }
+  el.portalLearningSkillTree.innerHTML = [...categories.entries()].map(([category, rows]) => `
+    <section class="portal-learning-skill-branch">
+      <header><span aria-hidden="true">◆</span><div><strong>${esc(category)}</strong><small>${rows.length} Fähigkeit${rows.length === 1 ? "" : "en"}</small></div></header>
+      <div>${rows.map((competency) => {
+        const definitions = Array.isArray(competency.levelDefinitions)
+          ? competency.levelDefinitions : [];
+        const current = competency.levelDefinition || {};
+        return `<article class="portal-learning-skill-node">
+          <div class="portal-learning-skill-node-heading"><div><span>${esc(competency.skillCode)}</span><h3>${esc(competency.skillTitle)}</h3></div><div><strong>Stufe ${Number(competency.level)}</strong>${competency.trainerAuthorized ? "<em>Trainerfreigabe</em>" : ""}</div></div>
+          <div class="portal-learning-level-rail" role="img" aria-label="${esc(competency.skillTitle)}: Stufe ${Number(competency.level)} von 10">${definitions.map((definition) => `<span class="${Number(definition.level) <= Number(competency.level) ? "reached" : ""}${Number(definition.level) === Number(competency.level) ? " current" : ""}" title="Stufe ${Number(definition.level)} · ${esc(definition.label)}"><b>${Number(definition.level)}</b></span>`).join("")}</div>
+          <div class="portal-learning-current-level"><strong>${esc(current.label || `Stufe ${Number(competency.level)}`)}</strong><p>${esc(current.description || competency.skillSummary || "Verbindlicher Kompetenzstand")}</p></div>
+        </article>`;
+      }).join("")}</div>
+    </section>`).join("");
+}
+
+function renderPersonnelLearningDashboardPortal() {
+  if (!el.personnelLearningDashboardView) return;
+  const dashboard = portalState.personnelLearningDashboard;
+  const summary = dashboard?.summary || {};
+  if (el.portalLearningDashboardSummary) {
+    el.portalLearningDashboardSummary.innerHTML = [
+      ["Aktiv", Number(summary.activeAssignments || 0), "Schulungen"],
+      ["In Arbeit", Number(summary.inProgress || 0), "aus Schritten"],
+      ["Erledigt", Number(summary.completed || 0), "bewertet"],
+      ["Klärung", Number(summary.attentionRequired || 0), "offene Punkte"],
+      ["Fähigkeiten", Number(summary.competencies || 0), `${Number(summary.trainerSkills || 0)} Trainerfreigaben`],
+    ].map(([label, value, detail]) => `<article><span>${label}</span><strong>${value}</strong><small>${detail}</small></article>`).join("");
+  }
+  const scope = dashboard?.viewer?.scope;
+  if (el.portalLearningDashboardScope) {
+    el.portalLearningDashboardScope.textContent = scope
+      ? `Sichtbarer Bereich: ${[scope.locationName, scope.departmentName].filter(Boolean).join(" · ")}. Die Ansicht erweitert keine Rechte.`
+      : dashboard?.capabilities?.canViewTeam
+        ? "Sichtbar ist ausschließlich der aktuell wirksame Verantwortungsbereich. Die Ansicht erweitert keine Rechte."
+        : "Sichtbar sind ausschließlich eigene Schulungen, Trainerbindungen und Kompetenzprofile.";
+  }
+  if (portalState.personnelLearningDashboardLoading) {
+    el.portalLearningDashboardAssignments.innerHTML = '<p class="empty-state">Schulungsstände werden geladen.</p>';
+    el.portalLearningSkillTree.innerHTML = '<p class="empty-state">Fähigkeitsprofile werden geladen.</p>';
+    return;
+  }
+  const assignments = dashboard?.assignments || [];
+  el.portalLearningDashboardAssignments.innerHTML = assignments.length
+    ? assignments.map((assignment) => {
+        const progress = assignment.progress || {};
+        const attention = ["follow_up_required", "not_passed"].includes(progress.result)
+          || (assignment.trainers || []).some((trainer) => trainer.currentEligible !== true);
+        const mayWrite = progress.capabilities?.canRecord === true
+          || progress.capabilities?.canCorrect === true;
+        return `<article class="portal-learning-assignment${attention ? " attention" : ""}">
+          <header><div><span>${esc(assignment.learner?.fullName || assignment.learner?.employeeNumber)}</span><h3>${esc(assignment.process?.title || "Schulung")}</h3></div><strong>${esc(portalLearningProgressStatusLabel(progress))}</strong></header>
+          <div class="portal-learning-progress-track"><span style="width:${Math.max(0, Math.min(100, Number(progress.percent || 0)))}%"></span></div>
+          <p>${Number(progress.completedStepCount || 0)} von ${Number(progress.totalStepCount || 0)} Schritten · ${Number(progress.percent || 0)} %</p>
+          <small>${esc((assignment.trainers || []).map((trainer) => `${trainer.trainerName} · ${trainer.skillTitle}`).join(" · ") || "Keine Trainerbindung")}</small>
+          <button class="${mayWrite ? "primary" : "text-button"}" data-portal-learning-progress="${esc(assignment.id)}" type="button">${mayWrite ? "Fortschritt erfassen" : "Fortschritt ansehen"}</button>
+        </article>`;
+      }).join("")
+    : '<p class="empty-state">Im sichtbaren Bereich gibt es noch keine Schulungszuweisung.</p>';
+  renderPortalLearningSkillTree();
+}
+
+async function loadPersonnelLearningDashboard({ force = false } = {}) {
+  if (portalState.personnelLearningDashboardLoading) return;
+  if (portalState.personnelLearningDashboard && !force) {
+    renderPersonnelLearningDashboardPortal();
+    return;
+  }
+  portalState.personnelLearningDashboardLoading = true;
+  message(el.portalLearningDashboardMessage, "");
+  renderPersonnelLearningDashboardPortal();
+  try {
+    const dashboard = await api("/api/portal/v1/personnel-learning/dashboard");
+    if (!dashboard || !Array.isArray(dashboard.assignments)
+      || !Array.isArray(dashboard.profiles)) {
+      throw new Error("Das Schulungsdashboard ist unvollständig.");
+    }
+    portalState.personnelLearningDashboard = dashboard;
+    portalState.personnelLearningDashboardAvailable = dashboard.available === true;
+    const profiles = dashboard.profiles || [];
+    if (!profiles.some((profile) => (
+      profile.employee?.employeeNumber === portalState.personnelLearningDashboardEmployeeNumber
+    ))) {
+      portalState.personnelLearningDashboardEmployeeNumber =
+        profiles[0]?.employee?.employeeNumber || "";
+    }
+  } catch (error) {
+    portalState.personnelLearningDashboard = null;
+    portalState.personnelLearningDashboardAvailable = false;
+    if (![401, 403].includes(error.status)) {
+      message(el.portalLearningDashboardMessage, error.message, true);
+    }
+  } finally {
+    portalState.personnelLearningDashboardLoading = false;
+    renderPersonnelLearningDashboardPortal();
+    applySelfServiceVisibility();
+    applyMobileLeadershipLayout();
+    renderMobileHome();
+    if (portalState.activeTab === "learningDashboard"
+      && !portalTabAllowed("learningDashboard")) setTab(defaultPortalTab());
+  }
+}
+
+function renderPortalLearningProgressDialog() {
+  const assignment = portalState.personnelLearningProgressAssignment;
+  if (!assignment || !el.portalLearningProgressDialog) return;
+  const progress = assignment.progress || {};
+  const canRecord = progress.capabilities?.canRecord === true;
+  const canFinalize = progress.capabilities?.canFinalize === true;
+  const canCorrect = progress.capabilities?.canCorrect === true;
+  const mayWrite = canRecord || canCorrect;
+  el.portalLearningProgressTitle.textContent =
+    `${assignment.process?.title || "Schulung"} · ${assignment.learner?.fullName || assignment.learner?.employeeNumber}`;
+  el.portalLearningProgressAssignmentId.value = assignment.id;
+  el.portalLearningProgressAssignmentReceipt.value =
+    assignment.currentAssignmentRevisionReceipt || "";
+  el.portalLearningProgressExpectedReceipt.value = progress.currentRevisionReceipt || "";
+  el.portalLearningProgressSummary.innerHTML = `<strong>${esc(portalLearningProgressStatusLabel(progress))}</strong><p>Gebundene Prozessversion ${Number(assignment.process?.versionNumber || 0)} · Fortschritt wird ausschließlich aus den erledigten Schritten berechnet.</p>`;
+  el.portalLearningProgressSteps.innerHTML = (progress.steps || []).map((step) => `
+    <label class="portal-learning-progress-step${step.completed ? " completed" : ""}">
+      <input type="checkbox" data-portal-learning-step="${esc(step.stepId)}" data-required="${step.required ? "true" : "false"}" ${step.completed ? "checked" : ""} ${mayWrite ? "" : "disabled"} />
+      <span><strong>${Number(step.order)}. ${esc(step.title)}</strong><small>${esc(step.completionCriteria || step.instruction || (step.required ? "Pflichtschritt" : "Optional"))}</small></span><em>${step.required ? "Pflicht" : "Optional"}</em>
+    </label>`).join("");
+  el.portalLearningProgressAssessment.classList.toggle("hidden", !canFinalize && !canCorrect);
+  el.portalLearningProgressFinalized.checked = Boolean(progress.finalized);
+  el.portalLearningProgressFinalized.disabled = !canFinalize && !canCorrect;
+  el.portalLearningProgressResult.value = progress.finalized ? progress.result : "pending";
+  el.portalLearningProgressResult.disabled = !canFinalize && !canCorrect;
+  el.portalLearningProgressAssessmentNote.value = progress.assessmentNote || "";
+  el.portalLearningProgressAssessmentNote.disabled = !canFinalize && !canCorrect;
+  el.portalLearningProgressCorrectionReasonField.classList.toggle("hidden", !canCorrect);
+  el.portalLearningProgressCorrectionReason.required = canCorrect;
+  el.portalLearningProgressCorrectionReason.value = "";
+  el.savePortalLearningProgress.classList.toggle("hidden", !mayWrite);
+  updatePortalLearningProgressAvailability();
+}
+
+function updatePortalLearningProgressAvailability() {
+  const assignment = portalState.personnelLearningProgressAssignment;
+  if (!assignment || !el.savePortalLearningProgress) return;
+  const progress = assignment.progress || {};
+  const canRecord = progress.capabilities?.canRecord === true;
+  const canFinalize = progress.capabilities?.canFinalize === true;
+  const canCorrect = progress.capabilities?.canCorrect === true;
+  const mayWrite = canRecord || canCorrect;
+  const assessmentWritable = canFinalize || canCorrect;
+  const finalized = assessmentWritable && el.portalLearningProgressFinalized.checked;
+  const requiredComplete = [...el.portalLearningProgressSteps.querySelectorAll(
+    'input[type="checkbox"][data-required="true"]',
+  )].every((checkbox) => checkbox.checked);
+  const resultSelected = el.portalLearningProgressResult.value !== "pending";
+  const correctionReasonPresent = !progress.hasFinalizedRevision
+    || el.portalLearningProgressCorrectionReason.value.trim().length > 0;
+  el.portalLearningProgressResult.disabled = !assessmentWritable || !finalized;
+  el.portalLearningProgressAssessmentNote.disabled = !assessmentWritable || !finalized;
+  el.savePortalLearningProgress.disabled = portalState.personnelLearningProgressMutationPending
+    || !mayWrite
+    || (finalized && (!requiredComplete || !resultSelected))
+    || (canCorrect && !correctionReasonPresent);
+}
+
+async function openPortalLearningProgress(assignmentId) {
+  message(el.portalLearningProgressMessage, "");
+  const result = await api(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignmentId)}/progress`);
+  portalState.personnelLearningProgressAssignment = result.assignment || null;
+  if (!portalState.personnelLearningProgressAssignment) {
+    throw new Error("Der Schulungsfortschritt ist nicht verfügbar.");
+  }
+  renderPortalLearningProgressDialog();
+  el.portalLearningProgressDialog.showModal();
+  el.portalLearningProgressSteps.querySelector("input:not(:disabled)")?.focus();
+}
+
+async function savePortalLearningProgress(event) {
+  event.preventDefault();
+  const assignment = portalState.personnelLearningProgressAssignment;
+  if (!assignment || portalState.personnelLearningProgressMutationPending) return;
+  const completedStepIds = [...el.portalLearningProgressSteps.querySelectorAll(
+    'input[type="checkbox"][data-portal-learning-step]:checked',
+  )].map((checkbox) => checkbox.dataset.portalLearningStep);
+  const finalized = !el.portalLearningProgressAssessment.classList.contains("hidden")
+    && el.portalLearningProgressFinalized.checked;
+  const requiredComplete = [...el.portalLearningProgressSteps.querySelectorAll(
+    'input[type="checkbox"][data-required="true"]',
+  )].every((checkbox) => checkbox.checked);
+  if (finalized && !requiredComplete) {
+    message(el.portalLearningProgressMessage, "Vor dem Abschluss müssen alle Pflichtschritte erledigt sein.", true);
+    return;
+  }
+  if (finalized && el.portalLearningProgressResult.value === "pending") {
+    message(el.portalLearningProgressMessage, "Bitte ein Abschlussergebnis auswählen.", true);
+    return;
+  }
+  portalState.personnelLearningProgressMutationPending = true;
+  el.savePortalLearningProgress.disabled = true;
+  message(el.portalLearningProgressMessage, "Der neue Fortschrittsstand wird revisionssicher gespeichert.");
+  try {
+    const result = await api(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignment.id)}/progress`, {
+      method: "PUT",
+      body: JSON.stringify({
+        expectedAssignmentRevisionReceipt: el.portalLearningProgressAssignmentReceipt.value,
+        expectedProgressRevisionReceipt: el.portalLearningProgressExpectedReceipt.value,
+        completedStepIds,
+        finalized,
+        result: finalized ? el.portalLearningProgressResult.value : "pending",
+        assessmentNote: finalized ? el.portalLearningProgressAssessmentNote.value : "",
+        correctionReason: assignment.progress?.hasFinalizedRevision
+          ? el.portalLearningProgressCorrectionReason.value : "",
+      }),
+    });
+    portalState.personnelLearningProgressAssignment = result.assignment;
+    el.portalLearningProgressDialog.close();
+    portalState.personnelLearningDashboard = null;
+    await loadPersonnelLearningDashboard({ force: true });
+  } catch (error) {
+    message(el.portalLearningProgressMessage, error.message, true);
+  } finally {
+    portalState.personnelLearningProgressMutationPending = false;
+    renderPortalLearningProgressDialog();
+  }
 }
 
 function renderPortalGreeting() {
@@ -1218,8 +2011,14 @@ function showLogin(error = "") {
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
+  neutralizeBirthdayPresentation();
+  neutralizeBirthdayPresentationTheme();
   portalState.session = null;
-  document.body.classList.remove("branch-organization-account");
+  portalState.personnelLearningDashboard = null;
+  portalState.personnelLearningDashboardAvailable = false;
+  portalState.personnelLearningProgressAssignment = null;
+  document.body.classList.remove("branch-organization-account", "branch-mobile-account");
+  stopBranchOrderAutosave();
   clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
   portalState.processTasksOwnerFingerprint = "";
   el.portalLogin.classList.remove("hidden");
@@ -1246,11 +2045,16 @@ function applySelfServiceVisibility() {
   if (canCreatePrivacyRequest && !canReadPrivacyRequests && el.privacyRequestsNotice) {
     el.privacyRequestsNotice.textContent = "Jede Anfrage wird nach einer Identitätsprüfung manuell bearbeitet und nachvollziehbar entschieden.";
   }
-  el.vacationAccountCard?.classList.toggle("hidden", !hasPortalPermission("own_vacation:read"));
+  el.vacationAccountCard?.classList.toggle(
+    "hidden",
+    !hasPortalPermission("own_vacation:read") || !mobileLocationDisplayAllows("requests"),
+  );
   el.timeTrackingTab?.classList.toggle("hidden", !portalTabAllowed("timeTracking"));
   el.wifiAutomationCard?.classList.toggle(
     "hidden",
-    !wifiTimeSuggestionsCapabilityEnabled() || !hasPortalPermission("own_time:read"),
+    !wifiTimeSuggestionsCapabilityEnabled()
+      || !hasPortalPermission("own_time:read")
+      || !mobileLocationDisplayAllows("time"),
   );
   el.scheduleTab?.classList.toggle("hidden", !portalTabAllowed("schedule"));
   el.timeOffTab?.classList.toggle("hidden", !portalTabAllowed("timeOff"));
@@ -1261,6 +2065,10 @@ function applySelfServiceVisibility() {
   el.branchVacationTab?.classList.toggle("hidden", !portalTabAllowed("branchVacation"));
   el.amuTab?.classList.toggle("hidden", !portalTabAllowed("amu"));
   el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
+  el.personnelLearningDashboardTab?.classList.toggle(
+    "hidden",
+    !portalTabAllowed("learningDashboard"),
+  );
   if (!portalTabAllowed("processTasks")) {
     clearProcessTaskState({ clearRequest: true });
   }
@@ -1270,7 +2078,9 @@ function applySelfServiceVisibility() {
   el.leadershipProcessTasksShortcut?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
   el.notificationsButton?.classList.toggle("hidden", isOrganizationAccount());
   el.emailSettingsCard?.classList.toggle("hidden", !personalEmailSettingsAvailable());
+  el.mobileHomeSettingsCard?.classList.toggle("hidden", isOrganizationAccount());
   el.branchOrderSettingsCard?.classList.toggle("hidden", !branchOrderManagementEnabled());
+  el.branchPortalDisplaySettingsCard?.classList.toggle("hidden", !branchPortalDisplaySettingsEnabled());
   el.passwordSettingsCard?.classList.toggle("hidden", isOrganizationAccount());
   if (!hasPortalPermission("own_time_record:read")) {
     el.timeRecordStatementsPanel?.classList.add("hidden");
@@ -1294,11 +2104,17 @@ function populateVacationAccountYears() {
 function showPortal(session) {
   const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
     || processTaskActorFingerprint(portalUser());
+  if (birthdayPresentationActor() !== birthdayPresentationActor(session?.user)) {
+    neutralizeBirthdayPresentation();
+    neutralizeBirthdayPresentationTheme();
+  }
   portalState.session = session;
   document.body.classList.toggle(
     "branch-organization-account",
     isOrganizationAccount(session?.user) && session?.user?.accountType === "branch",
   );
+  document.body.classList.toggle("portal-mobile-session", isMobileUi());
+  el.portalSettingsShortcut?.classList.toggle("hidden", !isMobileUi());
   const nextProcessTaskOwner = processTaskActorFingerprint(session?.user);
   if (previousProcessTaskOwner !== nextProcessTaskOwner) {
     clearProcessTaskState({
@@ -1360,22 +2176,151 @@ async function login(event) {
       await loadMobileLayout();
       chooseInitialPortalTab();
       await loadPortalData();
+      await refreshBirthdayPresentationTheme();
+      await claimBirthdayPresentation();
     }
   } catch (error) {
     message(el.loginError, error.message, true);
   }
 }
 
+function passwordResetTokenFromHash() {
+  const match = String(window.location.hash || "").match(/^#password-reset=([A-Za-z0-9_-]{43})$/);
+  return match?.[1] || "";
+}
+
+function clearPasswordResetHash() {
+  if (!String(window.location.hash || "").startsWith("#password-reset=")) return;
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+}
+
+function openPasswordResetRequest() {
+  message(el.passwordResetRequestMessage, "");
+  el.passwordResetEmail.value = "";
+  el.passwordResetRequestDialog.showModal();
+  el.passwordResetEmail.focus();
+}
+
+function openPasswordResetConfirm(token = passwordResetTokenFromHash()) {
+  if (!token) return false;
+  el.passwordResetToken.value = token;
+  el.passwordResetNewPassword.value = "";
+  el.passwordResetRepeatPassword.value = "";
+  message(el.passwordResetConfirmMessage, "");
+  el.passwordResetConfirmDialog.showModal();
+  el.passwordResetNewPassword.focus();
+  return true;
+}
+
+function closePasswordResetConfirm() {
+  clearPasswordResetHash();
+  el.passwordResetToken.value = "";
+  el.passwordResetNewPassword.value = "";
+  el.passwordResetRepeatPassword.value = "";
+  message(el.passwordResetConfirmMessage, "");
+  if (el.passwordResetConfirmDialog.open) el.passwordResetConfirmDialog.close();
+}
+
+async function requestPasswordReset(event) {
+  event.preventDefault();
+  if (el.passwordResetRequestSubmit.disabled) return;
+  el.passwordResetRequestSubmit.disabled = true;
+  message(el.passwordResetRequestMessage, "Der Rücksetzlink wird angefordert.");
+  try {
+    const result = await api("/api/portal/v1/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email: el.passwordResetEmail.value.trim() }),
+    });
+    el.passwordResetEmail.value = "";
+    message(
+      el.passwordResetRequestMessage,
+      result?.message || "Falls ein passender persönlicher Zugang vorhanden ist, wurde ein Rücksetzlink versendet.",
+    );
+  } catch (error) {
+    message(el.passwordResetRequestMessage, error.message, true);
+  } finally {
+    el.passwordResetRequestSubmit.disabled = false;
+  }
+}
+
+async function confirmPasswordReset(event) {
+  event.preventDefault();
+  if (el.passwordResetConfirmSubmit.disabled) return;
+  const newPassword = el.passwordResetNewPassword.value;
+  const repeatPassword = el.passwordResetRepeatPassword.value;
+  if (!repeatPassword || newPassword !== repeatPassword) {
+    message(el.passwordResetConfirmMessage, "Die Passwortwiederholung stimmt nicht überein.", true);
+    el.passwordResetRepeatPassword.focus();
+    return;
+  }
+  el.passwordResetConfirmSubmit.disabled = true;
+  message(el.passwordResetConfirmMessage, "Das neue Passwort wird gespeichert.");
+  try {
+    await api("/api/portal/v1/auth/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        token: el.passwordResetToken.value,
+        newPassword,
+        repeatPassword,
+      }),
+    });
+    clearPasswordResetHash();
+    el.passwordResetConfirmDialog.close();
+    showLogin();
+    el.loginPassword.value = "";
+    message(el.loginError, "Das Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.");
+    el.loginPersonnelNumber.focus();
+  } catch (error) {
+    message(el.passwordResetConfirmMessage, error.message, true);
+  } finally {
+    el.passwordResetConfirmSubmit.disabled = false;
+  }
+}
+
+let logoutInProgress = false;
+
 async function logout() {
+  if (logoutInProgress) return;
+  logoutInProgress = true;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  const originalLabel = el.logoutButton.textContent;
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
-  portalState.session = null;
-  clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
-  portalState.processTasksOwnerFingerprint = "";
-  try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
-  clearRememberedPortalTab();
-  location.reload();
+  neutralizeBirthdayPresentationTheme();
+  el.logoutButton.disabled = true;
+  el.logoutButton.setAttribute("aria-busy", "true");
+  el.logoutButton.textContent = "Abmelden…";
+  message(el.portalLogoutStatus, "");
+  try {
+    await api("/api/portal/v1/auth/logout", {
+      method: "POST",
+      body: "{}",
+      keepalive: true,
+      signal: controller.signal,
+    });
+    portalState.session = null;
+    stopBranchOrderAutosave();
+    clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
+    portalState.processTasksOwnerFingerprint = "";
+    clearRememberedPortalTab();
+    showLogin();
+    el.loginPassword.value = "";
+    el.loginPersonnelNumber.focus();
+  } catch (error) {
+    const detail = controller.signal.aborted
+      ? "Die Abmeldung wurde nicht rechtzeitig bestätigt. Bitte erneut versuchen."
+      : `Die Abmeldung konnte nicht bestätigt werden: ${error.message}`;
+    message(el.portalLogoutStatus, detail, true);
+    refreshBirthdayPresentationTheme();
+  } finally {
+    window.clearTimeout(timeout);
+    logoutInProgress = false;
+    el.logoutButton.disabled = false;
+    el.logoutButton.removeAttribute("aria-busy");
+    el.logoutButton.textContent = originalLabel;
+  }
 }
 
 function setTab(tab) {
@@ -1384,8 +2329,11 @@ function setTab(tab) {
   if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
   portalState.activeTab = tab;
   rememberPortalTab(tab);
+  document.body.classList.toggle("portal-settings-active", tab === "settings" && isMobileUi());
   syncPortalTabButtons(tab);
   el.portalSettingsShortcut?.classList.toggle("active", tab === "settings");
+  el.portalSettingsShortcut?.setAttribute("aria-label", tab === "settings" ? "Zur Startseite" : "Einstellungen öffnen");
+  el.mobileHomeView?.classList.toggle("active", tab === "home");
   el.settingsView.classList.toggle("active", tab === "settings");
   el.scheduleView.classList.toggle("active", tab === "schedule");
   el.timeTrackingView.classList.toggle("active", tab === "timeTracking");
@@ -1397,6 +2345,7 @@ function setTab(tab) {
   el.branchVacationView?.classList.toggle("active", tab === "branchVacation");
   el.amuView.classList.toggle("active", tab === "amu");
   el.processTasksView?.classList.toggle("active", tab === "processTasks");
+  el.personnelLearningDashboardView?.classList.toggle("active", tab === "learningDashboard");
   el.leadershipTeamView?.classList.toggle("active", tab === "leadershipTeam");
   el.leadershipApprovalsView?.classList.toggle("active", tab === "leadershipApprovals");
   el.leadershipMoreView?.classList.toggle("active", tab === "leadershipMore");
@@ -1406,6 +2355,7 @@ function setTab(tab) {
     if (hasPortalPermission("own_privacy_requests:read")) loadPrivacyRequests();
     if (personalEmailSettingsAvailable()) loadEmailSettings();
     if (branchOrderManagementEnabled()) Promise.allSettled([loadBranchOrderSettings(), loadBranchOrderHistory()]);
+    if (branchPortalDisplaySettingsEnabled()) loadBranchPortalDisplaySettings();
     focusPortalSettingsSection();
   }
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
@@ -1419,19 +2369,24 @@ function setTab(tab) {
   if (tab === "branchVacation") loadBranchVacationOverview();
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
   if (tab === "processTasks") loadProcessTasks();
+  if (tab === "learningDashboard") loadPersonnelLearningDashboard();
   if (tab === "leadershipTeam") loadLeadershipOverview();
   if (tab === "leadershipApprovals") {
     document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item.dataset.leadershipKind === portalState.leadershipKind));
     loadLeadershipApprovals();
   }
+  if (tab !== "branchOrders") portalState.branchOrderReviewVisible = false;
+  renderMobileHome();
+  renderBranchMobileActionBar();
+  if (portalState.session) applyMobileLeadershipLayout();
 }
 
 function branchOrderStatusText(status) {
   return {
     sent: "E-Mail-Übergabe abgeschlossen",
     partial: "Teilweise übergeben",
-    failed: "E-Mail-Übergabe fehlgeschlagen",
-    pending: "E-Mail-Übergabe offen",
+    failed: "Zustellung technisch nicht bestätigt",
+    pending: "Zustellbestätigung noch offen",
   }[status] || "Status unbekannt";
 }
 
@@ -1440,6 +2395,235 @@ function branchOrderTimestampText(value) {
   return Number.isNaN(date.getTime())
     ? String(value || "")
     : date.toLocaleString("de-AT", { dateStyle: "short", timeStyle: "short" });
+}
+
+function clearBranchOrderItemFields() {
+  portalState.branchOrderSelection.clear();
+  el.branchOrderGroups?.querySelectorAll("[data-branch-order-item]").forEach((row) => {
+    const checkbox = row.querySelector("[data-branch-order-select]");
+    const quantity = row.querySelector("[data-branch-order-quantity]");
+    const note = row.querySelector("[data-branch-order-note]");
+    if (checkbox) checkbox.checked = false;
+    if (quantity) quantity.value = "1";
+    if (note) note.value = "";
+  });
+}
+
+function branchOrderSelection() {
+  if (!(portalState.branchOrderSelection instanceof Map)) portalState.branchOrderSelection = new Map();
+  return portalState.branchOrderSelection;
+}
+
+function captureBranchOrderItems() {
+  const selected = [...branchOrderSelection().entries()].map(([itemId, value]) => ({ itemId, ...value }));
+  const items = selected.map((entry) => {
+    const quantity = Number(entry.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) return null;
+    return {
+      itemId: entry.itemId,
+      quantity,
+      note: entry.note || "",
+    };
+  });
+  return { selected, items };
+}
+
+function syncBranchOrderItemRepresentations(itemId, { sourceRow = null } = {}) {
+  const selected = branchOrderSelection().get(String(itemId));
+  el.branchOrderGroups?.querySelectorAll(`[data-branch-order-item="${CSS.escape(String(itemId))}"]`).forEach((row) => {
+    const checkbox = row.querySelector("[data-branch-order-select]");
+    const quantity = row.querySelector("[data-branch-order-quantity]");
+    const note = row.querySelector("[data-branch-order-note]");
+    if (row !== sourceRow) {
+      if (checkbox) checkbox.checked = Boolean(selected);
+      if (quantity) quantity.value = String(selected?.quantity ?? 1);
+      if (note) note.value = selected?.note || "";
+    }
+    row.classList.toggle("selected", Boolean(selected));
+  });
+}
+
+function syncAllBranchOrderItemRepresentations() {
+  for (const itemId of branchOrderSelection().keys()) syncBranchOrderItemRepresentations(itemId);
+}
+
+function renderBranchOrderDraftState() {
+  const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
+  const pending = portalState.branchOrderDraftPending;
+  const active = portalState.branchOrderDraft;
+  const hasSavedDraft = portalState.branchOrderDraftRevision > 0;
+  const { selected, items } = captureBranchOrderItems();
+  const validItems = selected.length > 0 && items.every(Boolean);
+  const locked = portalState.branchOrderDraftLoading || portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting || Boolean(pending);
+
+  el.branchOrderGroups?.querySelectorAll("[data-branch-order-item]").forEach((row) => {
+    const checkbox = row.querySelector("[data-branch-order-select]");
+    const selectable = row.dataset.branchOrderReady === "1";
+    if (checkbox) checkbox.disabled = locked || !selectable;
+    row.querySelectorAll("[data-branch-order-quantity], [data-branch-order-note]")
+      .forEach((field) => { field.disabled = locked || !checkbox?.checked || !selectable; });
+  });
+
+  if (el.branchOrderSaveDraft) {
+    el.branchOrderSaveDraft.disabled = locked || !employeeNumber || !validItems || !portalState.branchOrderDraftDirty;
+  }
+  if (el.branchOrderSubmit) {
+    el.branchOrderSubmit.disabled = locked || !employeeNumber || !validItems;
+  }
+  renderBranchOrderReview();
+  renderBranchMobileActionBar();
+
+  const visible = portalState.branchOrderDraftLoading || Boolean(pending) || hasSavedDraft || portalState.branchOrderDraftDirty;
+  el.branchOrderDraftPanel?.classList.toggle("hidden", !visible);
+  el.branchOrderContinueDraft?.classList.toggle("hidden", !pending);
+  el.branchOrderDiscardDraft?.classList.toggle("hidden", !(pending || hasSavedDraft || portalState.branchOrderDraftDirty));
+  if (!visible) return;
+
+  if (portalState.branchOrderDraftLoading) {
+    el.branchOrderDraftTitle.textContent = "Entwurf wird geprüft";
+    el.branchOrderDraftDetail.textContent = "Gespeicherter Stand wird geladen.";
+    return;
+  }
+  if (pending) {
+    el.branchOrderDraftTitle.textContent = "Gespeicherter Entwurf vorhanden";
+    const warnings = [];
+    if (pending.configurationChanged) warnings.push("Bestellkatalog wurde seitdem geändert");
+    if (pending.staleItemCount) warnings.push(`${pending.staleItemCount} Position(en) nicht mehr verfügbar`);
+    el.branchOrderDraftDetail.textContent = `${branchOrderTimestampText(pending.updatedAt)} · ${pending.items.length} Position(en)${warnings.length ? ` · ${warnings.join(" · ")}` : ""}`;
+    return;
+  }
+  if (portalState.branchOrderDraftDirty) {
+    el.branchOrderDraftTitle.textContent = "Ungespeicherte Änderungen";
+    el.branchOrderDraftDetail.textContent = hasSavedDraft && active?.updatedAt
+      ? `Letzter gespeicherter Stand: ${branchOrderTimestampText(active.updatedAt)}`
+      : "Dieser Stand ist noch nicht serverseitig gespeichert.";
+    return;
+  }
+  el.branchOrderDraftTitle.textContent = "Entwurf gespeichert";
+  el.branchOrderDraftDetail.textContent = active?.updatedAt
+    ? `Serverseitig gespeichert: ${branchOrderTimestampText(active.updatedAt)}`
+    : "Der Entwurf ist serverseitig gespeichert.";
+}
+
+function resetBranchOrderDraftState({ clearItems = true } = {}) {
+  portalState.branchOrderDraft = null;
+  portalState.branchOrderDraftPending = null;
+  portalState.branchOrderDraftRevision = 0;
+  portalState.branchOrderDraftDirty = false;
+  portalState.branchOrderDraftLoading = false;
+  portalState.branchOrderReviewVisible = false;
+  if (clearItems) clearBranchOrderItemFields();
+  renderBranchOrderDraftState();
+}
+
+function applyPendingBranchOrderDraft() {
+  const draft = portalState.branchOrderDraftPending;
+  if (!draft) return;
+  clearBranchOrderItemFields();
+  let applied = 0;
+  for (const item of draft.items || []) {
+    if (!item.available) continue;
+    branchOrderSelection().set(String(item.itemId), {
+      quantity: Number(item.quantity),
+      note: item.note || "",
+    });
+    syncBranchOrderItemRepresentations(item.itemId);
+    applied += 1;
+  }
+  portalState.branchOrderDraft = draft;
+  portalState.branchOrderDraftPending = null;
+  portalState.branchOrderDraftRevision = Number(draft.revision || 0);
+  portalState.branchOrderDraftDirty = false;
+  renderBranchOrderDraftState();
+  message(
+    el.branchOrderMessage,
+    applied
+      ? `Entwurf wurde fortgesetzt.${draft.staleItemCount ? ` ${draft.staleItemCount} nicht mehr verfügbare Position(en) wurden nicht übernommen.` : ""}`
+      : "Der Entwurf enthält keine aktuell verfügbare Position mehr. Bitte neu erfassen oder verwerfen.",
+    !applied || Boolean(draft.staleItemCount),
+  );
+}
+
+async function loadBranchOrderDraft(employeeNumber = el.branchOrderEmployee?.value) {
+  const normalizedEmployeeNumber = String(employeeNumber || "").trim();
+  portalState.branchOrderDraftEmployeeNumber = normalizedEmployeeNumber;
+  if (!normalizedEmployeeNumber) {
+    resetBranchOrderDraftState();
+    return;
+  }
+  portalState.branchOrderDraftLoading = true;
+  portalState.branchOrderDraft = null;
+  portalState.branchOrderDraftPending = null;
+  portalState.branchOrderDraftRevision = 0;
+  portalState.branchOrderDraftDirty = false;
+  clearBranchOrderItemFields();
+  renderBranchOrderDraftState();
+  try {
+    const result = await api(`/api/portal/v1/branch-orders/draft?employeeNumber=${encodeURIComponent(normalizedEmployeeNumber)}`);
+    if (String(el.branchOrderEmployee?.value || "").trim() !== normalizedEmployeeNumber) return;
+    portalState.branchOrderDraftPending = result.draft || null;
+  } catch (error) {
+    message(el.branchOrderMessage, error.message, true);
+  } finally {
+    if (String(el.branchOrderEmployee?.value || "").trim() === normalizedEmployeeNumber) {
+      portalState.branchOrderDraftLoading = false;
+      renderBranchOrderDraftState();
+    }
+  }
+}
+
+async function saveBranchOrderDraft({ silent = false } = {}) {
+  if (portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting) return false;
+  const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
+  const { selected, items } = captureBranchOrderItems();
+  if (!employeeNumber || !selected.length || items.some((item) => item === null)) {
+    if (!silent) message(el.branchOrderMessage, "Bitte mindestens eine Position mit einer ganzen Menge zwischen 1 und 100000 auswählen.", true);
+    return false;
+  }
+  portalState.branchOrderDraftSaving = true;
+  renderBranchOrderDraftState();
+  try {
+    const result = await api("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      body: JSON.stringify({
+        employeeNumber,
+        items,
+        expectedRevision: portalState.branchOrderDraftRevision,
+      }),
+    });
+    portalState.branchOrderDraft = result.draft;
+    portalState.branchOrderDraftPending = null;
+    portalState.branchOrderDraftRevision = Number(result.draft?.revision || 0);
+    portalState.branchOrderDraftDirty = false;
+    if (!silent) message(el.branchOrderMessage, "Entwurf wurde serverseitig gespeichert.");
+    return true;
+  } catch (error) {
+    message(el.branchOrderMessage, error.message, true);
+    return false;
+  } finally {
+    portalState.branchOrderDraftSaving = false;
+    renderBranchOrderDraftState();
+  }
+}
+
+async function discardBranchOrderDraft() {
+  if (!confirm("Diesen gespeicherten oder begonnenen Entwurf wirklich verwerfen?")) return;
+  const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
+  const expectedRevision = Number(
+    portalState.branchOrderDraftPending?.revision
+    || portalState.branchOrderDraftRevision
+    || 0,
+  );
+  try {
+    await api("/api/portal/v1/branch-orders/draft", {
+      method: "DELETE",
+      body: JSON.stringify({ employeeNumber, expectedRevision }),
+    });
+    resetBranchOrderDraftState();
+    message(el.branchOrderMessage, "Entwurf wurde verworfen.");
+  } catch (error) {
+    message(el.branchOrderMessage, error.message, true);
+  }
 }
 
 function renderBranchOrderCatalog() {
@@ -1461,20 +2645,20 @@ function renderBranchOrderCatalog() {
     el.branchOrderEmployee.value = selectedEmployee;
   }
   el.branchOrderEmployee.disabled = selfSubmission || !employees.length;
+  const mobileOrdering = isBranchMobileAccount();
   const groups = Array.isArray(catalog.groups) ? catalog.groups : [];
   el.branchOrderGroups.innerHTML = groups.length ? groups.map((group) => {
-    const deliveryReady = group.deliveryReady === true;
     const items = Array.isArray(group.items) ? group.items : [];
-    return `<section class="branch-order-group" data-branch-order-group="${esc(group.id)}">
-      <div class="branch-order-group-heading"><div><h2>${esc(group.title)}</h2>${group.hint ? `<p>${esc(group.hint)}</p>` : ""}</div><span class="branch-order-delivery-state ${deliveryReady ? "ready" : "missing"}">${deliveryReady ? "Versand bereit" : "E-Mail-Ziel fehlt"}</span></div>
-      <div class="branch-order-item-list">${items.length ? items.map((item) => `<article class="branch-order-item" data-branch-order-item="${esc(item.id)}">
-        <label class="branch-order-item-select"><span><strong>${esc(item.title)}</strong>${deliveryReady ? "" : "<small>Vor Versand muss PL+ ein E-Mail-Ziel einrichten.</small>"}</span><input data-branch-order-select type="checkbox" ${deliveryReady ? "" : "disabled"} /></label>
+    return `<details class="branch-order-group" data-branch-order-group="${esc(group.id)}" ${mobileOrdering ? "" : "open"}>
+      <summary class="branch-order-group-heading"><div><h2>${esc(group.title)}</h2>${group.hint ? `<p>${esc(group.hint)}</p>` : ""}</div><span class="branch-order-group-toggle" aria-hidden="true">+</span></summary>
+      <div class="branch-order-item-list">${items.length ? items.map((item) => `<article class="branch-order-item" data-branch-order-item="${esc(item.id)}" data-branch-order-ready="${item.orderReady === false ? "0" : "1"}">
+        <label class="branch-order-item-select"><span><strong>${esc(item.title)}</strong>${item.orderReady === false ? "<small>Diese Position ist derzeit nicht bestellbar.</small>" : ""}</span><input data-branch-order-select type="checkbox" ${item.orderReady === false ? "disabled" : ""} /></label>
         <div class="branch-order-line-fields"><label><span>Menge</span><input data-branch-order-quantity type="number" min="1" max="100000" step="1" inputmode="numeric" value="1" disabled /></label><span class="branch-order-unit">${esc(item.unit)}</span><label class="branch-order-note-field"><span>Bemerkung</span><input data-branch-order-note maxlength="500" disabled /></label></div>
       </article>`).join("") : '<p class="empty-state">Diese Warengruppe enthält noch keine Positionen.</p>'}</div>
-    </section>`;
+    </details>`;
   }).join("") : '<p class="empty-state">Für diesen Standort sind noch keine Bestellpositionen eingerichtet.</p>';
-  const available = groups.some((group) => group.deliveryReady && (group.items || []).length);
-  el.branchOrderSubmit.disabled = !available || !employees.length;
+  syncAllBranchOrderItemRepresentations();
+  renderBranchOrderDraftState();
 }
 
 async function loadBranchOrderCatalog() {
@@ -1482,7 +2666,9 @@ async function loadBranchOrderCatalog() {
   try {
     const catalog = await api("/api/portal/v1/branch-orders/catalog");
     portalState.branchOrderCatalog = catalog;
+    configureBranchOrderAutosave();
     renderBranchOrderCatalog();
+    await loadBranchOrderDraft(el.branchOrderEmployee?.value);
   } catch (error) {
     el.branchOrderGroups.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
     message(el.branchOrderMessage, error.message, true);
@@ -1521,9 +2707,10 @@ async function loadBranchOrderPortalHistory() {
 }
 
 async function submitBranchOrder(event) {
-  event.preventDefault();
+  event?.preventDefault?.();
+  if (portalState.branchOrderSubmitting) return;
   const employeeNumber = String(el.branchOrderEmployee.value || "").trim();
-  const selected = [...el.branchOrderGroups.querySelectorAll("[data-branch-order-select]:checked")];
+  const { selected, items } = captureBranchOrderItems();
   if (!employeeNumber) {
     message(el.branchOrderMessage, "Bitte das Teammitglied mit Name und Personalnummer auswählen.", true);
     return;
@@ -1532,27 +2719,27 @@ async function submitBranchOrder(event) {
     message(el.branchOrderMessage, "Bitte mindestens eine Bestellposition auswählen.", true);
     return;
   }
-  const items = selected.map((checkbox) => {
-    const row = checkbox.closest("[data-branch-order-item]");
-    const quantity = Number(row?.querySelector("[data-branch-order-quantity]")?.value || "");
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) return null;
-    return {
-      itemId: row?.dataset.branchOrderItem || "",
-      quantity,
-      note: row?.querySelector("[data-branch-order-note]")?.value || "",
-    };
-  });
   if (items.some((item) => item === null)) {
     message(el.branchOrderMessage, "Die Bestellmenge muss eine ganze Zahl zwischen 1 und 100000 sein.", true);
     return;
   }
-  el.branchOrderSubmit.disabled = true;
+  portalState.branchOrderSubmitting = true;
+  renderBranchOrderDraftState();
   message(el.branchOrderMessage, "");
   try {
     const result = await api("/api/portal/v1/branch-orders", {
       method: "POST",
-      body: JSON.stringify({ employeeNumber, items }),
+      body: JSON.stringify({
+        employeeNumber,
+        items,
+        draftRevision: portalState.branchOrderDraftRevision,
+      }),
     });
+    portalState.branchOrderDraft = null;
+    portalState.branchOrderDraftPending = null;
+    portalState.branchOrderDraftRevision = 0;
+    portalState.branchOrderDraftDirty = false;
+    portalState.branchOrderReviewVisible = false;
     await Promise.all([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]);
     message(
       el.branchOrderMessage,
@@ -1564,11 +2751,130 @@ async function submitBranchOrder(event) {
   } catch (error) {
     message(el.branchOrderMessage, error.message, true);
   } finally {
-    if (portalState.branchOrderCatalog) {
-      const hasItems = portalState.branchOrderCatalog.groups?.some((group) => group.deliveryReady && group.items?.length);
-       el.branchOrderSubmit.disabled = !hasItems || !(portalState.branchOrderCatalog.employees || []).length;
-    }
+    portalState.branchOrderSubmitting = false;
+    renderBranchOrderDraftState();
   }
+}
+
+function branchOrderGroupForItem(itemId) {
+  return (portalState.branchOrderCatalog?.groups || [])
+    .find((group) => (group.items || []).some((item) => item.id === itemId)) || null;
+}
+
+function branchOrderInputValid() {
+  const employeeNumber = String(el.branchOrderEmployee?.value || "").trim();
+  const { selected, items } = captureBranchOrderItems();
+  return Boolean(employeeNumber && selected.length && items.every(Boolean));
+}
+
+function setBranchOrderReviewVisible(visible) {
+  if (visible && !branchOrderInputValid()) {
+    message(el.branchOrderMessage, "Bitte Teammitglied und mindestens eine Position mit ganzer Menge auswählen.", true);
+    return;
+  }
+  portalState.branchOrderReviewVisible = Boolean(visible);
+  renderBranchOrderDraftState();
+}
+
+function renderBranchOrderReview() {
+  if (!el.branchOrderReview) return;
+  const visible = portalState.activeTab === "branchOrders" && portalState.branchOrderReviewVisible;
+  el.branchOrderReview.classList.toggle("hidden", !visible);
+  el.branchOrderGroups?.classList.toggle("hidden", visible);
+  el.branchOrderEmployee?.closest("label")?.classList.toggle("hidden", visible);
+  el.branchOrderDraftPanel?.classList.toggle("hidden", visible || el.branchOrderDraftPanel?.classList.contains("hidden"));
+  el.branchOrderForm?.classList.toggle("branch-order-reviewing", visible);
+  if (!visible || !el.branchOrderReviewList) return;
+  const employee = (portalState.branchOrderCatalog?.employees || [])
+    .find((entry) => entry.employeeNumber === String(el.branchOrderEmployee?.value || ""));
+  const { items } = captureBranchOrderItems();
+  el.branchOrderReviewList.innerHTML = `<div class="branch-order-review-person"><strong>${esc(employee?.fullName || "Teammitglied")}</strong><small>MA-Nr. ${esc(employee?.employeeNumber || "")}</small></div><ul>${items.filter(Boolean).map((item) => {
+    const group = branchOrderGroupForItem(item.itemId);
+    const catalogItem = (group?.items || []).find((entry) => entry.id === item.itemId);
+    return `<li><div><strong>${esc(catalogItem?.title || item.itemId)}</strong><small>${esc(group?.title || "Filialbestellung")}</small></div><span>${esc(String(item.quantity))} ${esc(catalogItem?.unit || "")}${item.note ? `<small>${esc(item.note)}</small>` : ""}</span></li>`;
+  }).join("")}</ul>`;
+}
+
+function stopBranchOrderAutosave() {
+  if (portalState.branchOrderAutosaveTimer) clearInterval(portalState.branchOrderAutosaveTimer);
+  portalState.branchOrderAutosaveTimer = null;
+}
+
+function configureBranchOrderAutosave() {
+  stopBranchOrderAutosave();
+  const settings = portalState.branchOrderCatalog?.portalSettings || portalState.branchPortalDisplaySettings;
+  if (!settings?.orderAutosaveEnabled) return;
+  const minutes = Number(settings.orderAutosaveMinutes);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 99) return;
+  portalState.branchOrderAutosaveTimer = setInterval(() => {
+    if (portalState.activeTab !== "branchOrders" || !portalState.branchOrderDraftDirty) return;
+    saveBranchOrderDraft({ silent: true });
+  }, minutes * 60 * 1000);
+}
+
+function mobileHomeTilesForCurrentAccount() {
+  const user = portalUser();
+  if (isOrganizationAccount(user)) {
+    return ["schedule", "learningDashboard", "branchOrders", "loan", "branchVacation"]
+      .map((tab) => mobileHomeTileCatalog.find((tile) => tile.tab === tab)
+        || { id: tab, tab, label: tab === "schedule" ? "Dienstplan" : tab, description: "" })
+      .filter((tile) => portalTabAllowed(tile.tab, user))
+      .map((tile) => ({ ...tile, rgb: [...(mobileHomeDefaultColors[tile.id] || mobileHomeDefaultColors.schedule)] }));
+  }
+  const layout = normalizedMobilePortalHome(portalState.uiPreferences?.mobilePortalHome);
+  const allowed = new Set(availableMobileHomeTiles(user).map((tile) => tile.id));
+  return layout.order
+    .filter((id) => allowed.has(id))
+    .map((id) => {
+      const tile = mobileHomeTileById.get(id);
+      return tile ? { ...tile, rgb: normalizedRgb(layout.colors[id], mobileHomeDefaultColors[id]) } : null;
+    })
+    .filter(Boolean);
+}
+
+function renderMobileHome() {
+  if (!el.mobileHomeTiles) return;
+  const visible = isMobileUi() && portalState.activeTab === "home";
+  el.mobileHomeTiles.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  const tiles = mobileHomeTilesForCurrentAccount();
+  if (!tiles.length) {
+    el.mobileHomeTiles.innerHTML = '<p class="empty-state">Für dieses Konto ist derzeit kein Portalbereich freigeschaltet.</p>';
+    return;
+  }
+  el.mobileHomeTiles.innerHTML = tiles.map((tile) => `
+    <button type="button" data-mobile-home-tab="${esc(tile.tab)}" style="--mobile-home-tile-color:rgb(${tile.rgb.join(",")})">
+      <span class="mobile-home-tile-accent" aria-hidden="true"></span>
+      <span><strong>${esc(tile.label)}</strong><small>${esc(tile.description)}</small></span>
+      <b aria-hidden="true">›</b>
+    </button>
+  `).join("");
+}
+
+function renderBranchMobileActionBar() {
+  if (!el.branchMobileActionBar) return;
+  const visible = isBranchMobileAccount() && portalState.activeTab === "branchOrders";
+  el.branchMobileActionBar.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  const ordering = portalState.activeTab === "branchOrders";
+  const reviewing = ordering && portalState.branchOrderReviewVisible;
+  const valid = ordering && branchOrderInputValid();
+  if (el.branchMobileBack) el.branchMobileBack.disabled = portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting;
+  el.branchMobileReview?.classList.toggle("hidden", !ordering || reviewing);
+  el.branchMobileSubmit?.classList.toggle("hidden", !ordering || !reviewing);
+  el.branchMobileSave?.classList.toggle("hidden", !ordering);
+  if (el.branchMobileReview) el.branchMobileReview.disabled = !valid || portalState.branchOrderDraftLoading || portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting;
+  if (el.branchMobileSubmit) el.branchMobileSubmit.disabled = !valid || portalState.branchOrderDraftLoading || portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting;
+  if (el.branchMobileSave) el.branchMobileSave.disabled = !valid || !portalState.branchOrderDraftDirty || portalState.branchOrderDraftLoading || portalState.branchOrderDraftSaving || portalState.branchOrderSubmitting;
+}
+
+function branchMobileBack() {
+  if (!isBranchMobileAccount()) return;
+  if (portalState.activeTab === "branchOrders" && portalState.branchOrderReviewVisible) {
+    setBranchOrderReviewVisible(false);
+    return;
+  }
+  setTab("home");
 }
 
 function branchOrderClientId(prefix) {
@@ -1585,16 +2891,21 @@ function clonedBranchOrderConfiguration(configuration = {}) {
       subjectTemplate: recipient.subjectTemplate || "",
       bodyTemplate: recipient.bodyTemplate || "",
     })),
+    units: (configuration.units || []).map((unit) => ({
+      id: typeof unit === "string" ? branchOrderClientId("unit") : unit.id,
+      title: typeof unit === "string" ? unit : unit.title || "Stück",
+    })),
+    items: (configuration.items || []).map((item) => ({
+      id: item.id,
+      recipientId: item.recipientId || "",
+      unitId: item.unitId || "",
+      title: item.title || "",
+    })),
     groups: (configuration.groups || []).map((group) => ({
       id: group.id,
-      recipientId: group.recipientId || "",
       title: group.title || "",
       hint: group.hint || "",
-      items: (group.items || []).map((item) => ({
-        id: item.id,
-        title: item.title || "",
-        unit: item.unit || "Stück",
-      })),
+      itemIds: [...(group.itemIds || (group.items || []).map((item) => item.id))],
     })),
   };
 }
@@ -1603,7 +2914,6 @@ function renderBranchOrderSettings() {
   const settings = portalState.branchOrderSettings;
   const draft = portalState.branchOrderSettingsDraft;
   if (!settings || !draft || !el.branchOrderSettingsWorkspace) return;
-  const units = settings.configuration?.units || ["Stück"];
   const emailDelivery = settings.emailDelivery || {};
   el.branchOrderSettingsSummary.textContent = emailDelivery.available
     ? "E-Mail-Übergabe ist technisch freigeschaltet."
@@ -1617,17 +2927,21 @@ function renderBranchOrderSettings() {
   const recipientRows = draft.recipients.length ? draft.recipients.map((recipient) => `<article class="branch-order-recipient-editor" data-branch-order-recipient="${esc(recipient.id)}">
     <div class="branch-order-editor-heading"><strong>E-Mail-Ziel</strong><button class="text-button danger-button" type="button" data-branch-order-remove-recipient="${esc(recipient.id)}">Entfernen</button></div>
     <div class="branch-order-editor-grid"><label><span>Zieladresse</span><input data-branch-order-settings-field="recipient-email" value="${esc(recipient.email)}" maxlength="320" inputmode="email" /></label><label><span>Antwortadresse</span><input data-branch-order-settings-field="recipient-reply-to" value="${esc(recipient.replyToEmail)}" maxlength="320" inputmode="email" /><small>Wird im verpflichtenden Antwort-Hinweis genannt.</small></label></div>
-    <label><span>E-Mail-Betreff</span><input data-branch-order-settings-field="recipient-subject" value="${esc(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNumber}}, {{items}}.</small></label>
+    <label><span>E-Mail-Betreff</span><input data-branch-order-settings-field="recipient-subject" value="${esc(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNickname}}, {{employeeNumber}}, {{weekStart}}, {{submittedAt}}, {{items}}.</small></label>
     <label><span>E-Mail-Text</span><textarea data-branch-order-settings-field="recipient-body" rows="6" maxlength="8000">${esc(recipient.bodyTemplate)}</textarea><small>Der Hinweis zur nicht möglichen Antwort und die Antwortadresse werden automatisch ergänzt.</small></label>
   </article>`).join("") : '<p class="empty-state">Noch kein E-Mail-Ziel angelegt.</p>';
-  const groupRows = draft.groups.length ? draft.groups.map((group) => `<article class="branch-order-group-editor" data-branch-order-group-editor="${esc(group.id)}">
-    <div class="branch-order-editor-heading"><strong>Warengruppe</strong><button class="text-button danger-button" type="button" data-branch-order-remove-group="${esc(group.id)}">Entfernen</button></div>
-    <div class="branch-order-editor-grid"><label><span>Bezeichnung</span><input data-branch-order-settings-field="group-title" value="${esc(group.title)}" maxlength="120" /></label><label><span>E-Mail-Ziel</span><select data-branch-order-settings-field="group-recipient">${recipientOptions(group.recipientId)}</select></label></div>
-    <label><span>Hinweis im Bestellformular</span><input data-branch-order-settings-field="group-hint" value="${esc(group.hint)}" maxlength="400" /></label>
-    <div class="branch-order-settings-items">${group.items.length ? group.items.map((item) => `<div class="branch-order-settings-item" data-branch-order-item-editor="${esc(item.id)}"><label><span>Position</span><input data-branch-order-settings-field="item-title" value="${esc(item.title)}" maxlength="180" /></label><label><span>Einheit</span><select data-branch-order-settings-field="item-unit">${units.map((unit) => `<option value="${esc(unit)}" ${unit === item.unit ? "selected" : ""}>${esc(unit)}</option>`).join("")}</select></label><button class="text-button danger-button" type="button" data-branch-order-remove-item="${esc(item.id)}">Entfernen</button></div>`).join("") : '<p class="empty-state">Noch keine Position angelegt.</p>'}</div>
-    <button class="text-button" type="button" data-branch-order-add-item="${esc(group.id)}">+ Position hinzufügen</button>
-  </article>`).join("") : '<p class="empty-state">Noch keine Warengruppe angelegt.</p>';
-  el.branchOrderSettingsWorkspace.innerHTML = `<section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>E-Mail-Ziele</h2><p>Jedes Ziel erhält einen eigenen Betreff, Text und eine frei bearbeitbare Antwortadresse.</p></div><button class="text-button" type="button" data-branch-order-add-recipient>+ E-Mail-Ziel</button></div>${recipientRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Warengruppen und Positionen</h2><p>Einheiten werden pro Position festgelegt.</p></div><button class="text-button" type="button" data-branch-order-add-group>+ Warengruppe</button></div>${groupRows}</section>`;
+  const unitOptions = (selected) => draft.units.map((unit) => (
+    `<option value="${esc(unit.id)}" ${unit.id === selected ? "selected" : ""}>${esc(unit.title || "Neue Einheit")}</option>`
+  )).join("");
+  const unitRows = draft.units.length ? draft.units.map((unit, index) => `<div class="branch-order-settings-item branch-order-unit-editor" data-branch-order-unit-editor="${esc(unit.id)}"><label><span>Einheit</span><input data-branch-order-settings-field="unit-title" value="${esc(unit.title)}" maxlength="40" /></label><div class="branch-order-sort-actions"><button class="text-button" type="button" data-branch-order-move-unit="${esc(unit.id)}" data-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-order-move-unit="${esc(unit.id)}" data-direction="1" ${index < draft.units.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-order-remove-unit="${esc(unit.id)}">Entfernen</button></div></div>`).join("") : '<p class="empty-state">Noch keine Einheit angelegt.</p>';
+  const itemRows = draft.items.length ? draft.items.map((item, index) => `<article class="branch-order-catalog-item" data-branch-order-catalog-item="${esc(item.id)}"><div class="branch-order-editor-heading"><strong>Position ${index + 1}</strong><button class="text-button danger-button" type="button" data-branch-order-remove-catalog-item="${esc(item.id)}">Entfernen</button></div><div class="branch-order-editor-grid"><label><span>Bezeichnung</span><input data-branch-order-settings-field="catalog-item-title" value="${esc(item.title)}" maxlength="180" /></label><label><span>Einheit</span><select data-branch-order-settings-field="catalog-item-unit">${unitOptions(item.unitId)}</select></label><label><span>E-Mail-Ziel</span><select data-branch-order-settings-field="catalog-item-recipient">${recipientOptions(item.recipientId)}</select></label></div></article>`).join("") : '<p class="empty-state">Noch keine Position angelegt.</p>';
+  const assignableItems = (group) => draft.items.filter((item) => !group.itemIds.includes(item.id));
+  const groupRows = draft.groups.length ? draft.groups.map((group, groupIndex) => {
+    const memberships = group.itemIds.map((itemId) => branchOrderDraftItem(itemId)).filter(Boolean);
+    const available = assignableItems(group);
+    return `<article class="branch-order-group-editor" data-branch-order-group-editor="${esc(group.id)}"><div class="branch-order-editor-heading"><strong>Anzeigegruppe</strong><div class="branch-order-sort-actions"><button class="text-button" type="button" data-branch-order-move-group="${esc(group.id)}" data-direction="-1" ${groupIndex ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-order-move-group="${esc(group.id)}" data-direction="1" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-order-remove-group="${esc(group.id)}">Entfernen</button></div></div><label><span>Bezeichnung</span><input data-branch-order-settings-field="group-title" value="${esc(group.title)}" maxlength="120" /></label><label><span>Hinweis im Bestellformular</span><input data-branch-order-settings-field="group-hint" value="${esc(group.hint)}" maxlength="400" /></label><div class="branch-order-settings-items">${memberships.length ? memberships.map((item, index) => `<div class="branch-order-settings-item"><strong>${esc(item.title || "Neue Position")}</strong><span>${esc(branchOrderDraftUnit(item.unitId)?.title || "")}</span><div class="branch-order-sort-actions"><button class="text-button" type="button" data-branch-order-move-group-item="${esc(group.id)}" data-item-id="${esc(item.id)}" data-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-order-move-group-item="${esc(group.id)}" data-item-id="${esc(item.id)}" data-direction="1" ${index < memberships.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-order-remove-group-item="${esc(group.id)}" data-item-id="${esc(item.id)}">Entfernen</button></div></div>`).join("") : '<p class="empty-state">Noch keine Position zugeordnet.</p>'}</div>${available.length ? `<div class="branch-order-group-add"><select data-branch-order-group-item-select="${esc(group.id)}"><option value="">Position zuordnen</option>${available.map((item) => `<option value="${esc(item.id)}">${esc(item.title || "Neue Position")}</option>`).join("")}</select><button class="text-button" type="button" data-branch-order-add-group-item="${esc(group.id)}">+ Zuordnen</button></div>` : ""}</article>`;
+  }).join("") : '<p class="empty-state">Noch keine Anzeigegruppe angelegt.</p>';
+  el.branchOrderSettingsWorkspace.innerHTML = `<section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>E-Mail-Ziele</h2><p>Jedes Ziel erhält einen eigenen Betreff, Text und eine frei bearbeitbare Antwortadresse.</p></div><button class="text-button" type="button" data-branch-order-add-recipient>+ E-Mail-Ziel</button></div>${recipientRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt und entfernt werden.</p></div><button class="text-button" type="button" data-branch-order-add-unit>+ Einheit</button></div>${unitRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Positionskatalog</h2><p>Eine Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><button class="text-button" type="button" data-branch-order-add-catalog-item>+ Position</button></div>${itemRows}</section><section class="branch-order-settings-section"><div class="branch-order-editor-heading"><div><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern die Bestellansicht, nicht die E-Mail-Zustellung.</p></div><button class="text-button" type="button" data-branch-order-add-group>+ Anzeigegruppe</button></div>${groupRows}</section>`;
 }
 
 function branchOrderDraftRecipient(id) {
@@ -1638,12 +2952,12 @@ function branchOrderDraftGroup(id) {
   return portalState.branchOrderSettingsDraft?.groups.find((group) => group.id === id) || null;
 }
 
+function branchOrderDraftUnit(id) {
+  return portalState.branchOrderSettingsDraft?.units.find((unit) => unit.id === id) || null;
+}
+
 function branchOrderDraftItem(id) {
-  for (const group of portalState.branchOrderSettingsDraft?.groups || []) {
-    const item = group.items.find((entry) => entry.id === id);
-    if (item) return item;
-  }
-  return null;
+  return portalState.branchOrderSettingsDraft?.items.find((item) => item.id === id) || null;
 }
 
 async function loadBranchOrderSettings() {
@@ -1712,30 +3026,128 @@ async function saveBranchOrderSettings() {
   }
 }
 
-async function loadSchedule() {
+function renderBranchPortalDisplaySettings() {
+  const settings = portalState.branchPortalDisplaySettings;
+  if (!settings || !el.branchPortalDisplaySettingsForm) return;
+  const mode = settings.scheduleDisplayMode === "colored" ? "colored" : "classic";
+  el.branchPortalDisplaySettingsForm.querySelectorAll('[name="branchScheduleDisplayMode"]')
+    .forEach((input) => { input.checked = input.value === mode; });
+  if (el.branchPortalHideElapsedDays) el.branchPortalHideElapsedDays.checked = settings.mobileHideElapsedDays === true;
+  if (el.branchOrderAutosaveEnabled) el.branchOrderAutosaveEnabled.checked = settings.orderAutosaveEnabled === true;
+  if (el.branchOrderAutosaveMinutes) el.branchOrderAutosaveMinutes.value = String(settings.orderAutosaveMinutes || 10);
+  if (el.branchPortalDisplaySettingsSummary) {
+    el.branchPortalDisplaySettingsSummary.textContent = mode === "colored"
+      ? "Farbig nach Teammitglied · mobile Ansicht angepasst"
+      : "Klassische Dienstplanansicht · mobile Ansicht angepasst";
+  }
+}
+
+async function loadBranchPortalDisplaySettings() {
+  if (!branchPortalDisplaySettingsEnabled() || portalState.branchPortalDisplaySettingsLoading) return;
+  portalState.branchPortalDisplaySettingsLoading = true;
+  try {
+    const result = await api("/api/portal/v1/branch-portal-settings");
+    portalState.branchPortalDisplaySettings = result.settings || null;
+    if (portalState.scheduleData?.displaySettings && result.settings) {
+      portalState.scheduleData.displaySettings = result.settings;
+      renderSchedule(portalState.scheduleData);
+    }
+    renderBranchPortalDisplaySettings();
+    configureBranchOrderAutosave();
+    message(el.branchPortalDisplaySettingsMessage, "");
+  } catch (error) {
+    message(el.branchPortalDisplaySettingsMessage, error.message, true);
+  } finally {
+    portalState.branchPortalDisplaySettingsLoading = false;
+  }
+}
+
+async function saveBranchPortalDisplaySettings(event) {
+  event?.preventDefault();
+  if (!branchPortalDisplaySettingsEnabled()) return;
+  const mode = el.branchPortalDisplaySettingsForm?.querySelector('[name="branchScheduleDisplayMode"]:checked')?.value || "classic";
+  const minutes = Number(el.branchOrderAutosaveMinutes?.value || "");
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 99) {
+    message(el.branchPortalDisplaySettingsMessage, "Der Speicherabstand muss eine ganze Zahl zwischen 1 und 99 Minuten sein.", true);
+    return;
+  }
+  if (el.saveBranchPortalDisplaySettings) el.saveBranchPortalDisplaySettings.disabled = true;
+  try {
+    const result = await api("/api/portal/v1/branch-portal-settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        settings: {
+          scheduleDisplayMode: mode,
+          mobileHideElapsedDays: el.branchPortalHideElapsedDays?.checked === true,
+          orderAutosaveEnabled: el.branchOrderAutosaveEnabled?.checked === true,
+          orderAutosaveMinutes: minutes,
+        },
+      }),
+    });
+    portalState.branchPortalDisplaySettings = result.settings;
+    if (portalState.scheduleData) {
+      portalState.scheduleData.displaySettings = result.settings;
+      renderSchedule(portalState.scheduleData);
+    }
+    if (portalState.branchOrderCatalog) portalState.branchOrderCatalog.portalSettings = result.settings;
+    renderBranchPortalDisplaySettings();
+    configureBranchOrderAutosave();
+    message(el.branchPortalDisplaySettingsMessage, "Filialkonto-Einstellungen wurden gespeichert.");
+  } catch (error) {
+    message(el.branchPortalDisplaySettingsMessage, error.message, true);
+  } finally {
+    if (el.saveBranchPortalDisplaySettings) el.saveBranchPortalDisplaySettings.disabled = false;
+  }
+}
+
+function schedulePersonColor(value) {
+  const explicit = String(value || "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(explicit)) return explicit;
+  const palette = ["#2b7d66", "#2e6f95", "#a05c43", "#7a5c93", "#9a6b21", "#477a58", "#a64d68", "#386f74"];
+  let hash = 0;
+  for (const character of String(value || "")) hash = ((hash * 31) + character.charCodeAt(0)) >>> 0;
+  return palette[hash % palette.length];
+}
+
+function renderSchedule(data) {
+  if (!data) return;
   const organizationView = isOrganizationAccount();
-  const route = organizationView
-    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}`
-    : `/api/portal/v1/me/schedule?week=${portalState.weekStart}`;
-  const data = await api(route);
   portalState.weekStart = data.weekStart;
+  portalState.scheduleData = data;
   el.scheduleHeading.textContent = organizationView
     ? `${data.location?.name || "Standort"} · KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`
     : `KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
   const today = iso(new Date());
-  el.scheduleGrid.innerHTML = Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(data.weekStart, index);
+  const settings = data.displaySettings || {};
+  const hideElapsedDays = organizationView
+    && isBranchMobileAccount()
+    && settings.mobileHideElapsedDays === true
+    && data.weekStart === mondayOf(new Date());
+  const colored = organizationView && settings.scheduleDisplayMode === "colored";
+  el.scheduleGrid.dataset.scheduleDisplay = colored ? "colored" : "classic";
+  const dates = Array.from({ length: 7 }, (_, index) => ({ date: addDays(data.weekStart, index), index }))
+    .filter(({ date }) => !hideElapsedDays || date >= today);
+  el.scheduleGrid.innerHTML = dates.map(({ date, index }) => {
     const shifts = data.shifts.filter((item) => (item.shift_date || item.date) === date);
     const options = organizationView
       ? []
       : data.options.filter((item) => item.date_from <= date && item.date_to >= date);
     return `<article class="schedule-day ${date === today ? "today" : ""} ${index > 4 ? "weekend" : ""}">
       <header><strong>${weekdayNames[index]}</strong><span>${dateText(date, { day: "2-digit", month: "2-digit" })}</span></header>
-      ${shifts.map((shift) => `<div class="shift-card">${organizationView && shift.employeeName ? `<span>${esc(shift.employeeName)}</span><br>` : ""}<strong>${esc(shift.start_time || shift.startTime)}–${esc(shift.end_time || shift.endTime)}</strong>${shift.department_name || shift.departmentName ? `<br>${esc(shift.department_name || shift.departmentName)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
+      ${shifts.map((shift) => `<div class="shift-card${colored ? " shift-card-colored" : ""}"${colored ? ` style="--schedule-person-color:${schedulePersonColor(shift.employeeColor || shift.employeeName)}"` : ""}>${organizationView && shift.employeeName ? `<span>${esc(shift.employeeName)}</span><br>` : ""}<strong>${esc(shift.start_time || shift.startTime)}–${esc(shift.end_time || shift.endTime)}</strong>${shift.department_name || shift.departmentName ? `<br>${esc(shift.department_name || shift.departmentName)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
       ${options.map((option) => `<div class="option-card"><strong>${esc(optionNames[option.option_type] || option.option_type)}</strong>${!option.all_day && option.start_time ? `<br>${esc(option.start_time)}–${esc(option.end_time)}` : ""}${option.note ? `<br>${esc(option.note)}` : ""}</div>`).join("")}
       ${!shifts.length && !options.length ? '<span class="empty-day">Kein Eintrag</span>' : ""}
     </article>`;
   }).join("");
+  renderMobileHome();
+}
+
+async function loadSchedule() {
+  const organizationView = isOrganizationAccount();
+  const route = organizationView
+    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}`
+    : `/api/portal/v1/me/schedule?week=${portalState.weekStart}`;
+  renderSchedule(await api(route));
 }
 
 function branchVacationDateRangeText(entry) {
@@ -1890,7 +3302,10 @@ function wifiSuggestionValues(row) {
 
 function renderWifiAutomation() {
   const data = portalState.wifiAutomation;
-  el.wifiAutomationCard?.classList.toggle("hidden", !wifiTimeSuggestionsCapabilityEnabled());
+  el.wifiAutomationCard?.classList.toggle(
+    "hidden",
+    !wifiTimeSuggestionsCapabilityEnabled() || !mobileLocationDisplayAllows("time"),
+  );
   if (!data) return;
   const enabled = data.preference?.enabled === true;
   el.wifiAutomationToggle.checked = enabled;
@@ -4483,6 +5898,7 @@ async function changePassword(event) {
       body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
     });
     el.passwordDialog.dataset.required = "false";
+    if (portalState.session?.user) portalState.session.user.mustChangePassword = false;
     el.passwordForm.reset();
     message(el.passwordMessage, "Passwort wurde geändert.");
     setTimeout(async () => {
@@ -4490,6 +5906,8 @@ async function changePassword(event) {
       await loadMobileLayout();
       chooseInitialPortalTab();
       await loadPortalData();
+      await refreshBirthdayPresentationTheme();
+      await claimBirthdayPresentation();
     }, 700);
   } catch (error) { message(el.passwordMessage, error.message, true); }
 }
@@ -4535,7 +5953,7 @@ function renderLoanPhotoPolicy() {
     el.loanIssuePhotoPolicy.textContent = `Optional · bis zu 9 Fotos · je 10 MB, zusammen 45 MB. ${processing}`;
   }
   if (el.loanReturnPhotoPolicy) {
-    el.loanReturnPhotoPolicy.textContent = `${processing} Die Rückgabe-Beilage wird dem zweiten Teammitglied vor der Bestätigung angezeigt.`;
+    el.loanReturnPhotoPolicy.textContent = `${processing} Die Rückgabe-Beilage wird gespeichert und bei einer Gegenprüfung dem zweiten Teammitglied angezeigt.`;
   }
 }
 
@@ -4866,14 +6284,17 @@ function renderLoanList() {
     const pendingCopy = loan.pendingReturnConfirmation
       ? `<small class="loan-pending-confirmation">Bestätigung ausständig bei ${esc(loan.pendingReturnConfirmation.witness.employeeNumber)} · ${esc(loan.pendingReturnConfirmation.witness.name)} – gültig bis ${esc(timestampText(loan.pendingReturnConfirmation.expiresAt))}</small>`
       : "";
+    const preparationCopy = loan.returnPreparation && !loan.pendingReturnConfirmation
+      ? `<small class="loan-return-preparation">Rücknahme vorbereitet von ${esc(loan.returnPreparation.requestedBy.employeeNumber)} · ${esc(loan.returnPreparation.requestedBy.name)} – zuletzt gespeichert ${esc(timestampText(loan.returnPreparation.updatedAt))}</small>`
+      : "";
     const photos = loanPhotoGallery(loan.photos);
     const photoAttachments = loanPhotoAttachmentList(loan.photoAttachments);
     const actions = [
       canManage ? `<button class="text-button" data-loan-manage="${esc(loan.id)}" type="button">Bearbeiten</button>` : "",
-      canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">Zurücknehmen</button>` : "",
+      canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">${loan.returnPreparation ? "Rücknahme fortsetzen" : "Zurücknehmen"}</button>` : "",
     ].filter(Boolean).join("");
     return `<article class="loan-list-item">
-      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${photos}${photoAttachments}${documents}</div>
+      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}${preparationCopy}<ul>${items}</ul>${photos}${photoAttachments}${documents}</div>
       ${actions ? `<div class="loan-list-actions">${actions}</div>` : ""}
     </article>`;
   }).join("") : '<p class="empty-state">In diesem Bereich sind noch keine Leihvorgänge vorhanden.</p>';
@@ -4994,19 +6415,29 @@ async function openLoanReturn(loanId) {
   const loan = portalState.loans.find((item) => item.id === loanId);
   if (!loan) return;
   portalState.selectedLoan = loan;
+  const preparation = loan.returnPreparation || null;
+  const preparedItems = new Map((preparation?.items || []).map((item) => [Number(item.position), item]));
   el.loanReturnTitle.textContent = `Leihe von ${loan.borrower?.name || loan.borrower?.employeeNumber}`;
   el.loanReturnSummary.innerHTML = `<strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><span>${loan.items.length} ${loan.items.length === 1 ? "Artikel" : "Artikel"} · Revision ${loan.revision}</span>`;
-  el.loanReturnItems.innerHTML = loan.items.map((item) => `<article class="loan-return-item" data-loan-return-position="${item.position}">
+  el.loanReturnItems.innerHTML = loan.items.map((item) => {
+    const prepared = preparedItems.get(Number(item.position));
+    return `<article class="loan-return-item" data-loan-return-position="${item.position}">
     <div><strong>${esc(item.articleNumber)} · ${esc(item.description)}</strong>${item.serialNumber ? `<small>Seriennummer: ${esc(item.serialNumber)}</small>` : ""}</div>
-    <label><span>Zustand bei Rückgabe</span><select data-loan-return-condition="${item.position}">${loanConditionOptions(item.conditionOut || "good")}</select></label>
-    <label><span>Bemerkung</span><input data-loan-return-note="${item.position}" maxlength="500" placeholder="Optional" /></label>
-  </article>`).join("");
-  el.loanReturnWitness.innerHTML = '<option value="">Bitte auswählen</option>' + portalState.loanTeamMembers
+    <label><span>Zustand bei Rückgabe</span><select data-loan-return-condition="${item.position}">${loanConditionOptions(prepared?.conditionReturn || item.conditionOut || "good")}</select></label>
+    <label><span>Bemerkung</span><input data-loan-return-note="${item.position}" maxlength="500" placeholder="Optional" value="${esc(prepared?.returnNote || "")}" /></label>
+  </article>`;
+  }).join("");
+  const canManage = portalState.loanStatus?.permissions?.locationManage === true;
+  el.loanReturnWitness.innerHTML = `<option value="">${canManage ? "Ohne zweite Person direkt abschließen" : "Jetzt speichern – Gegenprüfung später anfordern"}</option>` + portalState.loanTeamMembers
     .filter((member) => member.employeeNumber !== loan.borrower?.employeeNumber
       && member.employeeNumber !== portalUser()?.employeeNumber)
-    .map((member) => `<option value="${esc(member.employeeNumber)}" ${member.portalOpen ? "" : "disabled"}>${esc(member.employeeNumber)} · ${esc(member.name)} · ${member.portalOpen ? "Portal geöffnet" : "Portal nicht geöffnet"}</option>`)
+    .map((member) => `<option value="${esc(member.employeeNumber)}">${esc(member.employeeNumber)} · ${esc(member.name)}</option>`)
     .join("");
-  el.loanReturnNote.value = "";
+  el.loanReturnNote.value = preparation?.note || "";
+  el.loanReturnWitnessHint.textContent = canManage
+    ? "Ohne Auswahl schließt die zuständige Leitung direkt ab. Mit Auswahl kann ein zweites Teammitglied bis 23:59 Uhr gegenprüfen."
+    : "Ohne Auswahl wird die Rücknahme gespeichert. Ein zweites Teammitglied kann auch später ausgewählt werden und bis 23:59 Uhr gegenprüfen.";
+  el.loanReturnSubmit.textContent = canManage ? "Rücknahme abschließen" : "Rücknahme speichern";
   setLoanPhotoFiles("return", []);
   el.loanReturnPhotos.value = "";
   el.loanReturnCamera.value = "";
@@ -5043,10 +6474,12 @@ async function submitLoanReturn(event) {
     });
     el.loanReturnDialog.close();
     portalState.selectedLoan = null;
-    message(
-      el.loanAvailabilityMessage,
-      `Bestätigung bei ${result.confirmation.witness.employeeNumber} · ${result.confirmation.witness.name} angefordert. Die Leihe bleibt bis dahin offen.`,
-    );
+    const completionCopy = result.direct
+      ? "Die Rücknahme wurde durch die zuständige Leitung abgeschlossen."
+      : result.confirmation
+        ? `Bestätigung bei ${result.confirmation.witness.employeeNumber} · ${result.confirmation.witness.name} bis heute 23:59 Uhr angefordert. Die Leihe bleibt bis dahin offen.`
+        : "Die Rücknahme wurde gespeichert und kann später fortgesetzt oder zur Gegenprüfung weitergegeben werden.";
+    message(el.loanAvailabilityMessage, completionCopy);
     await loadLoans();
   } catch (error) {
     message(el.loanReturnMessage, error.message, true);
@@ -5258,10 +6691,45 @@ async function respondToLoanConfirmation(decision) {
 el.portalLoginForm.addEventListener("submit", login);
 el.loginPersonnelNumber.addEventListener("input", scheduleLoginBrandingPreview);
 el.loginPersonnelNumber.addEventListener("blur", previewLoginBranding);
+el.forgotPasswordButton?.addEventListener("click", openPasswordResetRequest);
+el.passwordResetRequestForm?.addEventListener("submit", requestPasswordReset);
+el.passwordResetConfirmForm?.addEventListener("submit", confirmPasswordReset);
+document.querySelectorAll("[data-close-password-reset-request]").forEach((button) => button.addEventListener("click", () => el.passwordResetRequestDialog.close()));
+document.querySelectorAll("[data-close-password-reset-confirm]").forEach((button) => button.addEventListener("click", closePasswordResetConfirm));
+el.passwordResetConfirmDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closePasswordResetConfirm();
+});
 el.logoutButton.addEventListener("click", logout);
 el.settingsPasswordButton?.addEventListener("click", () => el.passwordDialog.showModal());
-el.portalSettingsShortcut?.addEventListener("click", () => setTab("settings"));
+el.portalSettingsShortcut?.addEventListener("click", () => setTab(portalState.activeTab === "settings" ? "home" : "settings"));
+el.mobileSettingsHome?.addEventListener("click", () => setTab("home"));
+el.mobileHomeTiles?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-mobile-home-tab]");
+  if (button) setTab(button.dataset.mobileHomeTab);
+});
 el.leadershipSettingsButton?.addEventListener("click", () => setTab("settings"));
+el.mobileHomeSettingsList?.addEventListener("change", (event) => {
+  const row = event.target.closest("[data-mobile-home-item]");
+  if (!row) return;
+  if (event.target.closest("[data-mobile-home-color-picker]")) {
+    updateMobileHomeColorFromPicker(row);
+    return;
+  }
+  if (event.target.closest("[data-mobile-home-rgb]")) {
+    const rgb = mobileHomeRgbFromRow(row);
+    if (!updateMobileHomeColor(String(row.dataset.mobileHomeItem || ""), row, rgb)) {
+      message(el.mobileHomeSettingsMessage, "RGB-Werte müssen ganze Zahlen zwischen 0 und 255 sein.", true);
+    }
+  }
+});
+el.mobileHomeSettingsList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-mobile-home-move]");
+  const row = button?.closest("[data-mobile-home-item]");
+  if (button && row) moveMobileHomeItem(row.dataset.mobileHomeItem, Number(button.dataset.mobileHomeMove));
+});
+el.resetMobileHomeButton?.addEventListener("click", resetMobileHomeSettings);
+el.saveMobileHomeButton?.addEventListener("click", saveMobileHomeSettings);
 el.mobileNavigationSettingsList?.addEventListener("change", (event) => {
   const input = event.target.closest("[data-mobile-navigation-visible]");
   if (!input) return;
@@ -5309,6 +6777,42 @@ document.querySelectorAll("[data-settings-focus]").forEach((button) => button.ad
   window.setTimeout(() => focusPortalSettingsSection(button.dataset.settingsFocus), 0);
 }));
 document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
+el.refreshPortalLearningDashboard?.addEventListener("click", () => {
+  portalState.personnelLearningDashboard = null;
+  loadPersonnelLearningDashboard({ force: true });
+});
+el.portalLearningDashboardEmployee?.addEventListener("change", (event) => {
+  portalState.personnelLearningDashboardEmployeeNumber = event.target.value;
+  renderPortalLearningSkillTree();
+});
+el.portalLearningDashboardAssignments?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-portal-learning-progress]");
+  if (!button) return;
+  openPortalLearningProgress(button.dataset.portalLearningProgress)
+    .catch((error) => message(el.portalLearningDashboardMessage, error.message, true));
+});
+el.portalLearningProgressForm?.addEventListener("submit", savePortalLearningProgress);
+el.portalLearningProgressSteps?.addEventListener("change", (event) => {
+  event.target.closest(".portal-learning-progress-step")?.classList.toggle(
+    "completed",
+    event.target.checked,
+  );
+  updatePortalLearningProgressAvailability();
+});
+[
+  el.portalLearningProgressFinalized,
+  el.portalLearningProgressResult,
+  el.portalLearningProgressCorrectionReason,
+].forEach((field) => {
+  field?.addEventListener(field === el.portalLearningProgressCorrectionReason ? "input" : "change", updatePortalLearningProgressAvailability);
+});
+document.querySelectorAll("[data-close-portal-learning-progress]").forEach((button) => {
+  button.addEventListener("click", () => el.portalLearningProgressDialog.close());
+});
+el.portalLearningProgressDialog?.addEventListener("close", () => {
+  portalState.personnelLearningProgressAssignment = null;
+  message(el.portalLearningProgressMessage, "");
+});
 document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   const tabs = [...document.querySelectorAll("[data-tab]:not(.hidden)")];
@@ -5415,26 +6919,90 @@ el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayO
 el.branchVacationPrevious?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, -7); loadBranchVacationOverview(); });
 el.branchVacationNext?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, 7); loadBranchVacationOverview(); });
 el.branchVacationCurrent?.addEventListener("click", () => { portalState.branchVacationWeekStart = mondayOf(new Date()); loadBranchVacationOverview(); });
-  el.branchOrderRefresh?.addEventListener("click", () => Promise.allSettled([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]));
+  el.branchOrderRefresh?.addEventListener("click", () => {
+    if (portalState.branchOrderDraftDirty) {
+      message(el.branchOrderMessage, "Bitte den Entwurf vor dem Aktualisieren speichern oder verwerfen.", true);
+      return;
+    }
+    Promise.allSettled([loadBranchOrderCatalog(), loadBranchOrderPortalHistory()]);
+  });
   el.branchOrderForm?.addEventListener("submit", submitBranchOrder);
+el.branchOrderEmployee?.addEventListener("change", () => {
+  const nextEmployeeNumber = String(el.branchOrderEmployee.value || "").trim();
+  if (portalState.branchOrderDraftDirty
+    && portalState.branchOrderDraftEmployeeNumber
+    && nextEmployeeNumber !== portalState.branchOrderDraftEmployeeNumber) {
+    el.branchOrderEmployee.value = portalState.branchOrderDraftEmployeeNumber;
+    message(el.branchOrderMessage, "Bitte den begonnenen Entwurf zuerst speichern oder verwerfen.", true);
+    return;
+  }
+  loadBranchOrderDraft(nextEmployeeNumber);
+});
 el.branchOrderGroups?.addEventListener("change", (event) => {
   const checkbox = event.target.closest("[data-branch-order-select]");
-  if (!checkbox) return;
-  const row = checkbox.closest("[data-branch-order-item]");
-  row?.querySelectorAll("[data-branch-order-quantity], [data-branch-order-note]")
-    .forEach((field) => { field.disabled = !checkbox.checked; });
+  const row = event.target.closest("[data-branch-order-item]");
+  if (!row) return;
+  const itemId = String(row.dataset.branchOrderItem || "");
+  if (!itemId) return;
+  if (checkbox) {
+    if (checkbox.checked) {
+      const quantity = Number(row.querySelector("[data-branch-order-quantity]")?.value || 1);
+      branchOrderSelection().set(itemId, { quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1, note: row.querySelector("[data-branch-order-note]")?.value || "" });
+    } else {
+      branchOrderSelection().delete(itemId);
+    }
+  } else if (event.target.closest("[data-branch-order-quantity], [data-branch-order-note]")) {
+    const current = branchOrderSelection().get(itemId);
+    if (current) {
+      current.quantity = Number(row.querySelector("[data-branch-order-quantity]")?.value || "");
+      current.note = row.querySelector("[data-branch-order-note]")?.value || "";
+    }
+  } else return;
+  syncBranchOrderItemRepresentations(itemId);
+  portalState.branchOrderDraftDirty = true;
+  portalState.branchOrderReviewVisible = false;
+  renderBranchOrderDraftState();
 });
+el.branchOrderGroups?.addEventListener("input", (event) => {
+  if (!event.target.closest("[data-branch-order-quantity], [data-branch-order-note]")) return;
+  const row = event.target.closest("[data-branch-order-item]");
+  const itemId = String(row?.dataset.branchOrderItem || "");
+  const current = branchOrderSelection().get(itemId);
+  if (!current) return;
+  current.quantity = row.querySelector("[data-branch-order-quantity]")?.value || "";
+  current.note = row.querySelector("[data-branch-order-note]")?.value || "";
+  syncBranchOrderItemRepresentations(itemId, { sourceRow: row });
+  portalState.branchOrderDraftDirty = true;
+  portalState.branchOrderReviewVisible = false;
+  renderBranchOrderDraftState();
+});
+el.branchOrderSaveDraft?.addEventListener("click", saveBranchOrderDraft);
+el.branchOrderContinueDraft?.addEventListener("click", applyPendingBranchOrderDraft);
+el.branchOrderDiscardDraft?.addEventListener("click", discardBranchOrderDraft);
+el.branchOrderBackToEdit?.addEventListener("click", () => setBranchOrderReviewVisible(false));
+el.branchMobileBack?.addEventListener("click", branchMobileBack);
+el.branchMobileReview?.addEventListener("click", () => setBranchOrderReviewVisible(true));
+el.branchMobileSave?.addEventListener("click", () => saveBranchOrderDraft());
+el.branchMobileSubmit?.addEventListener("click", () => submitBranchOrder());
 el.refreshBranchOrderSettings?.addEventListener("click", loadBranchOrderSettings);
 el.saveBranchOrderSettings?.addEventListener("click", saveBranchOrderSettings);
-  el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);
+el.branchPortalDisplaySettingsForm?.addEventListener("submit", saveBranchPortalDisplaySettings);
+el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);
   el.branchOrderPortalHistoryRefresh?.addEventListener("click", loadBranchOrderPortalHistory);
+function moveBranchOrderDraftEntry(entries, id, direction) {
+  const index = entries.findIndex((entry) => (typeof entry === "string" ? entry : entry.id) === id);
+  const target = index + Number(direction || 0);
+  if (index < 0 || target < 0 || target >= entries.length) return;
+  [entries[index], entries[target]] = [entries[target], entries[index]];
+}
 function updateBranchOrderSettingsDraft(event) {
   const field = event.target.closest("[data-branch-order-settings-field]");
   if (!field || !portalState.branchOrderSettingsDraft) return;
   const key = field.dataset.branchOrderSettingsField;
   const recipient = field.closest("[data-branch-order-recipient]");
   const group = field.closest("[data-branch-order-group-editor]");
-  const item = field.closest("[data-branch-order-item-editor]");
+  const item = field.closest("[data-branch-order-catalog-item]");
+  const unit = field.closest("[data-branch-order-unit-editor]");
   if (recipient) {
     const target = branchOrderDraftRecipient(recipient.dataset.branchOrderRecipient);
     if (!target) return;
@@ -5444,11 +7012,17 @@ function updateBranchOrderSettingsDraft(event) {
     if (key === "recipient-body") target.bodyTemplate = field.value;
     return;
   }
+  if (unit) {
+    const target = branchOrderDraftUnit(unit.dataset.branchOrderUnitEditor);
+    if (target && key === "unit-title") target.title = field.value;
+    return;
+  }
   if (item) {
-    const target = branchOrderDraftItem(item.dataset.branchOrderItemEditor);
+    const target = branchOrderDraftItem(item.dataset.branchOrderCatalogItem);
     if (!target) return;
-    if (key === "item-title") target.title = field.value;
-    if (key === "item-unit") target.unit = field.value;
+    if (key === "catalog-item-title") target.title = field.value;
+    if (key === "catalog-item-unit") target.unitId = field.value;
+    if (key === "catalog-item-recipient") target.recipientId = field.value;
     return;
   }
   if (group) {
@@ -5456,7 +7030,6 @@ function updateBranchOrderSettingsDraft(event) {
     if (!target) return;
     if (key === "group-title") target.title = field.value;
     if (key === "group-hint") target.hint = field.value;
-    if (key === "group-recipient") target.recipientId = field.value;
   }
 }
 function captureBranchOrderSettingsDraft() {
@@ -5485,17 +7058,56 @@ el.branchOrderSettingsWorkspace?.addEventListener("click", (event) => {
   if (removeRecipient) {
     const id = removeRecipient.dataset.branchOrderRemoveRecipient;
     draft.recipients = draft.recipients.filter((recipient) => recipient.id !== id);
-    draft.groups.forEach((group) => { if (group.recipientId === id) group.recipientId = ""; });
+    draft.items.forEach((item) => { if (item.recipientId === id) item.recipientId = ""; });
+    renderBranchOrderSettings();
+    return;
+  }
+  if (event.target.closest("[data-branch-order-add-unit]")) {
+    draft.units.push({ id: branchOrderClientId("unit"), title: "Neue Einheit" });
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeUnit = event.target.closest("[data-branch-order-remove-unit]");
+  if (removeUnit) {
+    const id = removeUnit.dataset.branchOrderRemoveUnit;
+    if (draft.items.some((item) => item.unitId === id)) {
+      message(el.branchOrderSettingsMessage, "Diese Einheit wird noch von einer Position verwendet.", true);
+      return;
+    }
+    draft.units = draft.units.filter((unit) => unit.id !== id);
+    renderBranchOrderSettings();
+    return;
+  }
+  const moveUnit = event.target.closest("[data-branch-order-move-unit]");
+  if (moveUnit) {
+    moveBranchOrderDraftEntry(draft.units, moveUnit.dataset.branchOrderMoveUnit, Number(moveUnit.dataset.direction));
+    renderBranchOrderSettings();
+    return;
+  }
+  if (event.target.closest("[data-branch-order-add-catalog-item]")) {
+    const defaultUnit = draft.units[0]?.id || "";
+    if (!defaultUnit) {
+      message(el.branchOrderSettingsMessage, "Bitte zuerst mindestens eine Einheit anlegen.", true);
+      return;
+    }
+    draft.items.push({ id: branchOrderClientId("item"), title: "Neue Position", unitId: defaultUnit, recipientId: draft.recipients[0]?.id || "" });
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeCatalogItem = event.target.closest("[data-branch-order-remove-catalog-item]");
+  if (removeCatalogItem) {
+    const id = removeCatalogItem.dataset.branchOrderRemoveCatalogItem;
+    draft.items = draft.items.filter((item) => item.id !== id);
+    draft.groups.forEach((group) => { group.itemIds = group.itemIds.filter((itemId) => itemId !== id); });
     renderBranchOrderSettings();
     return;
   }
   if (event.target.closest("[data-branch-order-add-group]")) {
     draft.groups.push({
       id: branchOrderClientId("group"),
-      recipientId: draft.recipients[0]?.id || "",
-      title: "Neue Warengruppe",
+      title: "Neue Anzeigegruppe",
       hint: "",
-      items: [],
+      itemIds: [],
     });
     renderBranchOrderSettings();
     return;
@@ -5506,17 +7118,32 @@ el.branchOrderSettingsWorkspace?.addEventListener("click", (event) => {
     renderBranchOrderSettings();
     return;
   }
-  const addItem = event.target.closest("[data-branch-order-add-item]");
-  if (addItem) {
-    const group = branchOrderDraftGroup(addItem.dataset.branchOrderAddItem);
-    if (group) group.items.push({ id: branchOrderClientId("item"), title: "Neue Position", unit: "Stück" });
+  const moveGroup = event.target.closest("[data-branch-order-move-group]");
+  if (moveGroup) {
+    moveBranchOrderDraftEntry(draft.groups, moveGroup.dataset.branchOrderMoveGroup, Number(moveGroup.dataset.direction));
     renderBranchOrderSettings();
     return;
   }
-  const removeItem = event.target.closest("[data-branch-order-remove-item]");
-  if (removeItem) {
-    const id = removeItem.dataset.branchOrderRemoveItem;
-    draft.groups.forEach((group) => { group.items = group.items.filter((item) => item.id !== id); });
+  const addGroupItem = event.target.closest("[data-branch-order-add-group-item]");
+  if (addGroupItem) {
+    const groupId = addGroupItem.dataset.branchOrderAddGroupItem;
+    const selected = el.branchOrderSettingsWorkspace.querySelector(`[data-branch-order-group-item-select="${CSS.escape(groupId)}"]`)?.value || "";
+    const group = branchOrderDraftGroup(groupId);
+    if (group && selected && !group.itemIds.includes(selected)) group.itemIds.push(selected);
+    renderBranchOrderSettings();
+    return;
+  }
+  const removeGroupItem = event.target.closest("[data-branch-order-remove-group-item]");
+  if (removeGroupItem) {
+    const group = branchOrderDraftGroup(removeGroupItem.dataset.branchOrderRemoveGroupItem);
+    if (group) group.itemIds = group.itemIds.filter((id) => id !== removeGroupItem.dataset.itemId);
+    renderBranchOrderSettings();
+    return;
+  }
+  const moveGroupItem = event.target.closest("[data-branch-order-move-group-item]");
+  if (moveGroupItem) {
+    const group = branchOrderDraftGroup(moveGroupItem.dataset.branchOrderMoveGroupItem);
+    if (group) moveBranchOrderDraftEntry(group.itemIds, moveGroupItem.dataset.itemId, Number(moveGroupItem.dataset.direction));
     renderBranchOrderSettings();
   }
 });
@@ -5582,6 +7209,12 @@ el.loanList?.addEventListener("click", (event) => {
   if (manageButton) openLoanManagement(manageButton.dataset.loanManage);
 });
 el.loanReturnForm?.addEventListener("submit", submitLoanReturn);
+el.loanReturnWitness?.addEventListener("change", () => {
+  const canManage = portalState.loanStatus?.permissions?.locationManage === true;
+  el.loanReturnSubmit.textContent = el.loanReturnWitness.value
+    ? "Gegenprüfung anfordern"
+    : (canManage ? "Rücknahme abschließen" : "Rücknahme speichern");
+});
 el.loanManageForm?.addEventListener("submit", submitLoanManagement);
 el.loanManageClose?.addEventListener("click", () => runLoanManagementAction("close"));
 el.loanManageReopen?.addEventListener("click", () => runLoanManagementAction("reopen"));
@@ -5664,6 +7297,13 @@ el.notificationsButton.addEventListener("click", async () => {
 });
 el.notificationsDialog.addEventListener("close", () => el.notificationsButton.setAttribute("aria-expanded", "false"));
 document.querySelectorAll("[data-close-notifications]").forEach((button) => button.addEventListener("click", () => el.notificationsDialog.close()));
+el.birthdayPresentationClose?.addEventListener("click", closeBirthdayPresentation);
+el.birthdayPresentationConfirm?.addEventListener("click", closeBirthdayPresentation);
+el.birthdayPresentationDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeBirthdayPresentation();
+});
+el.birthdayPresentationGraphic?.addEventListener("error", () => neutralizeBirthdayPresentation());
 el.notificationList.addEventListener("click", (event) => {
   const item = event.target.closest("[data-notification-id]");
   if (item) readNotification(item.dataset.notificationId);
@@ -5708,6 +7348,7 @@ el.amuReportList.addEventListener("click", (event) => {
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && portalState.session) {
+    refreshBirthdayPresentationTheme();
     loadNotifications();
     loadProcessTasks();
     if (portalState.activeTab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking()]);

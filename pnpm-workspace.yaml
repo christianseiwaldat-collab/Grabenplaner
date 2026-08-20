@@ -3,8 +3,8 @@ allowBuilds:
   tesseract.js: false
 
 overrides:
-  brace-expansion: 5.0.8
+  brace-expansion: 5.0.9
   uuid: 11.1.1
 
 patchedDependencies:
-  brace-expansion@5.0.8: lib/vendor-patches/brace-expansion@5.0.8.patch
+  brace-expansion@5.0.9: lib/vendor-patches/brace-expansion@5.0.9.patch
