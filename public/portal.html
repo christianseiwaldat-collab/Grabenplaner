@@ -18,6 +18,7 @@
         <p>Mit Personalnummer oder Zugangskennung und Passwort.</p>
         <label><span>Zugangskennung</span><input id="loginPersonnelNumber" autocomplete="username" placeholder="Personalnummer oder Kontokennung" required /></label>
         <label><span>Passwort</span><span class="password-field"><input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <button class="login-forgot-password" id="forgotPasswordButton" type="button">Passwort vergessen?</button>
         <p class="message error hidden" id="loginError"></p>
         <button class="primary" type="submit">Anmelden</button>
       </form>
@@ -26,11 +27,19 @@
     <div class="portal-app hidden" id="portalApp">
       <header class="portal-header">
         <div class="portal-brand"><img id="portalLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" /><div><strong>Grabenplaner</strong><span>Mitarbeiterportal</span></div></div>
-        <div class="portal-user"><div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button><button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Persönliche Einstellungen öffnen">Einstellungen</button><button class="text-button header-action" id="logoutButton" type="button">Abmelden</button></div>
+        <div class="portal-user">
+          <div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div>
+          <a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a>
+          <button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button>
+          <button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Einstellungen öffnen"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2ZM19 12a7.2 7.2 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-2.1-1.2L14 3h-4l-.4 2.7a7.7 7.7 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5A7.2 7.2 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1a7.7 7.7 0 0 0 2.1 1.2L10 21h4l.4-2.7a7.7 7.7 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" /></svg><span class="portal-settings-shortcut-label">Einstellungen</span></button>
+          <button class="text-button header-action" id="logoutButton" type="button">Abmelden</button>
+        </div>
       </header>
+      <p class="portal-logout-status message error hidden" id="portalLogoutStatus" role="alert"></p>
 
       <main>
         <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
+          <button class="hidden mobile-home-tab" id="mobileHomeTab" data-tab="home" type="button" role="tab" aria-selected="false" aria-controls="mobileHomeView" tabindex="-1">Start</button>
           <button data-tab="settings" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Einstellungen</button>
           <button class="active" id="scheduleTab" data-tab="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView">Dienstplan</button>
           <button class="hidden" id="branchVacationTab" data-tab="branchVacation" type="button" role="tab" aria-selected="false" aria-controls="branchVacationView" tabindex="-1">Urlaubsplanung</button>
@@ -38,6 +47,7 @@
           <button class="hidden leadership-tab" id="leadershipTeamTab" data-tab="leadershipTeam" data-mobile-module="presence" type="button" role="tab" aria-selected="false" aria-controls="leadershipTeamView" tabindex="-1">Team</button>
           <button class="hidden leadership-tab" id="leadershipApprovalsTab" data-tab="leadershipApprovals" data-mobile-module="approvals" type="button" role="tab" aria-selected="false" aria-controls="leadershipApprovalsView" tabindex="-1">Freigaben</button>
           <button id="processTasksTab" data-tab="processTasks" type="button" role="tab" aria-selected="false" aria-controls="processTasksView" tabindex="-1">Aufgaben <span class="portal-tab-count hidden" id="processTasksTabCount">0</span></button>
+          <button class="hidden" id="personnelLearningDashboardTab" data-tab="learningDashboard" type="button" role="tab" aria-selected="false" aria-controls="personnelLearningDashboardView" tabindex="-1">Schulungen</button>
           <button id="timeOffTab" data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">ZA</button>
           <button id="vacationTab" data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
           <button id="historyTab" data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
@@ -49,8 +59,20 @@
         </nav>
 
         <section class="portal-view" id="settingsView" role="tabpanel">
-          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Mobile Navigation, persönliches Portaldesign, freiwillige Funktionen und Sicherheit an einem Ort.</p></div></div>
+          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Startseite, mobile Navigation, persönliches Portaldesign, freiwillige Funktionen und Sicherheit an einem Ort.</p></div><button class="text-button mobile-settings-home" id="mobileSettingsHome" type="button">Zur Startseite</button></div>
           <div class="portal-settings-stack">
+            <details class="portal-card portal-settings-section" id="mobileHomeSettingsCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Handyansicht</span><strong>Startseite</strong><small>Kacheln anordnen und Farben in RGB wählen</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <p>Die Startseite zeigt alle für dich freigeschalteten Bereiche. Du kannst die Reihenfolge und die Farbe jeder Kachel persönlich festlegen.</p>
+                <div class="mobile-home-settings-list" id="mobileHomeSettingsList" aria-live="polite"><p class="empty-state">Startseite wird geladen.</p></div>
+                <p class="message hidden" id="mobileHomeSettingsMessage" role="status" aria-live="polite"></p>
+                <div class="portal-settings-actions"><button class="text-button" id="resetMobileHomeButton" type="button">Standard wiederherstellen</button><button class="primary" id="saveMobileHomeButton" type="button">Startseite speichern</button></div>
+              </div>
+            </details>
             <details class="portal-card portal-settings-section" id="mobileNavigationSettingsCard">
               <summary class="portal-settings-summary">
                 <span><span class="eyebrow">Handyansicht</span><strong>Bottom-Menü</strong><small>Direkte Punkte auswählen und anordnen</small></span>
@@ -75,6 +97,10 @@
                   <label data-palette-option="ocean"><input type="radio" name="mobilePortalPalette" value="ocean" /><span class="portal-palette-swatch ocean"></span><span><strong>Ozeanblau</strong><small>Klar und neutral</small></span></label>
                   <label data-palette-option="plum"><input type="radio" name="mobilePortalPalette" value="plum" /><span class="portal-palette-swatch plum"></span><span><strong>Pflaume</strong><small>Warm und zurückhaltend</small></span></label>
                   <label data-palette-option="sand"><input type="radio" name="mobilePortalPalette" value="sand" /><span class="portal-palette-swatch sand"></span><span><strong>Sand</strong><small>Natürlich und weich</small></span></label>
+                  <label data-palette-option="berry"><input type="radio" name="mobilePortalPalette" value="berry" /><span class="portal-palette-swatch berry"></span><span><strong>Beere</strong><small>Kräftig und freundlich</small></span></label>
+                  <label data-palette-option="amber"><input type="radio" name="mobilePortalPalette" value="amber" /><span class="portal-palette-swatch amber"></span><span><strong>Bernstein</strong><small>Hell und warm</small></span></label>
+                  <label data-palette-option="slate"><input type="radio" name="mobilePortalPalette" value="slate" /><span class="portal-palette-swatch slate"></span><span><strong>Schiefer</strong><small>Ruhig und sachlich</small></span></label>
+                  <label data-palette-option="teal"><input type="radio" name="mobilePortalPalette" value="teal" /><span class="portal-palette-swatch teal"></span><span><strong>Petrol</strong><small>Frisch und kontrastreich</small></span></label>
                 </fieldset>
                 <fieldset class="portal-surface-options">
                   <legend>Kartenstil</legend>
@@ -152,7 +178,7 @@
                     <p class="notification-quiet-hours-hint" id="notificationQuietHoursHint">Zentral vorgegeben · nur lesbar</p>
                   </section>
                   <section class="email-settings-panel notification-events-panel" aria-labelledby="emailCategoriesHeading">
-                    <div class="email-settings-panel-heading"><div><h2 id="emailCategoriesHeading">Fachereignisse</h2><p>Die fachlichen Meldungen werden zentral vorbereitet. Derzeit wird daraus noch nichts automatisch extern versendet.</p></div></div>
+                    <div class="email-settings-panel-heading"><div><h2 id="emailCategoriesHeading">Fachereignisse</h2><p>Zentral freigegebene Einsatzanfragen können bei ausgewähltem, bestätigtem E-Mail-Kanal automatisch versendet werden. Weitere Fachereignisse bleiben derzeit inaktiv.</p></div></div>
                     <div class="email-category-list" id="emailCategoryList" aria-live="polite"><p class="empty-state">Kategorien werden geladen.</p></div>
                   </section>
                   <p class="message hidden notification-settings-message" id="emailSettingsMessage" role="status" aria-live="polite"></p>
@@ -172,6 +198,22 @@
                 <section class="branch-order-history" aria-labelledby="branchOrderHistoryTitle"><div class="list-heading"><h2 id="branchOrderHistoryTitle">Bestellverlauf</h2><button class="text-button" id="refreshBranchOrderHistory" type="button">Verlauf aktualisieren</button></div><div id="branchOrderHistoryList"><p class="empty-state">Bestellverlauf wird geladen.</p></div></section>
               </div>
             </details>
+            <details class="portal-card portal-settings-section hidden" id="branchPortalDisplaySettingsCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Filialkonto</span><strong>Ansicht &amp; Filialbestellung</strong><small id="branchPortalDisplaySettingsSummary">Einstellungen werden geladen.</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <p>Gilt für den zugewiesenen Standort. Die farbige Ansicht setzt Akzente nur am Rand der Dienstfelder, damit Zeiten und Namen uneingeschränkt lesbar bleiben.</p>
+                <form class="branch-portal-display-settings" id="branchPortalDisplaySettingsForm">
+                  <fieldset><legend>Dienstplanansicht</legend><label><input name="branchScheduleDisplayMode" type="radio" value="classic" checked /> Klassisch</label><label><input name="branchScheduleDisplayMode" type="radio" value="colored" /> Farbig nach Teammitglied</label></fieldset>
+                  <label class="portal-switch"><span>In der mobilen aktuellen Woche vergangene Tage ausblenden</span><input id="branchPortalHideElapsedDays" type="checkbox" /></label>
+                  <fieldset class="branch-order-autosave-settings"><legend>Filialbestellung</legend><label class="portal-switch"><span>Begonnene Bestellung automatisch speichern</span><input id="branchOrderAutosaveEnabled" type="checkbox" /></label><label><span>Speicherabstand in Minuten</span><input id="branchOrderAutosaveMinutes" type="number" min="1" max="99" step="1" inputmode="numeric" value="10" /></label></fieldset>
+                  <p class="message hidden" id="branchPortalDisplaySettingsMessage" role="status" aria-live="polite"></p>
+                  <div class="portal-settings-actions"><button class="primary" id="saveBranchPortalDisplaySettings" type="submit">Einstellungen speichern</button></div>
+                </form>
+              </div>
+            </details>
             <details class="portal-card portal-settings-section portal-settings-password" id="passwordSettingsCard">
               <summary class="portal-settings-summary">
                 <span><span class="eyebrow">Sicherheit</span><strong>Passwort ändern</strong><small>Persönliches Passwort sicher aktualisieren</small></span>
@@ -188,6 +230,11 @@
         <section class="portal-view active" id="scheduleView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
           <div class="schedule-grid" id="scheduleGrid"></div>
+        </section>
+
+        <section class="portal-view mobile-home-view" id="mobileHomeView" role="tabpanel" aria-labelledby="mobileHomeTab">
+          <div class="mobile-home-heading"><span class="eyebrow">Mitarbeiterportal</span><h1>Startseite</h1><p>Wähle einen Bereich aus.</p></div>
+          <nav class="mobile-home-tiles" id="mobileHomeTiles" aria-label="Portalbereiche"><p class="empty-state">Bereiche werden geladen.</p></nav>
         </section>
 
         <section class="portal-view branch-vacation-view" id="branchVacationView" role="tabpanel" aria-labelledby="branchVacationTab">
@@ -265,6 +312,23 @@
           </div>
           <div class="process-task-summary" id="processTaskSummary" aria-live="polite"></div>
           <section class="process-task-list" id="processTaskList" aria-live="polite" aria-busy="false"><div class="portal-card"><p class="empty-state">Prozessaufgaben werden geladen.</p></div></section>
+        </section>
+
+        <section class="portal-view portal-learning-dashboard-view" id="personnelLearningDashboardView" role="tabpanel" aria-labelledby="personnelLearningDashboardTab">
+          <div class="view-heading portal-learning-dashboard-heading"><div><span class="eyebrow">Transparentes Lernen</span><h1>Schulungen &amp; Fähigkeiten</h1><p id="portalLearningDashboardScope">Sichtbar sind ausschließlich deine eigenen oder die im aktuell freigegebenen Bereich liegenden Schulungen.</p></div><button class="text-button" id="refreshPortalLearningDashboard" type="button">Aktualisieren</button></div>
+          <p class="message hidden" id="portalLearningDashboardMessage" role="status" aria-live="polite"></p>
+          <div class="portal-learning-summary" id="portalLearningDashboardSummary" aria-label="Zusammenfassung der Schulungen"></div>
+          <div class="portal-learning-grid">
+            <section class="portal-card portal-learning-assignments" aria-labelledby="portalLearningAssignmentsTitle">
+              <div class="list-heading"><div><span class="eyebrow">Durchführung</span><h2 id="portalLearningAssignmentsTitle">Schulungsfortschritte</h2></div></div>
+              <p class="portal-learning-transparency">Erledigte Schritte und Bewertungen werden revisionsgebunden dokumentiert. Im Filialkonto sind Schritte erfassbar; Abschlüsse und Korrekturen bleiben persönlichen berechtigten Konten vorbehalten.</p>
+              <div class="portal-learning-assignment-list" id="portalLearningDashboardAssignments"><p class="empty-state">Schulungsstände werden geladen.</p></div>
+            </section>
+            <section class="portal-card portal-learning-skills" aria-labelledby="portalLearningSkillsTitle">
+              <div class="portal-learning-skills-heading"><div><span class="eyebrow">Fähigkeitsprofil</span><h2 id="portalLearningSkillsTitle">Fähigkeitsbaum · Stufen 1–10</h2></div><label><span>Mitarbeiter</span><select id="portalLearningDashboardEmployee"><option value="">Profile werden geladen</option></select></label></div>
+              <div class="portal-learning-skill-tree" id="portalLearningSkillTree"><p class="empty-state">Fähigkeitsprofil wird geladen.</p></div>
+            </section>
+          </div>
         </section>
 
         <section class="portal-view leadership-view" id="leadershipMoreView" role="tabpanel" aria-labelledby="leadershipMoreTab">
@@ -397,9 +461,14 @@
           <div class="view-heading branch-orders-heading"><div><span class="eyebrow">Standortbestellung</span><h1>Filialbestellung</h1><p id="branchOrderWeek">Kalenderwoche wird ermittelt.</p></div><button class="text-button" id="branchOrderRefresh" type="button">Aktualisieren</button></div>
           <form class="portal-card branch-order-form" id="branchOrderForm">
             <label class="branch-order-employee-field"><span>Bestellung für</span><select id="branchOrderEmployee" required><option value="">Teammitglied wird geladen.</option></select><small>Name und Personalnummer werden mit der Bestellung gespeichert.</small></label>
+            <aside class="branch-order-draft-panel hidden" id="branchOrderDraftPanel" aria-live="polite">
+              <div><strong id="branchOrderDraftTitle">Entwurf</strong><small id="branchOrderDraftDetail"></small></div>
+              <div class="branch-order-draft-actions"><button class="text-button hidden" id="branchOrderContinueDraft" type="button">Fortsetzen</button><button class="text-button danger-button hidden" id="branchOrderDiscardDraft" type="button">Verwerfen</button></div>
+            </aside>
             <div class="branch-order-group-list" id="branchOrderGroups"><p class="empty-state">Bestellpositionen werden geladen.</p></div>
+            <section class="branch-order-review hidden" id="branchOrderReview" aria-live="polite"><div class="branch-order-review-heading"><div><span class="eyebrow">Kontrolle</span><h2>Bestellung überprüfen</h2><p>Bitte Mengen und Bemerkungen vor dem Absenden kontrollieren.</p></div><button class="text-button" id="branchOrderBackToEdit" type="button">Bearbeiten</button></div><div id="branchOrderReviewList"></div></section>
             <p class="message hidden" id="branchOrderMessage" role="status" aria-live="polite"></p>
-            <div class="branch-order-submit-row"><small>Die Kalenderwoche wird nicht eingegeben und kann nicht überschrieben werden.</small><button class="primary" id="branchOrderSubmit" type="submit">Bestellung senden</button></div>
+            <div class="branch-order-submit-row"><small>Die Kalenderwoche wird automatisch ermittelt. Ein gespeicherter Entwurf lässt sich später fortsetzen.</small><div class="branch-order-submit-actions"><button class="text-button" id="branchOrderSaveDraft" type="button">Entwurf speichern</button><button class="primary" id="branchOrderSubmit" type="submit">Bestellung senden</button></div></div>
           </form>
           <section class="portal-card branch-order-portal-history" aria-labelledby="branchOrderPortalHistoryTitle">
             <div class="list-heading"><div><span class="eyebrow">Nachweis</span><h2 id="branchOrderPortalHistoryTitle">Vergangene Bestellungen</h2></div><button class="text-button" id="branchOrderPortalHistoryRefresh" type="button">Aktualisieren</button></div>
@@ -473,7 +542,31 @@
           </section>
         </section>
       </main>
+      <nav class="branch-mobile-action-bar hidden" id="branchMobileActionBar" aria-label="Filialbestellung Aktionen"><button class="text-button branch-mobile-back" id="branchMobileBack" type="button" aria-label="Zurück zur Startseite"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5M9 12h8" /></svg></button><div class="branch-mobile-action-spacer"></div><button class="text-button hidden" id="branchMobileReview" type="button">Bestellung überprüfen</button><button class="primary hidden" id="branchMobileSubmit" type="button">Bestellung absenden</button><button class="primary hidden" id="branchMobileSave" type="button">Speichern</button></nav>
     </div>
+
+    <dialog id="passwordResetRequestDialog" aria-labelledby="passwordResetRequestTitle">
+      <form id="passwordResetRequestForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Zugang</span><h2 id="passwordResetRequestTitle">Passwort zurücksetzen</h2></div><button type="button" data-close-password-reset-request aria-label="Dialog schließen">×</button></div>
+        <p>Gib die in deinen geschützten Personalstammdaten hinterlegte und bereits bestätigte E-Mail-Adresse ein.</p>
+        <label><span>E-Mail-Adresse</span><input id="passwordResetEmail" type="email" maxlength="320" autocomplete="email" required /></label>
+        <p class="form-note">Aus Datenschutzgründen ist die Rückmeldung immer gleich – unabhängig davon, ob ein passender Zugang gefunden wurde.</p>
+        <p class="message hidden" id="passwordResetRequestMessage" role="status" aria-live="polite"></p>
+        <div class="dialog-actions"><button type="button" data-close-password-reset-request>Abbrechen</button><button class="primary" id="passwordResetRequestSubmit" type="submit">Link anfordern</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="passwordResetConfirmDialog" aria-labelledby="passwordResetConfirmTitle">
+      <form id="passwordResetConfirmForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Zugang</span><h2 id="passwordResetConfirmTitle">Neues Passwort festlegen</h2></div><button type="button" data-close-password-reset-confirm aria-label="Dialog schließen">×</button></div>
+        <input id="passwordResetToken" type="hidden" />
+        <label><span>Neues Passwort</span><span class="password-field"><input id="passwordResetNewPassword" type="password" minlength="6" autocomplete="new-password" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input id="passwordResetRepeatPassword" type="password" minlength="6" autocomplete="new-password" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <p class="password-recommendation">Verwende ein langes, nur hier eingesetztes Passwort. Nach dem Speichern werden alle bestehenden Portal- und App-Sitzungen dieses Zugangs beendet.</p>
+        <p class="message hidden" id="passwordResetConfirmMessage" role="status" aria-live="polite"></p>
+        <div class="dialog-actions"><button type="button" data-close-password-reset-confirm>Abbrechen</button><button class="primary" id="passwordResetConfirmSubmit" type="submit">Passwort speichern</button></div>
+      </form>
+    </dialog>
 
     <dialog id="passwordDialog">
       <form id="passwordForm">
@@ -492,7 +585,7 @@
         <div class="dialog-heading"><div><span class="eyebrow">Rücknahme</span><h2 id="loanReturnTitle">Leihe zurücknehmen</h2></div><button type="button" data-close-loan-return aria-label="Dialog schließen">×</button></div>
         <div class="history-detail-summary" id="loanReturnSummary"></div>
         <div class="loan-return-items" id="loanReturnItems"></div>
-        <label><span>Zweites Teammitglied</span><select id="loanReturnWitness" required></select><small>Die Rücknahme wird durch ein anderes aktives Teammitglied desselben Standorts bestätigt.</small></label>
+        <label><span>Zweites Teammitglied</span><select id="loanReturnWitness"></select><small id="loanReturnWitnessHint">Die Rücknahme kann zuerst vorbereitet und später zur Gegenprüfung weitergegeben werden.</small></label>
         <label><span>Bemerkung zur Rückgabe</span><textarea id="loanReturnNote" maxlength="1000" rows="3" placeholder="Optional"></textarea></label>
         <section class="loan-photo-picker" aria-labelledby="loanReturnPhotoTitle">
           <div><strong id="loanReturnPhotoTitle">Zustand bei Rückgabe fotografieren</strong><small id="loanReturnPhotoPolicy">Die ausgewählten Fotos werden als eigene geschützte Rückgabe-PDF-Beilage verarbeitet und dem zweiten Teammitglied vor der Bestätigung angezeigt.</small></div>
@@ -641,6 +734,37 @@
         <div class="notification-toolbar"><button class="text-button" id="markAllNotificationsRead" type="button">Alle als gelesen markieren</button></div>
         <div class="notification-list" id="notificationList"></div>
         <div class="dialog-actions"><button type="button" data-close-notifications>Schließen</button></div>
+      </form>
+    </dialog>
+    <dialog class="birthday-presentation-dialog" id="birthdayPresentationDialog" aria-labelledby="birthdayPresentationTitle" aria-describedby="birthdayPresentationText">
+      <div class="birthday-presentation-panel">
+        <button class="birthday-presentation-close" id="birthdayPresentationClose" type="button" aria-label="Geburtstagsgruß schließen">×</button>
+        <img class="birthday-presentation-graphic" id="birthdayPresentationGraphic" alt="" aria-hidden="true" />
+        <div class="birthday-presentation-copy">
+          <span class="eyebrow">Persönlicher Gruß</span>
+          <h2 id="birthdayPresentationTitle">Alles Gute zum Geburtstag!</h2>
+          <p id="birthdayPresentationText">Wir wünschen dir einen schönen Tag.</p>
+        </div>
+        <button class="primary birthday-presentation-confirm" id="birthdayPresentationConfirm" type="button">Schließen</button>
+      </div>
+    </dialog>
+    <dialog class="portal-learning-progress-dialog" id="portalLearningProgressDialog" aria-labelledby="portalLearningProgressTitle">
+      <form id="portalLearningProgressForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Schulungsdurchführung</span><h2 id="portalLearningProgressTitle">Fortschritt erfassen</h2></div><button type="button" data-close-portal-learning-progress aria-label="Dialog schließen">×</button></div>
+        <input id="portalLearningProgressAssignmentId" type="hidden" />
+        <input id="portalLearningProgressAssignmentReceipt" type="hidden" />
+        <input id="portalLearningProgressExpectedReceipt" type="hidden" />
+        <div class="portal-learning-progress-summary" id="portalLearningProgressSummary"></div>
+        <div class="portal-learning-progress-steps" id="portalLearningProgressSteps"></div>
+        <fieldset class="portal-learning-progress-assessment" id="portalLearningProgressAssessment">
+          <legend>Abschlussbewertung</legend>
+          <label class="portal-switch"><span>Schulung abschließen</span><input id="portalLearningProgressFinalized" type="checkbox" /></label>
+          <label><span>Ergebnis</span><select id="portalLearningProgressResult"><option value="pending">Noch nicht bewertet</option><option value="passed">Alles erfüllt</option><option value="follow_up_required">Nachschulung erforderlich</option><option value="not_passed">Nicht bestanden</option></select></label>
+          <label><span>Transparente Rückmeldung</span><textarea id="portalLearningProgressAssessmentNote" maxlength="600" rows="3"></textarea></label>
+          <label class="hidden" id="portalLearningProgressCorrectionReasonField"><span>Begründung der Korrektur</span><textarea id="portalLearningProgressCorrectionReason" maxlength="600" rows="3"></textarea></label>
+        </fieldset>
+        <p class="message hidden" id="portalLearningProgressMessage" role="status" aria-live="polite"></p>
+        <div class="dialog-actions"><button type="button" data-close-portal-learning-progress>Abbrechen</button><button class="primary" id="savePortalLearningProgress" type="submit">Fortschritt speichern</button></div>
       </form>
     </dialog>
     <script src="/api-errors.js"></script>

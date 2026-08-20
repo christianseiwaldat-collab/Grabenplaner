@@ -77,6 +77,36 @@ function insertEmployee(personnelNumber, homeLocationId, preferredDepartmentId =
   );
 }
 
+function insertStaffAssignment({
+  id,
+  dateFrom,
+  dateTo = dateFrom,
+  startTime = null,
+  endTime = null,
+  departmentId = targetDepartment,
+}) {
+  const allDay = startTime === null && endTime === null;
+  db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, start_time, end_time,
+      note, status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'active', 1,
+      'v071-test', CURRENT_TIMESTAMP, 'v071-test', CURRENT_TIMESTAMP)
+  `).run(
+    id,
+    FOREIGN_EMPLOYEE,
+    homeLocation,
+    TARGET_LOCATION,
+    departmentId,
+    dateFrom,
+    dateTo,
+    allDay ? 1 : 0,
+    startTime,
+    endTime,
+  );
+}
+
 function createSession(employeeNumber, role, locationId = null) {
   const token = crypto.randomBytes(32).toString("hex");
   const csrf = crypto.randomBytes(24).toString("hex");
@@ -190,6 +220,14 @@ test("Einsatzfiliale ist migriert, indiziert und serverseitig abgesichert", () =
 });
 
 test("fehlende Einsatzfiliale wird aus Abteilung oder Stammfiliale abgeleitet", () => {
+  db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, note,
+      status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES ('v071-derived-assignment', ?, ?, ?, ?, '2031-02-03', '2031-02-03',
+      1, '', 'active', 1, 'v071-test', CURRENT_TIMESTAMP, 'v071-test', CURRENT_TIMESTAMP)
+  `).run(FOREIGN_EMPLOYEE, homeLocation, TARGET_LOCATION, targetDepartment);
   const departmentShift = db.prepare(`
     INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time)
     VALUES (?, ?, '2031-02-03', '09:00', '17:00')
@@ -232,6 +270,8 @@ test("eine bestehende Datenbank wird deterministisch auf Einsatzfilialen migrier
       DROP TRIGGER IF EXISTS trg_shifts_location_update;
       DROP TRIGGER IF EXISTS trg_shifts_department_location_insert;
       DROP TRIGGER IF EXISTS trg_shifts_department_location_update;
+      DROP TRIGGER IF EXISTS trg_staff_assignments_shift_coverage_insert;
+      DROP TRIGGER IF EXISTS trg_staff_assignments_shift_coverage_update;
       CREATE TABLE shifts_v070 (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         employee_number TEXT NOT NULL,
@@ -297,7 +337,20 @@ test("eine bestehende Datenbank wird deterministisch auf Einsatzfilialen migrier
   assert.equal(migrate.status, 0, migrate.stderr || migrate.stdout);
 });
 
-test("Dienst-CRUD bleibt kompatibel und zeigt fremde Mitarbeitende im Zielplan", async () => {
+test("Dienst-CRUD zeigt zugewiesene Mitarbeitende im Zielplan", async () => {
+  const assignment = await request("/api/portal/v1/staff-assignments", {
+    method: "POST",
+    body: {
+      employeeNumber: FOREIGN_EMPLOYEE,
+      destinationLocationId: TARGET_LOCATION,
+      destinationDepartmentId: targetDepartment,
+      dateFrom: "2031-03-03",
+      dateTo: "2031-03-03",
+      allDay: true,
+      note: "",
+    },
+  });
+  assert.equal(assignment.response.status, 201, assignment.text);
   const created = await request("/api/shifts", {
     method: "POST",
     body: shiftBody({ departmentId: targetDepartment }),
@@ -323,9 +376,9 @@ test("Dienst-CRUD bleibt kompatibel und zeigt fremde Mitarbeitende im Zielplan",
     method: "PUT",
     body: shiftBody({ locationId: homeLocation, departmentId: null }),
   });
-  assert.equal(moved.response.status, 200, moved.text);
-  assert.equal(moved.payload.locationId, homeLocation);
-  assert.equal(db.prepare("SELECT location_id FROM shifts WHERE id = ?").get(created.payload.id).location_id, homeLocation);
+  assert.equal(moved.response.status, 409, moved.text);
+  assert.equal(moved.payload.code, "STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT");
+  assert.equal(db.prepare("SELECT location_id FROM shifts WHERE id = ?").get(created.payload.id).location_id, TARGET_LOCATION);
 
   const removed = await request(`/api/shifts/${created.payload.id}`, { method: "DELETE" });
   assert.equal(removed.response.status, 204, removed.text);
@@ -350,6 +403,22 @@ test("Fremdeinsätze sind berechtigt, eindeutig und in der Ziel-Filialzeit sicht
   assert.equal(forbidden.response.status, 403, forbidden.text);
   assert.equal(forbidden.payload.code, "SHIFT_FOREIGN_EMPLOYEE_SCOPE_DENIED");
 
+  const assignment = await request("/api/portal/v1/staff-assignments", {
+    method: "POST",
+    body: {
+      employeeNumber: FOREIGN_EMPLOYEE,
+      destinationLocationId: TARGET_LOCATION,
+      destinationDepartmentId: null,
+      dateFrom: date,
+      dateTo: date,
+      allDay: false,
+      startTime: "09:00",
+      endTime: "17:30",
+      note: "",
+    },
+  });
+  assert.equal(assignment.response.status, 201, assignment.text);
+
   const created = await request("/api/shifts", {
     method: "POST",
     body: shiftBody({ date, locationId: TARGET_LOCATION, departmentId: null }),
@@ -367,8 +436,7 @@ test("Fremdeinsätze sind berechtigt, eindeutig und in der Ziel-Filialzeit sicht
     method: "POST",
     body: shiftBody({ date, locationId: homeLocation, departmentId: null, startTime: "17:30", endTime: "18:00" }),
   });
-  assert.equal(otherLocation.response.status, 409, otherLocation.text);
-  assert.equal(otherLocation.payload.code, "SHIFT_LOCATION_DAY_CONFLICT");
+  assert.equal(otherLocation.response.status, 201, otherLocation.text);
 
   const overlap = await request("/api/shifts", {
     method: "POST",
@@ -401,6 +469,7 @@ test("Fremdeinsatz steuert mobile Freigabe, Zeitkorrektur und geteilten Tagessta
   db.prepare("UPDATE locations SET time_tracking_enabled = 0 WHERE id = ?").run(homeLocation);
   db.prepare("UPDATE locations SET time_tracking_enabled = 1, time_tracking_access_mode = 'anywhere' WHERE id = ?")
     .run(TARGET_LOCATION);
+  insertStaffAssignment({ id: "v071-mobile-today", dateFrom: today });
   db.prepare(`
     INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time)
     VALUES (?, ?, ?, ?, '09:00', '17:00')
@@ -412,6 +481,7 @@ test("Fremdeinsatz steuert mobile Freigabe, Zeitkorrektur und geteilten Tagessta
   assert.equal(home.payload.timeTracking.accessAllowed, true);
 
   const correctionDate = "2026-07-17";
+  insertStaffAssignment({ id: "v071-mobile-correction", dateFrom: correctionDate });
   db.prepare(`
     INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time)
     VALUES (?, ?, ?, ?, '09:00', '17:00')
@@ -435,6 +505,19 @@ test("Fremdeinsatz steuert mobile Freigabe, Zeitkorrektur und geteilten Tagessta
   assert.equal(Number(correctionRow.department_id), targetDepartment);
 
   const splitDate = "2026-07-16";
+  insertStaffAssignment({
+    id: "v071-mobile-split-first",
+    dateFrom: splitDate,
+    startTime: "09:00",
+    endTime: "12:00",
+  });
+  insertStaffAssignment({
+    id: "v071-mobile-split-second",
+    dateFrom: splitDate,
+    startTime: "13:00",
+    endTime: "17:00",
+    departmentId: secondaryTargetDepartment,
+  });
   db.prepare(`
     INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time)
     VALUES (?, ?, ?, ?, '09:00', '12:00'), (?, ?, ?, ?, '13:00', '17:00')
@@ -463,13 +546,14 @@ test("Fremdeinsatz steuert mobile Freigabe, Zeitkorrektur und geteilten Tagessta
 
 test("Auto-Plan und Wochenreset werten ausschließlich die Ziel-Filiale", async () => {
   const week = "2032-03-01";
+  insertStaffAssignment({ id: "v071-autoplan", dateFrom: week });
   const foreignTargetShift = db.prepare(`
     INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time, area)
     VALUES (?, ?, ?, ?, '09:00', '18:00', 'Fremdeinsatz')
   `).run(FOREIGN_EMPLOYEE, TARGET_LOCATION, targetDepartment, week);
   const homeShift = db.prepare(`
     INSERT INTO shifts (employee_number, location_id, shift_date, start_time, end_time, area)
-    VALUES (?, ?, ?, '09:00', '18:00', 'Heimdienst')
+    VALUES (?, ?, date(?, '+1 day'), '09:00', '18:00', 'Heimdienst')
   `).run(FOREIGN_EMPLOYEE, homeLocation, week);
 
   const automatic = await request("/api/schedule/auto", {
@@ -498,6 +582,7 @@ test("Auto-Plan und Wochenreset werten ausschließlich die Ziel-Filiale", async 
 });
 
 test("Abteilungen mit vorhandenen Diensten lassen sich nicht filialfremd verschieben", async () => {
+  insertStaffAssignment({ id: "v071-department-move", dateFrom: "2033-03-07" });
   db.prepare(`
     INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time)
     VALUES (?, ?, ?, '2033-03-07', '09:00', '17:00')
@@ -511,4 +596,89 @@ test("Abteilungen mit vorhandenen Diensten lassen sich nicht filialfremd verschi
   assert.equal(result.payload.code, "SHIFT_DEPARTMENT_LOCATION_CONFLICT");
   assert.equal(db.prepare("SELECT location_id FROM departments WHERE id = ?").get(targetDepartment).location_id,
     TARGET_LOCATION);
+});
+
+test("Auto-Plan nutzt in der Stammfiliale nur das freie Stundenfenster", async () => {
+  const week = "2035-03-05";
+  db.prepare("UPDATE locations SET min_staff = 0, day_settings_json = ? WHERE id = ?")
+    .run(JSON.stringify(planningDays(0)), homeLocation);
+  db.prepare("UPDATE employees SET contracted_hours = 3, fixed_workdays = 'monday' WHERE personnel_number = ?")
+    .run(FOREIGN_EMPLOYEE);
+  insertStaffAssignment({
+    id: "v071-autoplan-home-hourly",
+    dateFrom: week,
+    startTime: "12:00",
+    endTime: "16:00",
+  });
+
+  const automatic = await request("/api/schedule/auto", {
+    method: "POST",
+    body: { weekStart: week, locationId: homeLocation, replaceExisting: false },
+  });
+  assert.equal(automatic.response.status, 200, automatic.text);
+  const shift = db.prepare(`
+    SELECT location_id, shift_date, start_time, end_time
+    FROM shifts
+    WHERE employee_number = ? AND shift_date = ? AND location_id = ?
+  `).get(FOREIGN_EMPLOYEE, week, homeLocation);
+  assert.ok(shift, "Die freie Zeit in der Stammfiliale muss automatisch planbar bleiben");
+  assert.ok(
+    shift.end_time <= "12:00" || shift.start_time >= "16:00",
+    `Der automatisch erstellte Dienst ${shift.start_time}-${shift.end_time} überlappt den Filialeinsatz`,
+  );
+});
+
+test("Auto-Plan plant zugewiesene Mitarbeitende nur innerhalb des Zielfensters", async () => {
+  const week = "2035-04-02";
+  db.prepare("UPDATE employees SET contracted_hours = 4, fixed_workdays = 'monday' WHERE personnel_number = ?")
+    .run(FOREIGN_EMPLOYEE);
+  insertStaffAssignment({
+    id: "v071-autoplan-destination-hourly",
+    dateFrom: week,
+    startTime: "11:00",
+    endTime: "15:00",
+  });
+  db.prepare(`
+    INSERT INTO shifts
+      (employee_number, location_id, shift_date, start_time, end_time, area, note)
+    VALUES (?, ?, date(?, '+1 day'), '09:00', '11:00', 'Stammdienst', '')
+  `).run(FOREIGN_EMPLOYEE, homeLocation, week);
+
+  const automatic = await request("/api/schedule/auto", {
+    method: "POST",
+    body: { weekStart: week, locationId: TARGET_LOCATION, replaceExisting: false },
+  });
+  assert.equal(automatic.response.status, 200, automatic.text);
+  const shift = db.prepare(`
+    SELECT location_id, department_id, shift_date, start_time, end_time
+    FROM shifts
+    WHERE employee_number = ? AND shift_date = ? AND location_id = ?
+  `).get(FOREIGN_EMPLOYEE, week, TARGET_LOCATION);
+  assert.ok(shift, "Die zugewiesene Person muss in der Zielfiliale automatisch planbar sein");
+  assert.ok(shift.start_time >= "11:00" && shift.end_time <= "15:00");
+  assert.equal(
+    (Number(shift.end_time.slice(0, 2)) * 60 + Number(shift.end_time.slice(3)))
+      - (Number(shift.start_time.slice(0, 2)) * 60 + Number(shift.start_time.slice(3))),
+    120,
+    "Stunden aus der Stammfiliale zählen gegen die vertragliche Wochenzeit",
+  );
+  assert.equal(Number(shift.department_id), targetDepartment);
+});
+
+test("Ganztägiger Filialeinsatz sperrt die automatische Planung der Stammfiliale", async () => {
+  const week = "2035-05-07";
+  db.prepare("UPDATE employees SET contracted_hours = 4, fixed_workdays = 'monday' WHERE personnel_number = ?")
+    .run(FOREIGN_EMPLOYEE);
+  insertStaffAssignment({ id: "v071-autoplan-home-all-day", dateFrom: week });
+
+  const automatic = await request("/api/schedule/auto", {
+    method: "POST",
+    body: { weekStart: week, locationId: homeLocation, replaceExisting: false },
+  });
+  assert.equal(automatic.response.status, 200, automatic.text);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM shifts
+    WHERE employee_number = ? AND shift_date = ? AND location_id = ?
+  `).get(FOREIGN_EMPLOYEE, week, homeLocation).count, 0);
 });

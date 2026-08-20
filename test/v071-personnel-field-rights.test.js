@@ -104,6 +104,7 @@ function resetTestPersonnelDocuments(employeeNumbers) {
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
   const csrf = crypto.randomBytes(24).toString("hex");
+  const id = crypto.randomUUID();
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, role_locked, active, must_change_password,
@@ -120,8 +121,25 @@ function session(employeeNumber, role) {
   db.prepare(`
     INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
     VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
-  `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
-  return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
+  `).run(id, employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
+  return { id, cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
+}
+
+function sqliteText(value) {
+  return `'${String(value ?? "").replaceAll("'", "''")}'`;
+}
+
+function installSessionTouchRaceMutation(auth, statements) {
+  const triggerName = `test_personnel_field_actor_race_${crypto.randomBytes(8).toString("hex")}`;
+  db.exec(`
+    CREATE TRIGGER ${triggerName}
+    AFTER UPDATE OF expires_at ON portal_sessions
+    WHEN NEW.id = ${sqliteText(auth.id)}
+    BEGIN
+      ${statements}
+    END
+  `);
+  return () => db.exec(`DROP TRIGGER IF EXISTS ${triggerName}`);
 }
 
 async function request(route, { method = "GET", auth = null, body } = {}) {
@@ -1043,6 +1061,98 @@ test("v0.71 Block 5: Alter Mitarbeiter-POST respektiert Feldrechte und Scope mit
   assert.equal(scopeAudit.detail.route, "POST /api/employees");
   assert.deepEqual(scopeAudit.detail.fieldKeys, ["employment.notes"]);
   assert.equal(scopeAudit.raw.includes(remoteMarker), false);
+});
+
+test("v0.71 Block 5: Employee-POST und -PUT prüfen Feldrechte im seriellen Live-Snapshot", async () => {
+  const hr = session("103", "hr");
+  const rights = await rightsPayload(hr);
+  const managerMatrix = completeMatrix(rights, "manager", {
+    "employment.notes": "write",
+  });
+  const saved = await saveMatrix(hr, "manager", managerMatrix);
+  assert.equal(saved.response.status, 200, saved.text);
+  db.prepare(`
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+    VALUES (?, 'employees:write', '103')
+  `).run(MANAGER);
+
+  const createNumber = "9538";
+  const createMarker = "LiveFieldCreate-798";
+  let manager = session(MANAGER, "manager");
+  let auditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
+  let dropTrigger = installSessionTouchRaceMutation(manager, `
+    UPDATE personnel_field_permissions
+    SET access_level = 'hidden', updated_by = 'live-race', updated_at = CURRENT_TIMESTAMP
+    WHERE role_id = 'manager' AND field_key = 'employment.notes';
+  `);
+  try {
+    const denied = await request("/api/employees", {
+      method: "POST",
+      auth: manager,
+      body: employeeMutationBody(createNumber, {
+        personnelRecord: {
+          sensitive: { employment: { notes: createMarker } },
+        },
+      }),
+    });
+    assert.equal(denied.response.status, 403, denied.text);
+    assert.equal(denied.payload.code, "PERSONNEL_FIELD_WRITE_DENIED");
+    assert.equal(db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?")
+      .get(createNumber), undefined);
+    assert.equal(db.prepare("SELECT 1 FROM personnel_sensitive_records WHERE employee_number = ?")
+      .get(createNumber), undefined);
+    assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), auditBefore);
+  } finally {
+    dropTrigger();
+  }
+
+  const original = await saveProfile(TARGET_A, hr, "LIVE-FIELD-PUT");
+  const originalNickname = db.prepare(
+    "SELECT nickname FROM employees WHERE personnel_number = ?",
+  ).get(TARGET_A).nickname;
+  const putMarker = "LiveFieldPut-799";
+  manager = session(MANAGER, "manager");
+  auditBefore = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE entity_id = ?
+      AND action IN ('employee.update', 'personnel-record.update')
+  `).get(TARGET_A).count);
+  dropTrigger = installSessionTouchRaceMutation(manager, `
+    UPDATE personnel_field_permissions
+    SET access_level = 'hidden', updated_by = 'live-race', updated_at = CURRENT_TIMESTAMP
+    WHERE role_id = 'manager' AND field_key = 'employment.notes';
+  `);
+  try {
+    const denied = await request(`/api/employees/${TARGET_A}`, {
+      method: "PUT",
+      auth: manager,
+      body: employeeMutationBody(TARGET_A, {
+        nickname: "LiveFieldPutDenied",
+        personnelRecord: {
+          sensitive: { employment: { notes: putMarker } },
+        },
+      }),
+    });
+    assert.equal(denied.response.status, 403, denied.text);
+    assert.equal(denied.payload.code, "PERSONNEL_FIELD_WRITE_DENIED");
+    assert.equal(db.prepare("SELECT nickname FROM employees WHERE personnel_number = ?")
+      .get(TARGET_A).nickname, originalNickname);
+    assert.equal(Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM audit_log
+      WHERE entity_id = ?
+        AND action IN ('employee.update', 'personnel-record.update')
+    `).get(TARGET_A).count), auditBefore);
+    const unchanged = await request(`/api/portal/v1/personnel-records/${TARGET_A}`, {
+      auth: hr,
+    });
+    assert.equal(unchanged.response.status, 200, unchanged.text);
+    assert.equal(
+      unchanged.payload.profile.sensitive.employment.notes,
+      original.sensitive.employment.notes,
+    );
+  } finally {
+    dropTrigger();
+  }
 });
 
 test("v0.71 Block 5: Alle vier Beschäftigungsdaten sind symmetrisch gekoppelt, auch über den Altpfad", async () => {

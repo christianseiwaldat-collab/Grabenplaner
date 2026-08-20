@@ -24,6 +24,11 @@ const {
   inspectTradeFotoOcrReportBuffer,
 } = require("./lib/sales-analytics-tradefoto-ocr");
 const {
+  XOFFI_IMAGE_MAX_BYTES,
+  XoffiTimeImportError,
+  inspectXoffiImageBuffer,
+} = require("./lib/xoffi-time-import");
+const {
   SalesAnalyticsReportSeriesError,
   aggregateSalesAnalyticsReportSeries,
   classifySalesAnalyticsReportArchive,
@@ -198,6 +203,10 @@ const {
   createSqliteBranchOrderOperations,
   ensureSqliteBranchOrdersSchema,
 } = require("./lib/persistence/sqlite/operations/branch-orders");
+const {
+  EmployeeLocationLendingError,
+  createSqliteEmployeeLocationLendingOperations,
+} = require("./lib/persistence/sqlite/operations/employee-location-lendings");
 const {
   createApplicationRepositories,
 } = require("./lib/persistence/application-repositories");
@@ -378,6 +387,101 @@ const {
   createPersonnelProfileAccessSnapshot,
 } = require("./lib/personnel-profile-access");
 const {
+  CROSS_LOCATION_SCHEDULE_PERMISSIONS,
+  CROSS_LOCATION_SCHEDULE_PERMISSION_IDS,
+  CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS,
+  CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS,
+  crossLocationScheduleDefaultPermissionsForRole,
+  resolveCrossLocationSchedulePermissionDependencies,
+  createCrossLocationScheduleAccessSnapshot,
+  canCreateStaffAssignmentRequest,
+  canReviewStaffAssignmentRequest,
+  normalizeCrossLocationScheduleSettings,
+  crossLocationScheduleSettingsValuesFromInput,
+  crossLocationScheduleOperationAllowed,
+  allowedCrossLocationScheduleWeek,
+  projectCrossLocationScheduleView,
+} = require("./lib/cross-location-schedule-access");
+const {
+  PortalBirthdayPresentationError,
+  PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS,
+  PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS,
+  PORTAL_BIRTHDAY_PRESENTATIONS,
+  isActivePersonalPortalPrincipal,
+  portalBirthdayPresentationDefaultPermissionsForRole,
+  createPortalBirthdayPresentationAccessSnapshot,
+  validatePortalBirthdayPresentationAssignmentInput,
+  validatePortalBirthdayPresentationPolicyInput,
+} = require("./lib/portal-birthday-presentations");
+const {
+  birthdayClaimReceipt,
+  birthdayEventForVienna,
+  birthdayThemeEventForVienna,
+} = require("./lib/portal-birthday-presentation-claim");
+const {
+  StaffAssignmentRequestError,
+  insertInitialStaffAssignmentRequestHistory,
+  normalizeStaffAssignmentRequestInput,
+  transitionStaffAssignmentRequestHistory,
+} = require("./lib/staff-assignment-requests");
+const {
+  assertStaffAssignmentRequestAssignmentAvailable,
+  boundAssignmentFromRequest,
+  staffAssignmentRequestIdFromAssignmentId,
+} = require("./lib/staff-assignment-request-fulfillment");
+const {
+  PERSONNEL_LEARNING_PERMISSIONS,
+  PERSONNEL_LEARNING_PERMISSION_IDS,
+  PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS,
+  PERSONNEL_LEARNING_DENIAL_AUTHORITIES,
+  PERSONNEL_LEARNING_DELEGATION_CODES,
+  personnelLearningDefaultPermissionsForRole,
+  resolvePersonnelLearningPermissionDependencies,
+  createPersonnelLearningAccessSnapshot,
+  evaluatePersonnelLearningCrossLocationDelegation,
+  projectPersonnelLearningCrossLocationDelegates,
+} = require("./lib/personnel-learning-access");
+const {
+  PersonnelLearningCatalogError,
+  buildPersonnelLearningModuleState,
+  normalizePersonnelLearningTemplateInput,
+  personnelLearningScopeAccess,
+  scopeFromVersion: personnelLearningScopeFromVersion,
+  stableJsonStringify: stablePersonnelLearningJson,
+} = require("./lib/personnel-learning-catalog");
+const {
+  buildPersonnelLearningSkillState,
+  isPersonnelLearningSkillContent,
+  normalizePersonnelLearningSkillInput,
+} = require("./lib/personnel-learning-skills");
+const {
+  buildPersonnelLearningCompetencyState,
+  competencyReceiptSha256: personnelLearningCompetencyReceiptSha256,
+  competencyRevisionReceiptSha256: personnelLearningCompetencyRevisionReceiptSha256,
+  levelDefinitionForSkillVersion,
+  normalizedCompetencyMutation,
+} = require("./lib/personnel-learning-competencies");
+const {
+  assignmentReceiptSha256: personnelLearningAssignmentReceiptSha256,
+  assignmentRevisionReceiptSha256: personnelLearningAssignmentRevisionReceiptSha256,
+  buildPersonnelLearningAssignmentState,
+  normalizePersonnelLearningAssignmentMutation,
+  normalizePersonnelLearningTrainerBindings,
+  trainerBindingsSha256: personnelLearningTrainerBindingsSha256,
+} = require("./lib/personnel-learning-assignments");
+const {
+  buildPersonnelLearningProgressState,
+  normalizePersonnelLearningProgressMutation,
+  personnelLearningProgressRevisionReceiptSha256,
+  progressStepStatesSha256: personnelLearningProgressStepStatesSha256,
+} = require("./lib/personnel-learning-progress");
+const {
+  moduleEventReceiptSha256: personnelLearningEventReceiptSha256,
+  moduleReceiptSha256: personnelLearningModuleReceiptSha256,
+  moduleVersionReceiptSha256: personnelLearningVersionReceiptSha256,
+  sha256Text: personnelLearningSha256,
+} = require("./lib/persistence/sqlite/operations/personnel-learning-schema");
+const {
   PERSONNEL_LIFECYCLE_CASE_PERMISSIONS,
   PERSONNEL_LIFECYCLE_CASE_PERMISSION_IDS,
   PERSONNEL_LIFECYCLE_RECIPIENT_CLASSES,
@@ -521,12 +625,35 @@ const defaultPersonalLoanOverviewColumns = Object.freeze([
   "dueDate",
 ]);
 const ORGANIZATION_SCHEDULE_PERMISSION = "schedule:location:view";
+const PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION =
+  "personnel_learning:location:dashboard";
 const BRANCH_ORDER_SUBMIT_PERMISSION = "branch_orders:submit";
 const BRANCH_ORDER_MANAGE_PERMISSION = "branch_orders:manage";
+const BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION = "branch_portal:display:manage";
+const MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION = "mobile_portal:location_display:manage";
+const XOFFI_TIME_IMPORT_PERMISSION = "xoffi_time_import:manage";
+const STAFF_ASSIGNMENTS_MANAGE_PERMISSION = "staff_assignments:manage";
 const BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION = "organization_accounts:password:manage";
+const mobilePortalLocationDisplayModules = Object.freeze([
+  { id: "time", label: "Zeit", description: "Zeiterfassung und Zeitkonto" },
+  { id: "tasks", label: "Aufgaben", description: "Persönliche Prozessschritte" },
+  { id: "team", label: "Team", description: "Anwesenheit im zuständigen Bereich" },
+  { id: "approvals", label: "Freigaben", description: "Offene Entscheidungen" },
+  { id: "schedule", label: "Dienstplan", description: "Eigener Dienstplan" },
+  { id: "requests", label: "Anträge", description: "Urlaub, Zeitausgleich und Verlauf" },
+  { id: "loan", label: "Leihe", description: "Persönliche Ausgaben und Rücknahmen" },
+  { id: "sickness", label: "Krank & AUM", description: "Krankmeldung und AUM" },
+  { id: "branchOrders", label: "Filialbestellung", description: "Bestellungen des Standorts" },
+  { id: "branchVacation", label: "Urlaubsplanung", description: "Genehmigte Urlaubstage des Standorts" },
+]);
+const mobilePortalLocationDisplayModuleIds = Object.freeze(
+  mobilePortalLocationDisplayModules.map((module) => module.id),
+);
+const mobilePortalLocationDisplayModuleIdSet = new Set(mobilePortalLocationDisplayModuleIds);
 const branchOrganizationAccountBasePermissions = Object.freeze([
   LOAN_OVERVIEW_PERMISSION,
   ORGANIZATION_SCHEDULE_PERMISSION,
+  PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION,
 ]);
 const organizationAccountPermissionCatalog = Object.freeze([
   {
@@ -538,6 +665,12 @@ const organizationAccountPermissionCatalog = Object.freeze([
     id: ORGANIZATION_SCHEDULE_PERMISSION,
     label: "Dienstplan des Standorts ansehen",
     description: "Reduzierte Dienstplanansicht des ausdrücklich zugewiesenen Standorts.",
+  },
+  {
+    id: PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION,
+    label: "Schulungsdashboard des Standorts verwenden",
+    description: "Transparente standortgebundene Fortschritts- und Fähigkeitsübersicht; Schritte können erfasst, Abschlüsse aber nicht bewertet oder korrigiert werden.",
+    accountTypes: ["branch"],
   },
   {
     id: BRANCH_ORDER_SUBMIT_PERMISSION,
@@ -615,6 +748,13 @@ const integrationCache = new IntegrationCache({
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
   { id: "schedule:write", label: "Dienstpläne bearbeiten", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
+  { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.READ, label: "Fremde Dienstpläne eingeschränkt lesen", description: "Aktuelle und nächste Dienstplanwoche anderer Filialen rein lesend und ohne Wochenstunden, Regelprüfungen, Zeitkonten oder Abwesenheitsgründe ansehen.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE, label: "Standortübergreifenden Einsatz für die eigene Filiale anfragen", description: "Aus einem fremden Dienstplan einen stundenweisen, ganztägigen oder mehrtägigen Einsatz für die eigene Filiale und den eigenen Abteilungsbereich anfragen; noch keine Einsatzfreigabe.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW, label: "Einsatzanfragen der eigenen Stammfiliale entscheiden", description: "Anfragen zu Teammitgliedern des eigenen Verantwortungsbereichs prüfen und entscheiden; direkte Filialeinsätze bleiben ein getrenntes Recht.", group: "Dienstplanung", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE, label: "Standortübergreifende Einsatzanfragen konfigurieren", description: "PL+-Metarecht für Sicht-, AL- und Benachrichtigungseinstellungen; vermittelt allein keinen Zugriff auf fremde Dienstpläne oder Anfragen.", group: "Dienstplanung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE, label: "Geburtstagsdarstellung im eigenen Team festlegen", description: "Wählt ausschließlich eine freigegebene Darstellungs-ID für das eigene aktive Filial- oder Abteilungsteam; vermittelt keinen Zugriff auf Geburtsdatum, Alter oder Geburtstagslisten.", group: "Mitarbeiterportal", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "developer"] },
+  { id: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE, label: "Geburtstagsdarstellungen global freigeben", description: "PL+-Metarecht für die globale Aktivierung; vermittelt weder Geburtstagsdaten noch Teamzugriff.", group: "Mitarbeiterportal", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: STAFF_ASSIGNMENTS_MANAGE_PERMISSION, label: "Temporäre Filialeinsätze verwalten", description: "Mitarbeitende des eigenen Verantwortungsbereichs zeitlich begrenzt einer anderen Filiale zuweisen.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "absence_entries:write", label: "Genehmigten Urlaub und ZA direkt eintragen", description: "Bereits betrieblich genehmigte Urlaube und vereinbarte Zeitausgleiche im eigenen Planungsbereich erfassen, bearbeiten und entfernen; keine Antrags- oder Freigaberechte.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Dienstplanung", warningLevel: "high", hrDelegable: true },
   { id: "employees:read", label: "Teamstammdaten lesen", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
@@ -660,6 +800,13 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ, label: "Mitarbeiter-Stammdaten im freigegebenen Bereich lesen", description: "Nur die zusätzlich im Feldrechteprofil freigegebenen Personalstammdaten im fachlich freigegebenen Bereich lesen.", group: "Mitarbeiterprofile", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr"] },
   { id: PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ, label: "Personalakt-Dokumente lesen", description: "Geschützte Dokumentmetadaten ausschließlich über einen persönlichen Personalleitungszugang lesen; nicht an lokale oder technische Rollen delegierbar.", group: "Mitarbeiterprofile", warningLevel: "critical", eligibleRoles: ["hr"] },
   { id: PERSONNEL_PROFILE_PERMISSIONS.DELEGATE, label: "Lokale Mitarbeiterprofil-Rechte freigeben", description: "Kennzeichnet PL+ für die fachrechtgebundene Freigabe lokaler Profilrechte; nicht weiterdelegierbar und ohne eigenen Profildatenzugriff.", group: "Mitarbeiterprofile", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.CATALOG_READ, label: "Schulungs- und Wissenskatalog lesen", description: "Veröffentlichte Schulungs- und Wissensprozesse im freigegebenen Verantwortungsbereich lesen.", group: "Schulung & Wissen", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE, label: "Schulungs- und Wissenskatalog bearbeiten", description: "Schulungs- und Wissensprozesse im freigegebenen Verantwortungsbereich versioniert anlegen und bearbeiten.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH, label: "Schulungs- und Wissensprozesse veröffentlichen", description: "Geprüfte Prozessversionen im freigegebenen Verantwortungsbereich veröffentlichen oder archivieren.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE, label: "Schulungs- und Wissensprozesse zuweisen", description: "Bestehende Mitarbeitende als Lernende oder einschulende Personen im freigegebenen Verantwortungsbereich zuordnen.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN, label: "Lernende und Trainer filialübergreifend zuweisen", description: "Mitarbeitende verschiedener Filialen transparent in Schulungs- und Wissensprozessen zusammenführen; kann von PL+ und innerhalb der Hierarchie gezielt entzogen werden.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.AUDIT_READ, label: "Schulungs- und Wissensprüfspur lesen", description: "Revisionsbelege des freigegebenen Schulungs- und Wissensbereichs ohne technische Geheimnisse lesen.", group: "Schulung & Wissen", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: PERSONNEL_LEARNING_PERMISSIONS.DELEGATE, label: "Schulungs- und Wissensrechte verwalten", description: "Kennzeichnet PL+ für die fachliche Rechteverwaltung; erzeugt selbst keinen Zugriff auf Kataloge, Zuweisungen oder Prüfspuren.", group: "Schulung & Wissen", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ, label: "Onboarding-Vorschau im Mitarbeiterprofil lesen", description: "Serverseitig aufgelöste Onboarding-Pakete, Startblocker und Zuweisungskandidaten ausschließlich read-only lesen; kein Start- oder Aufgabenrecht.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ, label: "Lifecycle-Pakete lesen", description: "Veröffentlichte Lifecycle-Paketmetadaten für ausdrücklich freigegebene Vorschauen lesen; kein Fallzugriff und keine Paketmutation.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_PREPARE, label: "Onboarding-Fall vorbereiten", description: "Referenztermine, Fallverantwortung und die kontrollierte Paketauflösung vorbereiten; kein Startrecht.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -739,7 +886,10 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION, label: "Leihansicht des Filialkontos festlegen", description: "Sichtbare Spalten der reinen Filialkonto-Übersicht im zugewiesenen Standort festlegen; keine Leih-, Foto-, Beleg- oder Personaldatenbearbeitung.", group: "Leihe", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "loans:settings", label: "Leihmodul und Artikelquelle verwalten", description: "Standortfreigaben und externe Artikelkataloge konfigurieren.", group: "Leihe", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ORDER_SUBMIT_PERMISSION, label: "Filialbestellungen für die eigene Filiale erfassen", description: "Erlaubt einer persönlich freigeschalteten Person Bestellungen ausschließlich für sich selbst und ihre Stammfiliale zu erfassen.", group: "Filialbestellungen", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["employee", "location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
-  { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION, label: "Anzeige des Filialkontos festlegen", description: "Dienstplanansicht, mobile Tagesausblendung und automatisches Speichern für den zugewiesenen Standort einstellen.", group: "Filialkonto", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION, label: "Mobile Mitarbeiteransicht des Standorts festlegen", description: "Legt fest, welche fachlich freigegebenen Bereiche Mitarbeitende der eigenen Filiale in ihrer mobilen Portalansicht sehen.", group: "Mitarbeiterportal", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: XOFFI_TIME_IMPORT_PERMISSION, label: "xoffi-Zeiterfassung importieren", description: "Geprüfte xoffi-Bilddaten ausschließlich für vergangene Wochen im eigenen Verantwortungsbereich als Ist-Zeit übernehmen.", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION, label: "Passwort eines Filialkontos neu vergeben", description: "Passwort ausschließlich für aktive Filialkonten im zugewiesenen Standort zurücksetzen; beendet bestehende Filialkonto-Sitzungen.", group: "Zugänge & Rechte", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -789,6 +939,7 @@ const personnelLifecyclePermissionIds = new Set([
   ...Object.values(PERSONNEL_LIFECYCLE_PERMISSIONS),
   ...PERSONNEL_WORKFLOW_PERMISSION_IDS,
   ...PERSONNEL_PROFILE_PERMISSION_IDS,
+  ...PERSONNEL_LEARNING_PERMISSION_IDS,
   ...PERSONNEL_LIFECYCLE_CASE_PERMISSION_IDS,
   ...PERSONNEL_LIFECYCLE_INTERFACE_PERMISSION_IDS,
   ...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
@@ -867,6 +1018,19 @@ function portalPermissionRoleRestrictionError(permissions) {
   if (restricted.length && restricted.every((permission) => SALES_ANALYTICS_PERMISSION_IDS.includes(permission))) {
     return httpError(403, "Verkaufsanalyse-Rechte dürfen nur dafür vorgesehenen kaufmännischen Rollen zugewiesen werden.", "SALES_ANALYTICS_PERMISSION_ROLE_RESTRICTED");
   }
+  if (restricted.length && restricted.every((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))) {
+    return httpError(403, "Schulungs- und Wissensrechte dürfen nur den dafür vorgesehenen persönlichen Fachrollen zugewiesen werden.", "PERSONNEL_LEARNING_PERMISSION_ROLE_RESTRICTED");
+  }
+  if (restricted.length && restricted.every(
+    (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+  )) {
+    return httpError(403, "Standortübergreifende Dienstplan- und Einsatzanfragerechte dürfen nur den dafür vorgesehenen persönlichen Fachrollen zugewiesen werden.", "CROSS_LOCATION_SCHEDULE_PERMISSION_ROLE_RESTRICTED");
+  }
+  if (restricted.length && restricted.every(
+    (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+  )) {
+    return httpError(403, "Rechte für Geburtstagsdarstellungen dürfen nur den dafür vorgesehenen persönlichen Leitungsrollen zugewiesen werden.", "PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_ROLE_RESTRICTED");
+  }
   return httpError(403, "Diese Personalakt-Rechte sind für die gewählte App-Rolle nicht zulässig.", "PORTAL_PERMISSION_ROLE_RESTRICTED");
 }
 
@@ -887,6 +1051,26 @@ function assertPortalPermissionDependencies(permissions) {
       throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
     }
   };
+  const personnelLearningDependencies = resolvePersonnelLearningPermissionDependencies(
+    [...projected],
+  );
+  if (!personnelLearningDependencies.valid) {
+    throw httpError(
+      400,
+      "Schulungs- und Wissensrechte können nur zusammen mit ihren erforderlichen Basisrechten vergeben werden.",
+      "PORTAL_PERMISSION_DEPENDENCY",
+    );
+  }
+  const crossLocationScheduleDependencies = resolveCrossLocationSchedulePermissionDependencies(
+    [...projected],
+  );
+  if (!crossLocationScheduleDependencies.valid) {
+    throw httpError(
+      400,
+      "Standortübergreifende Dienstplan- und Einsatzanfragerechte können nur zusammen mit ihren erforderlichen Leserechten vergeben werden.",
+      "PORTAL_PERMISSION_DEPENDENCY",
+    );
+  }
   for (const permission of SALES_ANALYTICS_PERMISSION_IDS.filter(
     (permission) => permission !== SALES_ANALYTICS_PERMISSIONS.ACCESS,
   )) {
@@ -1151,7 +1335,9 @@ const portalDashboardPermissionDetails = Object.freeze([
 ]);
 
 const portalGlobalPermissionIds = new Set([
-  "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
+  "settings:write", CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE,
+  PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
+  "positions:write", "hr:approve", "hr:settings", "sickness:settings",
   "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
@@ -1536,6 +1722,7 @@ addBuiltinRolePermissions("manager", [
   "loans:documents:read",
   LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
   BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION,
+  BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
 ]);
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -1543,8 +1730,10 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "loans:location:manage",
     "loans:documents:read",
     "loans:settings",
-    BRANCH_ORDER_MANAGE_PERMISSION,
   ]);
+}
+for (const roleId of ["hr", "admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [BRANCH_ORDER_MANAGE_PERMISSION]);
 }
 addBuiltinRolePermissions("developer", [
   LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
@@ -1553,6 +1742,43 @@ addBuiltinRolePermissions("developer", [
 ]);
 for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
+}
+
+function cascadeCrossLocationScheduleRolePermissionDenials(
+  rolePermissionSet,
+  deniedPermissionSet,
+) {
+  if (deniedPermissionSet.has("schedule:read")) {
+    if (rolePermissionSet.has("schedule:write")) deniedPermissionSet.add("schedule:write");
+    for (const permission of CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS) {
+      if (rolePermissionSet.has(permission)) deniedPermissionSet.add(permission);
+    }
+  }
+  if (deniedPermissionSet.has(CROSS_LOCATION_SCHEDULE_PERMISSIONS.READ)
+    && rolePermissionSet.has(CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE)) {
+    deniedPermissionSet.add(CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE);
+  }
+  return deniedPermissionSet;
+}
+for (const role of builtinPortalRoles) {
+  addBuiltinRolePermissions(
+    role.id,
+    crossLocationScheduleDefaultPermissionsForRole(role.id),
+  );
+}
+for (const role of builtinPortalRoles) {
+  addBuiltinRolePermissions(
+    role.id,
+    portalBirthdayPresentationDefaultPermissionsForRole(role.id),
+  );
+}
+for (const roleId of ["manager", "hr", "admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [
+    STAFF_ASSIGNMENTS_MANAGE_PERMISSION,
+    BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
+    MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION,
+    XOFFI_TIME_IMPORT_PERMISSION,
+  ]);
 }
 for (const roleId of ["hr", "admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -1583,6 +1809,12 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "collective_agreements:manage",
     "collective_agreements:assign",
   ]);
+}
+for (const role of builtinPortalRoles) {
+  addBuiltinRolePermissions(
+    role.id,
+    personnelLearningDefaultPermissionsForRole(role.id),
+  );
 }
 // Die geschuetzte Developer-Rolle ist der technische Eigentuerzugang der
 // Installation. Sie erhaelt jede bekannte App-Berechtigung direkt aus dem
@@ -1866,7 +2098,6 @@ const wifiWebhookSecret = loadPrivateSecret({
   bytes: 48,
   requiredInServerMode: true,
 });
-
 function loadAmuEncryptionConfiguration() {
   const keyId = String(process.env.GRABENPLANER_AMU_KEY_ID || (serverModeActive ? "" : "local-v1")).trim();
   const environmentKey = String(process.env.GRABENPLANER_AMU_KEY || "").trim();
@@ -2023,11 +2254,14 @@ const {
   organizationPersonnel: organizationPersonnelRepository,
   personalNotificationContacts: personalNotificationContactsRepository,
   personnelLifecycle: personnelLifecycleRepository,
+  personnelLearning: personnelLearningRepository,
   planningSettings: planningSettingsRepository,
+  portalBirthdayPresentations: portalBirthdayPresentationsRepository,
   portalAccess: portalAccessRepository,
   runtimeRecovery: runtimeRecoveryRepository,
   salesAnalytics: salesAnalyticsRepository,
   sicknessAmuManagement: sicknessAmuManagementRepository,
+  staffAssignmentRequests: staffAssignmentRequestRepository,
   systemCenterMetrics: systemCenterMetricsRepository,
   timeTracking: timeTrackingRepository,
   uiPreferences: uiPreferencesRepository,
@@ -2876,6 +3110,7 @@ const defaultSettings = {
   show_sunday: "0",
   remember_last_schedule_overall_plan: "1",
   remember_last_vacation_overall_plan: "1",
+  ...CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS,
 };
 
 const planningDays = [
@@ -2947,6 +3182,7 @@ sqliteApplicationSeedingOperations.seedDemoIfRequested({
 ensureSqliteSystemCenterMetricsSchema(db);
 ensureSqliteBranchOrdersSchema(db);
 const sqliteBranchOrderOperations = createSqliteBranchOrderOperations(db);
+const sqliteEmployeeLocationLendingOperations = createSqliteEmployeeLocationLendingOperations(db);
 sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
 let applicationInitialization = null;
 let configuredAdminSnapshot = false;
@@ -3037,6 +3273,85 @@ async function setPortalSetting(key, value) {
   return refreshPortalSettingsSnapshot();
 }
 
+function mobilePortalLocationDisplaySettingKey(locationId) {
+  return `mobile_portal_location_display_v1_${normalizeLocationId(locationId)}`;
+}
+
+function defaultMobilePortalLocationDisplay(locationId = "") {
+  return {
+    version: 1,
+    locationId: String(locationId || ""),
+    allowedModules: [...mobilePortalLocationDisplayModuleIds],
+    configured: false,
+  };
+}
+
+function mobilePortalLocationDisplayForLocation(locationId) {
+  const normalizedLocationId = String(locationId || "").trim();
+  if (!normalizedLocationId) return defaultMobilePortalLocationDisplay();
+  let settingKey;
+  try {
+    settingKey = mobilePortalLocationDisplaySettingKey(normalizedLocationId);
+  } catch {
+    return { version: 1, locationId: normalizedLocationId, allowedModules: [], configured: true };
+  }
+  const settings = getPortalSettings();
+  if (!Object.prototype.hasOwnProperty.call(settings, settingKey)) {
+    return defaultMobilePortalLocationDisplay(normalizedLocationId);
+  }
+  try {
+    const stored = JSON.parse(settings[settingKey]);
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)
+      || Number(stored.version) !== 1 || !Array.isArray(stored.allowedModules)
+      || stored.allowedModules.length > mobilePortalLocationDisplayModuleIds.length
+      || new Set(stored.allowedModules.map(String)).size !== stored.allowedModules.length
+      || stored.allowedModules.some((id) => !mobilePortalLocationDisplayModuleIdSet.has(String(id)))) {
+      throw new Error("invalid mobile portal location display policy");
+    }
+    const requested = new Set(stored.allowedModules.map(String));
+    return {
+      version: 1,
+      locationId: normalizedLocationId,
+      allowedModules: mobilePortalLocationDisplayModuleIds.filter((id) => requested.has(id)),
+      configured: true,
+    };
+  } catch {
+    return { version: 1, locationId: normalizedLocationId, allowedModules: [], configured: true };
+  }
+}
+
+function validateMobilePortalLocationDisplay(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["locationId", "allowedModules"].includes(key))
+    || !Array.isArray(value.allowedModules)
+    || value.allowedModules.length > mobilePortalLocationDisplayModuleIds.length
+    || new Set(value.allowedModules.map(String)).size !== value.allowedModules.length
+    || value.allowedModules.some((id) => !mobilePortalLocationDisplayModuleIdSet.has(String(id)))) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Auswahl für die mobile Mitarbeiteransicht übermitteln.",
+      "MOBILE_PORTAL_LOCATION_DISPLAY_INVALID",
+    );
+  }
+  const requested = new Set(value.allowedModules.map(String));
+  return {
+    version: 1,
+    allowedModules: mobilePortalLocationDisplayModuleIds.filter((id) => requested.has(id)),
+  };
+}
+
+function mobilePortalLocationDisplayForSession(session) {
+  if (!session || isLocalSystemSession(session) || session.sessionKind === "organization" || session.isEmployee === false) {
+    return defaultMobilePortalLocationDisplay();
+  }
+  return mobilePortalLocationDisplayForLocation(session.homeLocationId);
+}
+
+function mobilePortalLocationDisplayAllows(session, moduleId) {
+  if (!mobilePortalLocationDisplayModuleIdSet.has(moduleId)) return true;
+  return mobilePortalLocationDisplayForSession(session).allowedModules.includes(moduleId);
+}
+
 function initializeApplicationPersistence() {
   if (!applicationInitialization) {
     applicationInitialization = (async () => {
@@ -3088,7 +3403,7 @@ app.use((request, response, next) => {
 app.use((request, response, next) => {
   const embeddedPdfPreview = request.path === "/api/schedule-preview.pdf" || request.path === "/api/vacations-preview.pdf";
   const ocrClientAsset = request.path === "/portal" || request.path === "/portal/" || request.path === "/portal.html"
-    || request.path.startsWith("/vendor/tesseract") || request.path.startsWith("/vendor/pdfjs-v6.1.200");
+    || request.path.startsWith("/vendor/tesseract") || request.path.startsWith("/vendor/pdfjs-v6.2.108");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
@@ -3147,12 +3462,32 @@ app.use((request, response, next) => {
   next();
 });
 app.use(express.json({ limit: "1mb" }));
-app.use(async (request, _response, next) => {
+app.use(async (request, response, next) => {
   if (!request.path.startsWith("/api")) return next();
   try {
     await refreshPortalSettingsSnapshot();
     request.portalSession = await loadPortalSessionFromRequest(request);
     request.portalSessionLoaded = true;
+    if (request.portalSession) {
+      const cookies = parseCookies(request);
+      const maxAge = portalSessionTimeoutMinutes() * 60;
+      if (cookies[PORTAL_SESSION_COOKIE]) {
+        appendCookie(response, portalCookie(
+          PORTAL_SESSION_COOKIE,
+          cookies[PORTAL_SESSION_COOKIE],
+          request,
+          { httpOnly: true, maxAge },
+        ));
+      }
+      if (cookies[PORTAL_CSRF_COOKIE]) {
+        appendCookie(response, portalCookie(
+          PORTAL_CSRF_COOKIE,
+          cookies[PORTAL_CSRF_COOKIE],
+          request,
+          { maxAge },
+        ));
+      }
+    }
     if (request.path.startsWith("/api/work-rules")
       || request.path.startsWith("/api/collective-agreements")) {
       await refreshPortalScopeProjectionSnapshot();
@@ -3172,11 +3507,11 @@ const immutableVendorAssets = { maxAge: "365d", immutable: true, fallthrough: fa
 app.use("/vendor/tesseract-v7", express.static(path.join(tesseractPackageDirectory, "dist"), immutableVendorAssets));
 app.use("/vendor/tesseract-core-v7", express.static(tesseractCoreDirectory, immutableVendorAssets));
 app.use("/vendor/tesseract-data-deu-v1", express.static(tesseractGermanDataDirectory, immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/build", express.static(path.join(pdfjsPackageDirectory, "build"), immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/cmaps", express.static(path.join(pdfjsPackageDirectory, "cmaps"), immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/standard_fonts", express.static(path.join(pdfjsPackageDirectory, "standard_fonts"), immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/wasm", express.static(path.join(pdfjsPackageDirectory, "wasm"), immutableVendorAssets));
-app.use("/vendor/pdfjs-v6.1.200/iccs", express.static(path.join(pdfjsPackageDirectory, "iccs"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/build", express.static(path.join(pdfjsPackageDirectory, "build"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/cmaps", express.static(path.join(pdfjsPackageDirectory, "cmaps"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/standard_fonts", express.static(path.join(pdfjsPackageDirectory, "standard_fonts"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/wasm", express.static(path.join(pdfjsPackageDirectory, "wasm"), immutableVendorAssets));
+app.use("/vendor/pdfjs-v6.2.108/iccs", express.static(path.join(pdfjsPackageDirectory, "iccs"), immutableVendorAssets));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/api", enforceAdminApiAccess);
 app.use("/api", enforceInstallationFeatures);
@@ -3647,6 +3982,26 @@ const personalEmailVerificationIpRateLimits = createBoundedRateLimitStore({
   maxKeys: 2048,
   maxEventsPerKey: 30,
 });
+const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+const PASSWORD_RESET_RATE_WINDOW_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_RATE_MAX_PER_TARGET = 3;
+const PASSWORD_RESET_RATE_MAX_PER_IP = 10;
+const PASSWORD_RESET_CONFIRM_RATE_MAX_PER_IP = 15;
+const passwordResetIpRateLimits = createBoundedRateLimitStore({
+  windowMs: PASSWORD_RESET_RATE_WINDOW_MS,
+  maxKeys: 2048,
+  maxEventsPerKey: PASSWORD_RESET_RATE_MAX_PER_IP,
+});
+const passwordResetTargetRateLimits = createBoundedRateLimitStore({
+  windowMs: PASSWORD_RESET_RATE_WINDOW_MS,
+  maxKeys: 4096,
+  maxEventsPerKey: PASSWORD_RESET_RATE_MAX_PER_TARGET,
+});
+const passwordResetConfirmRateLimits = createBoundedRateLimitStore({
+  windowMs: LOGIN_RATE_WINDOW_MS,
+  maxKeys: 2048,
+  maxEventsPerKey: PASSWORD_RESET_CONFIRM_RATE_MAX_PER_IP,
+});
 
 function backupAdminOriginAllowed(request) {
   const origin = String(request.headers.origin || "").trim();
@@ -3965,9 +4320,10 @@ async function notifyRequestReviewers(entry, kind, stage = "local", actor = "") 
   const label = labels[kind] || "Abwesenheitsantrag";
   const requestContext = await employeeRequestContext(entry.employee_number, entry.request_date || entry.date_from);
   const locationId = entry.location_id || requestContext.locationId;
+  const departmentId = Number(entry.review_department_id || 0) || requestContext.departmentId;
   const targetKind = kind.startsWith("time_off") ? "time_off" : "vacation";
   const target = `/?view=requests&kind=${targetKind}`;
-  for (const recipient of await requestReviewerRecipients(locationId, requestContext.departmentId, stage, actor)) {
+  for (const recipient of await requestReviewerRecipients(locationId, departmentId, stage, actor)) {
     await createPortalNotification(recipient, "request.review", `${label} wartet auf Prüfung`, `${entry.employee_number} hat einen Antrag eingereicht.`, {
       target,
       entityType: kind,
@@ -4074,12 +4430,13 @@ async function notifyAbsenceRequestReviewers(
     repository,
   );
   const locationId = entry.location_id || requestContext.locationId;
+  const departmentId = Number(entry.review_department_id || 0) || requestContext.departmentId;
   const targetKind = kind.startsWith("time_off") ? "time_off" : "vacation";
   const target = `/?view=requests&kind=${targetKind}`;
   const recipients = await absenceRequestReviewerRecipients(
     repository,
     locationId,
-    requestContext.departmentId,
+    departmentId,
     stage,
     actor,
   );
@@ -4152,12 +4509,46 @@ function parsePortalPermissionScopes(value) {
   }
 }
 
+function sessionPortalAccessScopeProjection(row = {}) {
+  const explicitScopes = portalAccessScopesForPrincipal({
+    role: "employee",
+    scopesValue: row.access_scopes,
+  });
+  if (Number(row.access_scope_assignment_count || 0) > 0) {
+    return {
+      explicitScopes,
+      scopes: portalAccessScopesForPrincipal({
+        role: row.role,
+        scopesValue: row.access_scopes,
+      }),
+    };
+  }
+  const homeLocationActive = row.home_location_active === true
+    || Number(row.home_location_active || 0) === 1;
+  const preferredDepartmentActive = row.preferred_department_active === true
+    || Number(row.preferred_department_active || 0) === 1;
+  return {
+    explicitScopes,
+    scopes: portalAccessScopesForPrincipal({
+      employeeNumber: row.employee_number,
+      role: row.role,
+      homeLocationId: homeLocationActive ? row.home_location_id : "",
+      preferredDepartmentId: preferredDepartmentActive
+        ? row.preferred_department_id
+        : null,
+      scopesValue: [],
+    }),
+  };
+}
+
 async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
   if (!token) return null;
   const currentDate = new Date();
   const now = currentDate.toISOString();
   const tokenHash = sha256(token);
+  const timeoutMinutes = portalSessionTimeoutMinutes();
+  const refreshedExpiresAt = new Date(currentDate.getTime() + timeoutMinutes * 60000).toISOString();
   const session = await portalAccessRepository.getEmployeeSessionByToken({
     tokenHash,
     now,
@@ -4165,18 +4556,11 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   });
   if (session) {
     if (isReservedEmployeePrincipal(session.employee_number)) return null;
-    if (touch) await portalAccessRepository.touchEmployeeSession({ id: session.id });
-    const explicitScopes = portalAccessScopesForPrincipal({
-      role: "employee",
-      scopesValue: session.access_scopes,
-    });
-    const scopes = portalAccessScopesForPrincipal({
-      employeeNumber: session.employee_number,
-      role: session.role,
-      homeLocationId: session.home_location_id,
-      preferredDepartmentId: session.preferred_department_id,
-      scopesValue: session.access_scopes,
-    });
+    if (touch) {
+      await portalAccessRepository.touchEmployeeSession({ id: session.id, expiresAt: refreshedExpiresAt });
+      session.expires_at = refreshedExpiresAt;
+    }
+    const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session);
     const permissionState = effectivePortalPermissionState(
       session.employee_number,
       session.role,
@@ -4221,7 +4605,8 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
     .getOrganizationSessionByToken({ tokenHash, now });
   if (!organizationSession) return null;
   if (touch) {
-    await portalAccessRepository.touchOrganizationSession({ id: organizationSession.id });
+    await portalAccessRepository.touchOrganizationSession({ id: organizationSession.id, expiresAt: refreshedExpiresAt });
+    organizationSession.expires_at = refreshedExpiresAt;
   }
   const scopes = portalAccessScopesForPrincipal({
     role: "organization_account",
@@ -4615,13 +5000,7 @@ function validateMobileDevice(input = {}) {
 
 function mobileSessionPrincipal(row) {
   if (!row || isReservedEmployeePrincipal(row.employee_number)) return null;
-  const scopes = portalAccessScopesForPrincipal({
-    employeeNumber: row.employee_number,
-    role: row.role,
-    homeLocationId: row.home_location_id,
-    preferredDepartmentId: row.preferred_department_id,
-    scopesValue: row.access_scopes,
-  });
+  const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(row);
   const permissionState = effectivePortalPermissionState(
     row.employee_number,
     row.role,
@@ -4647,6 +5026,8 @@ function mobileSessionPrincipal(row) {
     rolePermissions: permissionState.rolePermissions,
     grantedPermissions: permissionState.grantedPermissions,
     deniedPermissions: permissionState.deniedPermissions,
+    explicitScopes,
+    permissionScopes: parsePortalPermissionScopes(row.permission_scopes),
     scopes,
     timeConfirmationLevel: normalizeTimeConfirmationLevel(row.time_confirmation_level),
     amuLocalAccessMode: normalizedManagerAmuAccessMode(row.amu_local_access_mode),
@@ -5364,6 +5745,11 @@ function viennaLocalDateTime(date, time) {
   return result;
 }
 
+function viennaEndOfDayIso(date = new Date()) {
+  const finalMinute = viennaLocalDateTime(viennaTodayIso(date), "23:59");
+  return new Date(finalMinute.getTime() + 59_999).toISOString();
+}
+
 function currentWeekLockPoint(settings = getSettings()) {
   const weekStart = currentWeekStart();
   if (settings.current_week_lock_mode === "manual") {
@@ -5409,7 +5795,7 @@ function getSettings() {
 function installationFeaturesForApiPath(apiPath) {
   const requestPath = String(apiPath || "").toLowerCase();
   const required = new Set();
-  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
+  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule|cross-location-schedules|cross-location-schedule-settings|staff-assignment-requests)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
   if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/personnel-vacations(?:\/|$)/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
@@ -5465,13 +5851,15 @@ function daySettingsFromStoredJson(value) {
   } catch { return {}; }
 }
 
-async function daySettingsFromLocation(locationId) {
-  const locations = await organizationPersonnelRepository.listLocations(true);
-  const row = locations.find((location) => String(location.id) === String(locationId));
+async function daySettingsFromLocation(locationId, repository = null) {
+  const row = repository?.locationTimeOffConfiguration
+    ? await repository.locationTimeOffConfiguration({ locationId: String(locationId) })
+    : (await organizationPersonnelRepository.listLocations(true))
+      .find((location) => String(location.id) === String(locationId));
   return daySettingsFromStoredJson(row?.day_settings_json);
 }
 
-async function settingsForLocation(locationId) {
+async function settingsForLocation(locationId, repository = null) {
   const settings = getSettings();
   const branding = brandingForLocation(locationId, settings);
   settings.branding_company_name = branding.companyName;
@@ -5479,7 +5867,7 @@ async function settingsForLocation(locationId) {
   settings.branding_icon_url = branding.iconUrl;
   settings.branding_logo_alt = branding.logoAlt;
   settings.branding_admin_email = branding.adminEmail;
-  const days = await daySettingsFromLocation(locationId);
+  const days = await daySettingsFromLocation(locationId, repository);
   for (const [day] of planningDays) {
     const value = days[day];
     if (!value) continue;
@@ -5498,6 +5886,10 @@ async function settingsForLocation(locationId) {
 
 function getPortalSettings() {
   return { ...portalSettingsSnapshot };
+}
+
+function portalSessionTimeoutMinutes() {
+  return Math.min(1440, Math.max(15, Number(getPortalSettings().session_timeout_minutes || 480)));
 }
 
 function portalGreetingSettings() {
@@ -6437,8 +6829,10 @@ function sicknessAlertPayload(row) {
 }
 
 function sicknessNotificationContexts(payload = {}) {
+  const responsible = Array.isArray(payload.responsibilityContexts)
+    ? payload.responsibilityContexts : [];
   const submitted = Array.isArray(payload.staffingRisk?.contexts) ? payload.staffingRisk.contexts : [];
-  const contexts = submitted.map((context) => ({
+  const contexts = [...responsible, ...submitted].map((context) => ({
     locationId: String(context?.locationId || "").trim(),
     departmentId: Number(context?.departmentId || 0) || null,
   })).filter((context) => context.locationId);
@@ -6449,6 +6843,32 @@ function sicknessNotificationContexts(payload = {}) {
     });
   }
   return [...new Map(contexts.map((context) => [
+    `${context.locationId}:${context.departmentId || 0}`,
+    context,
+  ])).values()];
+}
+
+async function sicknessResponsibilityContexts(
+  employeeNumber,
+  startDate,
+  expectedEnd = "",
+  asOfDate = viennaTodayIso(),
+) {
+  const home = await absenceEmployeeRequestContext(employeeNumber, startDate);
+  const contexts = [{ locationId: home.locationId, departmentId: home.departmentId }];
+  const effectiveAsOfDate = isIsoDate(asOfDate) ? asOfDate : viennaTodayIso();
+  const openCaseEnd = effectiveAsOfDate >= startDate ? effectiveAsOfDate : startDate;
+  for (const lending of await activeEmployeeLendingsForRange(
+    employeeNumber,
+    startDate,
+    isIsoDate(expectedEnd) ? expectedEnd : openCaseEnd,
+  )) {
+    contexts.push({
+      locationId: lending.destination_location_id,
+      departmentId: Number(lending.destination_department_id || 0) || null,
+    });
+  }
+  return [...new Map(contexts.filter((context) => context.locationId).map((context) => [
     `${context.locationId}:${context.departmentId || 0}`,
     context,
   ])).values()];
@@ -6603,6 +7023,60 @@ async function notifySicknessRecipients(row, { stage = "local", kind }) {
   return recipients;
 }
 
+async function notifyNewSicknessResponsibilityRecipients(
+  row,
+  payload,
+  previousResponsibilityContexts,
+  nextResponsibilityContexts,
+) {
+  const previousKeys = new Set((Array.isArray(previousResponsibilityContexts)
+    ? previousResponsibilityContexts : []).map((context) => (
+    `${String(context?.locationId || "").trim()}:${Number(context?.departmentId || 0) || 0}`
+  )));
+  const addedContexts = (Array.isArray(nextResponsibilityContexts)
+    ? nextResponsibilityContexts : []).filter((context) => {
+    const locationId = String(context?.locationId || "").trim();
+    if (!locationId) return false;
+    return !previousKeys.has(`${locationId}:${Number(context?.departmentId || 0) || 0}`);
+  });
+  if (!addedContexts.length) return [];
+
+  const previousRecipients = new Set(await sicknessNotificationRecipients({
+    responsibilityContexts: previousResponsibilityContexts,
+  }, "local", payload.employeeNumber));
+  const notifiedRecipients = [];
+  for (const context of addedContexts) {
+    const locationId = String(context.locationId).trim();
+    const departmentId = Number(context.departmentId || 0) || null;
+    const recipients = await sicknessNotificationRecipients({
+      responsibilityContexts: [{ locationId, departmentId }],
+    }, "local", payload.employeeNumber);
+    for (const recipient of recipients) {
+      if (previousRecipients.has(recipient)) continue;
+      const notificationId = await createProtectedPortalNotification(
+        recipient,
+        "protected.update",
+        "Neue gesch\u00fctzte Meldung",
+        "Bitte im gesch\u00fctzten Portal anmelden.",
+        {
+          target: "/portal.html?tab=leadershipApprovals",
+          entityType: "protected_record",
+          entityId: protectedPortalEntityId("sickness-case", row.id),
+          dedupeKey: protectedPortalDedupeKey([
+            row.id,
+            "responsibility_context",
+            locationId,
+            departmentId || 0,
+            recipient,
+          ]),
+        },
+      );
+      if (notificationId) notifiedRecipients.push(recipient);
+    }
+  }
+  return [...new Set(notifiedRecipients)];
+}
+
 async function sicknessStaffingAlertIsOpen(caseId) {
   return (await sicknessAmuManagementRepository.listSicknessAlertsByCase({
     caseId: Number(caseId),
@@ -6661,19 +7135,32 @@ async function reconcileSicknessStaffingRisk(row, now = new Date()) {
     { locationId: payload.locationId, departmentId: payload.departmentId },
     { asOfDate: viennaTodayIso(now) },
   );
-  const previousContexts = sicknessNotificationContexts({
-    locationId: payload.locationId,
-    departmentId: payload.departmentId,
-    staffingRisk: previousRisk,
-  });
-  const contextChanged = JSON.stringify(previousContexts) !== JSON.stringify(nextRisk.contexts || []);
+  const previousContexts = sicknessNotificationContexts(payload);
+  const previousResponsibilityContexts = Array.isArray(payload.responsibilityContexts)
+    ? structuredClone(payload.responsibilityContexts)
+    : sicknessNotificationContexts(payload);
+  const nextResponsibilityContexts = await sicknessResponsibilityContexts(
+    payload.employeeNumber,
+    payload.startDate,
+    futureRecovered ? addDays(payload.returnToWorkDate, -1) : payload.expectedEnd,
+    viennaTodayIso(now),
+  );
   const primaryContext = nextRisk.contexts?.[0] || null;
   if (primaryContext) {
     payload.locationId = primaryContext.locationId;
     payload.departmentId = primaryContext.departmentId;
   }
-  const payloadChanged = JSON.stringify(previousRisk) !== JSON.stringify(nextRisk) || contextChanged;
   payload.staffingRisk = nextRisk;
+  payload.responsibilityContexts = nextResponsibilityContexts;
+  const nextContexts = sicknessNotificationContexts(payload);
+  const contextChanged = JSON.stringify(previousContexts) !== JSON.stringify(nextContexts);
+  const payloadChanged = JSON.stringify(previousRisk) !== JSON.stringify(nextRisk) || contextChanged;
+  await notifyNewSicknessResponsibilityRecipients(
+    row,
+    payload,
+    previousResponsibilityContexts,
+    nextResponsibilityContexts,
+  );
   if (payloadChanged) {
     const protectedPayload = protectJson(payload, sicknessCaseProtectionContext(row));
     await sicknessAmuManagementRepository.updateSicknessCasePayload({
@@ -6689,12 +7176,13 @@ async function reconcileSicknessStaffingRisk(row, now = new Date()) {
   if (alert.created || contextChanged) {
     if (contextChanged) await resolveSicknessStaffingArtifacts(row.id);
     const refreshedAlert = await upsertSicknessAlert(row.id, "staffing_risk", "warning", "local");
-    const recipients = await notifySicknessRecipients(row, {
+    const notificationRow = payloadChanged ? await sicknessCaseMetadata(row.id) : row;
+    const recipients = await notifySicknessRecipients(notificationRow, {
       stage: "local",
       kind: "staffing",
     });
     await reactivateSicknessStaffingNotifications(row.id, recipients);
-    await queueExternalStaffingAlerts(row, recipients, now.toISOString());
+    await queueExternalStaffingAlerts(notificationRow, recipients, now.toISOString());
     return { checked: true, created: Boolean(alert.created || refreshedAlert.created), resolved: false, risk: nextRisk };
   }
   return { checked: true, created: false, resolved: false, risk: nextRisk };
@@ -8548,6 +9036,27 @@ async function preparePersonnelRecordMutation(
   };
 }
 
+function revalidatePreparedPersonnelRecordMutation(request, liveActor, prepared) {
+  if (!prepared) return;
+  if (!liveActor || liveActor.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  const access = personnelRecordAccess(liveActor);
+  if (!access.canReadSensitive && !access.canReadPhone
+    && !access.canReadDocuments && !access.canReadAmu) {
+    throw httpError(403, "Für den Personalakt fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  assertPersonnelRecordFieldsWritable(
+    request,
+    liveActor,
+    access,
+    prepared.submittedFields,
+    prepared.employeeNumber,
+    { auditDenied: false },
+  );
+  prepared.session = liveActor;
+}
+
 async function persistPersonnelRecordMutationWithRepository(repository, prepared, action = "update") {
   if (!prepared) return [];
   const before = prepared.assumeNew
@@ -8702,6 +9211,29 @@ function manageablePortalPermissionsForActor(actor) {
     manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.READ);
     manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ);
     manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ);
+    if (actor.role === "admin") {
+      manageable.delete(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
+      manageable.delete(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE);
+      manageable.delete(PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE);
+    }
+    if (actor.role === "admin"
+      && !actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE)) {
+      for (const permission of PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS) {
+        manageable.delete(permission);
+      }
+    }
+    if (actor.role === "admin"
+      && !actor.permissions?.includes(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE)) {
+      for (const permission of CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS) {
+        manageable.delete(permission);
+      }
+    }
+    if (actor.role === "admin"
+      && !actor.permissions?.includes(
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
+      )) {
+      manageable.delete(PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE);
+    }
     return manageable;
   }
   if (actor.role === "it_admin") {
@@ -8710,11 +9242,17 @@ function manageablePortalPermissionsForActor(actor) {
       && !permission.startsWith("personnel:workflows:")
       && !permission.startsWith("personnel:profiles:")
       && !permission.startsWith("personnel:lifecycle:")
+      && !permission.startsWith("personnel:learning:")
+      && !CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission)
+      && !PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
       && permission !== "personnel:applications:write"
     )));
   }
   if (actor.role === "hr") {
     const manageable = new Set(hrDelegablePortalPermissions);
+    manageable.delete(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
+    manageable.delete(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE);
+    manageable.delete(PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE);
     if (!actor.permissions?.includes("personnel:candidates:delegate")) {
       manageable.delete("personnel:candidates:read");
       manageable.delete("personnel:applications:write");
@@ -8729,6 +9267,21 @@ function manageablePortalPermissionsForActor(actor) {
       manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.READ);
       manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ);
     }
+    if (!actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE)) {
+      for (const permission of PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS) {
+        manageable.delete(permission);
+      }
+    }
+    if (!actor.permissions?.includes(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE)) {
+      for (const permission of CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS) {
+        manageable.delete(permission);
+      }
+    }
+    if (!actor.permissions?.includes(
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
+    )) {
+      manageable.delete(PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE);
+    }
     return manageable;
   }
   return new Set();
@@ -8736,10 +9289,12 @@ function manageablePortalPermissionsForActor(actor) {
 
 function portalPermissionCatalogForActor(actor) {
   const manageable = manageablePortalPermissionsForActor(actor);
-  return delegablePortalPermissionCatalog.map(({ hrDelegable: _hrDelegable, ...permission }) => ({
-    ...permission,
-    editable: manageable.has(permission.id),
-  }));
+  return delegablePortalPermissionCatalog
+    .filter((permission) => portalPermissionVisibleToActor(permission.id, actor))
+    .map(({ hrDelegable: _hrDelegable, ...permission }) => ({
+      ...permission,
+      editable: manageable.has(permission.id),
+    }));
 }
 
 function actorCanManagePermissionGrants(actor, target) {
@@ -8793,12 +9348,190 @@ async function portalTargetHasPersonnelLifecycleDelegation(
   role = "",
   repository = organizationPersonnelRepository,
 ) {
-  const [grants, scopes] = await Promise.all([
+  const [grants, denials, scopes] = await Promise.all([
     portalPermissionGrantsForEmployee(employeeNumber, role, repository),
+    portalPermissionDenialsForEmployee(employeeNumber, repository),
     repository.listPortalPermissionScopeGrants(employeeNumber),
   ]);
-  return grants.some((permission) => personnelLifecyclePermissionIds.has(permission))
+  const hasPersonnelLearningRoleAccess = personnelLearningDefaultPermissionsForRole(role)
+    .some((permission) => PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS.includes(permission));
+  return hasPersonnelLearningRoleAccess
+    || grants.some((permission) => personnelLifecyclePermissionIds.has(permission))
+    || denials.some((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))
+    || grants.some((permission) => (
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+    ))
+    || denials.some((permission) => (
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+    ))
     || scopes.length > 0;
+}
+
+function roleHasPersonnelLearningOperationalDefaults(role) {
+  return personnelLearningDefaultPermissionsForRole(role)
+    .some((permission) => PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS.includes(permission));
+}
+
+function roleHasPersonnelLearningDefaults(role) {
+  return personnelLearningDefaultPermissionsForRole(role).length > 0;
+}
+
+function actorCanAdministerPersonnelLearningRoleAccount(actor) {
+  if (!actor) return false;
+  if (isLocalSystemSession(actor) || actor.role === "developer") return true;
+  if (["admin", "hr"].includes(actor.role)) {
+    return actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE) === true;
+  }
+  if (actor.role === "manager") {
+    return actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN) === true;
+  }
+  return false;
+}
+
+async function livePersonnelLearningRoleAdministrationActor(
+  actor,
+  repository = organizationPersonnelRepository,
+) {
+  if (!actor || isLocalSystemSession(actor)) return actor;
+  const [user, scopeContext] = await Promise.all([
+    personnelLearningPortalUser(actor.employeeNumber, repository),
+    personnelLearningScopeContext(repository),
+  ]);
+  if (!user?.active || !user.employeeActive) {
+    return {
+      employeeNumber: String(actor.employeeNumber || ""),
+      role: "",
+      permissions: [],
+      explicitScopes: [],
+      homeLocationId: "",
+    };
+  }
+  const permissionState = effectivePortalPermissionState(
+    user.employeeNumber,
+    user.role,
+    user.rolePermissions,
+    user.grantedPermissions,
+    user.deniedPermissions,
+  );
+  const storedExplicitScopes = Array.isArray(user.scopes) ? user.scopes : [];
+  const activeExplicitScopes = personnelLearningEffectiveScopes(user, scopeContext)
+    .filter((scope) => scope.valid)
+    .map((scope) => ({
+      locationId: scope.locationId,
+      departmentId: scope.departmentId,
+    }));
+  const requestHadExplicitScopes = Array.isArray(actor.explicitScopes)
+    && actor.explicitScopes.length > 0;
+  const fallbackScopes = portalAccessScopesForPrincipal({
+    role: user.role,
+    homeLocationId: user.homeLocationId,
+    preferredDepartmentId: user.preferredDepartmentId,
+    scopesValue: [],
+  }).filter((scope) => (
+    scopeContext.locations.has(scope.locationId)
+      && (!scope.departmentId
+        || scopeContext.departments.get(Number(scope.departmentId)) === scope.locationId)
+  ));
+  return {
+    ...actor,
+    employeeNumber: user.employeeNumber,
+    role: user.role,
+    permissions: permissionState.effectivePermissions,
+    scopes: storedExplicitScopes.length || requestHadExplicitScopes
+      ? activeExplicitScopes
+      : fallbackScopes,
+    explicitScopes: activeExplicitScopes,
+    permissionScopes: user.permissionScopes,
+    homeLocationId: user.homeLocationId,
+    preferredDepartmentId: user.preferredDepartmentId,
+    timeConfirmationLevel: user.timeConfirmationLevel,
+    personnelFieldPermissions: user.personnelFieldPermissions,
+    mustChangePassword: user.mustChangePassword,
+  };
+}
+
+function assertLivePortalRoutePermission(actor, permission, { allowedRoles = null } = {}) {
+  if (isLocalSystemSession(actor)) return;
+  if (!actor?.permissions?.includes(permission)
+    || (allowedRoles && !allowedRoles.has(actor.role))) {
+    throw httpError(
+      403,
+      "Für diese Aktion fehlt die aktuell wirksame Berechtigung.",
+      "PORTAL_PERMISSION_DENIED",
+    );
+  }
+}
+
+function personnelLearningOrganizationAssignment(value = {}) {
+  return Object.freeze({
+    homeLocationId: String(value.homeLocationId ?? value.home_location_id ?? "").trim(),
+    preferredDepartmentId: Number(
+      value.preferredDepartmentId ?? value.preferred_department_id ?? 0,
+    ) || null,
+  });
+}
+
+function personnelLearningOrganizationAssignmentChanged(before, after) {
+  const previous = personnelLearningOrganizationAssignment(before);
+  const desired = personnelLearningOrganizationAssignment(after);
+  return previous.homeLocationId !== desired.homeLocationId
+    || previous.preferredDepartmentId !== desired.preferredDepartmentId;
+}
+
+function personnelLearningManagerExplicitLocationId(actor) {
+  if (actor?.role !== "manager") return "";
+  const homeLocationId = String(actor.homeLocationId || "").trim();
+  if (!homeLocationId || !Array.isArray(actor.explicitScopes)) return "";
+  return actor.explicitScopes.some((scope) => (
+    String(scope?.locationId || "") === homeLocationId
+      && !Number(scope?.departmentId || 0)
+  )) ? homeLocationId : "";
+}
+
+function assertPersonnelLearningRoleAccountAdministrationAllowed(actor, target = {}) {
+  const targetRole = String(target.role || "employee");
+  if (!roleHasPersonnelLearningDefaults(targetRole)) return;
+  if (!actorCanAdministerPersonnelLearningRoleAccount(actor)) {
+    throw httpError(
+      403,
+      "Ein Schulungs- und Wissenszugang darf nur mit wirksamer fachlicher Delegationsbefugnis verwaltet werden.",
+      "PORTAL_ROLE_HIERARCHY_DENIED",
+    );
+  }
+  if (actor.role !== "manager") return;
+  const managerLocationId = personnelLearningManagerExplicitLocationId(actor);
+  const targetLocationId = personnelLearningOrganizationAssignment(target).homeLocationId;
+  if (!managerLocationId || targetRole !== "department_manager"
+    || targetLocationId !== managerLocationId) {
+    throw httpError(
+      403,
+      "Eine Filialleitung darf Schulungs- und Wissenszugänge nur für Abteilungsleitungen ihrer explizit zugewiesenen Filiale verwalten.",
+      "PORTAL_ROLE_HIERARCHY_DENIED",
+    );
+  }
+}
+
+function assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+  actor,
+  beforeEmployee,
+  afterEmployee,
+  beforeRole = "employee",
+  afterRole = beforeRole,
+} = {}) {
+  if (!personnelLearningOrganizationAssignmentChanged(beforeEmployee, afterEmployee)) return false;
+  if (roleHasPersonnelLearningDefaults(beforeRole)) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      ...personnelLearningOrganizationAssignment(beforeEmployee),
+      role: beforeRole,
+    });
+  }
+  if (roleHasPersonnelLearningDefaults(afterRole)) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      ...personnelLearningOrganizationAssignment(afterEmployee),
+      role: afterRole,
+    });
+  }
+  return true;
 }
 
 async function assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, target, repository) {
@@ -8865,6 +9598,14 @@ async function assertEmployeeDestructiveMutationAllowed(
       JSON.stringify({ targetRole: target.role }));
     throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
   }
+  if (roleHasPersonnelLearningDefaults(target.role)) {
+    const employeeScope = await repository.getEmployeeScopeProjection(employeeNumber);
+    assertPersonnelLearningRoleAccountAdministrationAllowed(normalizedActor, {
+      role: target.role,
+      homeLocationId: employeeScope?.home_location_id || "",
+      preferredDepartmentId: employeeScope?.preferred_department_id || null,
+    });
+  }
   if (target.role === "admin" && target.active) {
     const otherSystemOwners = Number(
       await repository.countOtherSystemOwners(target.employee_number),
@@ -8928,6 +9669,121 @@ async function portalAccessProfileForEmployee(
   };
 }
 
+function actorMayInspectPersonnelLearningRights(actor) {
+  return Boolean(actor && (
+    isLocalSystemSession(actor)
+      || actor.role === "developer"
+      || (["admin", "hr"].includes(actor.role)
+        && actor.permissions?.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE))
+  ));
+}
+
+function actorMayInspectCrossLocationScheduleRights(actor) {
+  return Boolean(actor && (
+    isLocalSystemSession(actor)
+      || actor.role === "developer"
+      || (["hr", "admin"].includes(actor.role)
+        && actor.permissions?.includes(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE))
+      || (["manager", "department_manager"].includes(actor.role)
+        && CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS.some(
+          (permission) => actor.permissions?.includes(permission),
+        ))
+  ));
+}
+
+function actorMayInspectPortalBirthdayPresentationRights(actor) {
+  return Boolean(actor && (
+    actor.role === "developer"
+      || (["hr", "admin"].includes(actor.role)
+        && actor.permissions?.includes(
+          PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
+        ))
+      || (["manager", "department_manager"].includes(actor.role)
+        && actor.permissions?.includes(
+          PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+        ))
+  ));
+}
+
+function isPersonnelLearningPermission(permission) {
+  return String(permission || "").startsWith("personnel:learning:");
+}
+
+function isCrossLocationSchedulePermission(permission) {
+  return CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(String(permission || ""));
+}
+
+function isPortalBirthdayPresentationPermission(permission) {
+  return PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(String(permission || ""));
+}
+
+function portalPermissionVisibleToActor(permission, actor) {
+  if (isPersonnelLearningPermission(permission)) {
+    return actorMayInspectPersonnelLearningRights(actor);
+  }
+  if (isCrossLocationSchedulePermission(permission)) {
+    return actorMayInspectCrossLocationScheduleRights(actor);
+  }
+  if (isPortalBirthdayPresentationPermission(permission)) {
+    return actorMayInspectPortalBirthdayPresentationRights(actor);
+  }
+  return true;
+}
+
+function projectPortalRolesForActor(roles = [], actor = null) {
+  return roles.map((role) => ({
+    ...role,
+    permissions: (role.permissions || []).filter(
+      (permission) => portalPermissionVisibleToActor(permission, actor),
+    ),
+  }));
+}
+
+function projectPortalPermissionCatalogForActor(catalog = [], actor = null) {
+  return catalog.filter((permission) => portalPermissionVisibleToActor(permission?.id, actor));
+}
+
+function projectPortalAccessProfileForActor(profile = {}, actor = null) {
+  const projected = {
+    ...profile,
+    rolePermissions: [...(profile.rolePermissions || [])],
+    grantedPermissions: [...(profile.grantedPermissions || [])],
+    deniedPermissions: [...(profile.deniedPermissions || [])],
+    effectivePermissions: [...(profile.effectivePermissions || [])],
+    scopes: (profile.scopes || []).map((scope) => ({ ...scope })),
+    personnelLifecyclePermissionScopes: (profile.personnelLifecyclePermissionScopes || [])
+      .map((scope) => ({ ...scope })),
+  };
+  for (const field of [
+    "rolePermissions",
+    "grantedPermissions",
+    "deniedPermissions",
+    "effectivePermissions",
+  ]) {
+    projected[field] = projected[field].filter(
+      (permission) => portalPermissionVisibleToActor(permission, actor),
+    );
+  }
+  projected.personnelLifecyclePermissionScopes = projected.personnelLifecyclePermissionScopes
+    .filter((scope) => portalPermissionVisibleToActor(scope.permission, actor));
+  if (!actorMayInspectPersonnelLearningRights(actor)) {
+    delete projected.personnelLearningDenialAuthority;
+    delete projected.personnelLearningCrossLocationDenialAuthority;
+  }
+  return projected;
+}
+
+async function publicPortalAccessProfileForEmployee(
+  employeeNumber,
+  actor,
+  repository = organizationPersonnelRepository,
+) {
+  return projectPortalAccessProfileForActor(
+    await portalAccessProfileForEmployee(employeeNumber, repository),
+    actor,
+  );
+}
+
 function personnelAccessProfileConcurrencySignature(snapshot = {}) {
   return sha256(JSON.stringify({
     configured: Boolean(snapshot.configured),
@@ -8946,22 +9802,59 @@ function personnelAccessProfileConcurrencySignature(snapshot = {}) {
 
 function employeeMutationConcurrencySignature(employee = {}) {
   return sha256(JSON.stringify({
-    personnelNumber: String(employee.personnel_number || ""),
-    fullName: String(employee.full_name || ""),
-    nickname: String(employee.nickname || ""),
+    personnelNumber: String(employee.personnel_number ?? employee.personnelNumber ?? ""),
+    fullName: String(employee.full_name ?? employee.fullName ?? ""),
+    nickname: String(employee.nickname ?? ""),
     color: String(employee.color || ""),
-    contractedHours: String(employee.contracted_hours ?? ""),
-    targetWorkdaysPerWeek: Number(employee.target_workdays_per_week || 0),
-    preferredDayOff: String(employee.preferred_day_off || ""),
-    fixedWorkdays: String(employee.fixed_workdays || ""),
-    positionId: String(employee.position_id || ""),
-    timeConfirmationLevel: String(employee.time_confirmation_level || ""),
-    sicknessWithoutAumEnabled: Boolean(employee.sickness_without_aum_enabled),
-    homeLocationId: String(employee.home_location_id || ""),
-    preferredDepartmentId: Number(employee.preferred_department_id || 0) || null,
-    costCenterId: String(employee.cost_center_id || ""),
+    contractedHours: String(employee.contracted_hours ?? employee.contractedHours ?? ""),
+    targetWorkdaysPerWeek: Number(
+      employee.target_workdays_per_week ?? employee.targetWorkdaysPerWeek ?? 0,
+    ),
+    preferredDayOff: String(employee.preferred_day_off ?? employee.preferredDayOff ?? ""),
+    fixedWorkdays: String(employee.fixed_workdays ?? employee.fixedWorkdays ?? ""),
+    positionId: String(employee.position_id ?? employee.positionId ?? ""),
+    timeConfirmationLevel: String(
+      employee.time_confirmation_level ?? employee.timeConfirmationLevel ?? "",
+    ),
+    sicknessWithoutAumEnabled: Boolean(
+      employee.sickness_without_aum_enabled ?? employee.sicknessWithoutAumEnabled,
+    ),
+    homeLocationId: String(employee.home_location_id ?? employee.homeLocationId ?? ""),
+    preferredDepartmentId: Number(
+      employee.preferred_department_id ?? employee.preferredDepartmentId ?? 0,
+    ) || null,
+    costCenterId: String(employee.cost_center_id ?? employee.costCenterId ?? ""),
     active: Boolean(employee.active),
   }));
+}
+
+function personnelAccessProfileChanged(profile, before = {}) {
+  if (!profile) return false;
+  if (!before.configured) return true;
+  const desiredScopes = ["location_planner", "manager", "department_manager"].includes(profile.role)
+    ? [{
+      locationId: profile.homeLocationId,
+      departmentId: profile.role === "department_manager"
+        ? Number(profile.preferredDepartmentId || 0) || null
+        : null,
+    }]
+    : [];
+  return String(before.role || "") !== String(profile.role || "")
+    || setDifference(
+      before.grantedPermissions || [],
+      profile.permissions || [],
+      (permission) => String(permission || ""),
+    ).added.length > 0
+    || setDifference(
+      before.grantedPermissions || [],
+      profile.permissions || [],
+      (permission) => String(permission || ""),
+    ).removed.length > 0
+    || (before.deniedPermissions || []).some(
+      (permission) => permission !== PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    )
+    || setDifference(before.scopes || [], desiredScopes, portalAccessScopeKey).added.length > 0
+    || setDifference(before.scopes || [], desiredScopes, portalAccessScopeKey).removed.length > 0;
 }
 
 async function validatePersonnelAccessProfile(
@@ -9002,6 +9895,24 @@ async function validatePersonnelAccessProfile(
   const submittedPermissions = [...new Set(payload.permissions
     .map((value) => String(value || "").trim())
     .filter(Boolean))];
+  if (actor.role === "it_admin" && submittedPermissions.some(
+    (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+  )) {
+    throw httpError(
+      403,
+      "Standortübergreifende Dienstplan- und Einsatzanfragerechte dürfen nicht über ein technisches Rechteprofil vergeben werden.",
+      "CROSS_LOCATION_SCHEDULE_RIGHTS_ROUTE_REQUIRED",
+    );
+  }
+  if (actor.role === "it_admin" && submittedPermissions.some(
+    (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+  )) {
+    throw httpError(
+      403,
+      "Fachrechte für Geburtstagsdarstellungen dürfen nicht über ein technisches Rechteprofil vergeben werden.",
+      "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_ROUTE_REQUIRED",
+    );
+  }
   const submittedPersonnelLifecyclePermissions = submittedPermissions
     .filter((permission) => personnelLifecyclePermissionIds.has(permission));
   if (submittedPersonnelLifecyclePermissions.length) {
@@ -9011,12 +9922,45 @@ async function validatePersonnelAccessProfile(
       "PERSONNEL_LIFECYCLE_RIGHTS_ROUTE_REQUIRED",
     );
   }
+  if (roleHasPersonnelLearningDefaults(existing?.role)) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      ...personnelLearningOrganizationAssignment(employee),
+      role: existing.role,
+    });
+  }
+  if (roleHasPersonnelLearningDefaults(role)) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      ...personnelLearningOrganizationAssignment(employee),
+      role,
+    });
+  }
   if (existing) {
-    const [existingGrants, existingPermissionScopes] = await Promise.all([
+    const [existingGrants, existingDenials, existingPermissionScopes] = await Promise.all([
       portalPermissionGrantsForEmployee(employeeNumber, existing.role, repository),
+      portalPermissionDenialsForEmployee(employeeNumber, repository),
       repository.listPortalPermissionScopeGrants(employeeNumber),
     ]);
+    if (existingGrants.some((permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission))
+      || existingDenials.some((permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission))) {
+      throw httpError(
+        409,
+        "Das Rechteprofil enthält geschützte standortübergreifende Dienstplan- oder Einsatzanfragerechte. Diese müssen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+        "CROSS_LOCATION_SCHEDULE_RIGHTS_PROFILE_PROTECTED",
+      );
+    }
+    if (existingGrants.some(
+      (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+    ) || existingDenials.some(
+      (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+    )) {
+      throw httpError(
+        409,
+        "Das Rechteprofil enthält geschützte Fachrechte für Geburtstagsdarstellungen. Diese müssen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_PROFILE_PROTECTED",
+      );
+    }
     if (existingGrants.some((permission) => personnelLifecyclePermissionIds.has(permission))
+      || existingDenials.some((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))
       || existingPermissionScopes.length) {
       throw httpError(
         409,
@@ -9049,7 +9993,7 @@ async function validatePersonnelAccessProfile(
 }
 
 async function applyPersonnelAccessProfileWithRepository(repository, actor, profile, before = null) {
-  if (!profile) return;
+  if (!profile) return false;
   const liveBefore = await portalAccessProfileForEmployee(profile.employeeNumber, repository);
   assertRightsMutationSnapshotCurrent(
     personnelAccessProfileConcurrencySignature(before || {}),
@@ -9067,7 +10011,32 @@ async function applyPersonnelAccessProfileWithRepository(repository, actor, prof
       );
     }
   }
+  if (liveBefore.grantedPermissions.some(
+    (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+  ) || liveBefore.deniedPermissions.some(
+    (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+  )) {
+    throw httpError(
+      409,
+      "Das Rechteprofil enthaelt geschuetzte standortuebergreifende Dienstplan- oder Einsatzanfragerechte. Diese muessen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+      "CROSS_LOCATION_SCHEDULE_RIGHTS_PROFILE_PROTECTED",
+    );
+  }
+  if (liveBefore.grantedPermissions.some(
+    (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+  ) || liveBefore.deniedPermissions.some(
+    (permission) => PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission),
+  )) {
+    throw httpError(
+      409,
+      "Das Rechteprofil enthaelt geschuetzte Fachrechte fuer Geburtstagsdarstellungen. Diese muessen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+      "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_PROFILE_PROTECTED",
+    );
+  }
   if (liveBefore.grantedPermissions.some((permission) => personnelLifecyclePermissionIds.has(permission))
+    || liveBefore.deniedPermissions.some(
+      (permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission),
+    )
     || liveBefore.personnelLifecyclePermissionScopes.length) {
     throw httpError(
       409,
@@ -9091,12 +10060,14 @@ async function applyPersonnelAccessProfileWithRepository(repository, actor, prof
       );
     }
   }
+  if (!personnelAccessProfileChanged(profile, liveBefore)) return false;
   try {
     await repository.applyAccessProfile(actor, profile, liveBefore);
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw personnelLifecycleConcurrentChangeError();
     throw error;
   }
+  return true;
 }
 
 function getPortalStatus(locationId = "", request = null) {
@@ -9252,13 +10223,23 @@ function requirePortalAnyPermission(request, permissions) {
 async function portalUsersForAdmin() {
   return Promise.all((await organizationPersonnelRepository.listPortalUsersForAdmin()).map(async (row) => {
     const role = row.role || "employee";
-    const [grantedPermissions, deniedPermissions, scopeRows, permissionScopeRows] = await Promise.all([
+    const [
+      grantedPermissions,
+      deniedPermissions,
+      scopeRows,
+      permissionScopeRows,
+      personnelLearningDenialAuthority,
+    ] = await Promise.all([
       portalPermissionGrantsForEmployee(row.personnel_number, role),
       portalPermissionDenialsForEmployee(row.personnel_number),
       organizationPersonnelRepository.listPortalAccessScopes(row.personnel_number),
       organizationPersonnelRepository.listPortalPermissionScopeGrants(row.personnel_number),
+      organizationPersonnelRepository.getPersonnelLearningPermissionDenialAuthority(
+        row.personnel_number,
+        PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      ),
     ]);
-    return {
+    const user = {
       employeeNumber: row.personnel_number,
       fullName: row.full_name,
       nickname: row.nickname,
@@ -9295,14 +10276,2128 @@ async function portalUsersForAdmin() {
         approvedBy: scope.approved_by,
       })),
     };
+    Object.defineProperty(user, "personnelLearningDenialAuthority", {
+      configurable: false,
+      enumerable: false,
+      writable: false,
+      value: personnelLearningDenialAuthority || null,
+    });
+    return user;
   }));
 }
 
 async function portalUsersForActor(actor) {
+  if (!isLocalSystemSession(actor)
+    && !["users:write", "scopes:write"].some(
+      (permission) => actor?.permissions?.includes(permission),
+    )) {
+    return [];
+  }
   const users = await portalUsersForAdmin();
-  if (actor?.role !== "manager") return users;
+  const visiblePermission = (permission) => portalPermissionVisibleToActor(permission, actor);
+  const projected = users.map((user) => ({
+    ...user,
+    rolePermissions: user.rolePermissions.filter(visiblePermission),
+    grantedPermissions: user.grantedPermissions.filter(visiblePermission),
+    deniedPermissions: user.deniedPermissions.filter(visiblePermission),
+    personnelLifecyclePermissionScopes: user.personnelLifecyclePermissionScopes
+      .filter((scope) => visiblePermission(scope.permission)),
+  }));
+  if (actor?.role !== "manager") return projected;
   const locations = new Set((actor.scopes || []).map((scope) => scope.locationId));
-  return users.filter((user) => user.role === "department_manager" && locations.has(user.homeLocationId));
+  return projected.filter(
+    (user) => user.role === "department_manager" && locations.has(user.homeLocationId),
+  );
+}
+
+async function portalRolesForUserAdministrationActor(actor) {
+  if (!isLocalSystemSession(actor)
+    && !["users:write", "scopes:write"].some(
+      (permission) => actor?.permissions?.includes(permission),
+    )) {
+    return [];
+  }
+  return projectPortalRolesForActor(await getPortalRoles(), actor);
+}
+
+async function personnelLearningScopeContext(
+  repository = organizationPersonnelRepository,
+) {
+  const [locations, departments] = await Promise.all([
+    repository.listLocations(false),
+    repository.listDepartments(false),
+  ]);
+  return personnelLearningScopeContextFromRows(locations, departments);
+}
+
+function personnelLearningScopeContextFromRows(locations = [], departments = []) {
+  return {
+    locations: new Set(locations.filter((location) => location.active)
+      .map((location) => String(location.id || ""))),
+    departments: new Map(departments.filter((department) => department.active)
+      .map((department) => [Number(department.id), String(department.location_id || "")])),
+  };
+}
+
+function personnelLearningEffectiveScopes(user, context) {
+  const source = Array.isArray(user?.scopes) ? user.scopes : [];
+  return source.map((scope) => {
+    const locationId = String(scope?.locationId ?? scope?.location_id ?? "");
+    const departmentId = Number(scope?.departmentId ?? scope?.department_id ?? 0) || null;
+    const locationActive = context.locations.has(locationId);
+    const departmentLocationId = departmentId
+      ? String(context.departments.get(departmentId) || "")
+      : "";
+    return {
+      type: departmentId ? "department" : "location",
+      locationId,
+      departmentId,
+      valid: Boolean(locationId && locationActive
+        && (!departmentId || departmentLocationId === locationId)),
+      active: true,
+      locationActive,
+      departmentActive: departmentId ? Boolean(departmentLocationId) : false,
+      departmentLocationId,
+    };
+  });
+}
+
+function personnelLearningPrincipalForUser(user, context) {
+  if (!user) return null;
+  const deniedPermissions = Array.isArray(user.deniedPermissions)
+    ? user.deniedPermissions
+    : [];
+  const crossLocationDenied = deniedPermissions.includes(
+    PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+  );
+  const authority = user.personnelLearningDenialAuthority || null;
+  return {
+    employeeNumber: String(user.employeeNumber ?? user.employee_number ?? ""),
+    role: String(user.role || "employee"),
+    active: Boolean(user.active && (user.employeeActive ?? user.employee_active ?? true)),
+    configured: Boolean(user.configured ?? user.role),
+    sessionKind: "employee",
+    isEmployee: true,
+    homeLocationId: String(user.homeLocationId ?? user.home_location_id ?? ""),
+    preferredDepartmentId: Number(
+      user.preferredDepartmentId ?? user.preferred_department_id ?? 0,
+    ) || null,
+    rolePermissions: Array.isArray(user.rolePermissions) ? user.rolePermissions : [],
+    grantedPermissions: Array.isArray(user.grantedPermissions)
+      ? user.grantedPermissions
+      : [],
+    deniedPermissions,
+    effectiveScopes: personnelLearningEffectiveScopes(user, context),
+    permissionDenials: crossLocationDenied ? [{
+      permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      authorityLevel: String(authority?.authority_level || ""),
+      scopeLocationId: String(authority?.scope_location_id || ""),
+      revision: personnelLearningDenialRevision(user),
+    }] : [],
+  };
+}
+
+async function personnelLearningPortalUser(
+  employeeNumber,
+  repository = organizationPersonnelRepository,
+) {
+  const account = await repository.getPortalUserAccountProjection(employeeNumber);
+  if (!account) return null;
+  const role = String(account.role || "employee");
+  const [
+    employee,
+    scopeProjection,
+    roleProjection,
+    grantedPermissions,
+    deniedPermissions,
+    scopeRows,
+    permissionScopeRows,
+    personnelFieldPermissions,
+    personnelLearningDenialAuthority,
+  ] = await Promise.all([
+    repository.getEmployeeForUpdate(employeeNumber),
+    repository.getEmployeeScopeProjection(employeeNumber),
+    repository.getPortalRoleProjection(role),
+    portalPermissionGrantsForEmployee(employeeNumber, role, repository),
+    portalPermissionDenialsForEmployee(employeeNumber, repository),
+    repository.listPortalAccessScopes(employeeNumber),
+    repository.listPortalPermissionScopeGrants(employeeNumber),
+    repository.listPersonnelFieldPermissions(role),
+    repository.getPersonnelLearningPermissionDenialAuthority(
+      employeeNumber,
+      PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    ),
+  ]);
+  return {
+    employeeNumber: String(account.employee_number || employeeNumber),
+    employeeActive: Boolean(employee?.active),
+    configured: true,
+    role,
+    active: Boolean(account.active),
+    mustChangePassword: Boolean(account.must_change_password),
+    homeLocationId: String(scopeProjection?.home_location_id || ""),
+    preferredDepartmentId: Number(scopeProjection?.preferred_department_id || 0) || null,
+    timeConfirmationLevel: normalizeTimeConfirmationLevel(employee?.time_confirmation_level),
+    personnelFieldPermissions: parsePersonnelFieldPermissionProjection(personnelFieldPermissions),
+    rolePermissions: parsePortalPermissions(roleProjection?.permissions),
+    grantedPermissions,
+    deniedPermissions,
+    scopes: scopeRows.map((scope) => ({
+      locationId: String(scope.location_id || ""),
+      departmentId: Number(scope.department_id || 0) || null,
+    })),
+    permissionScopes: permissionScopeRows.map(publicPortalPermissionScopeGrant),
+    personnelLearningDenialAuthority,
+  };
+}
+
+function personnelLearningOrganizationScopeValue(principal, context) {
+  const scope = createPersonnelLearningAccessSnapshot(
+    personnelLearningPrincipalForUser(principal, context) || {},
+  ).organizationScope;
+  return scope ? Object.freeze({
+    locationId: String(scope.locationId || ""),
+    departmentId: Number(scope.departmentId || 0) || null,
+  }) : null;
+}
+
+function personnelLearningOrganizationScopeKey(scope) {
+  return scope ? `${scope.locationId}\0${scope.departmentId || 0}` : "";
+}
+
+function personnelLearningCatalogError(error) {
+  if (error instanceof PersonnelLearningCatalogError) {
+    return httpError(400, error.message, error.code);
+  }
+  return error;
+}
+
+function normalizePersonnelLearningCatalogInput(value, options = {}) {
+  try {
+    return normalizePersonnelLearningTemplateInput(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function normalizePersonnelLearningSkillCatalogInput(value, options = {}) {
+  try {
+    return normalizePersonnelLearningSkillInput(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+async function personnelLearningCatalogActor(
+  session,
+  repository = organizationPersonnelRepository,
+) {
+  const organizationSession = session?.sessionKind === "organization"
+    || session?.isEmployee === false;
+  const [locations, departments, user, organizationAccount] = await Promise.all([
+    repository.listLocations(false),
+    repository.listDepartments(false),
+    isLocalSystemSession(session) || organizationSession
+      ? Promise.resolve(null)
+      : personnelLearningPortalUser(session?.employeeNumber, repository),
+    organizationSession && session?.accountId
+      ? repository.getOrganizationAccount(String(session.accountId))
+      : Promise.resolve(null),
+  ]);
+  const context = personnelLearningScopeContextFromRows(locations, departments);
+  if (isLocalSystemSession(session)) {
+    return Object.freeze({
+      actorId: "local",
+      session,
+      access: Object.freeze({
+        actorId: "local",
+        role: "developer",
+        localSystem: true,
+        plPlus: true,
+        organizationScope: null,
+        canReadCatalog: true,
+        canManageCatalog: true,
+        canPublishCatalog: true,
+        canReadAudit: true,
+        canWriteAssignments: true,
+        canAssignCrossLocation: true,
+      }),
+      context,
+      locations: Object.freeze(locations),
+      departments: Object.freeze(departments),
+    });
+  }
+  if (organizationSession) {
+    const accountType = organizationAccount?.active
+      ? String(organizationAccount.account_type || "") : "";
+    const permissions = organizationAccount?.active
+      ? normalizedOrganizationAccountPermissions(
+          accountType,
+          parsePortalPermissions(organizationAccount.permissions_json),
+        )
+      : [];
+    const liveScopes = organizationAccount?.active
+      ? portalAccessScopesForPrincipal({
+          role: "organization_account",
+          scopesValue: organizationAccount.scopes_json,
+        })
+      : [];
+    const activeScopes = liveScopes.filter((scope) => (
+      !scope?.departmentId
+      && context.locations.has(String(scope?.locationId || ""))
+    ));
+    const branchDashboard = accountType === "branch"
+      && permissions.includes(PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION)
+      && activeScopes.length === 1;
+    const locationId = branchDashboard ? String(activeScopes[0].locationId) : "";
+    const actorId = organizationAccount?.active
+      ? `account:${String(organizationAccount.id || "")}` : "";
+    const liveSession = Object.freeze({
+      ...session,
+      actorId,
+      accountId: String(organizationAccount?.id || session?.accountId || ""),
+      accountType,
+      fullName: String(organizationAccount?.display_name || session?.fullName || ""),
+      permissions: Object.freeze([...permissions]),
+      explicitScopes: Object.freeze([...activeScopes]),
+      scopes: Object.freeze([...activeScopes]),
+    });
+    return Object.freeze({
+      actorId,
+      session: liveSession,
+      user: null,
+      access: Object.freeze({
+        actorId,
+        role: "organization_account",
+        localSystem: false,
+        plPlus: false,
+        organizationScope: branchDashboard
+          ? Object.freeze({ locationId, departmentId: null }) : null,
+        canReadCatalog: false,
+        canManageCatalog: false,
+        canPublishCatalog: false,
+        canReadAudit: false,
+        canWriteAssignments: false,
+        canAssignCrossLocation: false,
+        branchDashboard,
+        branchDashboardLocationId: locationId,
+      }),
+      context,
+      locations: Object.freeze(locations),
+      departments: Object.freeze(departments),
+    });
+  }
+  const principal = personnelLearningPrincipalForUser(user, context);
+  const access = createPersonnelLearningAccessSnapshot(principal || {});
+  return Object.freeze({
+    actorId: access.actorId,
+    session,
+    user,
+    access,
+    context,
+    locations: Object.freeze(locations),
+    departments: Object.freeze(departments),
+  });
+}
+
+function assertPersonnelLearningCatalogCapability(actor, capability) {
+  if (!actor?.actorId || actor.access?.[capability] !== true) {
+    throw httpError(
+      403,
+      "Für diesen Schulungs- und Wissensbereich fehlt die aktuell wirksame Berechtigung.",
+      "PERSONNEL_LEARNING_CATALOG_PERMISSION_DENIED",
+    );
+  }
+}
+
+function personnelLearningCatalogScopeSnapshot(scope, actor) {
+  if (!personnelLearningScopeAccess(actor.access, scope, { manage: true })) {
+    throw httpError(
+      403,
+      "Der Geltungsbereich liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+      "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+    );
+  }
+  if (scope.type === "organization") {
+    return Object.freeze({ type: "organization", label: "Gesamte Organisation" });
+  }
+  const location = actor.locations.find((entry) => String(entry.id) === scope.locationId);
+  if (!location?.active) {
+    throw httpError(
+      409,
+      "Die ausgewählte Filiale ist nicht mehr aktiv.",
+      "PERSONNEL_LEARNING_CATALOG_SCOPE_INACTIVE",
+    );
+  }
+  if (scope.type === "location") {
+    return Object.freeze({
+      type: "location",
+      locationId: scope.locationId,
+      locationName: String(location.name || scope.locationId),
+    });
+  }
+  const department = actor.departments.find((entry) => (
+    Number(entry.id) === Number(scope.departmentId)
+      && String(entry.location_id) === scope.locationId
+  ));
+  if (!department?.active) {
+    throw httpError(
+      409,
+      "Die ausgewählte Abteilung ist nicht mehr aktiv oder gehört nicht zur Filiale.",
+      "PERSONNEL_LEARNING_CATALOG_SCOPE_INACTIVE",
+    );
+  }
+  return Object.freeze({
+    type: "department",
+    locationId: scope.locationId,
+    locationName: String(location.name || scope.locationId),
+    departmentId: Number(scope.departmentId),
+    departmentName: String(department.name || scope.departmentId),
+  });
+}
+
+function personnelLearningCatalogScopeOptions(actor) {
+  if (actor.access?.canManageCatalog !== true) return Object.freeze([]);
+  const candidates = [];
+  if (actor.access.localSystem === true || actor.access.plPlus === true) {
+    candidates.push(Object.freeze({
+      type: "organization",
+      locationId: null,
+      departmentId: null,
+      label: "Gesamte Organisation",
+    }));
+  }
+  for (const location of actor.locations) {
+    const locationScope = {
+      type: "location",
+      locationId: String(location.id),
+      departmentId: null,
+    };
+    if (personnelLearningScopeAccess(actor.access, locationScope, { manage: true })) {
+      candidates.push(Object.freeze({
+        ...locationScope,
+        label: String(location.name || location.id),
+      }));
+    }
+    for (const department of actor.departments.filter((entry) => (
+      String(entry.location_id) === String(location.id)
+    ))) {
+      const departmentScope = {
+        type: "department",
+        locationId: String(location.id),
+        departmentId: Number(department.id),
+      };
+      if (personnelLearningScopeAccess(actor.access, departmentScope, { manage: true })) {
+        candidates.push(Object.freeze({
+          ...departmentScope,
+          label: `${String(location.name || location.id)} · ${String(department.name || department.id)}`,
+        }));
+      }
+    }
+  }
+  return Object.freeze(candidates);
+}
+
+async function personnelLearningModuleBundle(
+  moduleId,
+  repository = personnelLearningRepository,
+) {
+  const module = await repository.getModule(moduleId);
+  if (!module) {
+    throw httpError(
+      404,
+      "Der Schulungs- oder Wissensprozess wurde nicht gefunden.",
+      "PERSONNEL_LEARNING_MODULE_NOT_FOUND",
+    );
+  }
+  const [versions, events] = await Promise.all([
+    repository.listVersions(moduleId),
+    repository.listEvents(moduleId),
+  ]);
+  let state;
+  let catalogEntity = "process";
+  try {
+    const skillVersions = versions.filter((version) => (
+      isPersonnelLearningSkillContent(version.content)
+    )).length;
+    if (skillVersions > 0 && skillVersions !== versions.length) {
+      throw new PersonnelLearningCatalogError(
+        "PERSONNEL_LEARNING_HISTORY_INVALID",
+        "Die Kataloghistorie enthält widersprüchliche Entitätstypen.",
+      );
+    }
+    if (skillVersions === versions.length) {
+      catalogEntity = "skill";
+      state = buildPersonnelLearningSkillState({ module, versions, events });
+    } else {
+      state = buildPersonnelLearningModuleState({ module, versions, events });
+    }
+  } catch (error) {
+    if (error instanceof PersonnelLearningCatalogError) {
+      throw httpError(
+        503,
+        "Die revisionsgebundene Prozesshistorie ist inkonsistent.",
+        "PERSONNEL_LEARNING_HISTORY_INVALID",
+      );
+    }
+    throw error;
+  }
+  return Object.freeze({ module, versions, events, state, catalogEntity });
+}
+
+function assertPersonnelLearningCatalogEntity(bundle, expectedEntity) {
+  if (bundle?.catalogEntity !== expectedEntity) {
+    throw httpError(
+      404,
+      expectedEntity === "skill"
+        ? "Die Fähigkeit wurde nicht gefunden."
+        : "Der Schulungs- oder Wissensprozess wurde nicht gefunden.",
+      expectedEntity === "skill"
+        ? "PERSONNEL_LEARNING_SKILL_NOT_FOUND"
+        : "PERSONNEL_LEARNING_MODULE_NOT_FOUND",
+    );
+  }
+  return bundle;
+}
+
+function publicPersonnelLearningVersion(version, { audit = false } = {}) {
+  if (!version) return null;
+  const scopeSnapshot = version.scopeSnapshot && typeof version.scopeSnapshot === "object"
+    ? version.scopeSnapshot
+    : {};
+  const projected = {
+    versionNumber: Number(version.versionNumber),
+    title: String(version.title || ""),
+    content: version.content,
+    scope: {
+      type: String(version.scopeType || ""),
+      locationId: version.scopeLocationId === null ? null : String(version.scopeLocationId || ""),
+      departmentId: Number(version.scopeDepartmentId || 0) || null,
+      label: String(
+        scopeSnapshot.label
+          || scopeSnapshot.departmentName
+          || scopeSnapshot.locationName
+          || "Gesamte Organisation",
+      ),
+      locationName: scopeSnapshot.locationName ? String(scopeSnapshot.locationName) : null,
+      departmentName: scopeSnapshot.departmentName
+        ? String(scopeSnapshot.departmentName) : null,
+    },
+    createdAt: String(version.createdAt || ""),
+  };
+  if (audit) {
+    projected.createdBy = String(version.createdBy || "");
+    projected.contentSha256 = String(version.contentSha256 || "");
+    projected.scopeSnapshotSha256 = String(version.scopeSnapshotSha256 || "");
+    projected.receiptSha256 = String(version.receiptSha256 || "");
+  }
+  return projected;
+}
+
+function publicPersonnelLearningModule(bundle, actor) {
+  const { module, state } = bundle;
+  const latestScope = personnelLearningScopeFromVersion(state.latestVersion);
+  const publishedScope = personnelLearningScopeFromVersion(state.publishedVersion);
+  const canManage = actor.access.canManageCatalog === true
+    && personnelLearningScopeAccess(actor.access, latestScope, { manage: true });
+  const canReadPublished = Boolean(state.publishedVersion)
+    && personnelLearningScopeAccess(actor.access, publishedScope);
+  if (!canManage && (!canReadPublished || state.archived)) return null;
+  const canPublish = canManage && actor.access.canPublishCatalog === true;
+  const audit = actor.access.canReadAudit === true
+    && personnelLearningScopeAccess(actor.access, latestScope);
+  const visibleVersions = canManage
+    ? state.versions
+    : state.publishedVersion ? [state.publishedVersion] : [];
+  const visibleHistory = canManage
+    ? state.events
+    : state.events.filter((event) => {
+        const eventType = String(event.eventType || "");
+        const versionNumber = Number(event.moduleVersionNumber || 0) || null;
+        return eventType === "created"
+          || versionNumber === state.publishedVersionNumber;
+      });
+  return {
+    id: String(module.id),
+    moduleCode: String(module.moduleCode),
+    moduleType: String(module.moduleType),
+    status: canManage ? state.status : "published",
+    archived: state.archived,
+    latestVersionNumber: canManage
+      ? state.latestVersionNumber
+      : state.publishedVersionNumber,
+    publishedVersionNumber: state.publishedVersionNumber,
+    currentEventReceipt: canManage ? state.currentEventReceipt : null,
+    latestVersion: canManage
+      ? publicPersonnelLearningVersion(state.latestVersion, { audit })
+      : publicPersonnelLearningVersion(state.publishedVersion, { audit }),
+    publishedVersion: publicPersonnelLearningVersion(state.publishedVersion, { audit }),
+    versions: visibleVersions.map((version) => ({
+      ...publicPersonnelLearningVersion(version, { audit }),
+      published: Number(version.versionNumber) === state.publishedVersionNumber,
+      latest: Number(version.versionNumber) === state.latestVersionNumber,
+    })),
+    history: visibleHistory.map((event) => ({
+      sequenceNumber: Number(event.sequenceNumber),
+      eventType: String(event.eventType || ""),
+      versionNumber: Number(event.moduleVersionNumber || 0) || null,
+      occurredAt: String(event.occurredAt || ""),
+      ...(audit ? {
+        actorId: String(event.actorId || ""),
+        receiptSha256: String(event.receiptSha256 || ""),
+      } : {}),
+    })),
+    capabilities: {
+      canEdit: canManage && !state.archived,
+      canPublish: canPublish && !state.archived
+        && state.latestVersionNumber !== state.publishedVersionNumber,
+      canArchive: canPublish && !state.archived,
+      canRestore: canPublish && state.archived,
+      canReadAudit: audit,
+    },
+  };
+}
+
+async function personnelLearningCatalogPayload(
+  actor,
+  repository = personnelLearningRepository,
+) {
+  assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
+  const modules = await repository.listModules();
+  const projected = (await Promise.all(modules.map(async (module) => {
+    const bundle = await personnelLearningModuleBundle(module.id, repository);
+    if (bundle.catalogEntity !== "process") return null;
+    return publicPersonnelLearningModule(bundle, actor);
+  }))).filter(Boolean).sort((left, right) => (
+    String(left.latestVersion?.title || left.moduleCode)
+      .localeCompare(String(right.latestVersion?.title || right.moduleCode), "de-AT", {
+        sensitivity: "base",
+      })
+  ));
+  const scopes = personnelLearningCatalogScopeOptions(actor);
+  return {
+    generatedAt: new Date().toISOString(),
+    capabilities: {
+      canRead: actor.access.canReadCatalog === true,
+      canManage: actor.access.canManageCatalog === true,
+      canPublish: actor.access.canPublishCatalog === true,
+      canReadAudit: actor.access.canReadAudit === true,
+      canCreate: actor.access.canManageCatalog === true && scopes.length > 0,
+    },
+    scopes,
+    summary: {
+      visible: projected.length,
+      published: projected.filter((module) => (
+        ["published", "published_with_draft"].includes(module.status)
+      )).length,
+      drafts: projected.filter((module) => (
+        ["draft", "published_with_draft"].includes(module.status)
+      )).length,
+      archived: projected.filter((module) => module.archived).length,
+    },
+    modules: projected,
+  };
+}
+
+function publicPersonnelLearningSkill(bundle, actor) {
+  if (bundle.catalogEntity !== "skill") return null;
+  const projected = publicPersonnelLearningModule(bundle, actor);
+  if (!projected) return null;
+  const { moduleCode, moduleType: _moduleType, ...skill } = projected;
+  return {
+    ...skill,
+    skillCode: moduleCode,
+  };
+}
+
+async function personnelLearningSkillCatalogPayload(
+  actor,
+  repository = personnelLearningRepository,
+) {
+  assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
+  const modules = await repository.listModules();
+  const projected = (await Promise.all(modules.map(async (module) => {
+    const bundle = await personnelLearningModuleBundle(module.id, repository);
+    return publicPersonnelLearningSkill(bundle, actor);
+  }))).filter(Boolean).sort((left, right) => (
+    String(left.latestVersion?.title || left.skillCode)
+      .localeCompare(String(right.latestVersion?.title || right.skillCode), "de-AT", {
+        sensitivity: "base",
+      })
+  ));
+  const scopes = personnelLearningCatalogScopeOptions(actor);
+  return {
+    generatedAt: new Date().toISOString(),
+    capabilities: {
+      canRead: actor.access.canReadCatalog === true,
+      canManage: actor.access.canManageCatalog === true,
+      canPublish: actor.access.canPublishCatalog === true,
+      canReadAudit: actor.access.canReadAudit === true,
+      canCreate: actor.access.canManageCatalog === true && scopes.length > 0,
+    },
+    scopes,
+    summary: {
+      visible: projected.length,
+      published: projected.filter((skill) => (
+        ["published", "published_with_draft"].includes(skill.status)
+      )).length,
+      drafts: projected.filter((skill) => (
+        ["draft", "published_with_draft"].includes(skill.status)
+      )).length,
+      archived: projected.filter((skill) => skill.archived).length,
+    },
+    skills: projected,
+  };
+}
+
+function assertPersonnelLearningCompetencyCapability(actor) {
+  if (!actor?.actorId || actor.access?.canWriteAssignments !== true) {
+    throw httpError(
+      403,
+      "Für Mitarbeiter-Kompetenzprofile fehlt die aktuell wirksame Berechtigung.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_PERMISSION_DENIED",
+    );
+  }
+}
+
+function personnelLearningCompetencyEmployeeScope(employee, actor) {
+  const locationId = String(employee?.home_location_id || "").trim();
+  const departmentId = Number(employee?.preferred_department_id || 0) || null;
+  if (!locationId || !actor.context.locations.has(locationId)) return null;
+  if (departmentId && actor.context.departments.get(departmentId) !== locationId) return null;
+  return Object.freeze({ locationId, departmentId });
+}
+
+function personnelLearningCompetencyEmployeeAllowed(actor, employee) {
+  if (!employee?.active || actor.access?.canWriteAssignments !== true) return false;
+  const targetScope = personnelLearningCompetencyEmployeeScope(employee, actor);
+  if (!targetScope) return false;
+  if (actor.access.localSystem === true || actor.access.plPlus === true
+    || actor.access.canAssignCrossLocation === true) return true;
+  const actorScope = actor.access.organizationScope;
+  if (!actorScope || actorScope.locationId !== targetScope.locationId) return false;
+  if (actor.access.role === "manager") return true;
+  return actor.access.role === "department_manager"
+    && Number(actorScope.departmentId || 0) === Number(targetScope.departmentId || 0);
+}
+
+function personnelLearningCompetencyEmployeeProjection(employee) {
+  return {
+    employeeNumber: String(employee.personnel_number || ""),
+    fullName: String(employee.full_name || ""),
+    positionName: String(employee.position_name || ""),
+    locationId: String(employee.home_location_id || ""),
+    locationName: String(employee.home_location_name || employee.home_location_id || ""),
+    departmentId: Number(employee.preferred_department_id || 0) || null,
+    departmentName: String(employee.preferred_department_name || ""),
+  };
+}
+
+function personnelLearningCompetencySkillProjection(bundle) {
+  const version = bundle.state.publishedVersion;
+  if (!version) return null;
+  const projectedVersion = publicPersonnelLearningVersion(version);
+  return {
+    id: String(bundle.module.id),
+    skillCode: String(bundle.module.moduleCode || ""),
+    title: String(version.title || ""),
+    category: String(version.content?.category || ""),
+    summary: String(version.content?.summary || ""),
+    scope: projectedVersion.scope,
+    publishedVersionNumber: Number(bundle.state.publishedVersionNumber),
+    levelDefinitions: Array.isArray(version.content?.levelDefinitions)
+      ? version.content.levelDefinitions.map((definition) => ({
+          level: Number(definition.level),
+          label: String(definition.label || ""),
+          description: String(definition.description || ""),
+        }))
+      : [],
+  };
+}
+
+function personnelLearningCompetencyStateOrUnavailable(competency, revisions) {
+  try {
+    return buildPersonnelLearningCompetencyState({ competency, revisions });
+  } catch (error) {
+    if (error instanceof PersonnelLearningCatalogError) {
+      throw httpError(
+        503,
+        "Die revisionsgebundene Kompetenzhistorie ist inkonsistent.",
+        "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+      );
+    }
+    throw error;
+  }
+}
+
+function publicPersonnelLearningCompetency({
+  competency,
+  state: competencyState,
+  employee,
+  bundle,
+  actor,
+}) {
+  const current = competencyState.current;
+  const skillVersion = bundle.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(current.skillVersionNumber)
+  ));
+  if (!skillVersion) {
+    throw httpError(
+      503,
+      "Die gebundene Fähigkeitsversion des Kompetenzprofils fehlt.",
+      "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+    );
+  }
+  const levelDefinition = levelDefinitionForSkillVersion(
+    skillVersion,
+    current.competencyLevel,
+  );
+  const canManageTarget = personnelLearningCompetencyEmployeeAllowed(actor, employee);
+  const canReadAudit = actor.access.canReadAudit === true;
+  return {
+    id: String(competency.id),
+    employeeNumber: String(competency.employeeNumber),
+    skillId: String(competency.skillModuleId),
+    skillCode: String(bundle.module.moduleCode || ""),
+    skillTitle: String(skillVersion.title || ""),
+    skillCategory: String(skillVersion.content?.category || ""),
+    skillVersionNumber: Number(current.skillVersionNumber),
+    currentPublishedVersionNumber: Number(bundle.state.publishedVersionNumber || 0) || null,
+    usesCurrentPublishedVersion: Number(current.skillVersionNumber)
+      === Number(bundle.state.publishedVersionNumber || 0),
+    level: Number(current.competencyLevel),
+    levelDefinition,
+    trainerAuthorized: Boolean(current.trainerAuthorized),
+    active: Boolean(current.active),
+    revisionNumber: Number(current.revisionNumber),
+    currentRevisionReceipt: String(current.receiptSha256 || ""),
+    updatedAt: String(current.changedAt || ""),
+    capabilities: {
+      canEdit: canManageTarget && !bundle.state.archived,
+      canWithdraw: canManageTarget && Boolean(current.active),
+      canRestore: canManageTarget && !current.active && !bundle.state.archived,
+      canReadAudit,
+    },
+    history: (canReadAudit ? competencyState.revisions : [current]).map((revision) => ({
+      revisionNumber: Number(revision.revisionNumber),
+      skillVersionNumber: Number(revision.skillVersionNumber),
+      level: Number(revision.competencyLevel),
+      trainerAuthorized: Boolean(revision.trainerAuthorized),
+      active: Boolean(revision.active),
+      changeType: String(revision.changeType || ""),
+      changedAt: String(revision.changedAt || ""),
+      ...(canReadAudit ? {
+        changedBy: String(revision.changedBy || ""),
+        receiptSha256: String(revision.receiptSha256 || ""),
+      } : {}),
+    })),
+  };
+}
+
+async function personnelLearningCompetencyPayload(
+  actor,
+  {
+    learningRepository = personnelLearningRepository,
+    organizationRepository = organizationPersonnelRepository,
+  } = {},
+) {
+  assertPersonnelLearningCompetencyCapability(actor);
+  const [employees, modules, competencies, revisions] = await Promise.all([
+    organizationRepository.listEmployees(),
+    learningRepository.listModules(),
+    learningRepository.listCompetencies(),
+    learningRepository.listCompetencyRevisions(),
+  ]);
+  const visibleEmployees = employees.filter((employee) => (
+    personnelLearningCompetencyEmployeeAllowed(actor, employee)
+  ));
+  const employeeByNumber = new Map(visibleEmployees.map((employee) => [
+    String(employee.personnel_number),
+    employee,
+  ]));
+  const bundles = new Map();
+  for (const module of modules) {
+    const bundle = await personnelLearningModuleBundle(module.id, learningRepository);
+    if (bundle.catalogEntity === "skill") bundles.set(String(module.id), bundle);
+  }
+  const revisionsByCompetency = new Map();
+  for (const revision of revisions) {
+    const rows = revisionsByCompetency.get(revision.competencyId) || [];
+    rows.push(revision);
+    revisionsByCompetency.set(revision.competencyId, rows);
+  }
+  const projectedCompetencies = [];
+  for (const competency of competencies) {
+    const employee = employeeByNumber.get(String(competency.employeeNumber));
+    const bundle = bundles.get(String(competency.skillModuleId));
+    if (!employee || !bundle) continue;
+    const state = personnelLearningCompetencyStateOrUnavailable(
+      competency,
+      revisionsByCompetency.get(competency.id) || [],
+    );
+    const boundVersion = bundle.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(state.current.skillVersionNumber)
+    ));
+    if (!boundVersion || !personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(boundVersion),
+    )) continue;
+    projectedCompetencies.push(publicPersonnelLearningCompetency({
+      competency,
+      state,
+      employee,
+      bundle,
+      actor,
+    }));
+  }
+  const skillOptions = [...bundles.values()].filter((bundle) => {
+    if (bundle.state.archived || !bundle.state.publishedVersion) return false;
+    return personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(bundle.state.publishedVersion),
+    );
+  }).map(personnelLearningCompetencySkillProjection).filter(Boolean)
+    .sort((left, right) => left.title.localeCompare(right.title, "de-AT", {
+      sensitivity: "base",
+    }));
+  const profileCounts = new Map();
+  const trainerCounts = new Map();
+  for (const competency of projectedCompetencies.filter((entry) => entry.active)) {
+    profileCounts.set(
+      competency.employeeNumber,
+      (profileCounts.get(competency.employeeNumber) || 0) + 1,
+    );
+    if (competency.trainerAuthorized) {
+      trainerCounts.set(
+        competency.employeeNumber,
+        (trainerCounts.get(competency.employeeNumber) || 0) + 1,
+      );
+    }
+  }
+  return {
+    generatedAt: new Date().toISOString(),
+    capabilities: {
+      canRead: true,
+      canWriteAssignments: actor.access.canWriteAssignments === true,
+      canAssignCrossLocation: actor.access.canAssignCrossLocation === true,
+      canReadAudit: actor.access.canReadAudit === true,
+    },
+    summary: {
+      employees: visibleEmployees.length,
+      activeCompetencies: projectedCompetencies.filter((entry) => entry.active).length,
+      trainers: projectedCompetencies.filter((entry) => (
+        entry.active && entry.trainerAuthorized
+      )).length,
+    },
+    employees: visibleEmployees.map((employee) => ({
+      ...personnelLearningCompetencyEmployeeProjection(employee),
+      competencyCount: profileCounts.get(String(employee.personnel_number)) || 0,
+      trainerSkillCount: trainerCounts.get(String(employee.personnel_number)) || 0,
+    })),
+    skills: skillOptions,
+    competencies: projectedCompetencies.sort((left, right) => (
+      left.employeeNumber.localeCompare(right.employeeNumber, "de-AT", { numeric: true })
+      || left.skillTitle.localeCompare(right.skillTitle, "de-AT", { sensitivity: "base" })
+    )),
+  };
+}
+
+function normalizePersonnelLearningCompetencyInput(value, options = {}) {
+  try {
+    return normalizedCompetencyMutation(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function personnelLearningCompetencyExpectedReceipt(value) {
+  const receipt = String(value || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(receipt)) {
+    throw httpError(
+      400,
+      "Bitte den aktuellen Revisionsbeleg des Kompetenzprofils übermitteln.",
+      "PERSONNEL_LEARNING_COMPETENCY_REVISION_REQUIRED",
+    );
+  }
+  return receipt;
+}
+
+function personnelLearningCompetencyIdentityRow({
+  id,
+  employeeNumber,
+  skillModuleId,
+  actorId,
+  occurredAt,
+}) {
+  const row = {
+    id,
+    employeeNumber,
+    skillModuleId,
+    receiptSha256: "",
+    createdBy: actorId,
+    createdAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningCompetencyReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningCompetencyRevisionRow({
+  competencyId,
+  revisionNumber,
+  skillModuleId,
+  skillVersionNumber,
+  input,
+  changeType,
+  previousReceiptSha256 = "",
+  actorId,
+  occurredAt,
+}) {
+  const row = {
+    competencyId,
+    revisionNumber,
+    skillModuleId,
+    skillVersionNumber,
+    competencyLevel: input.competencyLevel,
+    trainerAuthorized: input.trainerAuthorized,
+    active: input.active,
+    changeType,
+    previousReceiptSha256,
+    receiptSha256: "",
+    changedBy: actorId,
+    changedAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningCompetencyRevisionReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningCompetencyAuditDetail({ revision, action }) {
+  return stablePersonnelLearningJson({
+    schemaVersion: 1,
+    action,
+    employeeNumber: String(revision.employeeNumber || ""),
+    skillModuleId: String(revision.skillModuleId || ""),
+    skillVersionNumber: Number(revision.skillVersionNumber),
+    competencyLevel: Number(revision.competencyLevel),
+    trainerAuthorized: Boolean(revision.trainerAuthorized),
+    active: Boolean(revision.active),
+    revisionNumber: Number(revision.revisionNumber),
+    receiptSha256: String(revision.receiptSha256 || ""),
+  });
+}
+
+function personnelLearningAssignmentStateOrUnavailable(assignment, revisions) {
+  try {
+    return buildPersonnelLearningAssignmentState({ assignment, revisions });
+  } catch (error) {
+    if (error instanceof PersonnelLearningCatalogError) {
+      throw httpError(
+        503,
+        "Die revisionsgebundene Schulungszuweisung ist inkonsistent.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+      );
+    }
+    throw error;
+  }
+}
+
+function personnelLearningProcessAppliesToEmployee(version, employee, actor) {
+  const employeeScope = personnelLearningCompetencyEmployeeScope(employee, actor);
+  if (!employeeScope) return false;
+  const processScope = personnelLearningScopeFromVersion(version);
+  if (processScope.type === "organization") return true;
+  if (processScope.locationId !== employeeScope.locationId) return false;
+  if (processScope.type === "location") return true;
+  return processScope.type === "department"
+    && Number(processScope.departmentId || 0) === Number(employeeScope.departmentId || 0);
+}
+
+function personnelLearningAssignmentExpectedReceipt(value) {
+  const receipt = String(value || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(receipt)) {
+    throw httpError(
+      400,
+      "Bitte den aktuellen Revisionsbeleg der Schulungszuweisung übermitteln.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_REVISION_REQUIRED",
+    );
+  }
+  return receipt;
+}
+
+function normalizePersonnelLearningAssignmentInput(value, options = {}) {
+  try {
+    return normalizePersonnelLearningAssignmentMutation(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function personnelLearningAssignmentIdentityRow({
+  id,
+  processModuleId,
+  learnerEmployeeNumber,
+  actorId,
+  occurredAt,
+}) {
+  const row = {
+    id,
+    processModuleId,
+    learnerEmployeeNumber,
+    receiptSha256: "",
+    createdBy: actorId,
+    createdAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningAssignmentReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningAssignmentRevisionRow({
+  assignmentId,
+  revisionNumber,
+  processModuleId,
+  processVersionNumber,
+  active,
+  trainerBindings,
+  changeType,
+  previousReceiptSha256 = "",
+  actorId,
+  occurredAt,
+}) {
+  const normalizedBindings = normalizePersonnelLearningTrainerBindings(trainerBindings);
+  const row = {
+    assignmentId,
+    revisionNumber,
+    processModuleId,
+    processVersionNumber,
+    active,
+    trainerBindings: normalizedBindings,
+    trainerBindingsSha256: personnelLearningTrainerBindingsSha256(normalizedBindings),
+    changeType,
+    previousReceiptSha256,
+    receiptSha256: "",
+    changedBy: actorId,
+    changedAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningAssignmentRevisionReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningAssignmentAuditDetail({ assignment, revision, action }) {
+  return stablePersonnelLearningJson({
+    schemaVersion: 1,
+    action,
+    assignmentId: String(assignment.id || ""),
+    processModuleId: String(assignment.processModuleId || ""),
+    processVersionNumber: Number(revision.processVersionNumber),
+    learnerEmployeeNumber: String(assignment.learnerEmployeeNumber || ""),
+    active: Boolean(revision.active),
+    revisionNumber: Number(revision.revisionNumber),
+    trainerBindingCount: revision.trainerBindings.length,
+    trainerEmployeeCount: new Set(revision.trainerBindings.map((binding) => (
+      binding.trainerEmployeeNumber
+    ))).size,
+    trainerCompetencyIds: revision.trainerBindings.map((binding) => binding.competencyId),
+    trainerBindingsSha256: String(revision.trainerBindingsSha256 || ""),
+    receiptSha256: String(revision.receiptSha256 || ""),
+  });
+}
+
+function personnelLearningProgressStateOrUnavailable(revisions, processSteps) {
+  try {
+    return buildPersonnelLearningProgressState({ revisions, processSteps });
+  } catch (error) {
+    if (error instanceof PersonnelLearningCatalogError) {
+      throw httpError(
+        503,
+        "Die revisionsgebundene Fortschrittshistorie ist inkonsistent.",
+        "PERSONNEL_LEARNING_PROGRESS_HISTORY_INVALID",
+      );
+    }
+    throw error;
+  }
+}
+
+function personnelLearningProgressExpectedReceipt(value, current) {
+  const receipt = String(value || "").trim().toLowerCase();
+  if (!current) {
+    if (receipt) {
+      throw httpError(
+        409,
+        "Der Schulungsfortschritt wurde zwischenzeitlich angelegt. Bitte neu laden.",
+        "PERSONNEL_LEARNING_PROGRESS_CONCURRENT_CHANGE",
+      );
+    }
+    return "";
+  }
+  if (!/^[a-f0-9]{64}$/.test(receipt)) {
+    throw httpError(
+      400,
+      "Bitte den aktuellen Revisionsbeleg des Schulungsfortschritts übermitteln.",
+      "PERSONNEL_LEARNING_PROGRESS_REVISION_REQUIRED",
+    );
+  }
+  if (receipt !== String(current.currentReceipt || "")) {
+    throw httpError(
+      409,
+      "Der Schulungsfortschritt wurde zwischenzeitlich geändert. Bitte neu laden.",
+      "PERSONNEL_LEARNING_PROGRESS_CONCURRENT_CHANGE",
+    );
+  }
+  return receipt;
+}
+
+function normalizePersonnelLearningProgressInput(value, options = {}) {
+  try {
+    return normalizePersonnelLearningProgressMutation(value, options);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function personnelLearningProgressRevisionRow({
+  assignment,
+  assignmentState,
+  progressState,
+  processVersion,
+  input,
+  actorId,
+  actorKind,
+  occurredAt,
+}) {
+  const processSteps = processVersion.content?.steps || [];
+  const row = {
+    assignmentId: String(assignment.id),
+    revisionNumber: Number(progressState?.revisionNumber || 0) + 1,
+    assignmentRevisionReceiptSha256: String(assignmentState.currentReceipt || ""),
+    processModuleId: String(assignment.processModuleId),
+    processVersionNumber: Number(assignmentState.current.processVersionNumber),
+    stepStates: input.stepStates,
+    stepStatesSha256: personnelLearningProgressStepStatesSha256(
+      input.stepStates,
+      processSteps,
+    ),
+    totalStepCount: Number(input.totalStepCount),
+    completedStepCount: Number(input.completedStepCount),
+    requiredStepCount: Number(input.requiredStepCount),
+    requiredCompletedCount: Number(input.requiredCompletedCount),
+    finalized: Boolean(input.finalized),
+    result: String(input.result),
+    assessmentNote: String(input.assessmentNote || ""),
+    changeType: String(input.changeType),
+    correctionReason: String(input.correctionReason || ""),
+    previousReceiptSha256: String(progressState?.currentReceipt || ""),
+    receiptSha256: "",
+    actorKind,
+    changedBy: actorId,
+    changedAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningProgressRevisionReceiptSha256(
+    row,
+    processSteps,
+  );
+  return row;
+}
+
+function personnelLearningProgressAuditDetail({ assignment, revision }) {
+  return stablePersonnelLearningJson({
+    schemaVersion: 1,
+    assignmentId: String(assignment.id || ""),
+    processModuleId: String(assignment.processModuleId || ""),
+    processVersionNumber: Number(revision.processVersionNumber),
+    learnerEmployeeNumber: String(assignment.learnerEmployeeNumber || ""),
+    revisionNumber: Number(revision.revisionNumber),
+    changeType: String(revision.changeType || ""),
+    actorKind: String(revision.actorKind || ""),
+    completedStepCount: Number(revision.completedStepCount),
+    totalStepCount: Number(revision.totalStepCount),
+    requiredCompletedCount: Number(revision.requiredCompletedCount),
+    requiredStepCount: Number(revision.requiredStepCount),
+    finalized: Boolean(revision.finalized),
+    result: String(revision.result || ""),
+    assessmentNotePresent: Boolean(revision.assessmentNote),
+    correctionReasonPresent: Boolean(revision.correctionReason),
+    stepStatesSha256: String(revision.stepStatesSha256 || ""),
+    receiptSha256: String(revision.receiptSha256 || ""),
+  });
+}
+
+function personnelLearningAssignmentProcessProjection(bundle) {
+  const version = bundle.state.publishedVersion;
+  if (!version || bundle.catalogEntity !== "process") return null;
+  return {
+    id: String(bundle.module.id),
+    moduleCode: String(bundle.module.moduleCode || ""),
+    moduleType: String(bundle.module.moduleType || ""),
+    title: String(version.title || ""),
+    summary: String(version.content?.summary || ""),
+    objective: String(version.content?.objective || ""),
+    estimatedMinutes: Number(version.content?.estimatedMinutes || 0),
+    verificationMode: String(version.content?.verificationMode || ""),
+    scope: publicPersonnelLearningVersion(version).scope,
+    publishedVersionNumber: Number(bundle.state.publishedVersionNumber),
+  };
+}
+
+function personnelLearningAssignmentTrainerEvidence({
+  competency,
+  competencyState,
+  employee,
+  skillBundle,
+}) {
+  const current = competencyState.current;
+  const skillVersion = skillBundle.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(current.skillVersionNumber)
+  ));
+  if (!skillVersion) return null;
+  return {
+    competencyId: String(competency.id),
+    competencyRevisionNumber: Number(current.revisionNumber),
+    competencyRevisionReceipt: String(current.receiptSha256 || ""),
+    trainerEmployeeNumber: String(employee.personnel_number || ""),
+    trainerName: String(employee.full_name || ""),
+    trainerLocationId: String(employee.home_location_id || ""),
+    trainerLocationName: String(employee.home_location_name || employee.home_location_id || ""),
+    trainerDepartmentId: Number(employee.preferred_department_id || 0) || null,
+    trainerDepartmentName: String(employee.preferred_department_name || ""),
+    skillModuleId: String(competency.skillModuleId),
+    skillCode: String(skillBundle.module.moduleCode || ""),
+    skillTitle: String(skillVersion.title || ""),
+    skillCategory: String(skillVersion.content?.category || ""),
+    skillVersionNumber: Number(current.skillVersionNumber),
+    competencyLevel: Number(current.competencyLevel),
+  };
+}
+
+async function personnelLearningAssignmentProjectionContext(
+  actor,
+  {
+    learningRepository = personnelLearningRepository,
+    organizationRepository = organizationPersonnelRepository,
+    requireCapability = true,
+  } = {},
+) {
+  if (requireCapability) assertPersonnelLearningCompetencyCapability(actor);
+  const [employees, modules, competencies, competencyRevisions, assignments,
+    assignmentRevisions, progressRevisions] = await Promise.all([
+    organizationRepository.listEmployees(),
+    learningRepository.listModules(),
+    learningRepository.listCompetencies(),
+    learningRepository.listCompetencyRevisions(),
+    learningRepository.listAssignments(),
+    learningRepository.listAssignmentRevisions(),
+    learningRepository.listProgressRevisions(),
+  ]);
+  const employeeByNumber = new Map(employees.map((employee) => [
+    String(employee.personnel_number),
+    employee,
+  ]));
+  const bundles = new Map();
+  for (const module of modules) {
+    bundles.set(
+      String(module.id),
+      await personnelLearningModuleBundle(module.id, learningRepository),
+    );
+  }
+  const competencyRevisionsById = new Map();
+  for (const revision of competencyRevisions) {
+    const rows = competencyRevisionsById.get(revision.competencyId) || [];
+    rows.push(revision);
+    competencyRevisionsById.set(revision.competencyId, rows);
+  }
+  const competencyStateById = new Map();
+  const competencyById = new Map();
+  for (const competency of competencies) {
+    competencyById.set(String(competency.id), competency);
+    competencyStateById.set(
+      String(competency.id),
+      personnelLearningCompetencyStateOrUnavailable(
+        competency,
+        competencyRevisionsById.get(competency.id) || [],
+      ),
+    );
+  }
+  const assignmentRevisionsById = new Map();
+  for (const revision of assignmentRevisions) {
+    const rows = assignmentRevisionsById.get(revision.assignmentId) || [];
+    rows.push(revision);
+    assignmentRevisionsById.set(revision.assignmentId, rows);
+  }
+  const progressRevisionsByAssignmentId = new Map();
+  for (const revision of progressRevisions) {
+    const rows = progressRevisionsByAssignmentId.get(revision.assignmentId) || [];
+    rows.push(revision);
+    progressRevisionsByAssignmentId.set(revision.assignmentId, rows);
+  }
+  return Object.freeze({
+    actor,
+    learningRepository,
+    organizationRepository,
+    employees: Object.freeze(employees),
+    employeeByNumber,
+    bundles,
+    competencies: Object.freeze(competencies),
+    competencyById,
+    competencyStateById,
+    assignments: Object.freeze(assignments),
+    assignmentRevisionsById,
+    progressRevisionsByAssignmentId,
+  });
+}
+
+function personnelLearningCurrentTrainerEvidence(context) {
+  const evidence = [];
+  for (const competency of context.competencies) {
+    const state = context.competencyStateById.get(String(competency.id));
+    const employee = context.employeeByNumber.get(String(competency.employeeNumber));
+    const skillBundle = context.bundles.get(String(competency.skillModuleId));
+    if (!state?.active || !state.trainerAuthorized || !employee?.active
+      || !skillBundle || skillBundle.catalogEntity !== "skill"
+      || !personnelLearningCompetencyEmployeeAllowed(context.actor, employee)) continue;
+    const boundVersion = skillBundle.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(state.current.skillVersionNumber)
+    ));
+    if (!boundVersion || !personnelLearningScopeAccess(
+      context.actor.access,
+      personnelLearningScopeFromVersion(boundVersion),
+    )) continue;
+    const row = personnelLearningAssignmentTrainerEvidence({
+      competency,
+      competencyState: state,
+      employee,
+      skillBundle,
+    });
+    if (row) evidence.push(row);
+  }
+  return evidence.sort((left, right) => (
+    left.trainerName.localeCompare(right.trainerName, "de-AT", { sensitivity: "base" })
+    || left.skillTitle.localeCompare(right.skillTitle, "de-AT", { sensitivity: "base" })
+  ));
+}
+
+function personnelLearningProgressLeadershipAllowed(actor, learner) {
+  if (!learner || actor.access?.canWriteAssignments !== true) return false;
+  const targetScope = personnelLearningCompetencyEmployeeScope(learner, actor);
+  if (!targetScope) return false;
+  if (actor.access.localSystem === true || actor.access.plPlus === true
+    || actor.access.canAssignCrossLocation === true) return true;
+  const actorScope = actor.access.organizationScope;
+  if (!actorScope || actorScope.locationId !== targetScope.locationId) return false;
+  if (actor.access.role === "manager") return true;
+  return actor.access.role === "department_manager"
+    && Number(actorScope.departmentId || 0) === Number(targetScope.departmentId || 0);
+}
+
+function personnelLearningProgressAccess({
+  actor,
+  assignmentState,
+  progressState,
+  learner,
+  processVersion,
+  context,
+}) {
+  const actorId = String(actor.actorId || "");
+  const leadership = personnelLearningProgressLeadershipAllowed(actor, learner);
+  const branchAccount = actor.access?.branchDashboard === true
+    && String(actor.access.branchDashboardLocationId || "")
+      === String(learner?.home_location_id || "");
+  const learnerSelf = actorId === String(learner?.personnel_number || "");
+  const trainerBinding = assignmentState.trainerBindings.find((binding) => (
+    binding.trainerEmployeeNumber === actorId
+  ));
+  const trainerEmployee = context.employeeByNumber.get(actorId);
+  const trainerState = trainerBinding
+    ? context.competencyStateById.get(trainerBinding.competencyId) : null;
+  const trainer = Boolean(trainerBinding)
+    && Boolean(trainerEmployee?.active)
+    && Boolean(trainerState?.active)
+    && Boolean(trainerState?.trainerAuthorized)
+    && String(trainerState?.currentReceipt || "")
+      === String(trainerBinding.competencyRevisionReceipt || "");
+  const verificationMode = String(processVersion.content?.verificationMode || "");
+  const finalizer = !branchAccount && (leadership
+    || (verificationMode === "self_confirmation" ? learnerSelf : trainer));
+  const active = Boolean(assignmentState.active);
+  const canRead = branchAccount || leadership || learnerSelf || trainer;
+  const canCorrect = Boolean(progressState?.hasFinalizedRevision)
+    && !branchAccount
+    && (leadership || (active && finalizer));
+  const canRecord = active
+    && canRead
+    && (!progressState?.hasFinalizedRevision || canCorrect);
+  return Object.freeze({
+    canRead,
+    canRecord,
+    canFinalize: active && finalizer,
+    canCorrect,
+    actorKind: branchAccount
+      ? "branch_account" : leadership ? "leadership" : trainer ? "trainer" : "learner",
+    branchAccount,
+    leadership,
+    trainer,
+    learnerSelf,
+  });
+}
+
+function personnelLearningProgressStatus(progressState) {
+  if (!progressState?.current) return "not_started";
+  if (!progressState.finalized) return "in_progress";
+  if (progressState.result === "passed") return "completed_passed";
+  if (progressState.result === "follow_up_required") return "completed_follow_up_required";
+  return "completed_not_passed";
+}
+
+function publicPersonnelLearningProgress({
+  progressState,
+  processVersion,
+  access,
+  canReadAudit = false,
+}) {
+  const stateByStepId = new Map(progressState.stepStates.map((step) => [
+    step.stepId,
+    Boolean(step.completed),
+  ]));
+  return {
+    status: personnelLearningProgressStatus(progressState),
+    revisionNumber: Number(progressState.revisionNumber),
+    currentRevisionReceipt: progressState.currentReceipt || null,
+    completedStepCount: Number(progressState.completedStepCount),
+    totalStepCount: Number(progressState.totalStepCount),
+    requiredCompletedCount: Number(progressState.requiredCompletedCount),
+    requiredStepCount: Number(progressState.requiredStepCount),
+    percent: Number(progressState.progressPercent),
+    finalized: Boolean(progressState.finalized),
+    hasFinalizedRevision: Boolean(progressState.hasFinalizedRevision),
+    result: String(progressState.result || "pending"),
+    assessmentNote: String(progressState.current?.assessmentNote || ""),
+    correctionReason: String(progressState.current?.correctionReason || ""),
+    updatedAt: progressState.current ? String(progressState.current.changedAt || "") : null,
+    verificationMode: String(processVersion.content?.verificationMode || ""),
+    steps: (processVersion.content?.steps || []).map((step, index) => ({
+      stepId: String(step.stepId || ""),
+      order: index + 1,
+      title: String(step.title || ""),
+      instruction: String(step.instruction || ""),
+      completionCriteria: String(step.completionCriteria || ""),
+      required: step.required !== false,
+      completed: stateByStepId.get(String(step.stepId || "")) === true,
+    })),
+    capabilities: {
+      canRecord: access.canRecord,
+      canFinalize: access.canFinalize,
+      canCorrect: access.canCorrect,
+    },
+    history: progressState.revisions.map((revision) => ({
+      revisionNumber: Number(revision.revisionNumber),
+      changeType: String(revision.changeType || ""),
+      actorKind: String(revision.actorKind || ""),
+      completedStepCount: Number(revision.completedStepCount),
+      totalStepCount: Number(revision.totalStepCount),
+      finalized: Boolean(revision.finalized),
+      result: String(revision.result || "pending"),
+      assessmentNote: String(revision.assessmentNote || ""),
+      correctionReason: String(revision.correctionReason || ""),
+      changedAt: String(revision.changedAt || ""),
+      ...(canReadAudit ? {
+        changedBy: String(revision.changedBy || ""),
+        receiptSha256: String(revision.receiptSha256 || ""),
+      } : {}),
+    })),
+  };
+}
+
+function publicPersonnelLearningAssignment(assignment, state, context) {
+  const learner = context.employeeByNumber.get(String(assignment.learnerEmployeeNumber));
+  const processBundle = context.bundles.get(String(assignment.processModuleId));
+  const processVersion = processBundle?.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(state.current.processVersionNumber)
+  ));
+  if (!learner || !processBundle || processBundle.catalogEntity !== "process" || !processVersion) {
+    throw httpError(
+      503,
+      "Die gebundene Prozessversion der Schulungszuweisung fehlt.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+    );
+  }
+  const progressState = personnelLearningProgressStateOrUnavailable(
+    context.progressRevisionsByAssignmentId.get(String(assignment.id)) || [],
+    processVersion.content?.steps || [],
+  );
+  const progressAccess = personnelLearningProgressAccess({
+    actor: context.actor,
+    assignmentState: state,
+    progressState,
+    learner,
+    processVersion,
+    context,
+  });
+  const canManageLearner = personnelLearningCompetencyEmployeeAllowed(context.actor, learner);
+  const trainerBindings = state.trainerBindings.map((binding) => {
+    const employee = context.employeeByNumber.get(binding.trainerEmployeeNumber);
+    const competency = context.competencyById.get(binding.competencyId);
+    const currentState = context.competencyStateById.get(binding.competencyId);
+    const skillBundle = context.bundles.get(binding.skillModuleId);
+    const boundSkillVersion = skillBundle?.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(binding.skillVersionNumber)
+    ));
+    if (!employee || !competency || !skillBundle || !boundSkillVersion) {
+      throw httpError(
+        503,
+        "Ein gebundener Trainer-Kompetenzbeleg fehlt.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+      );
+    }
+    const usesCurrentCompetencyRevision = String(currentState?.currentReceipt || "")
+      === String(binding.competencyRevisionReceipt || "");
+    const currentEligible = Boolean(employee.active)
+      && Boolean(currentState?.active)
+      && Boolean(currentState?.trainerAuthorized)
+      && usesCurrentCompetencyRevision;
+    return {
+      ...binding,
+      trainerName: String(employee.full_name || binding.trainerEmployeeNumber),
+      trainerLocationName: String(
+        employee.home_location_name || employee.home_location_id || "",
+      ),
+      trainerDepartmentName: String(employee.preferred_department_name || ""),
+      skillCode: String(skillBundle.module.moduleCode || ""),
+      skillTitle: String(boundSkillVersion.title || ""),
+      skillCategory: String(boundSkillVersion.content?.category || ""),
+      currentEligible,
+      usesCurrentCompetencyRevision,
+    };
+  });
+  const canReadAudit = context.actor.access.canReadAudit === true;
+  return {
+    id: String(assignment.id),
+    processId: String(assignment.processModuleId),
+    processCode: String(processBundle.module.moduleCode || ""),
+    processType: String(processBundle.module.moduleType || ""),
+    processTitle: String(processVersion.title || ""),
+    processSummary: String(processVersion.content?.summary || ""),
+    processVerificationMode: String(processVersion.content?.verificationMode || ""),
+    processVersionNumber: Number(state.current.processVersionNumber),
+    currentPublishedVersionNumber: Number(processBundle.state.publishedVersionNumber || 0) || null,
+    usesCurrentPublishedVersion: Number(state.current.processVersionNumber)
+      === Number(processBundle.state.publishedVersionNumber || 0),
+    learner: personnelLearningCompetencyEmployeeProjection(learner),
+    active: Boolean(state.active),
+    revisionNumber: Number(state.revisionNumber),
+    currentRevisionReceipt: String(state.currentReceipt || ""),
+    updatedAt: String(state.current.changedAt || ""),
+    trainersCurrent: trainerBindings.every((binding) => binding.currentEligible),
+    trainerBindings,
+    capabilities: {
+      canEdit: canManageLearner && !processBundle.state.archived,
+      canCancel: canManageLearner && Boolean(state.active),
+      canRestore: canManageLearner && !state.active && !processBundle.state.archived,
+      canRecordProgress: progressAccess.canRecord,
+      canFinalizeProgress: progressAccess.canFinalize,
+      canCorrectProgress: progressAccess.canCorrect,
+      canReadAudit,
+    },
+    progress: publicPersonnelLearningProgress({
+      progressState,
+      processVersion,
+      access: progressAccess,
+      canReadAudit,
+    }),
+    history: (canReadAudit ? state.revisions : [state.current]).map((revision) => ({
+      revisionNumber: Number(revision.revisionNumber),
+      processVersionNumber: Number(revision.processVersionNumber),
+      active: Boolean(revision.active),
+      changeType: String(revision.changeType || ""),
+      trainerBindingCount: revision.trainerBindings.length,
+      trainerEmployeeCount: new Set(revision.trainerBindings.map((binding) => (
+        binding.trainerEmployeeNumber
+      ))).size,
+      changedAt: String(revision.changedAt || ""),
+      ...(canReadAudit ? {
+        changedBy: String(revision.changedBy || ""),
+        receiptSha256: String(revision.receiptSha256 || ""),
+      } : {}),
+    })),
+  };
+}
+
+async function personnelLearningAssignmentPayload(
+  actor,
+  repositories = {},
+) {
+  const context = await personnelLearningAssignmentProjectionContext(actor, repositories);
+  const visibleLearners = context.employees.filter((employee) => (
+    personnelLearningCompetencyEmployeeAllowed(actor, employee)
+  ));
+  const visibleLearnerNumbers = new Set(visibleLearners.map((employee) => (
+    String(employee.personnel_number)
+  )));
+  const processes = [...context.bundles.values()].filter((bundle) => (
+    bundle.catalogEntity === "process"
+    && !bundle.state.archived
+    && bundle.state.publishedVersion
+    && personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(bundle.state.publishedVersion),
+    )
+  )).map(personnelLearningAssignmentProcessProjection).filter(Boolean)
+    .map((process) => ({
+      ...process,
+      applicableLearnerEmployeeNumbers: visibleLearners.filter((employee) => (
+        personnelLearningProcessAppliesToEmployee(
+          context.bundles.get(process.id).state.publishedVersion,
+          employee,
+          actor,
+        )
+      )).map((employee) => String(employee.personnel_number)),
+    })).sort((left, right) => left.title.localeCompare(right.title, "de-AT", {
+      sensitivity: "base",
+    }));
+  const assignments = [];
+  for (const assignment of context.assignments) {
+    if (!visibleLearnerNumbers.has(String(assignment.learnerEmployeeNumber))) continue;
+    const state = personnelLearningAssignmentStateOrUnavailable(
+      assignment,
+      context.assignmentRevisionsById.get(assignment.id) || [],
+    );
+    const bundle = context.bundles.get(String(assignment.processModuleId));
+    const version = bundle?.state.versions.find((candidate) => (
+      Number(candidate.versionNumber) === Number(state.current.processVersionNumber)
+    ));
+    if (!version || !personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(version),
+    )) continue;
+    assignments.push(publicPersonnelLearningAssignment(assignment, state, context));
+  }
+  const trainers = personnelLearningCurrentTrainerEvidence(context);
+  return {
+    generatedAt: new Date().toISOString(),
+    capabilities: {
+      canWriteAssignments: actor.access.canWriteAssignments === true,
+      canAssignCrossLocation: actor.access.canAssignCrossLocation === true,
+      canReadAudit: actor.access.canReadAudit === true,
+    },
+    summary: {
+      activeAssignments: assignments.filter((assignment) => assignment.active).length,
+      learners: new Set(assignments.filter((assignment) => assignment.active)
+        .map((assignment) => assignment.learner.employeeNumber)).size,
+      trainerEmployees: new Set(assignments.filter((assignment) => assignment.active)
+        .flatMap((assignment) => assignment.trainerBindings)
+        .map((binding) => binding.trainerEmployeeNumber)).size,
+      notStarted: assignments.filter((assignment) => (
+        assignment.active && assignment.progress.status === "not_started"
+      )).length,
+      inProgress: assignments.filter((assignment) => (
+        assignment.active && assignment.progress.status === "in_progress"
+      )).length,
+      completed: assignments.filter((assignment) => (
+        assignment.progress.finalized
+      )).length,
+      followUpRequired: assignments.filter((assignment) => (
+        assignment.progress.result === "follow_up_required"
+      )).length,
+      attentionRequired: assignments.filter((assignment) => (
+        assignment.active && (!assignment.trainersCurrent
+          || ["follow_up_required", "not_passed"].includes(assignment.progress.result))
+      )).length,
+    },
+    learners: visibleLearners.map(personnelLearningCompetencyEmployeeProjection),
+    processes,
+    trainers,
+    assignments: assignments.sort((left, right) => (
+      left.learner.fullName.localeCompare(right.learner.fullName, "de-AT", {
+        sensitivity: "base",
+      }) || left.processTitle.localeCompare(right.processTitle, "de-AT", {
+        sensitivity: "base",
+      })
+    )),
+  };
+}
+
+function resolvedPersonnelLearningTrainerBindings({
+  actor,
+  learnerEmployeeNumber,
+  trainerCompetencyIds,
+  context,
+}) {
+  const resolved = trainerCompetencyIds.map((competencyId) => {
+    const competency = context.competencyById.get(String(competencyId));
+    const competencyState = context.competencyStateById.get(String(competencyId));
+    const employee = competency
+      ? context.employeeByNumber.get(String(competency.employeeNumber)) : null;
+    const skillBundle = competency
+      ? context.bundles.get(String(competency.skillModuleId)) : null;
+    if (!competency || !competencyState || !employee?.active
+      || String(employee.personnel_number) === String(learnerEmployeeNumber)
+      || !competencyState.active || !competencyState.trainerAuthorized
+      || !skillBundle || skillBundle.catalogEntity !== "skill"
+      || !personnelLearningCompetencyEmployeeAllowed(actor, employee)) {
+      throw httpError(
+        409,
+        "Mindestens eine ausgewählte Trainerfreigabe ist nicht mehr wirksam.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_TRAINER_NOT_ELIGIBLE",
+      );
+    }
+    const skillVersion = skillBundle.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(competencyState.current.skillVersionNumber)
+    ));
+    if (!skillVersion || !personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(skillVersion),
+    )) {
+      throw httpError(
+        403,
+        "Mindestens eine Trainerfähigkeit liegt außerhalb des aktuell freigegebenen Bereichs.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_TRAINER_SCOPE_DENIED",
+      );
+    }
+    return {
+      competencyId: String(competency.id),
+      competencyRevisionNumber: Number(competencyState.revisionNumber),
+      competencyRevisionReceipt: String(competencyState.currentReceipt),
+      trainerEmployeeNumber: String(employee.personnel_number),
+      skillModuleId: String(competency.skillModuleId),
+      skillVersionNumber: Number(competencyState.current.skillVersionNumber),
+      competencyLevel: Number(competencyState.current.competencyLevel),
+    };
+  });
+  try {
+    return normalizePersonnelLearningTrainerBindings(resolved);
+  } catch (error) {
+    throw personnelLearningCatalogError(error);
+  }
+}
+
+function personnelLearningExpectedEventReceipt(value) {
+  const receipt = String(value || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(receipt)) {
+    throw httpError(
+      400,
+      "Bitte den aktuellen Revisionsbeleg des Katalogeintrags übermitteln.",
+      "PERSONNEL_LEARNING_REVISION_REQUIRED",
+    );
+  }
+  return receipt;
+}
+
+function assertPersonnelLearningEventRevision(state, expectedReceipt) {
+  if (state.currentEventReceipt !== expectedReceipt) {
+    throw httpError(
+      409,
+      "Der Katalogeintrag wurde zwischenzeitlich geändert. Bitte den aktuellen Stand neu laden.",
+      "PERSONNEL_LEARNING_CONCURRENT_CHANGE",
+    );
+  }
+}
+
+function personnelLearningModuleRow({ id, input, actorId, occurredAt }) {
+  const row = {
+    id,
+    moduleCode: input.moduleCode,
+    moduleType: input.moduleType,
+    receiptSha256: "",
+    createdBy: actorId,
+    createdAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningModuleReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningVersionRow({
+  moduleId,
+  versionNumber,
+  input,
+  scopeSnapshot,
+  previousReceiptSha256 = "",
+  actorId,
+  occurredAt,
+}) {
+  const contentSha256 = personnelLearningSha256(stablePersonnelLearningJson(input.content));
+  const scopeSnapshotSha256 = personnelLearningSha256(
+    stablePersonnelLearningJson(scopeSnapshot),
+  );
+  const row = {
+    moduleId,
+    versionNumber,
+    title: input.title,
+    content: input.content,
+    contentSha256,
+    scopeType: input.scope.type,
+    scopeLocationId: input.scope.locationId,
+    scopeDepartmentId: input.scope.departmentId,
+    scopeSnapshot,
+    scopeSnapshotSha256,
+    previousReceiptSha256,
+    receiptSha256: "",
+    createdBy: actorId,
+    createdAt: occurredAt,
+  };
+  row.receiptSha256 = personnelLearningVersionReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningEventRow({
+  moduleId,
+  sequenceNumber,
+  eventType,
+  moduleVersionNumber = null,
+  eventPayload,
+  previousReceiptSha256 = "",
+  actorId,
+  occurredAt,
+}) {
+  const row = {
+    id: `learning-event:${crypto.randomUUID()}`,
+    moduleId,
+    sequenceNumber,
+    eventType,
+    moduleVersionNumber,
+    eventPayload,
+    eventPayloadSha256: personnelLearningSha256(stablePersonnelLearningJson(eventPayload)),
+    previousReceiptSha256,
+    receiptSha256: "",
+    actorId,
+    occurredAt,
+  };
+  row.receiptSha256 = personnelLearningEventReceiptSha256(row);
+  return row;
+}
+
+function personnelLearningAuditDetail({ bundle, action, version = null }) {
+  const state = bundle.state;
+  return stablePersonnelLearningJson({
+    schemaVersion: 1,
+    action,
+    moduleType: bundle.module.moduleType,
+    versionNumber: version ? Number(version.versionNumber) : null,
+    scopeType: version ? String(version.scopeType) : null,
+    contentSha256: version ? String(version.contentSha256) : null,
+    scopeSnapshotSha256: version ? String(version.scopeSnapshotSha256) : null,
+    eventReceiptSha256: state.currentEventReceipt,
+  });
+}
+
+async function personnelLearningCatalogSerializableTransaction(work) {
+  try {
+    return await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      return work(repositories);
+    }, { isolation: "serializable" });
+  } catch (error) {
+    if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)
+      || isUniquePersistenceViolation(error)) {
+      throw httpError(
+        409,
+        "Der Schulungs- und Wissenskatalog wurde gleichzeitig geändert. Bitte neu laden.",
+        "PERSONNEL_LEARNING_CONCURRENT_CHANGE",
+      );
+    }
+    throw error;
+  }
+}
+
+async function personnelLearningOrganizationScopeDeltas(
+  repository,
+  { locationAfter = null, departmentAfter = null, portalUserRows = null } = {},
+) {
+  const [locations, departments, users] = await Promise.all([
+    repository.listLocations(true),
+    repository.listDepartments(true),
+    portalUserRows ? Promise.resolve(portalUserRows) : repository.listPortalUsersForAdmin(),
+  ]);
+  const afterLocations = locationAfter ? locations.map((location) => (
+    String(location.id) === String(locationAfter.id)
+      ? { ...location, active: Boolean(locationAfter.active) }
+      : location
+  )) : locations;
+  const afterDepartments = departmentAfter ? departments.map((department) => (
+    Number(department.id) === Number(departmentAfter.id)
+      ? {
+          ...department,
+          location_id: String(departmentAfter.locationId),
+          active: Boolean(departmentAfter.active),
+        }
+      : department
+  )) : departments;
+  const beforeContext = personnelLearningScopeContextFromRows(locations, departments);
+  const afterContext = personnelLearningScopeContextFromRows(afterLocations, afterDepartments);
+  const candidates = users.filter((user) => (
+    ["manager", "department_manager"].includes(String(user.role || ""))
+      && Boolean(user.active)
+      && Boolean(user.employee_active)
+  ));
+  const principals = await Promise.all(candidates.map(async (user) => ({
+    employeeNumber: String(user.personnel_number || ""),
+    employeeActive: true,
+    configured: true,
+    role: String(user.role),
+    active: true,
+    homeLocationId: String(user.home_location_id || ""),
+    preferredDepartmentId: Number(user.preferred_department_id || 0) || null,
+    scopes: (await repository.listPortalAccessScopes(user.personnel_number)).map((scope) => ({
+      locationId: String(scope.location_id || ""),
+      departmentId: Number(scope.department_id || 0) || null,
+    })),
+  })));
+  return principals.map((principal) => {
+    const scopeBefore = personnelLearningOrganizationScopeValue(principal, beforeContext);
+    const scopeAfter = personnelLearningOrganizationScopeValue(principal, afterContext);
+    return {
+      employeeNumber: principal.employeeNumber,
+      role: principal.role,
+      homeLocationId: principal.homeLocationId,
+      preferredDepartmentId: principal.preferredDepartmentId,
+      scopeBefore,
+      scopeAfter,
+    };
+  }).filter((delta) => (
+    personnelLearningOrganizationScopeKey(delta.scopeBefore)
+      !== personnelLearningOrganizationScopeKey(delta.scopeAfter)
+  )).sort((left, right) => left.employeeNumber.localeCompare(right.employeeNumber, "de-AT"));
+}
+
+function assertPersonnelLearningOrganizationScopeDeltasAllowed(actor, deltas = []) {
+  for (const delta of deltas) {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(actor, {
+      role: delta.role,
+      homeLocationId: delta.homeLocationId,
+      preferredDepartmentId: delta.preferredDepartmentId,
+    });
+  }
+}
+
+async function persistPersonnelLearningOrganizationScopeDeltas(
+  repository,
+  actor,
+  sourceType,
+  sourceId,
+  deltas = [],
+  reasonCode = "ORGANIZATION_TOPOLOGY_CHANGED",
+) {
+  for (const delta of deltas) {
+    await repository.revokePortalSessions(delta.employeeNumber);
+    await repository.revokeMobileSessions(
+      delta.employeeNumber,
+      "learning_organization_scope_changed",
+    );
+    await repository.insertAudit(
+      actor.employeeNumber,
+      "personnel.learning.organization-scope.update",
+      "portal_user",
+      delta.employeeNumber,
+      JSON.stringify({
+        schemaVersion: 1,
+        sourceType,
+        sourceId: String(sourceId),
+        scopeBefore: delta.scopeBefore,
+        scopeAfter: delta.scopeAfter,
+        reasonCode,
+      }),
+    );
+  }
+}
+
+async function personnelLearningEmployeeOrganizationScopeSnapshot(
+  repository,
+  employeeNumber,
+) {
+  const [principal, context] = await Promise.all([
+    personnelLearningPortalUser(employeeNumber, repository),
+    personnelLearningScopeContext(repository),
+  ]);
+  const role = String(principal?.role || "employee");
+  const inLearningScope = Boolean(
+    principal?.active
+      && principal?.employeeActive
+      && roleHasPersonnelLearningDefaults(role),
+  );
+  return Object.freeze({
+    role,
+    scope: inLearningScope
+      ? personnelLearningOrganizationScopeValue(principal, context)
+      : null,
+  });
+}
+
+function personnelLearningEmployeeOrganizationScopeDelta(
+  employeeNumber,
+  before,
+  after,
+) {
+  if (personnelLearningOrganizationScopeKey(before?.scope)
+    === personnelLearningOrganizationScopeKey(after?.scope)) return null;
+  return Object.freeze({
+    employeeNumber: String(employeeNumber),
+    role: String(after?.role || before?.role || "employee"),
+    scopeBefore: before?.scope || null,
+    scopeAfter: after?.scope || null,
+  });
+}
+
+function livePersonnelLearningAdministrationSession(actor) {
+  if (!actor || isLocalSystemSession(actor)) return actor;
+  return {
+    ...actor,
+    scopes: Array.isArray(actor.explicitScopes) ? actor.explicitScopes : [],
+  };
+}
+
+function locationAdministrationConcurrencySignature(location = {}) {
+  return JSON.stringify({
+    id: String(location.id || ""),
+    name: String(location.name || ""),
+    costCenterId: String(location.cost_center_id || ""),
+    minStaff: Number(location.min_staff || 0),
+    daySettingsJson: String(location.day_settings_json || ""),
+    timeTrackingEnabled: Boolean(location.time_tracking_enabled),
+    timeTrackingAccessMode: String(location.time_tracking_access_mode || "anywhere"),
+    timeTrackingAllowedNetworks: String(location.time_tracking_allowed_networks || ""),
+    timeTrackingVarianceMinutes: Number(location.time_tracking_variance_minutes ?? 15),
+    active: Boolean(location.active),
+  });
+}
+
+function departmentAdministrationConcurrencySignature(department = {}) {
+  return JSON.stringify({
+    id: Number(department.id || 0),
+    locationId: String(department.location_id || ""),
+    name: String(department.name || ""),
+    minStaff: Number(department.min_staff || 0),
+    active: Boolean(department.active),
+  });
+}
+
+function personnelLearningDenialRevision(user) {
+  const authority = user?.personnelLearningDenialAuthority;
+  if (!authority) return "";
+  const generationId = String(authority.generation_id || "").trim();
+  const revision = Number(authority.revision || 0);
+  return /^[0-9a-f]{32}$/.test(generationId) && Number.isSafeInteger(revision) && revision > 0
+    ? `${generationId}:${revision}`
+    : "";
+}
+
+function personnelLearningDelegationError(decision) {
+  const messages = {
+    [PERSONNEL_LEARNING_DELEGATION_CODES.INVALID_REQUEST]: "Bitte einen gültigen Rechtewert übermitteln.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.ACTOR_REQUIRED]: "Diese Rechtehierarchie steht nur aktiven persönlichen Zugängen zur Verfügung.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.ACTOR_ROLE_DENIED]: "Diese Rolle darf das filialübergreifende Schulungsrecht nicht verwalten.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.ACTOR_PERMISSION_DENIED]: "Das eigene filialübergreifende Schulungsrecht ist nicht wirksam.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.DEPARTMENT_MANAGER_CANNOT_DELEGATE]: "Eine Abteilungsleitung darf dieses Recht nicht weiterdelegieren.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.TARGET_NOT_FOUND]: "Der aktive Zielzugang wurde nicht gefunden.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.TARGET_ROLE_DENIED]: "Eine Filialleitung darf dieses Recht nur für Abteilungsleitungen verwalten.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.SELF_DELEGATION_DENIED]: "Das eigene Recht kann hier nicht verändert werden.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.TARGET_SCOPE_DENIED]: "Die Abteilungsleitung gehört nicht zur eigenen Filiale.",
+    [PERSONNEL_LEARNING_DELEGATION_CODES.PL_PLUS_DENIAL_PROTECTED]: "Ein von PL+ entzogener Zugriff kann durch die Filialleitung nicht wieder freigegeben werden.",
+  };
+  const status = decision?.code === PERSONNEL_LEARNING_DELEGATION_CODES.INVALID_REQUEST
+    ? 400
+    : decision?.code === PERSONNEL_LEARNING_DELEGATION_CODES.TARGET_NOT_FOUND
+      ? 404
+      : 403;
+  return httpError(
+    status,
+    messages[decision?.code] || "Die Änderung ist in dieser Rechtehierarchie nicht zulässig.",
+    decision?.code || "PERSONNEL_LEARNING_DELEGATION_DENIED",
+  );
 }
 
 async function validateVacationRequestDates(employeeNumber, body) {
@@ -9542,6 +12637,37 @@ function actualDayMetrics(entries, date, settings, now = new Date()) {
   };
 }
 
+function xoffiDayMetrics(row) {
+  let intervals = [];
+  try {
+    const parsed = JSON.parse(String(row?.intervals_json || "[]"));
+    intervals = Array.isArray(parsed) ? parsed.filter((value) => /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(String(value))) : [];
+  } catch {}
+  const minute = (clock) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+  const ordered = intervals.map((value) => {
+    const [start, end] = value.split("-");
+    return { value, startMinute: minute(start), endMinute: minute(end) };
+  }).filter((value) => value.endMinute > value.startMinute).sort((left, right) => left.startMinute - right.startMinute);
+  const breakMinutes = ordered.reduce((sum, interval, index) => (
+    index === 0 ? sum : sum + Math.max(0, interval.startMinute - ordered[index - 1].endMinute)
+  ), 0);
+  return {
+    source: "xoffi",
+    importId: row.import_id,
+    intervals: ordered.map((interval) => interval.value),
+    workedMinutes: Math.max(0, finiteScheduleMinutes(row.actual_minutes)),
+    valuedMinutes: Math.max(0, finiteScheduleMinutes(row.valued_minutes)),
+    breakMinutes: Math.max(0, finiteScheduleMinutes(breakMinutes)),
+    saturdayBonusMinutes: Math.max(0, finiteScheduleMinutes(row.surcharge_minutes)),
+    saturdayEligibleMinutes: 0,
+    segments: [],
+    errors: [],
+    incomplete: false,
+    ongoing: false,
+    state: "off",
+  };
+}
+
 async function excusedTimeForEmployeeDate(
   employeeNumber,
   date,
@@ -9680,6 +12806,13 @@ async function evaluateTimeDay(
   const entries = (providedEntries || await timeEntriesForDay(employeeNumber, date, repository))
     .filter((entry) => (!departmentId || Number(entry.department_id || 0) === Number(departmentId))
       && (!filterLocation || String(entry.location_id || context.locationId) === evaluationLocationId));
+  const xoffiDay = await repository.getActiveXoffiDay({
+    employeeNumber,
+    workDate: date,
+    locationId: evaluationLocationId,
+    departmentId: departmentId || context.departmentId || null,
+  });
+  const useXoffiActual = Number(xoffiDay?.use_as_actual || 0) === 1;
   const planned = await plannedDayMetrics(
     employeeNumber,
     date,
@@ -9688,7 +12821,8 @@ async function evaluateTimeDay(
     filterLocation,
     repository,
   );
-  const actual = actualDayMetrics(entries, date, settings, now);
+  const actual = useXoffiActual ? xoffiDayMetrics(xoffiDay) : actualDayMetrics(entries, date, settings, now);
+  const hasActualData = useXoffiActual || entries.length > 0;
   const excused = await excusedTimeForEmployeeDate(
     employeeNumber,
     date,
@@ -9716,7 +12850,7 @@ async function evaluateTimeDay(
   const addIssue = (code, severity, label, message) => issues.push({ code, severity, label, message });
   if (actual.errors.length) addIssue("invalid_sequence", "error", "Buchungsfolge prüfen", "Mindestens eine Buchung passt nicht zur zeitlichen Reihenfolge.");
   if (isPast && actual.incomplete) addIssue("incomplete", "error", "Abschluss fehlt", "Der Arbeitstag wurde nicht vollständig mit „Gehen“ abgeschlossen.");
-  if (bookingWindowEnded && planned.netMinutes > 0 && entries.length === 0 && !excused.excused) {
+  if (bookingWindowEnded && planned.netMinutes > 0 && !hasActualData && !excused.excused) {
     addIssue("missing_entries", "error", "Buchungen fehlen", "Für den geplanten Dienst wurden keine Zeitbuchungen erfasst.");
   }
   if (!isFuture && actual.workedMinutes > 0 && planned.netMinutes === 0 && !excused.excused) {
@@ -9725,7 +12859,7 @@ async function evaluateTimeDay(
   if (!isFuture && !actual.incomplete && requiredBreakMinutes > actual.breakMinutes) {
     addIssue("break_short", "error", "Pause zu kurz", `Erfasst sind ${actual.breakMinutes} statt mindestens ${requiredBreakMinutes} Pausenminuten.`);
   }
-  if (!isFuture && !actual.incomplete && planned.netMinutes > 0 && entries.length > 0 && Math.abs(differenceMinutes) > toleranceMinutes) {
+  if (!isFuture && !actual.incomplete && planned.netMinutes > 0 && hasActualData && Math.abs(differenceMinutes) > toleranceMinutes) {
     addIssue("variance", "warning", "Zeitabweichung", `Die Ist-Zeit weicht um mehr als ${toleranceMinutes} Minuten vom Dienstplan ab.`);
   }
   const pendingCorrection = Boolean(await repository.hasPendingCorrection({
@@ -9743,6 +12877,7 @@ async function evaluateTimeDay(
     departmentId: Number(departmentId || 0) || 0,
     planned: planned.blocks.map((block) => [block.id, block.department_id, block.start_time, block.end_time]),
     entries: entries.map((entry) => [entry.id, entry.department_id, entry.entry_type, entry.entry_timestamp]),
+    xoffi: useXoffiActual ? [xoffiDay.import_id, xoffiDay.work_date, xoffiDay.actual_minutes, xoffiDay.valued_minutes, xoffiDay.intervals_json] : null,
     excused: excused.options.map((option) => [option.option_type, option.all_day, option.start_time, option.end_time]),
     excusedStatus: excused.excused ? excused.label || "excused" : "",
     excusedCreditedMinutes: Number(excused.creditedMinutes || 0),
@@ -9763,9 +12898,9 @@ async function evaluateTimeDay(
     if (review.stale) addIssue("review_stale", "info", "Prüfung veraltet", "Plan, Buchungen oder Bewertungsregeln wurden seit der Prüfung geändert.");
   }
   let code = isFuture ? "future" : date === today && actual.ongoing ? actual.state : "complete";
-  if (!entries.length && excused.excused) code = "excused_absence";
-  else if (!entries.length && planned.netMinutes > 0) code = isFuture || (date === today && !todayAfterPlannedEnd) ? "planned" : "missing_entries";
-  else if (!entries.length && planned.netMinutes === 0) code = "no_data";
+  if (!hasActualData && excused.excused) code = "excused_absence";
+  else if (!hasActualData && planned.netMinutes > 0) code = isFuture || (date === today && !todayAfterPlannedEnd) ? "planned" : "missing_entries";
+  else if (!hasActualData && planned.netMinutes === 0) code = "no_data";
   else if (issues.some((issue) => issue.severity === "error")) code = issues[0].code;
   else if (issues.length) code = "attention";
   const severity = issues.some((issue) => issue.severity === "error") ? "error"
@@ -10804,9 +13939,17 @@ const mobileLeadershipModules = Object.freeze([
   { id: "approvals", label: "Freigaben" },
   { id: "schedule", label: "Mein Dienstplan" },
   { id: "requests", label: "Meine Anträge" },
+  { id: "learning", label: "Schulungen" },
   { id: "more", label: "Mehr" },
 ]);
 const mobileLeadershipModuleIds = new Set(mobileLeadershipModules.map((module) => module.id));
+const mobileLeadershipLocationDisplayModules = Object.freeze({
+  timeTracking: "time",
+  team: "team",
+  approvals: "approvals",
+  schedule: "schedule",
+  requests: "requests",
+});
 
 function mobileLeadershipLayouts() {
   const fallback = JSON.parse(defaultPortalSettings.mobile_leadership_layouts);
@@ -10825,11 +13968,14 @@ function mobileLeadershipLayouts() {
 
 function mobileModuleAllowedForSession(session, id) {
   const permissions = session.permissions || [];
+  const locationDisplayModule = mobileLeadershipLocationDisplayModules[id];
+  if (locationDisplayModule && !mobilePortalLocationDisplayAllows(session, locationDisplayModule)) return false;
   if (id === "timeTracking") return permissions.includes("own_time:read");
   if (id === "team") return permissions.includes("time:read");
   if (id === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "sickness:read"].includes(permission));
   if (id === "schedule") return permissions.includes("own_schedule:read");
   if (id === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
+  if (id === "learning") return session?.isEmployee !== false;
   return id === "more";
 }
 
@@ -10839,9 +13985,10 @@ function mobileLayoutPayload(session) {
   const modules = roleLayout.filter((id) => mobileModuleAllowedForSession(session, id));
   return {
     modules,
-    availableModules: mobileLeadershipModules,
+    availableModules: mobileLeadershipModules.filter((module) => mobileModuleAllowedForSession(session, module.id)),
     layouts,
     canChange: isLocalSystemSession(session) || RIGHTS_ADMIN_PORTAL_ROLES.has(session.role),
+    locationDisplay: mobilePortalLocationDisplayForSession(session),
   };
 }
 
@@ -11016,11 +14163,21 @@ function mobileNavigationPayload(session, status = getPortalStatus()) {
       "settings",
     ].filter(Boolean);
   }
+  modules = modules.filter((id) => {
+    const locationDisplayModule = {
+      timeTracking: "time",
+      schedule: "schedule",
+      requests: "requests",
+      sicknessAndAmu: "sickness",
+    }[id];
+    return !locationDisplayModule || mobilePortalLocationDisplayAllows(session, locationDisplayModule);
+  });
   const normalized = [...new Set(modules)].filter((id) => mobileNavigationLabels[id] && id !== "settings").slice(0, 6);
   normalized.unshift("settings");
   return {
     defaultModule: normalized.includes("timeTracking") ? "timeTracking" : (normalized[0] || "settings"),
     items: normalized.map((id) => ({ id, label: mobileNavigationLabels[id], badgeCount: null })),
+    locationDisplay: mobilePortalLocationDisplayForSession(session),
   };
 }
 
@@ -11049,7 +14206,7 @@ async function mobilePersonalSettingsPayload(session, now = new Date()) {
   };
 }
 
-async function mobileHomePayload(session, request = null, now = new Date()) {
+async function mobileHomePayload(session, request = null, now = new Date(), { applyLocationDisplay = false } = {}) {
   const date = viennaTodayIso(now);
   let timeTracking = {
     enabled: false,
@@ -11059,7 +14216,8 @@ async function mobileHomePayload(session, request = null, now = new Date()) {
     allowedActions: [],
     reason: "Die Zeiterfassung ist für diesen Zugang nicht verfügbar.",
   };
-  if (session.permissions?.includes("own_time:read")) {
+  if (session.permissions?.includes("own_time:read")
+    && (!applyLocationDisplay || mobilePortalLocationDisplayAllows(session, "time"))) {
     try {
       const context = await employeeTimeTrackingContext(session.employeeNumber, date);
   const location = await validateLocationExists(context.locationId);
@@ -11102,7 +14260,7 @@ async function mobileBootstrapPayload(session, request = null, now = new Date())
     user: mobileUserPayload(session),
     branding: mobileBrandingPayload(session),
     navigation: mobileNavigationPayload(session, portalStatus),
-    home: await mobileHomePayload(session, request, now),
+    home: await mobileHomePayload(session, request, now, { applyLocationDisplay: true }),
     settings: await mobilePersonalSettingsPayload(session, now),
   };
 }
@@ -11202,6 +14360,124 @@ async function absenceEmployeeRequestContext(
   };
 }
 
+async function activeEmployeeLendingsForRange(
+  employeeNumber,
+  dateFrom,
+  dateTo,
+  repository = absenceManagementRepository,
+) {
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) return [];
+  return repository.activeEmployeeLendingsForRange({
+    employeeNumber: String(employeeNumber || ""),
+    dateFrom,
+    dateTo,
+  });
+}
+
+function employeeLendingOverlapsTimeOff(lending, input) {
+  if (lending.date_from > input.dateTo || lending.date_to < input.dateFrom) return false;
+  if (input.allDay || input.dateFrom !== input.dateTo || Boolean(lending.all_day)) return true;
+  if (lending.date_from !== input.dateFrom || lending.date_to !== input.dateFrom) return false;
+  return isTime(lending.start_time) && isTime(lending.end_time)
+    && timeRangesOverlap(input.startTime, input.endTime, lending.start_time, lending.end_time);
+}
+
+function employeeLendingCoversTimeOff(lending, input) {
+  if (input.allDay || input.dateFrom !== input.dateTo) {
+    return Boolean(lending.all_day)
+      && lending.date_from <= input.dateFrom
+      && lending.date_to >= input.dateTo;
+  }
+  if (Boolean(lending.all_day)) {
+    return lending.date_from <= input.dateFrom && lending.date_to >= input.dateTo;
+  }
+  return lending.date_from === input.dateFrom
+    && lending.date_to === input.dateTo
+    && isTime(lending.start_time)
+    && isTime(lending.end_time)
+    && lending.start_time <= input.startTime
+    && lending.end_time >= input.endTime;
+}
+
+async function timeOffResponsibilityContext(
+  employeeNumber,
+  input,
+  repository = absenceManagementRepository,
+) {
+  const home = await absenceEmployeeRequestContext(employeeNumber, input.dateFrom, {}, repository);
+  const lendings = (await activeEmployeeLendingsForRange(
+    employeeNumber,
+    input.dateFrom,
+    input.dateTo,
+    repository,
+  )).filter((lending) => employeeLendingOverlapsTimeOff(lending, input));
+  if (!lendings.length) {
+    return {
+      mixed: false,
+      lent: false,
+      locationId: home.locationId,
+      originLocationId: home.locationId,
+      departmentId: home.departmentId,
+      lendingId: null,
+    };
+  }
+  if (lendings.length !== 1 || !employeeLendingCoversTimeOff(lendings[0], input)) {
+    return {
+      mixed: true,
+      code: "TIME_OFF_MIXED_RESPONSIBILITY",
+      reason: "Der ZA-Zeitraum umfasst unterschiedliche Filialzuständigkeiten. Bitte getrennte Anträge je Filiale und Zeitraum stellen.",
+    };
+  }
+  const lending = lendings[0];
+  return {
+    mixed: false,
+    lent: true,
+    locationId: lending.destination_location_id,
+    originLocationId: lending.home_location_id || home.locationId,
+    departmentId: Number(lending.destination_department_id || 0) || null,
+    lendingId: lending.id,
+  };
+}
+
+async function assertTimeOffResponsibility(
+  employeeNumber,
+  input,
+  repository = absenceManagementRepository,
+) {
+  const context = await timeOffResponsibilityContext(employeeNumber, input, repository);
+  if (!context.mixed) return context;
+  throw httpError(409, context.reason, context.code);
+}
+
+async function vacationLendingConflict(
+  employeeNumber,
+  dateFrom,
+  dateTo,
+  repository = absenceManagementRepository,
+) {
+  return (await activeEmployeeLendingsForRange(
+    employeeNumber,
+    dateFrom,
+    dateTo,
+    repository,
+  ))[0] || null;
+}
+
+async function assertNoVacationLendingOverlap(
+  employeeNumber,
+  dateFrom,
+  dateTo,
+  repository = absenceManagementRepository,
+) {
+  const conflict = await vacationLendingConflict(employeeNumber, dateFrom, dateTo, repository);
+  if (!conflict) return null;
+  throw httpError(
+    409,
+    "Für diesen Zeitraum besteht bereits ein temporärer Filialeinsatz. Während dieses Einsatzes kann kein Urlaub beantragt oder eingetragen werden.",
+    "VACATION_EMPLOYEE_LENDING_CONFLICT",
+  );
+}
+
 async function getRequestBlackouts(activeOnly = false) {
   return (await absenceManagementRepository.listBlackouts(activeOnly))
     .map(serializeRequestBlackout);
@@ -11249,8 +14525,9 @@ async function findRequestBlackout(
   dateTo,
   dateForDepartment = null,
   repository = absenceManagementRepository,
+  contextOverride = null,
 ) {
-  const context = await absenceEmployeeRequestContext(
+  const context = contextOverride || await absenceEmployeeRequestContext(
     employeeNumber,
     dateForDepartment || dateFrom,
     {},
@@ -11342,32 +14619,55 @@ function vacationCoverageCountsAt(input, unavailable, context, pointTime) {
   };
 }
 
-async function assessVacationAvailability(
+async function assessApprovedAbsenceAvailability(
   employeeNumber,
   body = {},
+  requestType = "vacation",
   repository = absenceManagementRepository,
 ) {
   const dateFrom = String(body.dateFrom || "");
   const dateTo = String(body.dateTo || "");
   const excludeGroupId = String(body.excludeGroupId || "").trim() || null;
+  const timeOff = requestType === "time_off";
+  const requestLabel = timeOff ? "Zeitausgleich" : "Urlaub";
+  const codePrefix = timeOff ? "TIME_OFF" : "VACATION";
+  const allDay = !timeOff || body.allDay !== false;
+  const startTime = String(body.startTime || "");
+  const endTime = String(body.endTime || "");
   if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > 366) {
     return {
-      trafficLight: "red", allowed: false, code: "VACATION_DATES_INVALID",
-      reason: "Bitte einen gültigen Urlaubszeitraum von höchstens 366 Kalendertagen eingeben.",
+      trafficLight: "red", allowed: false, code: `${codePrefix}_DATES_INVALID`,
+      reason: timeOff
+        ? "Bitte einen gültigen ZA-Zeitraum von höchstens 366 Kalendertagen eingeben."
+        : "Bitte einen gültigen Urlaubszeitraum von höchstens 366 Kalendertagen eingeben.",
+      manualReview: false, blockingSlots: [], contexts: [],
+    };
+  }
+  if (timeOff && !allDay && (!isTime(startTime) || !isTime(endTime) || endTime <= startTime)) {
+    return {
+      trafficLight: "red", allowed: false, code: "TIME_OFF_TIMES_INVALID",
+      reason: "Bitte eine gültige Uhrzeit für den Zeitausgleich eingeben.",
+      manualReview: false, blockingSlots: [], contexts: [],
+    };
+  }
+  if (!timeOff && await vacationLendingConflict(employeeNumber, dateFrom, dateTo, repository)) {
+    return {
+      trafficLight: "red", allowed: false, code: "VACATION_EMPLOYEE_LENDING_CONFLICT",
+      reason: "Für diesen Zeitraum besteht bereits ein temporärer Filialeinsatz. Während dieses Einsatzes kann kein Urlaub beantragt oder eingetragen werden.",
       manualReview: false, blockingSlots: [], contexts: [],
     };
   }
   const context = await vacationEmployeeGovernanceContext(employeeNumber, repository);
   if (!context) {
     return {
-      trafficLight: "red", allowed: false, code: "VACATION_EMPLOYEE_NOT_FOUND",
+      trafficLight: "red", allowed: false, code: `${codePrefix}_EMPLOYEE_NOT_FOUND`,
       reason: "Das aktive Teammitglied wurde nicht gefunden.", manualReview: false, blockingSlots: [], contexts: [],
     };
   }
   if (context.locationId) {
     const blackout = await findRequestBlackout(
       employeeNumber,
-      "vacation",
+      requestType,
       dateFrom,
       dateTo,
       null,
@@ -11376,14 +14676,14 @@ async function assessVacationAvailability(
     if (blackout) {
       return {
         trafficLight: "red", allowed: false, code: "REQUEST_BLACKOUT",
-        reason: requestBlackoutReason(blackout, "Urlaub"), manualReview: false,
+        reason: requestBlackoutReason(blackout, requestLabel), manualReview: false,
         blockingSlots: [], contexts: [{ locationId: context.locationId, departmentId: context.departmentId }],
       };
     }
   }
   if (!context.branchPlanned) {
     return {
-      trafficLight: "green", allowed: true, code: "VACATION_NO_BRANCH_STAFFING",
+      trafficLight: "green", allowed: true, code: `${codePrefix}_NO_BRANCH_STAFFING`,
       reason: "Für diesen Zeitraum besteht keine Antragssperre; eine Filial-Mindestbesetzung ist nicht anzuwenden.",
       manualReview: false, blockingSlots: [], contexts: [],
     };
@@ -11403,6 +14703,9 @@ async function assessVacationAvailability(
     if (isVacationHoliday(date, context.locationId) || getGlobalDayBlockForDate(date, context.locationId)) continue;
     const config = await dayConfiguration(date, settings, { locationId: context.locationId, departmentId: null });
     if (!config?.open || !isTime(config.minFrom) || !isTime(config.minTo) || config.minTo <= config.minFrom) continue;
+    const coverageFrom = timeOff && !allDay && startTime > config.minFrom ? startTime : config.minFrom;
+    const coverageTo = timeOff && !allDay && endTime < config.minTo ? endTime : config.minTo;
+    if (coverageTo <= coverageFrom) continue;
     const locationRequired = Number(config.minStaff || 0);
     if (locationRequired <= 0 && departmentRequired <= 0) continue;
     const input = await vacationCoverageInputForDate(
@@ -11413,10 +14716,10 @@ async function assessVacationAvailability(
       repository,
     );
     const hasConcretePlan = input.shifts.length > 0;
-    for (let minute = timeToMinutes(config.minFrom); minute < timeToMinutes(config.minTo); minute += 15) {
+    for (let minute = timeToMinutes(coverageFrom); minute < timeToMinutes(coverageTo); minute += 15) {
       checkedSlots += 1;
       const pointTime = minutesToTime(minute);
-      const nextPointTime = minutesToTime(Math.min(timeToMinutes(config.minTo), minute + 15));
+      const nextPointTime = minutesToTime(Math.min(timeToMinutes(coverageTo), minute + 15));
       const unavailable = vacationUnavailableAt(input, employeeNumber, pointTime, nextPointTime);
       const counts = vacationCoverageCountsAt(input, unavailable, context, pointTime);
       const capacityEnough = counts.locationCapacity >= locationRequired
@@ -11443,7 +14746,7 @@ async function assessVacationAvailability(
     const departmentText = context.departmentId && first.departmentRequired > first.departmentCount
       ? `; die Abteilung erreicht ${first.departmentCount} von ${first.departmentRequired}` : "";
     return {
-      trafficLight: "red", allowed: false, code: "VACATION_STAFFING_INSUFFICIENT",
+      trafficLight: "red", allowed: false, code: `${codePrefix}_STAFFING_INSUFFICIENT`,
       reason: `Am ${first.date} um ${first.time} Uhr ist die Mindestbesetzung nicht gesichert (${first.locationCount} von ${first.locationRequired}${departmentText}).`,
       manualReview: true, blockingSlots,
       contexts: [{ locationId: context.locationId, departmentId: context.departmentId }],
@@ -11451,18 +14754,34 @@ async function assessVacationAvailability(
   }
   if (requiresManualReview) {
     return {
-      trafficLight: "yellow", allowed: true, code: "VACATION_STAFFING_MANUAL_REVIEW",
+      trafficLight: "yellow", allowed: true, code: `${codePrefix}_STAFFING_MANUAL_REVIEW`,
       reason: "Die verfügbare Personalkapazität reicht aus; der konkrete Dienstplan ist noch unvollständig und muss bei der Freigabe geprüft werden.",
       manualReview: true, blockingSlots: [],
       contexts: [{ locationId: context.locationId, departmentId: context.departmentId }], checkedSlots,
     };
   }
   return {
-    trafficLight: "green", allowed: true, code: "VACATION_STAFFING_CONFIRMED",
+    trafficLight: "green", allowed: true, code: `${codePrefix}_STAFFING_CONFIRMED`,
     reason: "Antragssperren und Mindestbesetzung sind nach dem aktuellen Plan geprüft.",
     manualReview: false, blockingSlots: [],
     contexts: [{ locationId: context.locationId, departmentId: context.departmentId }], checkedSlots,
   };
+}
+
+async function assessVacationAvailability(
+  employeeNumber,
+  body = {},
+  repository = absenceManagementRepository,
+) {
+  return assessApprovedAbsenceAvailability(employeeNumber, body, "vacation", repository);
+}
+
+async function assessDirectTimeOffAvailability(
+  employeeNumber,
+  body = {},
+  repository = absenceManagementRepository,
+) {
+  return assessApprovedAbsenceAvailability(employeeNumber, body, "time_off", repository);
 }
 
 async function evaluateVacationRequest(
@@ -11496,15 +14815,53 @@ async function assertVacationGovernanceAvailable(
   return assessment;
 }
 
-async function staffingCountAt(locationId, departmentId, date, pointTime, excludedEmployeeNumber) {
+async function assertDirectTimeOffGovernanceAvailable(
+  employeeNumber,
+  option,
+  excludeGroupId = null,
+  repository = absenceManagementRepository,
+) {
+  const assessment = await assessDirectTimeOffAvailability(employeeNumber, {
+    dateFrom: option.dateFrom || option.date_from,
+    dateTo: option.dateTo || option.date_to,
+    allDay: Boolean(option.allDay ?? option.all_day),
+    startTime: option.startTime || option.start_time,
+    endTime: option.endTime || option.end_time,
+    excludeGroupId,
+  }, repository);
+  if (!assessment.allowed) {
+    const error = httpError(409, assessment.reason, assessment.code || "TIME_OFF_NOT_POSSIBLE");
+    error.details = {
+      trafficLight: assessment.trafficLight,
+      manualReview: Boolean(assessment.manualReview),
+      blockingSlots: assessment.blockingSlots || [],
+    };
+    throw error;
+  }
+  return assessment;
+}
+
+async function staffingCountAt(
+  locationId,
+  departmentId,
+  date,
+  pointTime,
+  excludedEmployeeNumber,
+  repository = absenceManagementRepository,
+) {
   const data = { locationId, departmentId, date, pointTime, excludedEmployeeNumber };
   const row = departmentId
-    ? await absenceManagementRepository.staffingAtDepartment(data)
-    : await absenceManagementRepository.staffingAtLocation(data);
+    ? await repository.staffingAtDepartment(data)
+    : await repository.staffingAtLocation(data);
   return Number(row?.count || 0);
 }
 
-async function evaluateTimeOffRequest(employeeNumber, body) {
+async function evaluateTimeOffRequest(
+  employeeNumber,
+  body,
+  responsibilityOverride = null,
+  repository = absenceManagementRepository,
+) {
   const date = String(body.date || body.requestDate || body.dateFrom || "");
   const dateTo = String(body.dateTo || date);
   const allDay = body.allDay === true || dateTo !== date;
@@ -11514,10 +14871,38 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
     return { trafficLight: "red", allowed: false, reason: "Bitte einen gültigen ZA-Zeitraum eingeben." };
   }
   if (date < viennaTodayIso()) return { trafficLight: "red", allowed: false, reason: "Für vergangene Tage kann kein Zeitausgleich beantragt werden." };
+  if (!allDay && (!isTime(startTime) || !isTime(endTime) || endTime <= startTime)) {
+    return { trafficLight: "red", allowed: false, reason: "Bitte Datum und Uhrzeit für den Zeitausgleich vollständig eingeben." };
+  }
+  if (!allDay && timeToMinutes(endTime) - timeToMinutes(startTime) < 15) {
+    return { trafficLight: "red", allowed: false, reason: "Zeitausgleich muss mindestens 15 Minuten dauern." };
+  }
+  const responsibility = responsibilityOverride || await timeOffResponsibilityContext(employeeNumber, {
+    dateFrom: date,
+    dateTo,
+    allDay,
+    startTime: allDay ? "00:00" : startTime,
+    endTime: allDay ? "23:59" : endTime,
+  }, repository);
+  if (responsibility.mixed) {
+    return {
+      trafficLight: "red",
+      allowed: false,
+      reason: responsibility.reason,
+      code: responsibility.code,
+    };
+  }
+  const context = {
+    locationId: responsibility.locationId,
+    departmentId: responsibility.departmentId,
+  };
   if (allDay) {
-    const blackout = await findRequestBlackout(employeeNumber, "time_off", date, dateTo, date);
+    const blackout = await findRequestBlackout(
+      employeeNumber, "time_off", date, dateTo, date,
+      repository, context,
+    );
     if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Zeitausgleich") };
-    const overlap = await absenceManagementRepository.timeOffRangeOverlap({
+    const overlap = await repository.timeOffRangeOverlap({
       employeeNumber,
       excludeId: Number(body.excludeRequestId || 0),
       dateFrom: date,
@@ -11526,15 +14911,15 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
     if (overlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein ZA-Antrag." };
     const missingDays = [];
     for (let current = date; current <= dateTo; current = addDays(current, 1)) {
-      const context = await absenceEmployeeRequestContext(employeeNumber, current);
-      if (!await operatingHours(current, await settingsForLocation(context.locationId))) {
+      if (!await operatingHours(current, await settingsForLocation(context.locationId, repository))) {
         return { trafficLight: "red", allowed: false, reason: `Am ${current} ist die Filiale geschlossen; dafür kann kein ganztägiger ZA beantragt werden.` };
       }
       const globalBlock = getGlobalDayBlockForDate(current, context.locationId);
       if (globalBlock) return { trafficLight: "red", allowed: false, reason: `Der ${current} ist bereits gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.` };
-      const planned = await absenceManagementRepository.plannedShiftOnDate({
+      const planned = await repository.plannedShiftOnDate({
         employeeNumber,
         date: current,
+        locationId: context.locationId,
       });
       if (!planned) missingDays.push(current);
     }
@@ -11548,10 +14933,12 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
   if (timeToMinutes(endTime) - timeToMinutes(startTime) < 15) {
     return { trafficLight: "red", allowed: false, reason: "Zeitausgleich muss mindestens 15 Minuten dauern." };
   }
-  const context = await absenceEmployeeRequestContext(employeeNumber, date);
-  const blackout = await findRequestBlackout(employeeNumber, "time_off", date, date, date);
+  const blackout = await findRequestBlackout(
+    employeeNumber, "time_off", date, date, date,
+    repository, context,
+  );
   if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Zeitausgleich") };
-  const settings = await settingsForLocation(context.locationId);
+  const settings = await settingsForLocation(context.locationId, repository);
   const hours = await operatingHours(date, settings);
   if (!hours) return { trafficLight: "red", allowed: false, reason: "An diesem Tag ist die Filiale geschlossen." };
   if (startTime < hours.start || endTime > hours.end) {
@@ -11561,7 +14948,7 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
   if (globalBlock) {
     return { trafficLight: "red", allowed: false, reason: `Dieser Tag ist gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.` };
   }
-  const conflictingOption = (await absenceManagementRepository.timeOffOptionsOnDate({
+  const conflictingOption = (await repository.timeOffOptionsOnDate({
     employeeNumber,
     date,
   })).find((option) => option.group_id !== `za-request-${Number(body.excludeRequestId || 0)}`
@@ -11569,7 +14956,7 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
   if (conflictingOption) {
     return { trafficLight: "red", allowed: false, reason: `Zu dieser Zeit ist bereits „${optionLabel(conflictingOption.option_type)}“ eingetragen.` };
   }
-  const pendingOverlap = await absenceManagementRepository.timeOffPointOverlap({
+  const pendingOverlap = await repository.timeOffPointOverlap({
     employeeNumber,
     date,
     excludeId: Number(body.excludeRequestId || 0),
@@ -11577,15 +14964,17 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
     startTime,
   });
   if (pendingOverlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein offener ZA-Antrag." };
-  const coveringShift = await absenceManagementRepository.coveringShift({
+  const coveringShift = await repository.coveringShift({
     employeeNumber,
     date,
+    locationId: context.locationId,
     startTime,
     endTime,
   });
-  const overlappingShift = await absenceManagementRepository.overlappingShift({
+  const overlappingShift = await repository.overlappingShift({
     employeeNumber,
     date,
+    locationId: context.locationId,
     startTime,
     endTime,
   });
@@ -11595,21 +14984,31 @@ async function evaluateTimeOffRequest(employeeNumber, body) {
   if (!coveringShift) {
     return { trafficLight: "yellow", allowed: true, reason: "Für diesen Zeitraum ist noch kein Dienst eingetragen. Der Antrag wird manuell geprüft." };
   }
-  const locationContext = await resolvePlanningContext({ locationId: context.locationId, departmentId: null });
-  const locationRequired = Number((await dayConfiguration(date, settings, locationContext))?.minStaff || 0);
+  const locationConfiguration = await repository.locationTimeOffConfiguration({
+    locationId: context.locationId,
+  });
+  const configuredDayMinimum = Number((await dayConfiguration(date, settings))?.minStaff || 0);
+  const locationRequired = Math.max(
+    configuredDayMinimum,
+    Number(locationConfiguration?.min_staff || 0),
+  );
   const departmentId = coveringShift.department_id ? Number(coveringShift.department_id) : context.departmentId;
   const department = departmentId
-    ? await absenceManagementRepository.departmentById(departmentId)
+    ? await repository.departmentById(departmentId)
     : null;
   const departmentRequired = Number(department?.min_staff || 0);
   for (let minute = timeToMinutes(startTime); minute < timeToMinutes(endTime); minute += 15) {
     const point = minutesToTime(minute);
-    const locationCount = await staffingCountAt(context.locationId, null, date, point, employeeNumber);
+    const locationCount = await staffingCountAt(
+      context.locationId, null, date, point, employeeNumber, repository,
+    );
     if (locationCount < locationRequired) {
       return { trafficLight: "red", allowed: false, reason: `Um ${point} Uhr würde die Filial-Mindestbesetzung auf ${locationCount} von ${locationRequired} Personen sinken.` };
     }
     if (departmentId && departmentRequired > 0) {
-      const departmentCount = await staffingCountAt(context.locationId, departmentId, date, point, employeeNumber);
+      const departmentCount = await staffingCountAt(
+        context.locationId, departmentId, date, point, employeeNumber, repository,
+      );
       if (departmentCount < departmentRequired) {
         const departmentName = department?.name || "Abteilung";
         return { trafficLight: "red", allowed: false, reason: `Um ${point} Uhr würde die Mindestbesetzung in ${departmentName} auf ${departmentCount} von ${departmentRequired} Personen sinken.` };
@@ -11652,10 +15051,12 @@ async function prepareApprovedTimeOffMutation(
       employeeNumber: entry.employee_number,
       dateFrom,
       dateTo,
+      locationId: entry.location_id || null,
     })
     : await readRepository.shiftsForTimeOffPeriod({
       employeeNumber: entry.employee_number,
       date: entry.request_date,
+      locationId: entry.location_id || null,
       startTime: entry.start_time,
       endTime: entry.end_time,
     });
@@ -13041,9 +16442,12 @@ async function assertRequestScope(session, entry, scopeSnapshot = null) {
     throw httpError(403, "Dieser Antrag gehört nicht zum eigenen Standort.", "PORTAL_PERMISSION_DENIED");
   }
   if (session.role === "department_manager") {
-    const employeeDepartment = scopeSnapshot?.employeeDepartment ?? (
-      await employeeRequestContext(entry.employee_number, entry.request_date || entry.date_from)
-    ).departmentId;
+    const employeeDepartment = scopeSnapshot?.employeeDepartment
+      ?? (Number(entry.review_department_id || 0) || null)
+      ?? (await employeeRequestContext(
+        entry.employee_number,
+        entry.request_date || entry.date_from,
+      )).departmentId;
     if (!assignedScopes.some((scope) => scope.locationId === locationId && Number(scope.departmentId) === Number(employeeDepartment))) {
       throw httpError(403, "Dieser Antrag gehört nicht zur eigenen Abteilung.", "PORTAL_PERMISSION_DENIED");
     }
@@ -13673,10 +17077,13 @@ async function assertCostCenterTypeChangeAllowed(existing, value) {
   }
 }
 
-async function defaultCostCenterId(locationId = "") {
+async function defaultCostCenterId(
+  locationId = "",
+  repository = organizationPersonnelRepository,
+) {
   const [locations, costCenters] = await Promise.all([
-    organizationPersonnelRepository.listLocations(true),
-    organizationPersonnelRepository.listCostCenters(false),
+    repository.listLocations(true),
+    repository.listCostCenters(false),
   ]);
   const locationCostCenterId = locationId
     ? locations.find((location) => String(location.id) === String(locationId))?.cost_center_id
@@ -15257,6 +18664,52 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if (!locationId) throw httpError(400, "Bitte eine Einsatzfiliale auswählen.", "SHIFT_LOCATION_REQUIRED");
   await validateLocationExists(locationId);
   if (department) await validateDepartmentExists(departmentId, locationId);
+  const homeLocationId = String(employee.home_location_id || "").trim();
+  if (locationId === homeLocationId) {
+    const awayAssignment = sqliteEmployeeLocationLendingOperations.overlapForShift(
+      employeeNumber,
+      shiftDate,
+      startTime,
+      endTime,
+    );
+    if (awayAssignment) {
+      throw httpError(
+        409,
+        `${employee.nickname} ist in diesem Zeitraum einer anderen Filiale zugewiesen.`,
+        "STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT",
+      );
+    }
+  } else {
+    const assignment = sqliteEmployeeLocationLendingOperations.coverageForShift(
+      employeeNumber,
+      locationId,
+      shiftDate,
+      startTime,
+      endTime,
+    );
+    if (!assignment) {
+      if (actor && !sessionHasGlobalScope(actor)) {
+        throw httpError(
+          403,
+          "Dieses Teammitglied ist für den vollständigen Dienstzeitraum nicht dieser Filiale zugewiesen.",
+          "SHIFT_FOREIGN_EMPLOYEE_SCOPE_DENIED",
+        );
+      }
+      throw httpError(
+        409,
+        `${employee.nickname} besitzt für diesen vollständigen Zeitraum keinen temporären Einsatz in der gewählten Filiale.`,
+        "STAFF_ASSIGNMENT_COVERAGE_REQUIRED",
+      );
+    }
+    if (assignment.destinationDepartmentId
+      && Number(assignment.destinationDepartmentId) !== Number(departmentId || 0)) {
+      throw httpError(
+        409,
+        "Der Dienst muss der für den temporären Filialeinsatz festgelegten Zielabteilung entsprechen.",
+        "STAFF_ASSIGNMENT_DEPARTMENT_MISMATCH",
+      );
+    }
+  }
   if (!employeeCanWorkOnDate(employee, shiftDate)) {
     throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
   }
@@ -15292,19 +18745,6 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if ((await activeSicknessEmployeeNumbers(shiftDate)).has(employeeNumber)) {
     throw httpError(409, `${employee.nickname} ist an diesem Tag krankgemeldet.`, "SICKNESS_SHIFT_CONFLICT");
   }
-  const otherLocationShift = await planningSettingsRepository.getOtherLocationShift({
-    employeeNumber,
-    shiftDate,
-    existingId,
-    locationId,
-  });
-  if (otherLocationShift) {
-    throw httpError(
-      409,
-      `${employee.nickname} ist an diesem Tag bereits in ${otherLocationShift.location_name || "einer anderen Filiale"} eingeteilt.`,
-      "SHIFT_LOCATION_DAY_CONFLICT",
-    );
-  }
   const overlappingShift = await planningSettingsRepository.getOverlappingShift({
     employeeNumber,
     shiftDate,
@@ -15324,18 +18764,57 @@ async function validateShift(body, contextInput = {}, actor = null) {
   return { employeeNumber, locationId, departmentId, shiftDate, startTime, endTime, area, note };
 }
 
-function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
+function staffAssignmentShiftConstraintError(error) {
+  let current = error;
+  while (current) {
+    const message = String(current.message || "");
+    if (current.messageKey === "staff-assignment-home-shift-conflict"
+      || message.includes("STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT")) {
+      return httpError(
+        409,
+        "Der Dienst überschneidet sich mit einem temporären Einsatz in einer anderen Filiale.",
+        "STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT",
+      );
+    }
+    if (current.messageKey === "staff-assignment-coverage-required"
+      || message.includes("STAFF_ASSIGNMENT_COVERAGE_REQUIRED")) {
+      return httpError(
+        409,
+        "Für den vollständigen Dienstzeitraum besteht kein passender temporärer Filialeinsatz.",
+        "STAFF_ASSIGNMENT_COVERAGE_REQUIRED",
+      );
+    }
+    current = current.cause;
+  }
+  return error;
+}
+
+function staffAssignmentAbsenceConstraintError(error) {
+  if (error?.messageKey !== "staff-assignment-direct-absence-conflict") return error;
+  return httpError(
+    409,
+    "Die direkte Abwesenheit überschneidet sich mit einem temporären Filialeinsatz. Bitte verwenden Sie für ZA den regulären Antrag.",
+    "STAFF_ASSIGNMENT_DIRECT_ABSENCE_CONFLICT",
+  );
+}
+
+async function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
   if (sessionHasGlobalScope(session)) return;
-  const homeLocationId = portalScopeProjectionSnapshot.employees
-    .find((employee) => employee.personnel_number === shift.employeeNumber)?.home_location_id;
+  const employee = sqliteEmployeeLocationLendingOperations.employee(shift.employeeNumber);
+  const homeLocationId = String(employee?.home_location_id || "");
   if (homeLocationId === shift.locationId) return;
-  const alreadyAssignedHere = existing
-    && existing.employee_number === shift.employeeNumber
-    && existing.location_id === shift.locationId;
-  if (alreadyAssignedHere) return;
+  const assignment = sqliteEmployeeLocationLendingOperations.coverageForShift(
+    shift.employeeNumber,
+    shift.locationId,
+    shift.shiftDate,
+    shift.startTime,
+    shift.endTime,
+  );
+  if (assignment && (!assignment.destinationDepartmentId
+    || Number(assignment.destinationDepartmentId) === Number(shift.departmentId || 0))) return;
   throw httpError(
     403,
-    "Filialfremde Teammitglieder können nur durch eine unternehmensweit zuständige Rolle zugeteilt werden.",
+    "Dieses Teammitglied ist für den vollständigen Dienstzeitraum nicht dieser Filiale zugewiesen.",
     "SHIFT_FOREIGN_EMPLOYEE_SCOPE_DENIED",
   );
 }
@@ -15456,6 +18935,25 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
       throw httpError(400, "Bitte die anrechenbaren Stunden pro Tag zwischen 0 und 24 eingeben.");
     }
   }
+  if (directlyApprovedAbsenceOptionTypes.has(optionType)) {
+    const assignment = sqliteEmployeeLocationLendingOperations.overlapForPeriod({
+      employeeNumber,
+      dateFrom,
+      dateTo,
+      allDay,
+      startTime: allDay ? null : startTime,
+      endTime: allDay ? null : endTime,
+    });
+    if (assignment) {
+      throw httpError(
+        409,
+        optionType === "time_off"
+          ? "Während eines temporären Filialeinsatzes muss ZA über den regulären ZA-Antrag an die zuständige Zielfiliale gestellt werden."
+          : "Während eines temporären Filialeinsatzes kann genehmigter Urlaub hier nicht direkt eingetragen werden.",
+        "STAFF_ASSIGNMENT_DIRECT_ABSENCE_CONFLICT",
+      );
+    }
+  }
   const overlappingOption = (await planningSettingsRepository.listOverlappingWeekOptions({
     employeeNumber,
     dateFrom,
@@ -15476,6 +18974,22 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
     throw httpError(
       409,
       `Für ${existingShift.shift_date} ist bereits ein Dienst von ${existingShift.start_time} bis ${existingShift.end_time} Uhr eingetragen.`,
+    );
+  }
+
+  const governanceExcludeGroupId = String(body.groupId || "").trim()
+    || (existingId ? `legacy-${existingId}` : null);
+  if (optionType === "vacation") {
+    await assertVacationGovernanceAvailable(
+      employeeNumber,
+      { dateFrom, dateTo },
+      governanceExcludeGroupId,
+    );
+  } else if (optionType === "time_off") {
+    await assertDirectTimeOffGovernanceAvailable(
+      employeeNumber,
+      { dateFrom, dateTo, allDay, startTime, endTime },
+      governanceExcludeGroupId,
     );
   }
 
@@ -16292,6 +19806,970 @@ function runWorkRuleMutationTransaction(callback) {
   return workRuleStoreRepository.transaction(callback);
 }
 
+async function crossLocationSchedulePrincipal(
+  session,
+  repository = organizationPersonnelRepository,
+) {
+  if (!session || session.sessionKind !== "employee" || session.isEmployee !== true) return null;
+  const [employee, scopeContext] = await Promise.all([
+    repository.getEmployeeScopeProjection(session.employeeNumber),
+    personnelLearningScopeContext(repository),
+  ]);
+  if (!employee) return null;
+  return {
+    employeeNumber: session.employeeNumber,
+    role: session.role,
+    active: true,
+    configured: true,
+    sessionKind: "employee",
+    isEmployee: true,
+    homeLocationId: String(employee.home_location_id || session.homeLocationId || ""),
+    preferredDepartmentId: Number(employee.preferred_department_id || 0) || null,
+    permissions: Array.isArray(session.permissions) ? session.permissions : [],
+    effectiveScopes: personnelLearningEffectiveScopes({ scopes: session.scopes || [] }, scopeContext),
+  };
+}
+
+function settingsObjectFromRows(rows = []) {
+  return Object.fromEntries((Array.isArray(rows) ? rows : [])
+    .map((row) => [String(row?.key || ""), String(row?.value ?? "")])
+    .filter(([key]) => key));
+}
+
+async function crossLocationScheduleSettingsFromRepository(repository = planningSettingsRepository) {
+  return normalizeCrossLocationScheduleSettings(
+    settingsObjectFromRows(await repository.listSettings()),
+  );
+}
+
+async function assertCrossLocationScheduleSettingsManagement(
+  session,
+  repository = organizationPersonnelRepository,
+) {
+  if (isLocalSystemSession(session)) return session;
+  const actor = await crossLocationSchedulePrincipal(session, repository);
+  const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+  if (!access.canManageSettings) {
+    throw httpError(
+      403,
+      "Die Dienstplan-Einstellungen dürfen nur von einer persönlichen PL+-Sitzung mit wirksamem Einstellungsrecht geändert werden.",
+      "CROSS_LOCATION_SCHEDULE_SETTINGS_DENIED",
+    );
+  }
+  return actor;
+}
+
+function publicCrossLocationScheduleSettings(configurationValue) {
+  const configuration = configurationValue?.horizonWeeks
+    ? configurationValue
+    : normalizeCrossLocationScheduleSettings(configurationValue);
+  return {
+    enabled: configuration.enabled,
+    horizonWeeks: configuration.horizonWeeks,
+    managerRequestCreateEnabled: configuration.managerRequestCreateEnabled,
+    departmentManagerRequestCreateEnabled: configuration.departmentManagerRequestCreateEnabled,
+    departmentManagerRequestReviewEnabled: configuration.departmentManagerRequestReviewEnabled,
+    emailSubmittedEnabled: configuration.emailSubmittedEnabled,
+    emailDecisionEnabled: configuration.emailDecisionEnabled,
+    changePolicy: configuration.changePolicy,
+    cancellationPolicy: configuration.cancellationPolicy,
+  };
+}
+
+async function crossLocationScheduleSettingsPayload(session) {
+  await assertCrossLocationScheduleSettingsManagement(
+    session,
+    organizationPersonnelRepository,
+  );
+  return publicCrossLocationScheduleSettings(
+    normalizeCrossLocationScheduleSettings(getSettings()),
+  );
+}
+
+async function updateCrossLocationScheduleSettings(session, input = {}) {
+  let proposed;
+  try {
+    proposed = crossLocationScheduleSettingsValuesFromInput(input);
+  } catch (error) {
+    throw httpError(
+      400,
+      String(error?.message || "Die Dienstplan-Einstellungen sind ungültig."),
+      "CROSS_LOCATION_SCHEDULE_SETTINGS_INVALID",
+    );
+  }
+  const outcome = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const organization = repositories.organizationPersonnel;
+    let liveSession = session;
+    if (!isLocalSystemSession(session)) {
+      liveSession = await livePersonnelLearningRoleAdministrationActor(session, organization);
+      assertLivePortalRoutePermission(
+        liveSession,
+        CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE,
+      );
+    }
+    await assertCrossLocationScheduleSettingsManagement(liveSession, organization);
+    const currentRows = await repositories.planningSettings.listSettings();
+    const currentValues = settingsObjectFromRows(currentRows);
+    const changedKeys = Object.keys(proposed).filter(
+      (key) => String(currentValues[key] ?? CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS[key] ?? "")
+        !== String(proposed[key]),
+    ).sort();
+    if (!changedKeys.length) {
+      return normalizeCrossLocationScheduleSettings({ ...currentValues, ...proposed });
+    }
+    for (const key of changedKeys) {
+      await repositories.planningSettings.upsertSetting({ key, value: proposed[key] });
+    }
+    const before = normalizeCrossLocationScheduleSettings(currentValues);
+    const after = normalizeCrossLocationScheduleSettings({ ...currentValues, ...proposed });
+    await organization.insertAudit(
+      liveSession?.employeeNumber || "local",
+      "schedule.cross-location.settings.update",
+      "schedule_settings",
+      "cross_location",
+      JSON.stringify({ changedKeys, before, after }),
+    );
+    return after;
+  }, { isolation: "serializable" });
+  await refreshPlanningSettingsReadModel();
+  return publicCrossLocationScheduleSettings(outcome);
+}
+
+function publicCrossLocationScheduleLocations(locations, access) {
+  const ownLocationId = String(access.organizationScope?.locationId || "");
+  return locations
+    .filter((location) => location.active && String(location.id || "") !== ownLocationId)
+    .map((location) => ({
+      id: String(location.id || ""),
+      name: String(location.name || ""),
+      departments: (location.departments || [])
+        .filter((department) => department.active)
+        .map((department) => ({ id: Number(department.id), name: String(department.name || "") })),
+    }))
+    .filter((location) => location.id && location.name)
+    .sort((left, right) => left.name.localeCompare(right.name, "de-AT") || left.id.localeCompare(right.id));
+}
+
+function crossLocationScheduleEmployeeDepartment(employee, sourceLocationId, shifts, lendings) {
+  const preferredDepartmentId = Number(employee.preferred_department_id || 0) || null;
+  if (String(employee.home_location_id || "") === sourceLocationId && preferredDepartmentId) {
+    return preferredDepartmentId;
+  }
+  const assignedShift = shifts.find((shift) => (
+    String(shift.employee_number || "") === String(employee.personnel_number || "")
+      && Number(shift.department_id || 0) > 0
+  ));
+  if (assignedShift) return Number(assignedShift.department_id);
+  const incoming = lendings.find((lending) => (
+    String(lending.employee_number || "") === String(employee.personnel_number || "")
+      && String(lending.destination_location_id || "") === sourceLocationId
+      && Number(lending.destination_department_id || 0) > 0
+  ));
+  return incoming ? Number(incoming.destination_department_id) : null;
+}
+
+async function crossLocationScheduleSource(location, weekStart) {
+  const weekEnd = addDays(weekStart, 6);
+  const locationId = String(location.id || "");
+  const planningQuery = {
+    locationId,
+    departmentId: null,
+    weekStart,
+    weekEnd,
+  };
+  const [employees, shifts, weekOptions, lendings] = await Promise.all([
+    planningSettingsRepository.listScheduleEmployees(planningQuery),
+    planningSettingsRepository.listScheduleShifts(planningQuery),
+    planningSettingsRepository.listScheduleWeekOptions(planningQuery),
+    planningSettingsRepository.listScheduleLendings(planningQuery),
+  ]);
+  const departments = (location.departments || []).filter((department) => department.active);
+  const departmentNames = new Map(
+    departments.map((department) => [Number(department.id), String(department.name || "")]),
+  );
+  const teamMembers = employees.map((employee) => {
+    const departmentId = crossLocationScheduleEmployeeDepartment(
+      employee,
+      locationId,
+      shifts,
+      lendings,
+    );
+    return {
+      employeeNumber: String(employee.personnel_number || ""),
+      displayName: String(employee.nickname || `MA ${employee.personnel_number || ""}`).trim(),
+      departmentId,
+      departmentName: departmentId ? departmentNames.get(departmentId) || "" : "",
+      color: employee.color,
+      requestEligible: String(employee.home_location_id || "") === locationId,
+    };
+  });
+  const unavailability = [
+    ...weekOptions.map((option) => ({
+      employeeNumber: option.employee_number,
+      dateFrom: option.date_from,
+      dateTo: option.date_to,
+      allDay: Number(option.all_day ?? 1) === 1,
+      startTime: option.start_time,
+      endTime: option.end_time,
+    })),
+    ...lendings
+      .filter((lending) => String(lending.home_location_id || "") === locationId)
+      .map((lending) => ({
+        employeeNumber: lending.employee_number,
+        dateFrom: lending.date_from,
+        dateTo: lending.date_to,
+        allDay: Number(lending.all_day ?? 1) === 1,
+        startTime: lending.start_time,
+        endTime: lending.end_time,
+      })),
+  ];
+  return {
+    location: { id: locationId, name: String(location.name || ""), active: Boolean(location.active) },
+    departments,
+    teamMembers,
+    shifts: shifts.map((shift) => ({
+      employeeNumber: shift.employee_number,
+      date: shift.shift_date,
+      startTime: shift.start_time,
+      endTime: shift.end_time,
+      departmentId: Number(shift.department_id || 0) || null,
+      departmentName: String(shift.department_name || ""),
+    })),
+    unavailability,
+  };
+}
+
+async function crossLocationSchedulePayload(session, input = {}) {
+  const actor = await crossLocationSchedulePrincipal(session);
+  const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+  const configuration = normalizeCrossLocationScheduleSettings(getSettings());
+  if (!crossLocationScheduleOperationAllowed(access, configuration, "read")) {
+    throw httpError(
+      403,
+      configuration.enabled
+        ? "Für die eingeschränkte Ansicht fremder Dienstpläne fehlt die fachliche Berechtigung oder ein gültiger Verantwortungsbereich."
+        : "Die standortübergreifende Dienstplanansicht ist in den Dienstplan-Einstellungen deaktiviert.",
+      "CROSS_LOCATION_SCHEDULE_READ_DENIED",
+    );
+  }
+  const current = currentWeekStart();
+  const requestedWeek = String(input.week || current).trim();
+  const weekStart = isIsoDate(requestedWeek) ? getMonday(requestedWeek) : "";
+  if (!weekStart || requestedWeek !== weekStart
+    || !allowedCrossLocationScheduleWeek(
+      weekStart,
+      viennaTodayIso(),
+      configuration.horizonWeeks,
+    )) {
+    throw httpError(
+      400,
+      configuration.horizonWeeks === 1
+        ? "Fremde Dienstpläne können ausschließlich für die aktuelle Kalenderwoche geöffnet werden."
+        : "Fremde Dienstpläne können ausschließlich für die aktuelle oder die nächste Kalenderwoche geöffnet werden.",
+      "CROSS_LOCATION_SCHEDULE_WEEK_DENIED",
+    );
+  }
+  const allLocations = await getLocations(false);
+  const locations = publicCrossLocationScheduleLocations(allLocations, access);
+  const destinationLocation = allLocations.find((location) => (
+    location.active
+      && String(location.id || "") === String(access.organizationScope?.locationId || "")
+  ));
+  const destinationDepartmentId = access.role === "department_manager"
+    ? Number(access.organizationScope?.departmentId || 0) || null
+    : null;
+  const requestDestination = crossLocationScheduleOperationAllowed(
+    access,
+    configuration,
+    "create",
+  ) && destinationLocation ? {
+    id: String(destinationLocation.id || ""),
+    name: String(destinationLocation.name || ""),
+    departments: (destinationLocation.departments || [])
+      .filter((department) => department.active
+        && (!destinationDepartmentId || Number(department.id) === destinationDepartmentId))
+      .map((department) => ({ id: Number(department.id), name: String(department.name || "") })),
+  } : null;
+  const requestedLocationId = String(input.locationId || input.location || "").trim();
+  const selectedLocationId = requestedLocationId || locations[0]?.id || "";
+  const selectedLocation = allLocations.find((location) => (
+    String(location.id || "") === selectedLocationId
+      && locations.some((visible) => visible.id === selectedLocationId)
+  ));
+  if (requestedLocationId && !selectedLocation) {
+    throw httpError(
+      403,
+      "Diese Filiale ist für die eingeschränkte Fremdansicht nicht verfügbar.",
+      "CROSS_LOCATION_SCHEDULE_LOCATION_DENIED",
+    );
+  }
+  let schedule = null;
+  if (selectedLocation) {
+    schedule = projectCrossLocationScheduleView({
+      actor,
+      sourceLocationId: selectedLocationId,
+      weekStart,
+      today: viennaTodayIso(),
+      settings: configuration,
+      schedule: await crossLocationScheduleSource(selectedLocation, weekStart),
+    });
+    if (!schedule) {
+      throw httpError(
+        403,
+        "Der fremde Dienstplan konnte nicht datensparsam freigegeben werden.",
+        "CROSS_LOCATION_SCHEDULE_PROJECTION_DENIED",
+      );
+    }
+  }
+  return {
+    mode: "foreign_read_only",
+    locations,
+    weeks: Array.from(
+      { length: configuration.horizonWeeks },
+      (_, index) => addDays(current, index * 7),
+    ).map((start) => ({
+      weekStart: start,
+      weekEnd: addDays(start, 6),
+      calendarWeek: getIsoWeek(start),
+    })),
+    configuration: {
+      horizonWeeks: configuration.horizonWeeks,
+      changePolicy: configuration.changePolicy,
+      cancellationPolicy: configuration.cancellationPolicy,
+    },
+    selectedLocationId: selectedLocation?.id ? String(selectedLocation.id) : null,
+    requestDestination,
+    schedule,
+  };
+}
+
+function publicSubmittedStaffAssignmentRequest(history) {
+  const current = history?.current;
+  const request = history?.request;
+  if (!request || !current || current.status !== "submitted") {
+    throw httpError(
+      503,
+      "Die eingereichte Einsatzanfrage konnte nicht sicher bestätigt werden.",
+      "STAFF_ASSIGNMENT_REQUEST_SUBMISSION_INTEGRITY_FAILED",
+    );
+  }
+  return {
+    id: String(request.id || ""),
+    status: "submitted",
+    revisionNumber: Number(current.revisionNumber),
+    sourceLocationId: String(current.sourceLocationId || ""),
+    destinationLocationId: String(current.destinationLocationId || ""),
+    destinationDepartmentId: Number(current.destinationDepartmentId),
+    periodStartDate: String(current.periodStartDate || ""),
+    periodEndDate: String(current.periodEndDate || ""),
+    timeKind: String(current.timeKind || ""),
+    startTime: current.startTime || null,
+    endTime: current.endTime || null,
+    preferredEmployeeNumber: current.preferredEmployeeNumber || null,
+  };
+}
+
+function staffAssignmentRequestHttpError(error) {
+  if (!(error instanceof StaffAssignmentRequestError)) return error;
+  const conflictCodes = new Set([
+    "STAFF_ASSIGNMENT_REQUEST_REVISION_CONFLICT",
+    "EMPLOYEE_LENDING_OVERLAP",
+    "EMPLOYEE_LENDING_APPROVED_ABSENCE_CONFLICT",
+    "EMPLOYEE_LENDING_PENDING_ABSENCE_REQUEST_CONFLICT",
+    "EMPLOYEE_LENDING_SHIFT_CONFLICT",
+  ]);
+  const status = conflictCodes.has(error.code) ? 409
+    : error.code === "STAFF_ASSIGNMENT_REQUEST_NOT_FOUND" ? 404
+      : 400;
+  return httpError(status, error.message, error.code);
+}
+
+function staffAssignmentRequestEmployeeMap(employees = []) {
+  return new Map(employees.map((employee) => [
+    String(employee.personnel_number || employee.employeeNumber || ""),
+    employee,
+  ]).filter(([employeeNumber]) => employeeNumber));
+}
+
+function staffAssignmentRequestSourceDepartmentId(current, employeesByNumber) {
+  const preferredEmployeeNumber = String(current?.preferredEmployeeNumber || "");
+  if (!preferredEmployeeNumber) return null;
+  const preferred = employeesByNumber.get(preferredEmployeeNumber);
+  if (!preferred?.active
+    || String(preferred.home_location_id || "") !== String(current.sourceLocationId || "")) {
+    return null;
+  }
+  return Number(preferred.preferred_department_id || 0) || null;
+}
+
+function staffAssignmentRequestReviewerPrincipal(user, scopeContext) {
+  return {
+    employeeNumber: String(user.employeeNumber || ""),
+    role: String(user.role || ""),
+    active: Boolean(user.active && user.employeeActive),
+    configured: Boolean(user.configured),
+    sessionKind: "employee",
+    isEmployee: true,
+    homeLocationId: String(user.homeLocationId || ""),
+    preferredDepartmentId: Number(user.preferredDepartmentId || 0) || null,
+    rolePermissions: user.rolePermissions || [],
+    grantedPermissions: user.grantedPermissions || [],
+    deniedPermissions: user.deniedPermissions || [],
+    effectiveScopes: personnelLearningEffectiveScopes({ scopes: user.scopes || [] }, scopeContext),
+  };
+}
+
+async function staffAssignmentRequestReviewerEmployeeNumbers(
+  sourceLocationId,
+  sourceDepartmentId,
+  configuration = normalizeCrossLocationScheduleSettings(getSettings()),
+) {
+  const [users, scopeContext] = await Promise.all([
+    portalUsersForAdmin(),
+    personnelLearningScopeContext(),
+  ]);
+  return [...new Set(users
+    .filter((user) => ["manager", "department_manager"].includes(user.role))
+    .filter((user) => {
+      const actor = staffAssignmentRequestReviewerPrincipal(user, scopeContext);
+      return crossLocationScheduleOperationAllowed(actor, configuration, "review")
+        && canReviewStaffAssignmentRequest({
+          actor,
+          sourceLocationId,
+          sourceDepartmentId,
+        });
+    })
+    .map((user) => String(user.employeeNumber || ""))
+    .filter(Boolean))];
+}
+
+async function notifyStaffAssignmentRequest(
+  kind,
+  employeeNumbers,
+  requestId,
+  { enabled = true } = {},
+) {
+  const recipients = [...new Set((Array.isArray(employeeNumbers) ? employeeNumbers : [])
+    .map((employeeNumber) => String(employeeNumber || "").trim())
+    .filter(Boolean))];
+  const result = { kind, eligible: recipients.length, delivered: 0, skipped: 0, failed: 0 };
+  const failureCodes = new Set();
+  if (!enabled) {
+    result.skipped = recipients.length;
+    failureCodes.add("disabled_by_schedule_settings");
+  } else if (!externalNotificationAdapter.canSendEvent("email", "staff_assignment_request")) {
+    result.skipped = recipients.length;
+    failureCodes.add("event_unavailable");
+  } else {
+    for (const employeeNumber of recipients) {
+      try {
+        const target = await verifiedPersonalNotificationTarget(employeeNumber, "email", {
+          requireEnabled: true,
+        });
+        if (!target) {
+          result.skipped += 1;
+          failureCodes.add("verified_enabled_target_missing");
+          continue;
+        }
+        await externalNotificationAdapter.sendStaffAssignmentRequestAlert({
+          recipient: target.destination,
+          kind,
+        });
+        result.delivered += 1;
+      } catch (error) {
+        result.failed += 1;
+        failureCodes.add(String(error?.code || "delivery_failed").slice(0, 120));
+      }
+    }
+  }
+  try {
+    auditPortal(
+      "system",
+      "staff-assignment-request.email",
+      "staff_assignment_request",
+      requestId,
+      JSON.stringify({ ...result, failureCodes: [...failureCodes].sort() }),
+    );
+  } catch {}
+  return result;
+}
+
+function staffAssignmentRequestReviewProjection({
+  current,
+  actor,
+  employeesByNumber,
+  locationsById,
+  departmentsById,
+}) {
+  const sourceDepartmentId = staffAssignmentRequestSourceDepartmentId(
+    current,
+    employeesByNumber,
+  );
+  if (!canReviewStaffAssignmentRequest({
+    actor,
+    sourceLocationId: current.sourceLocationId,
+    sourceDepartmentId,
+  })) return null;
+  const access = createCrossLocationScheduleAccessSnapshot(actor);
+  const requester = employeesByNumber.get(String(current.createdByEmployeeNumber || ""));
+  const preferred = employeesByNumber.get(String(current.preferredEmployeeNumber || ""));
+  const candidates = [...employeesByNumber.values()]
+    .filter((employee) => employee.active
+      && String(employee.home_location_id || "") === String(current.sourceLocationId || "")
+      && (access.role !== "department_manager"
+        || Number(employee.preferred_department_id || 0) === access.organizationScope.departmentId))
+    .map((employee) => {
+      const departmentId = Number(employee.preferred_department_id || 0) || null;
+      return {
+        employeeNumber: String(employee.personnel_number || ""),
+        displayName: String(employee.nickname || `MA ${employee.personnel_number || ""}`).trim(),
+        departmentId,
+        departmentName: departmentId
+          ? String(departmentsById.get(departmentId)?.name || "")
+          : "",
+      };
+    })
+    .filter((employee) => employee.employeeNumber)
+    .sort((left, right) => left.displayName.localeCompare(right.displayName, "de-AT")
+      || left.employeeNumber.localeCompare(right.employeeNumber));
+  const sourceLocation = locationsById.get(String(current.sourceLocationId || ""));
+  const destinationLocation = locationsById.get(String(current.destinationLocationId || ""));
+  const destinationDepartment = departmentsById.get(Number(current.destinationDepartmentId));
+  return {
+    id: String(current.requestId || ""),
+    status: "submitted",
+    revisionNumber: Number(current.revisionNumber),
+    createdAt: String(current.createdAt || ""),
+    submittedAt: String(current.changedAt || ""),
+    sourceLocation: {
+      id: String(current.sourceLocationId || ""),
+      name: String(sourceLocation?.name || current.sourceLocationId || ""),
+    },
+    destinationLocation: {
+      id: String(current.destinationLocationId || ""),
+      name: String(destinationLocation?.name || current.destinationLocationId || ""),
+    },
+    destinationDepartment: {
+      id: Number(current.destinationDepartmentId),
+      name: String(destinationDepartment?.name || current.destinationDepartmentId || ""),
+    },
+    periodStartDate: String(current.periodStartDate || ""),
+    periodEndDate: String(current.periodEndDate || ""),
+    timeKind: String(current.timeKind || ""),
+    startTime: current.startTime || null,
+    endTime: current.endTime || null,
+    requestReason: String(current.requestReason || ""),
+    requestedBy: {
+      employeeNumber: String(current.createdByEmployeeNumber || ""),
+      displayName: String(requester?.nickname
+        || `MA ${current.createdByEmployeeNumber || ""}`).trim(),
+    },
+    preferredEmployee: current.preferredEmployeeNumber ? {
+      employeeNumber: String(current.preferredEmployeeNumber),
+      displayName: String(preferred?.nickname
+        || `MA ${current.preferredEmployeeNumber}`).trim(),
+      departmentId: sourceDepartmentId,
+    } : null,
+    candidates,
+  };
+}
+
+async function staffAssignmentRequestReviewPayload(session) {
+  const liveSession = await livePersonnelLearningRoleAdministrationActor(
+    session,
+    organizationPersonnelRepository,
+  );
+  assertLivePortalRoutePermission(
+    liveSession,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW,
+  );
+  const actor = await crossLocationSchedulePrincipal(
+    liveSession,
+    organizationPersonnelRepository,
+  );
+  const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+  const configuration = normalizeCrossLocationScheduleSettings(getSettings());
+  if (!crossLocationScheduleOperationAllowed(access, configuration, "review")) {
+    throw httpError(
+      403,
+      access.role === "department_manager" && !configuration.departmentManagerRequestReviewEnabled
+        ? "Abteilungsleitungen sind in den Dienstplan-Einstellungen nicht für Entscheidungen freigeschaltet."
+        : "Für die Prüfung von Einsatzanfragen fehlt ein gültiger fachlicher Verantwortungsbereich.",
+      "STAFF_ASSIGNMENT_REQUEST_REVIEW_DENIED",
+    );
+  }
+  const [requestRows, employees, locations, departments] = await Promise.all([
+    staffAssignmentRequestRepository.listRequests(),
+    organizationPersonnelRepository.listEmployees(),
+    organizationPersonnelRepository.listLocations(false),
+    organizationPersonnelRepository.listDepartments(false),
+  ]);
+  const rows = (await Promise.all(requestRows.map(async (request) => {
+    const current = await staffAssignmentRequestRepository.getLatestRevision(request.id);
+    return current?.status === "submitted" ? {
+      ...current,
+      createdByEmployeeNumber: request.createdByEmployeeNumber,
+      createdAt: request.createdAt,
+    } : null;
+  }))).filter(Boolean);
+  const employeesByNumber = staffAssignmentRequestEmployeeMap(employees);
+  const locationsById = new Map(locations.map((location) => [String(location.id || ""), location]));
+  const departmentsById = new Map(departments.map((department) => [Number(department.id), department]));
+  return {
+    requests: rows.map((current) => staffAssignmentRequestReviewProjection({
+      current,
+      actor,
+      employeesByNumber,
+      locationsById,
+      departmentsById,
+    })).filter(Boolean),
+  };
+}
+
+async function decideStaffAssignmentRequest(session, requestId, input = {}) {
+  try {
+    const decision = String(input.decision || "").trim().toLowerCase();
+    if (!(["accepted", "rejected"].includes(decision))) {
+      throw httpError(
+        400,
+        "Bitte die Einsatzanfrage genehmigen oder ablehnen.",
+        "STAFF_ASSIGNMENT_REQUEST_DECISION_INVALID",
+      );
+    }
+    const expectedRevision = Number(input.expectedRevision);
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+      throw httpError(
+        400,
+        "Die erwartete Anfragerevision ist ungültig.",
+        "STAFF_ASSIGNMENT_REQUEST_REVISION_INVALID",
+      );
+    }
+    const outcome = await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const organization = repositories.organizationPersonnel;
+      const requests = repositories.staffAssignmentRequests;
+      const liveSession = await livePersonnelLearningRoleAdministrationActor(session, organization);
+      assertLivePortalRoutePermission(
+        liveSession,
+        CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW,
+      );
+      const actor = await crossLocationSchedulePrincipal(liveSession, organization);
+      const configuration = await crossLocationScheduleSettingsFromRepository(
+        repositories.planningSettings,
+      );
+      if (!crossLocationScheduleOperationAllowed(actor, configuration, "review")) {
+        throw httpError(
+          403,
+          "Die Entscheidung ist nach den aktuellen Dienstplan-Einstellungen nicht freigegeben.",
+          "STAFF_ASSIGNMENT_REQUEST_REVIEW_DENIED",
+        );
+      }
+      const current = await requests.getLatestRevision(requestId);
+      const request = await requests.getRequest(requestId);
+      if (!current || !request) {
+        throw new StaffAssignmentRequestError(
+          "STAFF_ASSIGNMENT_REQUEST_NOT_FOUND",
+          "Die Einsatzanfrage wurde nicht gefunden.",
+        );
+      }
+      const [employees, locations, departments] = await Promise.all([
+        organization.listEmployees(),
+        organization.listLocations(false),
+        organization.listDepartments(false),
+      ]);
+      const employeesByNumber = staffAssignmentRequestEmployeeMap(employees);
+      const sourceDepartmentId = staffAssignmentRequestSourceDepartmentId(
+        current,
+        employeesByNumber,
+      );
+      if (!canReviewStaffAssignmentRequest({
+        actor,
+        sourceLocationId: current.sourceLocationId,
+        sourceDepartmentId,
+      })) {
+        throw httpError(
+          403,
+          "Diese Einsatzanfrage liegt außerhalb des eigenen Prüfbereichs.",
+          "STAFF_ASSIGNMENT_REQUEST_REVIEW_DENIED",
+        );
+      }
+      const sourceLocation = locations.find((location) => (
+        location.active && String(location.id || "") === String(current.sourceLocationId || "")
+      ));
+      const destinationLocation = locations.find((location) => (
+        location.active
+          && String(location.id || "") === String(current.destinationLocationId || "")
+      ));
+      const destinationDepartment = departments.find((department) => (
+        department.active
+          && Number(department.id) === Number(current.destinationDepartmentId)
+          && String(department.location_id || "") === String(current.destinationLocationId || "")
+      ));
+      if (!sourceLocation || !destinationLocation || !destinationDepartment) {
+        throw httpError(
+          409,
+          "Die Organisationsstruktur der Einsatzanfrage hat sich geändert.",
+          "STAFF_ASSIGNMENT_REQUEST_TOPOLOGY_CHANGED",
+        );
+      }
+      const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+      let confirmedEmployeeNumber = null;
+      let preparedAssignment = null;
+      if (decision === "accepted") {
+        confirmedEmployeeNumber = String(input.confirmedEmployeeNumber || "").trim();
+        const confirmed = employeesByNumber.get(confirmedEmployeeNumber);
+        if (!confirmed?.active
+          || String(confirmed.home_location_id || "") !== String(current.sourceLocationId || "")
+          || (access.role === "department_manager"
+            && Number(confirmed.preferred_department_id || 0)
+              !== Number(access.organizationScope?.departmentId || 0))) {
+          throw httpError(
+            409,
+            "Das bestätigte Teammitglied gehört nicht aktiv zum eigenen Prüfbereich der Quellfiliale.",
+            "STAFF_ASSIGNMENT_REQUEST_CONFIRMED_EMPLOYEE_INVALID",
+          );
+        }
+        preparedAssignment = boundAssignmentFromRequest({
+          requestId,
+          current,
+          confirmedEmployeeNumber,
+          actorEmployeeNumber: liveSession.employeeNumber,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      const history = await transitionStaffAssignmentRequestHistory(
+        requests,
+        requestId,
+        decision,
+        {
+          confirmedEmployeeNumber,
+          decisionReason: String(input.decisionReason || "").trim(),
+        },
+        liveSession.employeeNumber,
+        { expectedRevision },
+      );
+      const result = history.current;
+      let assignmentId = null;
+      if (decision === "accepted") {
+        await assertStaffAssignmentRequestAssignmentAvailable(
+          preparedAssignment,
+          repositories.absenceManagement,
+        );
+        const assignment = boundAssignmentFromRequest({
+          requestId,
+          current,
+          confirmedEmployeeNumber,
+          actorEmployeeNumber: liveSession.employeeNumber,
+          timestamp: result.changedAt,
+        });
+        const insertion = await requests.insertBoundAssignment(assignment);
+        if (Number(insertion?.rowsAffected) !== 1) {
+          throw new StaffAssignmentRequestError(
+            "STAFF_ASSIGNMENT_REQUEST_FULFILLMENT_FAILED",
+            "Der temporäre Filialeinsatz konnte nicht verbindlich angelegt werden.",
+          );
+        }
+        assignmentId = assignment.id;
+      }
+      await organization.insertAudit(
+        liveSession.employeeNumber,
+        `staff-assignment-request.${decision}`,
+        "staff_assignment_request",
+        requestId,
+        JSON.stringify({
+          revisionNumber: Number(result.revisionNumber),
+          sourceLocationId: String(result.sourceLocationId || ""),
+          destinationLocationId: String(result.destinationLocationId || ""),
+          confirmedEmployeeSelected: Boolean(result.confirmedEmployeeNumber),
+          decisionReasonRecorded: Boolean(result.decisionReason),
+          assignmentCreated: Boolean(assignmentId),
+          assignmentId,
+        }),
+      );
+      return {
+        request: {
+          id: String(requestId),
+          status: decision,
+          revisionNumber: Number(result.revisionNumber),
+          confirmedEmployeeNumber: result.confirmedEmployeeNumber || null,
+          decisionReason: String(result.decisionReason || ""),
+          assignmentId,
+        },
+        requesterEmployeeNumber: String(request.createdByEmployeeNumber || ""),
+        emailDecisionEnabled: configuration.emailDecisionEnabled,
+      };
+    }, { isolation: "serializable" });
+    await notifyStaffAssignmentRequest(
+      decision,
+      [outcome.requesterEmployeeNumber],
+      requestId,
+      { enabled: outcome.emailDecisionEnabled },
+    );
+    return outcome.request;
+  } catch (error) {
+    throw staffAssignmentRequestHttpError(error);
+  }
+}
+
+async function submitStaffAssignmentRequest(session, input = {}) {
+  try {
+    const outcome = await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const organization = repositories.organizationPersonnel;
+      const liveSession = await livePersonnelLearningRoleAdministrationActor(session, organization);
+      assertLivePortalRoutePermission(
+        liveSession,
+        CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE,
+      );
+      const actor = await crossLocationSchedulePrincipal(liveSession, organization);
+      const access = createCrossLocationScheduleAccessSnapshot(actor || {});
+      const configuration = await crossLocationScheduleSettingsFromRepository(
+        repositories.planningSettings,
+      );
+      const sourceLocationId = String(input.sourceLocationId || "").trim();
+      const destinationLocationId = String(access.organizationScope?.locationId || "");
+      const destinationDepartmentId = Number(input.destinationDepartmentId || 0);
+      if (!crossLocationScheduleOperationAllowed(access, configuration, "create")
+        || !canCreateStaffAssignmentRequest({
+        actor,
+        sourceLocationId,
+        destinationLocationId,
+        destinationDepartmentId,
+      })) {
+        throw httpError(
+          403,
+          access.role === "department_manager" && !configuration.departmentManagerRequestCreateEnabled
+            ? "Abteilungsleitungen sind in den Dienstplan-Einstellungen nicht für neue Einsatzanfragen freigeschaltet."
+            : "Die Einsatzanfrage darf nicht für diese Quellfiliale oder Zielabteilung erstellt werden.",
+          "STAFF_ASSIGNMENT_REQUEST_SCOPE_DENIED",
+        );
+      }
+
+      const [locations, departments] = await Promise.all([
+        organization.listLocations(false),
+        organization.listDepartments(false),
+      ]);
+      const sourceLocation = locations.find((location) => (
+        String(location.id || "") === sourceLocationId && location.active
+      ));
+      const destinationLocation = locations.find((location) => (
+        String(location.id || "") === destinationLocationId && location.active
+      ));
+      const destinationDepartment = departments.find((department) => (
+        Number(department.id) === destinationDepartmentId
+          && department.active
+          && String(department.location_id || "") === destinationLocationId
+      ));
+      if (!sourceLocation || !destinationLocation || !destinationDepartment) {
+        throw httpError(
+          409,
+          "Quellfiliale oder Zielabteilung ist nicht mehr aktiv verfügbar.",
+          "STAFF_ASSIGNMENT_REQUEST_TOPOLOGY_CHANGED",
+        );
+      }
+
+      const normalized = normalizeStaffAssignmentRequestInput({
+        sourceLocationId,
+        destinationLocationId,
+        destinationDepartmentId,
+        periodStartDate: input.periodStartDate,
+        periodEndDate: input.periodEndDate,
+        timeKind: input.timeKind,
+        startTime: input.startTime ?? null,
+        endTime: input.endTime ?? null,
+        preferredEmployeeNumber: input.preferredEmployeeNumber || null,
+        confirmedEmployeeNumber: null,
+        requestReason: input.requestReason,
+        decisionReason: "",
+      }, { requestStatus: "submitted" });
+      const today = viennaTodayIso();
+      const maximum = addDays(
+        currentWeekStart(),
+        configuration.horizonWeeks * 7 - 1,
+      );
+      if (normalized.periodStartDate < today || normalized.periodEndDate > maximum) {
+        throw httpError(
+          400,
+          configuration.horizonWeeks === 1
+            ? "Einsatzanfragen sind nur ab heute bis zum Ende der aktuellen Kalenderwoche möglich."
+            : "Einsatzanfragen sind nur ab heute bis zum Ende der nächsten Kalenderwoche möglich.",
+          "STAFF_ASSIGNMENT_REQUEST_PERIOD_OUT_OF_RANGE",
+        );
+      }
+      let sourceDepartmentId = null;
+      if (normalized.preferredEmployeeNumber) {
+        const preferred = await organization.getEmployeeForUpdate(
+          normalized.preferredEmployeeNumber,
+        );
+        if (!preferred?.active
+          || String(preferred.home_location_id || "") !== sourceLocationId) {
+          throw httpError(
+            409,
+            "Das bevorzugte Teammitglied gehört nicht mehr aktiv zur Quellfiliale.",
+            "STAFF_ASSIGNMENT_REQUEST_PREFERRED_EMPLOYEE_INVALID",
+          );
+        }
+        sourceDepartmentId = Number(preferred.preferred_department_id || 0) || null;
+      }
+
+      const history = await insertInitialStaffAssignmentRequestHistory(
+        repositories.staffAssignmentRequests,
+        normalized,
+        liveSession.employeeNumber,
+        { submit: true },
+      );
+      const result = publicSubmittedStaffAssignmentRequest(history);
+      await organization.insertAudit(
+        liveSession.employeeNumber,
+        "staff-assignment-request.submit",
+        "staff_assignment_request",
+        result.id,
+        JSON.stringify({
+          sourceLocationId: result.sourceLocationId,
+          destinationLocationId: result.destinationLocationId,
+          destinationDepartmentId: result.destinationDepartmentId,
+          periodStartDate: result.periodStartDate,
+          periodEndDate: result.periodEndDate,
+          timeKind: result.timeKind,
+          preferredEmployeeRequested: Boolean(result.preferredEmployeeNumber),
+        }),
+      );
+      return {
+        request: result,
+        sourceDepartmentId,
+        configuration,
+      };
+    }, { isolation: "serializable" });
+    try {
+      const reviewers = await staffAssignmentRequestReviewerEmployeeNumbers(
+        outcome.request.sourceLocationId,
+        outcome.sourceDepartmentId,
+        outcome.configuration,
+      );
+      await notifyStaffAssignmentRequest(
+        "submitted",
+        reviewers,
+        outcome.request.id,
+        { enabled: outcome.configuration.emailSubmittedEnabled },
+      );
+    } catch {
+      try {
+        auditPortal(
+          "system",
+          "staff-assignment-request.email",
+          "staff_assignment_request",
+          outcome.request.id,
+          JSON.stringify({ kind: "submitted", eligible: 0, delivered: 0, skipped: 0, failed: 1, failureCodes: ["recipient_resolution_failed"] }),
+        );
+      } catch {}
+    }
+    return outcome.request;
+  } catch (error) {
+    throw staffAssignmentRequestHttpError(error);
+  }
+}
+
 async function getSchedule(weekValue, contextInput = {}, session = null) {
   const weekStart = getMonday(isIsoDate(weekValue) ? weekValue : undefined);
   const weekEnd = addDays(weekStart, 6);
@@ -16308,10 +20786,20 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     weekStart,
     weekEnd,
   };
-  const [employeeRows, shiftRows, storedWeekOptions] = await Promise.all([
+  const xoffiQuery = {
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+    filterDepartment: context.departmentId ? 1 : 0,
+    weekStart,
+  };
+  const [employeeRows, shiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listScheduleWeekOptions(planningQuery),
+    planningSettingsRepository.listScheduleLendings(planningQuery),
+    timeTrackingRepository.listActiveXoffiWeekRows(xoffiQuery),
+    timeTrackingRepository.listActiveXoffiWeekDays(xoffiQuery),
+    timeTrackingRepository.listLatestXoffiBalances(xoffiQuery),
   ]);
   const employees = employeeRows.map(serializeEmployee);
   const shifts = await Promise.all(
@@ -16475,6 +20963,45 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
   const workRuleAssessment = sessionCanReadWorkRules(session)
     ? (await evaluateScheduleWorkRules(weekStart, context, employees)).assessment
     : null;
+  const xoffiWeekByEmployee = {};
+  const selectedXoffiImports = new Set();
+  for (const row of xoffiWeekRows) {
+    if (xoffiWeekByEmployee[row.employee_number]) continue;
+    xoffiWeekByEmployee[row.employee_number] = {
+      importId: row.import_id,
+      useAsActual: Number(row.use_as_actual || 0) === 1,
+      importedAt: row.imported_at,
+      actualMinutes: Number(row.weekly_actual_minutes || 0),
+      valuedMinutes: Number(row.weekly_valued_minutes || 0),
+      surchargeMinutes: Number(row.weekly_surcharge_minutes || 0),
+      closingBalanceMinutes: row.closing_balance_minutes === null ? null : Number(row.closing_balance_minutes),
+      days: [],
+    };
+    selectedXoffiImports.add(`${row.import_id}|${row.employee_number}`);
+  }
+  for (const row of xoffiWeekDays) {
+    if (!selectedXoffiImports.has(`${row.import_id}|${row.employee_number}`)) continue;
+    const target = xoffiWeekByEmployee[row.employee_number];
+    if (!target) continue;
+    let intervals = [];
+    try { intervals = JSON.parse(row.intervals_json || "[]"); } catch {}
+    target.days.push({
+      workDate: row.work_date,
+      actualMinutes: Number(row.actual_minutes || 0),
+      valuedMinutes: Number(row.valued_minutes || 0),
+      surchargeMinutes: Number(row.surcharge_minutes || 0),
+      intervals: Array.isArray(intervals) ? intervals : [],
+      absence: row.absence_code || "",
+    });
+  }
+  const xoffiBalanceByEmployee = {};
+  for (const row of xoffiBalanceRows) {
+    if (xoffiBalanceByEmployee[row.employee_number]) continue;
+    xoffiBalanceByEmployee[row.employee_number] = {
+      minutes: Number(row.closing_balance_minutes || 0),
+      weekStart: row.balance_week_start,
+    };
+  }
 
   return {
     weekStart,
@@ -16491,6 +21018,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     employees,
     shifts,
     weekOptions,
+    staffAssignments: employeeLendings,
     globalDayBlocks,
     scheduleNote: await getScheduleNote(weekStart, context),
     globalBlockDates: Array.from(globalBlockDates),
@@ -16503,6 +21031,10 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     sicknessCredits,
     sicknessCreditTotals,
     saturdayStats,
+    xoffiTime: {
+      weekByEmployee: xoffiWeekByEmployee,
+      balanceByEmployee: xoffiBalanceByEmployee,
+    },
     workRuleAssessment,
   };
 }
@@ -17063,6 +21595,12 @@ async function createVacationEntries(vacation, actor = "system", options = {}) {
   const groupId = createVacationGroupId();
   const boundRepository = options.repository || null;
   const mutate = async (repository) => {
+    await assertNoVacationLendingOverlap(
+      vacation.employeeNumber,
+      vacation.dateFrom,
+      vacation.dateTo,
+      repository,
+    );
     const assessment = options.assessment || await assertVacationGovernanceAvailable(
       vacation.employeeNumber,
       vacation,
@@ -17106,6 +21644,12 @@ async function vacationGroupExists(groupId) {
 async function replaceVacationGroup(groupId, vacation, actor = "system", options = {}) {
   const boundRepository = options.repository || null;
   const mutate = async (repository) => {
+    await assertNoVacationLendingOverlap(
+      vacation.employeeNumber,
+      vacation.dateFrom,
+      vacation.dateTo,
+      repository,
+    );
     const assessment = options.assessment || await assertVacationGovernanceAvailable(
       vacation.employeeNumber,
       vacation,
@@ -17743,8 +22287,13 @@ async function integrationConnectionRows(kind = "") {
   })).map(serializeIntegrationConnection);
 }
 
-async function integrationConnectionById(id, kind = "", options = {}) {
-  const row = await integrationRuntimeRepository.getConnection({
+async function integrationConnectionById(
+  id,
+  kind = "",
+  options = {},
+  repository = integrationRuntimeRepository,
+) {
+  const row = await repository.getConnection({
     id: String(id || ""),
     includeInactive: Boolean(options.includeInactive),
   });
@@ -17893,11 +22442,11 @@ function allowedSqlPersonnelColumns(configuration, columns) {
   return selected;
 }
 
-async function sqlPersonnelScopeContext(input = {}) {
+async function sqlPersonnelScopeContext(input = {}, repository = integrationRuntimeRepository) {
   if (!input || typeof input !== "object" || Array.isArray(input)) input = {};
   const costCenterId = String(input.costCenterId || input.defaultCostCenterId || "");
   const derivedLocationId = costCenterId
-    ? String((await integrationRuntimeRepository.locationForCostCenter({
+    ? String((await repository.locationForCostCenter({
       costCenterId,
     }))?.id || "")
     : "";
@@ -17933,7 +22482,11 @@ function integrationConnectionConfigurationFingerprint(connection) {
   }));
 }
 
-async function revalidateSqlPersonnelPreviewConnection(actor, preview) {
+async function revalidateSqlPersonnelPreviewConnection(
+  actor,
+  preview,
+  repository = integrationRuntimeRepository,
+) {
   assertGlobalSqlPersonnelImportActor(actor);
   assertIntegrationPermission(actor, "integrations:connections:read");
   if (!preview.connectionId || !preview.connectionFingerprint) {
@@ -17941,7 +22494,12 @@ async function revalidateSqlPersonnelPreviewConnection(actor, preview) {
   }
   let connection;
   try {
-    connection = await integrationConnectionById(preview.connectionId, "personnel_sql_source");
+    connection = await integrationConnectionById(
+      preview.connectionId,
+      "personnel_sql_source",
+      {},
+      repository,
+    );
   } catch (error) {
     if (error.code === "INTEGRATION_CONNECTION_NOT_FOUND") {
       throw httpError(409, "Die SQL-Verbindung wurde deaktiviert oder entfernt. Bitte die Daten erneut einlesen.", "INTEGRATION_CONNECTION_CHANGED");
@@ -17951,7 +22509,11 @@ async function revalidateSqlPersonnelPreviewConnection(actor, preview) {
   if (connection.public.status !== "ready") {
     throw httpError(409, "Die SQL-Verbindung ist nicht mehr einsatzbereit. Bitte die Verbindung erneut pr\u00fcfen und die Daten neu einlesen.", "INTEGRATION_CONNECTION_CHANGED");
   }
-  assertIntegrationConnectionScope(actor, connection, await sqlPersonnelScopeContext(preview.connectionScopeContext));
+  assertIntegrationConnectionScope(
+    actor,
+    connection,
+    await sqlPersonnelScopeContext(preview.connectionScopeContext, repository),
+  );
   if (integrationConnectionConfigurationFingerprint(connection) !== preview.connectionFingerprint) {
     throw httpError(409, "Die SQL-Verbindung wurde seit der Vorschau ge\u00e4ndert. Bitte die Daten erneut einlesen.", "INTEGRATION_CONNECTION_CHANGED");
   }
@@ -18347,6 +22909,17 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
   if (existing && existing.active && !candidate.active) {
     await assertEmployeeDestructiveMutationAllowed(actor, existing.personnel_number);
   }
+  if (existing) {
+    const portalTarget = await organizationPersonnelRepository
+      .getPortalMutationTarget(existing.personnel_number);
+    assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+      actor,
+      beforeEmployee: existing,
+      afterEmployee: candidate,
+      beforeRole: portalTarget?.role || "employee",
+      afterRole: portalTarget?.role || "employee",
+    });
+  }
   assertSessionContextScope(actor, { locationId: candidate.homeLocationId, departmentId: candidate.preferredDepartmentId });
   return candidate;
 }
@@ -18536,6 +23109,18 @@ async function applyPersonnelImport(actor, preview) {
     if (row.action === "update" && current.active && !validated.active) {
       await assertEmployeeDestructiveMutationAllowed(actor, current.personnel_number);
     }
+    const portalTarget = current
+      ? await organizationPersonnelRepository.getPortalMutationTarget(validated.personnelNumber)
+      : null;
+    if (current) {
+      assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+        actor,
+        beforeEmployee: current,
+        afterEmployee: validated,
+        beforeRole: portalTarget?.role || "employee",
+        afterRole: portalTarget?.role || "employee",
+      });
+    }
     preparedRows.push({
       action: row.action,
       expectedFingerprint: row.existingFingerprint,
@@ -18550,6 +23135,19 @@ async function applyPersonnelImport(actor, preview) {
       const repositories = createApplicationRepositories(executor);
       const repository = repositories.integrationRuntime;
       const organization = repositories.organizationPersonnel;
+      const liveLearningActor = await livePersonnelLearningRoleAdministrationActor(
+        actor,
+        organization,
+      );
+      assertLivePortalRoutePermission(liveLearningActor, "employees:import");
+      if (preview.sourceTransport === "sql_view") {
+        await revalidateSqlPersonnelPreviewConnection(
+          liveLearningActor,
+          preview,
+          repository,
+        );
+      }
+      const learningOrganizationScopeDeltas = [];
       for (const row of preparedRows) {
         const preparedCandidate = row.validated;
         const currentMatches = await employeeImportRowsCaseInsensitive(preparedCandidate.personnelNumber, repository);
@@ -18560,7 +23158,7 @@ async function applyPersonnelImport(actor, preview) {
           throw httpError(409, "Die Importvorschau ist veraltet. Stammdaten wurden inzwischen ge\u00e4ndert.", "IMPORT_PREVIEW_STALE");
         }
         if (current) {
-          assertSessionContextScope(actor, {
+          assertSessionContextScope(liveLearningActor, {
             locationId: current.home_location_id,
             departmentId: current.preferred_department_id,
           });
@@ -18573,7 +23171,38 @@ async function applyPersonnelImport(actor, preview) {
           allowInactiveDepartmentId: current?.preferred_department_id || 0,
           repository: organization,
         });
-        assertSessionContextScope(actor, {
+        const centralCostCenterDelta = importFieldMapped(preview.mapping, "costCenterId")
+          && (!current
+            || String(current.cost_center_id || "") !== String(candidate.costCenterId || ""));
+        if (centralCostCenterDelta && !sessionCanManageCentralPersonnel(liveLearningActor)) {
+          throw httpError(
+            403,
+            "Kostenstellen können nur in der zentralen Personalverwaltung importiert werden.",
+            "PERSONNEL_CENTRAL_WRITE_REQUIRED",
+          );
+        }
+        const livePortalTarget = current
+          ? await organization.getPortalMutationTarget(candidate.personnelNumber)
+          : null;
+        if (current) {
+          assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+            actor: liveLearningActor,
+            beforeEmployee: current,
+            afterEmployee: candidate,
+            beforeRole: livePortalTarget?.role || "employee",
+            afterRole: livePortalTarget?.role || "employee",
+          });
+        }
+        const observeLearningOrganizationScope = Boolean(
+          roleHasPersonnelLearningDefaults(livePortalTarget?.role),
+        );
+        const learningOrganizationScopeBefore = observeLearningOrganizationScope
+          ? await personnelLearningEmployeeOrganizationScopeSnapshot(
+            organization,
+            candidate.personnelNumber,
+          )
+          : null;
+        assertSessionContextScope(liveLearningActor, {
           locationId: candidate.homeLocationId,
           departmentId: candidate.preferredDepartmentId,
         });
@@ -18600,7 +23229,7 @@ async function applyPersonnelImport(actor, preview) {
         } else {
           if (deactivate) {
             await assertEmployeeDestructiveMutationAllowed(
-              actor,
+              liveLearningActor,
               candidate.personnelNumber,
               organization,
             );
@@ -18615,7 +23244,24 @@ async function applyPersonnelImport(actor, preview) {
             });
           }
         }
+        if (observeLearningOrganizationScope) {
+          const learningOrganizationScopeAfter = await personnelLearningEmployeeOrganizationScopeSnapshot(
+            organization,
+            candidate.personnelNumber,
+          );
+          const learningOrganizationScopeDelta = personnelLearningEmployeeOrganizationScopeDelta(
+            candidate.personnelNumber,
+            learningOrganizationScopeBefore,
+            learningOrganizationScopeAfter,
+          );
+          if (learningOrganizationScopeDelta) {
+            learningOrganizationScopeDeltas.push(learningOrganizationScopeDelta);
+          }
+        }
       }
+      learningOrganizationScopeDeltas.sort(
+        (left, right) => left.employeeNumber.localeCompare(right.employeeNumber, "de-AT"),
+      );
       await insertIntegrationRun({
         id: runId,
         profileId: preview.profileId,
@@ -18638,6 +23284,28 @@ async function applyPersonnelImport(actor, preview) {
         },
         result: { rows: preview.rows.map((row) => ({ rowNumber: row.rowNumber, action: row.action })) },
       }, repository);
+      await persistPersonnelLearningOrganizationScopeDeltas(
+        organization,
+        liveLearningActor,
+        "personnel-import",
+        runId,
+        learningOrganizationScopeDeltas,
+        "PRINCIPAL_ORGANIZATION_SCOPE_CHANGED",
+      );
+      await organization.insertAudit(
+        liveLearningActor.employeeNumber,
+        "integration.personnel.import.applied",
+        "integration_run",
+        runId,
+        JSON.stringify({
+          profileId: preview.profileId,
+          total: preview.summary.total,
+          created: preview.summary.create,
+          updated: preview.summary.update,
+          skipped: preview.summary.skip,
+          contentSha256: preview.contentSha256,
+        }),
+      );
     }, { isolation: "serializable" }));
   } catch (error) {
     if (isUniquePersistenceViolation(error)) {
@@ -18649,8 +23317,6 @@ async function applyPersonnelImport(actor, preview) {
     }
     throw error;
   }
-  auditPortal(actor.employeeNumber, "integration.personnel.import.applied", "integration_run", runId,
-    JSON.stringify({ profileId: preview.profileId, total: preview.summary.total, created: preview.summary.create, updated: preview.summary.update, skipped: preview.summary.skip, contentSha256: preview.contentSha256 }));
   return { runId, ...preview.summary };
 }
 
@@ -19441,7 +24107,6 @@ app.post("/api/integrations/personnel-import/preview", async (request, response)
 app.post("/api/integrations/personnel-import/apply", async (request, response) => {
   const actor = integrationActor(request, "employees:import");
   const entry = integrationCache.get(request.body.previewId, actor.employeeNumber, "personnel-preview");
-  if (entry.value.sourceTransport === "sql_view") await revalidateSqlPersonnelPreviewConnection(actor, entry.value);
   const result = await applyPersonnelImport(actor, entry.value);
   integrationCache.delete(entry.id, actor.employeeNumber);
   if (entry.value.inspectionId) integrationCache.delete(entry.value.inspectionId, actor.employeeNumber);
@@ -19534,6 +24199,230 @@ function tradeFotoReportHttpError(error) {
   );
   result.details = error.details;
   return result;
+}
+
+function xoffiTimeImportHttpError(error) {
+  if (!(error instanceof XoffiTimeImportError)) return error;
+  const messages = {
+    XOFFI_IMAGE_SIZE_INVALID: "Die Bilddatei ist leer oder größer als 18 MB.",
+    XOFFI_IMAGE_INVALID: "Die Datei ist kein lesbares JPG-, PNG- oder WebP-Bild.",
+    XOFFI_IMAGE_LAYOUT_INVALID: "Das Bild ist für eine sichere xoffi-Auswertung zu klein oder ungeeignet.",
+    XOFFI_WEEK_NOT_DETECTED: "Die Kalenderwoche konnte im xoffi-Bild nicht sicher erkannt werden.",
+    XOFFI_WEEK_SELECTION_INVALID: "Die ausgewählte GP-Kalenderwoche ist ungültig.",
+    XOFFI_EMPLOYEES_NOT_DETECTED: "Im xoffi-Bild wurden keine Teamzeilen sicher erkannt.",
+    XOFFI_DAY_COLUMNS_NOT_DETECTED: "Die sieben Tagesspalten konnten im xoffi-Bild nicht sicher erkannt werden.",
+    XOFFI_OCR_BUSY: "Die lokale Bilderkennung ist ausgelastet. Bitte den Import in Kürze erneut starten.",
+    XOFFI_OCR_TIMEOUT: "Die lokale Bilderkennung hat das Zeitlimit erreicht.",
+  };
+  const status = error.code === "XOFFI_OCR_BUSY" ? 429
+    : error.code === "XOFFI_OCR_TIMEOUT" ? 503
+      : error.code === "XOFFI_IMAGE_SIZE_INVALID" ? 413 : 422;
+  const result = httpError(status, messages[error.code] || "Das xoffi-Bild konnte nicht sicher ausgewertet werden.", error.code);
+  result.details = error.details;
+  return result;
+}
+
+async function xoffiTimeImportContext(session, input = {}) {
+  if (!["department_manager", "manager", "hr", "admin", "developer"].includes(session.role)) {
+    throw httpError(403, "Diese Funktion ist nur für berechtigte lokale Leitungen oder PL+ verfügbar.", "XOFFI_IMPORT_ROLE_DENIED");
+  }
+  const context = await resolvePlanningContext(input);
+  assertSessionContextScope(session, context);
+  return context;
+}
+
+function assertPastXoffiWeek(weekStart) {
+  if (!isIsoDate(weekStart) || getMonday(weekStart) !== weekStart) {
+    throw httpError(400, "Bitte eine vergangene Kalenderwoche mit Montag als Wochenbeginn auswählen.", "XOFFI_WEEK_INVALID");
+  }
+  if (weekStart >= currentWeekStart()) {
+    throw httpError(409, "xoffi-Daten dürfen ausschließlich für bereits abgeschlossene Kalenderwochen importiert werden.", "XOFFI_WEEK_NOT_PAST");
+  }
+  return weekStart;
+}
+
+function xoffiCandidateProjection(rows = []) {
+  return rows.map((employee) => ({
+    employeeNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    nickname: employee.nickname,
+  }));
+}
+
+function xoffiInteger(value, minimum, maximum, code = "XOFFI_REVIEW_INVALID") {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < minimum || number > maximum) {
+    throw httpError(400, "Bitte alle erkannten xoffi-Werte vollständig prüfen.", code);
+  }
+  return number;
+}
+
+function validateXoffiReviewedRows(inputRows, preview) {
+  if (!Array.isArray(inputRows) || inputRows.length !== preview.employees.length || inputRows.length > 250) {
+    throw httpError(400, "Die geprüften Teamzeilen stimmen nicht mit der OCR-Vorschau überein.", "XOFFI_REVIEW_INVALID");
+  }
+  const candidates = new Set(preview.candidates.map((employee) => employee.employeeNumber));
+  const employeeNumbers = new Set();
+  return inputRows.map((row, rowIndex) => {
+    const sourceName = String(row?.sourceName || "").trim().slice(0, 120);
+    const employeeNumber = String(row?.employeeNumber || "").trim();
+    const original = preview.employees[rowIndex];
+    if (sourceName !== original?.sourceName || !candidates.has(employeeNumber) || employeeNumbers.has(employeeNumber)) {
+      throw httpError(400, "Jede xoffi-Zeile muss genau einem Teammitglied des ausgewählten Bereichs zugeordnet sein.", "XOFFI_EMPLOYEE_MAPPING_INVALID");
+    }
+    employeeNumbers.add(employeeNumber);
+    if (!Array.isArray(row.days) || row.days.length !== 7) {
+      throw httpError(400, "Für jede Teamzeile werden genau sieben geprüfte Tageswerte benötigt.", "XOFFI_REVIEW_INVALID");
+    }
+    const dates = new Set();
+    const days = row.days.map((day, index) => {
+      const workDate = String(day?.workDate || "");
+      if (workDate !== addDays(preview.weekStart, index) || dates.has(workDate)) {
+        throw httpError(400, "Die xoffi-Tageswerte passen nicht zur erkannten Kalenderwoche.", "XOFFI_REVIEW_INVALID");
+      }
+      dates.add(workDate);
+      const intervals = Array.isArray(day.intervals) ? day.intervals.map((value) => String(value).trim()) : [];
+      if (intervals.length > 12 || intervals.some((value) => !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(value))) {
+        throw httpError(400, "Mindestens ein xoffi-Zeitintervall ist ungültig.", "XOFFI_REVIEW_INVALID");
+      }
+      return {
+        workDate,
+        actualMinutes: xoffiInteger(day.actualMinutes, 0, 1440),
+        valuedMinutes: xoffiInteger(day.valuedMinutes, 0, 2880),
+        surchargeMinutes: xoffiInteger(day.surchargeMinutes, 0, 1440),
+        intervals: [...new Set(intervals)],
+        absence: String(day.absence || "") === "sick" ? "sick" : "",
+        confidence: xoffiInteger(day.confidence ?? 0, 0, 100),
+      };
+    });
+    const closingBalanceValue = row.closingBalanceMinutes;
+    const closingBalanceMinutes = closingBalanceValue === null || closingBalanceValue === "" || closingBalanceValue === undefined
+      ? null : xoffiInteger(closingBalanceValue, -600000, 600000);
+    return {
+      sourceName,
+      employeeNumber,
+      matchConfidence: employeeNumber === original?.employeeNumber ? xoffiInteger(original.matchConfidence || 0, 0, 100) : 0,
+      weeklyActualMinutes: xoffiInteger(row.weeklyActualMinutes, 0, 10080),
+      weeklyValuedMinutes: xoffiInteger(row.weeklyValuedMinutes, 0, 20160),
+      weeklySurchargeMinutes: xoffiInteger(row.weeklySurchargeMinutes, 0, 10080),
+      closingBalanceMinutes,
+      days,
+    };
+  });
+}
+
+function assertXoffiScreenshotWeekConfirmation(preview, input = {}) {
+  const resolution = preview?.weekResolution;
+  const selectedWeekValid = isIsoDate(preview?.weekStart)
+    && getMonday(preview.weekStart) === preview.weekStart
+    && preview.weekEnd === addDays(preview.weekStart, 6)
+    && resolution?.selectedWeekStart === preview.weekStart
+    && resolution?.selectedWeekEnd === preview.weekEnd;
+  const detectedWeekValid = isIsoDate(resolution?.detectedWeekStart)
+    && getMonday(resolution.detectedWeekStart) === resolution.detectedWeekStart
+    && resolution.detectedWeekEnd === addDays(resolution.detectedWeekStart, 6)
+    && Number.isInteger(resolution.matchedDateColumns)
+    && resolution.matchedDateColumns >= 6
+    && resolution.matchedDateColumns <= 7;
+  const statusValid = resolution?.status === "matched"
+    ? resolution.source === "header_date_columns" && detectedWeekValid
+      && resolution.detectedWeekStart === preview.weekStart && resolution.matchedDateColumns === 7
+      && resolution.confirmationRequired === false
+    : resolution?.status === "uncertain"
+      ? resolution.source === "header_date_columns" && detectedWeekValid
+        && resolution.detectedWeekStart === preview.weekStart && resolution.matchedDateColumns === 6
+        && resolution.confirmationRequired === true
+      : resolution?.status === "conflict"
+        ? resolution.source === "header_date_columns" && detectedWeekValid
+          && resolution.detectedWeekStart !== preview.weekStart && resolution.confirmationRequired === true
+        : resolution?.status === "unrecognized"
+          ? resolution.source === "none" && resolution.detectedWeekStart === ""
+            && resolution.detectedWeekEnd === "" && resolution.matchedDateColumns === 0
+            && resolution.confirmationRequired === true
+          : false;
+  if (!selectedWeekValid || !statusValid) {
+    throw httpError(409, "Die geprüfte xoffi-Wochenzuordnung ist nicht mehr gültig. Bitte das Bild erneut auslesen.", "XOFFI_WEEK_PREVIEW_INVALID");
+  }
+  if (resolution.confirmationRequired && input.screenshotWeekConfirmed !== true) {
+    throw httpError(409, "Bitte ausdrücklich bestätigen, dass der Screenshot zur ausgewählten GP-Kalenderwoche gehört.", "XOFFI_SCREENSHOT_WEEK_CONFIRMATION_REQUIRED");
+  }
+  return resolution;
+}
+
+async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual, screenshotWeekConfirmed = false) {
+  const importId = crypto.randomUUID();
+  const departmentId = Number(preview.context.departmentId || 0) || null;
+  const actor = portalActorId(session);
+  const weekResolution = assertXoffiScreenshotWeekConfirmation(preview, { screenshotWeekConfirmed });
+  await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const repository = repositories.timeTracking;
+    await repository.supersedeActiveXoffiImport({
+      locationId: preview.context.locationId,
+      weekStart: preview.weekStart,
+      departmentKey: departmentId || 0,
+      newImportId: importId,
+      actor,
+    });
+    await repository.insertXoffiImport({
+      id: importId,
+      locationId: preview.context.locationId,
+      departmentId,
+      departmentKey: departmentId || 0,
+      weekStart: preview.weekStart,
+      weekEnd: preview.weekEnd,
+      sourceSha256: preview.sourceSha256,
+      sourceFileName: preview.sourceFileName,
+      ocrEngineVersion: preview.engineVersion,
+      useAsActual: useAsActual ? 1 : 0,
+      actor,
+    });
+    for (const row of reviewedRows) {
+      const inserted = await repository.insertXoffiEmployeeRow({
+        importId,
+        employeeNumber: row.employeeNumber,
+        sourceName: row.sourceName,
+        matchConfidence: row.matchConfidence,
+        weeklyActualMinutes: row.weeklyActualMinutes,
+        weeklyValuedMinutes: row.weeklyValuedMinutes,
+        weeklySurchargeMinutes: row.weeklySurchargeMinutes,
+        closingBalanceMinutes: row.closingBalanceMinutes,
+      });
+      const employeeRowId = Number(inserted.inserted?.id || 0);
+      if (!employeeRowId) throw new Error("XOFFI_ROW_INSERT_FAILED");
+      for (const day of row.days) {
+        await repository.insertXoffiDay({
+          employeeRowId,
+          workDate: day.workDate,
+          actualMinutes: day.actualMinutes,
+          valuedMinutes: day.valuedMinutes,
+          surchargeMinutes: day.surchargeMinutes,
+          intervalsJson: JSON.stringify(day.intervals),
+          absenceCode: day.absence,
+          ocrConfidence: day.confidence,
+        });
+      }
+    }
+    await repository.invalidateDayReviewsForRange({
+      locationId: preview.context.locationId,
+      dateFrom: preview.weekStart,
+      dateTo: preview.weekEnd,
+      departmentId,
+      filterDepartment: departmentId ? 1 : 0,
+    });
+    await repositories.organizationPersonnel.insertAudit(actor, "xoffi-time.import.apply", "xoffi_time_import", importId, JSON.stringify({
+      locationId: preview.context.locationId,
+      departmentId: preview.context.departmentId,
+      weekStart: preview.weekStart,
+      weekResolutionStatus: weekResolution.status,
+      detectedWeekStart: weekResolution.detectedWeekStart,
+      screenshotWeekConfirmed: weekResolution.confirmationRequired,
+      employeeRows: reviewedRows.length,
+      useAsActual: Boolean(useAsActual),
+      sourceSha256: preview.sourceSha256,
+    }));
+  });
+  return importId;
 }
 
 function publicSalesAnalyticsReport(row, archive = null) {
@@ -21987,6 +26876,14 @@ async function privacyRequestExportBundle(state) {
       personalNotificationContact,
     } : null;
   }
+  if (scope.has("all_personal_data")) {
+    bundle.data.portalBirthdayPresentationClaims = (
+      await portalBirthdayPresentationsRepository.listClaimsForEmployee(employeeNumber)
+    ).map((claim) => ({
+      eventYear: Number(claim.eventYear),
+      presentationId: String(claim.presentationId || ""),
+    }));
+  }
   if (scope.has("time_records") || scope.has("all_personal_data")) {
     [
       bundle.data.timeRecords,
@@ -23961,7 +28858,7 @@ app.post("/api/work-rules/evaluate", async (request, response) => {
       existingId: id,
     }, request.portalSession);
     if (id) candidate.id = id;
-    assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
+    await assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
   }
   const evaluated = await evaluateScheduleWorkRules(
     weekStart,
@@ -24067,6 +28964,79 @@ app.get("/api/schedule", async (request, response) => {
   response.json(await getSchedule(request.query.week, request.query, request.portalSession));
 });
 
+app.get("/api/portal/v1/cross-location-schedules", async (request, response) => {
+  const session = requireEmployeePortalSession(
+    request,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.READ,
+  );
+  const payload = await crossLocationSchedulePayload(session, request.query);
+  if (payload.schedule) {
+    auditPortal(
+      session.employeeNumber,
+      "schedule.cross-location.view",
+      "location",
+      payload.schedule.location.id,
+      JSON.stringify({
+        weekStart: payload.schedule.weekStart,
+        teamMemberCount: payload.schedule.teamMembers.length,
+        shiftCount: payload.schedule.shifts.length,
+      }),
+    );
+  }
+  response.json(payload);
+});
+
+app.get("/api/portal/v1/cross-location-schedule-settings", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE],
+  );
+  response.json(await crossLocationScheduleSettingsPayload(session));
+});
+
+app.put("/api/portal/v1/cross-location-schedule-settings", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE],
+    { csrf: true },
+  );
+  response.json(await updateCrossLocationScheduleSettings(session, request.body || {}));
+});
+
+app.post("/api/portal/v1/staff-assignment-requests", async (request, response) => {
+  const session = requireEmployeePortalSession(
+    request,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE,
+  );
+  assertPortalCsrf(request);
+  response.status(201).json({
+    request: await submitStaffAssignmentRequest(session, request.body || {}),
+  });
+});
+
+app.get("/api/portal/v1/staff-assignment-requests", async (request, response) => {
+  const session = requireEmployeePortalSession(
+    request,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW,
+  );
+  response.json(await staffAssignmentRequestReviewPayload(session));
+});
+
+app.put("/api/portal/v1/staff-assignment-requests/:requestId/decision", async (request, response) => {
+  const session = requireEmployeePortalSession(
+    request,
+    CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW,
+  );
+  assertPortalCsrf(request);
+  response.json({
+    request: await decideStaffAssignmentRequest(
+      session,
+      String(request.params.requestId || ""),
+      request.body || {},
+    ),
+  });
+});
+
 app.put("/api/schedule-note", async (request, response) => {
   const note = await validateScheduleNote(request.body, request.portalSession);
   assertSessionContextScope(request.portalSession, note.context);
@@ -24168,13 +29138,19 @@ app.post("/api/locations", async (request, response) => {
 });
 
 app.put("/api/locations/:id", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["locations:write", "locations:operational:write"],
+    { csrf: true },
+  );
+  request.portalSession = mutationActor;
   const id = normalizeLocationId(request.params.id);
-  assertSessionLocationAdministrationScope(request.portalSession, id);
+  assertSessionLocationAdministrationScope(mutationActor, id);
   const current = await validateLocationExists(id);
   const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
     ? request.body : {};
-  const fullLocationWrite = isLocalSystemSession(request.portalSession)
-    || request.portalSession?.permissions?.includes("locations:write");
+  const fullLocationWrite = isLocalSystemSession(mutationActor)
+    || mutationActor.permissions?.includes("locations:write");
   const submittedLocation = fullLocationWrite ? body : {
     id,
     name: current.name,
@@ -24201,35 +29177,102 @@ app.put("/api/locations/:id", async (request, response) => {
   if (timeSettingsChanged) assertRequestPermission(request, "time:settings");
   const costCenterId = location.costCenterSubmitted ? location.costCenterId : current.cost_center_id;
   if (costCenterId !== current.cost_center_id) requireAdminHrOrLocal(request, "cost_centers:write");
-  const result = await organizationPersonnelRepository.updateLocation({
-    ...location,
-    id,
-    costCenterId,
-    daySettingsJson: JSON.stringify(location.daySettings),
-  });
-  if (!result.rowsAffected) throw httpError(404, "Die Filiale wurde nicht gefunden.");
-  if (costCenterId !== current.cost_center_id) {
-    auditPortal(request.portalSession?.employeeNumber || "local", "location.cost-center.assign", "location", id,
-      JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }));
-  }
+  const daySettingsJson = JSON.stringify(location.daySettings);
   const changedFields = [
     String(current.name || "") !== location.name ? "name" : "",
     Number(current.min_staff || 0) !== location.minStaff ? "minStaff" : "",
-    String(current.day_settings_json || "{}") !== JSON.stringify(location.daySettings) ? "daySettings" : "",
+    String(current.day_settings_json || "{}") !== daySettingsJson ? "daySettings" : "",
     Boolean(current.active) !== Boolean(location.active) ? "active" : "",
     timeSettingsChanged ? "timeTracking" : "",
     costCenterId !== current.cost_center_id ? "costCenter" : "",
   ].filter(Boolean);
-  auditPortal(request.portalSession?.employeeNumber || "local", "location.update", "location", id,
-    JSON.stringify({ changedFields, operationalOnly: !fullLocationWrite }));
-  response.json(await getLocationsForSession(request.portalSession, true));
+  if (!changedFields.length) {
+    response.json(await getLocationsForSession(request.portalSession, true));
+    return;
+  }
+  const update = {
+    ...location,
+    id,
+    costCenterId,
+    daySettingsJson,
+  };
+  if (!changedFields.includes("active")) {
+    const result = await organizationPersonnelRepository.updateLocation(update);
+    if (!result.rowsAffected) throw httpError(404, "Die Filiale wurde nicht gefunden.");
+    if (costCenterId !== current.cost_center_id) {
+      auditPortal(request.portalSession?.employeeNumber || "local", "location.cost-center.assign", "location", id,
+        JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }));
+    }
+    auditPortal(request.portalSession?.employeeNumber || "local", "location.update", "location", id,
+      JSON.stringify({ changedFields, operationalOnly: !fullLocationWrite }));
+  } else {
+    const expectedSignature = locationAdministrationConcurrencySignature(current);
+    await personnelLifecycleSerializableTransaction(async (organization) => {
+      const liveActor = await livePersonnelLearningRoleAdministrationActor(
+        mutationActor,
+        organization,
+      );
+      assertLivePortalRoutePermission(liveActor, "locations:write");
+      const liveSession = livePersonnelLearningAdministrationSession(liveActor);
+      assertSessionLocationAdministrationScope(liveSession, id);
+      if (timeSettingsChanged) assertLivePortalRoutePermission(liveActor, "time:settings");
+      if (costCenterId !== current.cost_center_id) {
+        assertLivePortalRoutePermission(
+          liveActor,
+          "cost_centers:write",
+          { allowedRoles: RIGHTS_ADMIN_PORTAL_ROLES },
+        );
+      }
+      const liveLocation = await validateLocationExists(id, organization);
+      if (locationAdministrationConcurrencySignature(liveLocation) !== expectedSignature) {
+        throw personnelLifecycleConcurrentChangeError();
+      }
+      const deltas = await personnelLearningOrganizationScopeDeltas(organization, {
+        locationAfter: { id, active: Boolean(location.active) },
+      });
+      assertPersonnelLearningOrganizationScopeDeltasAllowed(liveActor, deltas);
+      const result = await organization.updateLocation(update);
+      if (!result.rowsAffected) throw httpError(404, "Die Filiale wurde nicht gefunden.");
+      if (costCenterId !== current.cost_center_id) {
+        await organization.insertAudit(
+          liveActor.employeeNumber || "local",
+          "location.cost-center.assign",
+          "location",
+          id,
+          JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }),
+        );
+      }
+      await persistPersonnelLearningOrganizationScopeDeltas(
+        organization,
+        liveActor,
+        "location",
+        id,
+        deltas,
+      );
+      await organization.insertAudit(
+        liveActor.employeeNumber || "local",
+        "location.update",
+        "location",
+        id,
+        JSON.stringify({ changedFields, operationalOnly: false }),
+      );
+    });
+  }
+  response.json(await getLocationsForSession(mutationActor, true));
 });
 
 app.post("/api/departments", async (request, response) => {
   const department = await validateDepartmentPayload(request.body);
-  const departmentManagerCreatingInAssignedLocation = request.portalSession?.role === "department_manager"
-    && (request.portalSession.scopes || []).some((scope) => scope.locationId === department.locationId);
-  if (!departmentManagerCreatingInAssignedLocation) {
+  if (request.portalSession?.role === "department_manager") {
+    assertPersonnelLearningRoleAccountAdministrationAllowed(
+      request.portalSession,
+      {
+        role: request.portalSession.role,
+        homeLocationId: request.portalSession.homeLocationId,
+        preferredDepartmentId: request.portalSession.preferredDepartmentId,
+      },
+    );
+  } else {
     assertSessionContextScope(request.portalSession, { locationId: department.locationId });
   }
   let departmentId;
@@ -24237,52 +29280,152 @@ app.post("/api/departments", async (request, response) => {
     await organizationPersonnelRepository.transaction(async (organization) => {
       const sortOrder = await organization.nextDepartmentSortOrder(department.locationId);
       departmentId = await organization.insertDepartment(department, sortOrder);
-      if (departmentManagerCreatingInAssignedLocation) {
-        await organization.insertAccessScopeIgnore({
-          employeeNumber: request.portalSession.employeeNumber,
-          locationId: department.locationId,
-          departmentId,
-          assignedBy: request.portalSession.employeeNumber,
-        });
-      }
     });
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Abteilung gibt es in der Filiale bereits.");
     throw error;
   }
-  if (departmentManagerCreatingInAssignedLocation) {
-    request.portalSession.scopes = [...(request.portalSession.scopes || []), {
-      locationId: department.locationId,
-      departmentId,
-    }];
-  }
   response.status(201).json(await getLocationsForSession(request.portalSession, true));
 });
 
 app.put("/api/departments/:id", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["departments:write"],
+    { csrf: true },
+  );
+  request.portalSession = mutationActor;
   const id = normalizeDepartmentId(request.params.id, false);
   const existing = await validateDepartmentExists(id);
-  assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: id });
+  assertSessionContextScope(mutationActor, { locationId: existing.location_id, departmentId: id });
   const department = await validateDepartmentPayload(request.body, id);
-  assertSessionContextScope(request.portalSession, { locationId: department.locationId, departmentId: id });
-  if (existing.location_id !== department.locationId) {
-    const referencedShiftCount = Number(await organizationPersonnelRepository.countDepartmentShifts(id) || 0);
-    if (referencedShiftCount) {
-      throw httpError(
-        409,
-        "Eine Abteilung mit vorhandenen Diensten kann nicht in eine andere Filiale verschoben werden.",
-        "SHIFT_DEPARTMENT_LOCATION_CONFLICT",
-      );
-    }
+  assertSessionContextScope(mutationActor, { locationId: department.locationId, departmentId: id });
+  const changedFields = [
+    String(existing.location_id || "") !== department.locationId ? "location" : "",
+    String(existing.name || "") !== department.name ? "name" : "",
+    Number(existing.min_staff || 0) !== department.minStaff ? "minStaff" : "",
+    Boolean(existing.active) !== Boolean(department.active) ? "active" : "",
+  ].filter(Boolean);
+  if (!changedFields.length) {
+    response.json(await getLocationsForSession(request.portalSession, true));
+    return;
   }
+  const topologyChanged = changedFields.includes("location") || changedFields.includes("active");
   try {
-    const result = await organizationPersonnelRepository.updateDepartment(department, id);
-    if (!result.rowsAffected) throw httpError(404, "Die Abteilung wurde nicht gefunden.");
+    if (!topologyChanged) {
+      const result = await organizationPersonnelRepository.updateDepartment(department, id);
+      if (!result.rowsAffected) throw httpError(404, "Die Abteilung wurde nicht gefunden.");
+    } else {
+      const expectedSignature = departmentAdministrationConcurrencySignature(existing);
+      await personnelLifecycleSerializableTransaction(async (organization) => {
+        const liveActor = await livePersonnelLearningRoleAdministrationActor(
+          mutationActor,
+          organization,
+        );
+        assertLivePortalRoutePermission(liveActor, "departments:write");
+        const liveSession = livePersonnelLearningAdministrationSession(liveActor);
+        const liveDepartment = await validateDepartmentExists(id, null, organization);
+        if (departmentAdministrationConcurrencySignature(liveDepartment) !== expectedSignature) {
+          throw personnelLifecycleConcurrentChangeError();
+        }
+        assertSessionContextScope(liveSession, {
+          locationId: liveDepartment.location_id,
+          departmentId: id,
+        });
+        assertSessionContextScope(liveSession, {
+          locationId: department.locationId,
+          departmentId: id,
+        });
+        await validateLocationExists(department.locationId, organization);
+        let deltas = [];
+        if (changedFields.includes("location")) {
+          const [
+            referencedShiftCount,
+            referencedLearningModuleVersionCount,
+            portalUserRows,
+            liveDepartments,
+          ] = await Promise.all([
+            organization.countDepartmentShifts(id),
+            organization.countDepartmentLearningModuleVersionScopes(id),
+            organization.listPortalUsersForAdmin(),
+            organization.listDepartments(true),
+          ]);
+          if (Number(referencedShiftCount || 0)) {
+            throw httpError(
+              409,
+              "Eine Abteilung mit vorhandenen Diensten kann nicht in eine andere Filiale verschoben werden.",
+              "SHIFT_DEPARTMENT_LOCATION_CONFLICT",
+            );
+          }
+          if (Number(referencedLearningModuleVersionCount || 0)) {
+            throw httpError(
+              409,
+              "Eine Abteilung mit referenzierten Schulungs- oder Wissensversionen kann nicht in eine andere Filiale verschoben werden.",
+              "DEPARTMENT_LEARNING_SCOPE_REFERENCE_CONFLICT",
+            );
+          }
+          if (portalUserRows.some((user) => (
+            Number(user.preferred_department_id || 0) === id
+          ))) {
+            throw httpError(
+              409,
+              "Eine Abteilung mit zugeordneten Mitarbeitenden kann nicht in eine andere Filiale verschoben werden.",
+              "DEPARTMENT_EMPLOYEE_REFERENCE_CONFLICT",
+            );
+          }
+          const destinationDepartmentCount = liveDepartments.filter((entry) => (
+            String(entry.location_id || "") === department.locationId
+              && Number(entry.id) !== id
+          )).length;
+          if (destinationDepartmentCount >= 3) {
+            throw httpError(400, "Pro Filiale können maximal 3 Abteilungen angelegt werden.");
+          }
+        } else {
+          deltas = await personnelLearningOrganizationScopeDeltas(organization, {
+            departmentAfter: {
+              id,
+              locationId: department.locationId,
+              active: Boolean(department.active),
+            },
+          });
+          assertPersonnelLearningOrganizationScopeDeltasAllowed(liveActor, deltas);
+        }
+        let result;
+        try {
+          result = await organization.updateDepartment(department, id);
+        } catch (error) {
+          if (changedFields.includes("location")
+            && error?.code === "PERSISTENCE_CHECK_VIOLATION") {
+            throw httpError(
+              409,
+              "Eine Abteilung mit zugewiesenen Berechtigungsbereichen kann nicht in eine andere Filiale verschoben werden.",
+              "DEPARTMENT_SCOPE_REFERENCE_CONFLICT",
+            );
+          }
+          throw error;
+        }
+        if (!result.rowsAffected) throw httpError(404, "Die Abteilung wurde nicht gefunden.");
+        await persistPersonnelLearningOrganizationScopeDeltas(
+          organization,
+          liveActor,
+          "department",
+          id,
+          deltas,
+        );
+        await organization.insertAudit(
+          liveActor.employeeNumber || "local",
+          "department.update",
+          "department",
+          String(id),
+          JSON.stringify({ changedFields }),
+        );
+      });
+    }
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Abteilung gibt es in der Filiale bereits.");
     throw error;
   }
-  response.json(await getLocationsForSession(request.portalSession, true));
+  response.json(await getLocationsForSession(mutationActor, true));
 });
 
 async function assertCostCenterCanBeArchived(id) {
@@ -24588,7 +29731,10 @@ app.get("/api/employees", async (request, response) => {
           includeTimeConfirmationLevel: sessionCanViewTimeConfirmationLevel(session),
           includeSicknessAllowance: sessionCanManageTimeConfirmationLevel(session),
         }),
-        portal_access: await portalAccessProfileForEmployee(row.personnel_number),
+        portal_access: await publicPortalAccessProfileForEmployee(
+          row.personnel_number,
+          session,
+        ),
       })));
   if (!sessionHasGlobalScope(session)) {
     const scopesByLocation = new Map();
@@ -24616,14 +29762,15 @@ app.get("/api/employees", async (request, response) => {
 });
 
 app.post("/api/employees", async (request, response) => {
-  const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
+  const mutationActor = requirePortalAnyPermissionOrLocal(request, ["employees:write"]);
+  let centralWrite = sessionCanManageCentralPersonnel(mutationActor);
   const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
   const submittedCostCenter = String(request.body.costCenterId ?? request.body.cost_center_id ?? "").trim();
   const legacySubmittedHomeLocation = String(
     request.body.homeLocationId ?? request.body.home_location_id ?? "",
   ).trim();
-  const scopedCostCenterId = await defaultCostCenterId(
-    legacySubmittedHomeLocation || request.portalSession?.homeLocationId || "",
+  let scopedCostCenterId = await defaultCostCenterId(
+    legacySubmittedHomeLocation || mutationActor?.homeLocationId || "",
   );
   if (centralWrite && !submittedCostCenter && !legacySubmittedHomeLocation) {
     throw httpError(400, "Bitte eine Kostenstelle auswählen.", "COST_CENTER_REQUIRED");
@@ -24638,19 +29785,19 @@ app.post("/api/employees", async (request, response) => {
   let employee = await validateEmployee(request.body, true, {
     defaultCostCenterId: scopedCostCenterId,
   });
-  const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
+  let canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(mutationActor);
   if (!canManageTimeConfirmationLevel) {
     employee.timeConfirmationLevel = "C";
     employee.sicknessWithoutAumEnabled = 0;
   }
   if (request.body.personnelRecord !== undefined) {
-    assertPersonnelRecordContextScope(request.portalSession, {
+    assertPersonnelRecordContextScope(mutationActor, {
       locationId: employee.homeLocationId,
       departmentId: employee.preferredDepartmentId,
     }, request, employee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
   }
-  assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
-  const accessProfile = await validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, employee);
+  assertSessionContextScope(mutationActor, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
+  const accessProfile = await validatePersonnelAccessProfile(mutationActor, request.body.accessProfile, employee);
   const accessProfileBefore = accessProfile
     ? await portalAccessProfileForEmployee(accessProfile.employeeNumber)
     : null;
@@ -24659,28 +29806,52 @@ app.post("/api/employees", async (request, response) => {
     employee.personnelNumber,
     request.body.personnelRecord,
   );
+  let responseProjectionActor = mutationActor;
   try {
     await personnelLifecycleSerializableTransaction(async (organization) => {
+      const liveLearningActor = await livePersonnelLearningRoleAdministrationActor(
+        mutationActor,
+        organization,
+      );
+      responseProjectionActor = liveLearningActor;
+      assertLivePortalRoutePermission(liveLearningActor, "employees:write");
+      centralWrite = sessionCanManageCentralPersonnel(liveLearningActor);
+      scopedCostCenterId = await defaultCostCenterId(
+        legacySubmittedHomeLocation || liveLearningActor?.homeLocationId || "",
+        organization,
+      );
+      if (centralWrite && !submittedCostCenter && !legacySubmittedHomeLocation) {
+        throw httpError(400, "Bitte eine Kostenstelle auswählen.", "COST_CENTER_REQUIRED");
+      }
+      if (!centralWrite && costCenterSubmitted && submittedCostCenter !== scopedCostCenterId) {
+        throw httpError(
+          403,
+          "Kostenstellen können außerhalb der zentralen Personalverwaltung nicht geändert werden.",
+          "PERSONNEL_CENTRAL_WRITE_REQUIRED",
+        );
+      }
       const liveEmployee = await validateEmployee(request.body, true, {
         defaultCostCenterId: scopedCostCenterId,
         repository: organization,
       });
+      canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(liveLearningActor);
       if (!canManageTimeConfirmationLevel) {
         liveEmployee.timeConfirmationLevel = "C";
         liveEmployee.sicknessWithoutAumEnabled = 0;
       }
       if (request.body.personnelRecord !== undefined) {
-        assertPersonnelRecordContextScope(request.portalSession, {
+        assertPersonnelRecordContextScope(liveLearningActor, {
           locationId: liveEmployee.homeLocationId,
           departmentId: liveEmployee.preferredDepartmentId,
         }, request, liveEmployee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
       }
-      assertSessionContextScope(request.portalSession, {
+      assertSessionContextScope(liveLearningActor, {
         locationId: liveEmployee.homeLocationId,
         departmentId: liveEmployee.preferredDepartmentId,
       });
+      revalidatePreparedPersonnelRecordMutation(request, liveLearningActor, personnelRecordMutation);
       const liveAccessProfile = await validatePersonnelAccessProfile(
-        request.portalSession,
+        liveLearningActor,
         request.body.accessProfile,
         liveEmployee,
         organization,
@@ -24689,7 +29860,7 @@ app.post("/api/employees", async (request, response) => {
       await organization.insertEmployee(employee);
       await applyPersonnelAccessProfileWithRepository(
         organization,
-        request.portalSession,
+        liveLearningActor,
         liveAccessProfile,
         accessProfileBefore,
       );
@@ -24697,6 +29868,17 @@ app.post("/api/employees", async (request, response) => {
         await organization.deactivatePortalAccess(employee.personnelNumber);
       }
       await persistPersonnelRecordMutationWithRepository(organization, personnelRecordMutation, "create");
+      await organization.insertAudit(
+        liveLearningActor?.employeeNumber || "local",
+        "employee.create",
+        "employee",
+        employee.personnelNumber,
+        JSON.stringify({
+          timeConfirmationLevel: employee.timeConfirmationLevel,
+          costCenterId: employee.costCenterId,
+          personnelRecordFields: personnelRecordMutation?.changedFields || [],
+        }),
+      );
     });
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Personalnummer ist bereits vergeben.");
@@ -24706,21 +29888,18 @@ app.post("/api/employees", async (request, response) => {
     await reconcilePersonalNotificationTargets(
       employee.personnelNumber,
       null,
-      request.portalSession?.employeeNumber || "local",
+      responseProjectionActor?.employeeNumber || "local",
     );
   }
   await refreshConfiguredAdminSnapshot();
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.create", "employee", employee.personnelNumber,
-    JSON.stringify({
-      timeConfirmationLevel: employee.timeConfirmationLevel,
-      costCenterId: employee.costCenterId,
-      personnelRecordFields: personnelRecordMutation?.changedFields || [],
-    }));
-  await reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
+  await reconcileOpenAmuResponsibilities(responseProjectionActor?.employeeNumber || "local");
   const responseEmployee = {
     ...employee,
     active: Boolean(employee.active),
-    portal_access: await portalAccessProfileForEmployee(employee.personnelNumber),
+    portal_access: await publicPortalAccessProfileForEmployee(
+      employee.personnelNumber,
+      responseProjectionActor,
+    ),
   };
   if (!canManageTimeConfirmationLevel) {
     delete responseEmployee.timeConfirmationLevel;
@@ -24730,22 +29909,25 @@ app.post("/api/employees", async (request, response) => {
 });
 
 app.put("/api/employees/:personnelNumber", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(request, ["employees:write"]);
   const personnelNumber = request.params.personnelNumber;
   if (request.body.personnelRecord !== undefined) {
-    await assertPersonnelRecordEmployeeScope(request.portalSession, personnelNumber, request,
+    await assertPersonnelRecordEmployeeScope(mutationActor, personnelNumber, request,
       submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
   }
-  await assertSessionEmployeeScope(request.portalSession, personnelNumber);
+  await assertSessionEmployeeScope(mutationActor, personnelNumber);
   const existing = await organizationPersonnelRepository.getEmployeeForUpdate(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
+  const existingPortalTarget = await organizationPersonnelRepository
+    .getPortalMutationTarget(personnelNumber);
   const expectedEmployeeConcurrencySignature = employeeMutationConcurrencySignature(existing);
-  const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
+  let centralWrite = sessionCanManageCentralPersonnel(mutationActor);
   const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
   const submittedCostCenter = String(request.body.costCenterId ?? request.body.cost_center_id ?? existing.cost_center_id ?? "").trim();
   if (!centralWrite && costCenterSubmitted && submittedCostCenter !== String(existing.cost_center_id || "")) {
     throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung geändert werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
   }
-  const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
+  let canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(mutationActor);
   let employee = await validateEmployee({
     ...request.body,
     personnelNumber,
@@ -24762,30 +29944,48 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
     allowInactiveLocationId: existing.home_location_id || "",
     allowInactiveDepartmentId: existing.preferred_department_id || 0,
   });
-  assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
-  const accessProfile = await validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, {
+  assertSessionContextScope(mutationActor, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
+  const accessProfile = await validatePersonnelAccessProfile(mutationActor, request.body.accessProfile, {
     ...employee,
     personnelNumber,
   });
   const accessProfileBefore = accessProfile
     ? await portalAccessProfileForEmployee(accessProfile.employeeNumber)
     : null;
+  assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+    actor: mutationActor,
+    beforeEmployee: existing,
+    afterEmployee: employee,
+    beforeRole: existingPortalTarget?.role || "employee",
+    afterRole: accessProfile?.role || existingPortalTarget?.role || "employee",
+  });
   const personnelRecordMutation = await preparePersonnelRecordMutation(
     request,
     personnelNumber,
     request.body.personnelRecord,
   );
   if (existing.active && !employee.active) {
-    await assertEmployeeDestructiveMutationAllowed(request.portalSession, personnelNumber);
+    await assertEmployeeDestructiveMutationAllowed(mutationActor, personnelNumber);
   }
+  let responseProjectionActor = mutationActor;
+  let employeeMutationChanged = false;
   await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveLearningActor = await livePersonnelLearningRoleAdministrationActor(
+      mutationActor,
+      organization,
+    );
+    responseProjectionActor = liveLearningActor;
+    assertLivePortalRoutePermission(liveLearningActor, "employees:write");
+    centralWrite = sessionCanManageCentralPersonnel(liveLearningActor);
+    canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(liveLearningActor);
     const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
     if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
-    if (!sessionHasGlobalScope(request.portalSession)) {
+    const livePortalTarget = await organization.getPortalMutationTarget(personnelNumber);
+    if (!sessionHasGlobalScope(liveLearningActor)) {
       if (!String(liveEmployee.home_location_id || "").trim()) {
         throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
       }
-      assertSessionContextScope(request.portalSession, {
+      assertSessionContextScope(liveLearningActor, {
         locationId: liveEmployee.home_location_id,
         departmentId: liveEmployee.preferred_department_id,
       });
@@ -24794,9 +29994,28 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
       !== expectedEmployeeConcurrencySignature) {
       throw personnelLifecycleConcurrentChangeError();
     }
+    if (!centralWrite && costCenterSubmitted
+      && submittedCostCenter !== String(liveEmployee.cost_center_id || "")) {
+      throw httpError(
+        403,
+        "Kostenstellen können nur in der zentralen Personalverwaltung geändert werden.",
+        "PERSONNEL_CENTRAL_WRITE_REQUIRED",
+      );
+    }
     const liveValidatedEmployee = await validateEmployee({
-      ...employee,
+      ...request.body,
       personnelNumber,
+      targetWorkdaysPerWeek: request.body.targetWorkdaysPerWeek
+        ?? request.body.target_workdays_per_week
+        ?? liveEmployee.target_workdays_per_week
+        ?? 5,
+      ...(canManageTimeConfirmationLevel
+        ? {}
+        : { timeConfirmationLevel: liveEmployee.time_confirmation_level || "C" }),
+      ...((canManageTimeConfirmationLevel && (Object.hasOwn(request.body, "sicknessWithoutAumEnabled")
+        || Object.hasOwn(request.body, "sickness_without_aum_enabled")))
+        ? {}
+        : { sicknessWithoutAumEnabled: Boolean(liveEmployee.sickness_without_aum_enabled) }),
     }, false, {
       defaultTimeConfirmationLevel: liveEmployee.time_confirmation_level || "C",
       defaultCostCenterId: liveEmployee.cost_center_id || "",
@@ -24805,71 +30024,128 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
       allowInactiveDepartmentId: liveEmployee.preferred_department_id || 0,
       repository: organization,
     });
-    assertSessionContextScope(request.portalSession, {
+    assertSessionContextScope(liveLearningActor, {
       locationId: liveValidatedEmployee.homeLocationId,
       departmentId: liveValidatedEmployee.preferredDepartmentId,
     });
     if (request.body.personnelRecord !== undefined) {
-      assertPersonnelRecordContextScope(request.portalSession, {
+      assertPersonnelRecordContextScope(liveLearningActor, {
         locationId: liveValidatedEmployee.homeLocationId,
         departmentId: liveValidatedEmployee.preferredDepartmentId,
       }, request, personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
     }
+    revalidatePreparedPersonnelRecordMutation(request, liveLearningActor, personnelRecordMutation);
     const liveAccessProfile = await validatePersonnelAccessProfile(
-      request.portalSession,
+      liveLearningActor,
       request.body.accessProfile,
       liveValidatedEmployee,
       organization,
     );
+    assertPersonnelLearningOrganizationAssignmentMutationAllowed({
+      actor: liveLearningActor,
+      beforeEmployee: liveEmployee,
+      afterEmployee: liveValidatedEmployee,
+      beforeRole: livePortalTarget?.role || "employee",
+      afterRole: liveAccessProfile?.role || livePortalTarget?.role || "employee",
+    });
+    const observeLearningOrganizationScope = Boolean(
+      roleHasPersonnelLearningDefaults(livePortalTarget?.role)
+        || roleHasPersonnelLearningDefaults(liveAccessProfile?.role),
+    );
+    const learningOrganizationScopeBefore = observeLearningOrganizationScope
+      ? await personnelLearningEmployeeOrganizationScopeSnapshot(organization, personnelNumber)
+      : null;
     const deactivatingLiveEmployee = Boolean(liveEmployee.active) && !liveValidatedEmployee.active;
     if (deactivatingLiveEmployee) {
       await assertEmployeeDestructiveMutationAllowed(
-        request.portalSession,
+        liveLearningActor,
         personnelNumber,
         organization,
       );
     }
     employee = liveValidatedEmployee;
-    const result = await organization.updateEmployee({ ...employee, personnelNumber });
-    if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
-    await applyPersonnelAccessProfileWithRepository(
+    const employeeChanged = employeeMutationConcurrencySignature(liveEmployee)
+      !== employeeMutationConcurrencySignature(liveValidatedEmployee);
+    if (employeeChanged) {
+      const result = await organization.updateEmployee({ ...employee, personnelNumber });
+      if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
+    }
+    const accessProfileChanged = await applyPersonnelAccessProfileWithRepository(
       organization,
-      request.portalSession,
+      liveLearningActor,
       liveAccessProfile,
       accessProfileBefore,
     );
     if (deactivatingLiveEmployee) {
       await organization.deactivatePortalAccess(personnelNumber);
     }
-    await persistPersonnelRecordMutationWithRepository(organization, personnelRecordMutation, "update");
+    const personnelRecordChangedFields = await persistPersonnelRecordMutationWithRepository(
+      organization,
+      personnelRecordMutation,
+      "update",
+    );
+    if (observeLearningOrganizationScope) {
+      const learningOrganizationScopeAfter = await personnelLearningEmployeeOrganizationScopeSnapshot(
+        organization,
+        personnelNumber,
+      );
+      const learningOrganizationScopeDelta = personnelLearningEmployeeOrganizationScopeDelta(
+        personnelNumber,
+        learningOrganizationScopeBefore,
+        learningOrganizationScopeAfter,
+      );
+      await persistPersonnelLearningOrganizationScopeDeltas(
+        organization,
+        liveLearningActor,
+        "employee",
+        personnelNumber,
+        learningOrganizationScopeDelta ? [learningOrganizationScopeDelta] : [],
+        "PRINCIPAL_ORGANIZATION_SCOPE_CHANGED",
+      );
+    }
+    employeeMutationChanged = Boolean(
+      employeeChanged || accessProfileChanged || personnelRecordChangedFields.length,
+    );
+    if (employeeMutationChanged) {
+      await organization.insertAudit(
+        liveLearningActor?.employeeNumber || "local",
+        "employee.update",
+        "employee",
+        personnelNumber,
+        JSON.stringify({
+          timeConfirmationLevelBefore: liveEmployee.time_confirmation_level || "C",
+          timeConfirmationLevelAfter: liveValidatedEmployee.timeConfirmationLevel,
+          targetWorkdaysBefore: normalizeTargetWorkdays(liveEmployee.target_workdays_per_week),
+          targetWorkdaysAfter: liveValidatedEmployee.targetWorkdaysPerWeek,
+          sicknessWithoutAumBefore: Boolean(liveEmployee.sickness_without_aum_enabled),
+          sicknessWithoutAumAfter: Boolean(liveValidatedEmployee.sicknessWithoutAumEnabled),
+          costCenterBefore: String(liveEmployee.cost_center_id || ""),
+          costCenterAfter: liveValidatedEmployee.costCenterId,
+          portalAccessDisabled: deactivatingLiveEmployee,
+          personnelRecordFields: personnelRecordChangedFields,
+        }),
+      );
+    }
   });
   if (personalNotificationMasterFieldsChanged(personnelRecordMutation?.changedFields)) {
     await reconcilePersonalNotificationTargets(
       personnelNumber,
       null,
-      request.portalSession?.employeeNumber || "local",
+      responseProjectionActor?.employeeNumber || "local",
     );
   }
-  await refreshConfiguredAdminSnapshot();
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.update", "employee", personnelNumber,
-    JSON.stringify({
-      timeConfirmationLevelBefore: existing.time_confirmation_level || "C",
-      timeConfirmationLevelAfter: employee.timeConfirmationLevel,
-      targetWorkdaysBefore: normalizeTargetWorkdays(existing.target_workdays_per_week),
-      targetWorkdaysAfter: employee.targetWorkdaysPerWeek,
-      sicknessWithoutAumBefore: Boolean(existing.sickness_without_aum_enabled),
-      sicknessWithoutAumAfter: Boolean(employee.sicknessWithoutAumEnabled),
-      costCenterBefore: String(existing.cost_center_id || ""),
-      costCenterAfter: employee.costCenterId,
-      portalAccessDisabled: Boolean(existing.active && !employee.active),
-      personnelRecordFields: personnelRecordMutation?.changedFields || [],
-    }));
-  await reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
+  if (employeeMutationChanged) {
+    await refreshConfiguredAdminSnapshot();
+    await reconcileOpenAmuResponsibilities(responseProjectionActor?.employeeNumber || "local");
+  }
   const responseEmployee = {
     ...employee,
     personnelNumber,
     active: Boolean(employee.active),
-    portal_access: await portalAccessProfileForEmployee(personnelNumber),
+    portal_access: await publicPortalAccessProfileForEmployee(
+      personnelNumber,
+      responseProjectionActor,
+    ),
   };
   if (!canManageTimeConfirmationLevel) {
     delete responseEmployee.timeConfirmationLevel;
@@ -24879,8 +30155,9 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
 });
 
 app.patch("/api/employees/:personnelNumber/display", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(request, ["employees:display:write"]);
   const personnelNumber = String(request.params.personnelNumber || "").trim();
-  await assertSessionEmployeeScope(request.portalSession, personnelNumber);
+  await assertSessionEmployeeScope(mutationActor, personnelNumber);
   const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
     ? request.body : {};
   const colorSubmitted = own(body, "color");
@@ -24888,7 +30165,7 @@ app.patch("/api/employees/:personnelNumber/display", async (request, response) =
   if (!colorSubmitted && !nicknameSubmitted) {
     throw httpError(400, "Bitte mindestens ein freigegebenes Darstellungsfeld übermitteln.", "EMPLOYEE_DISPLAY_INVALID");
   }
-  if (nicknameSubmitted && !request.portalSession?.permissions?.includes("employees:nickname:write")) {
+  if (nicknameSubmitted && !mutationActor?.permissions?.includes("employees:nickname:write")) {
     throw httpError(403, "Der Dienstplan-Spitzname darf mit diesem Zugang nicht bearbeitet werden.", "EMPLOYEE_NICKNAME_WRITE_DENIED");
   }
   const submittedColor = colorSubmitted ? String(body.color || "").trim().toLowerCase() : null;
@@ -24903,67 +30180,121 @@ app.patch("/api/employees/:personnelNumber/display", async (request, response) =
   let nickname = "";
   let changedFields = [];
   await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(
+      mutationActor,
+      organization,
+    );
+    assertLivePortalRoutePermission(liveActor, "employees:display:write");
+    if (nicknameSubmitted && !liveActor?.permissions?.includes("employees:nickname:write")) {
+      throw httpError(403, "Der Dienstplan-Spitzname darf mit diesem Zugang nicht bearbeitet werden.", "EMPLOYEE_NICKNAME_WRITE_DENIED");
+    }
     const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
     if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
-    if (!sessionHasGlobalScope(request.portalSession)) {
+    if (!sessionHasGlobalScope(liveActor)) {
       if (!String(liveEmployee.home_location_id || "").trim()) {
         throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
       }
-      assertSessionContextScope(request.portalSession, {
+      assertSessionContextScope(liveActor, {
         locationId: liveEmployee.home_location_id,
         departmentId: liveEmployee.preferred_department_id,
       });
     }
     color = colorSubmitted ? submittedColor : liveEmployee.color;
     nickname = nicknameSubmitted ? submittedNickname : liveEmployee.nickname;
-    const result = await organization.updateEmployeeDisplay(personnelNumber, color, nickname);
-    if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
     changedFields = [
       colorSubmitted && color !== liveEmployee.color ? "color" : "",
       nicknameSubmitted && nickname !== liveEmployee.nickname ? "nickname" : "",
     ].filter(Boolean);
+    if (!changedFields.length) return;
+    const result = await organization.updateEmployeeDisplay(personnelNumber, color, nickname);
+    if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
+    await organization.insertAudit(
+      liveActor?.employeeNumber || "local",
+      "employee.display.update",
+      "employee",
+      personnelNumber,
+      JSON.stringify({ changedFields }),
+    );
   });
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.display.update", "employee", personnelNumber,
-    JSON.stringify({ changedFields }));
   response.json({ personnelNumber, color, nickname });
 });
 
 app.delete("/api/employees/:personnelNumber", async (request, response) => {
+  const mutationActor = requirePortalAnyPermissionOrLocal(request, ["employees:write"]);
   const personnelNumber = String(request.params.personnelNumber || "").trim();
-  await assertSessionEmployeeScope(request.portalSession, personnelNumber);
-  await assertEmployeeDestructiveMutationAllowed(request.portalSession, personnelNumber);
+  await assertSessionEmployeeScope(mutationActor, personnelNumber);
+  await assertEmployeeDestructiveMutationAllowed(mutationActor, personnelNumber);
   const existing = await organizationPersonnelRepository.getEmployeeActivation(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
   let previousActive = Boolean(existing.active);
+  let deactivated = false;
   await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(
+      mutationActor,
+      organization,
+    );
+    assertLivePortalRoutePermission(liveActor, "employees:write");
     const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
     if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
-    if (!sessionHasGlobalScope(request.portalSession)) {
+    previousActive = Boolean(liveEmployee.active);
+    if (!previousActive) return;
+    if (!sessionHasGlobalScope(liveActor)) {
       if (!String(liveEmployee.home_location_id || "").trim()) {
         throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
       }
-      assertSessionContextScope(request.portalSession, {
+      assertSessionContextScope(liveActor, {
         locationId: liveEmployee.home_location_id,
         departmentId: liveEmployee.preferred_department_id,
       });
     }
-    previousActive = Boolean(liveEmployee.active);
+    const livePortalTarget = await organization.getPortalMutationTarget(personnelNumber);
+    const observeLearningOrganizationScope = roleHasPersonnelLearningDefaults(livePortalTarget?.role);
+    const learningOrganizationScopeBefore = observeLearningOrganizationScope
+      ? await personnelLearningEmployeeOrganizationScopeSnapshot(organization, personnelNumber)
+      : null;
     await assertEmployeeDestructiveMutationAllowed(
-      request.portalSession,
+      liveActor,
       personnelNumber,
       organization,
     );
     await organization.deactivateEmployee(personnelNumber);
     await organization.deactivatePortalAccess(personnelNumber);
+    if (observeLearningOrganizationScope) {
+      const learningOrganizationScopeAfter = await personnelLearningEmployeeOrganizationScopeSnapshot(
+        organization,
+        personnelNumber,
+      );
+      const learningOrganizationScopeDelta = personnelLearningEmployeeOrganizationScopeDelta(
+        personnelNumber,
+        learningOrganizationScopeBefore,
+        learningOrganizationScopeAfter,
+      );
+      await persistPersonnelLearningOrganizationScopeDeltas(
+        organization,
+        liveActor,
+        "employee",
+        personnelNumber,
+        learningOrganizationScopeDelta ? [learningOrganizationScopeDelta] : [],
+        "PRINCIPAL_ORGANIZATION_SCOPE_CHANGED",
+      );
+    }
+    await organization.insertAudit(
+      liveActor?.employeeNumber || "local",
+      "employee.deactivate",
+      "employee",
+      personnelNumber,
+      JSON.stringify({
+        previousActive,
+        reason: "controlled-deactivation",
+        personalHistoryPreserved: true,
+      }),
+    );
+    deactivated = true;
   });
-  await refreshConfiguredAdminSnapshot();
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.deactivate", "employee", personnelNumber,
-    JSON.stringify({
-      previousActive,
-      reason: "controlled-deactivation",
-      personalHistoryPreserved: true,
-    }));
-  await reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
+  if (deactivated) {
+    await refreshConfiguredAdminSnapshot();
+    await reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
+  }
   response.status(204).end();
 });
 
@@ -25057,11 +30388,31 @@ app.post("/api/mobile/v1/auth/logout", async (request, response) => {
   response.json({ ok: true });
 });
 
-app.get("/api/portal/v1/roles", async (_request, response) => {
+app.get("/api/portal/v1/roles", async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(request, [
+    "roles:read",
+    "users:write",
+    "rights:read",
+    "rights:write",
+    "scopes:write",
+  ]);
+  if (!isLocalSystemSession(actor)
+    && (actor.sessionKind === "organization" || actor.isEmployee === false)) {
+    throw httpError(
+      403,
+      "Diese Funktion ist ausschließlich für persönliche Mitarbeiterzugänge verfügbar.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
   response.json({
     apiVersion: PORTAL_API_VERSION,
-    roles: await getPortalRoles(),
-    catalog: delegablePortalPermissionCatalog.map(({ hrDelegable: _hrDelegable, ...permission }) => permission),
+    roles: projectPortalRolesForActor(await getPortalRoles(), actor),
+    catalog: projectPortalPermissionCatalogForActor(
+      delegablePortalPermissionCatalog.map(
+        ({ hrDelegable: _hrDelegable, ...permission }) => permission,
+      ),
+      actor,
+    ),
   });
 });
 
@@ -25324,6 +30675,27 @@ app.post("/api/portal/v1/auth/branding", async (request, response) => {
   response.json({ branding });
 });
 
+app.post("/api/portal/v1/auth/password-reset/request", (request, response) => {
+  const resetRequest = {
+    email: String(request.body?.email || "").trim(),
+    ipKey: loginRateKey(request),
+  };
+  response.status(202).json(passwordResetGenericPayload());
+  if (!getPortalStatus().portalEnabled) return;
+  setImmediate(() => {
+    void requestPersonalPasswordReset(resetRequest).catch(() => {
+      // The public response must not reveal account, verification or provider state.
+    });
+  });
+});
+
+app.post("/api/portal/v1/auth/password-reset/confirm", async (request, response) => {
+  if (!getPortalStatus().portalEnabled) return sendPortalInactive(request, response);
+  await completePersonalPasswordReset(request);
+  clearPortalCookies(request, response);
+  response.json({ ok: true });
+});
+
 app.post("/api/portal/v1/setup/admin", async (request, response) => {
   if ((serverModeActive && !productionBootstrapActive) || !isLoopbackRequest(request)) {
     throw httpError(403, "Die Admin-Ersteinrichtung ist nur im lokalen Einrichtungsmodus direkt am Grabenplaner-PC möglich.");
@@ -25409,7 +30781,7 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   clearLoginRate(request);
   const rawToken = crypto.randomBytes(32).toString("base64url");
   const csrfToken = crypto.randomBytes(24).toString("base64url");
-  const timeoutMinutes = Math.min(1440, Math.max(15, Number(getPortalSettings().session_timeout_minutes || 480)));
+  const timeoutMinutes = portalSessionTimeoutMinutes();
   const expiresAt = new Date(now.getTime() + timeoutMinutes * 60000).toISOString();
   if (sessionKind === "organization") {
     await portalAccessRepository.transaction(async (repository) => {
@@ -25565,16 +30937,22 @@ function rightsDashboardCoverage(permission, user, scope) {
 }
 
 const UI_PREFERENCE_VIEWS = Object.freeze([
+  "filialAdministration",
   "planning",
   "requests",
   "timeTracking",
   "vacations",
   "personnelAdministration",
   "personnel",
+  "salesAdministration",
+  "salesAnalytics",
+  "loans",
+  "branchOrders",
   "rightsDashboard",
   "settings",
 ]);
 const UI_PAGE_THEMES = new Set(["light", "dark"]);
+const UI_VACATION_CALENDAR_VIEWS = new Set(["year", "quarter", "month", "employees"]);
 const UI_EMPLOYEE_DISPLAY_COLUMNS = new Set([
   "color", "personnel_number", "name", "nickname", "position", "cost_center", "assignment", "location", "department",
   "workload", "preferred_day", "fixed_days", "status", "phone", "private_email", "employment_start", "employment_end",
@@ -25607,10 +30985,73 @@ const UI_MOBILE_PORTAL_NAVIGATION_ITEMS = Object.freeze([
   "requests",
   "loan",
   "sickness",
+  "learning",
 ]);
 const UI_MOBILE_PORTAL_NAVIGATION_ITEM_SET = new Set(UI_MOBILE_PORTAL_NAVIGATION_ITEMS);
-const UI_MOBILE_PORTAL_PALETTES = new Set(["forest", "ocean", "plum", "sand"]);
+const UI_MOBILE_PORTAL_HOME_ITEMS = Object.freeze([
+  ...UI_MOBILE_PORTAL_NAVIGATION_ITEMS,
+  "branchOrders",
+  "branchVacation",
+]);
+const UI_MOBILE_PORTAL_HOME_ITEM_SET = new Set(UI_MOBILE_PORTAL_HOME_ITEMS);
+const UI_MOBILE_PORTAL_HOME_DEFAULT_COLORS = Object.freeze({
+  time: [39, 110, 85],
+  tasks: [41, 107, 145],
+  team: [98, 84, 151],
+  approvals: [156, 104, 28],
+  schedule: [38, 112, 104],
+  requests: [128, 82, 108],
+  loan: [129, 91, 48],
+  sickness: [173, 75, 66],
+  learning: [55, 118, 93],
+  branchOrders: [42, 122, 99],
+  branchVacation: [76, 112, 167],
+});
+const UI_MOBILE_PORTAL_PALETTES = new Set(["forest", "ocean", "plum", "sand", "berry", "amber", "slate", "teal"]);
 const UI_MOBILE_PORTAL_SURFACES = new Set(["soft", "compact"]);
+
+function defaultVacationCalendarView() {
+  const [yearText, monthText] = viennaTodayIso().split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  return {
+    version: 1,
+    year,
+    view: "year",
+    quarter: Math.floor((month - 1) / 3) + 1,
+    month,
+  };
+}
+
+function normalizeVacationCalendarView(value) {
+  const fallback = defaultVacationCalendarView();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return fallback;
+  }
+  const year = Number(value.year);
+  const quarter = Number(value.quarter);
+  const month = Number(value.month);
+  return {
+    version: 1,
+    year: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : fallback.year,
+    view: UI_VACATION_CALENDAR_VIEWS.has(String(value.view)) ? String(value.view) : fallback.view,
+    quarter: Number.isInteger(quarter) && quarter >= 1 && quarter <= 4 ? quarter : fallback.quarter,
+    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : fallback.month,
+  };
+}
+
+function validateVacationCalendarView(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["version", "year", "view", "quarter", "month"].includes(key))
+    || value.version !== 1
+    || !Number.isInteger(value.year) || value.year < 2000 || value.year > 2100
+    || !UI_VACATION_CALENDAR_VIEWS.has(String(value.view || ""))
+    || !Number.isInteger(value.quarter) || value.quarter < 1 || value.quarter > 4
+    || !Number.isInteger(value.month) || value.month < 1 || value.month > 12) {
+    throw httpError(400, "Bitte eine gültige Urlaubskalender-Ansicht übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  return normalizeVacationCalendarView(value);
+}
 
 function defaultPersonnelDashboardLayout() {
   return { version: 1, order: [...UI_PERSONNEL_DASHBOARD_ITEMS], hidden: [] };
@@ -25682,6 +31123,64 @@ function validateMobilePortalNavigation(value) {
   return normalizeMobilePortalNavigation(value);
 }
 
+function mobilePortalHomeRgb(value, fallback) {
+  if (!Array.isArray(value) || value.length !== 3
+    || value.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+    return [...fallback];
+  }
+  return value.map(Number);
+}
+
+function defaultMobilePortalHome() {
+  return {
+    version: 1,
+    order: [...UI_MOBILE_PORTAL_HOME_ITEMS],
+    colors: Object.fromEntries(UI_MOBILE_PORTAL_HOME_ITEMS.map((id) => [
+      id,
+      [...UI_MOBILE_PORTAL_HOME_DEFAULT_COLORS[id]],
+    ])),
+  };
+}
+
+function normalizeMobilePortalHome(value) {
+  const fallback = defaultMobilePortalHome();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return fallback;
+  }
+  const order = Array.isArray(value.order)
+    ? [...new Set(value.order.map(String))].filter((id) => UI_MOBILE_PORTAL_HOME_ITEM_SET.has(id))
+    : [];
+  for (const id of UI_MOBILE_PORTAL_HOME_ITEMS) if (!order.includes(id)) order.push(id);
+  const submittedColors = value.colors && typeof value.colors === "object" && !Array.isArray(value.colors)
+    ? value.colors
+    : {};
+  return {
+    version: 1,
+    order,
+    colors: Object.fromEntries(UI_MOBILE_PORTAL_HOME_ITEMS.map((id) => [
+      id,
+      mobilePortalHomeRgb(submittedColors[id], UI_MOBILE_PORTAL_HOME_DEFAULT_COLORS[id]),
+    ])),
+  };
+}
+
+function validateMobilePortalHome(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["version", "order", "colors"].includes(key))
+    || value.version !== 1
+    || !Array.isArray(value.order)
+    || value.order.length > UI_MOBILE_PORTAL_HOME_ITEMS.length
+    || new Set(value.order.map(String)).size !== value.order.length
+    || value.order.some((id) => !UI_MOBILE_PORTAL_HOME_ITEM_SET.has(String(id)))
+    || !value.colors || typeof value.colors !== "object" || Array.isArray(value.colors)
+    || Object.keys(value.colors).some((id) => !UI_MOBILE_PORTAL_HOME_ITEM_SET.has(String(id)))
+    || Object.values(value.colors).some((rgb) => !Array.isArray(rgb) || rgb.length !== 3
+      || rgb.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255))) {
+    throw httpError(400, "Bitte eine gültige persönliche mobile Startseite übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  return normalizeMobilePortalHome(value);
+}
+
 function defaultMobilePortalAppearance() {
   return { version: 1, palette: "forest", surface: "soft" };
 }
@@ -25732,11 +31231,14 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let allowPastWeekEditing = isLocalSystemSession(actor)
     ? settingEnabled(getSettings(), "allow_past_week_editing")
     : false;
+  let vacationCalendarView = defaultVacationCalendarView();
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
+  let mobilePortalHome = defaultMobilePortalHome();
   let mobilePortalNavigationCustomized = false;
   let mobilePortalAppearanceCustomized = false;
+  let mobilePortalHomeCustomized = false;
   if (actor?.employeeNumber && !isLocalSystemSession(actor)) {
     const rows = await uiPreferencesRepository.list(actor.employeeNumber);
     const lookup = new Map(rows.map((row) => [row.preferenceKey, row.value]));
@@ -25765,6 +31267,11 @@ async function uiPreferencesForActor(actor, overrides = {}) {
       && actor.permissions?.includes("settings:write")
       && lookup.get("allow_past_week_editing") === "1");
     try {
+      vacationCalendarView = normalizeVacationCalendarView(
+        JSON.parse(lookup.get("vacation_calendar_view_v1") || "null"),
+      );
+    } catch {}
+    try {
       personnelDashboardLayout = normalizePersonnelDashboardLayout(
         JSON.parse(lookup.get("personnel_dashboard_layout_v1") || "null"),
       );
@@ -25781,6 +31288,12 @@ async function uiPreferencesForActor(actor, overrides = {}) {
       );
       mobilePortalAppearanceCustomized = lookup.has("mobile_portal_appearance_v1");
     } catch {}
+    try {
+      mobilePortalHome = normalizeMobilePortalHome(
+        JSON.parse(lookup.get("mobile_portal_home_v1") || "null"),
+      );
+      mobilePortalHomeCustomized = lookup.has("mobile_portal_home_v1");
+    } catch {}
   }
   for (const [view, theme] of Object.entries(overrides.pageThemes || {})) {
     if (UI_PREFERENCE_VIEWS.includes(view) && UI_PAGE_THEMES.has(theme)) pageThemes[view] = theme;
@@ -25795,6 +31308,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (typeof overrides.allowPastWeekEditing === "boolean") {
     allowPastWeekEditing = overrides.allowPastWeekEditing;
   }
+  if (overrides.vacationCalendarView) {
+    vacationCalendarView = normalizeVacationCalendarView(overrides.vacationCalendarView);
+  }
   if (overrides.personnelDashboardLayout) {
     personnelDashboardLayout = normalizePersonnelDashboardLayout(overrides.personnelDashboardLayout);
   }
@@ -25806,6 +31322,10 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     mobilePortalAppearance = normalizeMobilePortalAppearance(overrides.mobilePortalAppearance);
     mobilePortalAppearanceCustomized = true;
   }
+  if (overrides.mobilePortalHome) {
+    mobilePortalHome = normalizeMobilePortalHome(overrides.mobilePortalHome);
+    mobilePortalHomeCustomized = true;
+  }
   return {
     actor: actor?.employeeNumber || "local",
     pageThemes,
@@ -25814,11 +31334,15 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     employeeDisplaySort,
     workRuleAssessmentExpanded,
     allowPastWeekEditing,
+    vacationCalendarView,
     personnelDashboardLayout,
     mobilePortalNavigation,
     mobilePortalAppearance,
+    mobilePortalHome,
+    mobilePortalLocationDisplay: mobilePortalLocationDisplayForSession(actor),
     mobilePortalNavigationCustomized,
     mobilePortalAppearanceCustomized,
+    mobilePortalHomeCustomized,
   };
 }
 
@@ -25879,6 +31403,9 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     : isLocalSystemSession(actor)
       ? settingEnabled(getSettings(), "allow_past_week_editing")
       : (await uiPreferencesRepository.get(actor.employeeNumber, "allow_past_week_editing"))?.value === "1";
+  const vacationCalendarView = input.vacationCalendarView === undefined
+    ? undefined
+    : validateVacationCalendarView(input.vacationCalendarView);
   const personnelDashboardLayout = input.personnelDashboardLayout === undefined
     ? undefined
     : validatePersonnelDashboardLayout(input.personnelDashboardLayout);
@@ -25888,11 +31415,15 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   const mobilePortalAppearance = input.mobilePortalAppearance === undefined
     ? undefined
     : validateMobilePortalAppearance(input.mobilePortalAppearance);
+  const mobilePortalHome = input.mobilePortalHome === undefined
+    ? undefined
+    : validateMobilePortalHome(input.mobilePortalHome);
   if (!Object.keys(pageThemes).length && appFontScalePercent === undefined && employeeDisplayColumns === undefined
     && employeeDisplaySort === undefined && workRuleAssessmentExpanded === undefined
     && allowPastWeekEditing === undefined
+    && vacationCalendarView === undefined
     && personnelDashboardLayout === undefined && mobilePortalNavigation === undefined
-    && mobilePortalAppearance === undefined) {
+    && mobilePortalAppearance === undefined && mobilePortalHome === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
   }
   if (!isLocalSystemSession(actor)) {
@@ -25933,6 +31464,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
         value: allowPastWeekEditing ? "1" : "0",
       });
     }
+    if (vacationCalendarView !== undefined) {
+      upserts.push({
+        preferenceKey: "vacation_calendar_view_v1",
+        value: JSON.stringify(vacationCalendarView),
+      });
+    }
     if (personnelDashboardLayout !== undefined) {
       upserts.push({
         preferenceKey: "personnel_dashboard_layout_v1",
@@ -25949,6 +31486,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
       upserts.push({
         preferenceKey: "mobile_portal_appearance_v1",
         value: JSON.stringify(mobilePortalAppearance),
+      });
+    }
+    if (mobilePortalHome !== undefined) {
+      upserts.push({
+        preferenceKey: "mobile_portal_home_v1",
+        value: JSON.stringify(mobilePortalHome),
       });
     }
     await uiPreferencesRepository.saveChanges(actor.employeeNumber, {
@@ -25972,9 +31515,11 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     employeeDisplaySort,
     workRuleAssessmentExpanded,
     allowPastWeekEditing,
+    vacationCalendarView,
     personnelDashboardLayout,
     mobilePortalNavigation,
     mobilePortalAppearance,
+    mobilePortalHome,
   });
 }
 
@@ -27899,13 +33444,17 @@ async function rightsDashboardPayload(actor) {
     .map((department) => ({ id: Number(department.id), locationId: department.location_id, name: department.name, active: Boolean(department.active) }));
   const locationLookup = new Map(locations.map((location) => [String(location.id), location]));
   const departmentLookup = new Map(departments.map((department) => [Number(department.id), department]));
-  const catalog = rightsDashboardPermissionCatalog(roles);
+  const catalog = projectPortalPermissionCatalogForActor(
+    rightsDashboardPermissionCatalog(roles),
+    actor,
+  );
   const catalogLookup = new Map(catalog.map((permission) => [permission.id, permission]));
+  const visiblePermission = (permission) => portalPermissionVisibleToActor(permission, actor);
   const users = adminUsers.filter((user) => user.employeeActive).map((user) => {
     const role = roleLookup.get(user.role) || roleLookup.get("employee") || { id: "employee", name: "Mitarbeiter", permissions: [] };
-    const rolePermissions = new Set(role.permissions || []);
-    const grantedPermissions = new Set(user.grantedPermissions || []);
-    const deniedPermissions = new Set(user.deniedPermissions || []);
+    const rolePermissions = new Set((role.permissions || []).filter(visiblePermission));
+    const grantedPermissions = new Set((user.grantedPermissions || []).filter(visiblePermission));
+    const deniedPermissions = new Set((user.deniedPermissions || []).filter(visiblePermission));
     const scope = rightsDashboardScopes(user, locationLookup, departmentLookup);
     const accessActive = Boolean(user.configured && user.active && user.passwordConfigured);
     const assignedPermissionIds = [...new Set([...rolePermissions, ...grantedPermissions, ...deniedPermissions])].sort();
@@ -28001,12 +33550,19 @@ async function rightsDashboardPayload(actor) {
 async function rightsManagementPayload(actor) {
   const [roleRows, adminUsers] = await Promise.all([getPortalRoles(), portalUsersForAdmin()]);
   const roles = new Map(roleRows.map((role) => [role.id, role]));
+  const visiblePermission = (permission) => portalPermissionVisibleToActor(permission, actor);
   const users = adminUsers
     .filter((user) => user.employeeActive)
     .map((user) => {
-      const rolePermissions = roles.get(user.role)?.permissions || [];
-      const denied = new Set(user.deniedPermissions || []);
-      const effectivePermissions = [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])]
+      const {
+        personnelLearningDenialAuthority: _personnelLearningDenialAuthority,
+        ...publicUser
+      } = user;
+      const rolePermissions = (roles.get(user.role)?.permissions || [])
+        .filter(visiblePermission);
+      const grantedPermissions = (user.grantedPermissions || []).filter(visiblePermission);
+      const denied = new Set((user.deniedPermissions || []).filter(visiblePermission));
+      const effectivePermissions = [...new Set([...rolePermissions, ...grantedPermissions])]
         .filter((permission) => !denied.has(permission))
         .filter((permission) => permission !== "amu:local:manage"
           || managerAmuAccessEffective(
@@ -28015,8 +33571,9 @@ async function rightsManagementPayload(actor) {
             user.amuLocalAccessMode,
           ));
       return {
-        ...user,
+        ...publicUser,
         rolePermissions,
+        grantedPermissions,
         deniedPermissions: [...denied].sort(),
         effectivePermissions,
         personnelFieldAccess: personnelFieldEffectiveAccess({
@@ -28792,6 +34349,8 @@ function rightsAuditSummary(snapshot = {}) {
       snapshot.personnelLifecyclePermissionScopes || [],
       canonicalPermissionScopeValue,
     ),
+    personnelLearningCrossLocationDenialAuthority:
+      snapshot.personnelLearningCrossLocationDenialAuthority || null,
   });
 }
 
@@ -28935,6 +34494,8 @@ function rightsConcurrencySignature({ target, rolePermissions = [], snapshot = {
       snapshot.personnelLifecyclePermissionScopes || [],
       canonicalPermissionScopeValue,
     ),
+    personnelLearningCrossLocationDenialAuthority:
+      snapshot.personnelLearningCrossLocationDenialAuthority || null,
   }));
 }
 
@@ -28955,7 +34516,12 @@ function scopeMutationConcurrencySignature(target, scopes, permissionScopes) {
   }));
 }
 
-function portalUserMutationConcurrencySignature(user, lifecycleGrants = [], lifecycleScopes = []) {
+function portalUserMutationConcurrencySignature(
+  user,
+  lifecycleGrants = [],
+  lifecycleScopes = [],
+  protectedBirthdayPresentationRights = [],
+) {
   return sha256(JSON.stringify({
     user: user ? {
       employeeNumber: String(user.employee_number ?? user.employeeNumber ?? ""),
@@ -28967,6 +34533,9 @@ function portalUserMutationConcurrencySignature(user, lifecycleGrants = [], life
     } : null,
     lifecycleGrants: sortedUniqueValues(lifecycleGrants),
     lifecycleScopes: sortedUniqueValues(lifecycleScopes, canonicalPermissionScopeValue),
+    protectedBirthdayPresentationRights: sortedUniqueValues(
+      protectedBirthdayPresentationRights,
+    ),
   }));
 }
 
@@ -28982,6 +34551,21 @@ function setDifference(currentValues, desiredValues, key) {
     added: [...desired].filter(([scopeKey]) => !current.has(scopeKey)).map(([, value]) => value),
     removed: [...current].filter(([scopeKey]) => !desired.has(scopeKey)).map(([, value]) => value),
   });
+}
+
+function assertPersonnelLearningPortalScopeDeltaAllowed(
+  actor,
+  target,
+  currentScopes,
+  desiredScopes,
+) {
+  const delta = setDifference(currentScopes, desiredScopes, portalAccessScopeKey);
+  if ((!delta.added.length && !delta.removed.length)
+    || !roleHasPersonnelLearningDefaults(target?.role)) {
+    return delta;
+  }
+  assertPersonnelLearningRoleAccountAdministrationAllowed(actor, target);
+  return delta;
 }
 
 function personnelLifecycleScopeMatchesTarget(target, scope, portalScopes) {
@@ -29116,7 +34700,13 @@ async function rightsMutationSnapshot(
   amuLocalAccessMode = "inherit",
   repository = organizationPersonnelRepository,
 ) {
-  const [grantedPermissions, deniedPermissions, scopes, permissionScopeRows] = await Promise.all([
+  const [
+    grantedPermissions,
+    deniedPermissions,
+    scopes,
+    permissionScopeRows,
+    personnelLearningDenialAuthority,
+  ] = await Promise.all([
     portalPermissionGrantsForEmployee(employeeNumber, role, repository),
     portalPermissionDenialsForEmployee(employeeNumber, repository),
     repository.listPortalAccessScopes(employeeNumber).then((rows) => rows.map((scope) => ({
@@ -29124,6 +34714,10 @@ async function rightsMutationSnapshot(
       departmentId: Number(scope.department_id || 0) || null,
     }))),
     repository.listPortalPermissionScopeGrants(employeeNumber),
+    repository.getPersonnelLearningPermissionDenialAuthority(
+      employeeNumber,
+      PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    ),
   ]);
   const permissionState = effectivePortalPermissionState(
     employeeNumber,
@@ -29139,6 +34733,12 @@ async function rightsMutationSnapshot(
     effectivePermissions: permissionState.effectivePermissions,
     scopes,
     personnelLifecyclePermissionScopes: permissionScopeRows.map(publicPortalPermissionScopeGrant),
+    personnelLearningCrossLocationDenialAuthority: personnelLearningDenialAuthority ? {
+      authorityLevel: String(personnelLearningDenialAuthority.authority_level || ""),
+      scopeLocationId: String(personnelLearningDenialAuthority.scope_location_id || ""),
+      generationId: String(personnelLearningDenialAuthority.generation_id || ""),
+      revision: Number(personnelLearningDenialAuthority.revision || 0),
+    } : null,
   };
 }
 
@@ -29203,9 +34803,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     ...[...currentDenials].filter((permission) => !manageablePermissions.has(permission)),
     ...submittedDenials.filter((permission) => manageablePermissions.has(permission)),
   ]);
-  if (normalizedDenials.has("schedule:read") && rolePermissionSet.has("schedule:write")) {
-    normalizedDenials.add("schedule:write");
-  }
+  cascadeCrossLocationScheduleRolePermissionDenials(rolePermissionSet, normalizedDenials);
   const projectedPermissions = [...new Set([
     ...rolePermissions,
     ...[...currentGrants].filter((permission) => !manageablePermissions.has(permission)),
@@ -29225,6 +34823,14 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   const scopes = await normalizeRightsScopesForTarget(target,
     scopesInputProvided ? request.body.scopes : currentPortalScopes,
     projectedPermissions);
+  if (scopesInputProvided) {
+    assertPersonnelLearningPortalScopeDeltaAllowed(
+      actor,
+      target,
+      currentPortalScopes,
+      scopes,
+    );
+  }
   const finalDirectGrants = new Set([
     ...[...currentGrants].filter((permission) => !manageablePermissions.has(permission)),
     ...submitted.filter((permission) => manageablePermissions.has(permission)),
@@ -29286,6 +34892,8 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     scopes: currentPortalScopes,
     personnelLifecyclePermissionScopes: currentPermissionScopeRows
       .map(publicPortalPermissionScopeGrant),
+    personnelLearningCrossLocationDenialAuthority:
+      before.personnelLearningCrossLocationDenialAuthority,
   };
   assertRightsMutationSnapshotCurrent(
     rightsConcurrencySignature({ target, rolePermissions, snapshot: prePlanSnapshot }),
@@ -29296,6 +34904,22 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     rolePermissions,
     snapshot: before,
   });
+  const learningCrossPermission = PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN;
+  const learningCrossDeniedBefore = before.deniedPermissions.includes(
+    learningCrossPermission,
+  );
+  const learningCrossDeniedAfter = normalizedDenials.has(learningCrossPermission);
+  let plannedLearningDenialAuthority = before.personnelLearningCrossLocationDenialAuthority;
+  if (denialInputProvided && manageablePermissions.has(learningCrossPermission)) {
+    if (!learningCrossDeniedAfter) plannedLearningDenialAuthority = null;
+    else if (!learningCrossDeniedBefore) {
+      plannedLearningDenialAuthority = {
+        authorityLevel: PERSONNEL_LEARNING_DENIAL_AUTHORITIES.PL_PLUS,
+        scopeLocationId: "",
+        revision: 1,
+      };
+    }
+  }
   const plannedAfter = {
     grantedPermissions: [...finalDirectGrants].sort(),
     deniedPermissions: [...normalizedDenials].sort(),
@@ -29303,9 +34927,12 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     scopes,
     personnelLifecyclePermissionScopes: plannedPermissionScopes
       .map(publicPortalPermissionScopeGrant),
+    personnelLearningCrossLocationDenialAuthority: plannedLearningDenialAuthority,
   };
+  let rightsChanged = false;
+  let responseProjectionActor = actor;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const [liveTarget, liveRoleProjection, liveBefore] = await Promise.all([
+    const [liveTarget, liveRoleProjection, liveBefore, liveLearningActor] = await Promise.all([
       organization.getPortalUserAccountProjection(employeeNumber),
       organization.getPortalRoleProjection(target.role),
       rightsMutationSnapshot(
@@ -29315,7 +34942,19 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         target.amuLocalAccessMode,
         organization,
       ),
+      livePersonnelLearningRoleAdministrationActor(actor, organization),
     ]);
+    responseProjectionActor = liveLearningActor;
+    assertLivePortalRoutePermission(liveLearningActor, "rights:write", {
+      allowedRoles: RIGHTS_ADMIN_PORTAL_ROLES,
+    });
+    const liveTargetAccess = {
+      employeeNumber,
+      role: String(liveTarget?.role || ""),
+      roleLocked: Boolean(liveTarget?.role_locked),
+      configured: Boolean(liveTarget),
+      active: Boolean(liveTarget?.active),
+    };
     const liveRolePermissions = parsePortalPermissions(liveRoleProjection?.permissions)
       .filter((permission) => portalPermissionAllowedForRole(permission, target.role));
     assertRightsMutationSnapshotCurrent(
@@ -29326,6 +34965,44 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         snapshot: liveBefore,
       }),
     );
+    const grantDelta = setDifference(
+      before.grantedPermissions,
+      plannedAfter.grantedPermissions,
+      (permission) => permission,
+    );
+    const denialDelta = denialInputProvided
+      ? setDifference(
+        before.deniedPermissions,
+        plannedAfter.deniedPermissions,
+        (permission) => permission,
+      )
+      : { added: [], removed: [] };
+    const accessScopeDelta = scopesInputProvided
+      ? setDifference(before.scopes, scopes, portalAccessScopeKey)
+      : { added: [], removed: [] };
+    const permissionScopeDelta = setDifference(
+      before.personnelLifecyclePermissionScopes,
+      plannedPermissionScopes,
+      personnelLifecyclePermissionScopeKey,
+    );
+    rightsChanged = [grantDelta, denialDelta, accessScopeDelta, permissionScopeDelta]
+      .some((delta) => delta.added.length || delta.removed.length);
+    if (!rightsChanged) return;
+    if (!actorCanManagePermissionGrants(liveLearningActor, liveTargetAccess)) {
+      throw httpError(
+        403,
+        "Für diesen Zugang dürfen keine individuellen Rechte geändert werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    if (scopesInputProvided) {
+      assertPersonnelLearningPortalScopeDeltaAllowed(
+        liveLearningActor,
+        liveTarget,
+        liveBefore.scopes,
+        scopes,
+      );
+    }
     const liveScopeValidation = new Map();
     for (const scope of [
       ...(scopesInputProvided ? scopes : []),
@@ -29339,11 +35016,38 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         await validateActiveDepartmentExists(scope.departmentId, scope.locationId, organization);
       }
     }
-    const grantDelta = setDifference(
-      before.grantedPermissions,
-      plannedAfter.grantedPermissions,
-      (permission) => permission,
-    );
+    const learningPermissionDelta = [
+      ...grantDelta.added,
+      ...grantDelta.removed,
+      ...denialDelta.added,
+      ...denialDelta.removed,
+      ...permissionScopeDelta.added.map((scope) => scope.permission),
+      ...permissionScopeDelta.removed.map((scope) => scope.permission),
+    ].filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
+    const liveManageablePermissions = manageablePortalPermissionsForActor(liveLearningActor);
+    const actualPermissionDelta = [
+      ...grantDelta.added,
+      ...grantDelta.removed,
+      ...denialDelta.added,
+      ...denialDelta.removed,
+      ...permissionScopeDelta.added.map((scope) => scope.permission),
+      ...permissionScopeDelta.removed.map((scope) => scope.permission),
+    ];
+    if (actualPermissionDelta.some((permission) => !liveManageablePermissions.has(permission))) {
+      throw httpError(
+        403,
+        "Mindestens eine tatsächliche Rechteänderung liegt außerhalb der aktuell wirksamen Verwaltungsbefugnis.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    if (learningPermissionDelta.length
+      && !actorCanAdministerPersonnelLearningRoleAccount(liveLearningActor)) {
+      throw httpError(
+        403,
+        "Schulungs- und Wissensrechte dürfen nur mit aktuell wirksamer fachlicher Delegationsbefugnis geändert werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
     for (const permission of grantDelta.added) {
       await organization.insertPermissionGrant(employeeNumber, permission, actor.employeeNumber);
     }
@@ -29351,19 +35055,30 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
       await organization.deletePermissionGrant(employeeNumber, permission);
     }
     if (denialInputProvided) {
-      const denialDelta = setDifference(
-        before.deniedPermissions,
-        plannedAfter.deniedPermissions,
-        (permission) => permission,
-      );
       for (const permission of denialDelta.added) {
         await organization.insertPermissionDenial(employeeNumber, permission, actor.employeeNumber);
+        if (permission === PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN
+          && liveManageablePermissions.has(permission)) {
+          await organization.upsertPersonnelLearningPermissionDenialAuthority({
+            employeeNumber,
+            permission,
+            authorityLevel: PERSONNEL_LEARNING_DENIAL_AUTHORITIES.PL_PLUS,
+            scopeLocationId: "",
+            actor: actor.employeeNumber,
+          });
+        }
       }
       for (const permission of denialDelta.removed) {
+        if (permission === PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN
+          && liveManageablePermissions.has(permission)) {
+          await organization.deletePersonnelLearningPermissionDenialAuthority(
+            employeeNumber,
+            permission,
+          );
+        }
         await organization.deletePermissionDenial(employeeNumber, permission);
       }
     }
-    const accessScopeDelta = setDifference(before.scopes, scopes, portalAccessScopeKey);
     if (scopesInputProvided) {
       for (const scope of accessScopeDelta.added) {
         await organization.insertAccessScope({
@@ -29374,11 +35089,6 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         });
       }
     }
-    const permissionScopeDelta = setDifference(
-      before.personnelLifecyclePermissionScopes,
-      plannedPermissionScopes,
-      personnelLifecyclePermissionScopeKey,
-    );
     for (const permissionScope of permissionScopeDelta.removed) {
       await organization.deletePermissionScopeGrant({
         employeeNumber,
@@ -29399,6 +35109,13 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     for (const permissionScope of permissionScopeDelta.added) {
       await organization.insertPermissionScopeGrant(permissionScope);
     }
+    const actualAfter = await rightsMutationSnapshot(
+      employeeNumber,
+      target.role,
+      liveRolePermissions,
+      target.amuLocalAccessMode,
+      organization,
+    );
     await organization.revokePortalSessions(employeeNumber);
     await organization.revokeMobileSessions(employeeNumber, "rights_changed");
     await organization.insertAudit(
@@ -29406,8 +35123,45 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
       "portal.rights.update",
       "portal_user",
       employeeNumber,
-      compactRightsAuditDetail(before, plannedAfter),
+      compactRightsAuditDetail(before, actualAfter),
     );
+    const learningAuthorityChanged = JSON.stringify(
+      before.personnelLearningCrossLocationDenialAuthority || null,
+    ) !== JSON.stringify(
+      actualAfter.personnelLearningCrossLocationDenialAuthority || null,
+    );
+    const learningDenialChanged = before.deniedPermissions.includes(
+      PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    ) !== actualAfter.deniedPermissions.includes(
+      PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    );
+    if (denialInputProvided
+      && liveManageablePermissions.has(
+        PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      )
+      && (learningAuthorityChanged || learningDenialChanged)) {
+      await organization.insertAudit(
+        actor.employeeNumber,
+        "personnel.learning.cross-location-right.update",
+        "portal_user",
+        employeeNumber,
+        JSON.stringify({
+          schemaVersion: 1,
+          permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          enabledBefore: !before.deniedPermissions.includes(
+            PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          ),
+          enabledAfter: !actualAfter.deniedPermissions.includes(
+            PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          ),
+          authorityBefore: before.personnelLearningCrossLocationDenialAuthority
+            ?.authorityLevel || null,
+          authorityAfter: actualAfter.personnelLearningCrossLocationDenialAuthority
+            ?.authorityLevel || null,
+          reasonCode: "PL_PLUS_RIGHTS_MANAGEMENT",
+        }),
+      );
+    }
   }, { uniqueAsConcurrent: true });
   const after = await rightsMutationSnapshot(
     employeeNumber,
@@ -29417,8 +35171,1845 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   );
   const amuRoutingChanged = ["amu:local:manage", "sickness:read"].some((permission) =>
     before.effectivePermissions.includes(permission) !== after.effectivePermissions.includes(permission));
-  if (scopesInputProvided || amuRoutingChanged) await reconcileOpenAmuResponsibilities(actor.employeeNumber);
-  response.json(await rightsManagementPayload(actor));
+  if (rightsChanged && (scopesInputProvided || amuRoutingChanged)) {
+    await reconcileOpenAmuResponsibilities(actor.employeeNumber);
+  }
+  response.json(await rightsManagementPayload(responseProjectionActor));
+});
+
+app.get("/api/portal/v1/personnel-learning/modules", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_READ],
+  );
+  const actor = await personnelLearningCatalogActor(session);
+  assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
+  response.json(await personnelLearningCatalogPayload(actor));
+});
+
+app.post("/api/portal/v1/personnel-learning/modules", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE],
+    { csrf: true },
+  );
+  const input = normalizePersonnelLearningCatalogInput(request.body);
+  const moduleId = `learning-module:${crypto.randomUUID()}`;
+  const created = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
+    const occurredAt = new Date().toISOString();
+    const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
+    const module = personnelLearningModuleRow({
+      id: moduleId,
+      input,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const version = personnelLearningVersionRow({
+      moduleId,
+      versionNumber: 1,
+      input,
+      scopeSnapshot,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const createdEvent = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: 1,
+      eventType: "created",
+      eventPayload: {
+        schemaVersion: 1,
+        moduleReceiptSha256: module.receiptSha256,
+      },
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const versionEvent = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: 2,
+      eventType: "version_added",
+      moduleVersionNumber: 1,
+      eventPayload: {
+        schemaVersion: 1,
+        versionReceiptSha256: version.receiptSha256,
+        contentSha256: version.contentSha256,
+        scopeSnapshotSha256: version.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: createdEvent.receiptSha256,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertModule(module);
+    await repositories.personnelLearning.insertVersion(version);
+    await repositories.personnelLearning.insertEvent(createdEvent);
+    await repositories.personnelLearning.insertEvent(versionEvent);
+    const bundle = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.module.create",
+      "personnel_learning_module",
+      moduleId,
+      personnelLearningAuditDetail({ bundle, action: "create", version }),
+    );
+    return publicPersonnelLearningModule(bundle, actor);
+  });
+  response.status(201).json({ module: created });
+});
+
+app.post("/api/portal/v1/personnel-learning/modules/:moduleId/versions", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const moduleId = String(request.params.moduleId || "").trim();
+  const changed = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
+    const current = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    if (current.state.archived) {
+      throw httpError(
+        409,
+        "Ein archivierter Prozess muss vor einer Bearbeitung wiederhergestellt werden.",
+        "PERSONNEL_LEARNING_MODULE_ARCHIVED",
+      );
+    }
+    const currentScope = personnelLearningScopeFromVersion(current.state.latestVersion);
+    if (!personnelLearningScopeAccess(actor.access, currentScope, { manage: true })) {
+      throw httpError(
+        403,
+        "Der Prozess liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    const input = normalizePersonnelLearningCatalogInput(request.body, {
+      moduleCode: current.module.moduleCode,
+      moduleType: current.module.moduleType,
+    });
+    const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
+    const occurredAt = new Date().toISOString();
+    const version = personnelLearningVersionRow({
+      moduleId,
+      versionNumber: current.state.latestVersionNumber + 1,
+      input,
+      scopeSnapshot,
+      previousReceiptSha256: current.state.latestVersion.receiptSha256,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const latest = current.state.latestVersion;
+    if (String(latest.title) === version.title
+      && String(latest.contentSha256) === version.contentSha256
+      && String(latest.scopeType) === version.scopeType
+      && String(latest.scopeLocationId || "") === String(version.scopeLocationId || "")
+      && Number(latest.scopeDepartmentId || 0) === Number(version.scopeDepartmentId || 0)
+      && String(latest.scopeSnapshotSha256) === version.scopeSnapshotSha256) {
+      throw httpError(
+        409,
+        "Die Prozessvorlage enthält gegenüber der aktuellen Version keine Änderung.",
+        "PERSONNEL_LEARNING_VERSION_NO_CHANGE",
+      );
+    }
+    const event = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType: "version_added",
+      moduleVersionNumber: version.versionNumber,
+      eventPayload: {
+        schemaVersion: 1,
+        versionReceiptSha256: version.receiptSha256,
+        contentSha256: version.contentSha256,
+        scopeSnapshotSha256: version.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertVersion(version);
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.module.version.add",
+      "personnel_learning_module",
+      moduleId,
+      personnelLearningAuditDetail({ bundle, action: "version_add", version }),
+    );
+    return publicPersonnelLearningModule(bundle, actor);
+  });
+  response.json({ module: changed });
+});
+
+app.post("/api/portal/v1/personnel-learning/modules/:moduleId/publish", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const requestedVersionNumber = Number(request.body?.versionNumber);
+  if (!Number.isSafeInteger(requestedVersionNumber) || requestedVersionNumber < 1) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Prozessversion zur Veröffentlichung auswählen.",
+      "PERSONNEL_LEARNING_VERSION_INVALID",
+    );
+  }
+  const moduleId = String(request.params.moduleId || "").trim();
+  const published = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canPublishCatalog");
+    const current = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    if (current.state.archived) {
+      throw httpError(
+        409,
+        "Ein archivierter Prozess kann nicht veröffentlicht werden.",
+        "PERSONNEL_LEARNING_MODULE_ARCHIVED",
+      );
+    }
+    const latest = current.state.latestVersion;
+    const latestScope = personnelLearningScopeFromVersion(latest);
+    if (!personnelLearningScopeAccess(actor.access, latestScope, { manage: true })) {
+      throw httpError(
+        403,
+        "Der Prozess liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    if (requestedVersionNumber !== current.state.latestVersionNumber) {
+      throw httpError(
+        409,
+        "Nur die aktuelle Prozessversion kann veröffentlicht werden.",
+        "PERSONNEL_LEARNING_VERSION_NOT_LATEST",
+      );
+    }
+    if (current.state.publishedVersionNumber === requestedVersionNumber) {
+      return publicPersonnelLearningModule(current, actor);
+    }
+    const occurredAt = new Date().toISOString();
+    const event = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType: "published",
+      moduleVersionNumber: requestedVersionNumber,
+      eventPayload: {
+        schemaVersion: 1,
+        versionReceiptSha256: latest.receiptSha256,
+        contentSha256: latest.contentSha256,
+        scopeSnapshotSha256: latest.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.module.publish",
+      "personnel_learning_module",
+      moduleId,
+      personnelLearningAuditDetail({ bundle, action: "publish", version: latest }),
+    );
+    return publicPersonnelLearningModule(bundle, actor);
+  });
+  response.json({ module: published });
+});
+
+async function changePersonnelLearningModuleLifecycle(request, response, eventType) {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const moduleId = String(request.params.moduleId || "").trim();
+  const archivedAfter = eventType === "archived";
+  const result = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canPublishCatalog");
+    const current = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    const latest = current.state.latestVersion;
+    if (!personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(latest),
+      { manage: true },
+    )) {
+      throw httpError(
+        403,
+        "Der Prozess liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    if (current.state.archived === archivedAfter) {
+      return publicPersonnelLearningModule(current, actor);
+    }
+    const occurredAt = new Date().toISOString();
+    const event = personnelLearningEventRow({
+      moduleId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType,
+      eventPayload: {
+        schemaVersion: 1,
+        latestVersionNumber: current.state.latestVersionNumber,
+        publishedVersionNumber: current.state.publishedVersionNumber,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = await personnelLearningModuleBundle(
+      moduleId,
+      repositories.personnelLearning,
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      eventType === "archived"
+        ? "personnel.learning.module.archive"
+        : "personnel.learning.module.restore",
+      "personnel_learning_module",
+      moduleId,
+      personnelLearningAuditDetail({
+        bundle,
+        action: eventType === "archived" ? "archive" : "restore",
+        version: latest,
+      }),
+    );
+    return publicPersonnelLearningModule(bundle, actor);
+  });
+  response.json({ module: result });
+}
+
+app.post("/api/portal/v1/personnel-learning/modules/:moduleId/archive", async (request, response) => {
+  await changePersonnelLearningModuleLifecycle(request, response, "archived");
+});
+
+app.post("/api/portal/v1/personnel-learning/modules/:moduleId/restore", async (request, response) => {
+  await changePersonnelLearningModuleLifecycle(request, response, "restored");
+});
+
+app.get("/api/portal/v1/personnel-learning/skills", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_READ],
+  );
+  const actor = await personnelLearningCatalogActor(session);
+  assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
+  response.json(await personnelLearningSkillCatalogPayload(actor));
+});
+
+app.post("/api/portal/v1/personnel-learning/skills", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE],
+    { csrf: true },
+  );
+  const input = normalizePersonnelLearningSkillCatalogInput(request.body);
+  const skillId = `learning-skill:${crypto.randomUUID()}`;
+  const created = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
+    const occurredAt = new Date().toISOString();
+    const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
+    const module = personnelLearningModuleRow({
+      id: skillId,
+      input,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const version = personnelLearningVersionRow({
+      moduleId: skillId,
+      versionNumber: 1,
+      input,
+      scopeSnapshot,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const createdEvent = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: 1,
+      eventType: "created",
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        moduleReceiptSha256: module.receiptSha256,
+      },
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const versionEvent = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: 2,
+      eventType: "version_added",
+      moduleVersionNumber: 1,
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        versionReceiptSha256: version.receiptSha256,
+        contentSha256: version.contentSha256,
+        scopeSnapshotSha256: version.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: createdEvent.receiptSha256,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertModule(module);
+    await repositories.personnelLearning.insertVersion(version);
+    await repositories.personnelLearning.insertEvent(createdEvent);
+    await repositories.personnelLearning.insertEvent(versionEvent);
+    const bundle = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.skill.create",
+      "personnel_learning_skill",
+      skillId,
+      personnelLearningAuditDetail({ bundle, action: "skill_create", version }),
+    );
+    return publicPersonnelLearningSkill(bundle, actor);
+  });
+  response.status(201).json({ skill: created });
+});
+
+app.post("/api/portal/v1/personnel-learning/skills/:skillId/versions", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_MANAGE],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const skillId = String(request.params.skillId || "").trim();
+  const changed = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
+    const current = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    if (current.state.archived) {
+      throw httpError(
+        409,
+        "Eine archivierte Fähigkeit muss vor einer Bearbeitung wiederhergestellt werden.",
+        "PERSONNEL_LEARNING_SKILL_ARCHIVED",
+      );
+    }
+    const currentScope = personnelLearningScopeFromVersion(current.state.latestVersion);
+    if (!personnelLearningScopeAccess(actor.access, currentScope, { manage: true })) {
+      throw httpError(
+        403,
+        "Die Fähigkeit liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    const input = normalizePersonnelLearningSkillCatalogInput(request.body, {
+      skillCode: current.module.moduleCode,
+    });
+    const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
+    const occurredAt = new Date().toISOString();
+    const version = personnelLearningVersionRow({
+      moduleId: skillId,
+      versionNumber: current.state.latestVersionNumber + 1,
+      input,
+      scopeSnapshot,
+      previousReceiptSha256: current.state.latestVersion.receiptSha256,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    const latest = current.state.latestVersion;
+    if (String(latest.title) === version.title
+      && String(latest.contentSha256) === version.contentSha256
+      && String(latest.scopeType) === version.scopeType
+      && String(latest.scopeLocationId || "") === String(version.scopeLocationId || "")
+      && Number(latest.scopeDepartmentId || 0) === Number(version.scopeDepartmentId || 0)
+      && String(latest.scopeSnapshotSha256) === version.scopeSnapshotSha256) {
+      throw httpError(
+        409,
+        "Die Fähigkeit enthält gegenüber der aktuellen Version keine Änderung.",
+        "PERSONNEL_LEARNING_SKILL_VERSION_NO_CHANGE",
+      );
+    }
+    const event = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType: "version_added",
+      moduleVersionNumber: version.versionNumber,
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        versionReceiptSha256: version.receiptSha256,
+        contentSha256: version.contentSha256,
+        scopeSnapshotSha256: version.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertVersion(version);
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.skill.version.add",
+      "personnel_learning_skill",
+      skillId,
+      personnelLearningAuditDetail({ bundle, action: "skill_version_add", version }),
+    );
+    return publicPersonnelLearningSkill(bundle, actor);
+  });
+  response.json({ skill: changed });
+});
+
+app.post("/api/portal/v1/personnel-learning/skills/:skillId/publish", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const requestedVersionNumber = Number(request.body?.versionNumber);
+  if (!Number.isSafeInteger(requestedVersionNumber) || requestedVersionNumber < 1) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Fähigkeitsversion zur Veröffentlichung auswählen.",
+      "PERSONNEL_LEARNING_SKILL_VERSION_INVALID",
+    );
+  }
+  const skillId = String(request.params.skillId || "").trim();
+  const published = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canPublishCatalog");
+    const current = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    if (current.state.archived) {
+      throw httpError(
+        409,
+        "Eine archivierte Fähigkeit kann nicht veröffentlicht werden.",
+        "PERSONNEL_LEARNING_SKILL_ARCHIVED",
+      );
+    }
+    const latest = current.state.latestVersion;
+    if (!personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(latest),
+      { manage: true },
+    )) {
+      throw httpError(
+        403,
+        "Die Fähigkeit liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    if (requestedVersionNumber !== current.state.latestVersionNumber) {
+      throw httpError(
+        409,
+        "Nur die aktuelle Fähigkeitsversion kann veröffentlicht werden.",
+        "PERSONNEL_LEARNING_SKILL_VERSION_NOT_LATEST",
+      );
+    }
+    if (current.state.publishedVersionNumber === requestedVersionNumber) {
+      return publicPersonnelLearningSkill(current, actor);
+    }
+    const occurredAt = new Date().toISOString();
+    const event = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType: "published",
+      moduleVersionNumber: requestedVersionNumber,
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        versionReceiptSha256: latest.receiptSha256,
+        contentSha256: latest.contentSha256,
+        scopeSnapshotSha256: latest.scopeSnapshotSha256,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      "personnel.learning.skill.publish",
+      "personnel_learning_skill",
+      skillId,
+      personnelLearningAuditDetail({ bundle, action: "skill_publish", version: latest }),
+    );
+    return publicPersonnelLearningSkill(bundle, actor);
+  });
+  response.json({ skill: published });
+});
+
+async function changePersonnelLearningSkillLifecycle(request, response, eventType) {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.CATALOG_PUBLISH],
+    { csrf: true },
+  );
+  const expectedReceipt = personnelLearningExpectedEventReceipt(
+    request.body?.expectedEventReceipt,
+  );
+  const skillId = String(request.params.skillId || "").trim();
+  const archivedAfter = eventType === "archived";
+  const result = await personnelLearningCatalogSerializableTransaction(async (repositories) => {
+    const actor = await personnelLearningCatalogActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    assertPersonnelLearningCatalogCapability(actor, "canPublishCatalog");
+    const current = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    assertPersonnelLearningEventRevision(current.state, expectedReceipt);
+    const latest = current.state.latestVersion;
+    if (!personnelLearningScopeAccess(
+      actor.access,
+      personnelLearningScopeFromVersion(latest),
+      { manage: true },
+    )) {
+      throw httpError(
+        403,
+        "Die Fähigkeit liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+        "PERSONNEL_LEARNING_CATALOG_SCOPE_DENIED",
+      );
+    }
+    if (current.state.archived === archivedAfter) {
+      return publicPersonnelLearningSkill(current, actor);
+    }
+    const occurredAt = new Date().toISOString();
+    const event = personnelLearningEventRow({
+      moduleId: skillId,
+      sequenceNumber: Number(current.state.currentEvent.sequenceNumber) + 1,
+      eventType,
+      eventPayload: {
+        schemaVersion: 1,
+        catalogEntity: "skill",
+        latestVersionNumber: current.state.latestVersionNumber,
+        publishedVersionNumber: current.state.publishedVersionNumber,
+      },
+      previousReceiptSha256: current.state.currentEventReceipt,
+      actorId: actor.actorId,
+      occurredAt,
+    });
+    await repositories.personnelLearning.insertEvent(event);
+    const bundle = assertPersonnelLearningCatalogEntity(
+      await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+      "skill",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.actorId,
+      eventType === "archived"
+        ? "personnel.learning.skill.archive"
+        : "personnel.learning.skill.restore",
+      "personnel_learning_skill",
+      skillId,
+      personnelLearningAuditDetail({
+        bundle,
+        action: eventType === "archived" ? "skill_archive" : "skill_restore",
+        version: latest,
+      }),
+    );
+    return publicPersonnelLearningSkill(bundle, actor);
+  });
+  response.json({ skill: result });
+}
+
+app.post("/api/portal/v1/personnel-learning/skills/:skillId/archive", async (request, response) => {
+  await changePersonnelLearningSkillLifecycle(request, response, "archived");
+});
+
+app.post("/api/portal/v1/personnel-learning/skills/:skillId/restore", async (request, response) => {
+  await changePersonnelLearningSkillLifecycle(request, response, "restored");
+});
+
+app.get("/api/portal/v1/personnel-learning/competencies", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
+  );
+  const actor = await personnelLearningCatalogActor(session);
+  response.json(await personnelLearningCompetencyPayload(actor));
+});
+
+app.put(
+  "/api/portal/v1/personnel-learning/competencies/:employeeNumber/:skillId",
+  async (request, response) => {
+    const session = requirePortalAnyPermissionOrLocal(
+      request,
+      [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
+      { csrf: true },
+    );
+    const employeeNumber = String(request.params.employeeNumber || "").trim();
+    const skillId = String(request.params.skillId || "").trim();
+    if (!employeeNumber || employeeNumber.length > 80 || employeeNumber.includes("\0")
+      || !skillId || skillId.length > 180 || skillId.includes("\0")) {
+      throw httpError(
+        400,
+        "Mitarbeiter oder Fähigkeit sind ungültig.",
+        "PERSONNEL_LEARNING_COMPETENCY_TARGET_INVALID",
+      );
+    }
+    const mutation = await personnelLearningCatalogSerializableTransaction(
+      async (repositories) => {
+        const actor = await personnelLearningCatalogActor(
+          session,
+          repositories.organizationPersonnel,
+        );
+        assertPersonnelLearningCompetencyCapability(actor);
+        const employee = (await repositories.organizationPersonnel.listEmployees())
+          .find((entry) => String(entry.personnel_number) === employeeNumber);
+        if (!employee?.active) {
+          throw httpError(
+            404,
+            "Der aktive Mitarbeiter wurde nicht gefunden.",
+            "PERSONNEL_LEARNING_COMPETENCY_EMPLOYEE_NOT_FOUND",
+          );
+        }
+        if (!personnelLearningCompetencyEmployeeAllowed(actor, employee)) {
+          throw httpError(
+            403,
+            "Der Mitarbeiter liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+            "PERSONNEL_LEARNING_COMPETENCY_SCOPE_DENIED",
+          );
+        }
+        const bundle = assertPersonnelLearningCatalogEntity(
+          await personnelLearningModuleBundle(skillId, repositories.personnelLearning),
+          "skill",
+        );
+        const competency = await repositories.personnelLearning.getCompetency(
+          employeeNumber,
+          skillId,
+        );
+        const current = competency
+          ? await repositories.personnelLearning.getLatestCompetencyRevision(competency.id)
+          : null;
+        if (competency && !current) {
+          throw httpError(
+            503,
+            "Die revisionsgebundene Kompetenzhistorie ist unvollständig.",
+            "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+          );
+        }
+        const input = normalizePersonnelLearningCompetencyInput(request.body, { current });
+        if (!competency && !input.active) {
+          throw httpError(
+            409,
+            "Eine noch nicht vorhandene Kompetenz kann nicht entzogen werden.",
+            "PERSONNEL_LEARNING_COMPETENCY_NOT_ASSIGNED",
+          );
+        }
+        if (competency) {
+          const expectedReceipt = personnelLearningCompetencyExpectedReceipt(
+            request.body?.expectedRevisionReceipt,
+          );
+          if (String(current.receiptSha256) !== expectedReceipt) {
+            throw httpError(
+              409,
+              "Das Kompetenzprofil wurde zwischenzeitlich geändert. Bitte neu laden.",
+              "PERSONNEL_LEARNING_COMPETENCY_CONCURRENT_CHANGE",
+            );
+          }
+        }
+        let skillVersion;
+        if (input.active) {
+          if (bundle.state.archived || !bundle.state.publishedVersion) {
+            throw httpError(
+              409,
+              "Nur eine aktuell veröffentlichte, nicht archivierte Fähigkeit kann zugeordnet werden.",
+              "PERSONNEL_LEARNING_SKILL_NOT_ASSIGNABLE",
+            );
+          }
+          skillVersion = bundle.state.publishedVersion;
+        } else {
+          skillVersion = bundle.state.versions.find((version) => (
+            Number(version.versionNumber) === Number(current.skillVersionNumber)
+          ));
+        }
+        if (!skillVersion) {
+          throw httpError(
+            503,
+            "Die gebundene Fähigkeitsversion ist nicht mehr verfügbar.",
+            "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+          );
+        }
+        if (!personnelLearningScopeAccess(
+          actor.access,
+          personnelLearningScopeFromVersion(skillVersion),
+        )) {
+          throw httpError(
+            403,
+            "Die Fähigkeit liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+            "PERSONNEL_LEARNING_COMPETENCY_SKILL_SCOPE_DENIED",
+          );
+        }
+        levelDefinitionForSkillVersion(skillVersion, input.competencyLevel);
+        const skillVersionNumber = Number(skillVersion.versionNumber);
+        const noChange = Boolean(current)
+          && Boolean(current.active) === input.active
+          && Number(current.competencyLevel) === input.competencyLevel
+          && Boolean(current.trainerAuthorized) === input.trainerAuthorized
+          && Number(current.skillVersionNumber) === skillVersionNumber;
+        const existingRevisions = competency
+          ? (await repositories.personnelLearning.listCompetencyRevisions())
+            .filter((revision) => revision.competencyId === competency.id)
+          : [];
+        if (noChange) {
+          return {
+            created: false,
+            competency: publicPersonnelLearningCompetency({
+              competency,
+              state: personnelLearningCompetencyStateOrUnavailable(
+                competency,
+                existingRevisions,
+              ),
+              employee,
+              bundle,
+              actor,
+            }),
+          };
+        }
+        const occurredAt = new Date().toISOString();
+        const identity = competency || personnelLearningCompetencyIdentityRow({
+          id: `learning-competency:${crypto.randomUUID()}`,
+          employeeNumber,
+          skillModuleId: skillId,
+          actorId: actor.actorId,
+          occurredAt,
+        });
+        const changeType = !competency
+          ? "assigned"
+          : !input.active
+            ? "withdrawn"
+            : !current.active
+              ? "restored"
+              : "updated";
+        const revision = personnelLearningCompetencyRevisionRow({
+          competencyId: identity.id,
+          revisionNumber: Number(current?.revisionNumber || 0) + 1,
+          skillModuleId: skillId,
+          skillVersionNumber,
+          input,
+          changeType,
+          previousReceiptSha256: String(current?.receiptSha256 || ""),
+          actorId: actor.actorId,
+          occurredAt,
+        });
+        if (!competency) await repositories.personnelLearning.insertCompetency(identity);
+        await repositories.personnelLearning.insertCompetencyRevision(revision);
+        const auditActions = {
+          assigned: "personnel.learning.competency.assign",
+          updated: "personnel.learning.competency.update",
+          withdrawn: "personnel.learning.competency.withdraw",
+          restored: "personnel.learning.competency.restore",
+        };
+        await repositories.organizationPersonnel.insertAudit(
+          actor.actorId,
+          auditActions[changeType],
+          "personnel_learning_employee_competency",
+          identity.id,
+          personnelLearningCompetencyAuditDetail({
+            revision: { ...revision, employeeNumber },
+            action: changeType,
+          }),
+        );
+        return {
+          created: !competency,
+          competency: publicPersonnelLearningCompetency({
+            competency: identity,
+            state: personnelLearningCompetencyStateOrUnavailable(
+              identity,
+              [...existingRevisions, revision],
+            ),
+            employee,
+            bundle,
+            actor,
+          }),
+        };
+      },
+    );
+    response.status(mutation.created ? 201 : 200).json({
+      competency: mutation.competency,
+    });
+  },
+);
+
+app.get("/api/portal/v1/personnel-learning/assignments", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
+  );
+  const actor = await personnelLearningCatalogActor(session);
+  response.json(await personnelLearningAssignmentPayload(actor));
+});
+
+async function mutatePersonnelLearningAssignment(request, response, { create = false } = {}) {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
+    { csrf: true },
+  );
+  const requestedAssignmentId = String(request.params.assignmentId || "").trim();
+  const requestedProcessId = String(request.body?.processId || "").trim();
+  const requestedLearnerEmployeeNumber = String(
+    request.body?.learnerEmployeeNumber || "",
+  ).trim();
+  if ((!create && (!requestedAssignmentId || requestedAssignmentId.length > 180
+      || requestedAssignmentId.includes("\0")))
+    || (create && (!requestedProcessId || requestedProcessId.length > 180
+      || requestedProcessId.includes("\0")
+      || !requestedLearnerEmployeeNumber
+      || requestedLearnerEmployeeNumber.length > 80
+      || requestedLearnerEmployeeNumber.includes("\0")))) {
+    throw httpError(
+      400,
+      "Die Schulungszuweisung enthält kein gültiges Ziel.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_TARGET_INVALID",
+    );
+  }
+  const mutation = await personnelLearningCatalogSerializableTransaction(
+    async (repositories) => {
+      const actor = await personnelLearningCatalogActor(
+        session,
+        repositories.organizationPersonnel,
+      );
+      assertPersonnelLearningCompetencyCapability(actor);
+      const context = await personnelLearningAssignmentProjectionContext(actor, {
+        learningRepository: repositories.personnelLearning,
+        organizationRepository: repositories.organizationPersonnel,
+      });
+      let assignment = create
+        ? await repositories.personnelLearning.getAssignmentForLearner(
+            requestedProcessId,
+            requestedLearnerEmployeeNumber,
+          )
+        : await repositories.personnelLearning.getAssignment(requestedAssignmentId);
+      if (create && assignment) {
+        throw httpError(
+          409,
+          "Für diesen Mitarbeiter besteht bereits eine Schulungszuweisung zu diesem Prozess. Bitte den vorhandenen Eintrag bearbeiten oder wiederherstellen.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_ALREADY_EXISTS",
+        );
+      }
+      if (!create && !assignment) {
+        throw httpError(
+          404,
+          "Die Schulungszuweisung wurde nicht gefunden.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_NOT_FOUND",
+        );
+      }
+      const processId = create ? requestedProcessId : String(assignment.processModuleId);
+      const learnerEmployeeNumber = create
+        ? requestedLearnerEmployeeNumber : String(assignment.learnerEmployeeNumber);
+      const learner = context.employeeByNumber.get(learnerEmployeeNumber);
+      if (!learner?.active) {
+        throw httpError(
+          404,
+          "Der aktive Lernende wurde nicht gefunden.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_LEARNER_NOT_FOUND",
+        );
+      }
+      if (!personnelLearningCompetencyEmployeeAllowed(actor, learner)) {
+        throw httpError(
+          403,
+          "Der Lernende liegt außerhalb des aktuell freigegebenen Verantwortungsbereichs.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_SCOPE_DENIED",
+        );
+      }
+      const processBundle = assertPersonnelLearningCatalogEntity(
+        context.bundles.get(processId),
+        "process",
+      );
+      const current = assignment
+        ? await repositories.personnelLearning.getLatestAssignmentRevision(assignment.id)
+        : null;
+      if (assignment && !current) {
+        throw httpError(
+          503,
+          "Die Schulungszuweisung besitzt keine vollständige Revisionshistorie.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+        );
+      }
+      if (assignment) {
+        const expectedReceipt = personnelLearningAssignmentExpectedReceipt(
+          request.body?.expectedRevisionReceipt,
+        );
+        if (String(current.receiptSha256 || "") !== expectedReceipt) {
+          throw httpError(
+            409,
+            "Die Schulungszuweisung wurde zwischenzeitlich geändert. Bitte neu laden.",
+            "PERSONNEL_LEARNING_ASSIGNMENT_CONCURRENT_CHANGE",
+          );
+        }
+      }
+      const currentTrainerCompetencyIds = current
+        ? current.trainerBindings.map((binding) => binding.competencyId) : [];
+      const input = normalizePersonnelLearningAssignmentInput(request.body, {
+        current: { trainerCompetencyIds: currentTrainerCompetencyIds },
+      });
+      let processVersion;
+      if (assignment) {
+        processVersion = processBundle.state.versions.find((version) => (
+          Number(version.versionNumber) === Number(current.processVersionNumber)
+        ));
+      } else {
+        processVersion = processBundle.state.publishedVersion;
+      }
+      if (!processVersion) {
+        throw httpError(
+          503,
+          "Die gebundene Prozessversion ist nicht verfügbar.",
+          "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+        );
+      }
+      if (input.active) {
+        if (processBundle.state.archived || (!assignment && !processBundle.state.publishedVersion)) {
+          throw httpError(
+            409,
+            "Nur ein veröffentlichter, nicht archivierter Prozess kann zugewiesen werden.",
+            "PERSONNEL_LEARNING_ASSIGNMENT_PROCESS_NOT_ASSIGNABLE",
+          );
+        }
+        if (!personnelLearningScopeAccess(
+          actor.access,
+          personnelLearningScopeFromVersion(processVersion),
+        ) || !personnelLearningProcessAppliesToEmployee(
+          processVersion,
+          learner,
+          actor,
+        )) {
+          throw httpError(
+            403,
+            "Der Prozess gilt nicht für den freigegebenen Organisationsbereich des Lernenden.",
+            "PERSONNEL_LEARNING_ASSIGNMENT_PROCESS_SCOPE_DENIED",
+          );
+        }
+      }
+      const trainerBindings = input.active
+        ? resolvedPersonnelLearningTrainerBindings({
+            actor,
+            learnerEmployeeNumber,
+            trainerCompetencyIds: input.trainerCompetencyIds,
+            context,
+          })
+        : normalizePersonnelLearningTrainerBindings(current.trainerBindings);
+      const noChange = Boolean(current)
+        && Boolean(current.active) === Boolean(input.active)
+        && stablePersonnelLearningJson(trainerBindings)
+          === stablePersonnelLearningJson(
+            normalizePersonnelLearningTrainerBindings(current.trainerBindings),
+          );
+      const existingRevisions = assignment
+        ? (await repositories.personnelLearning.listAssignmentRevisions())
+          .filter((revision) => revision.assignmentId === assignment.id)
+        : [];
+      if (noChange) {
+        const state = personnelLearningAssignmentStateOrUnavailable(
+          assignment,
+          existingRevisions,
+        );
+        return {
+          created: false,
+          assignment: publicPersonnelLearningAssignment(assignment, state, context),
+        };
+      }
+      const occurredAt = new Date().toISOString();
+      const identity = assignment || personnelLearningAssignmentIdentityRow({
+        id: `learning-assignment:${crypto.randomUUID()}`,
+        processModuleId: processId,
+        learnerEmployeeNumber,
+        actorId: actor.actorId,
+        occurredAt,
+      });
+      const changeType = !assignment
+        ? "assigned"
+        : !input.active
+          ? "cancelled"
+          : !current.active
+            ? "restored"
+            : "trainers_updated";
+      const revision = personnelLearningAssignmentRevisionRow({
+        assignmentId: identity.id,
+        revisionNumber: Number(current?.revisionNumber || 0) + 1,
+        processModuleId: processId,
+        processVersionNumber: Number(processVersion.versionNumber),
+        active: input.active,
+        trainerBindings,
+        changeType,
+        previousReceiptSha256: String(current?.receiptSha256 || ""),
+        actorId: actor.actorId,
+        occurredAt,
+      });
+      if (!assignment) await repositories.personnelLearning.insertAssignment(identity);
+      await repositories.personnelLearning.insertAssignmentRevision(revision);
+      const auditActions = {
+        assigned: "personnel.learning.assignment.assign",
+        trainers_updated: "personnel.learning.assignment.trainers.update",
+        cancelled: "personnel.learning.assignment.cancel",
+        restored: "personnel.learning.assignment.restore",
+      };
+      await repositories.organizationPersonnel.insertAudit(
+        actor.actorId,
+        auditActions[changeType],
+        "personnel_learning_assignment",
+        identity.id,
+        personnelLearningAssignmentAuditDetail({
+          assignment: identity,
+          revision,
+          action: changeType,
+        }),
+      );
+      const refreshedContext = await personnelLearningAssignmentProjectionContext(actor, {
+        learningRepository: repositories.personnelLearning,
+        organizationRepository: repositories.organizationPersonnel,
+      });
+      const refreshedAssignment = refreshedContext.assignments.find((entry) => (
+        entry.id === identity.id
+      ));
+      const state = personnelLearningAssignmentStateOrUnavailable(
+        refreshedAssignment,
+        refreshedContext.assignmentRevisionsById.get(identity.id) || [],
+      );
+      return {
+        created: !assignment,
+        assignment: publicPersonnelLearningAssignment(
+          refreshedAssignment,
+          state,
+          refreshedContext,
+        ),
+      };
+    },
+  );
+  response.status(mutation.created ? 201 : 200).json({
+    assignment: mutation.assignment,
+  });
+}
+
+app.post("/api/portal/v1/personnel-learning/assignments", async (request, response) => {
+  await mutatePersonnelLearningAssignment(request, response, { create: true });
+});
+
+app.put(
+  "/api/portal/v1/personnel-learning/assignments/:assignmentId",
+  async (request, response) => {
+    await mutatePersonnelLearningAssignment(request, response);
+  },
+);
+
+function personnelLearningProgressAssignmentBundleFromContext(
+  actor,
+  assignment,
+  context,
+  { requireRead = true } = {},
+) {
+  const assignmentState = personnelLearningAssignmentStateOrUnavailable(
+    assignment,
+    context.assignmentRevisionsById.get(assignment.id) || [],
+  );
+  const learner = context.employeeByNumber.get(String(assignment.learnerEmployeeNumber));
+  const processBundle = context.bundles.get(String(assignment.processModuleId));
+  const processVersion = processBundle?.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(assignmentState.current.processVersionNumber)
+  ));
+  if (!learner || !processVersion || processBundle?.catalogEntity !== "process") {
+    throw httpError(
+      503,
+      "Die gebundene Prozessversion der Schulungszuweisung fehlt.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_HISTORY_INVALID",
+    );
+  }
+  const progressState = personnelLearningProgressStateOrUnavailable(
+    context.progressRevisionsByAssignmentId.get(String(assignment.id)) || [],
+    processVersion.content?.steps || [],
+  );
+  const access = personnelLearningProgressAccess({
+    actor,
+    assignmentState,
+    progressState,
+    learner,
+    processVersion,
+    context,
+  });
+  if (requireRead && !access.canRead) {
+    throw httpError(
+      403,
+      "Der Schulungsfortschritt liegt außerhalb der aktuell wirksamen Zuständigkeit.",
+      "PERSONNEL_LEARNING_PROGRESS_PERMISSION_DENIED",
+    );
+  }
+  return Object.freeze({
+    actor,
+    context,
+    assignment,
+    assignmentState,
+    learner,
+    processBundle,
+    processVersion,
+    progressState,
+    access,
+  });
+}
+
+async function personnelLearningProgressAssignmentBundle(
+  actor,
+  assignmentId,
+  {
+    learningRepository = personnelLearningRepository,
+    organizationRepository = organizationPersonnelRepository,
+  } = {},
+) {
+  const context = await personnelLearningAssignmentProjectionContext(actor, {
+    learningRepository,
+    organizationRepository,
+    requireCapability: false,
+  });
+  const assignment = context.assignments.find((entry) => (
+    String(entry.id) === String(assignmentId)
+  ));
+  if (!assignment) {
+    throw httpError(
+      404,
+      "Die Schulungszuweisung wurde nicht gefunden.",
+      "PERSONNEL_LEARNING_ASSIGNMENT_NOT_FOUND",
+    );
+  }
+  return personnelLearningProgressAssignmentBundleFromContext(
+    actor,
+    assignment,
+    context,
+  );
+}
+
+function publicPersonnelLearningProgressAssignment(bundle) {
+  const canReadAudit = bundle.actor.access?.canReadAudit === true
+    && bundle.access.leadership;
+  const trainerBindings = bundle.assignmentState.trainerBindings.map((binding) => {
+    const employee = bundle.context.employeeByNumber.get(binding.trainerEmployeeNumber);
+    const competencyState = bundle.context.competencyStateById.get(binding.competencyId);
+    const skillBundle = bundle.context.bundles.get(binding.skillModuleId);
+    const skillVersion = skillBundle?.state.versions.find((version) => (
+      Number(version.versionNumber) === Number(binding.skillVersionNumber)
+    ));
+    return {
+      trainerEmployeeNumber: String(binding.trainerEmployeeNumber),
+      trainerName: String(employee?.full_name || binding.trainerEmployeeNumber),
+      skillTitle: String(skillVersion?.title || "Gebundene Trainerfähigkeit"),
+      competencyLevel: Number(binding.competencyLevel),
+      currentEligible: Boolean(employee?.active)
+        && Boolean(competencyState?.active)
+        && Boolean(competencyState?.trainerAuthorized)
+        && String(competencyState?.currentReceipt || "")
+          === String(binding.competencyRevisionReceipt || ""),
+    };
+  });
+  return {
+    id: String(bundle.assignment.id),
+    active: Boolean(bundle.assignmentState.active),
+    currentAssignmentRevisionReceipt: String(bundle.assignmentState.currentReceipt || ""),
+    process: {
+      id: String(bundle.assignment.processModuleId),
+      title: String(bundle.processVersion.title || ""),
+      summary: String(bundle.processVersion.content?.summary || ""),
+      objective: String(bundle.processVersion.content?.objective || ""),
+      versionNumber: Number(bundle.assignmentState.current.processVersionNumber),
+    },
+    learner: personnelLearningCompetencyEmployeeProjection(bundle.learner),
+    trainers: trainerBindings,
+    participantRole: bundle.access.branchAccount
+      ? "branch_account" : bundle.access.leadership
+        ? "leadership" : bundle.access.trainer ? "trainer" : "learner",
+    progress: publicPersonnelLearningProgress({
+      progressState: bundle.progressState,
+      processVersion: bundle.processVersion,
+      access: bundle.access,
+      canReadAudit,
+    }),
+  };
+}
+
+function personnelLearningDashboardEmployeeAllowed(actor, employee) {
+  if (!employee?.active) return false;
+  if (actor.access?.branchDashboard === true) {
+    return String(employee.home_location_id || "")
+      === String(actor.access.branchDashboardLocationId || "");
+  }
+  if (String(employee.personnel_number || "") === String(actor.actorId || "")) return true;
+  return personnelLearningProgressLeadershipAllowed(actor, employee);
+}
+
+function publicPersonnelLearningDashboardCompetency({
+  competency,
+  competencyState,
+  skillBundle,
+}) {
+  const current = competencyState.current;
+  const skillVersion = skillBundle.state.versions.find((version) => (
+    Number(version.versionNumber) === Number(current.skillVersionNumber)
+  ));
+  if (!skillVersion) {
+    throw httpError(
+      503,
+      "Die gebundene Fähigkeitsversion des Kompetenzprofils fehlt.",
+      "PERSONNEL_LEARNING_COMPETENCY_HISTORY_INVALID",
+    );
+  }
+  const levelDefinitions = Array.isArray(skillVersion.content?.levelDefinitions)
+    ? skillVersion.content.levelDefinitions.map((definition) => ({
+        level: Number(definition.level),
+        label: String(definition.label || ""),
+        description: String(definition.description || ""),
+      }))
+    : [];
+  return {
+    competencyId: String(competency.id),
+    skillId: String(competency.skillModuleId),
+    skillCode: String(skillBundle.module.moduleCode || ""),
+    skillTitle: String(skillVersion.title || ""),
+    skillCategory: String(skillVersion.content?.category || "Allgemein"),
+    skillSummary: String(skillVersion.content?.summary || ""),
+    skillVersionNumber: Number(current.skillVersionNumber),
+    level: Number(current.competencyLevel),
+    levelDefinition: levelDefinitions.find((definition) => (
+      Number(definition.level) === Number(current.competencyLevel)
+    )) || null,
+    levelDefinitions,
+    trainerAuthorized: Boolean(current.trainerAuthorized),
+    updatedAt: String(current.changedAt || ""),
+  };
+}
+
+function personnelLearningDashboardViewer(actor) {
+  const organizationScope = actor.access?.organizationScope || null;
+  const location = organizationScope?.locationId
+    ? actor.locations.find((entry) => String(entry.id) === organizationScope.locationId)
+    : null;
+  const department = organizationScope?.departmentId
+    ? actor.departments.find((entry) => (
+        Number(entry.id) === Number(organizationScope.departmentId)
+      ))
+    : null;
+  const kind = actor.access?.branchDashboard === true
+    ? "branch_account" : actor.access?.localSystem === true
+      ? "local" : actor.access?.canWriteAssignments === true ? "leadership" : "personal";
+  return {
+    kind,
+    actorId: String(actor.actorId || ""),
+    label: kind === "branch_account"
+      ? String(actor.session?.fullName || location?.name || "Filialkonto")
+      : kind === "local" ? "Lokale Verwaltung" : String(actor.session?.fullName || ""),
+    scope: organizationScope ? {
+      locationId: String(organizationScope.locationId || ""),
+      locationName: String(location?.name || organizationScope.locationId || ""),
+      departmentId: Number(organizationScope.departmentId || 0) || null,
+      departmentName: String(department?.name || ""),
+    } : null,
+  };
+}
+
+async function personnelLearningDashboardPayload(
+  actor,
+  {
+    learningRepository = personnelLearningRepository,
+    organizationRepository = organizationPersonnelRepository,
+  } = {},
+) {
+  if (!actor?.actorId
+    || ((actor.session?.sessionKind === "organization" || actor.session?.isEmployee === false)
+      && actor.access?.branchDashboard !== true)) {
+    throw httpError(
+      403,
+      "Für dieses Konto ist kein Schulungsdashboard freigegeben.",
+      "PERSONNEL_LEARNING_DASHBOARD_PERMISSION_DENIED",
+    );
+  }
+  const context = await personnelLearningAssignmentProjectionContext(actor, {
+    learningRepository,
+    organizationRepository,
+    requireCapability: false,
+  });
+  const assignments = [];
+  for (const assignment of context.assignments) {
+    const bundle = personnelLearningProgressAssignmentBundleFromContext(
+      actor,
+      assignment,
+      context,
+      { requireRead: false },
+    );
+    if (!bundle.access.canRead) continue;
+    assignments.push(publicPersonnelLearningProgressAssignment(bundle));
+  }
+  const profileByEmployee = new Map();
+  for (const competency of context.competencies) {
+    const competencyState = context.competencyStateById.get(String(competency.id));
+    const employee = context.employeeByNumber.get(String(competency.employeeNumber));
+    const skillBundle = context.bundles.get(String(competency.skillModuleId));
+    if (!competencyState?.active
+      || !employee
+      || !skillBundle
+      || skillBundle.catalogEntity !== "skill"
+      || !personnelLearningDashboardEmployeeAllowed(actor, employee)) continue;
+    const employeeNumber = String(employee.personnel_number || "");
+    const profile = profileByEmployee.get(employeeNumber) || {
+      employee: personnelLearningCompetencyEmployeeProjection(employee),
+      competencies: [],
+    };
+    profile.competencies.push(publicPersonnelLearningDashboardCompetency({
+      competency,
+      competencyState,
+      skillBundle,
+    }));
+    profileByEmployee.set(employeeNumber, profile);
+  }
+  const profiles = [...profileByEmployee.values()].map((profile) => ({
+    ...profile,
+    competencies: profile.competencies.sort((left, right) => (
+      left.skillCategory.localeCompare(right.skillCategory, "de-AT", { sensitivity: "base" })
+      || left.skillTitle.localeCompare(right.skillTitle, "de-AT", { sensitivity: "base" })
+    )),
+  })).sort((left, right) => left.employee.fullName.localeCompare(
+    right.employee.fullName,
+    "de-AT",
+    { sensitivity: "base" },
+  ));
+  assignments.sort((left, right) => (
+    Number(right.active) - Number(left.active)
+    || left.learner.fullName.localeCompare(right.learner.fullName, "de-AT", {
+      sensitivity: "base",
+    })
+    || left.process.title.localeCompare(right.process.title, "de-AT", {
+      sensitivity: "base",
+    })
+  ));
+  const activeAssignments = assignments.filter((assignment) => assignment.active);
+  const summary = {
+    activeAssignments: activeAssignments.length,
+    notStarted: activeAssignments.filter((assignment) => (
+      assignment.progress.status === "not_started"
+    )).length,
+    inProgress: activeAssignments.filter((assignment) => (
+      assignment.progress.status === "in_progress"
+    )).length,
+    completed: assignments.filter((assignment) => assignment.progress.finalized).length,
+    attentionRequired: activeAssignments.filter((assignment) => (
+      assignment.trainers.some((trainer) => trainer.currentEligible !== true)
+      || ["follow_up_required", "not_passed"].includes(assignment.progress.result)
+    )).length,
+    competencyProfiles: profiles.length,
+    competencies: profiles.reduce((total, profile) => total + profile.competencies.length, 0),
+    trainerSkills: profiles.reduce((total, profile) => total
+      + profile.competencies.filter((competency) => competency.trainerAuthorized).length, 0),
+  };
+  return {
+    generatedAt: new Date().toISOString(),
+    available: actor.access?.branchDashboard === true
+      || actor.access?.canWriteAssignments === true
+      || assignments.length > 0
+      || profiles.length > 0,
+    viewer: personnelLearningDashboardViewer(actor),
+    capabilities: {
+      canViewTeam: actor.access?.branchDashboard === true
+        || actor.access?.canWriteAssignments === true,
+      canManageAssignments: actor.access?.canWriteAssignments === true,
+      branchAccount: actor.access?.branchDashboard === true,
+    },
+    summary,
+    assignments,
+    profiles,
+  };
+}
+
+app.get(
+  "/api/portal/v1/personnel-learning/dashboard",
+  async (request, response) => {
+    const session = requirePortalAnyPermissionOrLocal(request, []);
+    const actor = await personnelLearningCatalogActor(session);
+    response.json(await personnelLearningDashboardPayload(actor));
+  },
+);
+
+app.get(
+  "/api/portal/v1/personnel-learning/assignments/:assignmentId/progress",
+  async (request, response) => {
+    const session = requirePortalAnyPermissionOrLocal(request, []);
+    const assignmentId = String(request.params.assignmentId || "").trim();
+    if (!assignmentId || assignmentId.length > 180 || assignmentId.includes("\0")) {
+      throw httpError(
+        400,
+        "Die Schulungszuweisung enthält kein gültiges Ziel.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_TARGET_INVALID",
+      );
+    }
+    const actor = await personnelLearningCatalogActor(session);
+    const bundle = await personnelLearningProgressAssignmentBundle(actor, assignmentId);
+    response.json({ assignment: publicPersonnelLearningProgressAssignment(bundle) });
+  },
+);
+
+app.put(
+  "/api/portal/v1/personnel-learning/assignments/:assignmentId/progress",
+  async (request, response) => {
+    const session = requirePortalAnyPermissionOrLocal(request, [], { csrf: true });
+    const assignmentId = String(request.params.assignmentId || "").trim();
+    if (!assignmentId || assignmentId.length > 180 || assignmentId.includes("\0")) {
+      throw httpError(
+        400,
+        "Die Schulungszuweisung enthält kein gültiges Ziel.",
+        "PERSONNEL_LEARNING_ASSIGNMENT_TARGET_INVALID",
+      );
+    }
+    const expectedAssignmentReceipt = personnelLearningAssignmentExpectedReceipt(
+      request.body?.expectedAssignmentRevisionReceipt,
+    );
+    const mutation = await personnelLearningCatalogSerializableTransaction(
+      async (repositories) => {
+        const actor = await personnelLearningCatalogActor(
+          session,
+          repositories.organizationPersonnel,
+        );
+        const bundle = await personnelLearningProgressAssignmentBundle(actor, assignmentId, {
+          learningRepository: repositories.personnelLearning,
+          organizationRepository: repositories.organizationPersonnel,
+        });
+        if (bundle.assignmentState.currentReceipt !== expectedAssignmentReceipt) {
+          throw httpError(
+            409,
+            "Die Schulungszuweisung wurde zwischenzeitlich geändert. Bitte neu laden.",
+            "PERSONNEL_LEARNING_ASSIGNMENT_CONCURRENT_CHANGE",
+          );
+        }
+        personnelLearningProgressExpectedReceipt(
+          request.body?.expectedProgressRevisionReceipt,
+          bundle.progressState.current ? bundle.progressState : null,
+        );
+        const input = normalizePersonnelLearningProgressInput(request.body, {
+          processSteps: bundle.processVersion.content?.steps || [],
+          current: bundle.progressState,
+          allowMissingCorrectionReason: true,
+        });
+        if (input.changeType === "corrected") {
+          if (!bundle.access.canCorrect) {
+            throw httpError(
+              403,
+              "Für diese begründungspflichtige Korrektur fehlt die aktuell wirksame Zuständigkeit.",
+              "PERSONNEL_LEARNING_PROGRESS_CORRECTION_DENIED",
+            );
+          }
+        } else if (!bundle.access.canRecord) {
+          throw httpError(
+            403,
+            "Für diese Fortschrittserfassung fehlt die aktuell wirksame Zuständigkeit.",
+            "PERSONNEL_LEARNING_PROGRESS_PERMISSION_DENIED",
+          );
+        }
+        if (input.finalized && input.changeType !== "corrected"
+          && !bundle.access.canFinalize) {
+          throw httpError(
+            403,
+            "Der Abschluss darf nur durch die vorgesehene Trainerperson oder eine berechtigte Leitung bewertet werden.",
+            "PERSONNEL_LEARNING_PROGRESS_FINALIZATION_DENIED",
+          );
+        }
+        const current = bundle.progressState.current;
+        const noChange = current
+          ? stablePersonnelLearningJson(current.stepStates)
+              === stablePersonnelLearningJson(input.stepStates)
+            && Boolean(current.finalized) === Boolean(input.finalized)
+            && String(current.result || "") === String(input.result || "")
+            && String(current.assessmentNote || "") === String(input.assessmentNote || "")
+          : input.completedStepCount === 0 && !input.finalized && !input.assessmentNote;
+        if (noChange) {
+          return publicPersonnelLearningProgressAssignment(bundle);
+        }
+        if (input.changeType === "corrected" && !input.correctionReason) {
+          throw httpError(
+            400,
+            "Bitte die spätere Korrektur nachvollziehbar begründen.",
+            "PERSONNEL_LEARNING_PROGRESS_CORRECTION_REASON_REQUIRED",
+          );
+        }
+        const occurredAt = new Date().toISOString();
+        const revision = personnelLearningProgressRevisionRow({
+          assignment: bundle.assignment,
+          assignmentState: bundle.assignmentState,
+          progressState: bundle.progressState,
+          processVersion: bundle.processVersion,
+          input,
+          actorId: actor.actorId,
+          actorKind: bundle.access.actorKind,
+          occurredAt,
+        });
+        await repositories.personnelLearning.insertProgressRevision(revision);
+        const auditActions = {
+          progress_recorded: "personnel.learning.progress.record",
+          completed: "personnel.learning.progress.complete",
+          corrected: "personnel.learning.progress.correct",
+        };
+        await repositories.organizationPersonnel.insertAudit(
+          actor.actorId,
+          auditActions[revision.changeType],
+          "personnel_learning_assignment_progress",
+          bundle.assignment.id,
+          personnelLearningProgressAuditDetail({
+            assignment: bundle.assignment,
+            revision,
+          }),
+        );
+        const refreshed = await personnelLearningProgressAssignmentBundle(
+          actor,
+          assignmentId,
+          {
+            learningRepository: repositories.personnelLearning,
+            organizationRepository: repositories.organizationPersonnel,
+          },
+        );
+        return publicPersonnelLearningProgressAssignment(refreshed);
+      },
+    );
+    response.json({ assignment: mutation });
+  },
+);
+
+app.get("/api/portal/v1/personnel-learning/cross-location-delegates", async (request, response) => {
+  const session = requirePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  const [users, scopeContext] = await Promise.all([
+    portalUsersForAdmin(),
+    personnelLearningScopeContext(),
+  ]);
+  const actorUser = users.find((user) => user.employeeNumber === session.employeeNumber);
+  const actor = personnelLearningPrincipalForUser(actorUser, scopeContext);
+  const access = createPersonnelLearningAccessSnapshot(actor || {});
+  if (!access.canDelegateCrossLocation && !access.canAdministerCrossLocationRight) {
+    throw personnelLearningDelegationError({
+      code: access.role === "department_manager"
+        ? PERSONNEL_LEARNING_DELEGATION_CODES.DEPARTMENT_MANAGER_CANNOT_DELEGATE
+        : PERSONNEL_LEARNING_DELEGATION_CODES.ACTOR_PERMISSION_DENIED,
+    });
+  }
+  const principals = new Map(users.map((user) => [
+    user.employeeNumber,
+    personnelLearningPrincipalForUser(user, scopeContext),
+  ]));
+  const delegates = projectPersonnelLearningCrossLocationDelegates(
+    actor,
+    [...principals.values()],
+  ).map((delegate) => ({
+    ...delegate,
+    revision: personnelLearningDenialRevision(
+      users.find((user) => user.employeeNumber === delegate.employeeNumber),
+    ),
+  }));
+  response.json({
+    permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    delegates,
+  });
+});
+
+app.put("/api/portal/v1/personnel-learning/cross-location-delegates/:employeeNumber", async (request, response) => {
+  const session = requirePortalAnyPermission(request, [
+    PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    PERSONNEL_LEARNING_PERMISSIONS.DELEGATE,
+  ]);
+  if (session.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const enabled = request.body?.enabled;
+  if (!employeeNumber || typeof enabled !== "boolean") {
+    throw httpError(400, "Bitte eine gültige Abteilungsleitung und einen Rechtewert übermitteln.", "PERSONNEL_LEARNING_DELEGATION_INVALID");
+  }
+  const submittedRevision = request.body?.expectedRevision;
+  if (submittedRevision !== undefined
+    && !["string", "number"].includes(typeof submittedRevision)) {
+    throw httpError(400, "Bitte den aktuellen Revisionsstand übermitteln.", "PERSONNEL_LEARNING_DELEGATION_REVISION_INVALID");
+  }
+  const expectedRevision = String(submittedRevision ?? "").trim();
+  const [users, scopeContext] = await Promise.all([
+    portalUsersForAdmin(),
+    personnelLearningScopeContext(),
+  ]);
+  const actorUser = users.find((user) => user.employeeNumber === session.employeeNumber);
+  const targetUser = users.find((user) => user.employeeNumber === employeeNumber);
+  const actor = personnelLearningPrincipalForUser(actorUser, scopeContext);
+  const target = personnelLearningPrincipalForUser(targetUser, scopeContext);
+  const decision = evaluatePersonnelLearningCrossLocationDelegation({
+    actor,
+    target,
+    enabled,
+  });
+  if (!decision.allowed) throw personnelLearningDelegationError(decision);
+  if (personnelLearningDenialRevision(targetUser) !== expectedRevision) {
+    throw httpError(409, "Das Recht wurde zwischenzeitlich geändert. Bitte den aktuellen Stand neu laden.", "PERSONNEL_LEARNING_DELEGATION_CONCURRENT_CHANGE");
+  }
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+      const [
+        liveScopeContext,
+        liveActorUser,
+        liveTargetUser,
+      ] = await Promise.all([
+        personnelLearningScopeContext(organization),
+        personnelLearningPortalUser(session.employeeNumber, organization),
+        personnelLearningPortalUser(employeeNumber, organization),
+      ]);
+      const liveActor = personnelLearningPrincipalForUser(
+        liveActorUser,
+        liveScopeContext,
+      );
+      const liveTarget = personnelLearningPrincipalForUser(
+        liveTargetUser,
+        liveScopeContext,
+      );
+      const liveDecision = evaluatePersonnelLearningCrossLocationDelegation({
+        actor: liveActor,
+        target: liveTarget,
+        enabled,
+      });
+      if (!liveDecision.allowed) throw personnelLearningDelegationError(liveDecision);
+      if (personnelLearningDenialRevision(liveTargetUser) !== expectedRevision) {
+        throw httpError(409, "Das Recht wurde zwischenzeitlich geändert. Bitte den aktuellen Stand neu laden.", "PERSONNEL_LEARNING_DELEGATION_CONCURRENT_CHANGE");
+      }
+      if (liveDecision.operation === "noop") return;
+      const deniedBefore = liveTargetUser.deniedPermissions.includes(
+        PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      );
+      if (liveDecision.operation === "deny") {
+        if (!deniedBefore) {
+          await organization.insertPermissionDenial(
+            employeeNumber,
+            PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+            liveActor.employeeNumber,
+          );
+        }
+        await organization.upsertPersonnelLearningPermissionDenialAuthority({
+          employeeNumber,
+          permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          authorityLevel: liveDecision.authorityLevel,
+          scopeLocationId: liveDecision.scopeLocationId,
+          actor: liveActor.employeeNumber,
+        });
+      } else if (liveDecision.operation === "restore_default") {
+        await organization.deletePersonnelLearningPermissionDenialAuthority(
+          employeeNumber,
+          PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+        );
+        await organization.deletePermissionDenial(
+          employeeNumber,
+          PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+        );
+      }
+      await organization.revokePortalSessions(employeeNumber);
+      await organization.revokeMobileSessions(employeeNumber, "rights_changed");
+      await organization.insertAudit(
+        liveActor.employeeNumber,
+        "personnel.learning.cross-location-right.update",
+        "portal_user",
+        employeeNumber,
+        JSON.stringify({
+          schemaVersion: 1,
+          permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+          enabledBefore: !deniedBefore,
+          enabledAfter: enabled,
+          authorityBefore: liveTargetUser.personnelLearningDenialAuthority
+            ?.authority_level || null,
+          authorityAfter: enabled
+            ? null
+            : liveDecision.authorityLevel,
+          scopeLocationId: liveDecision.scopeLocationId,
+          reasonCode: liveDecision.authorityLevel
+            === PERSONNEL_LEARNING_DENIAL_AUTHORITIES.PL_PLUS
+            ? "PL_PLUS_RIGHTS_MANAGEMENT"
+            : "MANAGER_LOCAL_DELEGATION",
+        }),
+      );
+  }, { uniqueAsConcurrent: true });
+  const [freshScopeContext, freshActorUser, freshTargetUser] = await Promise.all([
+    personnelLearningScopeContext(),
+    personnelLearningPortalUser(session.employeeNumber),
+    personnelLearningPortalUser(employeeNumber),
+  ]);
+  const projected = projectPersonnelLearningCrossLocationDelegates(
+    personnelLearningPrincipalForUser(freshActorUser, freshScopeContext),
+    [personnelLearningPrincipalForUser(freshTargetUser, freshScopeContext)],
+  )[0];
+  response.json({
+    permission: PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+    delegate: projected ? {
+      ...projected,
+      revision: personnelLearningDenialRevision(freshTargetUser),
+    } : null,
+  });
 });
 
 function normalizedOrganizationAccountLoginName(value) {
@@ -29739,6 +37330,416 @@ app.put("/api/portal/v1/branch-accounts/:accountId/password", async (request, re
   });
 });
 
+function staffAssignmentHttpError(error) {
+  if (!(error instanceof EmployeeLocationLendingError)) return error;
+  return httpError(error.status || 400, error.message, error.code || "STAFF_ASSIGNMENT_INVALID");
+}
+
+function requireStaffAssignmentAccess(request, { csrf = false } = {}) {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [STAFF_ASSIGNMENTS_MANAGE_PERMISSION],
+    { csrf },
+  );
+  if (!isLocalSystemSession(session)
+    && (session.sessionKind === "organization" || session.isEmployee === false)) {
+    throw httpError(
+      403,
+      "Temporäre Filialeinsätze können nur mit einem persönlichen Mitarbeiterzugang verwaltet werden.",
+      "STAFF_ASSIGNMENT_PERSONAL_ACCOUNT_REQUIRED",
+    );
+  }
+  return session;
+}
+
+function staffAssignmentEmployeeInScope(session, employee) {
+  if (sessionHasGlobalScope(session)) return true;
+  const homeLocationId = String(employee?.home_location_id ?? employee?.homeLocationId ?? "");
+  const departmentId = Number(
+    employee?.preferred_department_id ?? employee?.preferredDepartmentId ?? 0,
+  ) || null;
+  return (session.scopes || []).some((scope) => (
+    String(scope.locationId || "") === homeLocationId
+    && (!Number(scope.departmentId || 0) || Number(scope.departmentId) === departmentId)
+  ));
+}
+
+function assertStaffAssignmentEmployeeScope(session, employeeNumber) {
+  const employee = sqliteEmployeeLocationLendingOperations.employee(employeeNumber);
+  if (!employee || !employee.active) {
+    throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.", "STAFF_ASSIGNMENT_EMPLOYEE_NOT_FOUND");
+  }
+  if (!staffAssignmentEmployeeInScope(session, employee)) {
+    throw httpError(
+      403,
+      "Das Teammitglied gehört nicht zum eigenen Verantwortungsbereich.",
+      "STAFF_ASSIGNMENT_SCOPE_DENIED",
+    );
+  }
+  return employee;
+}
+
+function normalizeStaffAssignmentInput(input = {}, existing = null) {
+  const employeeNumber = String(
+    own(input, "employeeNumber") ? input.employeeNumber : existing?.employeeNumber || "",
+  ).trim();
+  const destinationLocationId = normalizeLocationId(
+    own(input, "destinationLocationId")
+      ? input.destinationLocationId
+      : existing?.destinationLocationId || "",
+  );
+  const dateFrom = String(own(input, "dateFrom") ? input.dateFrom : existing?.dateFrom || "").trim();
+  const dateTo = String(own(input, "dateTo") ? input.dateTo : existing?.dateTo || "").trim();
+  const allDayInput = own(input, "allDay") ? input.allDay : existing?.allDay ?? true;
+  if (typeof allDayInput !== "boolean") {
+    throw httpError(400, "Die Angabe zum ganztägigen Einsatz ist ungültig.", "STAFF_ASSIGNMENT_ALL_DAY_INVALID");
+  }
+  const allDay = allDayInput;
+  const startTime = allDay
+    ? null
+    : String(own(input, "startTime") ? input.startTime : existing?.startTime || "").trim();
+  const endTime = allDay
+    ? null
+    : String(own(input, "endTime") ? input.endTime : existing?.endTime || "").trim();
+  const rawDepartmentId = own(input, "destinationDepartmentId")
+    ? input.destinationDepartmentId
+    : existing?.destinationDepartmentId ?? null;
+  const destinationDepartmentId = rawDepartmentId === null || rawDepartmentId === ""
+    ? null
+    : Number(rawDepartmentId);
+  const note = stripEmoji(String(own(input, "note") ? input.note : existing?.note || "").trim()).slice(0, 500);
+
+  if (!employeeNumber) {
+    throw httpError(400, "Bitte ein Teammitglied auswählen.", "STAFF_ASSIGNMENT_EMPLOYEE_REQUIRED");
+  }
+  if (!destinationLocationId) {
+    throw httpError(400, "Bitte eine Zielfiliale auswählen.", "STAFF_ASSIGNMENT_DESTINATION_REQUIRED");
+  }
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
+    throw httpError(400, "Bitte einen gültigen Einsatzzeitraum eingeben.", "STAFF_ASSIGNMENT_DATE_INVALID");
+  }
+  if (daysBetweenInclusive(dateFrom, dateTo) > 366) {
+    throw httpError(
+      400,
+      "Ein temporärer Filialeinsatz darf höchstens 366 Kalendertage umfassen.",
+      "STAFF_ASSIGNMENT_DATE_RANGE_TOO_LONG",
+    );
+  }
+  if (!allDay && (dateFrom !== dateTo || !isTime(startTime) || !isTime(endTime)
+    || timeToMinutes(endTime) <= timeToMinutes(startTime))) {
+    throw httpError(
+      400,
+      "Ein stundenweiser Filialeinsatz benötigt am selben Tag eine gültige Start- und Endzeit.",
+      "STAFF_ASSIGNMENT_TIME_INVALID",
+    );
+  }
+  if (!allDay && (timeToMinutes(startTime) % 15 !== 0 || timeToMinutes(endTime) % 15 !== 0)) {
+    throw httpError(
+      400,
+      "Start- und Endzeit müssen im 15-Minuten-Raster liegen.",
+      "STAFF_ASSIGNMENT_TIME_STEP_INVALID",
+    );
+  }
+  if (destinationDepartmentId !== null
+    && (!Number.isSafeInteger(destinationDepartmentId) || destinationDepartmentId <= 0)) {
+    throw httpError(400, "Die Zielabteilung ist ungültig.", "STAFF_ASSIGNMENT_DEPARTMENT_INVALID");
+  }
+  return {
+    employeeNumber,
+    destinationLocationId,
+    destinationDepartmentId,
+    dateFrom,
+    dateTo,
+    allDay,
+    startTime,
+    endTime,
+    note,
+  };
+}
+
+function staffAssignmentRevision(input) {
+  const revision = Number(input);
+  if (!Number.isSafeInteger(revision) || revision < 1) {
+    throw httpError(400, "Bitte den aktuellen Bearbeitungsstand neu laden.", "STAFF_ASSIGNMENT_REVISION_REQUIRED");
+  }
+  return revision;
+}
+
+function staffAssignmentCanDelegate(session) {
+  return isLocalSystemSession(session)
+    || ["manager", "hr", "admin", "developer"].includes(session?.role);
+}
+
+function staffAssignmentDelegateInScope(session, target) {
+  if (isLocalSystemSession(session) || ["hr", "admin", "developer"].includes(session?.role)) return true;
+  return session?.role === "manager" && staffAssignmentEmployeeInScope(session, {
+    home_location_id: target.homeLocationId,
+    preferred_department_id: target.preferredDepartmentId,
+  });
+}
+
+function staffAssignmentVisibleToSession(session, assignment, employee) {
+  if (sessionHasGlobalScope(session)) return true;
+  const homeLocationId = String(assignment?.homeLocationId || "");
+  const destinationLocationId = String(assignment?.destinationLocationId || "");
+  const employeeDepartmentId = Number(
+    employee?.preferred_department_id ?? employee?.preferredDepartmentId ?? 0,
+  ) || null;
+  const destinationDepartmentId = Number(assignment?.destinationDepartmentId || 0) || null;
+  return (session.scopes || []).some((scope) => {
+    const scopeLocationId = String(scope.locationId || "");
+    const scopeDepartmentId = Number(scope.departmentId || 0) || null;
+    const outgoingVisible = scopeLocationId === homeLocationId
+      && (!scopeDepartmentId || scopeDepartmentId === employeeDepartmentId);
+    const incomingVisible = scopeLocationId === destinationLocationId
+      && (!scopeDepartmentId || scopeDepartmentId === destinationDepartmentId);
+    return outgoingVisible || incomingVisible;
+  });
+}
+
+async function staffAssignmentDelegates(session, locationId = "") {
+  if (!staffAssignmentCanDelegate(session)) return [];
+  const normalizedLocationId = String(locationId || "").trim();
+  const users = await portalUsersForAdmin();
+  return users
+    .filter((user) => user.configured && user.active && user.role === "department_manager")
+    .filter((user) => staffAssignmentDelegateInScope(session, user))
+    .filter((user) => !normalizedLocationId || String(user.homeLocationId) === normalizedLocationId)
+    .map((user) => ({
+      employeeNumber: user.employeeNumber,
+      fullName: user.fullName,
+      homeLocationId: user.homeLocationId,
+      preferredDepartmentId: user.preferredDepartmentId,
+      enabled: effectivePortalPermissionState(
+        user.employeeNumber,
+        user.role,
+        user.rolePermissions,
+        user.grantedPermissions,
+        user.deniedPermissions,
+        user.amuLocalAccessMode,
+      ).effectivePermissions.includes(STAFF_ASSIGNMENTS_MANAGE_PERMISSION),
+      denied: user.deniedPermissions.includes(STAFF_ASSIGNMENTS_MANAGE_PERMISSION),
+    }));
+}
+
+app.get("/api/portal/v1/staff-assignments/delegates", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request);
+  const locationId = String(request.query?.locationId || "").trim();
+  if (locationId) await validateActiveLocationExists(locationId);
+  if (locationId && !sessionHasGlobalScope(session)) {
+    assertSessionContextScope(session, { locationId });
+  }
+  response.json({ delegates: await staffAssignmentDelegates(session, locationId) });
+});
+
+app.put("/api/portal/v1/staff-assignments/delegates/:employeeNumber", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request, { csrf: true });
+  if (!staffAssignmentCanDelegate(session)) {
+    throw httpError(403, "Dieses Recht darf nur durch Filialleitung oder PL+ vergeben werden.", "STAFF_ASSIGNMENT_DELEGATION_DENIED");
+  }
+  if (typeof request.body?.enabled !== "boolean") {
+    throw httpError(400, "Bitte den gewünschten Berechtigungsstatus angeben.", "STAFF_ASSIGNMENT_DELEGATION_INVALID");
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const target = (await portalUsersForAdmin()).find((user) => user.employeeNumber === employeeNumber);
+  if (!target?.configured || !target.active || target.role !== "department_manager") {
+    throw httpError(404, "Die aktive Abteilungsleitung wurde nicht gefunden.", "STAFF_ASSIGNMENT_DELEGATE_NOT_FOUND");
+  }
+  if (!staffAssignmentDelegateInScope(session, target)) {
+    throw httpError(403, "Die Abteilungsleitung gehört nicht zum eigenen Verantwortungsbereich.", "STAFF_ASSIGNMENT_SCOPE_DENIED");
+  }
+  const requestedLocationId = String(request.body?.locationId || "").trim();
+  if (requestedLocationId) await validateActiveLocationExists(requestedLocationId);
+  if (requestedLocationId && String(target.homeLocationId) !== requestedLocationId) {
+    throw httpError(
+      403,
+      "Die Abteilungsleitung gehört nicht zur ausgewählten Filiale.",
+      "STAFF_ASSIGNMENT_SCOPE_DENIED",
+    );
+  }
+  const enabled = request.body.enabled;
+  const permissionDenied = target.deniedPermissions.includes(STAFF_ASSIGNMENTS_MANAGE_PERMISSION);
+  if (enabled && permissionDenied) {
+    throw httpError(
+      409,
+      "Das Recht wurde durch eine übergeordnete Rechteverwaltung ausdrücklich gesperrt und kann hier nicht aktiviert werden.",
+      "STAFF_ASSIGNMENT_PERMISSION_DENIED",
+    );
+  }
+  const alreadyGranted = target.grantedPermissions.includes(STAFF_ASSIGNMENTS_MANAGE_PERMISSION);
+  const actorId = portalActorId(session);
+  await organizationPersonnelRepository.transaction(async (organization) => {
+    if (enabled && !alreadyGranted) {
+      await organization.insertPermissionGrant(
+        employeeNumber,
+        STAFF_ASSIGNMENTS_MANAGE_PERMISSION,
+        actorId,
+      );
+    } else if (!enabled && alreadyGranted) {
+      await organization.deletePermissionGrant(employeeNumber, STAFF_ASSIGNMENTS_MANAGE_PERMISSION);
+    }
+    await organization.revokePortalSessions(employeeNumber);
+    await organization.revokeMobileSessions(employeeNumber, "staff_assignment_permission_changed");
+    await organization.insertAudit(
+      actorId,
+      enabled ? "staff-assignment.permission.grant" : "staff-assignment.permission.revoke",
+      "portal_user",
+      employeeNumber,
+      JSON.stringify({ permission: STAFF_ASSIGNMENTS_MANAGE_PERMISSION, enabled }),
+    );
+  }, { isolation: "serializable" });
+  const delegate = (await staffAssignmentDelegates(session, requestedLocationId))
+    .find((entry) => entry.employeeNumber === employeeNumber);
+  response.json({ delegate });
+});
+
+app.get("/api/portal/v1/staff-assignments", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request);
+  const status = String(request.query?.status || "active").trim();
+  if (!["active", "cancelled", "all"].includes(status)) {
+    throw httpError(400, "Der Statusfilter ist ungültig.", "STAFF_ASSIGNMENT_STATUS_INVALID");
+  }
+  const dateFrom = String(request.query?.dateFrom || request.query?.from || "").trim();
+  const dateTo = String(request.query?.dateTo || request.query?.to || "").trim();
+  if ((dateFrom && !isIsoDate(dateFrom)) || (dateTo && !isIsoDate(dateTo))
+    || (dateFrom && dateTo && dateTo < dateFrom)) {
+    throw httpError(400, "Der Zeitraumfilter ist ungültig.", "STAFF_ASSIGNMENT_DATE_FILTER_INVALID");
+  }
+  const assignedLocationIds = sessionHasGlobalScope(session)
+    ? []
+    : [...new Set((session.scopes || []).map((scope) => String(scope.locationId || "")).filter(Boolean))];
+  const requestedLocationId = String(request.query?.locationId || "").trim();
+  if (requestedLocationId) await validateActiveLocationExists(requestedLocationId);
+  if (requestedLocationId && !sessionHasGlobalScope(session)
+    && !assignedLocationIds.includes(requestedLocationId)) {
+    throw httpError(403, "Diese Filiale ist dem Zugang nicht zugewiesen.", "STAFF_ASSIGNMENT_SCOPE_DENIED");
+  }
+  const scopeLocationIds = requestedLocationId ? [requestedLocationId] : assignedLocationIds;
+  const allCandidates = sqliteEmployeeLocationLendingOperations.activeCandidates();
+  const candidateLookup = new Map(allCandidates.map((employee) => [employee.employeeNumber, employee]));
+  const candidates = allCandidates
+    .filter((employee) => staffAssignmentEmployeeInScope(session, employee))
+    .filter((employee) => !requestedLocationId || employee.homeLocationId === requestedLocationId);
+  const assignments = sqliteEmployeeLocationLendingOperations.list({
+    status: status === "all" ? "" : status,
+    dateFrom,
+    dateTo,
+    locationIds: scopeLocationIds,
+  })
+    .filter((assignment) => staffAssignmentVisibleToSession(
+      session,
+      assignment,
+      candidateLookup.get(assignment.employeeNumber)
+        || sqliteEmployeeLocationLendingOperations.employee(assignment.employeeNumber),
+    ))
+    .map((assignment) => {
+      const requestBound = Boolean(staffAssignmentRequestIdFromAssignmentId(assignment.id));
+      return {
+        ...assignment,
+        requestBound,
+        canEdit: !requestBound && candidates.some(
+          (employee) => employee.employeeNumber === assignment.employeeNumber,
+        ),
+      };
+    });
+  response.json({
+    assignments,
+    candidates,
+    locations: sqliteEmployeeLocationLendingOperations.activeLocations(),
+    departments: sqliteEmployeeLocationLendingOperations.activeDepartments(),
+    delegates: await staffAssignmentDelegates(session, requestedLocationId),
+    canManage: true,
+  });
+});
+
+app.post("/api/portal/v1/staff-assignments", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request, { csrf: true });
+  const input = normalizeStaffAssignmentInput(request.body || {});
+  assertStaffAssignmentEmployeeScope(session, input.employeeNumber);
+  let assignment;
+  try {
+    assignment = sqliteEmployeeLocationLendingOperations.create({
+      ...input,
+      actor: portalActorId(session),
+    });
+  } catch (error) {
+    throw staffAssignmentHttpError(error);
+  }
+  auditPortal(portalActorId(session), "staff-assignment.create", "staff_assignment", assignment.id, JSON.stringify({
+    employeeNumber: assignment.employeeNumber,
+    homeLocationId: assignment.homeLocationId,
+    destinationLocationId: assignment.destinationLocationId,
+    dateFrom: assignment.dateFrom,
+    dateTo: assignment.dateTo,
+    allDay: assignment.allDay,
+  }));
+  response.status(201).json({ assignment });
+});
+
+app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request, { csrf: true });
+  const existing = sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId);
+  if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
+  assertStaffAssignmentEmployeeScope(session, existing.employeeNumber);
+  if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
+    throw httpError(
+      409,
+      "Dieser verbindliche Filialeinsatz stammt aus einer genehmigten Einsatzanfrage und kann hier nicht geändert werden.",
+      "STAFF_ASSIGNMENT_REQUEST_BOUND",
+    );
+  }
+  const input = normalizeStaffAssignmentInput(request.body || {}, existing);
+  const revision = staffAssignmentRevision(request.body?.revision);
+  let assignment;
+  try {
+    assignment = sqliteEmployeeLocationLendingOperations.update(existing.id, {
+      ...input,
+      revision,
+      actor: portalActorId(session),
+    });
+  } catch (error) {
+    throw staffAssignmentHttpError(error);
+  }
+  auditPortal(portalActorId(session), "staff-assignment.update", "staff_assignment", assignment.id, JSON.stringify({
+    employeeNumber: assignment.employeeNumber,
+    destinationLocationId: assignment.destinationLocationId,
+    dateFrom: assignment.dateFrom,
+    dateTo: assignment.dateTo,
+    allDay: assignment.allDay,
+    revision: assignment.revision,
+  }));
+  response.json({ assignment });
+});
+
+app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request, response) => {
+  const session = requireStaffAssignmentAccess(request, { csrf: true });
+  const existing = sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId);
+  if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
+  assertStaffAssignmentEmployeeScope(session, existing.employeeNumber);
+  if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
+    throw httpError(
+      409,
+      "Dieser verbindliche Filialeinsatz stammt aus einer genehmigten Einsatzanfrage und kann hier nicht getrennt storniert werden.",
+      "STAFF_ASSIGNMENT_REQUEST_BOUND",
+    );
+  }
+  const revision = staffAssignmentRevision(request.body?.revision);
+  let assignment;
+  try {
+    assignment = sqliteEmployeeLocationLendingOperations.cancel(existing.id, {
+      revision,
+      actor: portalActorId(session),
+    });
+  } catch (error) {
+    throw staffAssignmentHttpError(error);
+  }
+  auditPortal(portalActorId(session), "staff-assignment.cancel", "staff_assignment", assignment.id, JSON.stringify({
+    employeeNumber: assignment.employeeNumber,
+    revision: assignment.revision,
+  }));
+  response.json({ assignment });
+});
+
 function branchOrderHttpError(error) {
   if (!(error instanceof BranchOrderError)) return error;
   return httpError(error.status || 400, error.message, error.code || "BRANCH_ORDER_INVALID");
@@ -29789,6 +37790,16 @@ function branchOrderSenderEmail(session, locationId) {
   return `fil${safeLocationId}-noreply@grabenplaner.eu`;
 }
 
+function branchOrderDraftScope(context, employeeNumberInput) {
+  const { session } = context;
+  return {
+    ownerKind: session.sessionKind === "organization" ? "organization" : "employee",
+    ownerAccountId: session.accountId || `employee:${session.employeeNumber}`,
+    updatedByLogin: session.loginName || session.actorId || `employee:${session.employeeNumber}`,
+    selectedEmployeeNumber: context.selectedEmployeeNumber || String(employeeNumberInput || "").trim(),
+  };
+}
+
 async function branchOrderManagementLocation(session, input = {}) {
   if (session.sessionKind === "organization" || session.isEmployee === false) {
     throw httpError(
@@ -29797,7 +37808,7 @@ async function branchOrderManagementLocation(session, input = {}) {
       "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
     );
   }
-  if (!isLocalSystemSession(session) && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
+  if (!isLocalSystemSession(session) && !HR_DECISION_PORTAL_ROLES.has(session.role)) {
     throw httpError(
       403,
       "Die Filialbestell-Einstellungen stehen ausschließlich Personalleitung und höheren Rollen zur Verfügung.",
@@ -29808,6 +37819,65 @@ async function branchOrderManagementLocation(session, input = {}) {
   assertSessionContextScope(session, { locationId });
   await validateActiveLocationExists(locationId);
   return locationId;
+}
+
+async function branchPortalDisplaySettingsLocation(session, input = {}) {
+  if (!session.permissions?.includes(BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION)) {
+    throw httpError(403, "Für die Filialkonto-Einstellungen fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (session.sessionKind === "organization" || session.isEmployee === false) {
+    throw httpError(
+      403,
+      "Filialkonto-Einstellungen werden ausschließlich über einen persönlichen Leitungszugang in der Desktopansicht verwaltet.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
+  const eligible = new Set(["department_manager", "manager", "hr", "admin", "developer"]);
+  if (!isLocalSystemSession(session) && !eligible.has(session.role)) {
+    throw httpError(403, "Die Filialkonto-Einstellungen benötigen eine berechtigte Filial-, Abteilungs- oder Personalleitung.", "BRANCH_PORTAL_SETTINGS_ROLE_DENIED");
+  }
+  const locationId = normalizeLocationId(input.locationId || session.homeLocationId || "");
+  assertSessionContextScope(session, { locationId });
+  await validateActiveLocationExists(locationId);
+  return locationId;
+}
+
+async function mobilePortalLocationDisplayManagementLocation(session, input = {}) {
+  if (!session.permissions?.includes(MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION)) {
+    throw httpError(403, "Für die mobile Mitarbeiteransicht fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (session.sessionKind === "organization" || session.isEmployee === false) {
+    throw httpError(
+      403,
+      "Die mobile Mitarbeiteransicht wird ausschließlich über einen persönlichen Leitungszugang verwaltet.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
+  const eligibleRoles = new Set(["department_manager", "manager", "hr", "admin", "developer"]);
+  if (!eligibleRoles.has(session.role)) {
+    throw httpError(
+      403,
+      "Die mobile Mitarbeiteransicht benötigt eine berechtigte Filial-, Abteilungs- oder Personalleitung.",
+      "MOBILE_PORTAL_LOCATION_DISPLAY_ROLE_DENIED",
+    );
+  }
+  const locationId = normalizeLocationId(input.locationId || input.location || session.homeLocationId || "");
+  if (!GLOBAL_SCOPE_PORTAL_ROLES.has(session.role)) {
+    if (locationId !== String(session.homeLocationId || "")) {
+      throw httpError(403, "Die mobile Mitarbeiteransicht darf nur für die eigene Filiale verwaltet werden.", "PORTAL_SCOPE_DENIED");
+    }
+    assertSessionLocationAdministrationScope(session, locationId);
+  }
+  return validateActiveLocationExists(locationId);
+}
+
+function publicMobilePortalLocationDisplay(location) {
+  const policy = mobilePortalLocationDisplayForLocation(location.id);
+  return {
+    ...policy,
+    locationName: location.name,
+    modules: mobilePortalLocationDisplayModules,
+  };
 }
 
 async function branchOrderHistoryAccess(request, input = {}) {
@@ -29865,6 +37935,63 @@ app.get("/api/portal/v1/branch-orders/catalog", async (request, response) => {
   }
 });
 
+app.get("/api/portal/v1/branch-orders/draft", async (request, response) => {
+  const context = requireBranchOrderSubmissionSession(request);
+  const scope = branchOrderDraftScope(context, request.query?.employeeNumber);
+  try {
+    response.json({
+      locationId: context.locationId,
+      draft: sqliteBranchOrderOperations.draftSnapshot(context.locationId, scope),
+    });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
+app.put("/api/portal/v1/branch-orders/draft", async (request, response) => {
+  const context = requireBranchOrderSubmissionSession(request);
+  assertPortalCsrf(request);
+  const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
+  const weekStart = currentWeekStart();
+  try {
+    const draft = sqliteBranchOrderOperations.saveDraft(context.locationId, {
+      ...scope,
+      items: request.body?.items,
+      expectedRevision: request.body?.expectedRevision,
+      weekStartAtSave: weekStart,
+    });
+    auditPortal(context.session.actorId, "branch-order.draft.save", "branch_order_draft", draft.id, JSON.stringify({
+      locationId: context.locationId,
+      selectedEmployeeNumber: draft.selectedEmployeeNumber,
+      revision: draft.revision,
+      lineCount: draft.items.length,
+    }));
+    response.json({ locationId: context.locationId, draft });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
+app.delete("/api/portal/v1/branch-orders/draft", async (request, response) => {
+  const context = requireBranchOrderSubmissionSession(request);
+  assertPortalCsrf(request);
+  const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
+  try {
+    const deleted = sqliteBranchOrderOperations.deleteDraft(context.locationId, {
+      ...scope,
+      expectedRevision: request.body?.expectedRevision,
+    });
+    auditPortal(context.session.actorId, "branch-order.draft.delete", "branch_order_draft", scope.selectedEmployeeNumber, JSON.stringify({
+      locationId: context.locationId,
+      selectedEmployeeNumber: scope.selectedEmployeeNumber,
+      deleted,
+    }));
+    response.json({ locationId: context.locationId, deleted });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
 app.post("/api/portal/v1/branch-orders", async (request, response) => {
   const context = requireBranchOrderSubmissionSession(request);
   const { session, locationId } = context;
@@ -29881,6 +38008,8 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
       submittedAt: new Date().toISOString(),
       submittedByAccountId: session.accountId || `employee:${session.employeeNumber}`,
       submittedByLogin: session.loginName,
+      draftOwnerKind: session.sessionKind === "organization" ? "organization" : "employee",
+      draftRevision: request.body?.draftRevision ?? 0,
       senderEmail,
     });
   } catch (error) {
@@ -29892,6 +38021,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
     selectedEmployeeNumber: order.employee.employeeNumber,
     lineCount: order.lines.length,
     deliveryCount: order.deliveries.length,
+    draftConsumed: order.draftConsumed,
   }));
   for (const delivery of order.deliveries) {
     try {
@@ -29905,7 +38035,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
       sqliteBranchOrderOperations.markDelivery(delivery.id, { status: "sent" });
     } catch (error) {
       sqliteBranchOrderOperations.markDelivery(delivery.id, {
-        status: "failed",
+        status: error?.code === "EXTERNAL_NOTIFICATION_TIMEOUT" ? "pending" : "failed",
         failureCode: String(error?.code || "EXTERNAL_NOTIFICATION_DELIVERY_FAILED"),
       });
     }
@@ -29924,6 +38054,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
       submittedAt: order.submittedAt,
       status: deliverySummary.status,
       pdf: order.pdf,
+      draftConsumed: order.draftConsumed,
     },
     delivery: deliverySummary,
   });
@@ -30011,7 +38142,10 @@ app.get("/api/portal/v1/branch-orders/:orderId/pdf", async (request, response) =
 
 app.get("/api/portal/v1/users", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["users:write", "scopes:write"]);
-  const [users, roles] = await Promise.all([portalUsersForActor(actor), getPortalRoles()]);
+  const [users, roles] = await Promise.all([
+    portalUsersForActor(actor),
+    portalRolesForUserAdministrationActor(actor),
+  ]);
   response.json({ users, roles });
 });
 
@@ -30022,11 +38156,6 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
     .getPortalScopeAssignmentTarget(employeeNumber);
   if (!target || !target.active) throw httpError(404, "Der aktive Zugang wurde nicht gefunden.");
   assertPortalUserIsMutable(target, actor);
-  await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
-    actor,
-    target,
-    organizationPersonnelRepository,
-  );
   if (!actorCanManagePortalRole(actor, target.role)) {
     throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
   }
@@ -30053,6 +38182,24 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
     explicitPortalAccessScopesForEmployee(employeeNumber),
     organizationPersonnelRepository.listPortalPermissionScopeGrants(employeeNumber),
   ]);
+  const portalScopeDelta = setDifference(
+    currentPortalScopes,
+    scopes,
+    portalAccessScopeKey,
+  );
+  if (portalScopeDelta.added.length || portalScopeDelta.removed.length) {
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+      actor,
+      target,
+      organizationPersonnelRepository,
+    );
+    assertPersonnelLearningPortalScopeDeltaAllowed(
+      actor,
+      target,
+      currentPortalScopes,
+      scopes,
+    );
+  }
   const currentPermissionScopes = currentPermissionScopeRows.map(publicPortalPermissionScopeGrant);
   const projectedPermissionScopes = currentPermissionScopes.filter((scope) => (
     personnelLifecycleScopeMatchesTarget(
@@ -30097,12 +38244,22 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
     scopes,
     personnelLifecyclePermissionScopes: projectedPermissionScopes,
   };
+  let scopesChanged = false;
+  let responseProjectionActor = actor;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const [liveTarget, livePortalScopeRows, livePermissionScopeRows] = await Promise.all([
+    const [
+      liveTarget,
+      livePortalScopeRows,
+      livePermissionScopeRows,
+      liveLearningActor,
+    ] = await Promise.all([
       organization.getPortalScopeAssignmentTarget(employeeNumber),
       organization.listPortalAccessScopes(employeeNumber),
       organization.listPortalPermissionScopeGrants(employeeNumber),
+      livePersonnelLearningRoleAdministrationActor(actor, organization),
     ]);
+    responseProjectionActor = liveLearningActor;
+    assertLivePortalRoutePermission(liveLearningActor, "scopes:write");
     const livePortalScopes = livePortalScopeRows.map((scope) => ({
       locationId: scope.location_id,
       departmentId: Number(scope.department_id || 0) || null,
@@ -30112,10 +38269,59 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
       expectedConcurrencySignature,
       scopeMutationConcurrencySignature(liveTarget, livePortalScopes, livePermissionScopes),
     );
-    assertPortalUserIsMutable(liveTarget, actor);
-    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveTarget, organization);
-    if (!actorCanManagePortalRole(actor, liveTarget.role)) {
+    const accessScopeDelta = setDifference(
+      livePortalScopes,
+      scopes,
+      portalAccessScopeKey,
+    );
+    const permissionScopeDelta = setDifference(
+      livePermissionScopes,
+      projectedPermissionScopes,
+      personnelLifecyclePermissionScopeKey,
+    );
+    scopesChanged = Boolean(
+      accessScopeDelta.added.length
+      || accessScopeDelta.removed.length
+      || permissionScopeDelta.added.length
+      || permissionScopeDelta.removed.length
+    );
+    if (!scopesChanged) return;
+    assertPortalUserIsMutable(liveTarget, liveLearningActor);
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+      liveLearningActor,
+      liveTarget,
+      organization,
+    );
+    assertPersonnelLearningPortalScopeDeltaAllowed(
+      liveLearningActor,
+      liveTarget,
+      livePortalScopes,
+      scopes,
+    );
+    if (!actorCanManagePortalRole(liveLearningActor, liveTarget.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
+    if (!actorCanManageProtectedPersonnelState(
+      liveLearningActor,
+      [],
+      permissionScopeDelta.removed,
+    )) {
+      throw httpError(
+        403,
+        "Ein von PL+ freigegebener Personalmodul-Geltungsbereich darf hier nicht entfernt werden.",
+        "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+      );
+    }
+    if (liveLearningActor.role === "manager") {
+      if (liveTarget.role !== "department_manager") {
+        throw httpError(403, "Eine Filialleitung darf nur Abteilungsleitungen ihres Standorts zuweisen.");
+      }
+      for (const scope of scopes) {
+        assertSessionContextScope(liveLearningActor, { locationId: scope.locationId });
+        if (String(liveTarget.home_location_id || "") !== String(scope.locationId || "")) {
+          throw httpError(403, "Die Abteilungsleitung gehört nicht zum eigenen Standort.");
+        }
+      }
     }
     for (const scope of scopes) {
       await validateActiveLocationExists(scope.locationId, organization);
@@ -30123,20 +38329,14 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
         await validateActiveDepartmentExists(scope.departmentId, scope.locationId, organization);
       }
     }
-    const accessScopeDelta = setDifference(currentPortalScopes, scopes, portalAccessScopeKey);
     for (const scope of accessScopeDelta.added) {
       await organization.insertAccessScope({
         employeeNumber,
         locationId: scope.locationId,
         departmentId: scope.departmentId || 0,
-        assignedBy: actor.employeeNumber,
+        assignedBy: liveLearningActor.employeeNumber,
       });
     }
-    const permissionScopeDelta = setDifference(
-      currentPermissionScopes,
-      projectedPermissionScopes,
-      personnelLifecyclePermissionScopeKey,
-    );
     for (const permissionScope of permissionScopeDelta.removed) {
       await organization.deletePermissionScopeGrant({
         employeeNumber,
@@ -30155,15 +38355,20 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
     await organization.revokePortalSessions(employeeNumber);
     await organization.revokeMobileSessions(employeeNumber, "scopes_changed");
     await organization.insertAudit(
-      actor.employeeNumber,
+      liveLearningActor.employeeNumber,
       "portal.scope.update",
       "portal_user",
       employeeNumber,
       compactRightsAuditDetail(before, after),
     );
   }, { uniqueAsConcurrent: true });
-  await reconcileOpenAmuResponsibilities(actor.employeeNumber);
-  const [users, roles] = await Promise.all([portalUsersForActor(actor), getPortalRoles()]);
+  if (scopesChanged) {
+    await reconcileOpenAmuResponsibilities(responseProjectionActor.employeeNumber);
+  }
+  const [users, roles] = await Promise.all([
+    portalUsersForActor(responseProjectionActor),
+    portalRolesForUserAdministrationActor(responseProjectionActor),
+  ]);
   response.json({ users, roles });
 });
 
@@ -30182,8 +38387,19 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   }
   const existingUser = await organizationPersonnelRepository
     .getPortalUserAccountProjection(employeeNumber);
+  if (roleHasPersonnelLearningDefaults(role)
+    && (!existingUser || !roleHasPersonnelLearningDefaults(existingUser.role))
+    && !actorCanAdministerPersonnelLearningRoleAccount(actor)) {
+    throw httpError(
+      403,
+      "Ein Zugang mit Schulungs- und Wissensdatenzugriff darf nur mit wirksamer fachlicher Delegationsbefugnis aktiviert werden.",
+      "PORTAL_ROLE_HIERARCHY_DENIED",
+    );
+  }
   let existingPersonnelLifecycleGrants = [];
   let existingPersonnelLifecyclePermissionScopes = [];
+  let existingPersonnelLearningDenials = [];
+  let existingPortalBirthdayPresentationRights = [];
   if (existingUser) {
     assertPortalUserIsMutable(existingUser, actor);
     await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
@@ -30191,18 +38407,55 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       existingUser,
       organizationPersonnelRepository,
     );
+    if (roleHasPersonnelLearningDefaults(existingUser.role)
+      && !actorCanAdministerPersonnelLearningRoleAccount(actor)) {
+      throw httpError(
+        403,
+        "Ein Zugang mit Schulungs- und Wissensdatenzugriff darf nur mit wirksamer fachlicher Delegationsbefugnis verwaltet werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    if (actor.employeeNumber === employeeNumber && existingUser.role !== role
+      && roleHasPersonnelLearningDefaults(role)) {
+      throw httpError(
+        403,
+        "Das eigene Administrationskonto darf nicht in eine fachlich datenberechtigte Schulungsrolle umgewandelt werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
     if (!actorCanManagePortalRole(actor, existingUser.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
     }
     if (existingUser.role !== role) {
-      const [grantRows, permissionScopeRows] = await Promise.all([
+      const [grantRows, denialRows, permissionScopeRows] = await Promise.all([
         portalPermissionGrantsForEmployee(employeeNumber, existingUser.role),
+        portalPermissionDenialsForEmployee(employeeNumber),
         organizationPersonnelRepository.listPortalPermissionScopeGrants(employeeNumber),
       ]);
       existingPersonnelLifecycleGrants = grantRows
         .filter((permission) => personnelLifecyclePermissionIds.has(permission));
       existingPersonnelLifecyclePermissionScopes = permissionScopeRows
         .map(publicPortalPermissionScopeGrant);
+      existingPersonnelLearningDenials = denialRows
+        .filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
+      existingPortalBirthdayPresentationRights = [...grantRows, ...denialRows]
+        .filter((permission) => (
+          PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+        ));
+      if (existingPersonnelLearningDenials.length) {
+        throw httpError(
+          409,
+          "Die Rolle kann erst geändert werden, nachdem PL+ die entzogenen Schulungs- und Wissensrechte in der zentralen Rechteverwaltung bereinigt hat.",
+          "PERSONNEL_LIFECYCLE_RIGHTS_PROFILE_PROTECTED",
+        );
+      }
+      if (existingPortalBirthdayPresentationRights.length) {
+        throw httpError(
+          409,
+          "Die Rolle kann erst geändert werden, nachdem die Fachrechte für Geburtstagsdarstellungen in der zentralen Rechteverwaltung bereinigt wurden.",
+          "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_PROFILE_PROTECTED",
+        );
+      }
       if ((existingPersonnelLifecycleGrants.length
           || existingPersonnelLifecyclePermissionScopes.length)
         && !actorCanManageProtectedPersonnelState(
@@ -30249,20 +38502,52 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     existingUser,
     existingPersonnelLifecycleGrants,
     existingPersonnelLifecyclePermissionScopes,
+    existingPortalBirthdayPresentationRights,
   );
+  let responseProjectionActor = actor;
+  let userChanged = false;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const liveUser = await organization.getPortalUserAccountProjection(employeeNumber);
+    const [liveUser, liveLearningActor, liveEmployeeScope] = await Promise.all([
+      organization.getPortalUserAccountProjection(employeeNumber),
+      livePersonnelLearningRoleAdministrationActor(actor, organization),
+      organization.getEmployeeScopeProjection(employeeNumber),
+    ]);
+    responseProjectionActor = liveLearningActor;
+    assertLivePortalRoutePermission(liveLearningActor, "users:write");
     let livePersonnelLifecycleGrants = [];
     let livePersonnelLifecyclePermissionScopes = [];
+    let livePersonnelLearningDenials = [];
+    let livePortalBirthdayPresentationRights = [];
     if (liveUser && existingUser?.role !== role) {
-      const [grantRows, permissionScopeRows] = await Promise.all([
+      const [grantRows, denialRows, permissionScopeRows] = await Promise.all([
         portalPermissionGrantsForEmployee(employeeNumber, liveUser.role, organization),
+        portalPermissionDenialsForEmployee(employeeNumber, organization),
         organization.listPortalPermissionScopeGrants(employeeNumber),
       ]);
       livePersonnelLifecycleGrants = grantRows
         .filter((permission) => personnelLifecyclePermissionIds.has(permission));
       livePersonnelLifecyclePermissionScopes = permissionScopeRows
         .map(publicPortalPermissionScopeGrant);
+      livePersonnelLearningDenials = denialRows
+        .filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
+      livePortalBirthdayPresentationRights = [...grantRows, ...denialRows]
+        .filter((permission) => (
+          PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+        ));
+      if (livePersonnelLearningDenials.length) {
+        throw httpError(
+          409,
+          "Die Rolle kann erst geändert werden, nachdem PL+ die entzogenen Schulungs- und Wissensrechte in der zentralen Rechteverwaltung bereinigt hat.",
+          "PERSONNEL_LIFECYCLE_RIGHTS_PROFILE_PROTECTED",
+        );
+      }
+      if (livePortalBirthdayPresentationRights.length) {
+        throw httpError(
+          409,
+          "Die Rolle kann erst geändert werden, nachdem die Fachrechte für Geburtstagsdarstellungen in der zentralen Rechteverwaltung bereinigt wurden.",
+          "PORTAL_BIRTHDAY_PRESENTATION_RIGHTS_PROFILE_PROTECTED",
+        );
+      }
     }
     assertRightsMutationSnapshotCurrent(
       expectedConcurrencySignature,
@@ -30270,9 +38555,77 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
         liveUser,
         livePersonnelLifecycleGrants,
         livePersonnelLifecyclePermissionScopes,
+        livePortalBirthdayPresentationRights,
       ),
     );
-    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveUser, organization);
+    userChanged = Boolean(
+      !liveUser
+      || String(liveUser.role || "") !== role
+      || Boolean(liveUser.active) !== Boolean(active)
+      || Boolean(liveUser.must_change_password) !== Boolean(mustChangePassword)
+      || password,
+    );
+    if (!userChanged) return;
+    if (liveUser) {
+      assertPortalUserIsMutable(liveUser, liveLearningActor);
+      if (!actorCanManagePortalRole(liveLearningActor, liveUser.role)) {
+        throw httpError(
+          403,
+          "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.",
+          "PORTAL_ROLE_HIERARCHY_DENIED",
+        );
+      }
+    }
+    if (!actorCanAssignPortalRole(liveLearningActor, role, roleExists)) {
+      throw httpError(
+        403,
+        "Diese Rolle darf durch den aktuellen Zugang nicht vergeben werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    const liveLearningTarget = {
+      homeLocationId: liveEmployeeScope?.home_location_id || "",
+      preferredDepartmentId: liveEmployeeScope?.preferred_department_id || null,
+    };
+    if (roleHasPersonnelLearningDefaults(liveUser?.role)) {
+      assertPersonnelLearningRoleAccountAdministrationAllowed(liveLearningActor, {
+        ...liveLearningTarget,
+        role: liveUser.role,
+      });
+    }
+    if (roleHasPersonnelLearningDefaults(role)) {
+      assertPersonnelLearningRoleAccountAdministrationAllowed(liveLearningActor, {
+        ...liveLearningTarget,
+        role,
+      });
+    }
+    if (liveLearningActor?.employeeNumber === employeeNumber
+      && liveUser?.role !== role
+      && roleHasPersonnelLearningDefaults(role)) {
+      throw httpError(
+        403,
+        "Das eigene Administrationskonto darf nicht in eine fachlich datenberechtigte Schulungsrolle umgewandelt werden.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+    if (liveUser?.role !== role
+      && (livePersonnelLifecycleGrants.length || livePersonnelLifecyclePermissionScopes.length)
+      && !actorCanManageProtectedPersonnelState(
+        liveLearningActor,
+        livePersonnelLifecycleGrants,
+        livePersonnelLifecyclePermissionScopes,
+      )) {
+      throw httpError(
+        403,
+        "Die Rolle kann erst geändert werden, nachdem PL+ die Personalmodul-Freigaben angepasst hat.",
+        "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+      );
+    }
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+      liveLearningActor,
+      liveUser,
+      organization,
+    );
     if (liveUser?.role === "admin" && (role !== "admin" || !active)) {
       const liveOtherSystemOwners = Number(
         await organization.countOtherSystemOwners(employeeNumber),
@@ -30289,70 +38642,100 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       mustChangePassword: Boolean(mustChangePassword),
       passwordChanged: Boolean(password),
     });
-    if (existingUser?.role && existingUser.role !== role) {
+    if (liveUser?.role && liveUser.role !== role) {
+      await organization.deletePersonnelLearningPermissionDenialAuthority(
+        employeeNumber,
+        PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
+      );
       await organization.deletePermissionDenials(employeeNumber);
       for (const permission of personnelLifecyclePermissionIds) {
         await organization.deletePermissionGrant(employeeNumber, permission);
       }
     }
-    if (!active || password || (existingUser?.role && existingUser.role !== role)) {
+    if (!active || password || (liveUser?.role && liveUser.role !== role)) {
       await organization.revokePortalSessions(employeeNumber);
     }
     await organization.revokeMobileSessions(employeeNumber, "account_changed");
     await organization.insertAudit(
-      actor.employeeNumber,
+      liveLearningActor.employeeNumber,
       "portal.user.update",
       "portal_user",
       employeeNumber,
       compactPortalUserAuditDetail({
-        roleBefore: existingUser?.role || null,
+        roleBefore: liveUser?.role || null,
         roleAfter: role,
         active: Boolean(active),
         passwordReset: Boolean(password),
-        personnelLifecycleRightsReset: existingPersonnelLifecycleGrants,
-        personnelLifecyclePermissionScopesBefore: existingPersonnelLifecyclePermissionScopes,
-        personnelLifecyclePermissionScopesAfter: existingUser?.role !== role ? []
-          : existingPersonnelLifecyclePermissionScopes,
+        personnelLifecycleRightsReset: livePersonnelLifecycleGrants,
+        personnelLifecyclePermissionScopesBefore: livePersonnelLifecyclePermissionScopes,
+        personnelLifecyclePermissionScopesAfter: liveUser?.role !== role ? []
+          : livePersonnelLifecyclePermissionScopes,
       }),
     );
   });
-  await refreshConfiguredAdminSnapshot();
-  await reconcileOpenAmuResponsibilities(actor.employeeNumber);
-  const [users, roles] = await Promise.all([portalUsersForAdmin(), getPortalRoles()]);
+  if (userChanged) {
+    await refreshConfiguredAdminSnapshot();
+    await reconcileOpenAmuResponsibilities(responseProjectionActor.employeeNumber);
+    if (String(responseProjectionActor.employeeNumber || "") === employeeNumber) {
+      responseProjectionActor = await livePersonnelLearningRoleAdministrationActor(
+        responseProjectionActor,
+      );
+    }
+  }
+  const [users, roles] = await Promise.all([
+    portalUsersForActor(responseProjectionActor),
+    portalRolesForUserAdministrationActor(responseProjectionActor),
+  ]);
   response.json({ users, roles });
 });
 
 app.post("/api/portal/v1/users/:employeeNumber/unlock", async (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "users:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  const target = await organizationPersonnelRepository
-    .getPortalMutationTarget(employeeNumber);
-  assertPortalUserIsMutable(target, actor);
-  await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
-    actor,
-    target,
-    organizationPersonnelRepository,
-  );
-  if (!actorCanManagePortalRole(actor, target.role)) {
-    throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
-  }
+  let responseProjectionActor = actor;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const liveTarget = await organization.getPortalMutationTarget(employeeNumber);
-    assertPortalUserIsMutable(liveTarget, actor);
-    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveTarget, organization);
-    if (!actorCanManagePortalRole(actor, liveTarget.role)) {
+    const [liveTarget, liveActor, liveEmployeeScope, liveUsers] = await Promise.all([
+      organization.getPortalMutationTarget(employeeNumber),
+      livePersonnelLearningRoleAdministrationActor(actor, organization),
+      organization.getEmployeeScopeProjection(employeeNumber),
+      organization.listPortalUsersForAdmin(),
+    ]);
+    responseProjectionActor = liveActor;
+    assertLivePortalRoutePermission(liveActor, "users:write");
+    if (!liveTarget) throw httpError(404, "Der Zugang wurde nicht gefunden.");
+    const liveUnlockState = liveUsers.find(
+      (user) => String(user.personnel_number || "") === employeeNumber,
+    );
+    const unlockChanged = Boolean(
+      Number(liveUnlockState?.failed_login_attempts || 0)
+        || String(liveUnlockState?.locked_until || "").trim(),
+    );
+    if (!unlockChanged) return;
+    assertPortalUserIsMutable(liveTarget, liveActor);
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(liveActor, liveTarget, organization);
+    if (!actorCanManagePortalRole(liveActor, liveTarget.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
+    if (roleHasPersonnelLearningDefaults(liveTarget.role)) {
+      assertPersonnelLearningRoleAccountAdministrationAllowed(liveActor, {
+        role: liveTarget.role,
+        homeLocationId: liveEmployeeScope?.home_location_id || "",
+        preferredDepartmentId: liveEmployeeScope?.preferred_department_id || null,
+      });
     }
     const result = await organization.unlockPortalUser(employeeNumber);
     if (!result.rowsAffected) throw httpError(404, "Der Zugang wurde nicht gefunden.");
     await organization.insertAudit(
-      actor.employeeNumber,
+      liveActor.employeeNumber,
       "portal.user.unlock",
       "portal_user",
       employeeNumber,
     );
   });
-  const [users, roles] = await Promise.all([portalUsersForAdmin(), getPortalRoles()]);
+  const [users, roles] = await Promise.all([
+    portalUsersForActor(responseProjectionActor),
+    portalRolesForUserAdministrationActor(responseProjectionActor),
+  ]);
   response.json({ users, roles });
 });
 
@@ -31451,12 +39834,249 @@ function loanPendingReturnConfirmationRow(loanId) {
   });
 }
 
-function parseLoanReturnConfirmationPayload(row) {
+function loanReturnPreparationRow(loanId) {
+  return loanModuleRepository.getReturnPreparation({
+    loanId: String(loanId || "").trim(),
+  });
+}
+
+function parseLoanReturnPayload(row) {
   try {
     const parsed = JSON.parse(String(row?.payload_json || "{}"));
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
   } catch {}
   return {};
+}
+
+const parseLoanReturnConfirmationPayload = parseLoanReturnPayload;
+
+async function publicLoanReturnPreparation(row) {
+  if (!row) return null;
+  const payload = parseLoanReturnPayload(row);
+  const [sourceItems, attachments, photos] = await Promise.all([
+    loanItemRows(row.loan_id),
+    loanPhotoAttachmentRows(row.loan_id),
+    loanPhotoRows(row.loan_id),
+  ]);
+  const returnedItems = Array.isArray(payload.items) ? payload.items : [];
+  const photoIds = new Set(Array.isArray(payload.photoIds) ? payload.photoIds.map(String) : []);
+  const photoAttachmentIds = new Set(
+    Array.isArray(payload.photoAttachmentIds) ? payload.photoAttachmentIds.map(String) : [],
+  );
+  return {
+    loanId: row.loan_id,
+    expectedRevision: Number(row.expected_revision),
+    requestedBy: {
+      employeeNumber: row.requested_by_employee_number,
+      name: row.requester_nickname || row.requester_full_name || row.requested_by_employee_number,
+    },
+    preparedAt: row.prepared_at,
+    updatedAt: row.updated_at,
+    note: String(payload.note || ""),
+    borrowerConfirmed: Boolean(payload.borrowerConfirmed),
+    items: sourceItems.map((item) => {
+      const returned = returnedItems.find((entry) => Number(entry.position) === Number(item.position)) || {};
+      return {
+        ...publicLoanItem(item),
+        conditionReturn: returned.conditionReturn || "",
+        returnNote: returned.note || "",
+      };
+    }),
+    photos: photos
+      .filter((photo) => photo.phase === "return" && photoIds.has(photo.id))
+      .map(publicLoanPhoto),
+    photoAttachments: attachments
+      .filter((attachment) => attachment.phase === "return" && photoAttachmentIds.has(attachment.id))
+      .map(publicLoanPhotoAttachment),
+  };
+}
+
+function canonicalPasswordResetEmail(value) {
+  const normalized = normalizePersonalEmailAddress(value);
+  return normalized ? normalized.toLowerCase() : "";
+}
+
+function passwordResetGenericPayload() {
+  return {
+    ok: true,
+    message: "Falls die E-Mail-Adresse einem aktiven persönlichen Zugang zugeordnet ist, wurde ein Link versendet.",
+  };
+}
+
+function passwordResetRequestRateAllowed(ipKey, email) {
+  const now = Date.now();
+  const normalizedIpKey = String(ipKey || "unknown").slice(0, 256);
+  const targetKey = sha256(`password-reset-rate\0${String(email || "").slice(0, 320)}`);
+  const allowed = passwordResetIpRateLimits.get(normalizedIpKey, now).length < PASSWORD_RESET_RATE_MAX_PER_IP
+    && passwordResetTargetRateLimits.get(targetKey, now).length < PASSWORD_RESET_RATE_MAX_PER_TARGET;
+  passwordResetIpRateLimits.record(normalizedIpKey, now);
+  passwordResetTargetRateLimits.record(targetKey, now);
+  return allowed;
+}
+
+function assertPasswordResetConfirmRateLimit(request) {
+  const key = loginRateKey(request);
+  const now = Date.now();
+  const events = passwordResetConfirmRateLimits.get(key, now);
+  if (events.length >= PASSWORD_RESET_CONFIRM_RATE_MAX_PER_IP) {
+    const error = httpError(
+      429,
+      "Zu viele Versuche. Bitte später erneut versuchen.",
+      "PORTAL_PASSWORD_RESET_RATE_LIMITED",
+    );
+    error.retryAfter = Math.max(1, Math.ceil((LOGIN_RATE_WINDOW_MS - (now - events[0])) / 1000));
+    throw error;
+  }
+  passwordResetConfirmRateLimits.record(key, now);
+}
+
+async function personalPasswordResetCandidate(requestedEmail) {
+  const canonicalRequested = canonicalPasswordResetEmail(requestedEmail);
+  if (!canonicalRequested) return null;
+  const candidates = await portalAccessRepository.listPasswordResetCandidates({});
+  const matches = [];
+  for (const candidate of candidates) {
+    let profile;
+    try {
+      profile = await personnelSensitiveProfile(candidate.employee_number);
+    } catch {
+      continue;
+    }
+    const storedEmail = normalizePersonalEmailAddress(profile.privateEmail);
+    if (!storedEmail) continue;
+    const currentFingerprint = personalNotificationTargetFingerprint("email", storedEmail);
+    if (!safeHashEquals(currentFingerprint, candidate.email_target_fingerprint)) continue;
+    if (storedEmail.toLowerCase() !== canonicalRequested) continue;
+    matches.push({
+      employeeNumber: candidate.employee_number,
+      email: storedEmail,
+      emailFingerprint: currentFingerprint,
+    });
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function requestPersonalPasswordReset(input = {}) {
+  const submittedEmail = String(input.email || "").trim();
+  const canonicalEmail = canonicalPasswordResetEmail(submittedEmail);
+  if (!passwordResetRequestRateAllowed(input.ipKey, canonicalEmail || submittedEmail.toLowerCase())) return;
+  if (!canonicalEmail
+    || !normalizedPublicOrigin?.startsWith("https://")
+    || !externalNotificationEventAvailable("email", "password_reset")) return;
+
+  let candidate;
+  try {
+    candidate = await personalPasswordResetCandidate(canonicalEmail);
+  } catch {
+    return;
+  }
+  if (!candidate) return;
+
+  const now = new Date();
+  const recent = await portalAccessRepository.countRecentPasswordResetTokens({
+    employeeNumber: candidate.employeeNumber,
+    since: new Date(now.getTime() - PASSWORD_RESET_RATE_WINDOW_MS).toISOString(),
+  });
+  if (Number(recent?.count || 0) >= PASSWORD_RESET_RATE_MAX_PER_TARGET) return;
+
+  const id = crypto.randomUUID();
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = sha256(rawToken);
+  const expiresAt = new Date(now.getTime() + PASSWORD_RESET_TOKEN_TTL_MS).toISOString();
+  try {
+    await portalAccessRepository.transaction(async (repository) => {
+      await repository.purgePasswordResetTokens({
+        cutoff: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+      });
+      await repository.revokePasswordResetTokensForEmployee({
+        employeeNumber: candidate.employeeNumber,
+        exceptId: null,
+      });
+      const inserted = await repository.insertPasswordResetToken({
+        id,
+        employeeNumber: candidate.employeeNumber,
+        tokenHash,
+        emailFingerprint: candidate.emailFingerprint,
+        expiresAt,
+      });
+      if (!inserted.rowsAffected) throw new Error("PASSWORD_RESET_TARGET_CHANGED");
+    });
+    await externalNotificationAdapter.sendPasswordReset({
+      recipient: candidate.email,
+      resetUrl: `${normalizedPublicOrigin}/portal.html#password-reset=${rawToken}`,
+    });
+    auditPortal("password-reset-public", "portal.password-reset.requested", "portal_user", candidate.employeeNumber);
+  } catch {
+    try { await portalAccessRepository.revokePasswordResetTokenById({ id }); } catch {}
+    auditPortal("password-reset-public", "portal.password-reset.delivery-failed", "portal_user", candidate.employeeNumber);
+  }
+}
+
+function invalidPasswordResetTokenError() {
+  return httpError(
+    410,
+    "Der Link ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Link an.",
+    "PORTAL_PASSWORD_RESET_INVALID",
+  );
+}
+
+async function completePersonalPasswordReset(request) {
+  assertPasswordResetConfirmRateLimit(request);
+  const browserSession = portalSessionFromRequest(request);
+  const rawToken = String(request.body?.token || "").trim();
+  if (!/^[A-Za-z0-9_-]{43}$/.test(rawToken)) throw invalidPasswordResetTokenError();
+  const newPassword = String(request.body?.newPassword || "");
+  const repeatPassword = String(request.body?.repeatPassword || "");
+  if (!repeatPassword || newPassword !== repeatPassword) {
+    throw httpError(400, "Die Passwortwiederholung stimmt nicht überein.", "PORTAL_PASSWORD_REPEAT_MISMATCH");
+  }
+  const tokenHash = sha256(rawToken);
+  const now = new Date().toISOString();
+  const available = await portalAccessRepository.getPasswordResetTokenByHash({ tokenHash, now });
+  if (!available) throw invalidPasswordResetTokenError();
+  const passwordHash = await hashPortalPassword(newPassword);
+  const completed = await portalAccessRepository.transaction(async (repository) => {
+    const current = await repository.getPasswordResetTokenByHash({ tokenHash, now });
+    if (!current) throw invalidPasswordResetTokenError();
+    const consumed = await repository.consumePasswordResetToken({
+      id: current.id,
+      tokenHash,
+      usedAt: now,
+    });
+    if (!consumed.rowsAffected) throw invalidPasswordResetTokenError();
+    const changed = await repository.updatePasswordFromReset({
+      employeeNumber: current.employee_number,
+      passwordHash,
+      changedAt: now,
+    });
+    if (!changed.rowsAffected) throw invalidPasswordResetTokenError();
+    await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: current.employee_number });
+    await repository.revokeMobileSessionsForPasswordReset({ employeeNumber: current.employee_number });
+    if (browserSession?.id
+      && browserSession.sessionKind === "organization") {
+      await repository.revokeOrganizationSessionById({ id: browserSession.id });
+    } else if (browserSession?.id
+      && browserSession.employeeNumber !== current.employee_number) {
+      await repository.revokeEmployeeSessionById({ id: browserSession.id });
+    }
+    await repository.revokePasswordResetTokensForEmployee({
+      employeeNumber: current.employee_number,
+      exceptId: current.id,
+    });
+    return current;
+  });
+  auditPortal(completed.employee_number, "portal.password-reset.completed", "portal_user", completed.employee_number);
+  if (browserSession?.id
+    && (browserSession.sessionKind === "organization"
+      || browserSession.employeeNumber !== completed.employee_number)) {
+    auditPortal(
+      portalActorId(browserSession),
+      "portal.password-reset.browser-session-revoked",
+      browserSession.sessionKind === "organization" ? "portal_organization_account" : "portal_user",
+      browserSession.accountId || browserSession.employeeNumber,
+    );
+  }
+  return completed;
 }
 
 async function publicLoanReturnConfirmation(row, { includeLoan = true } = {}) {
@@ -32164,6 +40784,7 @@ async function publicLoan(row, { includeEvents = true } = {}) {
   if (!row) return null;
   const [
     pendingReturnConfirmation,
+    returnPreparation,
     itemRows,
     photoRows,
     attachmentRows,
@@ -32171,6 +40792,7 @@ async function publicLoan(row, { includeEvents = true } = {}) {
     eventRows,
   ] = await Promise.all([
     loanPendingReturnConfirmationRow(row.id),
+    loanReturnPreparationRow(row.id),
     loanItemRows(row.id),
     loanPhotoRows(row.id),
     loanPhotoAttachmentRows(row.id),
@@ -32204,6 +40826,9 @@ async function publicLoan(row, { includeEvents = true } = {}) {
     } : null,
     pendingReturnConfirmation: pendingReturnConfirmation
       ? await publicLoanReturnConfirmation(pendingReturnConfirmation, { includeLoan: false })
+      : null,
+    returnPreparation: returnPreparation
+      ? await publicLoanReturnPreparation(returnPreparation)
       : null,
     borrowerReturnConfirmed: Boolean(row.borrower_return_confirmed),
     revision: Number(row.revision || 1),
@@ -33013,6 +41638,7 @@ app.put("/api/portal/v1/loans/:loanId/management", async (request, response) => 
       "Durch Bearbeitung der Filialleitung aufgehoben.",
       repository,
     );
+    await repository.deleteReturnPreparation({ loanId: row.id });
     await appendLoanEvent(row.id, actor.employeeNumber, "manager_edited", nextRevision, {
       previousRevision: expectedRevision,
       status: row.status,
@@ -33089,6 +41715,7 @@ app.post("/api/portal/v1/loans/:loanId/management/close", async (request, respon
       "Durch manuelles Schließen der Filialleitung aufgehoben.",
       repository,
     );
+    await repository.deleteReturnPreparation({ loanId: row.id });
     await appendLoanEvent(row.id, actor.employeeNumber, "manager_closed_without_document", nextRevision, {
       previousRevision: expectedRevision,
       returnRecordedByEmployeeNumber: actor.employeeNumber,
@@ -33207,6 +41834,169 @@ app.post("/api/portal/v1/loans/:loanId/management/reopen", async (request, respo
   response.json({ loan: await publicLoan(await loanRow(row.id)) });
 });
 
+app.post("/api/portal/v1/branch-orders/:orderId/delivery-confirmation", async (request, response) => {
+  const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
+  assertPortalCsrf(request);
+  const locationId = await branchOrderManagementLocation(session, request.body || {});
+  try {
+    const result = sqliteBranchOrderOperations.confirmOrderDeliveries(
+      locationId,
+      request.params.orderId,
+      new Date().toISOString(),
+    );
+    auditPortal(portalActorId(session), "branch-order.delivery.confirm", "branch_order", request.params.orderId, JSON.stringify({
+      locationId,
+      changedDeliveryCount: result.changed,
+      status: result.status,
+    }));
+    response.json({ locationId, orderId: request.params.orderId, delivery: result });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
+});
+
+async function completePreparedLoanReturn({
+  loan,
+  expectedRevision,
+  returnedItems,
+  note = "",
+  borrowerConfirmed = false,
+  recordedByEmployeeNumber,
+  witnessEmployeeNumber = "",
+  completionActor,
+  confirmationId = "",
+  confirmationNote = "",
+  directManagement = false,
+}) {
+  const completedAt = new Date().toISOString();
+  const nextRevision = Number(expectedRevision) + 1;
+  const sourceItems = await loanItemRows(loan.id);
+  const [recordedByParticipant, completionParticipant] = await Promise.all([
+    loanParticipant(recordedByEmployeeNumber),
+    loanParticipant(completionActor.employeeNumber),
+  ]);
+  let preparedReturnDocument;
+  try {
+    preparedReturnDocument = await prepareLoanDocument({
+      type: "return",
+      confirmationMode: directManagement ? "management" : "witness",
+      loanId: loan.id,
+      revision: nextRevision,
+      createdAt: completedAt,
+      issuedAt: loan.issued_at,
+      returnedAt: completedAt,
+      dueDate: loan.due_date,
+      note: [loan.notes, note].filter(Boolean).join(" · "),
+      confirmationNote,
+      location: { id: loan.location_id, name: loan.location_name },
+      borrower: {
+        employeeNumber: loan.borrower_employee_number,
+        name: loan.borrower_nickname || loan.borrower_full_name,
+      },
+      recordedBy: recordedByParticipant,
+      witness: completionParticipant,
+      items: sourceItems.map((item) => {
+        const returned = returnedItems.find((entry) => Number(entry.position) === Number(item.position)) || {};
+        return {
+          position: item.position,
+          articleNumber: item.article_number,
+          description: item.description_snapshot,
+          serialNumber: item.serial_number,
+          conditionOut: item.condition_out,
+          conditionReturn: returned.conditionReturn,
+          note: [item.item_note, returned.note].filter(Boolean).join(" · "),
+        };
+      }),
+      branding: loanPdfBranding(loan.location_id),
+    }, completionActor.employeeNumber);
+  } catch (error) {
+    throw httpError(
+      503,
+      `Der Rücknahmebeleg konnte nicht sicher erstellt werden: ${String(error.message || error)}`,
+      "LOAN_DOCUMENT_CREATE_FAILED",
+    );
+  }
+  try {
+    await persistenceProvider.transaction(async (executor) => {
+      const repository = createApplicationRepositories(executor).loanModule;
+      const result = await repository.markLoanReturned({
+        loanId: loan.id,
+        returnedAt: completedAt,
+        recordedByEmployeeNumber,
+        witnessEmployeeNumber: witnessEmployeeNumber || null,
+        borrowerReturnConfirmed: Boolean(borrowerConfirmed),
+        expectedRevision,
+      });
+      if (!result.rowsAffected) {
+        throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+      }
+      for (const item of returnedItems) {
+        await repository.updateLoanItemReturnCondition({
+          loanId: loan.id,
+          position: item.position,
+          conditionReturn: item.conditionReturn,
+          updatedAt: completedAt,
+        });
+      }
+      if (confirmationId) {
+        const confirmationResult = await repository.confirmReturnConfirmation({
+          confirmationId,
+          respondedAt: completedAt,
+          responseNote: confirmationNote,
+        });
+        if (!confirmationResult.rowsAffected) {
+          throw httpError(409, "Diese Rücknahmebestätigung wurde bereits bearbeitet.", "LOAN_RETURN_CONFIRMATION_CLOSED");
+        }
+      }
+      await repository.deleteReturnPreparation({ loanId: loan.id });
+      await insertPreparedLoanDocument(loan.id, preparedReturnDocument, repository);
+      await appendLoanEvent(loan.id, completionActor.employeeNumber, "returned", nextRevision, {
+        confirmationId: confirmationId || null,
+        completionMode: directManagement ? "management" : "second_employee",
+        requestedByEmployeeNumber: recordedByEmployeeNumber,
+        witnessEmployeeNumber: witnessEmployeeNumber || null,
+        borrowerConfirmed: Boolean(borrowerConfirmed),
+        note,
+        responseNote: confirmationNote,
+        items: returnedItems,
+      }, repository);
+      await appendLoanEvent(loan.id, completionActor.employeeNumber, "document_created", nextRevision, {
+        documentId: preparedReturnDocument.id,
+        documentType: preparedReturnDocument.documentType,
+        sha256: preparedReturnDocument.sha256,
+      }, repository);
+    });
+  } catch (error) {
+    cleanupPreparedLoanDocument(preparedReturnDocument);
+    throw error;
+  }
+  await refreshLoanProtectedStorageSnapshot();
+  const [returnedLoan, returnedDocument] = await Promise.all([
+    loanRow(loan.id),
+    loanDocumentRow(preparedReturnDocument.id),
+  ]);
+  const messageText = directManagement
+    ? `Die Rücknahme wurde von ${completionActor.employeeNumber} als zuständige Leitung abgeschlossen.`
+    : `Die Rücknahme wurde von ${completionActor.employeeNumber} gegengeprüft und abgeschlossen.`;
+  for (const recipient of new Set([recordedByEmployeeNumber, loan.borrower_employee_number])) {
+    if (!recipient || recipient === completionActor.employeeNumber) continue;
+    await createPortalNotification(
+      recipient,
+      "loan.returned",
+      "Leihe zurückgenommen",
+      messageText,
+      {
+        target: `/portal.html?tab=loan&loan=${encodeURIComponent(loan.id)}`,
+        entityType: "loan",
+        entityId: loan.id,
+        dedupeKey: `loan:${loan.id}:returned:${nextRevision}:${recipient}`,
+      },
+    );
+  }
+  await notifyLoanDocumentAvailable(returnedLoan, returnedDocument);
+  return { returnedLoan, returnedDocument, nextRevision, completedAt };
+}
+
 app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
   const actor = requirePortalAnyPermissionOrLocal(
     request,
@@ -33238,21 +42028,17 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
     throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
   }
   const witnessEmployeeNumber = String(request.body?.witnessEmployeeNumber || "").trim();
-  const witness = await loanEmployeeRow(witnessEmployeeNumber, { active: true });
-  if (!witness || String(witness.home_location_id || "") !== String(row.location_id)
+  const witness = witnessEmployeeNumber
+    ? await loanEmployeeRow(witnessEmployeeNumber, { active: true })
+    : null;
+  if (witnessEmployeeNumber && (!witness
+    || String(witness.home_location_id || "") !== String(row.location_id)
     || witness.personnel_number === row.borrower_employee_number
-    || witness.personnel_number === actor.employeeNumber) {
+    || witness.personnel_number === actor.employeeNumber)) {
     throw httpError(
       400,
       "Bitte ein anderes aktives Teammitglied dieses Standorts als Rücknahmebestätigung auswählen.",
       "LOAN_RETURN_WITNESS_INVALID",
-    );
-  }
-  if (!await employeeHasLivePortalSession(witness.personnel_number)) {
-    throw httpError(
-      409,
-      `${witness.nickname || witness.full_name} muss das Mitarbeiterportal geöffnet haben, bevor die Rücknahme angefordert wird.`,
-      "LOAN_RETURN_WITNESS_OFFLINE",
     );
   }
   let returnedItems;
@@ -33270,12 +42056,64 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
       "LOAN_RETURN_CONFIRMATION_PENDING",
     );
   }
-  const confirmationId = crypto.randomUUID();
+  const existingPreparation = await loanReturnPreparationRow(row.id);
+  if (existingPreparation
+    && existingPreparation.requested_by_employee_number !== actor.employeeNumber
+    && !managesLocation) {
+    throw httpError(
+      409,
+      "Diese Rücknahme wurde bereits von einer anderen zuständigen Person vorbereitet.",
+      "LOAN_RETURN_PREPARATION_OWNED",
+    );
+  }
   const requestedAt = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   const borrowerConfirmed = actor.employeeNumber === row.borrower_employee_number;
   let photoIds = [];
   let photoAttachmentIds = [];
+  const payload = {
+    items: returnedItems,
+    note,
+    borrowerConfirmed,
+    photoIds,
+    photoAttachmentIds,
+  };
+
+  if (managesLocation && !witness) {
+    photoIds = (await loanPhotoRows(row.id))
+      .filter((photo) => photo.phase === "return")
+      .map((photo) => photo.id);
+    photoAttachmentIds = (await loanPhotoAttachmentRows(row.id))
+      .filter((attachment) => attachment.phase === "return")
+      .map((attachment) => attachment.id);
+    payload.photoIds = photoIds;
+    payload.photoAttachmentIds = photoAttachmentIds;
+    const completed = await completePreparedLoanReturn({
+      loan: row,
+      expectedRevision,
+      returnedItems,
+      note,
+      borrowerConfirmed,
+      recordedByEmployeeNumber: actor.employeeNumber,
+      completionActor: actor,
+      directManagement: true,
+    });
+    auditPortal(actor.employeeNumber, "loan.return.management-complete", "loan", row.id, JSON.stringify({
+      locationId: row.location_id,
+      borrowerEmployeeNumber: row.borrower_employee_number,
+      itemCount: returnedItems.length,
+      photoCount: photoIds.length,
+      photoAttachmentCount: photoAttachmentIds.length,
+      noteProvided: Boolean(note),
+    }));
+    response.json({
+      direct: true,
+      loan: await publicLoan(completed.returnedLoan),
+    });
+    return;
+  }
+
+  const confirmationId = witness ? crypto.randomUUID() : "";
+  const expiresAt = witness ? viennaEndOfDayIso() : null;
   await persistenceProvider.transaction(async (executor) => {
     const repository = createApplicationRepositories(executor).loanModule;
     const current = await repository.getLoan({ loanId: row.id });
@@ -33288,54 +42126,81 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
     photoAttachmentIds = (await repository.listLoanPhotoAttachments({ loanId: row.id }))
       .filter((attachment) => attachment.phase === "return")
       .map((attachment) => attachment.id);
-    await repository.insertReturnConfirmation({
-      id: confirmationId,
+    payload.photoIds = photoIds;
+    payload.photoAttachmentIds = photoAttachmentIds;
+    const currentPreparation = await repository.getReturnPreparation({ loanId: row.id });
+    if (currentPreparation
+      && currentPreparation.requested_by_employee_number !== actor.employeeNumber
+      && !managesLocation) {
+      throw httpError(
+        409,
+        "Diese Rücknahme wurde bereits von einer anderen zuständigen Person vorbereitet.",
+        "LOAN_RETURN_PREPARATION_OWNED",
+      );
+    }
+    await repository.upsertReturnPreparation({
       loanId: row.id,
       requestedByEmployeeNumber: actor.employeeNumber,
-      witnessEmployeeNumber: witness.personnel_number,
       expectedRevision,
-      payloadJson: JSON.stringify({
-        items: returnedItems,
-        note,
-        borrowerConfirmed,
-        photoIds,
-        photoAttachmentIds,
-      }),
-      requestedAt,
-      expiresAt,
+      payloadJson: JSON.stringify(payload),
+      preparedAt: currentPreparation?.prepared_at || requestedAt,
+      updatedAt: requestedAt,
     });
-    await appendLoanEvent(row.id, actor.employeeNumber, "return_confirmation_requested", expectedRevision, {
-      confirmationId,
-      witnessEmployeeNumber: witness.personnel_number,
-      expiresAt,
+    await appendLoanEvent(row.id, actor.employeeNumber, "return_prepared", expectedRevision, {
+      confirmationRequested: Boolean(witness),
       photoIds,
       photoAttachmentIds,
     }, repository);
+    if (witness) {
+      await repository.insertReturnConfirmation({
+        id: confirmationId,
+        loanId: row.id,
+        requestedByEmployeeNumber: actor.employeeNumber,
+        witnessEmployeeNumber: witness.personnel_number,
+        expectedRevision,
+        payloadJson: JSON.stringify(payload),
+        requestedAt,
+        expiresAt,
+      });
+      await appendLoanEvent(row.id, actor.employeeNumber, "return_confirmation_requested", expectedRevision, {
+        confirmationId,
+        witnessEmployeeNumber: witness.personnel_number,
+        expiresAt,
+        photoIds,
+        photoAttachmentIds,
+      }, repository);
+    }
   });
-  auditPortal(actor.employeeNumber, "loan.return.request", "loan", row.id, JSON.stringify({
+  auditPortal(actor.employeeNumber, witness ? "loan.return.request" : "loan.return.prepare", "loan", row.id, JSON.stringify({
     locationId: row.location_id,
     borrowerEmployeeNumber: row.borrower_employee_number,
-    witnessEmployeeNumber: witness.personnel_number,
+    witnessEmployeeNumber: witness?.personnel_number || null,
     itemCount: returnedItems.length,
     photoCount: photoIds.length,
     photoAttachmentCount: photoAttachmentIds.length,
     noteProvided: Boolean(note),
   }));
-  await createPortalNotification(
-    witness.personnel_number,
-    "loan.return_confirmation",
-    "Rücknahme bestätigen",
-    `${actor.nickname || actor.fullName || actor.employeeNumber} bittet um deine Gegenbestätigung.`,
-    {
-      target: `/portal.html?tab=loan&confirmation=${encodeURIComponent(confirmationId)}`,
-      entityType: "loan_return_confirmation",
-      entityId: confirmationId,
-      dedupeKey: `loan-return-confirmation:${confirmationId}`,
-    },
-  );
+  if (witness) {
+    await createPortalNotification(
+      witness.personnel_number,
+      "loan.return_confirmation",
+      "Rücknahme bestätigen",
+      `${actor.nickname || actor.fullName || actor.employeeNumber} bittet um deine Gegenbestätigung bis heute 23:59 Uhr.`,
+      {
+        target: `/portal.html?tab=loan&confirmation=${encodeURIComponent(confirmationId)}`,
+        entityType: "loan_return_confirmation",
+        entityId: confirmationId,
+        dedupeKey: `loan-return-confirmation:${confirmationId}`,
+      },
+    );
+  }
   response.status(202).json({
     loan: await publicLoan(await loanRow(row.id)),
-    confirmation: await publicLoanReturnConfirmation(await loanReturnConfirmationRow(confirmationId)),
+    prepared: true,
+    preparation: await publicLoanReturnPreparation(await loanReturnPreparationRow(row.id)),
+    confirmation: confirmationId
+      ? await publicLoanReturnConfirmation(await loanReturnConfirmationRow(confirmationId))
+      : null,
   });
 });
 
@@ -33519,6 +42384,7 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", as
     if (!confirmationResult.rowsAffected) {
       throw httpError(409, "Diese Rücknahmebestätigung wurde bereits bearbeitet.", "LOAN_RETURN_CONFIRMATION_CLOSED");
     }
+    await repository.deleteReturnPreparation({ loanId: loan.id });
     await insertPreparedLoanDocument(loan.id, preparedReturnDocument, repository);
     await appendLoanEvent(loan.id, actor.employeeNumber, "returned", nextRevision, {
       confirmationId: confirmation.id,
@@ -33598,7 +42464,7 @@ app.get("/api/mobile/v1/bootstrap", async (request, response) => {
 
 app.get("/api/mobile/v1/me/home", async (request, response) => {
   const session = await requireMobileSession(request);
-  response.json(await mobileHomePayload(session, request, new Date()));
+  response.json(await mobileHomePayload(session, request, new Date(), { applyLocationDisplay: true }));
 });
 
 app.get("/api/mobile/v1/me/settings", async (request, response) => {
@@ -33715,6 +42581,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     area: shift.area || "",
     departmentName: shift.department_name || "",
     employeeName: shift.nickname || shift.full_name,
+    employeeColor: /^#[0-9a-f]{6}$/i.test(String(shift.color || "")) ? shift.color : "",
   }));
   response.json({
     location: { id: location.id, name: location.name },
@@ -33722,6 +42589,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     weekEnd,
     calendarWeek: getIsoWeek(weekStart),
     shifts,
+    displaySettings: sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId),
   });
 });
 
@@ -33971,6 +42839,11 @@ async function createOwnSicknessCase(session, body = {}) {
     { asOfDate: today },
   );
   const effectiveContext = staffingRisk.contexts?.[0] || context;
+  const responsibilityContexts = await sicknessResponsibilityContexts(
+    session.employeeNumber,
+    startDate,
+    expectedEnd,
+  );
   const policy = getAmuPolicy();
   const deadlines = sicknessDeadlineState({ startAt: startDate, asOf: new Date(), localDays: policy.localWarningDays, hrDays: policy.hrWarningDays });
   const reportedAt = new Date().toISOString();
@@ -33992,6 +42865,7 @@ async function createOwnSicknessCase(session, body = {}) {
     localDeadlineDate: deadlines.localDeadlineDate,
     hrDeadlineDate: deadlines.hrDeadlineDate,
     staffingRisk,
+    responsibilityContexts,
   }, { hasAum: false, now: new Date(reportedAt) });
   const caseId = await sicknessAmuManagementRepository.transaction(async (repository) => {
     const inserted = await repository.insertSicknessCase({
@@ -34329,6 +43203,746 @@ app.get("/api/portal/v1/amu-access-policy", async (request, response) => {
 app.put("/api/portal/v1/amu-access-policy", async (request, response) => {
   const actor = requireAdminHrOrLocal(request, "hr:settings");
   response.json({ policy: await saveManagerAmuAccessPolicy(actor, request.body || {}), canChange: true });
+});
+
+function portalBirthdayPresentationClaimResponse(presentation = null) {
+  return { presentation: presentation || null };
+}
+
+function portalBirthdayPresentationThemeResponse(theme = null) {
+  return { theme: theme || null };
+}
+
+app.get("/api/portal/v1/me/birthday-presentation/theme", async (request, response) => {
+  response.setHeader("Cache-Control", "private, no-store, max-age=0");
+  response.setHeader("Pragma", "no-cache");
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(
+      428,
+      "Bitte zuerst das persönliche Startpasswort ändern.",
+      "PORTAL_PASSWORD_CHANGE_REQUIRED",
+    );
+  }
+
+  const employeeNumber = String(session.employeeNumber || "").trim();
+  const theme = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const actor = await portalBirthdayPresentationActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    if (!isActivePersonalPortalPrincipal(actor)
+      || String(actor.employeeNumber || "") !== employeeNumber) {
+      throw httpError(
+        401,
+        "Der persönliche Mitarbeiterzugang ist nicht mehr aktiv.",
+        "PORTAL_LOGIN_REQUIRED",
+      );
+    }
+    const [policyRow, assignment] = await Promise.all([
+      repositories.portalBirthdayPresentations.getPolicy(),
+      repositories.portalBirthdayPresentations.getAssignment(employeeNumber),
+    ]);
+    const policy = portalBirthdayPresentationPolicy(policyRow);
+    const presentationId = String(
+      assignment?.presentation_id ?? assignment?.presentationId ?? "off",
+    );
+    const presentation = PORTAL_BIRTHDAY_PRESENTATIONS.find(
+      (item) => item.id === presentationId,
+    );
+    if (!policy.enabled || !presentation) return null;
+
+    const sensitive = await personnelSensitiveProfile(
+      employeeNumber,
+      repositories.organizationPersonnel,
+    );
+    const event = birthdayThemeEventForVienna(sensitive.identity?.birthDate, new Date());
+    return event ? { id: presentation.id } : null;
+  }, { isolation: "serializable", readOnly: true });
+  response.json(portalBirthdayPresentationThemeResponse(theme));
+});
+
+app.post("/api/portal/v1/me/birthday-presentation/claim", async (request, response) => {
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(
+      428,
+      "Bitte zuerst das persönliche Startpasswort ändern.",
+      "PORTAL_PASSWORD_CHANGE_REQUIRED",
+    );
+  }
+  assertPortalCsrf(request);
+  response.setHeader("Cache-Control", "private, no-store, max-age=0");
+  response.setHeader("Pragma", "no-cache");
+  if (!request.body
+    || typeof request.body !== "object"
+    || Array.isArray(request.body)
+    || Object.keys(request.body).length > 0) {
+    throw httpError(
+      400,
+      "Für den Einblendungsabruf sind keine Eingabedaten vorgesehen.",
+      "PORTAL_BIRTHDAY_PRESENTATION_CLAIM_INPUT_INVALID",
+    );
+  }
+
+  const employeeNumber = String(session.employeeNumber || "").trim();
+  const result = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const actor = await portalBirthdayPresentationActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    if (!isActivePersonalPortalPrincipal(actor)
+      || String(actor.employeeNumber || "") !== employeeNumber) {
+      throw httpError(
+        401,
+        "Der persönliche Mitarbeiterzugang ist nicht mehr aktiv.",
+        "PORTAL_LOGIN_REQUIRED",
+      );
+    }
+    const [policyRow, assignment] = await Promise.all([
+      repositories.portalBirthdayPresentations.getPolicy(),
+      repositories.portalBirthdayPresentations.getAssignment(employeeNumber),
+    ]);
+    const policy = portalBirthdayPresentationPolicy(policyRow);
+    const presentationId = String(
+      assignment?.presentation_id ?? assignment?.presentationId ?? "off",
+    );
+    const presentation = PORTAL_BIRTHDAY_PRESENTATIONS.find(
+      (item) => item.id === presentationId,
+    );
+    if (!policy.enabled || !presentation) return null;
+
+    const sensitive = await personnelSensitiveProfile(
+      employeeNumber,
+      repositories.organizationPersonnel,
+    );
+    const event = birthdayEventForVienna(sensitive.identity?.birthDate, new Date());
+    if (!event) return null;
+    if (!amuEncryptionConfiguration?.key) {
+      throw httpError(
+        503,
+        "Der geschützte Einblendungsnachweis ist derzeit nicht verfügbar.",
+        "PORTAL_BIRTHDAY_PRESENTATION_CLAIM_UNAVAILABLE",
+      );
+    }
+    const policyRevision = Number(policy.revision);
+    const assignmentRevision = Number(assignment?.revision || 0);
+    const receiptSha256 = birthdayClaimReceipt(amuEncryptionConfiguration.key, {
+      employeeNumber,
+      eventYear: event.eventYear,
+      presentationId: presentation.id,
+      policyRevision,
+      assignmentRevision,
+    });
+    const claim = await repositories.portalBirthdayPresentations.claimEvent({
+      employeeNumber,
+      eventYear: event.eventYear,
+      presentationId: presentation.id,
+      policyRevision,
+      assignmentRevision,
+      receiptSha256,
+    });
+    return Number(claim?.rowsAffected || 0) === 1 ? {
+      id: presentation.id,
+      label: presentation.label,
+      previewUrl: presentation.previewUrl,
+    } : null;
+  }, { isolation: "serializable" });
+  response.json(portalBirthdayPresentationClaimResponse(result));
+});
+
+function portalBirthdayPresentationInput(value, allowedKeys, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !allowedKeys.includes(key))) {
+    throw httpError(
+      400,
+      `${label} enthält ungültige oder unbekannte Felder.`,
+      "PORTAL_BIRTHDAY_PRESENTATION_INPUT_INVALID",
+    );
+  }
+  return value;
+}
+
+function portalBirthdayPresentationValidationError(error) {
+  if (error instanceof PortalBirthdayPresentationError) {
+    return httpError(400, error.message, error.code);
+  }
+  return error;
+}
+
+function portalBirthdayPresentationAccess(actor) {
+  const access = createPortalBirthdayPresentationAccessSnapshot(actor || {});
+  if (!access.personal
+    || (!access.canManageGlobal && !access.canManageTeam && !access.canDelegateTeam)) {
+    throw httpError(
+      403,
+      "Für die Konfiguration der Geburtstagsdarstellungen fehlt die Berechtigung.",
+      "PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_DENIED",
+    );
+  }
+  return access;
+}
+
+function requirePortalBirthdayPresentationSession(request, { csrf = false } = {}) {
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(
+      428,
+      "Bitte zuerst das persönliche Startpasswort ändern.",
+      "PORTAL_PASSWORD_CHANGE_REQUIRED",
+    );
+  }
+  if (!PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.some(
+    (permission) => session.permissions?.includes(permission),
+  )) {
+    throw httpError(
+      403,
+      "Für die Konfiguration der Geburtstagsdarstellungen fehlt die Berechtigung.",
+      "PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_DENIED",
+    );
+  }
+  if (csrf) assertPortalCsrf(request);
+  return session;
+}
+
+async function portalBirthdayPresentationActor(
+  session,
+  organization = organizationPersonnelRepository,
+) {
+  const [user, context] = await Promise.all([
+    personnelLearningPortalUser(session?.employeeNumber, organization),
+    personnelLearningScopeContext(organization),
+  ]);
+  return personnelLearningPrincipalForUser(user, context);
+}
+
+function portalBirthdayPresentationPolicy(row) {
+  if (!row || !Number.isSafeInteger(Number(row.revision)) || Number(row.revision) < 1) {
+    throw httpError(
+      503,
+      "Die globale Geburtstagsrichtlinie ist derzeit nicht konsistent verfügbar.",
+      "PORTAL_BIRTHDAY_PRESENTATION_POLICY_UNAVAILABLE",
+    );
+  }
+  return Object.freeze({
+    enabled: row.enabled === true || Number(row.enabled) === 1,
+    revision: Number(row.revision),
+  });
+}
+
+function portalBirthdayPresentationPublicId(value) {
+  return String(value || "") === "off" ? null : String(value || "") || null;
+}
+
+function activePortalBirthdayPresentationTopology(locations, departments) {
+  const locationById = new Map((locations || [])
+    .filter((location) => location?.active !== false && Number(location?.active) !== 0)
+    .map((location) => [String(location.id || ""), location]));
+  const departmentById = new Map((departments || [])
+    .filter((department) => department?.active !== false && Number(department?.active) !== 0)
+    .filter((department) => locationById.has(String(department.location_id ?? department.locationId ?? "")))
+    .map((department) => [Number(department.id), department]));
+  return Object.freeze({ locationById, departmentById });
+}
+
+function portalBirthdayPresentationSubject(employee, assignment, topology) {
+  const employeeNumber = String(employee?.personnel_number ?? employee?.personnelNumber ?? "").trim();
+  const locationId = String(employee?.home_location_id ?? employee?.homeLocationId ?? "").trim();
+  const departmentId = Number(
+    employee?.preferred_department_id ?? employee?.preferredDepartmentId ?? 0,
+  ) || null;
+  const location = topology.locationById.get(locationId);
+  const department = departmentId ? topology.departmentById.get(departmentId) : null;
+  const validDepartment = !departmentId
+    || (department && String(department.location_id ?? department.locationId ?? "") === locationId);
+  return {
+    employeeNumber,
+    displayName: String(
+      employee?.nickname || employee?.full_name || employee?.fullName || employeeNumber,
+    ).replace(/\s+/g, " ").trim().slice(0, 160),
+    locationId,
+    departmentId,
+    active: Boolean(employee?.active) && Boolean(location) && validDepartment,
+    presentationId: assignment?.presentation_id ?? assignment?.presentationId ?? null,
+    revision: Number(assignment?.revision || 0),
+    locationName: String(location?.name || locationId),
+    departmentName: String(department?.name || ""),
+  };
+}
+
+function portalBirthdayPresentationScopePayload(access, topology) {
+  if (access.role === "developer") {
+    return Object.freeze({ kind: "installation", label: "Gesamte Installation", delegated: false });
+  }
+  if (access.canManageGlobal && !access.canManageTeam) {
+    return Object.freeze({ kind: "global-settings", label: "Globale Freigabe", delegated: false });
+  }
+  if (access.role === "manager") {
+    const names = [...new Set(access.scopes
+      .filter((scope) => scope.departmentId === null)
+      .map((scope) => topology.locationById.get(scope.locationId)?.name)
+      .filter(Boolean))];
+    return Object.freeze({
+      kind: "location",
+      label: names.length === 1 ? names[0] : names.length ? `${names.length} Filialen` : "Kein aktiver Filialbereich",
+      delegated: false,
+    });
+  }
+  if (access.role === "department_manager") {
+    const names = [...new Set(access.scopes
+      .filter((scope) => scope.departmentId !== null)
+      .map((scope) => topology.departmentById.get(Number(scope.departmentId))?.name)
+      .filter(Boolean))];
+    return Object.freeze({
+      kind: "department",
+      label: names.length === 1 ? names[0] : names.length ? `${names.length} Abteilungen` : "Kein aktiver Abteilungsbereich",
+      delegated: true,
+    });
+  }
+  return Object.freeze({ kind: "global-settings", label: "Globale Freigabe", delegated: false });
+}
+
+async function portalBirthdayPresentationDelegates(access, organization, topology) {
+  if (!access.canDelegateTeam) return [];
+  const users = await organization.listPortalUsersForAdmin();
+  const candidates = users.filter((user) => (
+    String(user.role || "") === "department_manager"
+      && Boolean(user.active)
+      && Boolean(user.employee_active)
+  ));
+  const projected = [];
+  for (const user of candidates) {
+    const subject = portalBirthdayPresentationSubject({
+      personnel_number: user.personnel_number,
+      full_name: user.full_name,
+      nickname: user.nickname,
+      home_location_id: user.home_location_id,
+      preferred_department_id: user.preferred_department_id,
+      active: user.employee_active,
+    }, null, topology);
+    if (!access.canDelegateSubject(subject) || subject.departmentId === null) continue;
+    const [grantedPermissions, deniedPermissions, scopeRows] = await Promise.all([
+      organization.listPortalPermissionGrants(subject.employeeNumber),
+      organization.listPortalPermissionDenials(subject.employeeNumber),
+      organization.listPortalAccessScopes(subject.employeeNumber),
+    ]);
+    const hasOwnDepartmentScope = scopeRows.some((scope) => (
+      String(scope.location_id ?? scope.locationId ?? "") === subject.locationId
+        && Number(scope.department_id ?? scope.departmentId ?? 0) === subject.departmentId
+    ));
+    if (!hasOwnDepartmentScope) continue;
+    const denied = deniedPermissions.includes(
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+    );
+    projected.push({
+      employeeNumber: subject.employeeNumber,
+      displayName: subject.displayName,
+      departmentName: subject.departmentName,
+      enabled: !denied && grantedPermissions.includes(
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+      ),
+      denied,
+    });
+  }
+  return projected.sort((left, right) => (
+    left.displayName.localeCompare(right.displayName, "de-AT")
+      || left.employeeNumber.localeCompare(right.employeeNumber, "de-AT", { numeric: true })
+  ));
+}
+
+async function portalBirthdayPresentationSettingsPayload(actor, repositories) {
+  const access = portalBirthdayPresentationAccess(actor);
+  const [policyRow, assignments, employees, locations, departments] = await Promise.all([
+    repositories.portalBirthdayPresentations.getPolicy(),
+    repositories.portalBirthdayPresentations.listAssignments(),
+    repositories.organizationPersonnel.listEmployees(),
+    repositories.organizationPersonnel.listLocations(false),
+    repositories.organizationPersonnel.listDepartments(false),
+  ]);
+  const topology = activePortalBirthdayPresentationTopology(locations, departments);
+  const assignmentByEmployee = new Map(assignments.map((assignment) => [
+    String(assignment.employee_number ?? assignment.employeeNumber ?? ""),
+    assignment,
+  ]));
+  const visibleEmployees = access.canManageTeam
+    ? employees.map((employee) => portalBirthdayPresentationSubject(
+      employee,
+      assignmentByEmployee.get(String(employee.personnel_number ?? employee.personnelNumber ?? "")),
+      topology,
+    )).filter((subject) => access.canManageSubject(subject)).map((subject) => ({
+      employeeNumber: subject.employeeNumber,
+      displayName: subject.displayName,
+      locationName: subject.locationName,
+      departmentName: subject.departmentName,
+      presentationId: portalBirthdayPresentationPublicId(subject.presentationId),
+      revision: subject.revision,
+    }))
+    : [];
+  visibleEmployees.sort((left, right) => (
+    left.locationName.localeCompare(right.locationName, "de-AT")
+      || left.departmentName.localeCompare(right.departmentName, "de-AT")
+      || left.displayName.localeCompare(right.displayName, "de-AT")
+      || left.employeeNumber.localeCompare(right.employeeNumber, "de-AT", { numeric: true })
+  ));
+  return {
+    capabilities: {
+      canManageGlobal: access.canManageGlobal,
+      canManageTeam: access.canManageTeam,
+      canDelegateTeam: access.canDelegateTeam,
+    },
+    scope: portalBirthdayPresentationScopePayload(access, topology),
+    policy: portalBirthdayPresentationPolicy(policyRow),
+    presentations: PORTAL_BIRTHDAY_PRESENTATIONS.map((presentation) => ({ ...presentation })),
+    employees: visibleEmployees,
+    delegates: await portalBirthdayPresentationDelegates(
+      access,
+      repositories.organizationPersonnel,
+      topology,
+    ),
+  };
+}
+
+async function portalBirthdayPresentationLiveContext(session, repositories, capability) {
+  const actor = await portalBirthdayPresentationActor(
+    session,
+    repositories.organizationPersonnel,
+  );
+  const access = portalBirthdayPresentationAccess(actor);
+  if (access[capability] !== true) {
+    throw httpError(
+      403,
+      "Die erforderliche Berechtigung ist nicht mehr wirksam.",
+      "PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_DENIED",
+    );
+  }
+  return Object.freeze({ actor, access });
+}
+
+async function portalBirthdayPresentationSerializableMutation(work) {
+  try {
+    return await persistenceProvider.transaction(async (executor) => (
+      work(createApplicationRepositories(executor))
+    ), { isolation: "serializable" });
+  } catch (error) {
+    if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)
+      || isUniquePersistenceViolation(error)) {
+      throw httpError(
+        409,
+        "Die Geburtstagseinstellung wurde gleichzeitig geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_CONCURRENT_CHANGE",
+      );
+    }
+    throw error;
+  }
+}
+
+async function portalBirthdayPresentationTarget(
+  employeeNumber,
+  access,
+  organization,
+  subjectCapability = "canManageSubject",
+) {
+  const [employee, locations, departments] = await Promise.all([
+    organization.getEmployeeForUpdate(employeeNumber),
+    organization.listLocations(false),
+    organization.listDepartments(false),
+  ]);
+  const topology = activePortalBirthdayPresentationTopology(locations, departments);
+  const subject = portalBirthdayPresentationSubject(employee, null, topology);
+  if (!employee || typeof access[subjectCapability] !== "function"
+    || !access[subjectCapability](subject)) {
+    throw httpError(
+      404,
+      "Das aktive Teammitglied wurde im berechtigten Bereich nicht gefunden.",
+      "PORTAL_BIRTHDAY_PRESENTATION_EMPLOYEE_NOT_FOUND",
+    );
+  }
+  return Object.freeze({ employee, subject, topology });
+}
+
+app.get("/api/portal/v1/birthday-presentation-settings", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request);
+  const result = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const actor = await portalBirthdayPresentationActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  }, { isolation: "serializable", readOnly: true });
+  response.json(result);
+});
+
+app.put("/api/portal/v1/birthday-presentation-settings/global", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request, { csrf: true });
+  const body = portalBirthdayPresentationInput(
+    request.body,
+    ["enabled", "expectedRevision"],
+    "Die globale Geburtstagsrichtlinie",
+  );
+  let input;
+  try {
+    input = validatePortalBirthdayPresentationPolicyInput(body);
+  } catch (error) {
+    throw portalBirthdayPresentationValidationError(error);
+  }
+  const result = await portalBirthdayPresentationSerializableMutation(async (repositories) => {
+    const { actor } = await portalBirthdayPresentationLiveContext(
+      session,
+      repositories,
+      "canManageGlobal",
+    );
+    const current = portalBirthdayPresentationPolicy(
+      await repositories.portalBirthdayPresentations.getPolicy(),
+    );
+    if (current.revision !== input.expectedRevision) {
+      throw httpError(
+        409,
+        "Die globale Freigabe wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_REVISION_CONFLICT",
+      );
+    }
+    if (current.enabled === input.enabled) {
+      return portalBirthdayPresentationSettingsPayload(actor, repositories);
+    }
+    const updated = await repositories.portalBirthdayPresentations.updatePolicy({
+      enabled: input.enabled,
+      expectedRevision: input.expectedRevision,
+      updatedAt: new Date().toISOString(),
+    });
+    if (Number(updated?.rowsAffected || 0) !== 1) {
+      throw httpError(
+        409,
+        "Die globale Freigabe wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_REVISION_CONFLICT",
+      );
+    }
+    await repositories.organizationPersonnel.insertAudit(
+      actor.employeeNumber,
+      "portal.birthday-presentation.policy.update",
+      "portal_birthday_presentation_policy",
+      "global",
+      JSON.stringify({
+        schemaVersion: 1,
+        previousEnabled: current.enabled,
+        enabled: input.enabled,
+        previousRevision: current.revision,
+        revision: current.revision + 1,
+      }),
+    );
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  });
+  response.json(result);
+});
+
+app.put("/api/portal/v1/birthday-presentation-settings/employees/:employeeNumber", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request, { csrf: true });
+  const body = portalBirthdayPresentationInput(
+    request.body,
+    ["presentationId", "expectedRevision"],
+    "Die Geburtstagsdarstellung",
+  );
+  let input;
+  try {
+    input = validatePortalBirthdayPresentationAssignmentInput({
+      employeeNumber: String(request.params.employeeNumber || ""),
+      ...body,
+    });
+  } catch (error) {
+    throw portalBirthdayPresentationValidationError(error);
+  }
+  const result = await portalBirthdayPresentationSerializableMutation(async (repositories) => {
+    const { actor, access } = await portalBirthdayPresentationLiveContext(
+      session,
+      repositories,
+      "canManageTeam",
+    );
+    await portalBirthdayPresentationTarget(
+      input.employeeNumber,
+      access,
+      repositories.organizationPersonnel,
+    );
+    const currentRow = await repositories.portalBirthdayPresentations.getAssignment(
+      input.employeeNumber,
+    );
+    const current = {
+      presentationId: String(
+        currentRow?.presentation_id ?? currentRow?.presentationId ?? "off",
+      ),
+      revision: Number(currentRow?.revision || 0),
+    };
+    if (current.revision !== input.expectedRevision) {
+      throw httpError(
+        409,
+        "Die Darstellung wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_REVISION_CONFLICT",
+      );
+    }
+    if (current.presentationId === input.presentationId) {
+      return portalBirthdayPresentationSettingsPayload(actor, repositories);
+    }
+    const mutation = currentRow
+      ? await repositories.portalBirthdayPresentations.updateAssignment({
+          employeeNumber: input.employeeNumber,
+          presentationId: input.presentationId,
+          expectedRevision: input.expectedRevision,
+          updatedAt: new Date().toISOString(),
+        })
+      : await repositories.portalBirthdayPresentations.insertAssignment({
+          employeeNumber: input.employeeNumber,
+          presentationId: input.presentationId,
+          updatedAt: new Date().toISOString(),
+        });
+    if (Number(mutation?.rowsAffected || 0) !== 1) {
+      throw httpError(
+        409,
+        "Die Darstellung wurde zwischenzeitlich geändert. Bitte neu laden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_REVISION_CONFLICT",
+      );
+    }
+    await repositories.organizationPersonnel.insertAudit(
+      actor.employeeNumber,
+      "portal.birthday-presentation.assignment.update",
+      "portal_birthday_presentation_assignment",
+      input.employeeNumber,
+      JSON.stringify({
+        schemaVersion: 1,
+        previousPresentationId: portalBirthdayPresentationPublicId(current.presentationId),
+        presentationId: portalBirthdayPresentationPublicId(input.presentationId),
+        previousRevision: current.revision,
+        revision: current.revision + 1,
+      }),
+    );
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  });
+  response.json(result);
+});
+
+app.put("/api/portal/v1/birthday-presentation-settings/delegates/:employeeNumber", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request, { csrf: true });
+  const body = portalBirthdayPresentationInput(
+    request.body,
+    ["enabled"],
+    "Die Delegation",
+  );
+  if (typeof body.enabled !== "boolean") {
+    throw httpError(
+      400,
+      "Bitte den gewünschten Delegationsstatus angeben.",
+      "PORTAL_BIRTHDAY_PRESENTATION_DELEGATION_INVALID",
+    );
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  if (!employeeNumber || /[\u0000-\u001f\u007f]/u.test(employeeNumber)
+    || employeeNumber.length > 120) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Abteilungsleitung auswählen.",
+      "PORTAL_BIRTHDAY_PRESENTATION_DELEGATION_INVALID",
+    );
+  }
+  const result = await portalBirthdayPresentationSerializableMutation(async (repositories) => {
+    const { actor, access } = await portalBirthdayPresentationLiveContext(
+      session,
+      repositories,
+      "canDelegateTeam",
+    );
+    const targetUser = await personnelLearningPortalUser(
+      employeeNumber,
+      repositories.organizationPersonnel,
+    );
+    const { subject: target } = await portalBirthdayPresentationTarget(
+      employeeNumber,
+      access,
+      repositories.organizationPersonnel,
+      "canDelegateSubject",
+    );
+    const hasOwnDepartmentScope = targetUser?.scopes?.some((scope) => (
+      String(scope.locationId ?? scope.location_id ?? "") === target.locationId
+        && Number(scope.departmentId ?? scope.department_id ?? 0) === target.departmentId
+    ));
+    if (targetUser?.role !== "department_manager"
+      || target.departmentId === null
+      || !hasOwnDepartmentScope
+      || !access.canDelegateSubject(target)
+      || (body.enabled && targetUser.active !== true)) {
+      throw httpError(
+        404,
+        "Die aktive Abteilungsleitung wurde im berechtigten Bereich nicht gefunden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_DELEGATE_NOT_FOUND",
+      );
+    }
+    const denied = targetUser.deniedPermissions.includes(
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+    );
+    const granted = targetUser.grantedPermissions.includes(
+      PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+    );
+    const globalAuthority = access.canManageGlobal === true;
+    if (!globalAuthority && body.enabled && denied) {
+      throw httpError(
+        409,
+        "Das Recht wurde übergeordnet gesperrt und kann hier nicht aktiviert werden.",
+        "PORTAL_BIRTHDAY_PRESENTATION_DELEGATION_LOCKED",
+      );
+    }
+    const desiredDenied = globalAuthority ? !body.enabled : denied;
+    const desiredGranted = body.enabled && !desiredDenied;
+    if (granted === desiredGranted && denied === desiredDenied) {
+      return portalBirthdayPresentationSettingsPayload(actor, repositories);
+    }
+    if (granted && !desiredGranted) {
+      await repositories.organizationPersonnel.deletePermissionGrant(
+        employeeNumber,
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+      );
+    } else if (!granted && desiredGranted) {
+      await repositories.organizationPersonnel.insertPermissionGrant(
+        employeeNumber,
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+        actor.employeeNumber,
+      );
+    }
+    if (denied && !desiredDenied) {
+      await repositories.organizationPersonnel.deletePermissionDenial(
+        employeeNumber,
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+      );
+    } else if (!denied && desiredDenied) {
+      await repositories.organizationPersonnel.insertPermissionDenial(
+        employeeNumber,
+        PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+        actor.employeeNumber,
+      );
+    }
+    await repositories.organizationPersonnel.revokePortalSessions(employeeNumber);
+    await repositories.organizationPersonnel.revokeMobileSessions(
+      employeeNumber,
+      "birthday_presentation_permission_changed",
+    );
+    await repositories.organizationPersonnel.insertAudit(
+      actor.employeeNumber,
+      globalAuthority && !body.enabled
+        ? "portal.birthday-presentation.permission.deny"
+        : globalAuthority && denied
+          ? "portal.birthday-presentation.permission.restore"
+          : body.enabled
+            ? "portal.birthday-presentation.permission.grant"
+            : "portal.birthday-presentation.permission.revoke",
+      "portal_user",
+      employeeNumber,
+      JSON.stringify({
+        schemaVersion: 1,
+        permission: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE,
+        enabled: body.enabled,
+        authority: globalAuthority ? "pl_plus" : "manager",
+      }),
+    );
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  });
+  response.json(result);
 });
 
 app.get("/api/portal/v1/greeting-settings", (request, response) => {
@@ -38553,6 +48167,11 @@ async function createOwnAmuReport(session, { fields, documents }) {
       { asOfDate: viennaTodayIso() },
     );
     const preparedEffectiveContext = preparedStaffingRisk.contexts?.[0] || reportContext;
+    const preparedResponsibilityContexts = await sicknessResponsibilityContexts(
+      session.employeeNumber,
+      incapacityFrom,
+      incapacityTo,
+    );
     const preparedReportedAt = new Date().toISOString();
     const preparedSicknessRetentionDays = sicknessCaseRetentionDays();
     const preparedPurgeAfter = addDays(
@@ -38581,6 +48200,7 @@ async function createOwnAmuReport(session, { fields, documents }) {
       localDeadlineDate: preparedDeadlines.localDeadlineDate,
       hrDeadlineDate: preparedDeadlines.hrDeadlineDate,
       staffingRisk: preparedStaffingRisk,
+      responsibilityContexts: preparedResponsibilityContexts,
     }, { hasAum: true, now: new Date(preparedReportedAt) });
     const transactionOutcome = await sicknessAmuManagementRepository.transaction(async (repository) => {
       if (linkedSicknessCase) {
@@ -39275,19 +48895,42 @@ app.post("/api/portal/v1/me/time-off-check", async (request, response) => {
 
 app.get("/api/portal/v1/me/time-off-slots", async (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
-  const date = String(request.query.date || "");
-  if (!isIsoDate(date)) throw httpError(400, "Bitte zuerst ein gültiges Datum auswählen.");
-  const context = await absenceEmployeeRequestContext(session.employeeNumber, date);
-  const settings = await settingsForLocation(context.locationId);
-  const hours = await operatingHours(date, settings);
-  const block = getGlobalDayBlockForDate(date, context.locationId);
-  if (!hours || block) {
-    response.json({ date, closed: true, reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.", startTimes: [], endTimes: [] });
-    return;
+  response.json(await ownTimeOffSlots(session.employeeNumber, String(request.query.date || "")));
+});
+
+app.get("/api/portal/v1/branch-portal-settings", async (request, response) => {
+  const session = requirePortalSession(request, BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION);
+  const locationId = await branchPortalDisplaySettingsLocation(session, request.query || {});
+  try {
+    response.json({
+      locationId,
+      settings: sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId),
+    });
+  } catch (error) {
+    throw branchOrderHttpError(error);
   }
-  const values = [];
-  for (let minute = timeToMinutes(hours.start); minute <= timeToMinutes(hours.end); minute += 15) values.push(minutesToTime(minute));
-  response.json({ date, closed: false, start: hours.start, end: hours.end, startTimes: values.slice(0, -1), endTimes: values.slice(1) });
+});
+
+app.put("/api/portal/v1/branch-portal-settings", async (request, response) => {
+  const session = requirePortalSession(request, BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION);
+  assertPortalCsrf(request);
+  const locationId = await branchPortalDisplaySettingsLocation(session, request.body || {});
+  try {
+    const settings = sqliteBranchOrderOperations.saveBranchPortalSettings(
+      locationId,
+      request.body?.settings,
+      portalActorId(session),
+    );
+    auditPortal(portalActorId(session), "branch-portal.settings.update", "branch_order_location", locationId, JSON.stringify({
+      scheduleDisplayMode: settings.scheduleDisplayMode,
+      mobileHideElapsedDays: settings.mobileHideElapsedDays,
+      orderAutosaveEnabled: settings.orderAutosaveEnabled,
+      orderAutosaveMinutes: settings.orderAutosaveMinutes,
+    }));
+    response.json({ locationId, settings });
+  } catch (error) {
+    throw branchOrderHttpError(error);
+  }
 });
 
 app.get("/api/portal/v1/me/time-off-requests", async (request, response) => {
@@ -39507,8 +49150,14 @@ async function sessionCanReadAbsenceEntry(session, entry) {
     String(entry.employee_number || ""),
   ) || {};
   const locationId = String(entry.location_id || entry.scoped_location_id || employee.home_location_id || "");
-  const departmentId = Number(entry.preferred_department_id || employee.preferred_department_id || 0) || null;
-  return sessionMatchesOrganizationalContext(session, locationId, departmentId);
+  const departmentId = Number(
+    entry.review_department_id || entry.preferred_department_id || employee.preferred_department_id || 0,
+  ) || null;
+  if (sessionMatchesOrganizationalContext(session, locationId, departmentId)) return true;
+  const originLocationId = isTimeOff ? String(entry.origin_location_id || "") : "";
+  return Boolean(originLocationId
+    && originLocationId !== locationId
+    && sessionMatchesOrganizationalContext(session, originLocationId, null));
 }
 
 async function absenceEntryCapabilities(session, entry) {
@@ -39518,7 +49167,9 @@ async function absenceEntryCapabilities(session, entry) {
     String(entry.employee_number || ""),
   ) || {};
   const locationId = String(entry.location_id || entry.scoped_location_id || employee.home_location_id || "");
-  const departmentId = Number(entry.preferred_department_id || employee.preferred_department_id || 0) || null;
+  const departmentId = Number(
+    entry.review_department_id || entry.preferred_department_id || employee.preferred_department_id || 0,
+  ) || null;
   const canManage = sessionCanManageLocalContext(session, { locationId, departmentId, permission });
   const status = String(entry.status || "");
   return {
@@ -39566,6 +49217,7 @@ app.get("/api/portal/v1/absence-requests", async (request, response) => {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || Number(b.id) - Number(a.id));
   const actionable = requests.filter((entry) => {
     if (!["pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) return false;
+    if (entry.capabilities?.decide !== true) return false;
     if (entry.approval_stage === "hr") return sessionCanApproveHr(session);
     return session.role !== "hr" || ["developer", "admin"].includes(session.role)
       || isLocalSystemSession(session);
@@ -39605,6 +49257,12 @@ async function finalizeVacationRequest(
 ) {
   const preparation = prepared || await prepareVacationRequestFinalization(entry);
   const vacation = preparation.vacation;
+  await assertNoVacationLendingOverlap(
+    vacation.employeeNumber,
+    vacation.dateFrom,
+    vacation.dateTo,
+    repository,
+  );
   const groupId = entry.vacation_group_id || createVacationGroupId();
   await insertVacationEntries(vacation, groupId, repository);
   await repository.finalizeVacationRequest({
@@ -39617,6 +49275,14 @@ async function finalizeVacationRequest(
 }
 
 async function prepareTimeOffRequestFinalization(entry) {
+  const responsibility = {
+    mixed: false,
+    lent: Boolean(entry.lending_id),
+    locationId: entry.location_id,
+    originLocationId: entry.origin_location_id || entry.location_id,
+    departmentId: Number(entry.review_department_id || 0) || null,
+    lendingId: entry.lending_id || null,
+  };
   const check = await evaluateTimeOffRequest(entry.employee_number, {
     date: entry.date_from || entry.request_date,
     dateFrom: entry.date_from || entry.request_date,
@@ -39625,8 +49291,8 @@ async function prepareTimeOffRequestFinalization(entry) {
     startTime: entry.start_time,
     endTime: entry.end_time,
     excludeRequestId: entry.id,
-  });
-  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  }, responsibility);
+  if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
   return {
     check,
     mutation: await prepareApprovedTimeOffMutation(entry),
@@ -39670,6 +49336,14 @@ async function prepareTimeOffChangeFinalization(entry) {
   let check = null;
   let replacementMutation = null;
   if (entry.request_type === "change") {
+    const responsibility = {
+      mixed: false,
+      lent: Boolean(entry.lending_id),
+      locationId: entry.location_id,
+      originLocationId: entry.origin_location_id || entry.location_id,
+      departmentId: Number(entry.review_department_id || 0) || null,
+      lendingId: entry.lending_id || null,
+    };
     check = await evaluateTimeOffRequest(entry.employee_number, {
       date: entry.requested_date_from,
       dateFrom: entry.requested_date_from,
@@ -39678,12 +49352,16 @@ async function prepareTimeOffChangeFinalization(entry) {
       startTime: entry.requested_start_time,
       endTime: entry.requested_end_time,
       excludeRequestId: original.id,
-    });
-    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+    }, responsibility);
+    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     const allDay = Boolean(entry.requested_all_day)
       || entry.requested_date_to !== entry.requested_date_from;
     replacementMutation = await prepareApprovedTimeOffMutation({
       ...original,
+      location_id: responsibility.locationId,
+      origin_location_id: responsibility.originLocationId,
+      review_department_id: responsibility.departmentId,
+      lending_id: responsibility.lendingId,
       request_date: entry.requested_date_from,
       date_from: entry.requested_date_from,
       date_to: entry.requested_date_to,
@@ -39728,6 +49406,10 @@ async function finalizeTimeOffChangeRequest(
     const allDay = Boolean(entry.requested_all_day) || entry.requested_date_to !== entry.requested_date_from;
     await repository.replaceOriginalTimeOff({
       id: Number(original.id),
+      locationId: entry.location_id,
+      originLocationId: entry.origin_location_id || entry.location_id,
+      reviewDepartmentId: Number(entry.review_department_id || 0) || null,
+      lendingId: entry.lending_id || null,
       dateFrom: entry.requested_date_from,
       dateTo: entry.requested_date_to,
       allDay: allDay ? 1 : 0,
@@ -39794,6 +49476,14 @@ async function finalizeVacationChangeRequest(
 ) {
   const preparation = prepared || await prepareVacationChangeFinalization(entry);
   const { current, replacement } = preparation;
+  if (replacement) {
+    await assertNoVacationLendingOverlap(
+      replacement.employeeNumber,
+      replacement.dateFrom,
+      replacement.dateTo,
+      repository,
+    );
+  }
   await deleteVacationGroup(
     entry.vacation_group_id,
     actor,
@@ -39911,9 +49601,20 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
       endTime,
       excludeRequestId: preflightEntry.id,
     });
-    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
+    const responsibility = await assertTimeOffResponsibility(preflightEntry.employee_number, {
+      dateFrom,
+      dateTo,
+      allDay,
+      startTime,
+      endTime,
+    });
     const replacement = {
       ...preflightEntry,
+      location_id: responsibility.locationId,
+      origin_location_id: responsibility.originLocationId,
+      review_department_id: responsibility.departmentId,
+      lending_id: responsibility.lendingId,
       request_date: dateFrom,
       date_from: dateFrom,
       date_to: dateTo,
@@ -39929,6 +49630,7 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
       startTime,
       endTime,
       check,
+      responsibility,
       restoreMutation: await prepareRestoreApprovedTimeOffMutation(preflightEntry),
       finalization: {
         check,
@@ -39941,8 +49643,10 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
     && preflightEntry.status === "approved"
     ? await prepareRestoreApprovedTimeOffMutation(preflightEntry)
     : null;
-  const outcome = await absenceManagementRepository.transaction(async (repository) => {
-    const requestMethod = repository[`requestById${repositoryKind}`];
+  let outcome;
+  try {
+    outcome = await absenceManagementRepository.transaction(async (repository) => {
+      const requestMethod = repository[`requestById${repositoryKind}`];
     let entry = await requestMethod(Number(request.params.id));
     if (!entry) throw httpError(404, "Der Antrag wurde nicht gefunden.");
     if (!entry.location_id) {
@@ -40097,6 +49801,10 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
         );
         await repository.replaceOriginalTimeOff({
           id: Number(entry.id),
+          locationId: directTimeOffChange.responsibility.locationId,
+          originLocationId: directTimeOffChange.responsibility.originLocationId,
+          reviewDepartmentId: directTimeOffChange.responsibility.departmentId,
+          lendingId: directTimeOffChange.responsibility.lendingId,
           dateFrom,
           dateTo,
           allDay: allDay ? 1 : 0,
@@ -40205,12 +49913,15 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", async (request, resp
       updated.status,
       session.employeeNumber,
     );
-    return {
-      ok: true,
-      request: { ...updated, status: publicRequestStatus(updated.status) },
-      ...result,
-    };
-  });
+      return {
+        ok: true,
+        request: { ...updated, status: publicRequestStatus(updated.status) },
+        ...result,
+      };
+    });
+  } catch (error) {
+    throw staffAssignmentAbsenceConstraintError(error);
+  }
   response.json(outcome);
 });
 
@@ -40231,57 +49942,62 @@ app.put("/api/portal/v1/time-off-requests/:id/decision", async (request, respons
   const preparation = decision === "approved"
     ? await prepareTimeOffRequestFinalization(entry)
     : null;
-  const optionId = await absenceManagementRepository.transaction(async (repository) => {
-    let approvedOptionId = null;
-    if (decision === "approved") {
-      await repository.transitionTimeOffLocalApproved({
-        id: Number(entry.id),
-        note: "",
-        actor: session.employeeNumber,
-      });
-      approvedOptionId = (
-        await finalizeTimeOffRequest(
-          entry,
-          session.employeeNumber,
-          "",
-          repository,
-          preparation,
-        )
-      ).optionId;
-    } else {
-      await repository.transitionTimeOffReject({
-        id: Number(entry.id),
-        note: "",
-        actor: session.employeeNumber,
-      });
-    }
-    await recordRequestDecision(
-      "time_off",
-      entry.id,
-      "local",
-      decision === "approved" ? "approve" : "reject",
-      session.employeeNumber,
-      "",
-      repository,
-    );
-    await auditAbsence(
-      repository,
-      session.employeeNumber,
-      `time_off.request.${decision}`,
-      "time_off_request",
-      String(entry.id),
-    );
-    const updated = await repository.requestByIdTimeOff(Number(entry.id));
-    await resolveAbsenceRequestReviewNotifications(repository, "time_off", entry.id);
-    await notifyAbsenceRequestDecision(
-      repository,
-      updated,
-      "time_off",
-      updated.status,
-      session.employeeNumber,
-    );
-    return approvedOptionId;
-  });
+  let optionId;
+  try {
+    optionId = await absenceManagementRepository.transaction(async (repository) => {
+      let approvedOptionId = null;
+      if (decision === "approved") {
+        await repository.transitionTimeOffLocalApproved({
+          id: Number(entry.id),
+          note: "",
+          actor: session.employeeNumber,
+        });
+        approvedOptionId = (
+          await finalizeTimeOffRequest(
+            entry,
+            session.employeeNumber,
+            "",
+            repository,
+            preparation,
+          )
+        ).optionId;
+      } else {
+        await repository.transitionTimeOffReject({
+          id: Number(entry.id),
+          note: "",
+          actor: session.employeeNumber,
+        });
+      }
+      await recordRequestDecision(
+        "time_off",
+        entry.id,
+        "local",
+        decision === "approved" ? "approve" : "reject",
+        session.employeeNumber,
+        "",
+        repository,
+      );
+      await auditAbsence(
+        repository,
+        session.employeeNumber,
+        `time_off.request.${decision}`,
+        "time_off_request",
+        String(entry.id),
+      );
+      const updated = await repository.requestByIdTimeOff(Number(entry.id));
+      await resolveAbsenceRequestReviewNotifications(repository, "time_off", entry.id);
+      await notifyAbsenceRequestDecision(
+        repository,
+        updated,
+        "time_off",
+        updated.status,
+        session.employeeNumber,
+      );
+      return approvedOptionId;
+    });
+  } catch (error) {
+    throw staffAssignmentAbsenceConstraintError(error);
+  }
   response.json({ ok: true, id: entry.id, status: decision, optionId });
 });
 
@@ -40505,6 +50221,12 @@ async function createOwnVacationRequest(session, body = {}) {
     vacation.dateFrom,
   );
   return absenceManagementRepository.transaction(async (repository) => {
+    await assertNoVacationLendingOverlap(
+      session.employeeNumber,
+      vacation.dateFrom,
+      vacation.dateTo,
+      repository,
+    );
     const overlapping = await repository.vacationOverlap({
       employeeNumber: session.employeeNumber,
       excludeId: 0,
@@ -40574,6 +50296,12 @@ async function updateOwnVacationRequest(session, requestId, body = {}) {
   const availability = await evaluateVacationRequest(session.employeeNumber, { dateFrom, dateTo, excludeGroupId: `request-${entry.id}` });
   if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
   return absenceManagementRepository.transaction(async (repository) => {
+    await assertNoVacationLendingOverlap(
+      session.employeeNumber,
+      dateFrom,
+      dateTo,
+      repository,
+    );
     const overlapping = await repository.vacationOverlap({
       employeeNumber: session.employeeNumber,
       excludeId: Number(entry.id),
@@ -40655,6 +50383,14 @@ async function createOwnVacationChangeRequest(session, body = {}) {
     })) {
       throw httpError(409, "Fuer diesen Urlaub besteht bereits ein offener Aenderungs- oder Stornoantrag.", "VACATION_CHANGE_EXISTS");
     }
+    if (requestType === "change") {
+      await assertNoVacationLendingOverlap(
+        session.employeeNumber,
+        requestedFrom,
+        requestedTo,
+        repository,
+      );
+    }
     const result = await repository.insertVacationChange({
       employeeNumber: session.employeeNumber,
       groupId,
@@ -40713,38 +50449,106 @@ async function ownTimeOffRequests(employeeNumber) {
 
 async function ownTimeOffSlots(employeeNumber, date) {
   if (!isIsoDate(date)) throw httpError(400, "Bitte zuerst ein gueltiges Datum auswaehlen.", "TIME_OFF_DATE_INVALID");
-  const context = await absenceEmployeeRequestContext(employeeNumber, date);
-  const hours = await operatingHours(date, await settingsForLocation(context.locationId));
-  const block = getGlobalDayBlockForDate(date, context.locationId);
-  if (!hours || block) {
+  const home = await absenceEmployeeRequestContext(employeeNumber, date);
+  const assignments = await activeEmployeeLendingsForRange(employeeNumber, date, date);
+  const allDayAssignment = assignments.find((assignment) => Boolean(assignment.all_day));
+  const slotMap = new Map();
+  const warnings = [];
+
+  const addContextSlots = async ({
+    locationId,
+    departmentId = null,
+    windowStart = null,
+    windowEnd = null,
+    temporaryLocationAssignment = false,
+    assignmentId = null,
+  }) => {
+    const hours = await operatingHours(date, await settingsForLocation(locationId));
+    const block = getGlobalDayBlockForDate(date, locationId);
+    if (!hours || block) {
+      warnings.push({
+        locationId,
+        departmentId,
+        temporaryLocationAssignment,
+        reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.",
+      });
+      return;
+    }
+    const start = windowStart && windowStart > hours.start ? windowStart : hours.start;
+    const end = windowEnd && windowEnd < hours.end ? windowEnd : hours.end;
+    if (!isTime(start) || !isTime(end) || end <= start) return;
+    for (let minute = timeToMinutes(start); minute + 15 <= timeToMinutes(end); minute += 15) {
+      const startTime = minutesToTime(minute);
+      const endTime = minutesToTime(minute + 15);
+      slotMap.set(`${startTime}|${endTime}`, {
+        startTime,
+        endTime,
+        allowed: true,
+        reason: "",
+        locationId,
+        departmentId,
+        temporaryLocationAssignment,
+        assignmentId,
+      });
+    }
+  };
+
+  if (allDayAssignment) {
+    await addContextSlots({
+      locationId: allDayAssignment.destination_location_id,
+      departmentId: Number(allDayAssignment.destination_department_id || 0) || null,
+      temporaryLocationAssignment: true,
+      assignmentId: allDayAssignment.id,
+    });
+  } else {
+    await addContextSlots({ locationId: home.locationId, departmentId: home.departmentId });
+    for (const assignment of assignments.filter((entry) => !Boolean(entry.all_day))) {
+      for (const [key, slot] of slotMap) {
+        if (timeRangesOverlap(slot.startTime, slot.endTime, assignment.start_time, assignment.end_time)) {
+          slotMap.delete(key);
+        }
+      }
+      await addContextSlots({
+        locationId: assignment.destination_location_id,
+        departmentId: Number(assignment.destination_department_id || 0) || null,
+        windowStart: assignment.start_time,
+        windowEnd: assignment.end_time,
+        temporaryLocationAssignment: true,
+        assignmentId: assignment.id,
+      });
+    }
+  }
+
+  const slots = [...slotMap.values()].sort((left, right) => (
+    left.startTime.localeCompare(right.startTime)
+      || left.endTime.localeCompare(right.endTime)
+  ));
+  const startTimes = [...new Set(slots.map((slot) => slot.startTime))];
+  const endTimes = [...new Set(slots.map((slot) => slot.endTime))];
+  if (!slots.length) {
     return {
       date,
       closed: true,
-      reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.",
+      reason: warnings[0]?.reason || "An diesem Tag ist die Filiale geschlossen.",
       openingTime: null,
       closingTime: null,
       slots: [],
       startTimes: [],
       endTimes: [],
+      warnings,
     };
   }
-  const values = [];
-  for (let minute = timeToMinutes(hours.start); minute <= timeToMinutes(hours.end); minute += 15) values.push(minutesToTime(minute));
   return {
     date,
     closed: false,
-    start: hours.start,
-    end: hours.end,
-    openingTime: hours.start,
-    closingTime: hours.end,
-    startTimes: values.slice(0, -1),
-    endTimes: values.slice(1),
-    slots: values.slice(0, -1).map((startTime, index) => ({
-      startTime,
-      endTime: values[index + 1],
-      allowed: true,
-      reason: "",
-    })),
+    start: startTimes[0],
+    end: endTimes.at(-1),
+    openingTime: startTimes[0],
+    closingTime: endTimes.at(-1),
+    startTimes,
+    endTimes,
+    slots,
+    warnings,
   };
 }
 
@@ -40762,17 +50566,22 @@ function normalizedTimeOffInput(body = {}) {
 }
 
 async function createOwnTimeOffRequest(session, body = {}) {
-  const check = await evaluateTimeOffRequest(session.employeeNumber, body);
-  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
   const input = normalizedTimeOffInput(body);
-  const context = await absenceEmployeeRequestContext(
-    session.employeeNumber,
-    input.dateFrom,
-  );
   return absenceManagementRepository.transaction(async (repository) => {
+    const context = await assertTimeOffResponsibility(session.employeeNumber, input, repository);
+    const check = await evaluateTimeOffRequest(
+      session.employeeNumber,
+      input,
+      context,
+      repository,
+    );
+    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     const result = await repository.insertTimeOffRequest({
       employeeNumber: session.employeeNumber,
       locationId: context.locationId,
+      originLocationId: context.originLocationId,
+      reviewDepartmentId: context.departmentId,
+      lendingId: context.lendingId,
       requestDate: input.dateFrom,
       dateFrom: input.dateFrom,
       dateTo: input.dateTo,
@@ -40789,6 +50598,9 @@ async function createOwnTimeOffRequest(session, body = {}) {
       id,
       employee_number: session.employeeNumber,
       location_id: context.locationId,
+      origin_location_id: context.originLocationId,
+      review_department_id: context.departmentId,
+      lending_id: context.lendingId,
       date_from: input.dateFrom,
     };
     await recordRequestDecision("time_off", id, "employee", "submit", session.employeeNumber, "", repository);
@@ -40799,17 +50611,27 @@ async function createOwnTimeOffRequest(session, body = {}) {
 }
 
 async function updateOwnTimeOffRequest(session, requestId, body = {}) {
-  const entry = await absenceManagementRepository.openTimeOffForOwner({
-    id: Number(requestId),
-    employeeNumber: session.employeeNumber,
-  });
-  if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
-  const check = await evaluateTimeOffRequest(session.employeeNumber, { ...body, excludeRequestId: entry.id });
-  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
   const input = normalizedTimeOffInput(body);
   return absenceManagementRepository.transaction(async (repository) => {
+    const entry = await repository.openTimeOffForOwner({
+      id: Number(requestId),
+      employeeNumber: session.employeeNumber,
+    });
+    if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
+    const context = await assertTimeOffResponsibility(session.employeeNumber, input, repository);
+    const check = await evaluateTimeOffRequest(
+      session.employeeNumber,
+      { ...input, excludeRequestId: entry.id },
+      context,
+      repository,
+    );
+    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     const result = await repository.updateTimeOffRequest({
       id: Number(entry.id),
+      locationId: context.locationId,
+      originLocationId: context.originLocationId,
+      reviewDepartmentId: context.departmentId,
+      lendingId: context.lendingId,
       requestDate: input.dateFrom,
       dateFrom: input.dateFrom,
       dateTo: input.dateTo,
@@ -40824,7 +50646,12 @@ async function updateOwnTimeOffRequest(session, requestId, body = {}) {
     if (!result.rowsAffected) throw httpError(409, "Der ZA-Antrag wurde bereits bearbeitet.", "TIME_OFF_REQUEST_CHANGED");
     await recordRequestDecision("time_off", entry.id, "employee", "change", session.employeeNumber, input.note, repository);
     await resolveAbsenceRequestReviewNotifications(repository, "time_off", entry.id);
-    await notifyAbsenceRequestReviewers(repository, { ...entry, date_from: input.dateFrom }, "time_off", "local", session.employeeNumber);
+    await notifyAbsenceRequestReviewers(repository, {
+      ...entry,
+      location_id: context.locationId,
+      review_department_id: context.departmentId,
+      date_from: input.dateFrom,
+    }, "time_off", "local", session.employeeNumber);
     await auditAbsence(repository, session.employeeNumber, "time_off.request.update", "time_off_request", String(entry.id), JSON.stringify(check));
     return { id: entry.id, status: "pending", check };
   });
@@ -40855,33 +50682,45 @@ async function createOwnTimeOffChangeRequest(session, body = {}) {
   if (!Number.isInteger(originalRequestId) || !["change", "cancel"].includes(requestType)) {
     throw httpError(400, "Bitte eine gueltige ZA-Aenderung auswaehlen.", "TIME_OFF_CHANGE_INVALID");
   }
-  const original = await absenceManagementRepository.approvedTimeOffForOwner({
-    id: originalRequestId,
-    employeeNumber: session.employeeNumber,
-    fromDate: viennaTodayIso(),
-  });
-  if (!original) throw httpError(404, "Der genehmigte Zeitausgleich wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
-  if (await absenceManagementRepository.pendingTimeOffChange({
-    originalRequestId: Number(original.id),
-  })) {
-    throw httpError(409, "Fuer diesen Zeitausgleich besteht bereits ein offener Aenderungs- oder Stornoantrag.", "TIME_OFF_CHANGE_EXISTS");
-  }
   let input = { dateFrom: null, dateTo: null, allDay: false, startTime: null, endTime: null, note: stripEmoji(String(body.note || "").trim()).slice(0, 500) };
   if (requestType === "change") {
     input = { ...normalizedTimeOffInput(body), note: stripEmoji(String(body.note || "").trim()).slice(0, 500) };
-    const check = await evaluateTimeOffRequest(session.employeeNumber, {
-      date: input.dateFrom, dateFrom: input.dateFrom, dateTo: input.dateTo, allDay: input.allDay,
-      startTime: input.startTime, endTime: input.endTime, excludeRequestId: original.id,
-    });
-    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
   }
   return absenceManagementRepository.transaction(async (repository) => {
+    const original = await repository.approvedTimeOffForOwner({
+      id: originalRequestId,
+      employeeNumber: session.employeeNumber,
+      fromDate: viennaTodayIso(),
+    });
+    if (!original) throw httpError(404, "Der genehmigte Zeitausgleich wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
     if (await repository.pendingTimeOffChange({ originalRequestId: Number(original.id) })) {
       throw httpError(409, "Fuer diesen Zeitausgleich besteht bereits ein offener Aenderungs- oder Stornoantrag.", "TIME_OFF_CHANGE_EXISTS");
     }
+    const context = requestType === "change"
+      ? await assertTimeOffResponsibility(session.employeeNumber, input, repository)
+      : {
+        locationId: original.location_id,
+        originLocationId: original.origin_location_id || original.location_id,
+        departmentId: Number(original.review_department_id || 0) || null,
+        lendingId: original.lending_id || null,
+      };
+    const check = requestType === "change"
+      ? await evaluateTimeOffRequest(
+        session.employeeNumber,
+        { ...input, excludeRequestId: original.id },
+        context,
+        repository,
+      )
+      : null;
+    if (check && !check.allowed) {
+      throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
+    }
     const result = await repository.insertTimeOffChange({
       employeeNumber: session.employeeNumber,
-      locationId: original.location_id,
+      locationId: context.locationId,
+      originLocationId: context.originLocationId,
+      reviewDepartmentId: context.departmentId,
+      lendingId: context.lendingId,
       originalRequestId: Number(original.id),
       requestType,
       requestedDateFrom: input.dateFrom,
@@ -40896,13 +50735,22 @@ async function createOwnTimeOffChangeRequest(session, body = {}) {
     const entry = {
       id,
       employee_number: session.employeeNumber,
-      location_id: original.location_id,
+      location_id: context.locationId,
+      origin_location_id: context.originLocationId,
+      review_department_id: context.departmentId,
       date_from: input.dateFrom || original.date_from,
     };
     await recordRequestDecision("time_off_change", id, "employee", requestType, session.employeeNumber, input.note, repository);
     await notifyAbsenceRequestReviewers(repository, entry, "time_off_change", "local", session.employeeNumber);
-    await auditAbsence(repository, session.employeeNumber, `time_off.${requestType}.request`, "time_off_change_request", String(id));
-    return { id, status: "pending" };
+    await auditAbsence(
+      repository,
+      session.employeeNumber,
+      `time_off.${requestType}.request`,
+      "time_off_change_request",
+      String(id),
+      check ? JSON.stringify(check) : "",
+    );
+    return { id, status: "pending", ...(check ? { check } : {}) };
   });
 }
 
@@ -41440,6 +51288,111 @@ app.get("/api/portal/v1/time-summary", async (request, response) => {
   response.json({ summary: { period: "range", from: dateFrom, to: dateTo, dateFrom, dateTo, context, employees } });
 });
 
+app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
+  type: ["image/jpeg", "image/png", "image/webp", "application/octet-stream"],
+  limit: XOFFI_IMAGE_MAX_BYTES,
+}), async (request, response) => {
+  const session = requirePortalSession(request, XOFFI_TIME_IMPORT_PERMISSION);
+  assertPortalCsrf(request);
+  const expectedWeekStart = assertPastXoffiWeek(String(request.query?.weekStart || ""));
+  const context = await xoffiTimeImportContext(session, request.query || {});
+  const candidateRows = await planningSettingsRepository.listScheduleEmployees({
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+    weekStart: expectedWeekStart,
+    weekEnd: addDays(expectedWeekStart, 6),
+  });
+  let fileName = String(request.get("X-Import-Filename") || "xoffi.png");
+  try { fileName = decodeURIComponent(fileName); } catch {}
+  let inspected;
+  try {
+    inspected = await inspectXoffiImageBuffer(request.body, {
+      fileName,
+      selectedWeekStart: expectedWeekStart,
+      employees: candidateRows,
+    });
+  } catch (error) {
+    throw xoffiTimeImportHttpError(error);
+  }
+  if (inspected.locationCode) {
+    let detectedLocationId = "";
+    try { detectedLocationId = normalizeLocationId(inspected.locationCode); } catch {}
+    if (detectedLocationId && detectedLocationId !== context.locationId) {
+      throw httpError(409, "Die im Bild erkannte Filiale stimmt nicht mit der ausgewählten Dienstplanung überein.", "XOFFI_LOCATION_MISMATCH");
+    }
+  }
+  const candidates = xoffiCandidateProjection(candidateRows);
+  const cachedPreview = { ...inspected, context, candidates };
+  const actor = portalActorId(session);
+  integrationCache.deleteKind(actor, "xoffi-time-preview");
+  const previewSession = integrationCache.create(actor, "xoffi-time-preview", cachedPreview);
+  await auditPortal(actor, "xoffi-time.image.inspect", "xoffi_time_preview", previewSession.id, JSON.stringify({
+    locationId: context.locationId,
+    departmentId: context.departmentId,
+    weekStart: inspected.weekStart,
+    weekResolutionStatus: inspected.weekResolution.status,
+    detectedWeekStart: inspected.weekResolution.detectedWeekStart,
+    matchedDateColumns: inspected.weekResolution.matchedDateColumns,
+    confirmationRequired: inspected.weekResolution.confirmationRequired,
+    sourceSha256: inspected.sourceSha256,
+    employeeRows: inspected.employees.length,
+    originalRetained: false,
+  }));
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json({
+    previewId: previewSession.id,
+    weekStart: inspected.weekStart,
+    weekEnd: inspected.weekEnd,
+    calendarWeek: getIsoWeek(inspected.weekStart),
+    weekResolution: inspected.weekResolution,
+    context,
+    detectedLocation: { code: inspected.locationCode, name: inspected.locationName },
+    engineVersion: inspected.engineVersion,
+    employees: inspected.employees,
+    candidates,
+    warnings: inspected.warnings,
+  });
+});
+
+app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => {
+  const session = requirePortalSession(request, XOFFI_TIME_IMPORT_PERMISSION);
+  assertPortalCsrf(request);
+  if (request.body?.confirmed !== true || typeof request.body?.useAsActual !== "boolean") {
+    throw httpError(400, "Der geprüfte xoffi-Import muss ausdrücklich bestätigt werden.", "XOFFI_CONFIRMATION_REQUIRED");
+  }
+  const actor = portalActorId(session);
+  let entry;
+  try {
+    entry = integrationCache.get(String(request.body?.previewId || ""), actor, "xoffi-time-preview");
+  } catch (error) {
+    if (error instanceof IntegrationCacheError) {
+      throw httpError(410, "Die xoffi-Vorschau ist abgelaufen. Bitte das Bild erneut auswählen.", "XOFFI_PREVIEW_EXPIRED");
+    }
+    throw error;
+  }
+  const preview = entry.value;
+  assertPastXoffiWeek(preview.weekStart);
+  const weekResolution = assertXoffiScreenshotWeekConfirmation(preview, request.body || {});
+  const context = await xoffiTimeImportContext(session, preview.context);
+  if (context.locationId !== preview.context.locationId || Number(context.departmentId || 0) !== Number(preview.context.departmentId || 0)) {
+    throw httpError(403, "Der geprüfte Import liegt nicht mehr im freigegebenen Bereich.", "XOFFI_SCOPE_CHANGED");
+  }
+  const reviewedRows = validateXoffiReviewedRows(request.body?.employees, preview);
+  const importId = await storeXoffiTimeImport(
+    session,
+    preview,
+    reviewedRows,
+    request.body.useAsActual,
+    request.body?.screenshotWeekConfirmed === true,
+  );
+  integrationCache.delete(entry.id, actor);
+  response.status(201).json({
+    ok: true,
+    importId,
+    schedule: await getSchedule(preview.weekStart, context, session),
+  });
+});
+
 app.get("/api/portal/v1/time-day-evaluations", async (request, response) => {
   const session = requirePortalReadOrLocal(request, "time:read");
   const context = await resolvePlanningContext(request.query || {});
@@ -41488,6 +51441,35 @@ app.put("/api/portal/v1/time-corrections/:id/decision", async (request, response
 app.get("/api/portal/v1/mobile-layout", (request, response) => {
   const session = requirePortalAnyPermissionOrLocal(request, ["own_time:read", "own_schedule:read"]);
   response.json(mobileLayoutPayload(session));
+});
+
+app.get("/api/portal/v1/mobile-portal-location-display", async (request, response) => {
+  const session = requirePortalSession(request, MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION);
+  const location = await mobilePortalLocationDisplayManagementLocation(session, request.query || {});
+  response.json(publicMobilePortalLocationDisplay(location));
+});
+
+app.put("/api/portal/v1/mobile-portal-location-display", async (request, response) => {
+  const session = requirePortalSession(request, MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION);
+  assertPortalCsrf(request);
+  const location = await mobilePortalLocationDisplayManagementLocation(session, request.body || {});
+  const previous = mobilePortalLocationDisplayForLocation(location.id);
+  const policy = validateMobilePortalLocationDisplay(request.body || {});
+  await setPortalSetting(
+    mobilePortalLocationDisplaySettingKey(location.id),
+    JSON.stringify(policy),
+  );
+  await auditPortal(
+    session.employeeNumber,
+    "mobile-portal.location-display.update",
+    "location",
+    location.id,
+    JSON.stringify({
+      previousAllowedModules: previous.allowedModules,
+      allowedModules: policy.allowedModules,
+    }),
+  );
+  response.json(publicMobilePortalLocationDisplay(location));
 });
 
 app.put("/api/portal/v1/mobile-layout", async (request, response) => {
@@ -41619,9 +51601,23 @@ async function verifyUsbCreator(request, employeeNumber, password) {
     throw httpError(403, "Das Passwort des Erstellerkontos ist nicht korrekt.", "USB_CREATOR_AUTH_FAILED");
   }
   usbCreatorAuthRateLimits.clear(rateKey);
+  const [roleProjection, grantedPermissions, deniedPermissions] = await Promise.all([
+    organizationPersonnelRepository.getPortalRoleProjection(row.role),
+    portalPermissionGrantsForEmployee(row.employee_number, row.role),
+    portalPermissionDenialsForEmployee(row.employee_number),
+  ]);
+  const permissionState = effectivePortalPermissionState(
+    row.employee_number,
+    row.role,
+    roleProjection?.permissions || "[]",
+    grantedPermissions,
+    deniedPermissions,
+    row.amu_local_access_mode,
+  );
   return {
     personnelNumber: row.employee_number,
     role: row.role,
+    permissions: permissionState.effectivePermissions,
     passwordHash: row.password_hash,
     employee: row,
   };
@@ -41709,9 +51705,25 @@ function validateUsbBrandings(body = {}) {
   return { primaryKitId, primaryKit, kitIds };
 }
 
-function usbRoleAllowedForCreator(creatorRole, requestedRole) {
+function usbCreatorCanDelegatePersonnelLearning(creator = {}) {
+  if (creator.role === "developer") return true;
+  if (creator.role !== "admin") return false;
+  return Array.isArray(creator.permissions)
+    && creator.permissions.includes(PERSONNEL_LEARNING_PERMISSIONS.DELEGATE);
+}
+
+function usbCreatorCanDelegateCrossLocationSchedule(creator = {}) {
+  if (creator.role === "developer") return true;
+  return creator.role === "admin"
+    && Array.isArray(creator.permissions)
+    && creator.permissions.includes(CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE);
+}
+
+function usbRoleAllowedForCreator(creator, requestedRole) {
   if (requestedRole === "employee") return true;
-  return Boolean(PORTAL_ROLE_ASSIGNMENTS[creatorRole]?.has(requestedRole));
+  if (!PORTAL_ROLE_ASSIGNMENTS[creator?.role]?.has(requestedRole)) return false;
+  const grantsLearningByDefault = roleHasPersonnelLearningDefaults(requestedRole);
+  return !grantsLearningByDefault || usbCreatorCanDelegatePersonnelLearning(creator);
 }
 
 async function validateUsbEmployees(inputEmployees, selectedLocations, creator) {
@@ -41771,7 +51783,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
       throw httpError(400, `Der Standort von ${personnelNumber} ist nicht für den Stick ausgewählt.`, "USB_EMPLOYEE_LOCATION_INVALID");
     }
     const role = String(input.role || "employee").trim();
-    if (role === "developer" || !portalRoles.some((entry) => entry.id === role) || !usbRoleAllowedForCreator(creator.role, role)) {
+    if (role === "developer" || !portalRoles.some((entry) => entry.id === role) || !usbRoleAllowedForCreator(creator, role)) {
       throw httpError(403, `Die Rolle für Personalnummer ${personnelNumber} darf vom Ersteller nicht vergeben werden.`, "USB_EMPLOYEE_ROLE_DENIED");
     }
     if (role === "department_manager") {
@@ -41787,15 +51799,51 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
     const rolePermissions = new Set(portalRoles.find((entry) => entry.id === role)?.permissions || []);
     const deniedPermissions = new Set((Array.isArray(input.deniedPermissions) ? input.deniedPermissions : [])
       .map(String).filter((permission) => delegablePortalPermissions.has(permission)));
+    const submittedLearningPermissions = [...new Set([
+      ...additionalPermissions,
+      ...deniedPermissions,
+    ].filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission)))];
+    if (submittedLearningPermissions.length && !usbCreatorCanDelegatePersonnelLearning(creator)) {
+      throw httpError(
+        403,
+        "Schulungs- und Wissensrechte dürfen von diesem technischen Zugang nicht in USB-Profile übernommen werden.",
+        "USB_EMPLOYEE_PERMISSION_DENIED",
+      );
+    }
+    const submittedCrossLocationSchedulePermissions = [...new Set([
+      ...additionalPermissions,
+      ...deniedPermissions,
+    ].filter((permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission)))];
+    if (submittedCrossLocationSchedulePermissions.length
+      && !usbCreatorCanDelegateCrossLocationSchedule(creator)) {
+      throw httpError(
+        403,
+        "Standortübergreifende Dienstplan- und Einsatzanfragerechte dürfen von diesem Zugang nicht in USB-Profile übernommen werden.",
+        "USB_EMPLOYEE_PERMISSION_DENIED",
+      );
+    }
+    if ([...deniedPermissions].some(
+      (permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission),
+    )) {
+      throw httpError(
+        400,
+        "Entzogene Schulungs- und Wissensrechte müssen nach der Inbetriebnahme in der zentralen Rechteverwaltung gesetzt werden.",
+        "USB_EMPLOYEE_PERMISSION_DENIAL_INVALID",
+      );
+    }
+    const roleRestrictedAdditionalPermissions = additionalPermissions.filter(
+      (permission) => !portalPermissionAllowedForRole(permission, role),
+    );
+    if (roleRestrictedAdditionalPermissions.length) {
+      throw portalPermissionRoleRestrictionError(roleRestrictedAdditionalPermissions);
+    }
     const invalidDenials = [...deniedPermissions].filter((permission) => !rolePermissions.has(permission));
     if (invalidDenials.length) {
       throw httpError(400,
         `Auf dem USB-Profil können nur Grundrechte der Rolle entzogen werden: ${invalidDenials.join(", ")}`,
         "USB_EMPLOYEE_PERMISSION_DENIAL_INVALID");
     }
-    if (deniedPermissions.has("schedule:read") && rolePermissions.has("schedule:write")) {
-      deniedPermissions.add("schedule:write");
-    }
+    cascadeCrossLocationScheduleRolePermissionDenials(rolePermissions, deniedPermissions);
     const projectedPermissions = [...new Set([...rolePermissions, ...additionalPermissions])]
       .filter((permission) => !deniedPermissions.has(permission));
     if (projectedPermissions.includes("schedule:write") && !projectedPermissions.includes("schedule:read")) {
@@ -41803,6 +51851,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
         "Dienstpläne können auf dem USB-Profil nur bearbeitet werden, wenn das Leserecht ebenfalls wirksam ist.",
         "USB_EMPLOYEE_PERMISSION_DEPENDENCY");
     }
+    assertPortalPermissionDependencies(projectedPermissions);
     let scopes = Array.isArray(input.scopes) ? input.scopes.map((scope) => ({
       locationId: normalizeLocationId(scope?.locationId),
       departmentId: normalizeDepartmentId(scope?.departmentId, true),
@@ -42290,6 +52339,33 @@ function assertRequestPermission(request, permission) {
 app.put("/api/settings", async (request, response) => {
   const body = request.body;
   const currentSettings = getSettings();
+  const crossLocationScheduleSettingsSubmitted = body.crossLocationSchedule !== undefined;
+  let crossLocationScheduleValues = null;
+  if (crossLocationScheduleSettingsSubmitted) {
+    try {
+      crossLocationScheduleValues = crossLocationScheduleSettingsValuesFromInput(
+        body.crossLocationSchedule,
+      );
+    } catch (error) {
+      throw httpError(
+        400,
+        String(error?.message || "Die Dienstplan-Einstellungen sind ungültig."),
+        "CROSS_LOCATION_SCHEDULE_SETTINGS_INVALID",
+      );
+    }
+  }
+  let crossLocationScheduleSettingsSession = null;
+  if (crossLocationScheduleSettingsSubmitted) {
+    crossLocationScheduleSettingsSession = requirePortalAnyPermissionOrLocal(
+      request,
+      [CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE],
+      { csrf: true },
+    );
+    await assertCrossLocationScheduleSettingsManagement(
+      crossLocationScheduleSettingsSession,
+      organizationPersonnelRepository,
+    );
+  }
   const scheduleContext = await resolvePlanningContext(body);
   const vacationContext = await resolvePlanningContext({ ...body, departmentId: null, department: null });
   const scheduleDefaults = defaultSchedulePdfSettings(scheduleContext);
@@ -42382,11 +52458,42 @@ app.put("/api/settings", async (request, response) => {
     show_sunday: body.showSunday === true ? "1" : "0",
     remember_last_schedule_overall_plan: rememberLastScheduleOverallPlan ? "1" : "0",
     remember_last_vacation_overall_plan: rememberLastVacationOverallPlan ? "1" : "0",
+    ...(crossLocationScheduleValues || {}),
   };
   if (!getPortalStatus().portalEnabled) {
     values.allow_past_week_editing = body.allowPastWeekEditing === true ? "1" : "0";
   }
-  await planningSettingsRepository.transaction(async (repository) => {
+  await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const repository = repositories.planningSettings;
+    let liveCrossLocationScheduleSettingsSession = crossLocationScheduleSettingsSession;
+    if (crossLocationScheduleSettingsSubmitted
+      && !isLocalSystemSession(crossLocationScheduleSettingsSession)) {
+      liveCrossLocationScheduleSettingsSession = await livePersonnelLearningRoleAdministrationActor(
+        crossLocationScheduleSettingsSession,
+        repositories.organizationPersonnel,
+      );
+      assertLivePortalRoutePermission(
+        liveCrossLocationScheduleSettingsSession,
+        CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE,
+      );
+      await assertCrossLocationScheduleSettingsManagement(
+        liveCrossLocationScheduleSettingsSession,
+        repositories.organizationPersonnel,
+      );
+    }
+    const liveCrossLocationScheduleValues = crossLocationScheduleSettingsSubmitted
+      ? settingsObjectFromRows(await repository.listSettings())
+      : null;
+    const liveCrossLocationScheduleChangedKeys = crossLocationScheduleValues
+      ? Object.keys(crossLocationScheduleValues).filter(
+        (key) => String(
+          liveCrossLocationScheduleValues?.[key]
+            ?? CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS[key]
+            ?? "",
+        ) !== String(crossLocationScheduleValues[key]),
+      )
+      : [];
     for (const [key, value] of Object.entries(values)) {
       await repository.upsertSetting({ key, value });
     }
@@ -42416,7 +52523,25 @@ app.put("/api/settings", async (request, response) => {
       vacation_pdf_balance_show_consumed: body.vacationPdfBalanceShowConsumed === true ? "1" : "0",
       vacation_pdf_calendar_style: vacationPdfCalendarStyle,
     }, repository);
-  });
+    if (liveCrossLocationScheduleChangedKeys.length) {
+      const before = normalizeCrossLocationScheduleSettings(liveCrossLocationScheduleValues);
+      const after = normalizeCrossLocationScheduleSettings({
+        ...liveCrossLocationScheduleValues,
+        ...crossLocationScheduleValues,
+      });
+      await repositories.organizationPersonnel.insertAudit(
+        liveCrossLocationScheduleSettingsSession?.employeeNumber || "local",
+        "schedule.cross-location.settings.update",
+        "schedule_settings",
+        "cross_location",
+        JSON.stringify({
+          changedKeys: liveCrossLocationScheduleChangedKeys.sort(),
+          before,
+          after,
+        }),
+      );
+    }
+  }, { isolation: "serializable" });
   await refreshPlanningSettingsReadModel();
   scheduleAutomaticBackups();
   await setPortalSetting("login_required", "1");
@@ -42432,7 +52557,7 @@ app.post("/api/shifts", async (request, response) => {
   const context = await resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
-  assertShiftEmployeeAssignmentScope(request.portalSession, shift);
+  await assertShiftEmployeeAssignmentScope(request.portalSession, shift);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
   const evaluated = await evaluateScheduleWorkRules(
@@ -42442,29 +52567,34 @@ app.post("/api/shifts", async (request, response) => {
     shift,
   );
   assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
-  const saved = await runWorkRuleMutationTransaction(async (repository) => {
-    const result = await repository.insertPlanningShift({
-      employeeNumber: shift.employeeNumber,
-      locationId: shift.locationId,
-      departmentId: shift.departmentId || null,
-      shiftDate: shift.shiftDate,
-      startTime: shift.startTime,
-      endTime: shift.endTime,
-      area: shift.area,
-      note: shift.note,
+  let saved;
+  try {
+    saved = await runWorkRuleMutationTransaction(async (repository) => {
+      const result = await repository.insertPlanningShift({
+        employeeNumber: shift.employeeNumber,
+        locationId: shift.locationId,
+        departmentId: shift.departmentId || null,
+        shiftDate: shift.shiftDate,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        area: shift.area,
+        note: shift.note,
+      });
+      await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
+      const workRuleAssessment = await recordEvaluatedWorkRuleEvaluation(
+        repository,
+        evaluated,
+        context,
+        request.portalSession?.employeeNumber || "local",
+      );
+      return {
+        id: result.returnedRows[0]?.id,
+        workRuleAssessment,
+      };
     });
-    await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
-    const workRuleAssessment = await recordEvaluatedWorkRuleEvaluation(
-      repository,
-      evaluated,
-      context,
-      request.portalSession?.employeeNumber || "local",
-    );
-    return {
-      id: result.returnedRows[0]?.id,
-      workRuleAssessment,
-    };
-  });
+  } catch (error) {
+    throw staffAssignmentShiftConstraintError(error);
+  }
   await refreshSicknessStaffingAfterPlanningChange();
   response.status(201).json({
     id: saved.id,
@@ -42486,7 +52616,7 @@ app.put("/api/shifts/:id", async (request, response) => {
   const context = await resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
-  assertShiftEmployeeAssignmentScope(request.portalSession, shift, existing);
+  await assertShiftEmployeeAssignmentScope(request.portalSession, shift, existing);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
   const planningChange = { id, ...shift };
@@ -42501,40 +52631,45 @@ app.put("/api/shifts/:id", async (request, response) => {
     [existing, shift],
     planningChange,
   );
-  const workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
-    const result = await repository.updatePlanningShift({
-      id,
-      employeeNumber: shift.employeeNumber,
-      locationId: shift.locationId,
-      departmentId: shift.departmentId || null,
-      shiftDate: shift.shiftDate,
-      startTime: shift.startTime,
-      endTime: shift.endTime,
-      area: shift.area,
-      note: shift.note,
-    });
-    if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
-    await repository.invalidatePlanningDayReview(existing.employee_number, existing.shift_date);
-    await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
-    const records = [];
-    for (const entry of preparedEvaluations) {
-      records.push({
-        ...entry,
-        assessment: await recordEvaluatedWorkRuleEvaluation(
-          repository,
-          entry.evaluated,
-          entry.context,
-          request.portalSession?.employeeNumber || "local",
-        ),
+  let workRuleAssessment;
+  try {
+    workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
+      const result = await repository.updatePlanningShift({
+        id,
+        employeeNumber: shift.employeeNumber,
+        locationId: shift.locationId,
+        departmentId: shift.departmentId || null,
+        shiftDate: shift.shiftDate,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        area: shift.area,
+        note: shift.note,
       });
-    }
-    return records.find((entry) => (
-      entry.weekStart === weekStart
-      && entry.locationId === String(shift.locationId)
-      && Number(entry.departmentId || 0) === Number(shift.departmentId || 0)
-      && entry.employeeNumber === String(shift.employeeNumber)
-    ))?.assessment || preview.assessment;
-  });
+      if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+      await repository.invalidatePlanningDayReview(existing.employee_number, existing.shift_date);
+      await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
+      const records = [];
+      for (const entry of preparedEvaluations) {
+        records.push({
+          ...entry,
+          assessment: await recordEvaluatedWorkRuleEvaluation(
+            repository,
+            entry.evaluated,
+            entry.context,
+            request.portalSession?.employeeNumber || "local",
+          ),
+        });
+      }
+      return records.find((entry) => (
+        entry.weekStart === weekStart
+        && entry.locationId === String(shift.locationId)
+        && Number(entry.departmentId || 0) === Number(shift.departmentId || 0)
+        && entry.employeeNumber === String(shift.employeeNumber)
+      ))?.assessment || preview.assessment;
+    });
+  } catch (error) {
+    throw staffAssignmentShiftConstraintError(error);
+  }
   await refreshSicknessStaffingAfterPlanningChange();
   response.json({
     id,
@@ -42628,10 +52763,19 @@ app.delete("/api/schedule", async (request, response) => {
 });
 
 app.post("/api/week-options", async (request, response) => {
+  const requestedEmployeeNumber = String(request.body?.employeeNumber || "").trim();
+  const requestedOptionType = String(request.body?.optionType || "");
+  assertApprovedAbsenceEntryAccess(request.portalSession, requestedOptionType);
+  await assertSessionEmployeeScope(request.portalSession, requestedEmployeeNumber);
   const option = await validateWeekOption(request.body, 0, request.portalSession);
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
-  const result = await planningSettingsRepository.insertWeekOption(option);
+  let result;
+  try {
+    result = await planningSettingsRepository.insertWeekOption(option);
+  } catch (error) {
+    throw staffAssignmentAbsenceConstraintError(error);
+  }
   const id = Number(result.rows[0]?.id);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) await invalidateTimeDayReview(option.employeeNumber, date);
   auditApprovedAbsenceEntry(request.portalSession, "approved-absence.create", id, option);
@@ -42651,13 +52795,22 @@ app.put("/api/week-options/:id", async (request, response) => {
     employeeNumber: existing.employee_number,
   }))?.home_location_id;
   await assertWeekEditable(existing.week_start, await settingsForLocation(existingLocation), request.portalSession);
+  const requestedEmployeeNumber = String(request.body?.employeeNumber || existing.employee_number).trim();
+  const requestedOptionType = String(request.body?.optionType || existing.option_type);
+  assertApprovedAbsenceEntryAccess(request.portalSession, requestedOptionType);
+  await assertSessionEmployeeScope(request.portalSession, requestedEmployeeNumber);
   const option = await validateWeekOption({
     ...request.body,
     groupId: request.body.groupId === undefined ? existing.group_id : request.body.groupId,
   }, id, request.portalSession);
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
-  const updated = await planningSettingsRepository.updateWeekOption({ id, ...option });
+  let updated;
+  try {
+    updated = await planningSettingsRepository.updateWeekOption({ id, ...option });
+  } catch (error) {
+    throw staffAssignmentAbsenceConstraintError(error);
+  }
   if (!updated.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) await invalidateTimeDayReview(option.employeeNumber, date);
@@ -42872,12 +53025,34 @@ function shiftCoversPeriod(shift, from, to) {
   return shift.start_time <= from && shift.end_time >= to;
 }
 
-async function findBestAutomaticShift(employeeNumber, date, remainingMinutes, settings, requiredTo = null) {
+async function findBestAutomaticShift(
+  employeeNumber,
+  date,
+  remainingMinutes,
+  settings,
+  {
+    windowStart = null,
+    windowEnd = null,
+    requiredFrom = null,
+    requiredTo = null,
+  } = {},
+) {
   const hours = await operatingHours(date, settings);
   if (!hours) return null;
-  const start = timeToMinutes(hours.start);
-  const end = timeToMinutes(hours.end);
-  const minimumEnd = requiredTo ? Math.max(start + 60, timeToMinutes(requiredTo)) : start + 60;
+  const start = Math.max(
+    timeToMinutes(hours.start),
+    isTime(windowStart) ? timeToMinutes(windowStart) : timeToMinutes(hours.start),
+  );
+  const end = Math.min(
+    timeToMinutes(hours.end),
+    isTime(windowEnd) ? timeToMinutes(windowEnd) : timeToMinutes(hours.end),
+  );
+  if (end - start < 60) return null;
+  if (isTime(requiredFrom) && start > timeToMinutes(requiredFrom)) return null;
+  if (isTime(requiredTo) && end < timeToMinutes(requiredTo)) return null;
+  const minimumEnd = isTime(requiredTo)
+    ? Math.max(start + 60, timeToMinutes(requiredTo))
+    : start + 60;
   let best = null;
 
   for (let candidateEnd = minimumEnd; candidateEnd <= end; candidateEnd += 1) {
@@ -42890,6 +53065,80 @@ async function findBestAutomaticShift(employeeNumber, date, remainingMinutes, se
     const metrics = await shiftMetrics(shift, settings);
     const difference = Math.abs(metrics.counted_minutes - remainingMinutes);
     if (!best || difference < best.difference) best = { shift, metrics, difference };
+  }
+  return best;
+}
+
+function automaticPlanningWindows(employee, date, hours, context, employeeLendings) {
+  if (!hours) return [];
+  const opening = timeToMinutes(hours.start);
+  const closing = timeToMinutes(hours.end);
+  const employeeNumber = String(employee.personnel_number);
+  const locationId = String(context.locationId);
+  const assignments = employeeLendings.filter((assignment) => (
+    String(assignment.employee_number) === employeeNumber
+    && assignment.date_from <= date
+    && assignment.date_to >= date
+  ));
+
+  if (String(employee.home_location_id) === locationId) {
+    const outgoing = assignments
+      .filter((assignment) => String(assignment.home_location_id) === locationId)
+      .map((assignment) => assignment.all_day
+        ? { start: opening, end: closing }
+        : {
+            start: Math.max(opening, timeToMinutes(assignment.start_time)),
+            end: Math.min(closing, timeToMinutes(assignment.end_time)),
+          })
+      .filter((interval) => interval.end > interval.start)
+      .sort((left, right) => left.start - right.start);
+    const windows = [];
+    let cursor = opening;
+    for (const interval of outgoing) {
+      if (interval.start > cursor) windows.push({ start: cursor, end: interval.start, departmentId: null });
+      cursor = Math.max(cursor, interval.end);
+      if (cursor >= closing) break;
+    }
+    if (cursor < closing) windows.push({ start: cursor, end: closing, departmentId: null });
+    return windows.filter((window) => window.end - window.start >= 60);
+  }
+
+  return assignments
+    .filter((assignment) => (
+      String(assignment.destination_location_id) === locationId
+      && (
+        !context.departmentId
+        || Number(assignment.destination_department_id) === Number(context.departmentId)
+      )
+    ))
+    .map((assignment) => ({
+      start: assignment.all_day ? opening : Math.max(opening, timeToMinutes(assignment.start_time)),
+      end: assignment.all_day ? closing : Math.min(closing, timeToMinutes(assignment.end_time)),
+      departmentId: assignment.destination_department_id || null,
+    }))
+    .filter((window) => window.end - window.start >= 60)
+    .sort((left, right) => left.start - right.start);
+}
+
+async function bestAutomaticShiftForWindows(
+  employeeNumber,
+  date,
+  remainingMinutes,
+  settings,
+  windows,
+  requiredFrom = null,
+  requiredTo = null,
+) {
+  let best = null;
+  for (const window of windows) {
+    const candidate = await findBestAutomaticShift(employeeNumber, date, remainingMinutes, settings, {
+      windowStart: minutesToTime(window.start),
+      windowEnd: minutesToTime(window.end),
+      requiredFrom,
+      requiredTo,
+    });
+    if (!candidate) continue;
+    if (!best || candidate.difference < best.difference) best = { ...candidate, window };
   }
   return best;
 }
@@ -42911,13 +53160,23 @@ app.post("/api/schedule/auto", async (request, response) => {
     locationId: context.locationId,
     departmentId: context.departmentId || null,
   };
-  const [employees, storedExistingShifts, options] = await Promise.all([
+  const [employees, storedExistingShifts, employeeWeekShifts, options, employeeLendings] = await Promise.all([
     planningSettingsRepository.listAutoPlanningEmployees(planningQuery),
     planningSettingsRepository.listAutoPlanningShifts(planningQuery),
+    planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningOptions(planningQuery),
+    planningSettingsRepository.listScheduleLendings(planningQuery),
   ]);
   const existingShifts = replaceExisting ? [] : [...storedExistingShifts];
-  const occupied = new Set(existingShifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`));
+  const retainedEmployeeWeekShifts = replaceExisting
+    ? employeeWeekShifts.filter((shift) => (
+        String(shift.location_id) !== String(context.locationId)
+        || (context.departmentId && Number(shift.department_id) !== Number(context.departmentId))
+      ))
+    : employeeWeekShifts;
+  const occupied = new Set(
+    retainedEmployeeWeekShifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`),
+  );
   const unavailable = new Set();
   for (const option of options) {
     for (let date = option.date_from; date <= option.date_to; date = addDays(date, 1)) {
@@ -42932,9 +53191,17 @@ app.post("/api/schedule/auto", async (request, response) => {
 
     const totals = Object.fromEntries(employees.map((employee) => [employee.personnel_number, 0]));
     const dayLoads = Object.fromEntries(Array.from({ length: 6 }, (_, index) => [addDays(weekStart, index), 0]));
-    for (const shift of existingShifts) {
+    const locationSettings = new Map([[String(context.locationId), settings]]);
+    for (const shift of retainedEmployeeWeekShifts) {
+      const shiftLocationId = String(shift.location_id || context.locationId);
+      if (!locationSettings.has(shiftLocationId)) {
+        locationSettings.set(shiftLocationId, await settingsForLocation(shiftLocationId));
+      }
       totals[shift.employee_number] =
-        (totals[shift.employee_number] || 0) + (await shiftMetrics(shift, settings)).counted_minutes;
+        (totals[shift.employee_number] || 0)
+        + (await shiftMetrics(shift, locationSettings.get(shiftLocationId))).counted_minutes;
+    }
+    for (const shift of existingShifts) {
       if (dayLoads[shift.shift_date] !== undefined) dayLoads[shift.shift_date] += 1;
     }
     const claimedOptionDates = new Set();
@@ -43014,7 +53281,14 @@ app.post("/api/schedule/auto", async (request, response) => {
         Math.max(0, Number(employee.contracted_hours) * 60 - (totals[employee.personnel_number] || 0)),
       ]),
     );
-    const automaticDepartmentId = (employee) => context.departmentId || employee.preferred_department_id || null;
+    const automaticDepartmentId = (employee, window = null) => (
+      context.departmentId
+      || window?.departmentId
+      || (String(employee.home_location_id) === String(context.locationId)
+        ? employee.preferred_department_id
+        : null)
+      || null
+    );
 
     for (let dayIndex = 0; dayIndex < 6; dayIndex += 1) {
       const date = addDays(weekStart, dayIndex);
@@ -43035,20 +53309,36 @@ app.post("/api/schedule/auto", async (request, response) => {
             if (aPreferred !== bPreferred) return aPreferred - bPreferred;
             return remainingByEmployee[b.personnel_number] - remainingByEmployee[a.personnel_number];
           });
-        const employee = candidates[0];
-        if (!employee) break;
-        const candidate = await findBestAutomaticShift(
-          employee.personnel_number,
-          date,
-          remainingByEmployee[employee.personnel_number],
-          settings,
-          config.minTo,
-        );
-        if (!candidate) break;
+        const hours = await operatingHours(date, settings);
+        let employee = null;
+        let candidate = null;
+        for (const availableEmployee of candidates) {
+          const windows = automaticPlanningWindows(
+            availableEmployee,
+            date,
+            hours,
+            context,
+            employeeLendings,
+          );
+          const availableCandidate = await bestAutomaticShiftForWindows(
+            availableEmployee.personnel_number,
+            date,
+            remainingByEmployee[availableEmployee.personnel_number],
+            settings,
+            windows,
+            config.minFrom,
+            config.minTo,
+          );
+          if (!availableCandidate) continue;
+          employee = availableEmployee;
+          candidate = availableCandidate;
+          break;
+        }
+        if (!employee || !candidate) break;
         const plannedShift = {
           employeeNumber: employee.personnel_number,
           locationId: context.locationId,
-          departmentId: automaticDepartmentId(employee),
+          departmentId: automaticDepartmentId(employee, candidate.window),
           shiftDate: date,
           startTime: candidate.shift.start_time,
           endTime: candidate.shift.end_time,
@@ -43101,12 +53391,20 @@ app.post("/api/schedule/auto", async (request, response) => {
           return rotatedA - rotatedB;
         });
         const date = availableDates.shift();
-        const candidate = await findBestAutomaticShift(employee.personnel_number, date, remaining, settings);
+        const hours = await operatingHours(date, settings);
+        const windows = automaticPlanningWindows(employee, date, hours, context, employeeLendings);
+        const candidate = await bestAutomaticShiftForWindows(
+          employee.personnel_number,
+          date,
+          remaining,
+          settings,
+          windows,
+        );
         if (!candidate) continue;
         plannedShifts.push({
           employeeNumber: employee.personnel_number,
           locationId: context.locationId,
-          departmentId: automaticDepartmentId(employee),
+          departmentId: automaticDepartmentId(employee, candidate.window),
           shiftDate: date,
           startTime: candidate.shift.start_time,
           endTime: candidate.shift.end_time,
@@ -43141,7 +53439,9 @@ app.post("/api/schedule/auto", async (request, response) => {
       planningChange,
     );
     assertWorkRuleAssessmentAllowsMutation(evaluatedPreview.assessment);
-    const workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
+    let workRuleAssessment;
+    try {
+      workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
       if (replaceExisting) {
         await repository.deletePlanningShiftsForRange({
           locationId: context.locationId,
@@ -43165,7 +53465,10 @@ app.post("/api/schedule/auto", async (request, response) => {
         context,
         request.portalSession?.employeeNumber || "local",
       );
-    });
+      });
+    } catch (error) {
+      throw staffAssignmentShiftConstraintError(error);
+    }
     await refreshSicknessStaffingAfterPlanningChange();
     const schedule = await getSchedule(weekStart, context, request.portalSession);
     response.json({
@@ -44557,6 +54860,9 @@ async function startServer() {
         backupAdminGlobalRateLimits.prune(now);
         articleLookupRateLimits.prune(now);
         personalEmailVerificationIpRateLimits.prune(now);
+        passwordResetIpRateLimits.prune(now);
+        passwordResetTargetRateLimits.prune(now);
+        passwordResetConfirmRateLimits.prune(now);
       }, 5 * 60 * 1000);
       rateLimitCleanupInterval.unref();
     }
@@ -44660,6 +54966,8 @@ module.exports = {
   mobileSessionPrincipal,
   mobileSessionRow,
   effectivePortalPermissionState,
+  assertXoffiScreenshotWeekConfirmation,
+  storeXoffiTimeImport,
   hashPortalPassword,
   verifyPortalPassword,
   ipMatchesNetwork,

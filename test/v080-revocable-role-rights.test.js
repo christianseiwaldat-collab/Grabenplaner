@@ -247,6 +247,123 @@ test("v0.80: Web und Mobile berechnen Entzüge identisch", async () => {
   assert.deepEqual(web.permissions, mobile.permissions);
 });
 
+test("v0.80: Web und Mobile behandeln aktive, inaktive und echte Legacy-Scopes identisch", async () => {
+  const webAuth = createPortalSession(MANAGER, "manager");
+  const mobileId = createMobileSession(MANAGER);
+  const project = async () => ({
+    web: await loadPortalSessionFromRequest(
+      { headers: { cookie: webAuth.cookie } },
+      { touch: false },
+    ),
+    mobile: mobileSessionPrincipal(await mobileSessionRow(mobileId)),
+    mobileRow: await mobileSessionRow(mobileId),
+  });
+  const expectedLocationScope = [{ locationId: String(locationId), departmentId: null }];
+
+  let current = await project();
+  assert.equal(Number(current.mobileRow.access_scope_assignment_count), 1);
+  assert.deepEqual(current.web.explicitScopes, expectedLocationScope);
+  assert.deepEqual(current.mobile.explicitScopes, expectedLocationScope);
+  assert.deepEqual(current.web.scopes, expectedLocationScope);
+  assert.deepEqual(current.mobile.scopes, expectedLocationScope);
+  assert.deepEqual(current.web.permissionScopes, current.mobile.permissionScopes);
+
+  db.prepare("UPDATE locations SET active = 0 WHERE id = ?").run(locationId);
+  try {
+    current = await project();
+    assert.equal(Number(current.mobileRow.access_scope_assignment_count), 1);
+    assert.deepEqual(current.web.explicitScopes, []);
+    assert.deepEqual(current.mobile.explicitScopes, []);
+    assert.deepEqual(current.web.scopes, []);
+    assert.deepEqual(current.mobile.scopes, []);
+    assert.deepEqual(current.web.permissionScopes, current.mobile.permissionScopes);
+  } finally {
+    db.prepare("UPDATE locations SET active = 1 WHERE id = ?").run(locationId);
+  }
+
+  db.prepare("DELETE FROM portal_access_scopes WHERE employee_number = ?").run(MANAGER);
+  try {
+    current = await project();
+    assert.equal(Number(current.mobileRow.access_scope_assignment_count), 0);
+    assert.deepEqual(current.web.explicitScopes, []);
+    assert.deepEqual(current.mobile.explicitScopes, []);
+    assert.deepEqual(current.web.scopes, expectedLocationScope);
+    assert.deepEqual(current.mobile.scopes, expectedLocationScope);
+
+    db.prepare("UPDATE locations SET active = 0 WHERE id = ?").run(locationId);
+    current = await project();
+    assert.equal(Number(current.mobileRow.access_scope_assignment_count), 0);
+    assert.deepEqual(current.web.scopes, []);
+    assert.deepEqual(current.mobile.scopes, []);
+  } finally {
+    db.prepare("UPDATE locations SET active = 1 WHERE id = ?").run(locationId);
+    db.prepare(`
+      INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+      VALUES (?, ?, 0, ?)
+    `).run(MANAGER, locationId, ADMIN);
+  }
+});
+
+test("v0.80: echter AL-Legacy-Scope bleibt an eine aktive Stammabteilung gebunden", async () => {
+  db.prepare("DELETE FROM portal_access_scopes WHERE employee_number = ?").run(MARIA);
+  const webAuth = createPortalSession(MARIA, "department_manager");
+  const mobileId = createMobileSession(MARIA);
+  const project = async () => ({
+    web: await loadPortalSessionFromRequest(
+      { headers: { cookie: webAuth.cookie } },
+      { touch: false },
+    ),
+    mobile: mobileSessionPrincipal(await mobileSessionRow(mobileId)),
+    mobileRow: await mobileSessionRow(mobileId),
+  });
+  const expectedDepartmentScope = [{
+    locationId: String(locationId),
+    departmentId,
+  }];
+
+  let current = await project();
+  assert.equal(Number(current.mobileRow.access_scope_assignment_count), 0);
+  assert.equal(Number(current.mobileRow.home_location_active), 1);
+  assert.equal(Number(current.mobileRow.preferred_department_active), 1);
+  assert.deepEqual(current.web.explicitScopes, []);
+  assert.deepEqual(current.mobile.explicitScopes, []);
+  assert.deepEqual(current.web.scopes, expectedDepartmentScope);
+  assert.deepEqual(current.mobile.scopes, expectedDepartmentScope);
+
+  db.prepare("UPDATE departments SET active = 0 WHERE id = ?").run(departmentId);
+  try {
+    current = await project();
+    assert.equal(Number(current.mobileRow.access_scope_assignment_count), 0);
+    assert.equal(Number(current.mobileRow.home_location_active), 1);
+    assert.equal(Number(current.mobileRow.preferred_department_active), 0);
+    assert.deepEqual(current.web.scopes, []);
+    assert.deepEqual(current.mobile.scopes, []);
+  } finally {
+    db.prepare("UPDATE departments SET active = 1 WHERE id = ?").run(departmentId);
+  }
+});
+
+test("v0.80: gespeicherte Scope-Provenienz schränkt globale Rollen nicht versehentlich ein", async () => {
+  db.prepare(`
+    INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+    VALUES (?, ?, 0, ?)
+  `).run(ADMIN, locationId, ADMIN);
+  try {
+    const web = await loadPortalSessionFromRequest(
+      { headers: { cookie: adminSession.cookie } },
+      { touch: false },
+    );
+    const mobile = mobileSessionPrincipal(await mobileSessionRow(createMobileSession(ADMIN)));
+    const storedScope = [{ locationId: String(locationId), departmentId: null }];
+    assert.deepEqual(web.explicitScopes, storedScope);
+    assert.deepEqual(mobile.explicitScopes, storedScope);
+    assert.deepEqual(web.scopes, []);
+    assert.deepEqual(mobile.scopes, []);
+  } finally {
+    db.prepare("DELETE FROM portal_access_scopes WHERE employee_number = ?").run(ADMIN);
+  }
+});
+
 test("v0.80: Maria kann nur die eigene Abteilung oder nach expliziter Freigabe die ganze Filiale planen", async () => {
   const departmentOnly = await request(`/api/portal/v1/rights/${MARIA}`, {
     method: "PUT",
@@ -335,7 +452,7 @@ test("v0.80: Leserecht-Entzug normalisiert das abhängige Schreibrecht", async (
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   const manager = changed.payload.users.find((entry) => entry.employeeNumber === MANAGER);
   assert.deepEqual(manager.deniedPermissions.filter((permission) => permission.startsWith("schedule:")),
-    ["schedule:read", "schedule:write"]);
+    ["schedule:cross_location:read", "schedule:read", "schedule:write"]);
   assert.equal(manager.effectivePermissions.includes("schedule:read"), false);
   assert.equal(manager.effectivePermissions.includes("schedule:write"), false);
 });

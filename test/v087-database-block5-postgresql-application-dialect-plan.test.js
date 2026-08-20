@@ -25,7 +25,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1044 Statements genau einmal ab", () => {
+test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1117 Statements genau einmal ab", () => {
   const plan = POSTGRESQL_APPLICATION_DIALECT_PLAN;
   const sqliteEntries = SQLITE_APPLICATION_DIALECT_MANIFEST.entries;
 
@@ -34,8 +34,8 @@ test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1044 Statemen
   assert.equal(plan.status, "implementation-in-progress");
   assert.equal(plan.executable, false);
   assert.match(plan.fingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(plan.entries.length, 1044);
-  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1044);
+  assert.equal(plan.entries.length, 1117);
+  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1117);
 
   for (let index = 0; index < sqliteEntries.length; index += 1) {
     const source = sqliteEntries[index];
@@ -62,9 +62,9 @@ test("Block 5/7: nur portable Einträge enthalten kompiliertes PostgreSQL-SQL", 
   const portable = entries.filter((entry) => entry.strategy === "portable-generated");
   const blocked = entries.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(summary.statementCount, 1044);
-  assert.equal(summary.portableGeneratedCount, 938);
-  assert.equal(summary.requiresOverrideCount, 106);
+  assert.equal(summary.statementCount, 1117);
+  assert.equal(summary.portableGeneratedCount, 1006);
+  assert.equal(summary.requiresOverrideCount, 111);
   assert.equal(portable.length, summary.portableGeneratedCount);
   assert.equal(blocked.length, summary.requiresOverrideCount);
 
@@ -95,8 +95,8 @@ test("Block 5/7: Summary erfasst die bekannten Override-Grenzen stabil", () => {
   assert.equal(counts["sqlite.collate-nocase"], 26);
   assert.equal(counts["sqlite.like-operator"], 9);
   assert.equal(counts["sqlite.rowid-pseudocolumn"], 3);
-  assert.equal(counts["sqlite.cast-integer"], 24);
-  assert.equal(counts["sqlite.julianday-function"], 6);
+  assert.equal(counts["sqlite.cast-integer"], 27);
+  assert.equal(counts["sqlite.julianday-function"], 8);
   assert.equal(counts["sqlite.schema-catalog"], 2);
   assert.deepEqual(
     Object.keys(counts),
@@ -136,7 +136,7 @@ test("Block 5/7: die Block-4-Plan-Fixture bleibt unverändert nicht ausführbar"
 
   assert.equal(fixture.status, "contract-only");
   assert.equal(fixture.executable, false);
-  assert.equal(fixture.entries.length, 1044);
+  assert.equal(fixture.entries.length, 1117);
   assert.equal(fixture.sourceFingerprint, SQLITE_APPLICATION_DIALECT_MANIFEST.fingerprint);
   for (const entry of fixture.entries) {
     assert.equal(entry.status, "contract-only");

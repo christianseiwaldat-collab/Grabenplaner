@@ -1,5 +1,80 @@
 # Grabenplaner Versions-Log
 
+## v0.92.10 Beta · Standortübergreifende Einsatzanfragen und Geburtstagsportal
+
+- Berechtigte Leitungen sehen für aktuelle und nächste Woche die notwendigen Planungsdaten fremder Filialen rein lesend und ohne fremde Wochenstunden, Arbeitsregelbewertungen oder vertrauliche Planungsdetails.
+- Standortübergreifende Einsatzanfragen unterstützen stundenweise, ganztägige und mehrtägige Zeiträume, eine Zielabteilung sowie ein optional bevorzugtes Teammitglied. Entscheidungen bleiben revisionsgebunden; eine Genehmigung erzeugt atomar den verbindlichen temporären Filialeinsatz.
+- Das neue Dienstplan-Einstellungsmenü bündelt Bearbeitungssperren und konfigurierbare Anfrage-, Entscheidungs- und E-Mail-Regeln. Benachrichtigungen bleiben neutral und geben weder Planungsdetails noch technische Transportfehler preis.
+- Filialleitung, ausdrücklich berechtigte Abteilungsleitung und PL+ verwalten Geburtstagsdarstellungen ausschließlich im wirksamen Organisationsbereich. Fünf feste lokale Grafiken ersetzen freie Inhalte; Geburtsdatum, Alter und Geburtstagslisten werden nicht an Leitungs- oder Browseransichten ausgegeben.
+- Ein serverseitig atomarer Nachweis begrenzt die grafische Einblendung auf genau eine Auslieferung pro Mitarbeiter und Ereignisjahr. Am Wiener Geburtstag und Folgetag kann zusätzlich ein barrierearmes, mobiles und darkmode-taugliches Portaldesign erscheinen; der Folgetag erzeugt keine zweite Einblendung.
+- Rechte-, Scope-, Datenschutz-, Manipulations-, Konflikt-, E-Mail-, Mobil-, Darkmode-, Barrierefreiheits-, Migrations- und Sicherungsverträge wurden gemeinsam geprüft. SQLite blieb bei fünf gleichzeitig eintreffenden Portalaktionen sowie zwei parallelen Entscheidungen integer; der verifizierte Sicherungspunkt erhielt Anfrage-, Ereignis-, Darstellungs- und Claim-Historien vollständig.
+- Der SQLite-Anwendungskatalog umfasst 1.117 providerneutrale Statements. PostgreSQL bleibt weiterhin nicht produktiv aktiviert; ein produktiver Wechsel ist nicht Bestandteil dieser Version.
+
+## v0.92.9 Beta · Neustartsichere Schulungsbelege
+
+- Schulungs-, Wissens- und Fähigkeitsbelege werden beim Start anhand ihres kanonischen JSON-Fachinhalts geprüft; eine semantisch gleichwertige Schlüsselreihenfolge des SQLite-Providers löst keinen falschen Integritätsalarm mehr aus.
+- Bereits gespeicherte gültige Belege bleiben unverändert erhalten. Tatsächliche Inhalts-, Scope-, Receipt- oder Ereigniskettenmanipulationen werden weiterhin fail-closed abgewiesen.
+- Persistenz- und Neustartregressionen prüfen ausdrücklich die abweichende JSON-Bytefolge bei identischem kanonischem SHA-256-Beleg.
+
+## v0.92.8 Beta · Schulungsprozesse und Fähigkeitsprofile
+
+- Versionierte Schulungs- und Wissensprozesse bilden verbindliche Ziele, Schritte, Abschlusskriterien, Prüfarten und Geltungsbereiche ab; veröffentlichte Fassungen bleiben unveränderlich nachvollziehbar.
+- Berechtigte FL und AL können Lernende und fachlich freigegebene Trainerpersonen auch filialübergreifend zuweisen. Das filialübergreifende Recht ist hierarchisch entziehbar; technische Rollen erhalten keinen automatischen fachlichen Zugriff.
+- Kompetenzprofile führen mehrere Fähigkeiten je Mitarbeiter mit zehn klar beschriebenen Stufen und einer gesonderten Trainerfreigabe. Zuweisungen bleiben an die exakte Prozess- und Fähigkeitsversion gebunden.
+- Schrittfortschritt, Abschlussbewertung und begründungspflichtige Korrekturen sind revisionsgebunden und auditierbar. Filialkonten dürfen standortgebunden Schritte erfassen, aber weder abschließen noch nachträglich korrigieren.
+- Verwaltungs-, persönliche Portal-, Mobil- und Filialansichten projizieren nur den aktuell wirksamen Bereich. Live-Rechteprüfungen, CSRF-Schutz, datensparsame Antworten und responsive Ansichten sichern den neuen Funktionsbereich fail-closed ab.
+- Der Xoffi-Import bestimmt die Woche ausschließlich aus den sieben Datumsspalten oder der vorab gewählten vergangenen GP-Woche. Unsichere oder widersprüchliche Bilder verlangen eine getrennte ausdrückliche Wochenbestätigung; Kostenstellen- und Eintrittszahlen gelten niemals als Wochenbeleg.
+- Die Navigation richtet „Anträge“ wieder am gemeinsamen Menüraster aus, der Update-Status liegt platzsparend in den Einstellungen und die Rechteerklärung erscheint unmittelbar unter der ausgewählten Rechtezeile.
+- Die produktiven PDF- und Mustererweiterungsabhängigkeiten sind auf die korrigierten Sicherheitsstände PDF.js 6.2.108 und brace-expansion 5.0.9 angehoben.
+
+## v0.92.7 Beta · Berechtigungsgefilterte Funktionssuche
+
+- Ein Suchfeld unter der angemeldeten Person erschließt ausschließlich Funktionen, deren bestehende UI- und Berechtigungsgates im aktuellen Sitzungskontext vollständig sichtbar sind.
+- 90 präzise Navigationsziele unterstützen gewichtete deutsche Suchbegriffe, umfangreiche Synonyme, gebräuchliche Abkürzungen, ASCII-Umlaute und begrenzte Tippfehler.
+- Treffer öffnen die richtige Ansicht, Registerkarte und gegebenenfalls den zugehörigen Klappbereich, fokussieren das Ziel und markieren es kurz, ohne Schaltflächen, Downloads, Dialoge oder Formularaktionen auszulösen.
+- Tastatursteuerung, mobile Darstellung, reduzierte Bewegung sowie erneute Zugriffsprüfungen vor und nach dem Ansichtswechsel sind fail-closed abgesichert.
+
+## v0.92.6 Beta · Antragssperren und gespeicherte Kalenderansicht
+
+- Aktive Urlaubs- und ZA-Sperren gelten auch für neue direkte Einträge durch berechtigte Leitungen in der Dienstplanung; bereits genehmigte Einträge bleiben unverändert bestehen.
+- Unterschreitet ein neuer direkter Urlaubs- oder ZA-Eintrag die Filial- oder Abteilungs-Mindestbesetzung, wird er mit Datum, Uhrzeit und konkretem Soll-/Ist-Grund abgewiesen.
+- Antragssperren verwenden einen kompakten Zeitraumkalender für einzelne oder mehrere, auch kalenderwochenübergreifende Tage und stehen einklappbar unter dem Urlaubskalender.
+- Die zuletzt gewählte Jahres-, Quartals-, Monats- oder Teamansicht des Urlaubskalenders wird benutzerbezogen gespeichert und beim nächsten Öffnen wiederhergestellt.
+
+## v0.92.5 Beta · Xoffi-Zeiten, Portalzugang und Navigation
+
+- Vergangene Xoffi-Wochen können als lokal ausgelesene, vor der Übernahme prüfbare Ist-Zeiten importiert und mit dem Dienstplan verglichen werden; der Stundenstand bleibt in der aktuellen Wochenübersicht sichtbar.
+- Passwortwiederherstellung für persönliche Portalzugänge, verlängerte aktive Sitzungen sowie eine robuste mobile Abmeldung ergänzen den Portalzugang.
+- Filial- und Verkaufsverwaltung verwenden funktionsfähige, berechtigungsgefilterte Bereichs-Dashboards; die Seitenleiste und mobile Kopfzeile sind einheitlich ausgerichtet.
+- Standortbezogene mobile Sichtbarkeit bleibt über ein entzieh- und delegierbares Recht steuerbar. Linux-Update- und Recovery-Prüfungen verwenden künftig einen Health-Zeitrahmen von bis zu 1500 Sekunden.
+
+## v0.92.4 Beta · Rücknahme, Filialbestellung und globale Oberfläche
+
+- Rücknahmen können vorbereitet und bis Tagesende durch eine zweite Person bestätigt werden; berechtigte Leitungen schließen eigene Teamfälle direkt ab.
+- Filialbestellungen verwenden kompaktere Konfigurationsbereiche, zusätzliche Vorlagenwerte und einen nachvollziehbaren Zustellstatus.
+- Verkaufsverwaltung, Portalzugänge, Einstellungen und die globale Hell-/Dunkel-Auswahl folgen dem einheitlichen Desktop-Layout.
+
+## v0.92.3 Beta · Mobile Filialkonto-Startseite und Portalgestaltung
+
+- Mobile Filialkonto-Startseite mit konfigurierbaren Kacheln, Farben und Anordnung.
+- Einheitliche Filialkonto-Einstellungen für Dienstplanfarben und mobile Tagesanzeige.
+- Überarbeitete Navigation und kompaktere mobile Bedienung.
+
+## v0.92.2 Beta · Filialbestellungen und mobile Bestellführung
+
+- Ausklappbare, frei pflegbare Bestellgruppen mit gemeinsam verwendbaren Positionen.
+- Kompaktere mobile Bestellerfassung mit Entwurfsspeicherung und Prüfseite.
+- Erweiterte Filialkonto-Einstellungen für Bestellautomatik und Darstellung.
+
+## v0.92.1 Beta · Temporäre Filialeinsätze und Bestellentwürfe
+
+- Filialleitungen der Stammfiliale sowie PL+ können zeitlich begrenzte Filialeinsätze stunden-, tage- oder wochenweise zuweisen. Das eng begrenzte Verwaltungsrecht kann von FL+ gezielt an Abteilungsleitungen delegiert werden; die geschützte Developer-Rolle behält ihren vollständigen Anwendungskatalog.
+- Eingesetzte Mitarbeitende stehen im zugewiesenen Zeitraum der Dienstplanung der Ziel- statt der Stammfiliale zur Verfügung. Genehmigter Urlaub und genehmigter Zeitausgleich haben Vorrang; neue überschneidende Anträge werden fail-closed behandelt. Zuständigkeiten für Zeitausgleich und Krankmeldungen berücksichtigen beide beteiligten Filialen nachvollziehbar.
+- Filialbestellungen lassen sich als serverseitig gebundene Entwürfe speichern, später fortsetzen oder bewusst verwerfen. Standort, Person und Revision bleiben dabei eindeutig gebunden; Versand- und Zielkonfigurationen werden nicht in den Entwurf kopiert.
+- Die Bestellerfassung nutzt in der Desktop- und Mobilansicht ein kompakteres, platzsparendes Layout. Mengen bleiben auch serverseitig auf positive ganze Zahlen begrenzt.
+- Für die ausdrücklich freigegebene Bereinigung historischer Testbestellungen steht ein kontrollierter Wartungsablauf mit Manifest, Prüfsummen und internem, transaktionalem Ausführungsbeleg bereit. Es erfolgt keine automatische Datenlöschung.
+- Linux-Runtime, Offsite-Sicherung, Recovery und Host-Hardening bleiben unverändert; das Update ist eine additive Anwendungsmigration.
+
 ## v0.92.0 Beta · Verkaufsverwaltung und Verkaufsanalysen
 
 - Der feste Desktop-Hauptbereich `Verkaufsverwaltung` startet mit `Verkaufsanalysen`; er ist kein optionales Installationsmodul und erhält keine separate mobile Fachansicht.

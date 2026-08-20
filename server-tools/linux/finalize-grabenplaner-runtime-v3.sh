@@ -36,7 +36,7 @@ from_version=""
 to_version=""
 original_package_sha256=""
 node_arg=""
-health_timeout=120
+health_timeout=1500
 
 usage() {
   cat <<'EOF'
@@ -84,8 +84,8 @@ original_package_sha256="${original_package_sha256,,}"
 [[ "$from_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[A-Za-z0-9.-]+$ \
   && "$to_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[A-Za-z0-9.-]+$ ]] \
   || gp_die "Die erwarteten Versionen sind ungueltig."
-[[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 600 )) \
-  || gp_die "--health-timeout muss zwischen 30 und 600 liegen."
+[[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 1500 )) \
+  || gp_die "--health-timeout muss zwischen 30 und 1500 liegen."
 
 os_release_source="$(realpath --canonicalize-existing -- /etc/os-release)" \
   || gp_die "Ubuntu konnte nicht sicher erkannt werden."

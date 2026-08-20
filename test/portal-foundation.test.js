@@ -17,6 +17,9 @@ const {
 const {
   PERMISSION_IDS: PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS,
 } = require("../lib/personnel-lifecycle-editor-contract");
+const {
+  PERSONNEL_LEARNING_PERMISSION_IDS,
+} = require("../lib/personnel-learning-access");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-portal-test-"));
 const databasePath = path.join(testRoot, "legacy.db");
@@ -254,6 +257,90 @@ test("Login und Mitarbeiterfunktionen bleiben bis zum Servermodus gesperrt", asy
   const result = await response.json();
   assert.equal(result.code, "PORTAL_INACTIVE");
   assert.equal(result.status.operationMode, "local");
+});
+
+test("lokaler Einzelplatzmodus kann Filialen und Abteilungen deaktivieren und reaktivieren", async () => {
+  const initialResponse = await fetch(`${baseUrl}/api/locations`);
+  assert.equal(initialResponse.status, 200, await initialResponse.clone().text());
+  const initialLocations = await initialResponse.json();
+  const template = initialLocations.find((location) => location.active !== false) || initialLocations[0];
+  assert.ok(template, "Für den lokalen Topologietest fehlt eine Ausgangsfiliale.");
+  const usedIds = new Set(initialLocations.map((location) => String(location.id)));
+  const locationId = Array.from({ length: 10 }, (_, index) => String(99 - index).padStart(2, "0"))
+    .find((candidate) => !usedIds.has(candidate));
+  assert.ok(locationId, "Für den lokalen Topologietest fehlt eine freie Filial-ID.");
+
+  const locationBody = {
+    id: locationId,
+    name: "Lokale Topologieprüfung",
+    minStaff: 1,
+    daySettings: template.day_settings,
+    timeTrackingEnabled: false,
+    active: true,
+  };
+  const createdLocation = await fetch(`${baseUrl}/api/locations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(locationBody),
+  });
+  assert.equal(createdLocation.status, 201, await createdLocation.clone().text());
+
+  const disabledLocation = await fetch(`${baseUrl}/api/locations/${locationId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...locationBody, active: false }),
+  });
+  assert.equal(disabledLocation.status, 200, await disabledLocation.clone().text());
+  assert.equal((await disabledLocation.json()).find((location) => location.id === locationId)?.active, false);
+
+  const restoredLocation = await fetch(`${baseUrl}/api/locations/${locationId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(locationBody),
+  });
+  assert.equal(restoredLocation.status, 200, await restoredLocation.clone().text());
+  assert.equal((await restoredLocation.json()).find((location) => location.id === locationId)?.active, true);
+
+  const departmentBody = {
+    locationId,
+    name: "Lokale Wissensprüfung",
+    minStaff: 1,
+    active: true,
+  };
+  const createdDepartment = await fetch(`${baseUrl}/api/departments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(departmentBody),
+  });
+  assert.equal(createdDepartment.status, 201, await createdDepartment.clone().text());
+  const departmentId = (await createdDepartment.json())
+    .find((location) => location.id === locationId)?.departments
+    .find((department) => department.name === departmentBody.name)?.id;
+  assert.ok(departmentId, "Die lokale Testabteilung wurde nicht angelegt.");
+
+  const disabledDepartment = await fetch(`${baseUrl}/api/departments/${departmentId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...departmentBody, active: false }),
+  });
+  assert.equal(disabledDepartment.status, 200, await disabledDepartment.clone().text());
+  assert.equal(
+    (await disabledDepartment.json()).find((location) => location.id === locationId)?.departments
+      .find((department) => Number(department.id) === Number(departmentId))?.active,
+    false,
+  );
+
+  const restoredDepartment = await fetch(`${baseUrl}/api/departments/${departmentId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(departmentBody),
+  });
+  assert.equal(restoredDepartment.status, 200, await restoredDepartment.clone().text());
+  assert.equal(
+    (await restoredDepartment.json()).find((location) => location.id === locationId)?.departments
+      .find((department) => Number(department.id) === Number(departmentId))?.active,
+    true,
+  );
 });
 
 test("Betriebsmodus kann nicht über eine Browser-API verändert werden", async () => {
@@ -1190,6 +1277,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       ...PERSONNEL_LIFECYCLE_INTERFACE_PERMISSION_IDS,
       ...PERSONNEL_LIFECYCLE_AUTOMATION_PERMISSION_IDS,
       ...PERSONNEL_LIFECYCLE_EDITOR_PERMISSION_IDS,
+      ...PERSONNEL_LEARNING_PERMISSION_IDS,
     ]);
     assert.ok(itAdminRightsPayload.catalog
       .filter((permission) => !personnelLifecyclePermissionIds.has(permission.id))
@@ -1201,7 +1289,9 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       new Set(itAdminRightsPayload.catalog
         .filter((permission) => !permission.editable)
         .map((permission) => permission.id)),
-      personnelLifecyclePermissionIds,
+      new Set([...personnelLifecyclePermissionIds].filter(
+        (permission) => !PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission),
+      )),
     );
     for (const permissionId of [
       "personnel:lifecycle:onboarding:read",

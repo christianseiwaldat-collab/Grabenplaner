@@ -17,6 +17,7 @@ test("Zeitraumskalender beginnt montags und liefert sechs vollständige Wochen",
 test("erste Auswahl setzt den Beginn, zweite Auswahl das Ende", () => {
   const start = selectRangeDate({}, "2026-07-14");
   assert.deepEqual(start, { start: "2026-07-14", end: "" });
+  assert.deepEqual(selectRangeDate(start, "2026-07-14"), { start: "2026-07-14", end: "2026-07-14" });
   assert.deepEqual(selectRangeDate(start, "2026-07-18"), { start: "2026-07-14", end: "2026-07-18" });
   assert.deepEqual(selectRangeDate(start, "2026-07-10"), { start: "2026-07-10", end: "" });
 });

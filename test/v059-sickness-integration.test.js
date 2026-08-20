@@ -249,13 +249,13 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt lokal und erzeugt keinen 
   const portalPage = await fetch(`${baseUrl}/portal.html`);
   assert.equal(portalPage.status, 200);
   assert.match(portalPage.headers.get("content-security-policy") || "", /script-src 'self' 'wasm-unsafe-eval'/);
-  const pdfModule = await fetch(`${baseUrl}/vendor/pdfjs-v6.1.200/build/pdf.min.mjs`);
+  const pdfModule = await fetch(`${baseUrl}/vendor/pdfjs-v6.2.108/build/pdf.min.mjs`);
   assert.equal(pdfModule.status, 200);
   assert.match(pdfModule.headers.get("content-type") || "", /javascript/);
   assert.match(pdfModule.headers.get("cache-control") || "", /immutable/);
-  const pdfWorker = await fetch(`${baseUrl}/vendor/pdfjs-v6.1.200/build/pdf.worker.min.mjs`);
+  const pdfWorker = await fetch(`${baseUrl}/vendor/pdfjs-v6.2.108/build/pdf.worker.min.mjs`);
   assert.equal(pdfWorker.status, 200);
-  const pdfWasm = await fetch(`${baseUrl}/vendor/pdfjs-v6.1.200/wasm/qcms_bg.wasm`);
+  const pdfWasm = await fetch(`${baseUrl}/vendor/pdfjs-v6.2.108/wasm/qcms_bg.wasm`);
   assert.equal(pdfWasm.status, 200);
   assert.match(pdfWasm.headers.get("content-type") || "", /application\/wasm/);
   const shiftDate = mostRecentPlanningDate();
@@ -427,6 +427,14 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   const saturday = new Date(`${shiftDate}T12:00:00Z`).getUTCDay() === 6;
   const shiftStart = saturday ? "10:00" : "09:00";
   const shiftEnd = saturday ? "17:00" : "18:00";
+  db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, note,
+      status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES ('v059-cross-location-assignment', '596', '91', '92', ?, ?, ?, 1, '',
+      'active', 1, 'test', CURRENT_TIMESTAMP, 'test', CURRENT_TIMESTAMP)
+  `).run(departmentB, shiftDate, shiftDate);
   const insertShift = db.prepare(`
     INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
     VALUES (?, ?, ?, ?, ?, 'Filialwechsel', '')
@@ -519,6 +527,14 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   assert.ok(Object.hasOwn(deploymentCaseSummary, "staffing_risk"));
 
   const directCrossEmployee = session("605", "employee");
+  db.prepare(`
+    INSERT INTO employee_location_lendings (
+      id, employee_number, home_location_id, destination_location_id,
+      destination_department_id, date_from, date_to, all_day, note,
+      status, revision, created_by, created_at, updated_by, updated_at
+    ) VALUES ('v059-direct-cross-assignment', '605', '91', '92', ?, ?, ?, 1, '',
+      'active', 1, 'test', CURRENT_TIMESTAMP, 'test', CURRENT_TIMESTAMP)
+  `).run(departmentB, shiftDate, shiftDate);
   insertShift.run("605", departmentB, shiftDate, shiftStart, shiftEnd);
   const homeNotificationCount = db.prepare(`
     SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = '593'

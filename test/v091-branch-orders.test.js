@@ -47,10 +47,12 @@ const {
 
 const LOCATION = "18";
 const OTHER_LOCATION = "19";
+const LEGACY_LOCATION = "20";
 const HR = "v091hr";
 const MANAGER = "252";
 const EMPLOYEE = "275";
 const OTHER_MANAGER = "v091other";
+const IT_ADMIN = "v091-it-admin";
 const ORGANIZATION_LOGIN = "fil18";
 const INITIAL_PASSWORD = "Filialkonto-v091!";
 const ACTIVE_PASSWORD = "Filialkonto-aktiv-v091!";
@@ -59,6 +61,7 @@ let baseUrl;
 let httpServer;
 let hrSession;
 let managerSession;
+let itAdminSession;
 let organizationSession;
 
 function ensureLocation(id, name) {
@@ -193,13 +196,16 @@ function insertReadOnlyFixtures() {
 test.before(() => {
   ensureLocation(LOCATION, "Filiale 18");
   ensureLocation(OTHER_LOCATION, "Andere Filiale");
+  ensureLocation(LEGACY_LOCATION, "Legacy-Katalog");
   ensureEmployee(HR, "Herta Personal", LOCATION, "hr");
   ensureEmployee(MANAGER, "Mara Filialleitung", LOCATION, "manager");
   ensureEmployee(EMPLOYEE, "Marie-Theres", LOCATION, "employee");
   ensureEmployee(OTHER_MANAGER, "Olaf Andere", OTHER_LOCATION, "manager");
+  ensureEmployee(IT_ADMIN, "Ines Technik", LOCATION, "it_admin");
   insertReadOnlyFixtures();
   hrSession = createEmployeeSession(HR);
   managerSession = createEmployeeSession(MANAGER);
+  itAdminSession = createEmployeeSession(IT_ADMIN);
   return new Promise((resolve) => {
     httpServer = app.listen(0, "127.0.0.1", () => {
       baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
@@ -218,6 +224,7 @@ test.after(async () => {
 test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", async (t) => {
   let accountId;
   let catalog;
+  let organizationOrderDraft;
 
   await t.test("Filialkonto erhält die zwei Basisansichten; Filialbestellung wird durch PL+ einzeln aktiviert", async () => {
     const created = await requestJson("/api/portal/v1/organization-accounts", {
@@ -238,6 +245,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(created.payload.account.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
+      "personnel_learning:location:dashboard",
     ]));
 
     db.prepare("DELETE FROM portal_organization_account_permissions WHERE account_id = ?").run(accountId);
@@ -249,6 +257,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(login.payload.user.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
+      "personnel_learning:location:dashboard",
     ]));
     organizationSession = responseSession(login.response);
     const selfChangeDenied = await requestJson("/api/portal/v1/me/password", {
@@ -283,6 +292,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(activeLogin.payload.user.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
+      "personnel_learning:location:dashboard",
     ]));
 
     const activated = await requestJson(`/api/portal/v1/organization-accounts/${encodeURIComponent(accountId)}`, {
@@ -301,6 +311,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.deepEqual(new Set(activated.payload.account.permissions), new Set([
       "loans:overview:read",
       "schedule:location:view",
+      "personnel_learning:location:dashboard",
       "branch_orders:submit",
     ]));
 
@@ -319,6 +330,7 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       });
       assert.equal(result.response.status, 200, JSON.stringify(result.payload));
       assert.equal(result.payload.weekStart, week);
+      assert.equal(result.payload.shifts[0]?.employeeColor, "#26785f");
       assert.equal(JSON.stringify(result.payload).includes("nicht für Filialkonto"), false);
     }
     const vacations = await requestJson("/api/portal/v1/location-dashboard/vacations?week=2031-03-10", {
@@ -364,17 +376,41 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(catalog.senderEmail, "fil18-noreply@grabenplaner.eu");
     assert.ok(catalog.employees.some((employee) => employee.employeeNumber === EMPLOYEE));
     assert.equal(JSON.stringify(catalog).includes("lager@lamprechter.com"), false);
-    const warehouse = catalog.groups.find((group) => group.title === "Lager");
-    assert.ok(warehouse);
+    const instantPrint = catalog.groups.find((group) => group.title === "Fotowelt – Sofortdruck");
+    assert.ok(instantPrint);
     assert.deepEqual(
-      new Set(warehouse.items.filter((item) => item.title.includes("Mediaset")).map((item) => item.title)),
+      new Set(instantPrint.items.filter((item) => item.title.includes("Mediaset")).map((item) => item.title)),
       new Set(["Fotodrucker: Mediaset DS40", "Fotodrucker: Mediaset DS80", "Fotodrucker: Mediaset DS620"]),
     );
+    assert.equal(catalog.groups.some((group) => ["Lager", "Marketing"].includes(group.title)), false);
+    const plotterHutpapier = catalog.groups.find((group) => group.title === "Fotowelt – Plotter")
+      .items.find((item) => item.title === "Hutpapier");
+    const packagingHutpapier = catalog.groups.find((group) => group.title === "Fotowelt – Verpackung & Versand")
+      .items.find((item) => item.title === "Hutpapier");
+    assert.ok(plotterHutpapier);
+    assert.equal(plotterHutpapier.id, packagingHutpapier.id);
   });
 
   await t.test("nur PL+ konfiguriert Einheiten, Antwortadresse und Vorlagen", async () => {
     const managerDenied = await requestJson("/api/portal/v1/branch-orders/settings", { session: managerSession });
     assert.equal(managerDenied.response.status, 403, JSON.stringify(managerDenied.payload));
+    const itAdminSessionInfo = await requestJson("/api/portal/v1/session", { session: itAdminSession });
+    assert.equal(itAdminSessionInfo.response.status, 200, JSON.stringify(itAdminSessionInfo.payload));
+    assert.equal(itAdminSessionInfo.payload.user.permissions.includes("branch_orders:manage"), false);
+    const itAdminDenied = await requestJson("/api/portal/v1/branch-orders/settings", { session: itAdminSession });
+    assert.equal(itAdminDenied.response.status, 403, JSON.stringify(itAdminDenied.payload));
+    db.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES (?, 'branch_orders:manage', 'v091-legacy-test')
+    `).run(IT_ADMIN);
+    const legacyGrantDenied = await requestJson("/api/portal/v1/branch-orders/settings", {
+      session: createEmployeeSession(IT_ADMIN),
+    });
+    assert.equal(legacyGrantDenied.response.status, 403, JSON.stringify(legacyGrantDenied.payload));
+    db.prepare(`
+      DELETE FROM portal_permission_grants
+      WHERE employee_number = ? AND permission = 'branch_orders:manage'
+    `).run(IT_ADMIN);
     const settings = await requestJson("/api/portal/v1/branch-orders/settings", { session: hrSession });
     assert.equal(settings.response.status, 200, JSON.stringify(settings.payload));
     assert.equal(settings.payload.locationId, LOCATION);
@@ -383,19 +419,25 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.ok(recipient);
     assert.equal(recipient.replyToEmail, recipient.email);
     const originalRecipientEmail = recipient.email;
+    const ds40Before = configuration.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
+    assert.ok(ds40Before);
     recipient.email = "test-filialbestellung@example.test";
+    recipient.subjectTemplate = "Filialbestellung {{employeeNickname}} · KW {{calendarWeek}}";
+    recipient.bodyTemplate = `${recipient.bodyTemplate}\n\nDienstplanname: {{employeeNickname}}`;
     for (const recipient of configuration.recipients) recipient.replyToEmail = "antworten@grabenplaner.eu";
-    const warehouse = configuration.groups.find((group) => group.title === "Lager");
-    warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS40").unit = "Karton";
+    configuration.items.find((item) => item.title === "Fotodrucker: Mediaset DS40").unitId = configuration.units.find((unit) => unit.title === "Karton").id;
     const saved = await requestJson("/api/portal/v1/branch-orders/settings", {
       method: "PUT",
       session: hrSession,
       body: { locationId: LOCATION, configuration },
     });
     assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
-    assert.equal(saved.payload.configuration.groups
-      .find((group) => group.title === "Lager").items
+    assert.equal(saved.payload.configuration.items
       .find((item) => item.title === "Fotodrucker: Mediaset DS40").unit, "Karton");
+    assert.equal(
+      saved.payload.configuration.items.find((item) => item.title === "Fotodrucker: Mediaset DS40").id,
+      ds40Before.id,
+    );
     assert.ok(saved.payload.configuration.recipients
       .some((entry) => entry.email === "test-filialbestellung@example.test"));
     const recipientToRestore = saved.payload.configuration.recipients
@@ -447,26 +489,274 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(passwordResetDenied.response.status, 403, JSON.stringify(passwordResetDenied.payload));
   });
 
-  await t.test("Bestellung ignoriert eine übermittelte KW, speichert Momentaufnahmen und versendet über den freigegebenen Absender", async () => {
+  await t.test("PL+ kann zentrale Positionen mehreren Gruppen zuordnen und Maßeinheiten pflegen", async () => {
+    const before = await requestJson("/api/portal/v1/branch-orders/settings", { session: hrSession });
+    assert.equal(before.response.status, 200, JSON.stringify(before.payload));
+    const original = structuredClone(before.payload.configuration);
+    const configuration = structuredClone(original);
+    const unitId = "unit-test-v093";
+    const itemId = "item-test-v093";
+    configuration.units.unshift({ id: unitId, title: "Bogen" });
+    configuration.items.unshift({
+      id: itemId,
+      title: "Testposition für Mehrfachgruppe",
+      unitId,
+      recipientId: configuration.recipients[0].id,
+    });
+    const plotter = configuration.groups.find((group) => group.title === "Fotowelt – Plotter");
+    const packaging = configuration.groups.find((group) => group.title === "Fotowelt – Verpackung & Versand");
+    plotter.itemIds.unshift(itemId);
+    packaging.itemIds.unshift(itemId);
+    const saved = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration },
+    });
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+    assert.equal(saved.payload.configuration.units[0].title, "Bogen");
+    assert.equal(saved.payload.configuration.groups.find((group) => group.title === "Fotowelt – Plotter").itemIds[0], saved.payload.configuration.groups.find((group) => group.title === "Fotowelt – Verpackung & Versand").itemIds[0]);
+    const invalid = structuredClone(saved.payload.configuration);
+    invalid.units = invalid.units.filter((unit) => unit.title !== "Bogen");
+    const invalidDelete = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: invalid },
+    });
+    assert.equal(invalidDelete.response.status, 400, JSON.stringify(invalidDelete.payload));
+    const duplicateUnit = structuredClone(saved.payload.configuration);
+    duplicateUnit.units.push({ id: "unit-duplicate-v093", title: duplicateUnit.units[0].title });
+    const duplicateUnitDenied = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: duplicateUnit },
+    });
+    assert.equal(duplicateUnitDenied.response.status, 400, JSON.stringify(duplicateUnitDenied.payload));
+    const restored = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: original },
+    });
+    assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
+  });
+
+  await t.test("alte Standardgruppen werden ohne Positionsverlust in Anzeigegruppen überführt", async () => {
+    const now = "2031-03-11T08:00:00.000Z";
+    db.prepare(`
+      INSERT INTO branch_order_location_settings (location_id, initialized_at, initialized_by, updated_at, updated_by)
+      VALUES (?, ?, 'v091-test', ?, 'v091-test')
+    `).run(LEGACY_LOCATION, now, now);
+    db.prepare(`
+      INSERT INTO branch_order_recipients
+        (id, location_id, email, reply_to_email, subject_template, body_template, created_at, created_by, updated_at, updated_by)
+      VALUES ('v091-legacy-recipient', ?, 'legacy@example.test', 'legacy@example.test', 'Bestellung {{locationName}}', '{{items}}', ?, 'v091-test', ?, 'v091-test')
+    `).run(LEGACY_LOCATION, now, now);
+    const groupRows = [
+      ["v091-legacy-lager", "Lager"],
+      ["v091-legacy-marketing", "Marketing"],
+      ["v091-legacy-other", "Sonstiges"],
+    ];
+    for (const [id, title] of groupRows) {
+      db.prepare(`
+        INSERT INTO branch_order_groups
+          (id, location_id, recipient_id, title, hint, active, sort_order, created_at, created_by, updated_at, updated_by)
+        VALUES (?, ?, 'v091-legacy-recipient', ?, '', 1, 1, ?, 'v091-test', ?, 'v091-test')
+      `).run(id, LEGACY_LOCATION, title, now, now);
+    }
+    const itemRows = [
+      ["v091-legacy-custom-lager", "v091-legacy-lager", "Eigene Plotterfolie", "Rolle"],
+      ["v091-legacy-custom-marketing", "v091-legacy-marketing", "Eigener Marketingartikel", "Packung"],
+      ["v091-legacy-custom-other", "v091-legacy-other", "Eigene Zusatzposition", "Stück"],
+    ];
+    for (const [id, groupId, title, unit] of itemRows) {
+      db.prepare(`
+        INSERT INTO branch_order_items
+          (id, group_id, title, unit, active, sort_order, created_at, created_by, updated_at, updated_by)
+        VALUES (?, ?, ?, ?, 1, 1, ?, 'v091-test', ?, 'v091-test')
+      `).run(id, groupId, title, unit, now, now);
+    }
+    const migrated = await requestJson(`/api/portal/v1/branch-orders/settings?locationId=${LEGACY_LOCATION}`, { session: hrSession });
+    assert.equal(migrated.response.status, 200, JSON.stringify(migrated.payload));
+    const titles = migrated.payload.configuration.groups.map((group) => group.title);
+    assert.equal(titles.includes("Lager"), false);
+    assert.equal(titles.includes("Marketing"), false);
+    assert.equal(titles.includes("Sonstiges"), false);
+    assert.ok(titles.includes("Fotowelt – Plotter"));
+    const catalogTitles = migrated.payload.configuration.items.map((item) => item.title);
+    assert.ok(catalogTitles.includes("Eigene Plotterfolie"));
+    assert.ok(catalogTitles.includes("Eigener Marketingartikel"));
+    assert.ok(catalogTitles.includes("Eigene Zusatzposition"));
+    const otherGroup = migrated.payload.configuration.groups.find((group) => group.title === "Fotowelt – Weitere Positionen");
+    const catalogById = new Map(migrated.payload.configuration.items.map((item) => [item.id, item.title]));
+    assert.ok(otherGroup.itemIds.some((id) => catalogById.get(id) === "Eigene Plotterfolie"));
+  });
+
+  await t.test("Filialkonto-Anzeige ist ausschließlich persönlich für FL+ oder berechtigte AL konfigurierbar", async () => {
+    const managerRead = await requestJson("/api/portal/v1/branch-portal-settings", { session: managerSession });
+    assert.equal(managerRead.response.status, 200, JSON.stringify(managerRead.payload));
+    assert.equal(managerRead.payload.settings.scheduleDisplayMode, "classic");
+    const invalid = await requestJson("/api/portal/v1/branch-portal-settings", {
+      method: "PUT",
+      session: managerSession,
+      body: { settings: { scheduleDisplayMode: "colored", mobileHideElapsedDays: true, orderAutosaveEnabled: true, orderAutosaveMinutes: 0 } },
+    });
+    assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
+    const saved = await requestJson("/api/portal/v1/branch-portal-settings", {
+      method: "PUT",
+      session: managerSession,
+      body: { settings: { scheduleDisplayMode: "colored", mobileHideElapsedDays: true, orderAutosaveEnabled: true, orderAutosaveMinutes: 17 } },
+    });
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+    assert.deepEqual(saved.payload.settings, {
+      scheduleDisplayMode: "colored",
+      mobileHideElapsedDays: true,
+      orderAutosaveEnabled: true,
+      orderAutosaveMinutes: 17,
+      updatedAt: saved.payload.settings.updatedAt,
+    });
+    db.prepare(`
+      INSERT INTO portal_organization_account_permissions (account_id, permission)
+      VALUES (?, 'branch_portal:display:manage')
+    `).run(accountId);
+    const organizationDenied = await requestJson("/api/portal/v1/branch-portal-settings", {
+      session: organizationSession,
+    });
+    assert.equal(organizationDenied.response.status, 403, JSON.stringify(organizationDenied.payload));
+    db.prepare(`
+      DELETE FROM portal_organization_account_permissions
+      WHERE account_id = ? AND permission = 'branch_portal:display:manage'
+    `).run(accountId);
+    const schedule = await requestJson("/api/portal/v1/location-dashboard/schedule?week=2031-03-10", {
+      session: organizationSession,
+    });
+    assert.equal(schedule.response.status, 200, JSON.stringify(schedule.payload));
+    assert.equal(schedule.payload.displaySettings.orderAutosaveMinutes, 17);
+    assert.equal(schedule.payload.displaySettings.scheduleDisplayMode, "colored");
+    const catalogSettings = await requestJson("/api/portal/v1/branch-orders/catalog", { session: organizationSession });
+    assert.equal(catalogSettings.response.status, 200, JSON.stringify(catalogSettings.payload));
+    assert.equal(catalogSettings.payload.portalSettings.orderAutosaveEnabled, true);
+    const employeeDenied = await requestJson("/api/portal/v1/branch-portal-settings", {
+      session: createEmployeeSession(EMPLOYEE),
+    });
+    assert.equal(employeeDenied.response.status, 403, JSON.stringify(employeeDenied.payload));
+    db.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES (?, 'branch_portal:display:manage', 'v091-legacy-test')
+    `).run(IT_ADMIN);
+    const itAdminDenied = await requestJson("/api/portal/v1/branch-portal-settings", {
+      session: createEmployeeSession(IT_ADMIN),
+    });
+    assert.equal(itAdminDenied.response.status, 403, JSON.stringify(itAdminDenied.payload));
+    db.prepare(`
+      DELETE FROM portal_permission_grants
+      WHERE employee_number = ? AND permission = 'branch_portal:display:manage'
+    `).run(IT_ADMIN);
+  });
+
+  await t.test("Filialkonto speichert und lädt einen revisionsgeschützten Entwurf ohne Empfängerdaten", async () => {
     const refreshedCatalog = await requestJson("/api/portal/v1/branch-orders/catalog", { session: organizationSession });
     assert.equal(refreshedCatalog.response.status, 200, JSON.stringify(refreshedCatalog.payload));
     catalog = refreshedCatalog.payload;
-    const warehouse = catalog.groups.find((group) => group.title === "Lager");
-    const ds40 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
-    const ds620 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS620");
+    const instantPrint = catalog.groups.find((group) => group.title === "Fotowelt – Sofortdruck");
+    const ds40 = instantPrint.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
+    const ds620 = instantPrint.items.find((item) => item.title === "Fotodrucker: Mediaset DS620");
+
+    const empty = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: organizationSession,
+    });
+    assert.equal(empty.response.status, 200, JSON.stringify(empty.payload));
+    assert.equal(empty.payload.draft, null);
+
+    const saved = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: organizationSession,
+      body: {
+        employeeNumber: EMPLOYEE,
+        expectedRevision: 0,
+        items: [
+          { itemId: ds40.id, quantity: 2 },
+          { itemId: ds620.id, quantity: 3, note: "Später fertigstellen" },
+        ],
+      },
+    });
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+    assert.equal(saved.payload.draft.revision, 1);
+    assert.equal(saved.payload.draft.selectedEmployeeNumber, EMPLOYEE);
+    assert.equal(saved.payload.draft.items.length, 2);
+    assert.equal(JSON.stringify(saved.payload).includes("lager@lamprechter.com"), false);
+    assert.equal(JSON.stringify(saved.payload).includes("antworten@grabenplaner.eu"), false);
+
+    const staleWrite = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: organizationSession,
+      body: {
+        employeeNumber: EMPLOYEE,
+        expectedRevision: 0,
+        items: [{ itemId: ds40.id, quantity: 9 }],
+      },
+    });
+    assert.equal(staleWrite.response.status, 409, JSON.stringify(staleWrite.payload));
+    assert.equal(staleWrite.payload.code, "BRANCH_ORDER_DRAFT_REVISION_CONFLICT");
+
+    const updated = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: organizationSession,
+      body: {
+        employeeNumber: EMPLOYEE,
+        expectedRevision: 1,
+        items: [
+          { itemId: ds40.id, quantity: 2 },
+          { itemId: ds620.id, quantity: 3, note: "Dringend" },
+        ],
+      },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.payload));
+    assert.equal(updated.payload.draft.revision, 2);
+    organizationOrderDraft = updated.payload.draft;
+
+    const managerDenied = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: managerSession,
+    });
+    assert.equal(managerDenied.response.status, 403, JSON.stringify(managerDenied.payload));
+  });
+
+  await t.test("Bestellung ignoriert eine übermittelte KW, speichert Momentaufnahmen und versendet über den freigegebenen Absender", async () => {
+    db.prepare("UPDATE employees SET nickname = 'Mitzi' WHERE personnel_number = ?").run(EMPLOYEE);
+    const refreshedCatalog = await requestJson("/api/portal/v1/branch-orders/catalog", { session: organizationSession });
+    assert.equal(refreshedCatalog.response.status, 200, JSON.stringify(refreshedCatalog.payload));
+    catalog = refreshedCatalog.payload;
+    const instantPrint = catalog.groups.find((group) => group.title === "Fotowelt – Sofortdruck");
+    const ds40 = instantPrint.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
+    const ds620 = instantPrint.items.find((item) => item.title === "Fotodrucker: Mediaset DS620");
+    const missingRevision = await requestJson("/api/portal/v1/branch-orders", {
+      method: "POST",
+      session: organizationSession,
+      body: { employeeNumber: EMPLOYEE, items: [{ itemId: ds40.id, quantity: 2 }] },
+    });
+    assert.equal(missingRevision.response.status, 409, JSON.stringify(missingRevision.payload));
+    assert.equal(missingRevision.payload.code, "BRANCH_ORDER_DRAFT_REVISION_CONFLICT");
     const decimal = await requestJson("/api/portal/v1/branch-orders", {
       method: "POST",
       session: organizationSession,
-      body: { employeeNumber: EMPLOYEE, items: [{ itemId: ds620.id, quantity: 1.5 }] },
+      body: {
+        employeeNumber: EMPLOYEE,
+        draftRevision: organizationOrderDraft.revision,
+        items: [{ itemId: ds620.id, quantity: 1.5 }],
+      },
     });
     assert.equal(decimal.response.status, 400, JSON.stringify(decimal.payload));
     assert.equal(decimal.payload.code, "BRANCH_ORDER_QUANTITY_INVALID");
+    const draftAfterValidationFailure = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: organizationSession,
+    });
+    assert.equal(draftAfterValidationFailure.response.status, 200, JSON.stringify(draftAfterValidationFailure.payload));
+    assert.equal(draftAfterValidationFailure.payload.draft.revision, organizationOrderDraft.revision);
     const order = await requestJson("/api/portal/v1/branch-orders", {
       method: "POST",
       session: organizationSession,
       body: {
         employeeNumber: EMPLOYEE,
         calendarWeek: 1,
+        draftRevision: organizationOrderDraft.revision,
         items: [
           { itemId: ds40.id, quantity: 2 },
           { itemId: ds620.id, quantity: 3, note: "Dringend" },
@@ -476,12 +766,15 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(order.response.status, 201, JSON.stringify(order.payload));
     assert.equal(order.payload.order.calendarWeek, catalog.calendarWeek);
     assert.equal(order.payload.order.status, "sent");
+    assert.equal(order.payload.order.draftConsumed, true);
     assert.match(order.payload.order.pdf.filename, /^Filialbestellung-18-KW\d{2}-.+\.pdf$/);
     assert.match(order.payload.order.pdf.sha256, /^[a-f0-9]{64}$/);
     assert.equal(sentMails.length, 1);
     assert.equal(sentMails[0].from, "fil18-noreply@grabenplaner.eu");
     assert.equal(sentMails[0].to, "lager@lamprechter.com");
     assert.equal(sentMails[0].replyTo, "antworten@grabenplaner.eu");
+    assert.match(sentMails[0].subject, /Filialbestellung Mitzi/);
+    assert.match(sentMails[0].text, /Dienstplanname: Mitzi/);
     assert.match(sentMails[0].text, /Fotodrucker: Mediaset DS40: 2 Karton/);
     assert.match(sentMails[0].text, /Bitte antworten Sie an antworten@grabenplaner\.eu\./);
     assert.equal(
@@ -527,6 +820,11 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(Buffer.compare(Buffer.from(storedPdf.content), pdf.content), 0);
     assert.equal(storedPdf.sha256, order.payload.order.pdf.sha256);
     assert.equal(storedPdf.filename, order.payload.order.pdf.filename);
+    const consumedDraft = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: organizationSession,
+    });
+    assert.equal(consumedDraft.response.status, 200, JSON.stringify(consumedDraft.payload));
+    assert.equal(consumedDraft.payload.draft, null);
   });
 
   await t.test("PL+ kann Marie-Theres (275) für persönliche Filialbestellungen freischalten", async () => {
@@ -561,19 +859,38 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     const personalSettings = await requestJson("/api/portal/v1/branch-orders/settings", { session: personalSession });
     assert.equal(personalSettings.response.status, 403, JSON.stringify(personalSettings.payload));
 
-    const warehouse = personalCatalog.payload.groups.find((group) => group.title === "Lager");
-    const ds80 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS80");
+    const instantPrint = personalCatalog.payload.groups.find((group) => group.title === "Fotowelt – Sofortdruck");
+    const ds80 = instantPrint.items.find((item) => item.title === "Fotodrucker: Mediaset DS80");
+    const personalDraft = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: personalSession,
+      body: {
+        employeeNumber: OTHER_MANAGER,
+        expectedRevision: 0,
+        items: [{ itemId: ds80.id, quantity: 1, note: "Persönlicher Entwurf" }],
+      },
+    });
+    assert.equal(personalDraft.response.status, 200, JSON.stringify(personalDraft.payload));
+    assert.equal(personalDraft.payload.draft.selectedEmployeeNumber, EMPLOYEE);
+    assert.equal(personalDraft.payload.draft.revision, 1);
+    const branchCannotSeePersonalDraft = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+      session: organizationSession,
+    });
+    assert.equal(branchCannotSeePersonalDraft.response.status, 200, JSON.stringify(branchCannotSeePersonalDraft.payload));
+    assert.equal(branchCannotSeePersonalDraft.payload.draft, null);
     const personalOrder = await requestJson("/api/portal/v1/branch-orders", {
       method: "POST",
       session: personalSession,
       body: {
         employeeNumber: OTHER_MANAGER,
+        draftRevision: personalDraft.payload.draft.revision,
         items: [{ itemId: ds80.id, quantity: 1 }],
       },
     });
     assert.equal(personalOrder.response.status, 201, JSON.stringify(personalOrder.payload));
     assert.equal(personalOrder.payload.order.selectedEmployeeNumber, EMPLOYEE);
     assert.equal(personalOrder.payload.order.senderEmail, "fil18-noreply@grabenplaner.eu");
+    assert.equal(personalOrder.payload.order.draftConsumed, true);
 
     const personalHistory = await requestJson("/api/portal/v1/branch-orders/history?limit=10", { session: personalSession });
     assert.equal(personalHistory.response.status, 200, JSON.stringify(personalHistory.payload));
@@ -586,11 +903,28 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(personalPdf.response.status, 200);
     assert.match(personalPdf.response.headers.get("content-disposition") || "", /^attachment;/);
     assert.equal(personalPdf.content.subarray(0, 5).toString("ascii"), "%PDF-");
+
+    const discardCandidate = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "PUT",
+      session: personalSession,
+      body: {
+        expectedRevision: 0,
+        items: [{ itemId: ds80.id, quantity: 2 }],
+      },
+    });
+    assert.equal(discardCandidate.response.status, 200, JSON.stringify(discardCandidate.payload));
+    const discarded = await requestJson("/api/portal/v1/branch-orders/draft", {
+      method: "DELETE",
+      session: personalSession,
+      body: { expectedRevision: discardCandidate.payload.draft.revision },
+    });
+    assert.equal(discarded.response.status, 200, JSON.stringify(discarded.payload));
+    assert.equal(discarded.payload.deleted, true);
   });
 
   await t.test("ein Versandfehler verliert die Bestellung nicht und wird im Verlauf markiert", async () => {
-    const warehouse = catalog.groups.find((group) => group.title === "Lager");
-    const ds80 = warehouse.items.find((item) => item.title === "Fotodrucker: Mediaset DS80");
+    const instantPrint = catalog.groups.find((group) => group.title === "Fotowelt – Sofortdruck");
+    const ds80 = instantPrint.items.find((item) => item.title === "Fotodrucker: Mediaset DS80");
     failNextMail = true;
     const failed = await requestJson("/api/portal/v1/branch-orders", {
       method: "POST",
@@ -607,5 +941,35 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       db.prepare("SELECT status FROM branch_order_deliveries WHERE order_id = ?").get(failed.payload.order.id).status,
       "failed",
     );
+    const confirmed = await requestJson(
+      `/api/portal/v1/branch-orders/${encodeURIComponent(failed.payload.order.id)}/delivery-confirmation`,
+      {
+        method: "POST",
+        session: hrSession,
+        body: { locationId: LOCATION },
+      },
+    );
+    assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.payload));
+    assert.equal(confirmed.payload.delivery.status, "sent");
+    assert.equal(confirmed.payload.delivery.changed, 1);
+    assert.equal(
+      db.prepare("SELECT status FROM branch_orders WHERE id = ?").get(failed.payload.order.id).status,
+      "sent",
+    );
+    assert.equal(
+      db.prepare("SELECT status FROM branch_order_deliveries WHERE order_id = ?").get(failed.payload.order.id).status,
+      "sent",
+    );
+    const audit = db.prepare(`
+      SELECT action, entity_type, entity_id
+      FROM audit_log
+      WHERE action = 'branch-order.delivery.confirm' AND entity_id = ?
+      ORDER BY id DESC LIMIT 1
+    `).get(failed.payload.order.id);
+    assert.deepEqual({ ...audit }, {
+      action: "branch-order.delivery.confirm",
+      entity_type: "branch_order",
+      entity_id: failed.payload.order.id,
+    });
   });
 });
