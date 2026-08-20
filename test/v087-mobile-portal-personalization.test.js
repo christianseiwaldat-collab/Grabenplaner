@@ -45,7 +45,7 @@ test("v0.87: Persönliche Kanäle bleiben Self-Service, Stammdaten read-only und
   assert.match(portalScript, /return String\(target\?\.masked \|\| ""\)\.trim\(\)/);
   assert.doesNotMatch(portalScript, /email-settings\/address|data-channel-destination|preference\.destination/);
   assert.match(portalScript, /<span>Noch nicht aktiviert<\/span>/);
-  assert.match(portalHtml, /Derzeit wird daraus noch nichts automatisch extern versendet\./);
+  assert.match(portalHtml, /Einsatzanfragen können bei ausgewähltem, bestätigtem E-Mail-Kanal automatisch versendet werden\./);
   assert.match(portalScript, /if \(tab === "settings"\)[\s\S]*loadEmailSettings\(\)/);
   assert.doesNotMatch(portalScript, /if \(hasPortalPermission\([^)]*\)\)\s*loadEmailSettings\(\)/);
 });

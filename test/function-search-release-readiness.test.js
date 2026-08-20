@@ -54,8 +54,16 @@ const FEATURE_CASES = Object.freeze([
   },
   {
     id: "employeePortal",
-    removedGateIds: ["greetingSettingsCard", "mobilePortalLocationDisplayCard"],
-    hiddenEntryIds: ["settings.greetings", "settings.mobile-location-view"],
+    removedGateIds: [
+      "birthdayPresentationSettingsCard",
+      "greetingSettingsCard",
+      "mobilePortalLocationDisplayCard",
+    ],
+    hiddenEntryIds: [
+      "settings.birthday-presentation",
+      "settings.greetings",
+      "settings.mobile-location-view",
+    ],
   },
   {
     id: "timeTracking",
@@ -121,8 +129,8 @@ function availableIds(availableGateIds) {
 }
 
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
-  assert.equal(catalogApi.FUNCTION_SEARCH_CATALOG.length, 94);
-  assert.equal(ALL_GATE_IDS.size, 89);
+  assert.equal(catalogApi.FUNCTION_SEARCH_CATALOG.length, 98);
+  assert.equal(ALL_GATE_IDS.size, 94);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 

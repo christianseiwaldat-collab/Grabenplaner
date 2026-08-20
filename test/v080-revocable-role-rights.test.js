@@ -452,7 +452,7 @@ test("v0.80: Leserecht-Entzug normalisiert das abhängige Schreibrecht", async (
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   const manager = changed.payload.users.find((entry) => entry.employeeNumber === MANAGER);
   assert.deepEqual(manager.deniedPermissions.filter((permission) => permission.startsWith("schedule:")),
-    ["schedule:read", "schedule:write"]);
+    ["schedule:cross_location:read", "schedule:read", "schedule:write"]);
   assert.equal(manager.effectivePermissions.includes("schedule:read"), false);
   assert.equal(manager.effectivePermissions.includes("schedule:write"), false);
 });

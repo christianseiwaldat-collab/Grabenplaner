@@ -233,6 +233,8 @@
               <button class="primary-button" id="autoPlanButton"><span>✦</span> Dienstplan automatisch erstellen</button>
               <button class="secondary-button" id="optionsButton"><span>✦</span> Planungsoptionen</button>
               <button class="secondary-button hidden" id="employeeLendingButton" type="button"><span>⇄</span> Filialeinsatz zuweisen</button>
+              <button class="secondary-button hidden" id="crossLocationScheduleButton" type="button"><span aria-hidden="true">◎</span><span>Fremde Filiale ansehen</span></button>
+              <button class="secondary-button hidden" id="staffAssignmentRequestReviewButton" type="button"><span aria-hidden="true">✓</span><span>Einsatzanfragen prüfen</span></button>
               <button class="secondary-button reset-button" id="resetWeekButton"><span>↺</span> Zurücksetzen</button>
               <button class="secondary-button schedule-note-button" id="scheduleNoteButton" type="button"><span>✎</span><span>Bemerkung<small id="scheduleNoteButtonHint">hinzufügen</small></span></button>
               <label class="department-pdf-control hidden" id="departmentPdfControl"><span>Abteilungs-PDF</span><select id="departmentPdfSelect"></select><a class="secondary-button" id="departmentPdfButton" href="/api/schedule.pdf"><span>↓</span></a></label>
@@ -240,6 +242,80 @@
               <div class="page-theme-switch" role="group" aria-label="Darstellung der Dienstplanung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
             </div>
           </header>
+
+          <section class="cross-location-schedule-panel hidden" id="crossLocationSchedulePanel" aria-labelledby="crossLocationScheduleTitle">
+            <div class="cross-location-schedule-heading">
+              <div>
+                <span class="eyebrow">Nur-Lesen-Ansicht</span>
+                <h2 id="crossLocationScheduleTitle">Dienstplan einer anderen Filiale</h2>
+                <p>Für eine Einsatzentscheidung werden nur Team, eingeteilte Dienste und neutrale Nichtverfügbarkeit gezeigt. Wochenstunden, Zeitkonten, Regelprüfungen, Warnungen und Abwesenheitsgründe bleiben ausgeblendet.</p>
+              </div>
+              <span class="status-badge" id="crossLocationScheduleMode">Rein lesend</span>
+            </div>
+            <div class="cross-location-schedule-controls">
+              <label><span>Filiale</span><select id="crossLocationScheduleLocation"></select></label>
+              <div class="cross-location-week-choice" id="crossLocationScheduleWeeks" role="group" aria-label="Kalenderwoche auswählen"></div>
+            </div>
+            <p class="cross-location-schedule-status" id="crossLocationScheduleStatus" aria-live="polite">Fremden Dienstplan laden.</p>
+            <div class="cross-location-schedule-scroll" id="crossLocationScheduleGrid" aria-live="polite"></div>
+          </section>
+
+          <dialog class="modal staff-assignment-request-dialog" id="staffAssignmentRequestDialog" aria-labelledby="staffAssignmentRequestTitle">
+            <form id="staffAssignmentRequestForm">
+              <div class="modal-header">
+                <div><span class="eyebrow">Standortübergreifender Einsatz</span><h2 id="staffAssignmentRequestTitle">Einsatzanfrage stellen</h2><p>Die Anfrage geht an die zuständige Leitung der Quellfiliale. Ein gewünschtes Teammitglied ist noch keine Zusage.</p></div>
+                <button class="close-button" id="staffAssignmentRequestClose" type="button" aria-label="Einsatzanfrage schließen">×</button>
+              </div>
+              <input id="staffAssignmentRequestSourceLocationId" type="hidden" />
+              <input id="staffAssignmentRequestDestinationLocationId" type="hidden" />
+              <input id="staffAssignmentRequestDateFrom" type="hidden" />
+              <input id="staffAssignmentRequestDateTo" type="hidden" />
+              <div class="staff-assignment-request-context" aria-label="Anfragekontext">
+                <div><span>Quellfiliale</span><strong id="staffAssignmentRequestSourceLocationName">–</strong></div>
+                <div><span>Eigene Zielfiliale</span><strong id="staffAssignmentRequestDestinationLocationName">–</strong></div>
+              </div>
+              <fieldset class="staff-assignment-request-time-kinds">
+                <legend>Zeitart</legend>
+                <label><input type="radio" name="staffAssignmentRequestTimeKind" value="hourly" /><span><strong>Stundenweise</strong><small>Ein Tag mit genauer Uhrzeit</small></span></label>
+                <label><input type="radio" name="staffAssignmentRequestTimeKind" value="full_day" checked /><span><strong>Ganzer Tag</strong><small>Ein vollständiger Einsatztag</small></span></label>
+                <label><input type="radio" name="staffAssignmentRequestTimeKind" value="multi_day" /><span><strong>Mehrere Tage</strong><small>Zusammenhängend, auch KW-übergreifend</small></span></label>
+              </fieldset>
+              <div class="form-grid staff-assignment-request-form-grid">
+                <label class="field"><span>Zielabteilung der eigenen Filiale</span><select id="staffAssignmentRequestDepartment" required></select></label>
+                <label class="field"><span>Bevorzugtes Teammitglied der Quellfiliale</span><select id="staffAssignmentRequestPreferredEmployee"><option value="">Kein Wunsch</option></select><small>Die Quellfiliale bestätigt später die tatsächliche Person.</small></label>
+                <div class="field staff-assignment-request-range"><span>Zeitraum</span><button class="date-range-trigger" id="staffAssignmentRequestDateRangeButton" type="button" aria-haspopup="dialog" aria-controls="staffAssignmentRequestDateRangeDialog"><span><strong id="staffAssignmentRequestDateRangeText">Zeitraum auswählen</strong><small>Ein Tag oder mehrere Tage, auch kalenderwochenübergreifend</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg></button></div>
+                <div class="inline-fields staff-assignment-request-times hidden" id="staffAssignmentRequestTimes"><label class="field"><span>Von</span><input id="staffAssignmentRequestStartTime" type="time" step="300" /></label><label class="field"><span>Bis</span><input id="staffAssignmentRequestEndTime" type="time" step="300" /></label></div>
+                <label class="field staff-assignment-request-reason"><span>Begründung</span><textarea id="staffAssignmentRequestReason" maxlength="2000" placeholder="Wofür wird die Unterstützung benötigt?" required></textarea></label>
+              </div>
+              <p class="staff-assignment-request-message" id="staffAssignmentRequestMessage" role="status" aria-live="polite"></p>
+              <div class="modal-actions"><span></span><button class="secondary-button" id="staffAssignmentRequestCancel" type="button">Abbrechen</button><button class="primary-button" id="staffAssignmentRequestSubmit" type="submit">Anfrage senden</button></div>
+            </form>
+          </dialog>
+
+          <dialog class="modal staff-assignment-review-dialog" id="staffAssignmentRequestReviewDialog" aria-labelledby="staffAssignmentRequestReviewTitle">
+            <div class="modal-header">
+              <div><span class="eyebrow">Temporärer Filialeinsatz</span><h2 id="staffAssignmentRequestReviewTitle">Einsatzanfragen prüfen</h2><p>Die Anfrage bleibt bis zur Entscheidung unverändert. Eine Genehmigung legt den bestätigten temporären Filialeinsatz verbindlich an und macht das Teammitglied in der Zielfiliale einplanbar.</p></div>
+              <button class="close-button" id="staffAssignmentRequestReviewClose" type="button" aria-label="Prüfansicht schließen">×</button>
+            </div>
+            <div class="staff-assignment-review-toolbar">
+              <p id="staffAssignmentRequestReviewStatus" role="status" aria-live="polite">Offene Einsatzanfragen laden.</p>
+              <button class="secondary-button" id="staffAssignmentRequestReviewRefresh" type="button">Aktualisieren</button>
+            </div>
+            <div class="staff-assignment-review-list" id="staffAssignmentRequestReviewList" aria-live="polite"></div>
+            <div class="modal-actions"><span></span><button class="secondary-button" id="staffAssignmentRequestReviewCancel" type="button">Schließen</button></div>
+          </dialog>
+
+          <dialog class="modal date-range-dialog" id="staffAssignmentRequestDateRangeDialog" aria-labelledby="staffAssignmentRequestDateRangeDialogTitle">
+            <form id="staffAssignmentRequestDateRangeForm">
+              <div class="modal-header"><div><span class="eyebrow">Einsatzanfrage</span><h2 id="staffAssignmentRequestDateRangeDialogTitle">Zeitraum auswählen</h2><p>Für einen einzelnen Tag denselben Tag als Beginn und Ende auswählen.</p></div><button class="close-button" id="staffAssignmentRequestDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
+              <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="staffAssignmentRequestDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="staffAssignmentRequestDateRangeEndText">Noch nicht gewählt</strong></div></div>
+              <div class="date-range-toolbar"><button id="staffAssignmentRequestDateRangePreviousMonth" type="button" aria-label="Vorheriger Monat">←</button><strong id="staffAssignmentRequestDateRangeMonthLabel">Monat</strong><button id="staffAssignmentRequestDateRangeNextMonth" type="button" aria-label="Nächster Monat">→</button></div>
+              <div class="date-range-weekdays" aria-hidden="true"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+              <div class="date-range-grid" id="staffAssignmentRequestDateRangeGrid" role="grid" aria-label="Zeitraumkalender für die Einsatzanfrage"></div>
+              <label class="date-range-open-end hidden"><input id="staffAssignmentRequestDateRangeOpenEnd" type="checkbox" /><span>Ende offen</span></label>
+              <div class="modal-actions"><span></span><button class="secondary-button" id="staffAssignmentRequestDateRangeCancel" type="button">Abbrechen</button><button class="primary-button" id="staffAssignmentRequestDateRangeApply" type="submit">Zeitraum übernehmen</button></div>
+            </form>
+          </dialog>
 
           <section class="summary-grid">
             <article class="summary-card week-context-card"><span>Zeitraum</span><strong id="weekTitle">Diese Woche</strong><small id="calendarWeek">Kalenderwoche</small></article>
@@ -1664,6 +1740,7 @@
 
           <div class="settings-tabs" role="tablist">
             <button class="settings-tab active" id="settingsGeneralTab" data-settings-tab="general">Grundeinstellungen</button>
+            <button class="settings-tab" id="settingsScheduleTab" data-settings-tab="schedule">Dienstplan</button>
             <button class="settings-tab" id="settingsPersonnelTab" data-settings-tab="personnel">Personal</button>
             <button class="settings-tab" id="settingsVacationTab" data-settings-tab="vacation">Urlaub</button>
             <button class="settings-tab" id="settingsTimeTrackingTab" data-settings-tab="timeTracking">Zeiterfassung</button>
@@ -1695,23 +1772,6 @@
               </div>
               <label class="field"><span>Anzeigedauer für Warnmeldungen</span><select id="toastDuration"><option value="short">Kurz · 5 Sekunden</option><option value="medium">Mittel · 10 Sekunden</option><option value="long">Lang · 15 Sekunden</option></select><small>Legt fest, wie lange Hinweise und Fehlermeldungen sichtbar bleiben.</small></label>
               <p class="settings-note">Die beiden Startansichten können von Personalleitung, Admin, IT-Admin und Developer festgelegt werden.</p>
-            </div>
-
-            <div class="settings-card past-week-card">
-              <div class="card-heading"><div class="card-icon">KW</div><div><h2>Bearbeitungssperre für Dienstpläne</h2><p>Legt fest, wann aktuelle und vergangene Dienstpläne nicht mehr verändert werden dürfen.</p></div></div>
-              <label class="switch-row">
-                <span><strong>Vergangene Kalenderwochen bearbeiten erlauben</strong><small>Gilt nur für dein Benutzerkonto und ist standardmäßig aus. Bei Bedarf temporär aktivieren.</small></span>
-                <input id="allowPastWeekEditing" type="checkbox" />
-              </label>
-              <label class="switch-row">
-                <span><strong>Aktuelle Woche automatisch sperren</strong><small>Standardmäßig nach der letzten hinterlegten Standort-Schließzeit.</small></span>
-                <input id="currentWeekAutoLock" type="checkbox" />
-              </label>
-              <div class="lock-settings" id="currentWeekLockSettings">
-                <label class="field"><span>Sperrzeitpunkt</span><select id="currentWeekLockMode"><option value="closing">Nach letzter Schließzeit</option><option value="manual">Manuell festlegen</option></select></label>
-                <div class="inline-fields hidden" id="manualWeekLockFields"><label class="field"><span>Wochentag</span><select id="currentWeekLockDay"><option value="friday">Freitag</option><option value="saturday">Samstag</option><option value="sunday">Sonntag</option></select></label><label class="field"><span>Uhrzeit</span><input id="currentWeekLockTime" type="time" min="18:00" max="23:00" step="1800" /></label></div>
-                <p class="settings-note" id="currentWeekLockHint"></p>
-              </div>
             </div>
 
             <details class="settings-accordion full-settings-card hidden" id="loanSettingsCard">
@@ -1818,6 +1878,46 @@
 
           </section>
 
+          <section id="scheduleSettings" class="settings-section settings-two-column">
+            <div class="settings-card" id="crossLocationScheduleSettingsCard">
+              <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Standortübergreifende Dienstplanung</h2><p>Steuert die datensparsame Fremdansicht und wer Einsatzanfragen für die eigene Filiale stellen oder prüfen darf.</p></div></div>
+              <label class="switch-row"><span><strong>Fremde Dienstpläne lesend anzeigen</strong><small>Zeigt nur Planzeiten und neutrale Nichtverfügbarkeit; Wochenstunden, Zeitkonten und Regelprüfungen bleiben ausgeblendet.</small></span><input id="crossLocationScheduleEnabled" type="checkbox" /></label>
+              <label class="field"><span>Erlaubter Anzeigezeitraum</span><select id="crossLocationScheduleHorizonWeeks"><option value="1">Nur aktuelle Kalenderwoche</option><option value="2">Aktuelle und nächste Kalenderwoche</option></select><small>Begrenzt zugleich den spätesten Zeitraum neuer Einsatzanfragen.</small></label>
+              <label class="switch-row"><span><strong>Filialleitungen dürfen Anfragen stellen</strong><small>Anfragen bleiben immer an die eigene Zielfiliale gebunden.</small></span><input id="staffAssignmentManagerCreateEnabled" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Abteilungsleitungen dürfen Anfragen stellen</strong><small>Zusätzlich ist das ausdrücklich erteilte Anfragerecht erforderlich; Ziel bleibt die eigene Abteilung.</small></span><input id="staffAssignmentDepartmentManagerCreateEnabled" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Abteilungsleitungen dürfen Anfragen entscheiden</strong><small>Zusätzlich ist das ausdrücklich erteilte Prüfungsrecht erforderlich; Entscheidungen bleiben im eigenen Fachbereich.</small></span><input id="staffAssignmentDepartmentManagerReviewEnabled" type="checkbox" /></label>
+            </div>
+
+            <div class="settings-card" id="staffAssignmentNotificationSettingsCard">
+              <div class="card-heading"><div class="card-icon">Mail</div><div><h2>E-Mail-Benachrichtigungen</h2><p>Benachrichtigt ausschließlich verifizierte persönliche E-Mail-Ziele.</p></div></div>
+              <label class="switch-row"><span><strong>E-Mail bei neuer Einsatzanfrage</strong><small>Die zuständigen Prüfer der Quellfiliale erhalten einen neutralen Hinweis.</small></span><input id="staffAssignmentEmailSubmittedEnabled" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>E-Mail bei Genehmigung oder Ablehnung</strong><small>Der Antragsteller erhält nach der Entscheidung einen neutralen Hinweis.</small></span><input id="staffAssignmentEmailDecisionEnabled" type="checkbox" /></label>
+            </div>
+
+            <div class="settings-card" id="staffAssignmentChangeSettingsCard">
+              <div class="card-heading"><div class="card-icon">Regel</div><div><h2>Änderung &amp; Stornierung</h2><p>Legt den verbindlichen Umgang mit bereits eingereichten oder bestätigten Einsatzanfragen fest.</p></div></div>
+              <label class="field"><span>Änderung offener Anfragen</span><select id="staffAssignmentChangePolicy"><option value="withdraw_and_resubmit">Zurückziehen und neu einreichen</option><option value="locked">Nach Einreichung gesperrt</option></select><small>Eine eingereichte Revision wird niemals still überschrieben.</small></label>
+              <label class="field"><span>Stornierung bestätigter Einsätze</span><select id="staffAssignmentCancellationPolicy"><option value="source_review">Quellfiliale oder PL+</option><option value="pl_plus_only">Nur PL+</option><option value="disabled">Keine Stornierung über den Anfrageprozess</option></select><small>Der bereits gebundene temporäre Filialeinsatz bleibt bis zu einer revisionssicheren Stornierung geschützt.</small></label>
+            </div>
+
+            <div class="settings-card past-week-card" id="scheduleLockSettingsCard">
+              <div class="card-heading"><div class="card-icon">KW</div><div><h2>Bearbeitungssperre für Dienstpläne</h2><p>Legt fest, wann aktuelle und vergangene Dienstpläne nicht mehr verändert werden dürfen.</p></div></div>
+              <label class="switch-row">
+                <span><strong>Vergangene Kalenderwochen bearbeiten erlauben</strong><small>Gilt nur für dein Benutzerkonto und ist standardmäßig aus. Bei Bedarf temporär aktivieren.</small></span>
+                <input id="allowPastWeekEditing" type="checkbox" />
+              </label>
+              <label class="switch-row">
+                <span><strong>Aktuelle Woche automatisch sperren</strong><small>Standardmäßig nach der letzten hinterlegten Standort-Schließzeit.</small></span>
+                <input id="currentWeekAutoLock" type="checkbox" />
+              </label>
+              <div class="lock-settings" id="currentWeekLockSettings">
+                <label class="field"><span>Sperrzeitpunkt</span><select id="currentWeekLockMode"><option value="closing">Nach letzter Schließzeit</option><option value="manual">Manuell festlegen</option></select></label>
+                <div class="inline-fields hidden" id="manualWeekLockFields"><label class="field"><span>Wochentag</span><select id="currentWeekLockDay"><option value="friday">Freitag</option><option value="saturday">Samstag</option><option value="sunday">Sonntag</option></select></label><label class="field"><span>Uhrzeit</span><input id="currentWeekLockTime" type="time" min="18:00" max="23:00" step="1800" /></label></div>
+                <p class="settings-note" id="currentWeekLockHint"></p>
+              </div>
+            </div>
+          </section>
+
           <section id="vacationSettings" class="settings-section settings-two-column">
             <div class="settings-card" id="workflowSettingsCard">
               <div class="card-heading"><div class="card-icon">PL</div><div><h2>Freigabeworkflow</h2><p>Zusätzliche Genehmigung von Urlaubsanträgen durch die Personalleitung.</p></div></div>
@@ -1878,6 +1978,29 @@
                 <label class="field"><span>Rückkehr nach Genesung</span><textarea id="greetingSicknessReturnTemplates" rows="4" maxlength="1600"></textarea><small>Neutraler Willkommen-zurück-Text ohne Gesundheitsdetails.</small></label>
               </div>
               <div class="form-actions-inline"><span class="settings-note" id="greetingSettingsHint">Begrüßungen werden ausschließlich serverseitig ausgewählt.</span><button class="primary-button" id="saveGreetingSettingsButton" type="button">Begrüßungen speichern</button></div>
+            </div>
+            <div class="settings-card hidden" id="birthdayPresentationSettingsCard">
+              <div class="card-heading"><div class="card-icon">GB</div><div><h2>Geburtstagsdarstellung</h2><p>Legt je Teammitglied fest, ob eine freigegebene Geburtstagsvariante im Mitarbeiterportal verwendet werden darf.</p></div></div>
+              <p class="settings-note security-note">Die Konfiguration zeigt keine Geburtsdaten. In diesem Block werden ausschließlich Freigabe und Variantenzuordnung vorbereitet; es erfolgt noch keine grafische Einblendung oder Designänderung.</p>
+              <p class="birthday-presentation-scope" id="birthdayPresentationScope">Berechtigter Bereich wird geladen.</p>
+              <section class="birthday-presentation-section hidden" id="birthdayPresentationGlobalSection" aria-labelledby="birthdayPresentationGlobalTitle">
+                <div class="birthday-presentation-section-heading"><div><span class="eyebrow">PL+</span><h3 id="birthdayPresentationGlobalTitle">Globale Freigabe</h3></div><span class="status-badge">Unternehmen</span></div>
+                <label class="switch-row"><span><strong>Geburtstagsdarstellungen freigeben</strong><small>Die Freigabe allein löst noch keine Einblendung aus. Je Teammitglied bleibt zusätzlich eine freigegebene Variante erforderlich.</small></span><input id="birthdayPresentationEnabled" type="checkbox" /></label>
+              </section>
+              <section class="birthday-presentation-section hidden" id="birthdayPresentationTeamSection" aria-labelledby="birthdayPresentationTeamTitle">
+                <div class="birthday-presentation-section-heading"><div><span class="eyebrow">Team</span><h3 id="birthdayPresentationTeamTitle">Darstellung je Teammitglied</h3></div><span class="status-badge">Berechtigter Bereich</span></div>
+                <div class="birthday-presentation-toolbar">
+                  <label class="field"><span>Teammitglied suchen</span><input id="birthdayPresentationEmployeeSearch" type="search" placeholder="Name oder Personalnummer" autocomplete="off" /></label>
+                  <label class="field"><span>Filiale</span><select id="birthdayPresentationLocationFilter"><option value="">Alle sichtbaren Filialen</option></select></label>
+                </div>
+                <div class="birthday-presentation-list" id="birthdayPresentationEmployeeList"><p class="settings-note">Teammitglieder werden geladen.</p></div>
+              </section>
+              <section class="birthday-presentation-section hidden" id="birthdayPresentationDelegatesSection" aria-labelledby="birthdayPresentationDelegatesTitle">
+                <div class="birthday-presentation-section-heading"><div><span class="eyebrow">Delegation</span><h3 id="birthdayPresentationDelegatesTitle">Abteilungsleitungen</h3></div><span class="status-badge">FL / PL+</span></div>
+                <p class="settings-note">Nur ausdrücklich freigegebene Abteilungsleitungen dürfen Geburtstagsdarstellungen für ihr projiziertes Team konfigurieren.</p>
+                <div class="birthday-presentation-list" id="birthdayPresentationDelegateList"><p class="settings-note">Delegationen werden geladen.</p></div>
+              </section>
+              <div class="form-actions-inline"><span class="settings-note" id="birthdayPresentationSettingsHint">Die Auswahl wird serverseitig auf den berechtigten Bereich begrenzt.</span><button class="primary-button" id="saveBirthdayPresentationSettingsButton" type="button" disabled>Geburtstagsdarstellungen speichern</button></div>
             </div>
             <div class="settings-card" id="portalUserAccessCard">
               <div class="card-heading"><div class="card-icon">Login</div><div><h2>Portal-Zugänge</h2><p>Rollen, Freigabe und Startpasswort je Teammitglied verwalten.</p></div></div>

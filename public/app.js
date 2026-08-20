@@ -41,6 +41,19 @@ const state = {
   employeeLendingLocations: [],
   employeeLendingDepartments: [],
   employeeLendingLoading: false,
+  crossLocationScheduleOpen: false,
+  crossLocationSchedulePayload: null,
+  crossLocationScheduleLocationId: "",
+  crossLocationScheduleWeekStart: "",
+  crossLocationScheduleLoading: false,
+  crossLocationScheduleError: "",
+  crossLocationScheduleRequestId: 0,
+  staffAssignmentRequestDateRangeCalendar: null,
+  staffAssignmentRequestPending: false,
+  staffAssignmentRequestReviews: [],
+  staffAssignmentRequestReviewLoaded: false,
+  staffAssignmentRequestReviewLoading: false,
+  staffAssignmentRequestReviewError: "",
   vacationData: null,
   locations: [],
   positions: [],
@@ -161,6 +174,7 @@ const state = {
   wifiAutomationSettings: null,
   trustLevelSettings: null,
   greetingSettings: null,
+  birthdayPresentationSettings: null,
   selectedRequest: null,
   selectedSicknessCase: null,
   selectedAmuReport: null,
@@ -465,8 +479,8 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 const elements = Object.fromEntries(
   [
     "filialAdministrationView", "filialDashboardGrid", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "pdfButton", "timeline", "weekLockNotice",
-    "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "pdfButton", "timeline", "weekLockNotice", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
+    "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
@@ -495,9 +509,10 @@ const elements = Object.fromEntries(
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
+    "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton", "sicknessCaseFields", "sicknessExpectedEnd", "sicknessReturnDate", "sicknessCaseHint",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordForm", "personnelRecordTitle", "personnelRecordContent", "personnelRecordMessage", "savePersonnelRecordButton",
@@ -1740,6 +1755,8 @@ function applyRoleVisibility() {
   const role = state.portalSession?.user?.role || "admin";
   const globalAdministration = !lanActive || ["developer", "it_admin", "admin", "hr"].includes(role);
   const settingsAccess = !lanActive || permissions.includes("settings:write");
+  const scheduleSettingsAccess = !lanActive
+    || permissions.includes("schedule:cross_location:settings:write");
   const rightsAccess = globalAdministration && (!lanActive || permissions.includes("rights:read"));
   const brandingAccess = !lanActive || permissions.includes("branding:write");
   const employeeWriteAccess = !lanActive || permissions.includes("employees:write");
@@ -1755,6 +1772,10 @@ function applyRoleVisibility() {
   const timeReadAccess = canReadManagedTimeTracking() && features.timeTracking !== false;
   const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
   const greetingSettingsAccess = !lanActive || (globalAdministration && permissions.includes("hr:settings"));
+  const birthdayPresentationSettingsAccess = features.employeePortal !== false && (
+    permissions.includes("portal:birthday:team:write")
+    || permissions.includes("portal:birthday:settings:write")
+  );
   const diagnosticsTechnicalAccess = !lanActive || permissions.includes("system:diagnostics:technical");
   const diagnosticsReadAccess = !lanActive || diagnosticsTechnicalAccess || permissions.includes("system:diagnostics:read");
   const backupWriteAccess = !lanActive || permissions.includes("backup:write");
@@ -1862,30 +1883,36 @@ function applyRoleVisibility() {
   if (!accessibleDashboardModes().includes(state.rightsDashboardMode)) {
     state.rightsDashboardMode = accessibleDashboardModes()[0] || "systemCenter";
   }
-  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
+  const anySettingsAccess = settingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
     || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
     || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess
-    || loanSettingsAccess || mobilePortalLocationDisplayAccess || updateAccess;
+    || loanSettingsAccess || mobilePortalLocationDisplayAccess || birthdayPresentationSettingsAccess || updateAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || brandingAccess || loanSettingsAccess,
+    schedule: settingsAccess || scheduleSettingsAccess,
     personnel: settingsAccess || positionWriteAccess || wifiSettingsAccess,
     vacation: features.vacation !== false && (settingsAccess || globalAdministration),
     timeTracking: settingsAccess || (wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false),
     integrations: integrationAccess,
-    access: (portalUserAdministrationAccess || mobilePortalLocationDisplayAccess)
-      && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false),
+    access: birthdayPresentationSettingsAccess || ((portalUserAdministrationAccess || mobilePortalLocationDisplayAccess)
+      && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false)),
     rights: rightsAccess,
     dataProtection: retentionReadAccess,
     backup: diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || usbProvisioningAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
+  elements.crossLocationScheduleSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
+  elements.staffAssignmentNotificationSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
+  elements.staffAssignmentChangeSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
+  elements.scheduleLockSettingsCard?.classList.toggle("hidden", !settingsAccess);
   document.querySelector("#legacyUsbProvisioning")?.classList.toggle("hidden", !usbProvisioningAccess);
   const timeTrackingTabActive = document.querySelector('[data-settings-tab="timeTracking"]')?.classList.contains("active");
+  const scheduleTabActive = document.querySelector('[data-settings-tab="schedule"]')?.classList.contains("active");
   const integrationTabActive = document.querySelector('[data-settings-tab="integrations"]')?.classList.contains("active");
   const dataProtectionTabActive = document.querySelector('[data-settings-tab="dataProtection"]')?.classList.contains("active");
   const backupTabActive = document.querySelector('[data-settings-tab="backup"]')?.classList.contains("active");
-  elements.saveSettingsButton?.classList.toggle("hidden", (!(settingsAccess || brandingAccess) && !backupTabActive)
+  elements.saveSettingsButton?.classList.toggle("hidden", (!(settingsAccess || brandingAccess || (scheduleTabActive && scheduleSettingsAccess)) && !backupTabActive)
     || integrationTabActive || dataProtectionTabActive
     || (timeTrackingTabActive && !settingsAccess)
     || (backupTabActive && (serverActive || !backupConfigurationAccess)));
@@ -1988,6 +2015,7 @@ function applyRoleVisibility() {
   elements.portalUserAccessCard?.classList.toggle("hidden", !portalUserAdministrationAccess);
   elements.mobilePortalLocationDisplayCard?.classList.toggle("hidden", !mobilePortalLocationDisplayAccess);
   elements.greetingSettingsCard?.classList.toggle("hidden", !greetingSettingsAccess || features.employeePortal === false);
+  elements.birthdayPresentationSettingsCard?.classList.toggle("hidden", !birthdayPresentationSettingsAccess);
   elements.serverDiagnosticsCard?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
   elements.refreshServerDiagnosticsButton?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
   elements.databaseBackupSettingsCard?.classList.toggle("hidden", serverActive ? !serverBackupAdministrationAccess : !backupWriteAccess);
@@ -2451,6 +2479,8 @@ function render() {
   applyShellBranding(hasManagementBrandingAccess() ? {} : state.data?.settings || {});
   renderContextNavigation();
   renderHeader();
+  renderCrossLocationSchedule();
+  renderStaffAssignmentRequestReviewAccess();
   renderSummary();
   renderWorkRuleAssessment();
   renderTimeline();
@@ -3488,6 +3518,464 @@ function renderHeader() {
       button.title = isWeekLocked() ? "Vergangene Kalenderwochen sind schreibgeschützt." : "";
     }
   });
+}
+
+function canReadCrossLocationSchedule() {
+  const user = state.portalSession?.user;
+  return state.portalStatus?.installationFeatures?.schedule !== false
+    && state.data?.settings?.cross_location_schedule_enabled !== "0"
+    && user?.isEmployee === true
+    && user.permissions?.includes("schedule:cross_location:read") === true;
+}
+
+function canCreateStaffAssignmentRequestFromSchedule() {
+  const user = state.portalSession?.user;
+  const payload = state.crossLocationSchedulePayload;
+  const settings = state.data?.settings || {};
+  const roleAllowed = user?.role === "manager"
+    ? settings.staff_assignment_requests_manager_create_enabled !== "0"
+    : user?.role === "department_manager"
+      ? settings.staff_assignment_requests_department_manager_create_enabled === "1"
+      : true;
+  return canReadCrossLocationSchedule()
+    && roleAllowed
+    && user?.permissions?.includes("staff_assignment_requests:create") === true
+    && payload?.schedule?.requestContext?.canCreateRequest === true
+    && Boolean(payload?.requestDestination?.id)
+    && (payload.requestDestination.departments || []).length > 0;
+}
+
+function staffAssignmentRequestTimeKind() {
+  return document.querySelector('input[name="staffAssignmentRequestTimeKind"]:checked')?.value
+    || "full_day";
+}
+
+function staffAssignmentRequestRangeLabel() {
+  const dateFrom = elements.staffAssignmentRequestDateFrom?.value || "";
+  const dateTo = elements.staffAssignmentRequestDateTo?.value || "";
+  return window.GrabenplanerDateRangeCalendar?.rangeLabel(dateFrom, dateTo)
+    || (dateFrom ? `${formatDate(dateFrom)} – ${formatDate(dateTo || dateFrom)}` : "Zeitraum auswählen");
+}
+
+function renderStaffAssignmentRequestFormState() {
+  const timeKind = staffAssignmentRequestTimeKind();
+  const hourly = timeKind === "hourly";
+  elements.staffAssignmentRequestTimes?.classList.toggle("hidden", !hourly);
+  if (elements.staffAssignmentRequestStartTime) elements.staffAssignmentRequestStartTime.required = hourly;
+  if (elements.staffAssignmentRequestEndTime) elements.staffAssignmentRequestEndTime.required = hourly;
+  if (!hourly) {
+    elements.staffAssignmentRequestStartTime.value = "";
+    elements.staffAssignmentRequestEndTime.value = "";
+  }
+  if (timeKind !== "multi_day" && elements.staffAssignmentRequestDateFrom?.value) {
+    elements.staffAssignmentRequestDateTo.value = elements.staffAssignmentRequestDateFrom.value;
+  }
+  if (elements.staffAssignmentRequestDateRangeText) {
+    elements.staffAssignmentRequestDateRangeText.textContent = staffAssignmentRequestRangeLabel();
+  }
+}
+
+function staffAssignmentRequestCalendarBounds() {
+  const payload = state.crossLocationSchedulePayload;
+  const minimum = [toIsoDate(new Date()), payload?.weeks?.[0]?.weekStart || ""]
+    .filter(Boolean).sort().at(-1) || toIsoDate(new Date());
+  const maximum = payload?.weeks?.at(-1)?.weekEnd || addDays(minimum, 13);
+  return { minimum, maximum };
+}
+
+function openStaffAssignmentRequestDateRangeCalendar() {
+  if (!state.staffAssignmentRequestDateRangeCalendar) {
+    showToast("Der Zeitraumkalender konnte nicht geladen werden.", true);
+    return;
+  }
+  const timeKind = staffAssignmentRequestTimeKind();
+  const { minimum, maximum } = staffAssignmentRequestCalendarBounds();
+  state.staffAssignmentRequestDateRangeCalendar.open({
+    start: elements.staffAssignmentRequestDateFrom.value,
+    end: elements.staffAssignmentRequestDateTo.value,
+    min: minimum,
+    max: maximum,
+    maxEndDays: timeKind === "multi_day" ? 13 : 0,
+    allowOpenEnd: false,
+    onCommit(dateFrom, dateTo) {
+      elements.staffAssignmentRequestDateFrom.value = dateFrom;
+      elements.staffAssignmentRequestDateTo.value = timeKind === "multi_day"
+        ? dateTo
+        : dateFrom;
+      renderStaffAssignmentRequestFormState();
+    },
+  });
+}
+
+function initializeStaffAssignmentRequestDateRangeCalendar() {
+  const factory = window.GrabenplanerDateRangeCalendar?.createDateRangeCalendar;
+  if (!factory || !elements.staffAssignmentRequestDateRangeDialog) return;
+  state.staffAssignmentRequestDateRangeCalendar = factory({
+    dialog: elements.staffAssignmentRequestDateRangeDialog,
+    form: elements.staffAssignmentRequestDateRangeForm,
+    grid: elements.staffAssignmentRequestDateRangeGrid,
+    title: elements.staffAssignmentRequestDateRangeMonthLabel,
+    startText: elements.staffAssignmentRequestDateRangeStartText,
+    endText: elements.staffAssignmentRequestDateRangeEndText,
+    previousButton: elements.staffAssignmentRequestDateRangePreviousMonth,
+    nextButton: elements.staffAssignmentRequestDateRangeNextMonth,
+    openEndCheckbox: elements.staffAssignmentRequestDateRangeOpenEnd,
+    applyButton: elements.staffAssignmentRequestDateRangeApply,
+    closeButtons: [
+      elements.staffAssignmentRequestDateRangeClose,
+      elements.staffAssignmentRequestDateRangeCancel,
+    ],
+  });
+  elements.staffAssignmentRequestDateRangeButton?.addEventListener(
+    "click",
+    openStaffAssignmentRequestDateRangeCalendar,
+  );
+}
+
+function openStaffAssignmentRequestDialog({ date = "", preferredEmployeeNumber = "" } = {}) {
+  const payload = state.crossLocationSchedulePayload;
+  const schedule = payload?.schedule;
+  const destination = payload?.requestDestination;
+  const { minimum, maximum } = staffAssignmentRequestCalendarBounds();
+  const selectedDate = date >= minimum && date <= maximum ? date : minimum;
+  if (!canCreateStaffAssignmentRequestFromSchedule() || !schedule || !destination || !selectedDate) {
+    showToast("Für diese Auswahl kann keine Einsatzanfrage erstellt werden.", true);
+    return;
+  }
+  const preferredCandidates = (schedule.teamMembers || [])
+    .filter((teamMember) => teamMember.requestEligible === true);
+  const preferred = preferredCandidates.some(
+    (teamMember) => teamMember.employeeNumber === preferredEmployeeNumber,
+  ) ? preferredEmployeeNumber : "";
+  elements.staffAssignmentRequestForm.reset();
+  document.querySelector('input[name="staffAssignmentRequestTimeKind"][value="full_day"]').checked = true;
+  elements.staffAssignmentRequestSourceLocationId.value = schedule.location.id;
+  elements.staffAssignmentRequestSourceLocationName.textContent = schedule.location.name;
+  elements.staffAssignmentRequestDestinationLocationId.value = destination.id;
+  elements.staffAssignmentRequestDestinationLocationName.textContent = destination.name;
+  elements.staffAssignmentRequestDepartment.innerHTML = (destination.departments || []).map(
+    (department) => `<option value="${escapeHtmlAttribute(String(department.id))}">${escapeHtml(department.name)}</option>`,
+  ).join("");
+  elements.staffAssignmentRequestPreferredEmployee.innerHTML = `
+    <option value="">Kein Wunsch</option>
+    ${preferredCandidates.map((teamMember) => `
+      <option value="${escapeHtmlAttribute(teamMember.employeeNumber)}">${escapeHtml(teamMember.displayName)} · ${escapeHtml(teamMember.employeeNumber)}</option>
+    `).join("")}`;
+  elements.staffAssignmentRequestPreferredEmployee.value = preferred;
+  elements.staffAssignmentRequestDateFrom.value = selectedDate;
+  elements.staffAssignmentRequestDateTo.value = selectedDate;
+  elements.staffAssignmentRequestMessage.textContent = "";
+  state.staffAssignmentRequestPending = false;
+  elements.staffAssignmentRequestSubmit.disabled = false;
+  renderStaffAssignmentRequestFormState();
+  elements.staffAssignmentRequestDialog.showModal();
+  elements.staffAssignmentRequestDepartment.focus();
+}
+
+async function submitStaffAssignmentRequestForm(event) {
+  event.preventDefault();
+  if (state.staffAssignmentRequestPending) return;
+  const timeKind = staffAssignmentRequestTimeKind();
+  const periodStartDate = elements.staffAssignmentRequestDateFrom.value;
+  const periodEndDate = elements.staffAssignmentRequestDateTo.value;
+  if (!periodStartDate || !periodEndDate) {
+    elements.staffAssignmentRequestMessage.textContent = "Bitte zuerst einen Zeitraum auswählen.";
+    return;
+  }
+  if (timeKind === "multi_day" && periodEndDate <= periodStartDate) {
+    elements.staffAssignmentRequestMessage.textContent = "Für mehrere Tage muss das Enddatum nach dem Beginn liegen.";
+    return;
+  }
+  state.staffAssignmentRequestPending = true;
+  elements.staffAssignmentRequestSubmit.disabled = true;
+  elements.staffAssignmentRequestMessage.textContent = "Die Einsatzanfrage wird sicher eingereicht …";
+  try {
+    const payload = await api("/api/portal/v1/staff-assignment-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourceLocationId: elements.staffAssignmentRequestSourceLocationId.value,
+        destinationDepartmentId: Number(elements.staffAssignmentRequestDepartment.value),
+        periodStartDate,
+        periodEndDate,
+        timeKind,
+        startTime: timeKind === "hourly" ? elements.staffAssignmentRequestStartTime.value : null,
+        endTime: timeKind === "hourly" ? elements.staffAssignmentRequestEndTime.value : null,
+        preferredEmployeeNumber: elements.staffAssignmentRequestPreferredEmployee.value || null,
+        requestReason: elements.staffAssignmentRequestReason.value.trim(),
+      }),
+    });
+    elements.staffAssignmentRequestDialog.close();
+    showToast(`Einsatzanfrage ${payload.request.id} wurde eingereicht.`);
+  } catch (error) {
+    elements.staffAssignmentRequestMessage.textContent = error.message;
+  } finally {
+    state.staffAssignmentRequestPending = false;
+    elements.staffAssignmentRequestSubmit.disabled = false;
+  }
+}
+
+function canReviewStaffAssignmentRequests() {
+  const user = state.portalSession?.user;
+  const departmentManagerAllowed = user?.role !== "department_manager"
+    || state.data?.settings?.staff_assignment_requests_department_manager_review_enabled === "1";
+  return departmentManagerAllowed
+    && user?.permissions?.includes("staff_assignment_requests:review") === true;
+}
+
+function renderStaffAssignmentRequestReviewAccess() {
+  const allowed = canReviewStaffAssignmentRequests();
+  elements.staffAssignmentRequestReviewButton?.classList.toggle("hidden", !allowed);
+  if (!allowed && elements.staffAssignmentRequestReviewDialog?.open) {
+    elements.staffAssignmentRequestReviewDialog.close();
+  }
+  const label = elements.staffAssignmentRequestReviewButton?.querySelector("span:last-child");
+  if (label) {
+    const count = state.staffAssignmentRequestReviewLoaded
+      ? state.staffAssignmentRequestReviews.length
+      : 0;
+    label.textContent = count
+      ? `Einsatzanfragen prüfen (${count})`
+      : "Einsatzanfragen prüfen";
+  }
+}
+
+function staffAssignmentRequestTimeLabel(request) {
+  if (request.timeKind === "hourly") {
+    return `${formatDate(request.periodStartDate)} · ${request.startTime || "–"}–${request.endTime || "–"}`;
+  }
+  if (request.timeKind === "multi_day") {
+    return `${formatDate(request.periodStartDate)}–${formatDate(request.periodEndDate)}`;
+  }
+  return `${formatDate(request.periodStartDate)} · ganzer Tag`;
+}
+
+function renderStaffAssignmentRequestReviewList() {
+  renderStaffAssignmentRequestReviewAccess();
+  if (!elements.staffAssignmentRequestReviewList) return;
+  elements.staffAssignmentRequestReviewRefresh.disabled = state.staffAssignmentRequestReviewLoading;
+  elements.staffAssignmentRequestReviewStatus.textContent = state.staffAssignmentRequestReviewLoading
+    ? "Offene Einsatzanfragen werden revisionssicher geladen …"
+    : state.staffAssignmentRequestReviewError
+      ? state.staffAssignmentRequestReviewError
+    : !state.staffAssignmentRequestReviewLoaded
+      ? "Offene Einsatzanfragen laden."
+      : state.staffAssignmentRequestReviews.length
+        ? `${state.staffAssignmentRequestReviews.length} offene Einsatzanfrage${state.staffAssignmentRequestReviews.length === 1 ? "" : "n"} im eigenen Prüfbereich.`
+        : "Derzeit gibt es keine offene Einsatzanfrage im eigenen Prüfbereich.";
+  elements.staffAssignmentRequestReviewList.innerHTML = state.staffAssignmentRequestReviews.length
+    ? state.staffAssignmentRequestReviews.map((request) => {
+      const preferredNumber = request.preferredEmployee?.employeeNumber || "";
+      const preferredAvailable = request.candidates.some(
+        (candidate) => candidate.employeeNumber === preferredNumber,
+      );
+      return `
+        <article class="staff-assignment-review-card" data-staff-assignment-review-id="${escapeHtmlAttribute(request.id)}" data-staff-assignment-review-revision="${escapeHtmlAttribute(String(request.revisionNumber))}">
+          <div class="staff-assignment-review-card-heading">
+            <div><span class="eyebrow">Offen · Revision ${escapeHtml(String(request.revisionNumber))}</span><h3>${escapeHtml(request.sourceLocation.name)} → ${escapeHtml(request.destinationLocation.name)}</h3><p>${escapeHtml(request.destinationDepartment.name)} · ${escapeHtml(staffAssignmentRequestTimeLabel(request))}</p></div>
+            <span class="status-badge">Prüfung</span>
+          </div>
+          <dl class="staff-assignment-review-facts">
+            <div><dt>Angefragt von</dt><dd>${escapeHtml(request.requestedBy.displayName)} · ${escapeHtml(request.requestedBy.employeeNumber)}</dd></div>
+            <div><dt>Gewünschtes Teammitglied</dt><dd>${request.preferredEmployee ? `${escapeHtml(request.preferredEmployee.displayName)} · ${escapeHtml(request.preferredEmployee.employeeNumber)}` : "Kein Wunsch angegeben"}</dd></div>
+          </dl>
+          <div class="staff-assignment-review-reason"><span>Begründung der Anfrage</span><p>${escapeHtml(request.requestReason)}</p></div>
+          <div class="staff-assignment-review-decision-grid">
+            <label class="field"><span>Tatsächlich bestätigtes Teammitglied</span><select data-staff-assignment-review-employee>
+              <option value="">Bitte auswählen</option>
+              ${request.candidates.map((candidate) => `<option value="${escapeHtmlAttribute(candidate.employeeNumber)}" ${preferredAvailable && candidate.employeeNumber === preferredNumber ? "selected" : ""}>${escapeHtml(candidate.displayName)} · ${escapeHtml(candidate.employeeNumber)}${candidate.departmentName ? ` · ${escapeHtml(candidate.departmentName)}` : ""}</option>`).join("")}
+            </select><small>Der Wunsch ist nur vorausgewählt; die Entscheidung bestätigt die tatsächliche Person.</small></label>
+            <label class="field"><span>Entscheidungsbegründung</span><textarea data-staff-assignment-review-reason maxlength="2000" placeholder="Bei Ablehnung verpflichtend; bei Genehmigung optional"></textarea></label>
+          </div>
+          <p class="staff-assignment-review-message" data-staff-assignment-review-message role="status" aria-live="polite"></p>
+          <div class="staff-assignment-review-actions"><button class="secondary-button danger-soft" type="button" data-staff-assignment-review-decision="rejected">Ablehnen</button><button class="primary-button" type="button" data-staff-assignment-review-decision="accepted">Genehmigen</button></div>
+        </article>`;
+    }).join("")
+    : state.staffAssignmentRequestReviewLoaded && !state.staffAssignmentRequestReviewLoading
+      ? '<div class="staff-assignment-review-empty"><strong>Alles geprüft</strong><p>Neue Einsatzanfragen erscheinen hier automatisch beim nächsten Öffnen oder Aktualisieren.</p></div>'
+      : "";
+}
+
+async function loadStaffAssignmentRequestReviews() {
+  if (!canReviewStaffAssignmentRequests() || state.staffAssignmentRequestReviewLoading) return;
+  state.staffAssignmentRequestReviewLoading = true;
+  state.staffAssignmentRequestReviewError = "";
+  renderStaffAssignmentRequestReviewList();
+  try {
+    const payload = await api("/api/portal/v1/staff-assignment-requests");
+    state.staffAssignmentRequestReviews = Array.isArray(payload.requests) ? payload.requests : [];
+    state.staffAssignmentRequestReviewLoaded = true;
+    state.staffAssignmentRequestReviewError = "";
+  } catch (error) {
+    state.staffAssignmentRequestReviews = [];
+    state.staffAssignmentRequestReviewLoaded = false;
+    state.staffAssignmentRequestReviewError = error.message;
+    showToast(error.message, true);
+  } finally {
+    state.staffAssignmentRequestReviewLoading = false;
+    renderStaffAssignmentRequestReviewList();
+  }
+}
+
+async function decideStaffAssignmentRequestFromReview(button, decision) {
+  const card = button.closest("[data-staff-assignment-review-id]");
+  if (!card) return;
+  const employee = card.querySelector("[data-staff-assignment-review-employee]")?.value || "";
+  const reason = card.querySelector("[data-staff-assignment-review-reason]")?.value.trim() || "";
+  const message = card.querySelector("[data-staff-assignment-review-message]");
+  if (decision === "accepted" && !employee) {
+    message.textContent = "Bitte das tatsächlich bestätigte Teammitglied auswählen.";
+    return;
+  }
+  if (decision === "rejected" && !reason) {
+    message.textContent = "Bitte die Ablehnung nachvollziehbar begründen.";
+    return;
+  }
+  const buttons = [...card.querySelectorAll("[data-staff-assignment-review-decision]")];
+  buttons.forEach((actionButton) => { actionButton.disabled = true; });
+  message.textContent = decision === "accepted"
+    ? "Genehmigung wird revisionssicher gespeichert …"
+    : "Ablehnung wird revisionssicher gespeichert …";
+  try {
+    const payload = await api(`/api/portal/v1/staff-assignment-requests/${encodeURIComponent(card.dataset.staffAssignmentReviewId)}/decision`, {
+      method: "PUT",
+      body: JSON.stringify({
+        decision,
+        expectedRevision: Number(card.dataset.staffAssignmentReviewRevision),
+        confirmedEmployeeNumber: decision === "accepted" ? employee : null,
+        decisionReason: reason,
+      }),
+    });
+    showToast(payload.request.status === "accepted"
+      ? "Einsatzanfrage genehmigt: Der temporäre Filialeinsatz ist verbindlich einplanbar."
+      : "Einsatzanfrage wurde abgelehnt.");
+    await loadStaffAssignmentRequestReviews();
+  } catch (error) {
+    message.textContent = error.message;
+    buttons.forEach((actionButton) => { actionButton.disabled = false; });
+  }
+}
+
+function crossLocationScheduleCell(schedule, teamMember, date) {
+  const shifts = (schedule.shifts || []).filter((shift) => (
+    shift.employeeNumber === teamMember.employeeNumber && shift.date === date
+  ));
+  const unavailable = (schedule.unavailability || []).filter((entry) => (
+    entry.employeeNumber === teamMember.employeeNumber
+      && date >= entry.dateFrom
+      && date <= entry.dateTo
+  ));
+  const shiftsMarkup = shifts.map((shift) => `
+    <span class="cross-location-shift">
+      <strong>${escapeHtml(shift.startTime)}–${escapeHtml(shift.endTime)}</strong>
+      ${shift.departmentName ? `<small>${escapeHtml(shift.departmentName)}</small>` : ""}
+    </span>`).join("");
+  const unavailableMarkup = unavailable.map((entry) => {
+    const time = entry.allDay
+      ? "Ganztägig"
+      : `${escapeHtml(entry.startTime || "")}–${escapeHtml(entry.endTime || "")}`;
+    return `<span class="cross-location-unavailable"><strong>Nicht verfügbar</strong><small>${time}</small></span>`;
+  }).join("");
+  return shiftsMarkup || unavailableMarkup
+    ? `${shiftsMarkup}${unavailableMarkup}`
+    : '<span class="cross-location-empty-cell">Keine Einteilung</span>';
+}
+
+function renderCrossLocationScheduleGrid(schedule) {
+  if (!schedule) {
+    elements.crossLocationScheduleGrid.innerHTML = '<div class="cross-location-schedule-empty">Für die Auswahl liegen keine freigegebenen Plandaten vor.</div>';
+    return;
+  }
+  const dates = Array.from({ length: 7 }, (_, index) => addDays(schedule.weekStart, index));
+  const headers = dates.map((date) => `
+    <div class="cross-location-day-header">
+      <strong>${escapeHtml(formatDate(date, { weekday: "short" }))}</strong>
+      <small>${escapeHtml(formatDate(date, { day: "2-digit", month: "2-digit" }))}</small>
+    </div>`).join("");
+  const requestEnabled = canCreateStaffAssignmentRequestFromSchedule();
+  const { minimum: requestMinimum, maximum: requestMaximum } = staffAssignmentRequestCalendarBounds();
+  const rows = (schedule.teamMembers || []).map((teamMember) => `
+    <div class="cross-location-team-member">
+      <span class="cross-location-person-color" style="background:${escapeHtmlAttribute(teamMember.color || "#87948f")}"></span>
+      <strong>${escapeHtml(teamMember.displayName)}</strong>
+      <small>${escapeHtml(teamMember.employeeNumber)}${teamMember.departmentName ? ` · ${escapeHtml(teamMember.departmentName)}` : ""}</small>
+    </div>
+    ${dates.map((date) => {
+      const content = crossLocationScheduleCell(schedule, teamMember, date);
+      const canRequestDate = requestEnabled && date >= requestMinimum && date <= requestMaximum;
+      return canRequestDate
+        ? `<button type="button" class="cross-location-day-cell cross-location-request-cell" data-cross-location-request-date="${escapeHtmlAttribute(date)}" data-cross-location-request-employee="${escapeHtmlAttribute(teamMember.requestEligible ? teamMember.employeeNumber : "")}" aria-label="Einsatzanfrage für ${escapeHtmlAttribute(teamMember.displayName)} am ${escapeHtmlAttribute(formatDate(date))} öffnen">${content}<span class="cross-location-request-cue">Einsatz anfragen</span></button>`
+        : `<div class="cross-location-day-cell">${content}</div>`;
+    }).join("")}
+  `).join("");
+  elements.crossLocationScheduleGrid.innerHTML = (schedule.teamMembers || []).length
+    ? `<div class="cross-location-schedule-grid">
+        <div class="cross-location-team-header">Team</div>${headers}${rows}
+      </div>`
+    : '<div class="cross-location-schedule-empty">In dieser Filiale ist für die gewählte Woche kein sichtbares Team eingeplant.</div>';
+}
+
+function renderCrossLocationSchedule() {
+  const allowed = canReadCrossLocationSchedule();
+  if (!allowed) state.crossLocationScheduleOpen = false;
+  elements.crossLocationScheduleButton?.classList.toggle("hidden", !allowed);
+  elements.planningView?.classList.toggle("cross-location-mode", allowed && state.crossLocationScheduleOpen);
+  elements.crossLocationSchedulePanel?.classList.toggle("hidden", !allowed || !state.crossLocationScheduleOpen);
+  const buttonLabel = elements.crossLocationScheduleButton?.querySelector("span:last-child");
+  if (buttonLabel) buttonLabel.textContent = state.crossLocationScheduleOpen
+    ? "Eigene Planung ansehen"
+    : "Fremde Filiale ansehen";
+  if (!allowed || !state.crossLocationScheduleOpen) return;
+
+  const payload = state.crossLocationSchedulePayload || { locations: [], weeks: [], schedule: null };
+  elements.crossLocationScheduleLocation.disabled = state.crossLocationScheduleLoading;
+  elements.crossLocationScheduleLocation.innerHTML = (payload.locations || []).map((location) => `
+    <option value="${escapeHtmlAttribute(location.id)}" ${location.id === state.crossLocationScheduleLocationId ? "selected" : ""}>${escapeHtml(location.name)}</option>
+  `).join("");
+  elements.crossLocationScheduleWeeks.innerHTML = (payload.weeks || []).map((week, index) => `
+    <button type="button" class="${week.weekStart === state.crossLocationScheduleWeekStart ? "active" : ""}" data-cross-location-week="${escapeHtmlAttribute(week.weekStart)}" aria-pressed="${String(week.weekStart === state.crossLocationScheduleWeekStart)}" ${state.crossLocationScheduleLoading ? "disabled" : ""}>
+      <strong>${index === 0 ? "Aktuelle Woche" : "Nächste Woche"}</strong>
+      <small>KW ${escapeHtml(String(week.calendarWeek))} · ${escapeHtml(formatDate(week.weekStart, { day: "2-digit", month: "2-digit" }))}–${escapeHtml(formatDate(week.weekEnd, { day: "2-digit", month: "2-digit" }))}</small>
+    </button>
+  `).join("");
+  elements.crossLocationScheduleMode.textContent = "Rein lesend";
+  elements.crossLocationScheduleStatus.textContent = state.crossLocationScheduleLoading
+    ? "Der fremde Dienstplan wird datensparsam geladen …"
+    : state.crossLocationScheduleError
+      ? state.crossLocationScheduleError
+      : payload.schedule
+        ? `${payload.schedule.location.name} · KW ${getIsoWeek(payload.schedule.weekStart)} · keine Bearbeitung und keine Arbeitsregelprüfung`
+        : "Es ist keine fremde Filiale verfügbar.";
+  elements.crossLocationScheduleStatus.classList.toggle("error", Boolean(state.crossLocationScheduleError));
+  renderCrossLocationScheduleGrid(payload.schedule);
+}
+
+async function loadCrossLocationSchedule() {
+  if (!canReadCrossLocationSchedule()) return;
+  const requestId = ++state.crossLocationScheduleRequestId;
+  state.crossLocationScheduleLoading = true;
+  state.crossLocationScheduleError = "";
+  renderCrossLocationSchedule();
+  try {
+    const query = new URLSearchParams();
+    if (state.crossLocationScheduleLocationId) query.set("locationId", state.crossLocationScheduleLocationId);
+    if (state.crossLocationScheduleWeekStart) query.set("week", state.crossLocationScheduleWeekStart);
+    const payload = await api(`/api/portal/v1/cross-location-schedules${query.size ? `?${query}` : ""}`);
+    if (requestId !== state.crossLocationScheduleRequestId) return;
+    state.crossLocationSchedulePayload = payload;
+    state.crossLocationScheduleLocationId = payload.selectedLocationId || "";
+    state.crossLocationScheduleWeekStart = payload.schedule?.weekStart
+      || payload.weeks?.[0]?.weekStart
+      || "";
+  } catch (error) {
+    if (requestId !== state.crossLocationScheduleRequestId) return;
+    state.crossLocationSchedulePayload = null;
+    state.crossLocationScheduleError = error.message;
+  } finally {
+    if (requestId === state.crossLocationScheduleRequestId) {
+      state.crossLocationScheduleLoading = false;
+      renderCrossLocationSchedule();
+    }
+  }
 }
 
 function renderSummary() {
@@ -16540,6 +17028,21 @@ function renderSettings() {
   elements.currentWeekLockDay.value = settings.current_week_lock_day || "saturday";
   elements.currentWeekLockTime.value = settings.current_week_lock_time || "17:00";
   updateWeekLockSettings();
+  elements.crossLocationScheduleEnabled.checked = settings.cross_location_schedule_enabled !== "0";
+  elements.crossLocationScheduleHorizonWeeks.value = ["1", "2"].includes(
+    String(settings.cross_location_schedule_horizon_weeks),
+  ) ? String(settings.cross_location_schedule_horizon_weeks) : "2";
+  elements.staffAssignmentManagerCreateEnabled.checked = settings.staff_assignment_requests_manager_create_enabled !== "0";
+  elements.staffAssignmentDepartmentManagerCreateEnabled.checked = settings.staff_assignment_requests_department_manager_create_enabled === "1";
+  elements.staffAssignmentDepartmentManagerReviewEnabled.checked = settings.staff_assignment_requests_department_manager_review_enabled === "1";
+  elements.staffAssignmentEmailSubmittedEnabled.checked = settings.staff_assignment_request_email_submitted_enabled !== "0";
+  elements.staffAssignmentEmailDecisionEnabled.checked = settings.staff_assignment_request_email_decision_enabled !== "0";
+  elements.staffAssignmentChangePolicy.value = ["withdraw_and_resubmit", "locked"].includes(
+    settings.staff_assignment_request_change_policy,
+  ) ? settings.staff_assignment_request_change_policy : "withdraw_and_resubmit";
+  elements.staffAssignmentCancellationPolicy.value = ["source_review", "pl_plus_only", "disabled"].includes(
+    settings.staff_assignment_request_cancellation_policy,
+  ) ? settings.staff_assignment_request_cancellation_policy : "source_review";
   if (elements.vacationHrApprovalRequired) {
     elements.vacationHrApprovalRequired.checked = Boolean(state.workflowSettings?.vacationHrApprovalRequired ?? state.portalStatus?.workflow?.vacationHrApprovalRequired);
     elements.workflowSettingsHint.textContent = "Die Einstellung kann von Personalleitung oder höher geändert werden.";
@@ -16563,9 +17066,14 @@ function renderSettings() {
 function updateWeekLockSettings() {
   const active = elements.currentWeekAutoLock.checked;
   const manual = elements.currentWeekLockMode.value === "manual";
-  elements.currentWeekLockSettings.classList.toggle("disabled-setting", !active);
-  elements.currentWeekLockMode.disabled = !active;
+  const canManageGlobalLock = state.portalStatus?.portalEnabled !== true
+    || state.portalSession?.user?.permissions?.includes("settings:write") === true;
+  elements.currentWeekAutoLock.disabled = !canManageGlobalLock;
+  elements.currentWeekLockSettings.classList.toggle("disabled-setting", !active || !canManageGlobalLock);
+  elements.currentWeekLockMode.disabled = !active || !canManageGlobalLock;
   elements.manualWeekLockFields.classList.toggle("hidden", !active || !manual);
+  elements.currentWeekLockDay.disabled = !canManageGlobalLock;
+  elements.currentWeekLockTime.disabled = !canManageGlobalLock;
   elements.currentWeekLockTime.min = elements.currentWeekLockDay.value === "friday" ? "18:00" : "00:00";
   const settings = state.data?.settings || {};
   const openDays = planningDayKeys.filter((day) => settings[`${day}_open`] !== "0");
@@ -20720,6 +21228,205 @@ async function saveGreetingSettings() {
     renderGreetingSettings(result);
     showToast("Persönliche Begrüßungen wurden gespeichert.");
   } catch (error) { showToast(error.message, true); }
+}
+
+function birthdayPresentationCatalog(result = state.birthdayPresentationSettings) {
+  const seen = new Set();
+  return (Array.isArray(result?.presentations) ? result.presentations : []).filter((presentation) => {
+    const id = String(presentation?.id || "").trim();
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function birthdayPresentationOptions(selectedId = "") {
+  const selected = String(selectedId || "");
+  return [
+    `<option value="" ${selected ? "" : "selected"}>Deaktiviert</option>`,
+    ...birthdayPresentationCatalog().map((presentation) => {
+      const id = String(presentation.id || "").trim();
+      const label = String(presentation.label || id).trim() || id;
+      return `<option value="${escapeHtml(id)}" ${selected === id ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    }),
+  ].join("");
+}
+
+function filterBirthdayPresentationEmployees() {
+  if (!elements.birthdayPresentationEmployeeList) return;
+  const query = String(elements.birthdayPresentationEmployeeSearch?.value || "").trim().toLocaleLowerCase("de");
+  const location = String(elements.birthdayPresentationLocationFilter?.value || "");
+  let visible = 0;
+  elements.birthdayPresentationEmployeeList.querySelectorAll("[data-birthday-presentation-employee-row]").forEach((row) => {
+    const matchesQuery = !query || String(row.dataset.birthdaySearchText || "").includes(query);
+    const matchesLocation = !location || row.dataset.birthdayLocationName === location;
+    row.classList.toggle("hidden", !(matchesQuery && matchesLocation));
+    if (matchesQuery && matchesLocation) visible += 1;
+  });
+  elements.birthdayPresentationEmployeeList.querySelector("[data-birthday-presentation-empty]")?.classList.toggle("hidden", visible > 0);
+}
+
+function birthdayPresentationChanges() {
+  const result = state.birthdayPresentationSettings;
+  if (!result) return { global: null, employees: [], delegates: [] };
+  const capabilities = result.capabilities || {};
+  const global = capabilities.canManageGlobal === true
+    && elements.birthdayPresentationEnabled?.checked !== (result.policy?.enabled === true)
+    ? {
+      enabled: elements.birthdayPresentationEnabled.checked,
+      expectedRevision: result.policy?.revision ?? "",
+    }
+    : null;
+  const employees = capabilities.canManageTeam === true
+    ? Array.from(elements.birthdayPresentationEmployeeList?.querySelectorAll("[data-birthday-presentation-employee]") || [])
+      .filter((select) => String(select.value || "") !== String(select.dataset.birthdayPresentationOriginal || ""))
+      .map((select) => ({
+        employeeNumber: String(select.dataset.birthdayPresentationEmployee || ""),
+        presentationId: String(select.value || "") || null,
+        expectedRevision: Number(select.dataset.birthdayPresentationRevision || 0),
+      }))
+    : [];
+  const delegates = capabilities.canDelegateTeam === true
+    ? Array.from(elements.birthdayPresentationDelegateList?.querySelectorAll("[data-birthday-presentation-delegate]") || [])
+      .filter((input) => !input.disabled && input.checked !== (input.dataset.birthdayPresentationOriginal === "1"))
+      .map((input) => ({
+        employeeNumber: String(input.dataset.birthdayPresentationDelegate || ""),
+        enabled: input.checked === true,
+      }))
+    : [];
+  return { global, employees, delegates };
+}
+
+function updateBirthdayPresentationSettingsState() {
+  if (!elements.saveBirthdayPresentationSettingsButton || !state.birthdayPresentationSettings) return;
+  const changes = birthdayPresentationChanges();
+  const count = Number(Boolean(changes.global)) + changes.employees.length + changes.delegates.length;
+  elements.saveBirthdayPresentationSettingsButton.disabled = count === 0;
+  if (count > 0) {
+    elements.birthdayPresentationSettingsHint.textContent = `${count} ${count === 1 ? "Änderung ist" : "Änderungen sind"} noch nicht gespeichert.`;
+    return;
+  }
+  const scopeLabel = String(state.birthdayPresentationSettings.scope?.label || "berechtigter Bereich");
+  elements.birthdayPresentationSettingsHint.textContent = `Die Auswahl wird serverseitig auf „${scopeLabel}“ begrenzt.`;
+}
+
+function renderBirthdayPresentationSettings(result) {
+  state.birthdayPresentationSettings = result && typeof result === "object" ? result : {};
+  const capabilities = state.birthdayPresentationSettings.capabilities || {};
+  const scope = state.birthdayPresentationSettings.scope || {};
+  const scopeLabel = String(scope.label || "Berechtigter Bereich");
+  if (elements.birthdayPresentationScope) {
+    elements.birthdayPresentationScope.textContent = `${scopeLabel}${scope.delegated === true ? " · delegiert" : ""}`;
+  }
+
+  elements.birthdayPresentationGlobalSection?.classList.toggle("hidden", capabilities.canManageGlobal !== true);
+  if (elements.birthdayPresentationEnabled) {
+    elements.birthdayPresentationEnabled.checked = state.birthdayPresentationSettings.policy?.enabled === true;
+    elements.birthdayPresentationEnabled.disabled = capabilities.canManageGlobal !== true;
+  }
+
+  elements.birthdayPresentationTeamSection?.classList.toggle("hidden", capabilities.canManageTeam !== true);
+  const employees = Array.isArray(state.birthdayPresentationSettings.employees)
+    ? state.birthdayPresentationSettings.employees : [];
+  const allowedPresentationIds = new Set(birthdayPresentationCatalog().map((presentation) => String(presentation.id)));
+  const locationNames = [...new Set(employees.map((employee) => String(employee?.locationName || "").trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, "de"));
+  if (elements.birthdayPresentationLocationFilter) {
+    const previousLocation = elements.birthdayPresentationLocationFilter.value;
+    elements.birthdayPresentationLocationFilter.innerHTML = '<option value="">Alle sichtbaren Filialen</option>'
+      + locationNames.map((locationName) => `<option value="${escapeHtml(locationName)}">${escapeHtml(locationName)}</option>`).join("");
+    elements.birthdayPresentationLocationFilter.value = locationNames.includes(previousLocation) ? previousLocation : "";
+  }
+  if (elements.birthdayPresentationEmployeeList) {
+    elements.birthdayPresentationEmployeeList.innerHTML = employees.map((employee) => {
+      const employeeNumber = String(employee?.employeeNumber || "").trim();
+      const displayName = String(employee?.displayName || employeeNumber).trim() || employeeNumber;
+      const locationName = String(employee?.locationName || "").trim();
+      const departmentName = String(employee?.departmentName || "").trim();
+      const storedPresentationId = String(employee?.presentationId || "").trim();
+      const presentationId = allowedPresentationIds.has(storedPresentationId) ? storedPresentationId : "";
+      const detail = [locationName, departmentName].filter(Boolean).join(" · ") || "Berechtigter Bereich";
+      const searchText = [employeeNumber, displayName, locationName, departmentName]
+        .join(" ").toLocaleLowerCase("de");
+      return `<article class="birthday-presentation-row" data-birthday-presentation-employee-row data-birthday-search-text="${escapeHtml(searchText)}" data-birthday-location-name="${escapeHtml(locationName)}">
+        <div><strong>${escapeHtml(employeeNumber)} · ${escapeHtml(displayName)}</strong><small>${escapeHtml(detail)}</small></div>
+        <label><span>Darstellung</span><select data-birthday-presentation-employee="${escapeHtml(employeeNumber)}" data-birthday-presentation-original="${escapeHtml(presentationId)}" data-birthday-presentation-revision="${escapeHtml(String(employee?.revision ?? ""))}">${birthdayPresentationOptions(presentationId)}</select></label>
+      </article>`;
+    }).join("") + '<p class="settings-note hidden" data-birthday-presentation-empty>Keine passenden Teammitglieder gefunden.</p>';
+  }
+
+  elements.birthdayPresentationDelegatesSection?.classList.toggle("hidden", capabilities.canDelegateTeam !== true);
+  const delegates = Array.isArray(state.birthdayPresentationSettings.delegates)
+    ? state.birthdayPresentationSettings.delegates : [];
+  if (elements.birthdayPresentationDelegateList) {
+    elements.birthdayPresentationDelegateList.innerHTML = delegates.length ? delegates.map((delegate) => {
+      const employeeNumber = String(delegate?.employeeNumber || "").trim();
+      const displayName = String(delegate?.displayName || employeeNumber).trim() || employeeNumber;
+      const departmentName = String(delegate?.departmentName || "Berechtigter Bereich").trim();
+      const denied = delegate?.denied === true;
+      const canOverrideDeniedDelegation = capabilities.canManageGlobal === true;
+      const delegationLocked = denied && !canOverrideDeniedDelegation;
+      const denialExplanation = denied
+        ? (canOverrideDeniedDelegation
+          ? "Übergeordnet gesperrt · als PL+ können Sie diese Sperre hier aufheben"
+          : "Übergeordnet durch PL+ gesperrt · nur PL+ kann diese Sperre aufheben")
+        : "";
+      const switchLabel = denied && canOverrideDeniedDelegation ? "Sperre aufheben" : "Delegiert";
+      return `<article class="birthday-presentation-row ${denied ? "denied" : ""}">
+        <div><strong>${escapeHtml(employeeNumber)} · ${escapeHtml(displayName)}</strong><small>${escapeHtml(departmentName)}${denialExplanation ? ` · ${escapeHtml(denialExplanation)}` : ""}</small></div>
+        <label class="birthday-presentation-delegate-switch"><span>${escapeHtml(switchLabel)}</span><input type="checkbox" data-birthday-presentation-delegate="${escapeHtml(employeeNumber)}" data-birthday-presentation-original="${delegate?.enabled === true ? "1" : "0"}" ${delegate?.enabled === true ? "checked" : ""} ${delegationLocked ? "disabled" : ""} /></label>
+      </article>`;
+    }).join("") : '<p class="settings-note">Keine delegierbaren Abteilungsleitungen im berechtigten Bereich.</p>';
+  }
+  filterBirthdayPresentationEmployees();
+  updateBirthdayPresentationSettingsState();
+}
+
+async function loadBirthdayPresentationSettings() {
+  if (!elements.birthdayPresentationSettingsCard || elements.birthdayPresentationSettingsCard.classList.contains("hidden")) return;
+  try {
+    renderBirthdayPresentationSettings(await api("/api/portal/v1/birthday-presentation-settings"));
+  } catch (error) {
+    state.birthdayPresentationSettings = null;
+    elements.birthdayPresentationSettingsCard.classList.toggle("hidden", error.status === 403);
+    elements.birthdayPresentationSettingsHint.textContent = error.message;
+    elements.saveBirthdayPresentationSettingsButton.disabled = true;
+  }
+}
+
+async function saveBirthdayPresentationSettings() {
+  const changes = birthdayPresentationChanges();
+  const count = Number(Boolean(changes.global)) + changes.employees.length + changes.delegates.length;
+  if (!count) return;
+  elements.saveBirthdayPresentationSettingsButton.disabled = true;
+  try {
+    if (changes.global) {
+      await api("/api/portal/v1/birthday-presentation-settings/global", {
+        method: "PUT",
+        body: JSON.stringify(changes.global),
+      });
+    }
+    for (const employee of changes.employees) {
+      await api(`/api/portal/v1/birthday-presentation-settings/employees/${encodeURIComponent(employee.employeeNumber)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          presentationId: employee.presentationId,
+          expectedRevision: employee.expectedRevision,
+        }),
+      });
+    }
+    for (const delegate of changes.delegates) {
+      await api(`/api/portal/v1/birthday-presentation-settings/delegates/${encodeURIComponent(delegate.employeeNumber)}`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled: delegate.enabled }),
+      });
+    }
+    await loadBirthdayPresentationSettings();
+    showToast(`${count} ${count === 1 ? "Geburtstagseinstellung wurde" : "Geburtstagseinstellungen wurden"} gespeichert.`);
+  } catch (error) {
+    showToast(error.message, true);
+    await loadBirthdayPresentationSettings().catch(() => {});
+  }
 }
 
 function renderWifiConfirmationLevels() {
@@ -25155,6 +25862,7 @@ function setSettingsTab(tab) {
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === activeTab));
   document.querySelector(`[data-settings-tab="${activeTab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   elements.generalSettings.classList.toggle("active", activeTab === "general");
+  elements.scheduleSettings?.classList.toggle("active", activeTab === "schedule");
   elements.personnelSettings.classList.toggle("active", activeTab === "personnel");
   elements.vacationSettings?.classList.toggle("active", activeTab === "vacation");
   elements.timeTrackingSettings?.classList.toggle("active", activeTab === "timeTracking");
@@ -25168,6 +25876,8 @@ function setSettingsTab(tab) {
   }
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
+  const canSaveScheduleSettings = !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("schedule:cross_location:settings:write");
   const canSaveBackupSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("backup:write");
   const canSaveBranding = !state.portalStatus?.portalEnabled
@@ -25175,7 +25885,11 @@ function setSettingsTab(tab) {
   const serverBackupTab = activeTab === "backup" && state.portalStatus?.operationMode === "server";
   elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection"].includes(activeTab)
     || serverBackupTab
-    || (activeTab === "backup" ? !canSaveBackupSettings : !(canSaveGeneralSettings || (activeTab === "general" && canSaveBranding))));
+    || (activeTab === "backup"
+      ? !canSaveBackupSettings
+      : activeTab === "schedule"
+        ? !(canSaveScheduleSettings || canSaveGeneralSettings)
+        : !(canSaveGeneralSettings || (activeTab === "general" && canSaveBranding))));
   if (activeTab === "access") {
     if (!elements.portalUserAccessCard?.classList.contains("hidden")) loadPortalUsers();
     if (canManageMobilePortalLocationDisplay()) loadMobilePortalLocationDisplay();
@@ -25183,6 +25897,7 @@ function setSettingsTab(tab) {
     loadAmuSettings();
     loadAmuAccessPolicy();
     loadGreetingSettings();
+    loadBirthdayPresentationSettings();
   }
   if (activeTab === "vacation") {
     loadWorkflowSettings();
@@ -28148,7 +28863,10 @@ async function saveSettings(silent = false) {
   try {
     const permissions = state.portalSession?.user?.permissions || [];
     const portalEnabled = state.portalStatus?.portalEnabled === true;
+    const activeSettingsTab = document.querySelector("[data-settings-tab].active")?.dataset.settingsTab || "general";
     const canSaveGeneralSettings = !portalEnabled || permissions.includes("settings:write");
+    const canSaveScheduleSettings = !portalEnabled
+      || permissions.includes("schedule:cross_location:settings:write");
     const canSaveBranding = !portalEnabled || permissions.includes("branding:write");
     const canSavePastWeekPreference = !portalEnabled
       || (permissions.includes("schedule:write") && permissions.includes("settings:write"));
@@ -28189,11 +28907,40 @@ async function saveSettings(silent = false) {
         showSunday: document.querySelector("#showSunday").checked,
         rememberLastScheduleOverallPlan: elements.rememberLastScheduleOverallPlan.checked,
         rememberLastVacationOverallPlan: elements.rememberLastVacationOverallPlan.checked,
+        ...(activeSettingsTab === "schedule" && canSaveScheduleSettings ? {
+          crossLocationSchedule: {
+            enabled: elements.crossLocationScheduleEnabled.checked,
+            horizonWeeks: Number(elements.crossLocationScheduleHorizonWeeks.value),
+            managerRequestCreateEnabled: elements.staffAssignmentManagerCreateEnabled.checked,
+            departmentManagerRequestCreateEnabled: elements.staffAssignmentDepartmentManagerCreateEnabled.checked,
+            departmentManagerRequestReviewEnabled: elements.staffAssignmentDepartmentManagerReviewEnabled.checked,
+            emailSubmittedEnabled: elements.staffAssignmentEmailSubmittedEnabled.checked,
+            emailDecisionEnabled: elements.staffAssignmentEmailDecisionEnabled.checked,
+            changePolicy: elements.staffAssignmentChangePolicy.value,
+            cancellationPolicy: elements.staffAssignmentCancellationPolicy.value,
+          },
+        } : {}),
     };
     if (canSaveGeneralSettings) {
       await api("/api/settings", {
         method: "PUT",
         body: JSON.stringify(payload),
+      });
+    }
+    if (activeSettingsTab === "schedule" && canSaveScheduleSettings && !canSaveGeneralSettings) {
+      await api("/api/portal/v1/cross-location-schedule-settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: elements.crossLocationScheduleEnabled.checked,
+          horizonWeeks: Number(elements.crossLocationScheduleHorizonWeeks.value),
+          managerRequestCreateEnabled: elements.staffAssignmentManagerCreateEnabled.checked,
+          departmentManagerRequestCreateEnabled: elements.staffAssignmentDepartmentManagerCreateEnabled.checked,
+          departmentManagerRequestReviewEnabled: elements.staffAssignmentDepartmentManagerReviewEnabled.checked,
+          emailSubmittedEnabled: elements.staffAssignmentEmailSubmittedEnabled.checked,
+          emailDecisionEnabled: elements.staffAssignmentEmailDecisionEnabled.checked,
+          changePolicy: elements.staffAssignmentChangePolicy.value,
+          cancellationPolicy: elements.staffAssignmentCancellationPolicy.value,
+        }),
       });
     }
     if (portalEnabled && canSavePastWeekPreference) {
@@ -28815,6 +29562,14 @@ elements.vacationHrApprovalRequired?.addEventListener("change", (event) => toggl
 elements.saveAmuSettingsButton?.addEventListener("click", saveAmuSettings);
 elements.saveAmuAccessPolicyButton?.addEventListener("click", saveAmuAccessPolicy);
 elements.saveGreetingSettingsButton?.addEventListener("click", saveGreetingSettings);
+elements.saveBirthdayPresentationSettingsButton?.addEventListener("click", saveBirthdayPresentationSettings);
+elements.birthdayPresentationEmployeeSearch?.addEventListener("input", filterBirthdayPresentationEmployees);
+elements.birthdayPresentationLocationFilter?.addEventListener("change", filterBirthdayPresentationEmployees);
+elements.birthdayPresentationSettingsCard?.addEventListener("change", (event) => {
+  if (event.target.matches("#birthdayPresentationEnabled, [data-birthday-presentation-employee], [data-birthday-presentation-delegate]")) {
+    updateBirthdayPresentationSettingsState();
+  }
+});
 elements.rightsEmployeeSearch?.addEventListener("input", renderRightsManagement);
 elements.rightsUserList?.addEventListener("click", (event) => {
   const card = event.target.closest("[data-rights-user]");
@@ -29507,6 +30262,63 @@ document.querySelector("#weekJumpDate").addEventListener("change", (event) => {
   if (!event.target.value) return;
   state.weekStart = getMonday(new Date(`${event.target.value}T12:00:00`));
   loadAll();
+});
+elements.crossLocationScheduleButton?.addEventListener("click", () => {
+  state.crossLocationScheduleOpen = !state.crossLocationScheduleOpen;
+  if (state.crossLocationScheduleOpen && !state.crossLocationSchedulePayload) {
+    state.crossLocationScheduleLocationId = "";
+    state.crossLocationScheduleWeekStart = "";
+    void loadCrossLocationSchedule();
+    return;
+  }
+  renderCrossLocationSchedule();
+});
+elements.crossLocationScheduleLocation?.addEventListener("change", () => {
+  state.crossLocationScheduleLocationId = elements.crossLocationScheduleLocation.value;
+  void loadCrossLocationSchedule();
+});
+elements.crossLocationScheduleWeeks?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-cross-location-week]");
+  if (!button || button.disabled) return;
+  state.crossLocationScheduleWeekStart = button.dataset.crossLocationWeek;
+  void loadCrossLocationSchedule();
+});
+elements.crossLocationScheduleGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-cross-location-request-date]");
+  if (!button || button.disabled) return;
+  openStaffAssignmentRequestDialog({
+    date: button.dataset.crossLocationRequestDate,
+    preferredEmployeeNumber: button.dataset.crossLocationRequestEmployee || "",
+  });
+});
+elements.staffAssignmentRequestReviewButton?.addEventListener("click", () => {
+  if (!canReviewStaffAssignmentRequests()) return;
+  elements.staffAssignmentRequestReviewDialog?.showModal();
+  void loadStaffAssignmentRequestReviews();
+});
+elements.staffAssignmentRequestReviewRefresh?.addEventListener(
+  "click",
+  loadStaffAssignmentRequestReviews,
+);
+elements.staffAssignmentRequestReviewList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-staff-assignment-review-decision]");
+  if (!button || button.disabled) return;
+  void decideStaffAssignmentRequestFromReview(
+    button,
+    button.dataset.staffAssignmentReviewDecision,
+  );
+});
+[elements.staffAssignmentRequestReviewClose, elements.staffAssignmentRequestReviewCancel]
+  .forEach((button) => button?.addEventListener(
+    "click",
+    () => elements.staffAssignmentRequestReviewDialog?.close(),
+  ));
+document.querySelectorAll('input[name="staffAssignmentRequestTimeKind"]').forEach((input) => {
+  input.addEventListener("change", renderStaffAssignmentRequestFormState);
+});
+elements.staffAssignmentRequestForm?.addEventListener("submit", submitStaffAssignmentRequestForm);
+[elements.staffAssignmentRequestClose, elements.staffAssignmentRequestCancel].forEach((button) => {
+  button?.addEventListener("click", () => elements.staffAssignmentRequestDialog?.close());
 });
 elements.vacationYear.addEventListener("change", () => {
   const year = Number(elements.vacationYear.value);
@@ -30512,6 +31324,7 @@ elements.vacationCalendar.addEventListener("click", (event) => {
 });
 
 initializeRequestBlackoutDateRangeCalendar();
+initializeStaffAssignmentRequestDateRangeCalendar();
 bootstrapApplication();
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked")) loadSystemInfo();

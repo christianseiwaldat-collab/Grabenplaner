@@ -21,7 +21,7 @@ test("Updater-Oberfläche unterscheidet Service-, Sicherheits- und Funktionsupda
   assert.match(settingsHeader, /class="settings-update-button" id="updateCheckButton"/);
   assert.doesNotMatch(appSource, /Klick unten links/);
   assert.match(appSource, /const updateAccess = !lanActive \|\| permissions\.includes\("update:write"\)/);
-  assert.match(appSource, /mobilePortalLocationDisplayAccess \|\| updateAccess/);
+  assert.match(appSource, /mobilePortalLocationDisplayAccess \|\| birthdayPresentationSettingsAccess \|\| updateAccess/);
   assert.match(appSource, /updateCheckButton\?\.classList\.toggle\("hidden", !updateAccess\)/);
   assert.match(styles, /data-active-page-theme="dark"[^\n]*#settingsView \.settings-update-button\.current[^\n]*var\(--success-surface\)/);
   assert.match(styles, /data-active-page-theme="dark"[^\n]*#settingsView \.settings-update-button\.available[^\n]*var\(--warning-surface\)/);

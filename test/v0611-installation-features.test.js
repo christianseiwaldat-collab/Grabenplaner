@@ -25,6 +25,10 @@ const {
 const {
   PERSONNEL_LEARNING_PERMISSIONS,
 } = require("../lib/personnel-learning-access");
+const {
+  CROSS_LOCATION_SCHEDULE_PERMISSION_IDS,
+  CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS,
+} = require("../lib/cross-location-schedule-access");
 
 test.after(() => {
   try { db.close(); } catch {}
@@ -35,6 +39,7 @@ test.after(() => {
 test("v0.61.1 Funktionsprofil: direkte Planungs- und PDF-Routen bleiben serverseitig gesperrt", () => {
   assert.deepEqual(installationFeaturesForApiPath("/schedule-note/2026-07-20"), ["schedule"]);
   assert.deepEqual(installationFeaturesForApiPath("/schedule-preview.pdf"), ["schedule"]);
+  assert.deepEqual(installationFeaturesForApiPath("/portal/v1/cross-location-schedules"), ["schedule"]);
   assert.deepEqual(installationFeaturesForApiPath("/vacations-preview.pdf"), ["vacation"]);
   assert.deepEqual(installationFeaturesForApiPath("/VACATIONS"), ["vacation"]);
 });
@@ -176,7 +181,13 @@ test("v0.80 USB-Rechte: entzogenes Dienstplan-Leserecht entzieht auch das Schrei
   );
   assert.deepEqual(
     validated.deniedPermissions.filter((permission) => permission.startsWith("schedule:")).sort(),
-    ["schedule:read", "schedule:write"],
+    ["schedule:cross_location:read", "schedule:read", "schedule:write"],
+  );
+  assert.deepEqual(
+    validated.deniedPermissions.filter(
+      (permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission),
+    ).sort(),
+    [...CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS].sort(),
   );
   assert.deepEqual(validated.scopes, [{ locationId: employee.home_location_id, departmentId: null }]);
 });
