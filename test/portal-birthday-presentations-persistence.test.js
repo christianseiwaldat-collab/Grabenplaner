@@ -17,6 +17,10 @@ const {
   inspectSqlitePortalBirthdayPresentationRows,
 } = require("../lib/persistence/sqlite/operations/portal-birthday-presentation-schema");
 const {
+  ensureSqlitePortalBirthdayPresentationClaimSchema,
+  inspectSqlitePortalBirthdayPresentationClaimRows,
+} = require("../lib/persistence/sqlite/operations/portal-birthday-presentation-claim-schema");
+const {
   createSqlitePersistenceProvider,
   openSqliteLegacyDatabase,
 } = require("../lib/persistence/sqlite/provider");
@@ -37,6 +41,7 @@ function fixture() {
       ('412', 'Weber Nicolai Sascha');
   `);
   ensureSqlitePortalBirthdayPresentationSchema(database);
+  ensureSqlitePortalBirthdayPresentationClaimSchema(database);
   const provider = createSqlitePersistenceProvider({
     database,
     catalog: SQLITE_PORTAL_BIRTHDAY_PRESENTATION_CATALOG,
@@ -50,17 +55,76 @@ function fixture() {
 
 test("Statement- und SQLite-Katalog sind typisiert, vollständig und isoliert", () => {
   assert.deepEqual(Object.keys(PORTAL_BIRTHDAY_PRESENTATION_STATEMENTS).sort(), [
+    "claimEvent",
     "getAssignment",
     "getPolicy",
     "insertAssignment",
     "listAssignments",
+    "listClaimsForEmployee",
     "updateAssignment",
     "updatePolicy",
   ]);
-  assert.equal(SQLITE_PORTAL_BIRTHDAY_PRESENTATION_CATALOG.length, 6);
+  assert.equal(SQLITE_PORTAL_BIRTHDAY_PRESENTATION_CATALOG.length, 8);
   assert.equal(new Set(SQLITE_PORTAL_BIRTHDAY_PRESENTATION_CATALOG
-    .map(({ statement }) => statement.id)).size, 6);
+    .map(({ statement }) => statement.id)).size, 8);
   assert.equal(Object.isFrozen(SQLITE_PORTAL_BIRTHDAY_PRESENTATION_CATALOG), true);
+});
+
+test("Block 10: Claim-Repository entscheidet ein Ereignis atomar genau einmal", async () => {
+  const { database, provider, repository } = fixture();
+  try {
+    const input = {
+      employeeNumber: "252",
+      eventYear: 2026,
+      presentationId: "elegant",
+      policyRevision: 3,
+      assignmentRevision: 2,
+      receiptSha256: "a".repeat(64),
+    };
+    const [first, second] = await Promise.all([
+      repository.claimEvent(input),
+      repository.claimEvent(input),
+    ]);
+    assert.deepEqual([first.rowsAffected, second.rowsAffected].sort(), [0, 1]);
+    assert.equal(database.prepare(`
+      SELECT COUNT(*) AS count FROM portal_birthday_presentation_claims
+      WHERE employee_number = '252' AND event_year = 2026
+    `).get().count, 1);
+
+    const nextYear = await repository.claimEvent({
+      ...input,
+      eventYear: 2027,
+      presentationId: "technik",
+      policyRevision: 4,
+      assignmentRevision: 3,
+      receiptSha256: "b".repeat(64),
+    });
+    assert.equal(nextYear.rowsAffected, 1);
+    assert.equal(database.prepare(`
+      SELECT COUNT(*) AS count FROM portal_birthday_presentation_claims
+      WHERE employee_number = '252'
+    `).get().count, 2);
+    assert.deepEqual(await repository.listClaimsForEmployee("252"), [
+      { eventYear: 2026, presentationId: "elegant" },
+      { eventYear: 2027, presentationId: "technik" },
+    ]);
+    assert.equal(inspectSqlitePortalBirthdayPresentationClaimRows(database).valid, true);
+
+    for (const invalid of [
+      { ...input, eventYear: 0 },
+      { ...input, presentationId: "off" },
+      { ...input, receiptSha256: "2026-08-20" },
+      { ...input, eventYear: 2028, unknown: true },
+    ]) {
+      assert.throws(
+        () => repository.claimEvent(invalid),
+        (error) => error.code === PERSISTENCE_ERROR_CODES.STATEMENT_INVALID,
+      );
+    }
+  } finally {
+    await provider.close();
+    database.close();
+  }
 });
 
 test("Repository liest und aktualisiert Policy optimistisch revisionsgebunden", async () => {
@@ -97,7 +161,7 @@ test("Repository liest und aktualisiert Policy optimistisch revisionsgebunden", 
   }
 });
 
-test("Repository persistiert ausschließlich standard/off und schützt Revisionen", async () => {
+test("Repository persistiert ausschließlich feste Katalog-IDs/off und schützt Revisionen", async () => {
   const { database, provider, repository } = fixture();
   try {
     assert.equal(repository.deleteAssignment, undefined);
@@ -116,16 +180,36 @@ test("Repository persistiert ausschließlich standard/off und schützt Revisione
       createdAt: "2026-08-20T12:00:00.000Z",
       updatedAt: "2026-08-20T12:00:00.000Z",
     });
+    assert.equal((await repository.getAssignment("252")).presentationId, "standard");
 
-    const changed = await repository.updateAssignment({
+    let revision = 1;
+    for (const [index, presentationId] of [
+      "elegant", "farbenfroh", "fotowelt", "technik",
+    ].entries()) {
+      const changed = await repository.updateAssignment({
+        employeeNumber: "252",
+        presentationId,
+        expectedRevision: revision,
+        updatedAt: `2026-08-20T12:0${index + 1}:00.000Z`,
+      });
+      revision += 1;
+      assert.equal(changed.rowsAffected, 1);
+      assert.equal(changed.returnedRows[0].presentationId, presentationId);
+      assert.equal(changed.returnedRows[0].revision, revision);
+      assert.equal(
+        (await repository.getAssignment("252")).presentationId,
+        presentationId,
+      );
+    }
+    const disabled = await repository.updateAssignment({
       employeeNumber: "252",
       presentationId: null,
-      expectedRevision: 1,
-      updatedAt: "2026-08-20T12:01:00.000Z",
+      expectedRevision: revision,
+      updatedAt: "2026-08-20T12:05:00.000Z",
     });
-    assert.equal(changed.rowsAffected, 1);
-    assert.equal(changed.returnedRows[0].presentationId, "off");
-    assert.equal(changed.returnedRows[0].revision, 2);
+    assert.equal(disabled.rowsAffected, 1);
+    assert.equal(disabled.returnedRows[0].presentationId, "off");
+    assert.equal(disabled.returnedRows[0].revision, 6);
 
     const stale = await repository.updateAssignment({
       employeeNumber: "252",

@@ -182,6 +182,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/personnel-learning-assignment-schema.js",
   "lib/persistence/sqlite/operations/personnel-learning-progress-schema.js",
   "lib/persistence/sqlite/operations/personnel-learning-schema.js",
+  "lib/persistence/sqlite/operations/portal-birthday-presentation-claim-schema.js",
   "lib/persistence/sqlite/operations/portal-birthday-presentation-schema.js",
   "lib/persistence/sqlite/operations/staff-assignment-request-schema.js",
   "lib/persistence/sqlite/operations/personnel-workflow-instance-schema.js",
@@ -280,10 +281,14 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/personnel-learning-catalog-api.test.js",
   "test/personnel-learning-catalog-persistence.test.js",
   "test/personnel-learning-rights-hierarchy.test.js",
+  "test/portal-birthday-presentation-claim-api.test.js",
+  "test/portal-birthday-presentation-claim-startup-migration.test.js",
+  "test/portal-birthday-presentation-claim.test.js",
   "test/portal-birthday-presentation-schema.test.js",
   "test/portal-birthday-presentation-settings-api.test.js",
   "test/portal-birthday-presentation-startup-migration.test.js",
   "test/portal-birthday-presentations-persistence.test.js",
+  "test/portal-birthday-theme-api.test.js",
   "test/staff-assignment-request-foundation.test.js",
   "test/staff-assignment-request-startup-migration.test.js",
   "test/cross-location-schedule-rights-api.test.js",
@@ -358,10 +363,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1115;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1117;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 33;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1082;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1009;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1084;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1011;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -485,7 +490,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1004;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1006;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 111;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

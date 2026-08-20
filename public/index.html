@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.9 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.10 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -1980,9 +1980,14 @@
               <div class="form-actions-inline"><span class="settings-note" id="greetingSettingsHint">Begrüßungen werden ausschließlich serverseitig ausgewählt.</span><button class="primary-button" id="saveGreetingSettingsButton" type="button">Begrüßungen speichern</button></div>
             </div>
             <div class="settings-card hidden" id="birthdayPresentationSettingsCard">
-              <div class="card-heading"><div class="card-icon">GB</div><div><h2>Geburtstagsdarstellung</h2><p>Legt je Teammitglied fest, ob eine freigegebene Geburtstagsvariante im Mitarbeiterportal verwendet werden darf.</p></div></div>
-              <p class="settings-note security-note">Die Konfiguration zeigt keine Geburtsdaten. In diesem Block werden ausschließlich Freigabe und Variantenzuordnung vorbereitet; es erfolgt noch keine grafische Einblendung oder Designänderung.</p>
+              <div class="card-heading"><div class="card-icon">GB</div><div><h2>Geburtstagsdarstellung</h2><p>Legt je Teammitglied eine feste, professionell geprüfte Geburtstagsvariante fest.</p></div></div>
+              <p class="settings-note security-note">Die Konfiguration zeigt keine Geburtsdaten. Die Vorschauen werden lokal mit dem GP ausgeliefert; im Mitarbeiterportal erfolgt in diesem Block noch keine Einblendung oder Designänderung.</p>
               <p class="birthday-presentation-scope" id="birthdayPresentationScope">Berechtigter Bereich wird geladen.</p>
+              <section class="birthday-presentation-section" id="birthdayPresentationCatalogSection" aria-labelledby="birthdayPresentationCatalogTitle">
+                <div class="birthday-presentation-section-heading"><div><span class="eyebrow">Grafikkatalog</span><h3 id="birthdayPresentationCatalogTitle">Feste Geburtstagsvarianten</h3></div><span class="status-badge">Geprüfte Auswahl</span></div>
+                <p class="settings-note">Alle Varianten sind statisch, barrierearm und ohne externe Inhalte. Eigene Uploads oder freie Grafikadressen sind nicht vorgesehen.</p>
+                <div class="birthday-presentation-catalog" id="birthdayPresentationCatalog" role="list" aria-live="polite"><p class="settings-note">Grafikkatalog wird geladen.</p></div>
+              </section>
               <section class="birthday-presentation-section hidden" id="birthdayPresentationGlobalSection" aria-labelledby="birthdayPresentationGlobalTitle">
                 <div class="birthday-presentation-section-heading"><div><span class="eyebrow">PL+</span><h3 id="birthdayPresentationGlobalTitle">Globale Freigabe</h3></div><span class="status-badge">Unternehmen</span></div>
                 <label class="switch-row"><span><strong>Geburtstagsdarstellungen freigeben</strong><small>Die Freigabe allein löst noch keine Einblendung aus. Je Teammitglied bleibt zusätzlich eine freigegebene Variante erforderlich.</small></span><input id="birthdayPresentationEnabled" type="checkbox" /></label>
@@ -2467,7 +2472,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.9 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.10 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

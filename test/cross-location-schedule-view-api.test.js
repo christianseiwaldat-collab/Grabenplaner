@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-cross-schedule-view-"));
 process.env.DB_PATH = path.join(testRoot, "dienstplan.db");
@@ -39,6 +40,7 @@ let homeLocation;
 let homeDepartment;
 let foreignDepartment;
 let positionId;
+let block12LoadRequestIds = [];
 
 function insertEmployee(employeeNumber, nickname, locationId, departmentId = null) {
   db.prepare(`
@@ -1070,4 +1072,158 @@ test("Block 2 API: anonyme, technische und fachlich unberechtigte Zugänge erhal
   );
   assert.equal(employee.response.status, 403, JSON.stringify(employee.payload));
   assert.equal(employee.payload.code, "PORTAL_PERMISSION_DENIED");
+});
+
+test("Block 12: zwei parallele Entscheidungen erzeugen genau einen verbindlichen Filialeinsatz", async () => {
+  const submitted = await mutate(
+    "/api/portal/v1/staff-assignment-requests",
+    session(MANAGER),
+    {
+      sourceLocationId: FOREIGN_LOCATION,
+      destinationDepartmentId: homeDepartment,
+      periodStartDate: "2026-08-25",
+      periodEndDate: "2026-08-25",
+      timeKind: "full_day",
+      preferredEmployeeNumber: FOREIGN_EMPLOYEE,
+      requestReason: "Parallele revisionsgebundene Entscheidung prüfen",
+    },
+  );
+  assert.equal(submitted.response.status, 201, JSON.stringify(submitted.payload));
+  const requestId = submitted.payload.request.id;
+  const assignmentId = staffAssignmentRequestAssignmentId(requestId);
+  const decision = {
+    decision: "accepted",
+    expectedRevision: 2,
+    confirmedEmployeeNumber: FOREIGN_EMPLOYEE,
+    decisionReason: "Parallelentscheidung fachlich geprüft",
+  };
+
+  const outcomes = await Promise.all([
+    mutateWithMethod(
+      `/api/portal/v1/staff-assignment-requests/${encodeURIComponent(requestId)}/decision`,
+      session(FOREIGN_EMPLOYEE),
+      decision,
+    ),
+    mutateWithMethod(
+      `/api/portal/v1/staff-assignment-requests/${encodeURIComponent(requestId)}/decision`,
+      session(FOREIGN_EMPLOYEE),
+      decision,
+    ),
+  ]);
+  assert.deepEqual(outcomes.map(({ response }) => response.status).sort(), [200, 409]);
+  const conflict = outcomes.find(({ response }) => response.status === 409);
+  assert.equal(conflict.payload.code, "STAFF_ASSIGNMENT_REQUEST_REVISION_CONFLICT");
+  assert.equal(db.prepare(`
+    SELECT MAX(revision_number) AS revision
+    FROM staff_assignment_request_revisions WHERE request_id = ?
+  `).get(requestId).revision, 3);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM employee_location_lendings WHERE id = ?
+  `).get(assignmentId).count, 1);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE action = 'staff-assignment-request.accepted' AND entity_id = ?
+  `).get(requestId).count, 1);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE action = 'staff-assignment-request.email' AND entity_id = ?
+      AND json_extract(detail, '$.kind') = 'accepted'
+  `).get(requestId).count, 1);
+});
+
+test("Block 12: fünf gleichzeitige persönliche Benutzeraktionen bleiben SQLite-stabil", async () => {
+  const actors = Array.from({ length: 5 }, (_, index) => `block12-load-${index + 1}`);
+  for (const [index, employeeNumber] of actors.entries()) {
+    insertEmployee(employeeNumber, `Lastprofil ${index + 1}`, homeLocation, homeDepartment);
+    insertPortalUser(employeeNumber, "manager");
+    db.prepare(`
+      INSERT INTO portal_access_scopes (
+        employee_number, location_id, department_id, assigned_by
+      ) VALUES (?, ?, 0, ?)
+    `).run(employeeNumber, homeLocation, employeeNumber);
+  }
+
+  const startedAt = Date.now();
+  const results = await Promise.all(actors.map((employeeNumber, index) => mutate(
+    "/api/portal/v1/staff-assignment-requests",
+    session(employeeNumber),
+    {
+      sourceLocationId: FOREIGN_LOCATION,
+      destinationDepartmentId: homeDepartment,
+      periodStartDate: "2026-08-30",
+      periodEndDate: "2026-08-30",
+      timeKind: "full_day",
+      requestReason: `Block-12-Lastprüfung ${index + 1}`,
+    },
+  )));
+  assert.deepEqual(results.map(({ response }) => response.status), [201, 201, 201, 201, 201]);
+  assert.ok(Date.now() - startedAt < 20_000, "Fünf Portalaktionen benötigen unerwartet lange.");
+  block12LoadRequestIds = results.map(({ payload }) => payload.request.id);
+  assert.equal(new Set(block12LoadRequestIds).size, 5);
+  for (const requestId of block12LoadRequestIds) {
+    assert.equal(db.prepare(`
+      SELECT COUNT(*) AS count FROM staff_assignment_request_revisions WHERE request_id = ?
+    `).get(requestId).count, 2);
+    assert.equal(db.prepare(`
+      SELECT COUNT(*) AS count FROM staff_assignment_request_events WHERE request_id = ?
+    `).get(requestId).count, 2);
+  }
+  assert.deepEqual(db.prepare("PRAGMA integrity_check").all().map((row) => row.integrity_check), ["ok"]);
+  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+});
+
+test("Block 12: verifizierter Sicherungspunkt erhält Anfragehistorie und Geburtstagsnachweise", () => {
+  assert.equal(block12LoadRequestIds.length, 5);
+  const employeeNumber = "block12-load-1";
+  db.prepare(`
+    INSERT INTO portal_birthday_presentation_assignments (
+      employee_number, presentation_id, revision
+    ) VALUES (?, 'elegant', 1)
+  `).run(employeeNumber);
+  db.prepare(`
+    INSERT INTO portal_birthday_presentation_claims (
+      employee_number, event_year, presentation_id, policy_revision,
+      assignment_revision, receipt_sha256, revision
+    ) VALUES (?, 2026, 'elegant', 1, 1, ?, 1)
+  `).run(employeeNumber, "a".repeat(64));
+
+  const backupDirectory = path.join(testRoot, "block12-release-backup");
+  const backup = subject.createDatabaseBackupToDirectory(
+    backupDirectory,
+    "block12-release-readiness",
+    "test",
+  );
+  assert.equal(backup?.verified, true);
+  assert.equal(backup?.committed, true);
+  assert.equal(fs.existsSync(backup.path), true);
+  assert.equal(fs.existsSync(backup.marker), true);
+
+  const restoredPath = path.join(testRoot, "block12-restored.db");
+  fs.copyFileSync(backup.path, restoredPath);
+  const restored = openSqliteLegacyDatabase(restoredPath, { readOnly: true });
+  try {
+    assert.deepEqual(restored.prepare("PRAGMA quick_check").all().map((row) => row.quick_check), ["ok"]);
+    assert.deepEqual(restored.prepare("PRAGMA integrity_check").all().map((row) => row.integrity_check), ["ok"]);
+    assert.deepEqual(restored.prepare("PRAGMA foreign_key_check").all(), []);
+    const requestId = block12LoadRequestIds[0];
+    assert.equal(restored.prepare(`
+      SELECT COUNT(*) AS count FROM staff_assignment_requests WHERE id = ?
+    `).get(requestId).count, 1);
+    assert.equal(restored.prepare(`
+      SELECT COUNT(*) AS count FROM staff_assignment_request_revisions WHERE request_id = ?
+    `).get(requestId).count, 2);
+    assert.equal(restored.prepare(`
+      SELECT COUNT(*) AS count FROM staff_assignment_request_events WHERE request_id = ?
+    `).get(requestId).count, 2);
+    assert.deepEqual({ ...restored.prepare(`
+      SELECT presentation_id, revision
+      FROM portal_birthday_presentation_assignments WHERE employee_number = ?
+    `).get(employeeNumber) }, { presentation_id: "elegant", revision: 1 });
+    assert.deepEqual({ ...restored.prepare(`
+      SELECT event_year, presentation_id, revision
+      FROM portal_birthday_presentation_claims WHERE employee_number = ?
+    `).get(employeeNumber) }, { event_year: 2026, presentation_id: "elegant", revision: 1 });
+  } finally {
+    restored.close();
+  }
 });

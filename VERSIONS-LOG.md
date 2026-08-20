@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.92.10 Beta · Standortübergreifende Einsatzanfragen und Geburtstagsportal
+
+- Berechtigte Leitungen sehen für aktuelle und nächste Woche die notwendigen Planungsdaten fremder Filialen rein lesend und ohne fremde Wochenstunden, Arbeitsregelbewertungen oder vertrauliche Planungsdetails.
+- Standortübergreifende Einsatzanfragen unterstützen stundenweise, ganztägige und mehrtägige Zeiträume, eine Zielabteilung sowie ein optional bevorzugtes Teammitglied. Entscheidungen bleiben revisionsgebunden; eine Genehmigung erzeugt atomar den verbindlichen temporären Filialeinsatz.
+- Das neue Dienstplan-Einstellungsmenü bündelt Bearbeitungssperren und konfigurierbare Anfrage-, Entscheidungs- und E-Mail-Regeln. Benachrichtigungen bleiben neutral und geben weder Planungsdetails noch technische Transportfehler preis.
+- Filialleitung, ausdrücklich berechtigte Abteilungsleitung und PL+ verwalten Geburtstagsdarstellungen ausschließlich im wirksamen Organisationsbereich. Fünf feste lokale Grafiken ersetzen freie Inhalte; Geburtsdatum, Alter und Geburtstagslisten werden nicht an Leitungs- oder Browseransichten ausgegeben.
+- Ein serverseitig atomarer Nachweis begrenzt die grafische Einblendung auf genau eine Auslieferung pro Mitarbeiter und Ereignisjahr. Am Wiener Geburtstag und Folgetag kann zusätzlich ein barrierearmes, mobiles und darkmode-taugliches Portaldesign erscheinen; der Folgetag erzeugt keine zweite Einblendung.
+- Rechte-, Scope-, Datenschutz-, Manipulations-, Konflikt-, E-Mail-, Mobil-, Darkmode-, Barrierefreiheits-, Migrations- und Sicherungsverträge wurden gemeinsam geprüft. SQLite blieb bei fünf gleichzeitig eintreffenden Portalaktionen sowie zwei parallelen Entscheidungen integer; der verifizierte Sicherungspunkt erhielt Anfrage-, Ereignis-, Darstellungs- und Claim-Historien vollständig.
+- Der SQLite-Anwendungskatalog umfasst 1.117 providerneutrale Statements. PostgreSQL bleibt weiterhin nicht produktiv aktiviert; ein produktiver Wechsel ist nicht Bestandteil dieser Version.
+
 ## v0.92.9 Beta · Neustartsichere Schulungsbelege
 
 - Schulungs-, Wissens- und Fähigkeitsbelege werden beim Start anhand ihres kanonischen JSON-Fachinhalts geprüft; eine semantisch gleichwertige Schlüsselreihenfolge des SQLite-Providers löst keinen falschen Integritätsalarm mehr aus.

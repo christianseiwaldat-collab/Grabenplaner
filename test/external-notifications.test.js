@@ -313,6 +313,30 @@ test("Einsatzanfragen versenden nur neutrale Prüf- und Entscheidungshinweise", 
   );
 });
 
+test("Einsatzanfragen geben SMTP-Fehler ausschließlich neutral und ohne Providerdetails zurück", async () => {
+  const adapter = createExternalNotificationAdapter({
+    configuration: { email: enabledSmtp("staff_assignment_request") },
+    smtpTransport: {
+      async sendMail() {
+        const error = new Error("smtp-password=top-secret host=internal.example.test");
+        error.code = "ETIMEDOUT";
+        throw error;
+      },
+    },
+  });
+  await assert.rejects(
+    adapter.sendStaffAssignmentRequestAlert({
+      recipient: "verified@example.test",
+      kind: "accepted",
+    }),
+    (error) => {
+      assert.equal(error.code, "EXTERNAL_NOTIFICATION_DELIVERY_FAILED");
+      assert.doesNotMatch(String(error.message), /top-secret|internal\.example|smtp-password|ETIMEDOUT/i);
+      return true;
+    },
+  );
+});
+
 test("SMTP-Versand nutzt TLS-Zeitlimits und nur den neutralen Nachrichtentext", async () => {
   let transportOptions;
   let mail;

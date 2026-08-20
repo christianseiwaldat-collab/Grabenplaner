@@ -11,6 +11,8 @@ const html = read("public/index.html");
 const app = read("public/app.js");
 const styles = read("public/styles.css");
 const portal = read("public/portal.html");
+const portalScript = read("public/portal.js");
+const portalStyles = read("public/portal.css");
 const catalog = read("public/function-search-catalog.js");
 
 function between(source, start, end) {
@@ -35,6 +37,8 @@ test("Block 8: Geburtstagsdarstellung ist eine getrennte Karte direkt nach den g
   const card = between(access, '<div class="settings-card hidden" id="birthdayPresentationSettingsCard">', '<div class="settings-card" id="portalUserAccessCard">');
   for (const id of [
     "birthdayPresentationScope",
+    "birthdayPresentationCatalogSection",
+    "birthdayPresentationCatalog",
     "birthdayPresentationGlobalSection",
     "birthdayPresentationEnabled",
     "birthdayPresentationTeamSection",
@@ -46,7 +50,8 @@ test("Block 8: Geburtstagsdarstellung ist eine getrennte Karte direkt nach den g
     "birthdayPresentationSettingsHint",
     "saveBirthdayPresentationSettingsButton",
   ]) assert.match(card, new RegExp(`id="${id}"`), id);
-  assert.doesNotMatch(card, /<(?:img|canvas)|Vorschau erzeugen|data-page-theme|showModal/i);
+  assert.match(card, /id="birthdayPresentationCatalog" role="list"/);
+  assert.doesNotMatch(card, /<canvas|type="file"|Eigene Grafik|Vorschau erzeugen|data-page-theme|showModal/i);
 });
 
 test("Block 8: Sichtbarkeit folgt ausschließlich den beiden Geburtstagsrechten und Server-Capabilities", () => {
@@ -86,6 +91,25 @@ test("Block 8: Team und Varianten werden nur aus der Serverprojektion gerendert"
   assert.match(implementation, /employee\?\.departmentName/);
 });
 
+test("Block 9: fünf feste lokale Grafiken werden sicher und professionell vorgeladen", () => {
+  const implementation = between(app, "function birthdayPresentationCatalog", "function renderWifiConfirmationLevels");
+  const access = between(html, '<section id="accessSettings"', '<section id="rightsSettings"');
+  const card = between(access, '<div class="settings-card hidden" id="birthdayPresentationSettingsCard">', '<div class="settings-card" id="portalUserAccessCard">');
+  for (const asset of ["elegant", "farbenfroh", "fotowelt", "technik", "dezent"]) {
+    assert.match(implementation, new RegExp(`/assets/birthday-presentations/${asset}\\.svg`), asset);
+  }
+  assert.match(implementation, /previewUrl !== previewPaths\[id\]/);
+  assert.match(implementation, /seen\.has\(id\)/);
+  assert.match(implementation, /function renderBirthdayPresentationCatalog\(\)/);
+  assert.match(implementation, /class="birthday-presentation-preview-card" role="listitem"/);
+  assert.match(implementation, /<img src="\$\{escapeHtml\(presentation\.previewUrl\)\}" alt="" aria-hidden="true" loading="lazy" decoding="async"/);
+  assert.match(implementation, /escapeHtml\(presentation\.label\)/);
+  assert.match(implementation, /escapeHtml\(presentation\.description\)/);
+  assert.match(implementation, /renderBirthdayPresentationCatalog\(\)/);
+  assert.doesNotMatch(implementation, /type="file"|FileReader|URL\.createObjectURL|data:image|https?:\/\//i);
+  assert.doesNotMatch(card, /type="file"|<input[^>]+type="url"|id="[^"]*(?:upload|url)/i);
+});
+
 test("Block 8: Speicherung ist revisionsgebunden und überträgt nur geänderte Werte", () => {
   const implementation = between(app, "function birthdayPresentationCatalog", "function renderWifiConfirmationLevels");
   assert.match(implementation, /checked !== \(result\.policy\?\.enabled === true\)/);
@@ -99,10 +123,16 @@ test("Block 8: Speicherung ist revisionsgebunden und überträgt nur geänderte 
   assert.match(implementation, /JSON\.stringify\(\{ enabled:\s*delegate\.enabled \}\)/);
 });
 
-test("Block 8: Portal, Grafik, Einmaleinblendung und Geburtstagstheme bleiben unangetastet", () => {
-  assert.doesNotMatch(portal, /birthdayPresentation|birthdayOverlay|birthdayModal|birthdayTheme/);
+test("Block 11: Gesamttheme ergänzt die unveränderte Block-10-Einmaleinblendung getrennt", () => {
+  assert.match(portal, /id="birthdayPresentationDialog"/);
+  assert.match(portalScript, /\/api\/portal\/v1\/me\/birthday-presentation\/claim/);
+  assert.match(portalScript, /\/api\/portal\/v1\/me\/birthday-presentation\/theme/);
+  assert.match(portalStyles, /\.birthday-presentation-dialog/);
+  assert.match(portalStyles, /html\[data-portal-birthday-theme="standard"\]/);
   assert.match(app, /loadBirthdayPresentationSettings\(\)/);
   assert.doesNotMatch(styles, /birthday-(?:overlay|modal|theme)|--birthday-/);
+  assert.doesNotMatch(portal, /data-portal-birthday-theme|birthdayTheme/);
+  assert.doesNotMatch(portalScript, /birthDate|dateOfBirth|Geburtsdatum/);
 });
 
 test("Block 8: Funktionssuche navigiert präzise zur berechtigten Geburtstagskarte", () => {
@@ -121,4 +151,7 @@ test("Block 8: Geburtstagskonfiguration bleibt responsiv und ohne starre Desktop
   assert.match(styles, /\.greeting-rule-grid,\.greeting-template-grid,\.birthday-presentation-toolbar \{ grid-template-columns:1fr; \}/);
   assert.match(styles, /\.birthday-presentation-section-heading,\.birthday-presentation-row \{ align-items:stretch; flex-direction:column; \}/);
   assert.match(styles, /\.birthday-presentation-row select \{ width:min\(100%,320px\); min-width:0; \}/);
+  assert.match(styles, /\.birthday-presentation-catalog \{[^}]*grid-template-columns:repeat\(auto-fit,minmax\(180px,1fr\)\)/);
+  assert.match(styles, /\.birthday-presentation-preview-image \{[^}]*aspect-ratio:8 \/ 5/);
+  assert.match(styles, /\.birthday-presentation-catalog \{ grid-template-columns:1fr; \}/);
 });

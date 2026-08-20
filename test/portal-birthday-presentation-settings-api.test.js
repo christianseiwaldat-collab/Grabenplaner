@@ -26,6 +26,7 @@ process.env.TZ = "Europe/Vienna";
 const { createAmuStorage } = require("../lib/amu-storage");
 const {
   PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS,
+  PORTAL_BIRTHDAY_PRESENTATIONS,
 } = require("../lib/portal-birthday-presentations");
 const subject = require("../server");
 const { app, db, organizationPersonnelRepository } = subject;
@@ -329,9 +330,7 @@ test("Block 8 API: GET trennt PL+, FL, delegierte AL, technische Rollen und loka
 
 test("Block 8 API: GET projiziert nur das aktive eigene Team und erzeugt keinen Geburtsdaten- oder Listen-Leak", async () => {
   const payload = await settings(createSession(ACTORS.manager));
-  assert.deepEqual(payload.presentations, [
-    { id: "standard", label: "Standarddarstellung" },
-  ]);
+  assert.deepEqual(payload.presentations, PORTAL_BIRTHDAY_PRESENTATIONS);
   assert.equal(typeof payload.policy?.enabled, "boolean");
   assert.equal(Number.isSafeInteger(payload.policy?.revision), true);
 
@@ -434,7 +433,7 @@ test("Block 8 API: FL setzt nur freigegebene Darstellungen im eigenen aktiven Te
       method: "PUT",
       auth: manager,
       includeCsrf: false,
-      body: { presentationId: "standard", expectedRevision: targetBefore.revision },
+      body: { presentationId: "fotowelt", expectedRevision: targetBefore.revision },
     },
   );
   assert.equal(missingCsrf.response.status, 403, JSON.stringify(missingCsrf.payload));
@@ -469,14 +468,14 @@ test("Block 8 API: FL setzt nur freigegebene Darstellungen im eigenen aktiven Te
     {
       method: "PUT",
       auth: manager,
-      body: { presentationId: "standard", expectedRevision: targetBefore.revision },
+      body: { presentationId: "fotowelt", expectedRevision: targetBefore.revision },
     },
   );
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
 
   const after = await settings(manager);
   const targetAfter = employeeProjection(after, TARGETS.withBirthDate);
-  assert.equal(targetAfter.presentationId, "standard");
+  assert.equal(targetAfter.presentationId, "fotowelt");
   assert.equal(targetAfter.revision, targetBefore.revision + 1);
   assertPrivacyProjection(after);
 

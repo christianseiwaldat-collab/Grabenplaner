@@ -39,7 +39,7 @@ test("v0.92.5: Logout ist doppelklickfest, begrenzt und wechselt nach Bestätigu
 
 function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout) {
   const logoutSource = script.slice(script.indexOf("let logoutInProgress = false;"), script.indexOf("function setTab("));
-  const calls = { api: 0, clearTab: 0, showLogin: 0, processClear: 0, autosaveStop: 0 };
+  const calls = { api: 0, clearTab: 0, showLogin: 0, processClear: 0, autosaveStop: 0, themeNeutralize: 0, themeRefresh: 0 };
   const status = {};
   const button = {
     textContent: "Abmelden",
@@ -69,6 +69,8 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
     clearProcessTaskState: () => { calls.processClear += 1; },
     clearRememberedPortalTab: () => { calls.clearTab += 1; },
     showLogin: () => { calls.showLogin += 1; },
+    neutralizeBirthdayPresentationTheme: () => { calls.themeNeutralize += 1; },
+    refreshBirthdayPresentationTheme: async () => { calls.themeRefresh += 1; },
   };
   vm.createContext(context);
   vm.runInContext(`${logoutSource}\nthis.runLogout = logout;`, context);
@@ -93,6 +95,8 @@ test("v0.92.5: Logout zeigt sofort Fortschritt, ignoriert Doppelklick und render
   assert.equal(runtime.calls.clearTab, 1);
   assert.equal(runtime.calls.processClear, 1);
   assert.equal(runtime.calls.autosaveStop, 1);
+  assert.equal(runtime.calls.themeNeutralize, 1);
+  assert.equal(runtime.calls.themeRefresh, 0);
   assert.equal(runtime.context.portalState.session, null);
   assert.equal(runtime.context.el.loginPassword.value, "");
   assert.equal(runtime.context.el.loginPersonnelNumber.focused, true);
@@ -122,5 +126,7 @@ test("v0.92.5: Logout-Timeout bestätigt keinen Erfolg und bietet einen erneuten
   assert.notEqual(runtime.context.portalState.session, null);
   assert.match(runtime.status.text, /nicht rechtzeitig bestätigt/i);
   assert.equal(runtime.status.error, true);
+  assert.equal(runtime.calls.themeNeutralize, 1);
+  assert.equal(runtime.calls.themeRefresh, 1);
   assert.equal(runtime.button.disabled, false);
 });

@@ -2235,6 +2235,13 @@ html[data-active-page-theme="dark"] .personnel-lifecycle-editor-step-actions .da
 .birthday-presentation-section { display:grid; gap:11px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
 .birthday-presentation-section-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .birthday-presentation-section-heading h3 { margin:3px 0 0; font-size:14px; }
+.birthday-presentation-catalog { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; min-width:0; }
+.birthday-presentation-preview-card { display:grid; grid-template-rows:auto 1fr; min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:0 8px 22px rgba(15,43,37,.08); }
+.birthday-presentation-preview-image { aspect-ratio:8 / 5; overflow:hidden; background:var(--surface-muted); border-bottom:1px solid var(--line); }
+.birthday-presentation-preview-image img { display:block; width:100%; height:100%; object-fit:cover; }
+.birthday-presentation-preview-copy { min-width:0; padding:11px 12px 13px; }
+.birthday-presentation-preview-copy strong { display:block; color:var(--ink); font-size:13px; overflow-wrap:anywhere; }
+.birthday-presentation-preview-copy p { margin:5px 0 0; color:var(--muted); font-size:9px; line-height:1.5; overflow-wrap:anywhere; }
 .birthday-presentation-toolbar { display:grid; grid-template-columns:minmax(0,1fr) minmax(150px,.65fr); gap:10px; align-items:end; }
 .birthday-presentation-toolbar .field { margin:0; }
 .birthday-presentation-list { display:grid; gap:8px; }
@@ -3175,6 +3182,7 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
   .wifi-confirmation-level-row { align-items:stretch; flex-direction:column; }
   .wifi-confirmation-level-row label { justify-content:space-between; }
   .birthday-presentation-section-heading,.birthday-presentation-row { align-items:stretch; flex-direction:column; }
+  .birthday-presentation-catalog { grid-template-columns:1fr; }
   .birthday-presentation-row label { justify-content:space-between; }
   .birthday-presentation-row select { width:min(100%,320px); min-width:0; }
   .wifi-location-mapping-row { grid-template-columns:1fr; }
