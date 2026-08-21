@@ -302,12 +302,12 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   );
 
   // Personalmodul-, Lernmodul- inklusive Fortschritt, versionierte Einsatzanfragen,
-  // Geburtstagseinblendungs-Claims, Filialbestellungs- und
+  // Geburtstagseinblendungs-Claims, Filialbestellungs-, Teamsitzungs- und
   // Verkaufsanalyse-Schemaoperationen sowie die persistenzfreie Funktionssuche sind
   // explizit klassifiziert.
   assert.equal(report.summary.productionDirectFiles, 67);
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 5);
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 3);
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 4);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 14);

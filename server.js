@@ -18823,6 +18823,7 @@ const alwaysFullDayOptionTypes = new Set(["vacation", "sick", "branch", "vocatio
 const timedOptionTypes = new Set(["school", "time_off", "external_appointment", "team_meeting", "other"]);
 const manualAllDayCreditTypes = new Set(["school", "external_appointment", "team_meeting", "other"]);
 const directlyApprovedAbsenceOptionTypes = new Set(["vacation", "time_off"]);
+const TEAM_MEETING_GROUP_PREFIX = "team-meeting:";
 const allowedWeekOptionTypes = [
   "vacation",
   "sick",
@@ -18835,6 +18836,22 @@ const allowedWeekOptionTypes = [
   "team_meeting",
   "other",
 ];
+
+function isTeamMeetingGroupId(value) {
+  return String(value || "").startsWith(TEAM_MEETING_GROUP_PREFIX);
+}
+
+function isTeamWideMeetingOption(option) {
+  return String(option?.option_type || option?.optionType || "") === "team_meeting"
+    && isTeamMeetingGroupId(option?.group_id || option?.groupId);
+}
+
+function weekOptionOverlapAllowed(optionType, groupId, overlappingOption) {
+  const creatingTeamMeeting = optionType === "team_meeting" && isTeamMeetingGroupId(groupId);
+  const existingTeamMeeting = isTeamWideMeetingOption(overlappingOption);
+  return (creatingTeamMeeting && overlappingOption.option_type === "sick")
+    || (optionType === "sick" && existingTeamMeeting);
+}
 
 function assertApprovedAbsenceEntryAccess(session, optionType) {
   if (session?.role !== "location_planner") return;
@@ -18903,6 +18920,7 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
   const dateTo = String(body.dateTo || "");
   const optionType = String(body.optionType || "");
   const note = String(body.note || "").trim();
+  const groupId = String(body.groupId || "").trim() || null;
   const allDay = alwaysFullDayOptionTypes.has(optionType) || body.allDay === true;
   const startTime = String(body.startTime || "");
   const endTime = String(body.endTime || "");
@@ -18954,17 +18972,31 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
       );
     }
   }
-  const overlappingOption = (await planningSettingsRepository.listOverlappingWeekOptions({
+  const overlappingOptions = await planningSettingsRepository.listOverlappingWeekOptions({
     employeeNumber,
     dateFrom,
     dateTo,
     existingId: Number(existingId || 0),
-  }))
-    .some((option) => allDay || optionOverlapsTime(option, startTime, endTime));
+    excludedGroupId: isTeamMeetingGroupId(groupId) ? groupId : null,
+  });
+  const overlappingOption = overlappingOptions.some((option) => (
+      (allDay || optionOverlapsTime(option, startTime, endTime))
+      && !weekOptionOverlapAllowed(optionType, groupId, option)
+    ));
   if (overlappingOption) {
     throw httpError(409, "Für diesen Zeitraum ist bereits eine überschneidende Planungsoption eingetragen.");
   }
-  const existingShift = (await planningSettingsRepository.listShiftConflictsForRange({
+  let sicknessOverlap = optionType === "team_meeting" && isTeamMeetingGroupId(groupId)
+    && overlappingOptions.some((option) => option.option_type === "sick");
+  if (!sicknessOverlap && optionType === "team_meeting" && isTeamMeetingGroupId(groupId)) {
+    for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+      if ((await activeSicknessEmployeeNumbers(date)).has(employeeNumber)) {
+        sicknessOverlap = true;
+        break;
+      }
+    }
+  }
+  const existingShift = sicknessOverlap ? null : (await planningSettingsRepository.listShiftConflictsForRange({
     employeeNumber,
     dateFrom,
     dateTo,
@@ -19000,7 +19032,7 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
     dateTo,
     optionType,
     note,
-    groupId: String(body.groupId || "").trim() || null,
+    groupId,
     allDay: allDay ? 1 : 0,
     startTime: allDay ? null : startTime,
     endTime: allDay ? null : endTime,
@@ -19080,6 +19112,17 @@ function claimEmployeeDate(
   if (blockedEmployeeDates.has(key) || claimedEmployeeDates.has(key)) return false;
   claimedEmployeeDates.add(key);
   return true;
+}
+
+function employeeDateHasSickness(options, sicknessCreditDates, employeeNumber, date) {
+  const key = `${employeeNumber}|${date}`;
+  if (sicknessCreditDates?.has(key)) return true;
+  return options.some((option) => (
+    option.employee_number === employeeNumber
+    && option.option_type === "sick"
+    && date >= option.date_from
+    && date <= option.date_to
+  ));
 }
 
 function claimCreditedOptionDaysInRange(
@@ -20864,27 +20907,36 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
   const scheduledEmployeeDates = new Set(
     shifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`),
   );
+  const sicknessCreditDates = new Set(
+    sicknessCredits
+      .filter((credit) => Number(credit.minutes || 0) > 0)
+      .map((credit) => `${credit.employee_number}|${credit.date}`),
+  );
   const claimedOptionDates = new Set();
   for (const option of weekOptions) {
     option.credited_minutes_per_day_effective = Math.max(
       0,
       finiteScheduleMinutes(optionMinutesPerDay(option, option.contracted_hours)),
     );
-    const creditedDays = optionIsAllDay(option) && option.credited_minutes_per_day_effective > 0
-      ? claimCreditedOptionDaysInRange(
-        option,
-        weekStart,
-        weekEnd,
-        context.locationId,
-        scheduledEmployeeDates,
-        claimedOptionDates,
-      )
-      : countCreditedOptionDaysInRange(
-        option,
-        weekStart,
-        weekEnd,
-        context.locationId,
-      );
+    const creditedDates = creditedOptionDatesInRange(option, weekStart, weekEnd, context.locationId)
+      .filter((date) => !isTeamWideMeetingOption(option) || !employeeDateHasSickness(
+        weekOptions,
+        sicknessCreditDates,
+        option.employee_number,
+        date,
+      ));
+    const creditedDays = isTeamWideMeetingOption(option)
+      ? creditedDates.length
+      : optionIsAllDay(option) && option.credited_minutes_per_day_effective > 0
+        ? claimCreditedOptionDaysInRange(
+          option,
+          weekStart,
+          weekEnd,
+          context.locationId,
+          scheduledEmployeeDates,
+          claimedOptionDates,
+        )
+        : creditedDates.length;
     option.credited_minutes = option.credited_minutes_per_day_effective * Math.max(
       0,
       finiteScheduleMinutes(creditedDays),
@@ -20898,12 +20950,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       option.credited_minutes,
     );
     if (!optionIsAllDay(option) && option.credited_minutes > 0) {
-      for (const date of creditedOptionDatesInRange(
-        option,
-        weekStart,
-        weekEnd,
-        context.locationId,
-      )) claimedOptionDates.add(`${option.employee_number}|${date}`);
+      for (const date of creditedDates) claimedOptionDates.add(`${option.employee_number}|${date}`);
     }
   }
   const sicknessBlockedDates = new Set([
@@ -23354,26 +23401,32 @@ async function payrollAbsencesForDay(employee, date, locationId, activeSickness 
     employeeNumber,
     date,
   });
-  const absences = rows.filter((row) => payrollOptionCreditedOnDate(row, date, locationId)).map((row) => {
-    const internalCode = payrollAbsenceCodeByOption[row.option_type] || "other";
-    const quantityMinutes = !row.all_day && isTime(row.start_time) && isTime(row.end_time)
-      ? Math.max(0, timeToMinutes(row.end_time) - timeToMinutes(row.start_time))
-      : optionMinutesPerDay(row, employee.contracted_hours);
-    return {
-      internalCode,
-      referenceType: "week_option",
-      referenceId: Number(row.id),
-      quantityMinutes,
-      quantityDays: row.all_day ? 1 : 0,
-      unit: row.all_day ? "days" : "minutes",
-      allDay: Boolean(row.all_day),
-      startTime: row.start_time || "",
-      endTime: row.end_time || "",
-    };
-  });
+  const activeSicknessSet = activeSickness || await activeSicknessEmployeeNumbers(date);
+  const sicknessActive = rows.some((row) => row.option_type === "sick")
+    || activeSicknessSet.has(employeeNumber);
+  const absences = rows
+    .filter((row) => payrollOptionCreditedOnDate(row, date, locationId))
+    .filter((row) => !(sicknessActive && isTeamWideMeetingOption(row)))
+    .map((row) => {
+      const internalCode = payrollAbsenceCodeByOption[row.option_type] || "other";
+      const quantityMinutes = !row.all_day && isTime(row.start_time) && isTime(row.end_time)
+        ? Math.max(0, timeToMinutes(row.end_time) - timeToMinutes(row.start_time))
+        : optionMinutesPerDay(row, employee.contracted_hours);
+      return {
+        internalCode,
+        referenceType: "week_option",
+        referenceId: Number(row.id),
+        quantityMinutes,
+        quantityDays: row.all_day ? 1 : 0,
+        unit: row.all_day ? "days" : "minutes",
+        allDay: Boolean(row.all_day),
+        startTime: row.start_time || "",
+        endTime: row.end_time || "",
+      };
+    });
   const weekDay = new Date(`${date}T12:00:00Z`).getUTCDay();
   const sicknessCredit = await sicknessCreditForEmployeeDate(employeeNumber, date);
-  if (sicknessCredit.minutes > 0 && (activeSickness || await activeSicknessEmployeeNumbers(date)).has(employeeNumber)
+  if (sicknessCredit.minutes > 0 && activeSicknessSet.has(employeeNumber)
     && !absences.some((absence) => absence.internalCode === "sickness")) {
     absences.push({
       internalCode: "sickness", referenceType: "sickness_case", referenceId: sicknessCredit.caseId,
@@ -24911,6 +24964,323 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
   );
   response.setHeader("Cache-Control", "private, no-store");
   response.json(series);
+});
+
+const SALES_ANALYTICS_CHART_PDF_METRICS = Object.freeze({
+  netRevenue: Object.freeze({ label: "Umsatz netto", currency: true }),
+  quantity: Object.freeze({ label: "Menge", currency: false }),
+  customerCount: Object.freeze({ label: "Kunden", currency: false }),
+  revenuePerCustomer: Object.freeze({ label: "Umsatz je Kunde", currency: true }),
+  grossMargin: Object.freeze({ label: "Rohertrag", currency: true, protected: true }),
+});
+
+function normalizeSalesAnalyticsChartsPdfInput(input, projection) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw httpError(400, "Die Auswahl für den Grafikexport ist ungültig.", "SALES_ANALYTICS_CHART_PDF_INPUT_INVALID");
+  }
+  const keys = Object.keys(input).sort();
+  const series = Object.hasOwn(input, "reportIds");
+  const expectedKeys = (series ? ["horizon", "metric", "reportIds"] : ["horizon", "metric", "reportId"]).sort();
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
+    throw httpError(400, "Die Auswahl für den Grafikexport ist unvollständig.", "SALES_ANALYTICS_CHART_PDF_INPUT_INVALID");
+  }
+  const metric = String(input.metric || "");
+  const metricDefinition = SALES_ANALYTICS_CHART_PDF_METRICS[metric];
+  if (!metricDefinition) {
+    throw httpError(400, "Die ausgewählte Kennzahl ist für den Grafikexport nicht verfügbar.", "SALES_ANALYTICS_CHART_PDF_METRIC_INVALID");
+  }
+  if (metricDefinition.protected && !projection.grossMargin) {
+    throw httpError(403, "Der Rohertrag ist für diesen Zugang nicht freigegeben.", "SALES_ANALYTICS_GROSS_MARGIN_DENIED");
+  }
+  const horizon = String(input.horizon || "");
+  if (!['period', 'year_to_date'].includes(horizon) || (series && horizon !== "period")) {
+    throw httpError(400, "Der ausgewählte Auswertungszeitraum ist für den Grafikexport ungültig.", "SALES_ANALYTICS_CHART_PDF_HORIZON_INVALID");
+  }
+  if (series) {
+    let reportIds;
+    try {
+      reportIds = normalizeSalesAnalyticsReportSeriesIds(input.reportIds);
+    } catch (error) {
+      throw salesReportSeriesHttpError(error);
+    }
+    return { series: true, reportIds, metric, metricDefinition, horizon };
+  }
+  const reportId = String(input.reportId || "").trim();
+  if (!reportId || reportId.length > 120 || !/^[A-Za-z0-9_-]+$/.test(reportId)) {
+    throw httpError(400, "Der ausgewählte Statistikbericht ist ungültig.", "SALES_ANALYTICS_REPORT_SELECTION_INVALID");
+  }
+  return { series: false, reportId, metric, metricDefinition, horizon };
+}
+
+async function projectedSalesAnalyticsChartsPdfData(input, projection) {
+  if (!input.series) {
+    const bundle = await salesAnalyticsRepository.getReportBundle(input.reportId);
+    if (!bundle) throw httpError(404, "Der Statistikbericht wurde nicht gefunden.", "SALES_ANALYTICS_REPORT_NOT_FOUND");
+    assertSalesAnalyticsLocation(projection, bundle.report.locationId);
+    return publicSalesAnalyticsReportBundle(bundle, projection);
+  }
+  const bundles = [];
+  for (const reportId of input.reportIds) {
+    const bundle = await salesAnalyticsRepository.getReportBundle(reportId);
+    if (!bundle) {
+      throw httpError(404, "Mindestens ein ausgewählter Statistikbericht wurde nicht gefunden.", "SALES_ANALYTICS_REPORT_NOT_FOUND");
+    }
+    assertSalesAnalyticsLocation(projection, bundle.report.locationId);
+    bundles.push(publicSalesAnalyticsReportBundle(bundle, projection));
+  }
+  try {
+    return aggregateSalesAnalyticsReportSeries(bundles);
+  } catch (error) {
+    throw salesReportSeriesHttpError(error);
+  }
+}
+
+function salesAnalyticsChartsPdfMetricNumber(metric, metricId, side) {
+  const value = metric?.[metricId]?.[side];
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function salesAnalyticsChartsPdfChange(current, comparison) {
+  if (!Number.isFinite(current) || !Number.isFinite(comparison) || comparison === 0) return null;
+  return ((current / comparison) - 1) * 100;
+}
+
+function salesAnalyticsChartsPdfSafeText(value) {
+  return String(value ?? "").replace(/[\u2010-\u2015]/g, "-").replace(/[\r\n\t]+/g, " ").trim();
+}
+
+function salesAnalyticsChartsPdfValue(value, metricDefinition) {
+  if (!Number.isFinite(value)) return "nicht verfügbar";
+  return new Intl.NumberFormat("de-AT", metricDefinition.currency ? {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 2,
+  } : {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function salesAnalyticsChartsPdfPercent(value) {
+  if (!Number.isFinite(value)) return "nicht verfügbar";
+  return `${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1, signDisplay: "always" }).format(value)} %`;
+}
+
+function salesAnalyticsChartsPdfPeriod(detail, horizon, side) {
+  const periods = detail.report?.periods || {};
+  if (horizon === "year_to_date") return side === "current" ? periods.yearToDate : periods.yearToDateComparison;
+  return side === "current" ? periods.period : periods.comparison;
+}
+
+function salesAnalyticsChartsPdfPeriodLabel(period) {
+  if (!period?.start || !period?.end) return "Zeitraum nicht verfügbar";
+  return `${formatDateGerman(period.start)} bis ${formatDateGerman(period.end)}`;
+}
+
+function salesAnalyticsChartsPdfTruncate(doc, value, width) {
+  const text = salesAnalyticsChartsPdfSafeText(value);
+  if (doc.widthOfString(text) <= width) return text;
+  let shortened = text;
+  while (shortened.length > 1 && doc.widthOfString(`${shortened}...`) > width) shortened = shortened.slice(0, -1);
+  return `${shortened}...`;
+}
+
+function drawSalesAnalyticsChartsPdfHeader(doc, title, context) {
+  const width = doc.page.width;
+  doc.save().rect(0, 0, width, 82).fill("#17382f").restore();
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(17)
+    .text("Grabenplaner Verkaufsanalyse", 36, 25, { width: 440 });
+  doc.font("Helvetica").fontSize(8.5).fillColor("#d6e5df")
+    .text(salesAnalyticsChartsPdfSafeText(context.locationName), 36, 50, { width: 440 });
+  doc.font("Helvetica-Bold").fontSize(12).fillColor("#ffffff")
+    .text(salesAnalyticsChartsPdfSafeText(title), width - 330, 25, { width: 294, align: "right" });
+  doc.font("Helvetica").fontSize(7.5).fillColor("#d6e5df")
+    .text(`${context.metricDefinition.label} - ${salesAnalyticsChartsPdfPeriodLabel(context.currentPeriod)}`, width - 430, 49, { width: 394, align: "right" });
+}
+
+function salesAnalyticsChartsPdfEntries(detail, horizon, metric) {
+  return (detail.productGroups || []).filter((group) => group.horizons?.[horizon]).map((group) => ({
+    id: salesAnalyticsChartsPdfSafeText(group.externalProductGroupId),
+    label: salesAnalyticsChartsPdfSafeText(group.label),
+    current: salesAnalyticsChartsPdfMetricNumber(group.horizons[horizon], metric, "current"),
+    comparison: salesAnalyticsChartsPdfMetricNumber(group.horizons[horizon], metric, "comparison"),
+  })).filter((entry) => entry.current !== null || entry.comparison !== null);
+}
+
+function drawSalesAnalyticsChartsPdfRanking(doc, entries, context) {
+  drawSalesAnalyticsChartsPdfHeader(doc, "Aktuell und Vergleich", context);
+  const rows = [...entries].filter((entry) => entry.current !== 0 || entry.comparison !== 0)
+    .sort((left, right) => (right.current ?? Number.NEGATIVE_INFINITY) - (left.current ?? Number.NEGATIVE_INFINITY))
+    .slice(0, 12);
+  const xLabel = 36;
+  const labelWidth = 202;
+  const xTrack = 250;
+  const trackWidth = 430;
+  const xValue = 692;
+  const maximum = Math.max(1, ...rows.flatMap((entry) => [Math.abs(entry.current || 0), Math.abs(entry.comparison || 0)]));
+  doc.font("Helvetica").fontSize(7.5).fillColor("#66736e")
+    .text("Aktuell", xTrack, 92).text("Vergleich", xTrack + 55, 92);
+  let y = 111;
+  if (!rows.length) doc.fillColor("#66736e").text("Keine auswertbaren Warengruppen vorhanden.", xLabel, y);
+  rows.forEach((entry) => {
+    doc.font("Helvetica-Bold").fontSize(7.4).fillColor("#172331")
+      .text(salesAnalyticsChartsPdfTruncate(doc, `${entry.id} - ${entry.label}`, labelWidth), xLabel, y + 5, { width: labelWidth });
+    doc.roundedRect(xTrack, y + 2, trackWidth, 7, 3.5).fill("#edf2f0");
+    doc.roundedRect(xTrack, y + 13, trackWidth, 6, 3).fill("#edf2f0");
+    if (Number.isFinite(entry.current) && entry.current !== 0) {
+      doc.roundedRect(xTrack, y + 2, Math.max(1, (Math.abs(entry.current) / maximum) * trackWidth), 7, 3.5)
+        .fill(entry.current < 0 ? "#b14b44" : "#2f7764");
+    }
+    if (Number.isFinite(entry.comparison) && entry.comparison !== 0) {
+      doc.roundedRect(xTrack, y + 13, Math.max(1, (Math.abs(entry.comparison) / maximum) * trackWidth), 6, 3)
+        .fill("#aebfba");
+    }
+    doc.font("Helvetica-Bold").fontSize(7).fillColor("#172331")
+      .text(salesAnalyticsChartsPdfValue(entry.current, context.metricDefinition), xValue, y + 1, { width: 113, align: "right" });
+    doc.font("Helvetica").fontSize(6.8).fillColor("#66736e")
+      .text(salesAnalyticsChartsPdfValue(entry.comparison, context.metricDefinition), xValue, y + 12, { width: 113, align: "right" });
+    y += 34;
+  });
+}
+
+function drawSalesAnalyticsChartsPdfChanges(doc, entries, context) {
+  doc.addPage();
+  drawSalesAnalyticsChartsPdfHeader(doc, "Größte relative Abweichungen", context);
+  const rows = entries.map((entry) => ({ ...entry, change: salesAnalyticsChartsPdfChange(entry.current, entry.comparison) }))
+    .filter((entry) => Number.isFinite(entry.change))
+    .sort((left, right) => Math.abs(right.change) - Math.abs(left.change))
+    .slice(0, 12);
+  const xLabel = 36;
+  const labelWidth = 202;
+  const xTrack = 250;
+  const trackWidth = 430;
+  const xValue = 692;
+  const maximum = Math.max(1, ...rows.map((entry) => Math.abs(entry.change)));
+  doc.font("Helvetica").fontSize(7.5).fillColor("#66736e")
+    .text("unter Vergleich", xTrack, 92, { width: trackWidth / 2, align: "center" })
+    .text("über Vergleich", xTrack + trackWidth / 2, 92, { width: trackWidth / 2, align: "center" });
+  let y = 111;
+  if (!rows.length) doc.fillColor("#66736e").text("Keine belastbaren Prozentvergleiche vorhanden.", xLabel, y);
+  rows.forEach((entry) => {
+    doc.font("Helvetica-Bold").fontSize(7.4).fillColor("#172331")
+      .text(salesAnalyticsChartsPdfTruncate(doc, `${entry.id} - ${entry.label}`, labelWidth), xLabel, y + 5, { width: labelWidth });
+    doc.roundedRect(xTrack, y + 4, trackWidth / 2, 11, 5.5).fill("#f6e5e3");
+    doc.roundedRect(xTrack + trackWidth / 2, y + 4, trackWidth / 2, 11, 5.5).fill("#e5f3ec");
+    doc.rect(xTrack + trackWidth / 2 - .5, y + 2, 1, 15).fill("#8b9893");
+    const width = Math.max(1, (Math.abs(entry.change) / maximum) * (trackWidth / 2));
+    const barX = entry.change < 0 ? xTrack + trackWidth / 2 - width : xTrack + trackWidth / 2;
+    doc.roundedRect(barX, y + 5, width, 9, 4.5).fill(entry.change < 0 ? "#b14b44" : "#2f7764");
+    doc.font("Helvetica-Bold").fontSize(7.2).fillColor(entry.change < 0 ? "#9a3831" : "#1f6d4d")
+      .text(salesAnalyticsChartsPdfPercent(entry.change), xValue, y + 5, { width: 113, align: "right" });
+    y += 34;
+  });
+}
+
+function drawSalesAnalyticsChartsPdfShares(doc, entries, context) {
+  doc.addPage();
+  drawSalesAnalyticsChartsPdfHeader(doc, "Anteile nach Warengruppe", context);
+  const positive = entries.filter((entry) => Number(entry.current) > 0)
+    .sort((left, right) => right.current - left.current);
+  const total = positive.reduce((sum, entry) => sum + entry.current, 0);
+  const rows = positive.slice(0, 12);
+  const palette = ["#2f7764", "#4d927d", "#72aa98", "#9bc1b4", "#d08f54", "#bd6b61", "#7d8da3", "#8d79a6", "#87935f", "#5d7770", "#b39c69", "#8790a0"];
+  const xLabel = 36;
+  const labelWidth = 202;
+  const xTrack = 250;
+  const trackWidth = 430;
+  const xValue = 692;
+  let stackX = xTrack;
+  rows.forEach((entry, index) => {
+    const width = total > 0 ? (entry.current / total) * trackWidth : 0;
+    if (width > 0) doc.rect(stackX, 96, Math.max(1, width), 16).fill(palette[index % palette.length]);
+    stackX += width;
+  });
+  let y = 130;
+  if (!rows.length) doc.fillColor("#66736e").text("Keine positiven aktuellen Werte für eine Anteilsdarstellung vorhanden.", xLabel, y);
+  rows.forEach((entry, index) => {
+    const share = total > 0 ? (entry.current / total) * 100 : 0;
+    doc.circle(xLabel + 4, y + 9, 3.5).fill(palette[index % palette.length]);
+    doc.font("Helvetica-Bold").fontSize(7.4).fillColor("#172331")
+      .text(salesAnalyticsChartsPdfTruncate(doc, `${entry.id} - ${entry.label}`, labelWidth - 14), xLabel + 13, y + 5, { width: labelWidth - 14 });
+    doc.roundedRect(xTrack, y + 5, trackWidth, 9, 4.5).fill("#edf2f0");
+    doc.roundedRect(xTrack, y + 5, Math.max(1, (share / 100) * trackWidth), 9, 4.5).fill(palette[index % palette.length]);
+    doc.font("Helvetica-Bold").fontSize(7).fillColor("#172331")
+      .text(`${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(share)} %`, xValue, y + 1, { width: 113, align: "right" });
+    doc.font("Helvetica").fontSize(6.7).fillColor("#66736e")
+      .text(salesAnalyticsChartsPdfValue(entry.current, context.metricDefinition), xValue, y + 11, { width: 113, align: "right" });
+    y += 31;
+  });
+}
+
+function drawSalesAnalyticsChartsPdf(detail, input, locationName, response, createdAt = new Date()) {
+  const currentPeriod = salesAnalyticsChartsPdfPeriod(detail, input.horizon, "current");
+  const comparisonPeriod = salesAnalyticsChartsPdfPeriod(detail, input.horizon, "comparison");
+  const context = {
+    locationName,
+    currentPeriod,
+    comparisonPeriod,
+    metricDefinition: input.metricDefinition,
+  };
+  const doc = new PDFDocument({
+    size: "A4",
+    layout: "landscape",
+    margins: { top: 0, right: 36, bottom: 36, left: 36 },
+    bufferPages: true,
+    info: {
+      Title: "Grabenplaner Verkaufsanalyse - Grafiken",
+      Author: "Grabenplaner",
+      Subject: `${input.metricDefinition.label} - ${salesAnalyticsChartsPdfPeriodLabel(currentPeriod)}`,
+      CreationDate: createdAt,
+    },
+  });
+  doc.pipe(response);
+  const entries = salesAnalyticsChartsPdfEntries(detail, input.horizon, input.metric);
+  drawSalesAnalyticsChartsPdfRanking(doc, entries, context);
+  drawSalesAnalyticsChartsPdfChanges(doc, entries, context);
+  drawSalesAnalyticsChartsPdfShares(doc, entries, context);
+  const range = doc.bufferedPageRange();
+  for (let index = range.start; index < range.start + range.count; index += 1) {
+    doc.switchToPage(index);
+    doc.font("Helvetica").fontSize(6.8).fillColor("#66736e")
+      .text(
+        `Serverseitig freigegebene Berichtsaggregate - Vergleich ${salesAnalyticsChartsPdfPeriodLabel(comparisonPeriod)} - Erstellt ${formatPdfTimestamp(createdAt)} - Seite ${index + 1} von ${range.count}`,
+        36,
+        doc.page.height - 47,
+        { width: doc.page.width - 72, align: "center", lineBreak: false },
+      );
+  }
+  doc.flushPages();
+  doc.end();
+}
+
+app.post("/api/sales-analytics/charts.pdf", async (request, response) => {
+  const { session, projection } = salesAnalyticsRequestContext(request, { csrf: true });
+  const input = normalizeSalesAnalyticsChartsPdfInput(request.body, projection);
+  const detail = await projectedSalesAnalyticsChartsPdfData(input, projection);
+  const locationId = assertSalesAnalyticsLocation(projection, detail.report.locationId);
+  const locations = await salesAnalyticsLocations(projection);
+  const locationName = locations.find((location) => location.id === locationId)?.name || `Filiale ${locationId}`;
+  const createdAt = new Date();
+  const targetId = input.series ? detail.selection.fingerprint : detail.report.id;
+  auditPortal(
+    session.employeeNumber,
+    "sales.report.charts.export",
+    input.series ? "sales_report_series" : "sales_aggregate_report",
+    targetId,
+    JSON.stringify({
+      locationId,
+      reportCount: input.series ? input.reportIds.length : 1,
+      metric: input.metric,
+      horizon: input.horizon,
+    }),
+  );
+  const filename = `Grabenplaner-Verkaufsanalyse-${locationId}-${formatFilenameTimestamp(createdAt)}.pdf`;
+  response.status(200);
+  response.setHeader("Content-Type", "application/pdf");
+  response.setHeader("Content-Disposition", contentDispositionHeader(filename));
+  response.setHeader("Cache-Control", "private, no-store");
+  drawSalesAnalyticsChartsPdf(detail, input, locationName, response, createdAt);
 });
 
 app.get("/api/sales-analytics/reports/:id", async (request, response) => {
@@ -30937,6 +31307,7 @@ function rightsDashboardCoverage(permission, user, scope) {
 }
 
 const UI_PREFERENCE_VIEWS = Object.freeze([
+  "startDashboard",
   "filialAdministration",
   "planning",
   "requests",
@@ -30976,6 +31347,15 @@ const UI_PERSONNEL_DASHBOARD_ITEMS = Object.freeze([
   "dataRequests",
 ]);
 const UI_PERSONNEL_DASHBOARD_ITEM_SET = new Set(UI_PERSONNEL_DASHBOARD_ITEMS);
+const UI_START_DASHBOARD_WIDGETS = Object.freeze([
+  "branchOnDuty",
+  "branchAbsences",
+  "personnelTeam",
+  "personnelRequests",
+  "salesKpis",
+  "salesTopGroups",
+]);
+const UI_START_DASHBOARD_WIDGET_SET = new Set(UI_START_DASHBOARD_WIDGETS);
 const UI_MOBILE_PORTAL_NAVIGATION_ITEMS = Object.freeze([
   "time",
   "tasks",
@@ -31233,6 +31613,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     : false;
   let vacationCalendarView = defaultVacationCalendarView();
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
+  let startDashboardPreferences = defaultStartDashboardPreferences();
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
   let mobilePortalHome = defaultMobilePortalHome();
@@ -31277,6 +31658,11 @@ async function uiPreferencesForActor(actor, overrides = {}) {
       );
     } catch {}
     try {
+      startDashboardPreferences = normalizeStartDashboardPreferences(
+        JSON.parse(lookup.get("start_dashboard_preferences_v1") || "null"),
+      );
+    } catch {}
+    try {
       mobilePortalNavigation = normalizeMobilePortalNavigation(
         JSON.parse(lookup.get("mobile_portal_navigation_v1") || "null"),
       );
@@ -31314,6 +31700,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (overrides.personnelDashboardLayout) {
     personnelDashboardLayout = normalizePersonnelDashboardLayout(overrides.personnelDashboardLayout);
   }
+  if (overrides.startDashboardPreferences) {
+    startDashboardPreferences = normalizeStartDashboardPreferences(overrides.startDashboardPreferences);
+  }
   if (overrides.mobilePortalNavigation) {
     mobilePortalNavigation = normalizeMobilePortalNavigation(overrides.mobilePortalNavigation);
     mobilePortalNavigationCustomized = true;
@@ -31336,6 +31725,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     allowPastWeekEditing,
     vacationCalendarView,
     personnelDashboardLayout,
+    startDashboardPreferences,
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
@@ -31409,6 +31799,9 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   const personnelDashboardLayout = input.personnelDashboardLayout === undefined
     ? undefined
     : validatePersonnelDashboardLayout(input.personnelDashboardLayout);
+  const startDashboardPreferences = input.startDashboardPreferences === undefined
+    ? undefined
+    : validateStartDashboardPreferences(input.startDashboardPreferences);
   const mobilePortalNavigation = input.mobilePortalNavigation === undefined
     ? undefined
     : validateMobilePortalNavigation(input.mobilePortalNavigation);
@@ -31422,7 +31815,8 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     && employeeDisplaySort === undefined && workRuleAssessmentExpanded === undefined
     && allowPastWeekEditing === undefined
     && vacationCalendarView === undefined
-    && personnelDashboardLayout === undefined && mobilePortalNavigation === undefined
+    && personnelDashboardLayout === undefined && startDashboardPreferences === undefined
+    && mobilePortalNavigation === undefined
     && mobilePortalAppearance === undefined && mobilePortalHome === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
   }
@@ -31476,6 +31870,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
         value: JSON.stringify(personnelDashboardLayout),
       });
     }
+    if (startDashboardPreferences !== undefined) {
+      upserts.push({
+        preferenceKey: "start_dashboard_preferences_v1",
+        value: JSON.stringify(startDashboardPreferences),
+      });
+    }
     if (mobilePortalNavigation !== undefined) {
       upserts.push({
         preferenceKey: "mobile_portal_navigation_v1",
@@ -31517,6 +31917,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     allowPastWeekEditing,
     vacationCalendarView,
     personnelDashboardLayout,
+    startDashboardPreferences,
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
@@ -34352,6 +34753,51 @@ function rightsAuditSummary(snapshot = {}) {
     personnelLearningCrossLocationDenialAuthority:
       snapshot.personnelLearningCrossLocationDenialAuthority || null,
   });
+}
+
+function defaultStartDashboardPreferences() {
+  return {
+    version: 1,
+    hidden: [],
+    locationId: "",
+    departmentId: "",
+    salesLocationId: "",
+  };
+}
+
+function normalizeStartDashboardPreferences(value) {
+  const fallback = defaultStartDashboardPreferences();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return fallback;
+  }
+  const normalizeScopeId = (candidate, pattern) => {
+    const normalized = String(candidate || "").trim();
+    return normalized.length <= 80 && pattern.test(normalized) ? normalized : "";
+  };
+  return {
+    version: 1,
+    hidden: Array.isArray(value.hidden)
+      ? [...new Set(value.hidden.map(String))].filter((id) => UI_START_DASHBOARD_WIDGET_SET.has(id))
+      : [],
+    locationId: normalizeScopeId(value.locationId, /^[A-Za-z0-9._:-]*$/),
+    departmentId: normalizeScopeId(value.departmentId, /^\d*$/),
+    salesLocationId: normalizeScopeId(value.salesLocationId, /^[A-Za-z0-9._:-]*$/),
+  };
+}
+
+function validateStartDashboardPreferences(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["version", "hidden", "locationId", "departmentId", "salesLocationId"].includes(key))
+    || value.version !== 1
+    || !Array.isArray(value.hidden)
+    || value.hidden.length > UI_START_DASHBOARD_WIDGETS.length
+    || new Set(value.hidden.map(String)).size !== value.hidden.length
+    || value.hidden.some((id) => !UI_START_DASHBOARD_WIDGET_SET.has(String(id)))
+    || ![value.locationId, value.salesLocationId].every((id) => typeof id === "string" && id.length <= 80 && /^[A-Za-z0-9._:-]*$/.test(id))
+    || typeof value.departmentId !== "string" || value.departmentId.length > 20 || !/^\d*$/.test(value.departmentId)) {
+    throw httpError(400, "Bitte eine gültige persönliche Startdashboard-Konfiguration übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  return normalizeStartDashboardPreferences(value);
 }
 
 function compactRightsAuditDetail(before = {}, after = {}) {
@@ -52762,10 +53208,130 @@ app.delete("/api/schedule", async (request, response) => {
   });
 });
 
+function requestCreatesTeamMeetingGroup(body = {}) {
+  return body.teamWide === true && String(body.optionType || "") === "team_meeting";
+}
+
+async function listTeamMeetingGroupRows(groupId, sample) {
+  if (!isTeamMeetingGroupId(groupId) || !sample || !isIsoDate(sample.week_start)) return [];
+  const rows = [sample];
+  const seenIds = new Set([Number(sample.id)]);
+  const employees = await planningSettingsRepository.listCentralVacationEmployees({
+    includeInactive: 1,
+    costCenterId: "",
+    locationId: "",
+    departmentId: null,
+  });
+  for (const employee of employees) {
+    const overlapping = await planningSettingsRepository.listOverlappingWeekOptions({
+      employeeNumber: employee.personnel_number,
+      dateFrom: sample.week_start,
+      dateTo: addDays(sample.week_start, 6),
+      existingId: 0,
+      excludedGroupId: null,
+    });
+    for (const candidate of overlapping) {
+      const candidateId = Number(candidate.id);
+      if (candidate.group_id !== groupId || seenIds.has(candidateId)) continue;
+      const row = await planningSettingsRepository.getWeekOptionById({ id: candidateId });
+      if (!row || row.group_id !== groupId || row.option_type !== "team_meeting") continue;
+      rows.push(row);
+      seenIds.add(candidateId);
+    }
+  }
+  return rows;
+}
+
+async function validateTeamMeetingGroup(body, session, {
+  groupId = `${TEAM_MEETING_GROUP_PREFIX}${crypto.randomUUID()}`,
+  existingRows = null,
+} = {}) {
+  if (String(body.optionType || "") !== "team_meeting") {
+    throw httpError(400, "Eine Teamoption muss als Teamsitzung gespeichert werden.", "TEAM_MEETING_TYPE_REQUIRED");
+  }
+  const context = await resolvePlanningContext({
+    locationId: body.locationId,
+    departmentId: body.departmentId || null,
+  });
+  assertSessionContextScope(session, context);
+  const members = existingRows || await planningSettingsRepository.listVacationEmployees({
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+  });
+  if (!members.length) {
+    throw httpError(409, "Für den ausgewählten Planungsbereich ist kein aktives Team hinterlegt.", "TEAM_MEETING_TEAM_EMPTY");
+  }
+  const options = [];
+  for (const member of members) {
+    const employeeNumber = String(member.employee_number || member.personnel_number || "");
+    await assertSessionEmployeeScope(session, employeeNumber);
+    options.push(await validateWeekOption({
+      ...body,
+      employeeNumber,
+      optionType: "team_meeting",
+      groupId,
+      teamWide: true,
+    }, Number(member.id || 0), session));
+  }
+  return { context, groupId, options };
+}
+
+async function invalidateWeekOptionReviews(options) {
+  for (const option of options) {
+    for (let date = option.dateFrom || option.date_from; date <= (option.dateTo || option.date_to); date = addDays(date, 1)) {
+      await invalidateTimeDayReview(option.employeeNumber || option.employee_number, date);
+    }
+  }
+}
+
+function auditTeamMeetingGroup(session, action, groupId, context, options) {
+  const option = options[0] || {};
+  auditPortal(
+    session?.employeeNumber || "local",
+    action,
+    "team_meeting",
+    groupId,
+    JSON.stringify({
+      locationId: context.locationId,
+      departmentId: context.departmentId || null,
+      employeeCount: options.length,
+      dateFrom: option.dateFrom || option.date_from,
+      dateTo: option.dateTo || option.date_to,
+      startTime: option.startTime || option.start_time,
+      endTime: option.endTime || option.end_time,
+    }),
+  );
+}
+
 app.post("/api/week-options", async (request, response) => {
   const requestedEmployeeNumber = String(request.body?.employeeNumber || "").trim();
   const requestedOptionType = String(request.body?.optionType || "");
   assertApprovedAbsenceEntryAccess(request.portalSession, requestedOptionType);
+  if (requestCreatesTeamMeetingGroup(request.body)) {
+    const group = await validateTeamMeetingGroup(request.body, request.portalSession);
+    let ids;
+    try {
+      ids = await planningSettingsRepository.transaction(async (repository) => {
+        const inserted = [];
+        for (const option of group.options) {
+          inserted.push(Number((await repository.insertWeekOption(option)).rows[0]?.id));
+        }
+        return inserted;
+      });
+    } catch (error) {
+      throw staffAssignmentAbsenceConstraintError(error);
+    }
+    await invalidateWeekOptionReviews(group.options);
+    auditTeamMeetingGroup(request.portalSession, "team-meeting.create", group.groupId, group.context, group.options);
+    response.status(201).json({
+      id: ids[0],
+      groupId: group.groupId,
+      teamWide: true,
+      employeeCount: group.options.length,
+      ...group.options[0],
+    });
+    return;
+  }
   await assertSessionEmployeeScope(request.portalSession, requestedEmployeeNumber);
   const option = await validateWeekOption(request.body, 0, request.portalSession);
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
@@ -52788,6 +53354,51 @@ app.put("/api/week-options/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getWeekOptionById({ id });
   if (!existing) {
     throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
+  }
+  if (isTeamMeetingGroupId(existing.group_id)) {
+    assertApprovedAbsenceEntryAccess(request.portalSession, "team_meeting");
+    const existingRows = await listTeamMeetingGroupRows(existing.group_id, existing);
+    const requestedType = String(request.body?.optionType || "team_meeting");
+    if (requestedType !== "team_meeting" || request.body?.teamWide === false) {
+      throw httpError(
+        409,
+        "Eine teamweite Teamsitzung kann nicht in eine Einzeloption umgewandelt werden.",
+        "TEAM_MEETING_SCOPE_IMMUTABLE",
+      );
+    }
+    const group = await validateTeamMeetingGroup({
+      ...request.body,
+      optionType: "team_meeting",
+    }, request.portalSession, {
+      groupId: existing.group_id,
+      existingRows,
+    });
+    try {
+      await planningSettingsRepository.transaction(async (repository) => {
+        for (let index = 0; index < existingRows.length; index += 1) {
+          await repository.updateWeekOption({ id: existingRows[index].id, ...group.options[index] });
+        }
+      });
+    } catch (error) {
+      throw staffAssignmentAbsenceConstraintError(error);
+    }
+    await invalidateWeekOptionReviews([...existingRows, ...group.options]);
+    auditTeamMeetingGroup(request.portalSession, "team-meeting.update", group.groupId, group.context, group.options);
+    response.json({
+      id: Number(existingRows[0]?.id),
+      groupId: group.groupId,
+      teamWide: true,
+      employeeCount: group.options.length,
+      ...group.options[0],
+    });
+    return;
+  }
+  if (request.body?.teamWide === true) {
+    throw httpError(
+      409,
+      "Für eine teamweite Teamsitzung bitte eine neue Planungsoption anlegen.",
+      "TEAM_MEETING_CREATE_REQUIRED",
+    );
   }
   assertApprovedAbsenceEntryAccess(request.portalSession, existing.option_type);
   await assertSessionEmployeeScope(request.portalSession, existing.employee_number);
@@ -52822,6 +53433,42 @@ app.delete("/api/week-options/:id", async (request, response) => {
   const id = Number(request.params.id);
   const existing = await planningSettingsRepository.getWeekOptionById({ id });
   if (!existing) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
+  if (isTeamMeetingGroupId(existing.group_id)) {
+    assertApprovedAbsenceEntryAccess(request.portalSession, "team_meeting");
+    const existingRows = await listTeamMeetingGroupRows(existing.group_id, existing);
+    const scopedEmployees = await Promise.all(existingRows.map((row) => (
+      planningSettingsRepository.getPlanningEmployee({ employeeNumber: row.employee_number })
+    )));
+    const departmentIds = [...new Set(scopedEmployees
+      .map((employee) => Number(employee?.preferred_department_id || 0))
+      .filter(Boolean))];
+    const context = await resolvePlanningContext({
+      locationId: scopedEmployees[0]?.home_location_id,
+      departmentId: departmentIds.length === 1 ? departmentIds[0] : null,
+    });
+    assertSessionContextScope(request.portalSession, context);
+    for (let index = 0; index < existingRows.length; index += 1) {
+      const row = existingRows[index];
+      await assertSessionEmployeeScope(request.portalSession, row.employee_number);
+      await assertWeekEditable(
+        row.week_start,
+        await settingsForLocation(scopedEmployees[index]?.home_location_id),
+        request.portalSession,
+      );
+    }
+    await planningSettingsRepository.transaction(async (repository) => {
+      for (const row of existingRows) {
+        const result = await repository.deleteWeekOption({ id: row.id });
+        if (result.rowsAffected !== 1) {
+          throw httpError(409, "Die Teamsitzung wurde parallel verändert.", "TEAM_MEETING_CONCURRENT_CHANGE");
+        }
+      }
+    });
+    await invalidateWeekOptionReviews(existingRows);
+    auditTeamMeetingGroup(request.portalSession, "team-meeting.delete", existing.group_id, context, existingRows);
+    response.status(204).end();
+    return;
+  }
   assertApprovedAbsenceEntryAccess(request.portalSession, existing.option_type);
   await assertSessionEmployeeScope(request.portalSession, existing.employee_number);
   const existingLocation = (await planningSettingsRepository.getPlanningEmployee({
@@ -53178,14 +53825,19 @@ app.post("/api/schedule/auto", async (request, response) => {
     retainedEmployeeWeekShifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`),
   );
   const unavailable = new Set();
+  const sicknessDates = new Set();
   for (const option of options) {
     for (let date = option.date_from; date <= option.date_to; date = addDays(date, 1)) {
-      unavailable.add(`${option.employee_number}|${date}`);
+      const key = `${option.employee_number}|${date}`;
+      if (option.option_type === "sick") sicknessDates.add(key);
+      if (!isTeamWideMeetingOption(option)) unavailable.add(key);
     }
   }
   for (let date = weekStart; date <= weekEnd; date = addDays(date, 1)) {
     for (const employeeNumber of await activeSicknessEmployeeNumbers(date)) {
-      unavailable.add(`${employeeNumber}|${date}`);
+      const key = `${employeeNumber}|${date}`;
+      unavailable.add(key);
+      sicknessDates.add(key);
     }
   }
 
@@ -53207,31 +53859,26 @@ app.post("/api/schedule/auto", async (request, response) => {
     const claimedOptionDates = new Set();
     for (const option of options) {
       const creditedMinutesPerDay = optionMinutesPerDay(option, option.contracted_hours);
-      const creditedDays = optionIsAllDay(option) && creditedMinutesPerDay > 0
-        ? claimCreditedOptionDaysInRange(
-          option,
-          weekStart,
-          weekEnd,
-          context.locationId,
-          occupied,
-          claimedOptionDates,
-        )
-        : countCreditedOptionDaysInRange(
-          option,
-          weekStart,
-          weekEnd,
-          context.locationId,
-        );
+      const creditedDates = creditedOptionDatesInRange(option, weekStart, weekEnd, context.locationId)
+        .filter((date) => !isTeamWideMeetingOption(option)
+          || !sicknessDates.has(`${option.employee_number}|${date}`));
+      const creditedDays = isTeamWideMeetingOption(option)
+        ? creditedDates.length
+        : optionIsAllDay(option) && creditedMinutesPerDay > 0
+          ? claimCreditedOptionDaysInRange(
+            option,
+            weekStart,
+            weekEnd,
+            context.locationId,
+            occupied,
+            claimedOptionDates,
+          )
+          : creditedDates.length;
       totals[option.employee_number] =
         (totals[option.employee_number] || 0) +
         creditedMinutesPerDay * creditedDays;
       if (!optionIsAllDay(option) && creditedMinutesPerDay > 0) {
-        for (const date of creditedOptionDatesInRange(
-          option,
-          weekStart,
-          weekEnd,
-          context.locationId,
-        )) claimedOptionDates.add(`${option.employee_number}|${date}`);
+        for (const date of creditedDates) claimedOptionDates.add(`${option.employee_number}|${date}`);
       }
     }
     const sicknessBlockedDates = new Set([...occupied, ...claimedOptionDates]);
@@ -53666,9 +54313,24 @@ function optionRemarkText(option) {
       option.is_public_holiday ? " · Feiertag" : ""
     }`;
   }
-  return `${option.nickname}: ${optionLabel(option.option_type)} · ${formatOptionDateRange(option)} · ${formatOptionTimeRange(option)}${
+  return `${isTeamWideMeetingOption(option) ? "Ganzes Team" : option.nickname}: ${optionLabel(option.option_type)} · ${formatOptionDateRange(option)} · ${formatOptionTimeRange(option)}${
     option.note ? ` · ${option.note}` : ""
   }`;
+}
+
+function collapsedScheduleWeekOptions(options = []) {
+  const meetings = new Map();
+  const individual = [];
+  for (const option of options) {
+    if (!isTeamWideMeetingOption(option)) {
+      individual.push(option);
+      continue;
+    }
+    if (!meetings.has(option.group_id)) {
+      meetings.set(option.group_id, { ...option, color: "#76529a" });
+    }
+  }
+  return [...meetings.values(), ...individual];
 }
 
 function monthName(monthNumber, format = "long") {
@@ -54330,7 +54992,11 @@ async function drawSchedulePdf(schedule, response, createdAt = new Date()) {
   const gridLeft = left + timeWidth;
   const gridWidth = pageWidth - gridLeft - right;
   const dayCount = settingEnabled(schedule.settings, "show_sunday") ? 7 : 6;
-  const dayGap = 3;
+  const dayGap = 5;
+  const dayFrameColor = "#8796a5";
+  const dayFrameWidth = 0.55;
+  const daySeparatorColor = "#617386";
+  const daySeparatorWidth = 1.1;
   const dayWidth = (gridWidth - dayGap * (dayCount - 1)) / dayCount;
   const dayX = (dayIndex) => gridLeft + dayIndex * (dayWidth + dayGap);
   const titleY = 18;
@@ -54386,7 +55052,7 @@ async function drawSchedulePdf(schedule, response, createdAt = new Date()) {
       .fillColor(dayIndex === 6 ? "#d6d6d6" : "#e5edf4")
       .rect(x, dayHeaderY, dayWidth, dayHeaderHeight)
       .fill();
-    doc.strokeColor("#aab6c2").lineWidth(0.45).rect(x, dayHeaderY, dayWidth, dayHeaderHeight).stroke();
+    doc.strokeColor(dayFrameColor).lineWidth(dayFrameWidth).rect(x, dayHeaderY, dayWidth, dayHeaderHeight).stroke();
     doc
       .fillColor("#111820")
       .font("Helvetica-Bold")
@@ -54481,14 +55147,15 @@ async function drawSchedulePdf(schedule, response, createdAt = new Date()) {
 
   for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
     const dayStartX = dayX(dayIndex);
-    doc.strokeColor("#aab6c2").lineWidth(0.45).rect(dayStartX, gridTop, dayWidth, gridHeight).stroke();
+    doc.strokeColor(dayFrameColor).lineWidth(dayFrameWidth).rect(dayStartX, gridTop, dayWidth, gridHeight).stroke();
     for (let employeeIndex = 1; employeeIndex < employeeCount; employeeIndex += 1) {
       const x = dayStartX + employeeIndex * employeeWidth;
-      doc.strokeColor("#c6ced5").lineWidth(0.3).moveTo(x, gridTop).lineTo(x, gridBottom).stroke();
+      doc.strokeColor("#c6ced5").lineWidth(0.25).moveTo(x, gridTop).lineTo(x, gridBottom).stroke();
     }
   }
 
   for (const option of schedule.weekOptions) {
+    if (isTeamWideMeetingOption(option)) continue;
     const employeeIndex = employees.findIndex(
       (employee) => employee.personnel_number === option.employee_number,
     );
@@ -54594,6 +55261,48 @@ async function drawSchedulePdf(schedule, response, createdAt = new Date()) {
     doc.restore();
   }
 
+  for (const meeting of collapsedScheduleWeekOptions(schedule.weekOptions).filter(isTeamWideMeetingOption)) {
+    if (optionIsAllDay(meeting) || !isTime(meeting.start_time) || !isTime(meeting.end_time)) continue;
+    for (let date = meeting.date_from; date <= meeting.date_to; date = addDays(date, 1)) {
+      const dayIndex = Math.round(
+        (new Date(`${date}T12:00:00Z`) - new Date(`${schedule.weekStart}T12:00:00Z`)) / 86400000,
+      );
+      if (dayIndex < 0 || dayIndex >= dayCount) continue;
+      const meetingStart = Math.max(startMinutes, timeToMinutes(meeting.start_time));
+      const meetingEnd = Math.min(endMinutes, timeToMinutes(meeting.end_time));
+      if (meetingEnd <= meetingStart) continue;
+      const x = dayX(dayIndex) + 1;
+      const y = gridTop + ((meetingStart - startMinutes) / rangeMinutes) * gridHeight;
+      const width = dayWidth - 2;
+      const height = Math.max(10, ((meetingEnd - meetingStart) / rangeMinutes) * gridHeight);
+      doc.save();
+      doc.fillOpacity(0.9).fillColor("#eadff5").roundedRect(x, y, width, height, 2.5).fill();
+      doc.fillOpacity(1);
+      doc.strokeColor("#68448f").lineWidth(1.15).roundedRect(x, y, width, height, 2.5).stroke();
+      doc
+        .fillColor("#332044")
+        .font("Helvetica-Bold")
+        .fontSize(Math.max(5.2, Math.min(7, height / 3.2)))
+        .text(
+          `TS · Teamsitzung · ${meeting.start_time}–${meeting.end_time}${meeting.note ? ` · ${meeting.note}` : ""}`,
+          x + 3,
+          y + Math.max(2, height / 2 - 3.5),
+          { width: width - 6, height: Math.max(7, height - 4), align: "center", ellipsis: true },
+        );
+      doc.restore();
+    }
+  }
+
+  for (let dayIndex = 0; dayIndex < dayCount - 1; dayIndex += 1) {
+    const separatorX = dayX(dayIndex) + dayWidth + dayGap / 2;
+    doc
+      .strokeColor(daySeparatorColor)
+      .lineWidth(daySeparatorWidth)
+      .moveTo(separatorX, dayHeaderY)
+      .lineTo(separatorX, gridBottom)
+      .stroke();
+  }
+
   const remarksY = 454;
   const remarkColumns = [
     { key: "leave", title: "Urlaube / Zeitausgleich" },
@@ -54605,7 +55314,9 @@ async function drawSchedulePdf(schedule, response, createdAt = new Date()) {
   const remarkColumnCount = scheduleNote ? 4 : 3;
   const remarkColumnWidth = (pageWidth - left - right - remarkGap * (remarkColumnCount - 1)) / remarkColumnCount;
   const groupedOptions = Object.fromEntries(remarkColumns.map((column) => [column.key, []]));
-  for (const option of schedule.weekOptions) groupedOptions[optionRemarkColumn(option)].push(option);
+  for (const option of collapsedScheduleWeekOptions(schedule.weekOptions)) {
+    groupedOptions[optionRemarkColumn(option)].push(option);
+  }
   for (const block of schedule.globalDayBlocks || []) {
     groupedOptions.other.push({ ...block, global_day: true, color: "#9aa2a4" });
   }
