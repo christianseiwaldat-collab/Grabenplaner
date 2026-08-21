@@ -76,7 +76,7 @@ const state = {
   amuAccess: null,
   requestCounts: { vacation: 0, timeOff: 0, sickness: 0, amu: 0, total: 0 },
   requestKindTab: "vacation",
-  currentView: "planning",
+  currentView: "startDashboard",
   xoffiImportPreview: null,
   timePresence: null,
   timeDayReview: null,
@@ -121,11 +121,23 @@ const state = {
   locationDashboard: null,
   locationDashboardFilter: "all",
   locationDashboardDraggingId: "",
+  startDashboardPreferences: { version: 1, hidden: [], locationId: "", departmentId: "", salesLocationId: "" },
+  startDashboardDraftPreferences: null,
+  startDashboardSchedule: null,
+  startDashboardScheduleLoading: false,
+  startDashboardScheduleError: "",
+  startDashboardScheduleRequestId: 0,
+  startDashboardSalesReports: [],
+  startDashboardSalesDetail: null,
+  startDashboardSalesLoading: false,
+  startDashboardSalesError: "",
+  startDashboardSalesRequestId: 0,
   rightsDashboardSelectedEmployeeNumber: "",
   rightsDashboardSelectedPermissionId: "",
   rightsDashboardTheme: "light",
   globalTheme: "light",
   pageThemes: {
+    startDashboard: "light",
     planning: "light",
     requests: "light",
     timeTracking: "light",
@@ -187,9 +199,10 @@ const state = {
     dateFrom: "",
     dateTo: "",
     horizon: "period",
+    chartType: "ranking",
     chartMetric: "netRevenue",
     tableSearch: "",
-    tableSort: "netRevenue_desc",
+    tableSort: "netRevenue_current_desc",
     archiveSelection: [],
     reportSeries: null,
     seriesLoading: false,
@@ -469,6 +482,7 @@ const optionLabels = {
   team_meeting: "Teamsitzung",
   other: "Sonstiges",
 };
+const TEAM_MEETING_GROUP_PREFIX = "team-meeting:";
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const planningDayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const dayKeyByNumber = { 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday", 5: "friday", 6: "saturday" };
@@ -478,7 +492,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "filialAdministrationView", "filialDashboardGrid", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "startDashboardView", "startDashboardBrandButton", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardSalesLocation", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "pdfButton", "timeline", "weekLockNotice", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -532,7 +546,7 @@ const elements = Object.fromEntries(
     "payrollHandoffMonth", "payrollHandoffLocation", "payrollHandoffDepartment", "payrollHandoffPreflightButton", "payrollHandoffCreateButton", "payrollHandoffPreflightResult", "payrollHandoffList", "payrollHandoffProtocolModal", "payrollHandoffProtocolForm", "payrollHandoffProtocolId", "payrollHandoffProtocolSummary", "payrollHandoffProtocolResult", "payrollHandoffProtocolNumber", "payrollHandoffProtocolNote", "payrollHandoffProtocolMessage", "savePayrollHandoffProtocolButton",
     "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportSourceType", "personnelImportFileField", "personnelImportSqlConnectionField", "personnelImportSqlConnection", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultCostCenter", "personnelImportDefaultDepartment", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
     "integrationConnectionModal", "integrationConnectionForm", "integrationConnectionTitle", "integrationConnectionId", "integrationConnectionKind", "integrationConnectionName", "integrationConnectionActive", "integrationConnectionScopeLocations", "integrationConnectionScopeDepartments", "integrationSqlFields", "integrationSqlHost", "integrationSqlPort", "integrationSqlDatabase", "integrationSqlInstance", "integrationSqlSchema", "integrationSqlView", "integrationSqlAllowedColumns", "integrationSqlTls", "integrationSqlTimeout", "integrationSqlRowLimit", "integrationApiFields", "integrationApiEndpoint", "integrationApiAuthentication", "integrationApiKeyHeaderField", "integrationApiKeyHeader", "integrationApiTimeout", "integrationApiRequestLimit", "integrationApiResponseLimit", "integrationCredentialPanel", "integrationCredentialTitle", "integrationCredentialStatus", "integrationSqlCredentials", "integrationApiCredentials", "integrationBearerTokenField", "integrationApiKeyField", "integrationBasicUsernameField", "integrationBasicPasswordField", "integrationCredentialUsername", "integrationCredentialPassword", "integrationCredentialToken", "integrationCredentialApiKey", "integrationCredentialBasicUsername", "integrationCredentialBasicPassword", "integrationConnectionMessage", "deleteIntegrationConnectionButton", "testIntegrationConnectionButton", "saveIntegrationConnectionButton",
-    "salesAnalyticsStatusBadge", "salesReportImportPanel", "salesReportImportFile", "salesReportInspectButton", "salesReportImportMessage", "salesReportPreview", "salesReportPreviewSummary", "salesReportOcrReview", "salesReportOcrReviewState", "salesReportOcrReportFields", "salesReportImportLocation", "salesReportImportCurrency", "salesReportPreviewIssues", "salesReportPreviewTableTitle", "salesReportPreviewHorizonField", "salesReportPreviewHorizon", "salesReportPreviewHead", "salesReportPreviewBody", "salesReportPreviewFoot", "salesReportImportConfirmed", "salesReportConfirmationText", "salesReportDiscardButton", "salesReportApplyButton", "salesReportLocationFilter", "salesReportDateFrom", "salesReportDateTo", "salesReportResetFilters", "salesReportFilterNotice", "salesReportSelect", "salesReportHorizon", "salesReportArchive", "salesReportArchiveBody", "salesReportArchiveEmpty", "salesReportArchiveSelectionSummary", "salesReportCoverageChart", "salesReportSeriesAnalyzeButton", "salesReportSeriesClearButton", "salesReportKpis", "salesReportSummary", "salesReportChartMetric", "salesReportChartLegend", "salesReportChart", "salesReportGroupSearch", "salesReportTableSort", "salesReportTableCount", "salesReportTableHead", "salesReportTableBody", "salesReportTableEmpty",
+    "salesAnalyticsStatusBadge", "salesReportImportPanel", "salesReportImportFile", "salesReportInspectButton", "salesReportImportMessage", "salesReportPreview", "salesReportPreviewSummary", "salesReportOcrReview", "salesReportOcrReviewState", "salesReportOcrReportFields", "salesReportImportLocation", "salesReportImportCurrency", "salesReportPreviewIssues", "salesReportPreviewTableTitle", "salesReportPreviewHorizonField", "salesReportPreviewHorizon", "salesReportPreviewHead", "salesReportPreviewBody", "salesReportPreviewFoot", "salesReportImportConfirmed", "salesReportConfirmationText", "salesReportDiscardButton", "salesReportApplyButton", "salesReportLocationFilter", "salesReportDateFrom", "salesReportDateTo", "salesReportResetFilters", "salesReportFilterNotice", "salesReportSelect", "salesReportHorizon", "salesReportArchive", "salesReportArchiveBody", "salesReportArchiveEmpty", "salesReportArchiveSelectionSummary", "salesReportCoverageChart", "salesReportSeriesAnalyzeButton", "salesReportSeriesClearButton", "salesReportKpis", "salesReportSummary", "salesAnalyticsChartEyebrow", "salesAnalyticsChartTitle", "salesReportChartType", "salesReportChartMetric", "salesReportChartPdfButton", "salesReportChartLegend", "salesReportChart", "salesReportGroupSearch", "salesReportTableCount", "salesReportTableHead", "salesReportTableBody", "salesReportTableEmpty",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
 
@@ -661,6 +675,26 @@ function specialCasesFor(employeeNumber, date) {
 
 function optionIsAllDay(option) {
   return Number(option?.all_day ?? 1) === 1;
+}
+
+function isTeamWideMeetingOption(option) {
+  return option?.option_type === "team_meeting"
+    && String(option?.group_id || "").startsWith(TEAM_MEETING_GROUP_PREFIX);
+}
+
+function collapsedWeekOptions(options = []) {
+  const teamMeetings = new Map();
+  const individualOptions = [];
+  for (const option of options) {
+    if (!isTeamWideMeetingOption(option)) {
+      individualOptions.push(option);
+      continue;
+    }
+    const existing = teamMeetings.get(option.group_id);
+    if (existing) existing.team_member_count += 1;
+    else teamMeetings.set(option.group_id, { ...option, team_wide: true, team_member_count: 1 });
+  }
+  return [...teamMeetings.values(), ...individualOptions];
 }
 
 function fullDaySpecialCaseFor(employeeNumber, date) {
@@ -2191,12 +2225,13 @@ function applyRoleVisibility() {
     setPersonnelAdministrationTab(firstAccessiblePersonnelAdministrationTab());
   }
   if (personnelModuleAccess) renderPersonnelDashboard();
-  if (!personnelModuleAccess && state.currentView === "personnelAdministration") setView("planning");
-  if (!requestReadAccess && state.currentView === "requests") setView("planning");
-  if (!timeReadAccess && state.currentView === "timeTracking") setView("planning");
-  if (!loanManagementAccess && state.currentView === "loans") setView("planning");
-  if (!branchOrderManagementAccess && state.currentView === "branchOrders") setView("planning");
-  if (!salesAnalyticsAccess && state.currentView === "salesAnalytics") setView("planning");
+  if (!personnelModuleAccess && state.currentView === "personnelAdministration") setView("startDashboard");
+  if (!requestReadAccess && state.currentView === "requests") setView("startDashboard");
+  if (!timeReadAccess && state.currentView === "timeTracking") setView("startDashboard");
+  if (!loanManagementAccess && state.currentView === "loans") setView("startDashboard");
+  if (!branchOrderManagementAccess && state.currentView === "branchOrders") setView("startDashboard");
+  if (!salesAnalyticsAccess && ["salesAdministration", "salesAnalytics"].includes(state.currentView)) setView("startDashboard");
+  renderStartDashboard();
   renderSidebarSession();
   refreshFunctionSearchAccess();
 }
@@ -2486,6 +2521,7 @@ function render() {
   renderTimeline();
   renderRemarks();
   renderHoursOverview();
+  renderStartDashboard();
   renderFilialDashboard();
   renderVacations();
   renderPersonnelAdministration();
@@ -4290,6 +4326,20 @@ function renderTimeline() {
     const lunchBand = hours?.lunchEnabled
       ? `<span class="lunch-band" style="top:${((timeToMinutes(hours.lunchStart) - start) / range) * 100}%;height:${((timeToMinutes(hours.lunchEnd) - timeToMinutes(hours.lunchStart)) / range) * 100}%">Mittagspause</span>`
       : "";
+    const teamMeetingBands = collapsedWeekOptions(state.data.weekOptions)
+      .filter((option) => isTeamWideMeetingOption(option)
+        && !optionIsAllDay(option)
+        && date >= option.date_from
+        && date <= option.date_to)
+      .map((option) => {
+        const optionStart = Math.max(start, timeToMinutes(option.start_time));
+        const optionEnd = Math.min(end, timeToMinutes(option.end_time));
+        if (optionEnd <= optionStart) return "";
+        const top = ((optionStart - start) / range) * 100;
+        const height = Math.max(3.5, ((optionEnd - optionStart) / range) * 100);
+        const title = `TS · Teamsitzung · ${formatOptionTime(option)}${option.note ? ` – ${option.note}` : ""}`;
+        return `<span class="team-meeting-band" style="top:${top}%;height:${height}%" title="${escapeHtmlAttribute(title)}">${escapeHtml(title)}</span>`;
+      }).join("");
     const headers = employees.length
       ? employees.map((employee) => `
           <div class="employee-strip" style="background:${employee.color};color:${contrastColor(employee.color)}" title="${escapeHtml(employee.full_name)} · ${employee.personnel_number}">
@@ -4319,14 +4369,14 @@ function renderTimeline() {
                 : fixedUnavailable
                   ? "Kein fixer Arbeitstag"
                   : "";
-          const optionBlocks = dayOptions.filter((option) => !optionIsAllDay(option)).map((option) => {
+          const optionBlocks = dayOptions.filter((option) => !optionIsAllDay(option) && !isTeamWideMeetingOption(option)).map((option) => {
             const optionStart = Math.max(start, timeToMinutes(option.start_time));
             const optionEnd = Math.min(end, timeToMinutes(option.end_time));
             if (optionEnd <= optionStart) return "";
             const top = ((optionStart - start) / range) * 100;
             const height = Math.max(2.5, ((optionEnd - optionStart) / range) * 100);
             const title = `${optionLabels[option.option_type]} · ${formatOptionTime(option)}${option.note ? ` – ${option.note}` : ""}`;
-            return `<span class="option-block ${option.soft_pending ? "soft-pending-option" : ""}" data-option-title="${escapeHtml(title)}" style="top:${top}%;height:${height}%"><em>${escapeHtml(option.soft_pending ? "ZA beantragt" : optionLabels[option.option_type])}</em></span>`;
+            return `<span class="option-block ${option.soft_pending ? "soft-pending-option" : ""}" data-option-title="${escapeHtmlAttribute(title)}" style="top:${top}%;height:${height}%"><em>${escapeHtml(option.soft_pending ? "ZA beantragt" : optionLabels[option.option_type])}</em></span>`;
           }).join("");
           const assignmentBlocks = [...outgoingAssignments, ...incomingAssignments].map((assignment) => {
             const incoming = String(assignment.destination_location_id || assignment.destinationLocationId) === String(state.locationId);
@@ -4369,7 +4419,7 @@ function renderTimeline() {
     return `<section class="day-column ${dayIndex === 6 ? "sunday" : ""}" style="grid-column:${dayIndex + 2}">
       <div class="day-title">${weekday} ${formatDate(date, { day: "2-digit", month: "2-digit" })}${holiday ? ` · ${escapeHtml(holiday.name)}` : ""}</div>
       <div class="employee-strips">${headers}</div>
-      <div class="day-body ${hours ? "" : "closed-day"}" style="--open-start:${openStart}%;--open-end:${openEnd}%">${lunchBand}<div class="lane-grid">${lanes}</div></div>
+      <div class="day-body ${hours ? "" : "closed-day"}" style="--open-start:${openStart}%;--open-end:${openEnd}%">${lunchBand}<div class="lane-grid">${lanes}</div>${teamMeetingBands}</div>
     </section>`;
   }).join("");
 
@@ -4380,13 +4430,13 @@ function renderTimeline() {
 }
 
 function renderRemarks() {
-  const options = state.data.weekOptions;
+  const options = collapsedWeekOptions(state.data.weekOptions);
   const globalRemarks = (state.data.globalDayBlocks || []).map((block) => `
           <div class="remark-item"><span class="remark-color" style="background:#9aa2a4"></span>
           <span><strong>Alle:</strong> ${escapeHtml(block.reason || block.holiday_name || "Tag gesperrt")} · ${formatDate(block.block_date, { day: "2-digit", month: "2-digit" })}${block.is_public_holiday ? " · Feiertag" : ""}</span></div>`);
   const optionRemarks = options.map((option) => `
-          <div class="remark-item"><span class="remark-color" style="background:${option.color}"></span>
-          <span><strong>${escapeHtml(option.nickname)}:</strong> ${optionLabels[option.option_type]} · ${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` – ${escapeHtml(option.note)}` : ""}</span></div>`);
+          <div class="remark-item"><span class="remark-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : option.color}"></span>
+          <span><strong>${isTeamWideMeetingOption(option) ? "Ganzes Team" : escapeHtml(option.nickname)}:</strong> ${optionLabels[option.option_type]} · ${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` – ${escapeHtml(option.note)}` : ""}</span></div>`);
   const remarks = [...globalRemarks, ...optionRemarks];
   elements.remarks.innerHTML = `<h3>Bemerkungen / Sonderfälle</h3>${
     remarks.length
@@ -16380,6 +16430,337 @@ function renderPersonnelAdministration() {
   if (canReadDataSubjectRequests()) renderDataSubjectRequests();
 }
 
+const START_DASHBOARD_WIDGET_IDS = Object.freeze([
+  "branchOnDuty",
+  "branchAbsences",
+  "personnelTeam",
+  "personnelRequests",
+  "salesKpis",
+  "salesTopGroups",
+]);
+const START_DASHBOARD_WIDGET_ID_SET = new Set(START_DASHBOARD_WIDGET_IDS);
+
+function defaultStartDashboardPreferences() {
+  return { version: 1, hidden: [], locationId: "", departmentId: "", salesLocationId: "" };
+}
+
+function normalizeStartDashboardPreferences(value) {
+  const fallback = defaultStartDashboardPreferences();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return fallback;
+  }
+  return {
+    version: 1,
+    hidden: Array.isArray(value.hidden)
+      ? [...new Set(value.hidden.map(String))].filter((id) => START_DASHBOARD_WIDGET_ID_SET.has(id))
+      : [],
+    locationId: String(value.locationId || "").slice(0, 80),
+    departmentId: /^\d+$/.test(String(value.departmentId || "")) ? String(value.departmentId) : "",
+    salesLocationId: String(value.salesLocationId || "").slice(0, 80),
+  };
+}
+
+function startDashboardPreferencesStorageKey() {
+  return `grabenplaner:start-dashboard-preferences-v1:${uiPreferenceActorKey()}`;
+}
+
+function startDashboardLocationId(preferences = state.startDashboardPreferences) {
+  const preferred = String(preferences?.locationId || "");
+  if (activeLocations().some((location) => String(location.id) === preferred)) return preferred;
+  const current = String(state.locationId || "");
+  if (activeLocations().some((location) => String(location.id) === current)) return current;
+  return String(activeLocations()[0]?.id || "");
+}
+
+function startDashboardDepartmentId(locationId, preferences = state.startDashboardPreferences) {
+  const departments = departmentsForLocation(locationId);
+  const preferred = String(preferences?.departmentId || "");
+  if (departments.some((department) => String(department.id) === preferred)) return preferred;
+  const current = String(state.departmentId || "");
+  if (String(state.locationId) === String(locationId)
+    && departments.some((department) => String(department.id) === current)) return current;
+  return state.portalSession?.user?.role === "department_manager"
+    ? String(departments[0]?.id || "")
+    : "";
+}
+
+function renderStartDashboardScopeControls() {
+  if (!elements.startDashboardLocation || !elements.startDashboardDepartment) return;
+  const locationId = startDashboardLocationId();
+  elements.startDashboardLocation.innerHTML = activeLocations().map((location) => (
+    `<option value="${escapeHtmlAttribute(location.id)}">${escapeHtml(location.name)}</option>`
+  )).join("");
+  elements.startDashboardLocation.value = locationId;
+  const departmentId = startDashboardDepartmentId(locationId);
+  const departmentOnly = state.portalSession?.user?.role === "department_manager";
+  elements.startDashboardDepartment.innerHTML = `${departmentOnly ? "" : '<option value="">Gesamte Filiale</option>'}${departmentsForLocation(locationId).map((department) => (
+    `<option value="${escapeHtmlAttribute(String(department.id))}">${escapeHtml(department.name)}</option>`
+  )).join("")}`;
+  elements.startDashboardDepartment.value = departmentId;
+}
+
+function startDashboardEmployeeLabel(employee) {
+  return String(employee?.nickname || employee?.full_name || employee?.name || employee?.personnel_number || "Teammitglied");
+}
+
+function startDashboardListMarkup(rows, emptyText) {
+  if (!rows.length) return `<p class="start-dashboard-empty">${escapeHtml(emptyText)}</p>`;
+  return `<ul>${rows.slice(0, 8).map((row) => `<li><strong>${escapeHtml(row.title)}</strong>${row.detail ? `<span>${escapeHtml(row.detail)}</span>` : ""}</li>`).join("")}</ul>${rows.length > 8 ? `<small class="start-dashboard-more">+ ${rows.length - 8} weitere</small>` : ""}`;
+}
+
+function renderStartDashboardBranchWidgets() {
+  const schedule = state.startDashboardSchedule;
+  const today = toIsoDate(new Date());
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  if (elements.startDashboardOnDuty) {
+    if (state.startDashboardScheduleLoading) {
+      elements.startDashboardOnDuty.innerHTML = '<p class="start-dashboard-empty">Dienstplan wird geladen.</p>';
+    } else if (state.startDashboardScheduleError) {
+      elements.startDashboardOnDuty.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardScheduleError)}</p>`;
+    } else {
+      const employeeByNumber = new Map((schedule?.employees || []).map((employee) => [String(employee.personnel_number), employee]));
+      const running = (schedule?.shifts || []).filter((shift) => shift.shift_date === today
+        && timeToMinutes(shift.start_time) <= currentMinutes && timeToMinutes(shift.end_time) > currentMinutes)
+        .map((shift) => ({
+          title: startDashboardEmployeeLabel(employeeByNumber.get(String(shift.employee_number))),
+          detail: `${shift.start_time}–${shift.end_time}`,
+        }));
+      elements.startDashboardOnDuty.innerHTML = startDashboardListMarkup(running, "Derzeit läuft in diesem Bereich kein Dienst.");
+    }
+  }
+  if (elements.startDashboardAbsences) {
+    if (state.startDashboardScheduleLoading) {
+      elements.startDashboardAbsences.innerHTML = '<p class="start-dashboard-empty">Abwesenheiten werden geladen.</p>';
+    } else if (state.startDashboardScheduleError) {
+      elements.startDashboardAbsences.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardScheduleError)}</p>`;
+    } else {
+      const employeeByNumber = new Map((schedule?.employees || []).map((employee) => [String(employee.personnel_number), employee]));
+      const absences = (schedule?.weekOptions || []).filter((option) => today >= option.date_from && today <= option.date_to
+        && option.option_type !== "team_meeting" && !option.soft_pending)
+        .map((option) => ({
+          title: startDashboardEmployeeLabel(employeeByNumber.get(String(option.employee_number))),
+          detail: `${optionLabels[option.option_type] || "Planungsoption"}${optionIsAllDay(option) ? " · ganztägig" : ` · ${formatOptionTime(option)}`}`,
+        }));
+      elements.startDashboardAbsences.innerHTML = startDashboardListMarkup(absences, "Heute ist keine Abwesenheit eingetragen.");
+    }
+  }
+}
+
+function renderStartDashboardPersonnelWidgets() {
+  const schedule = state.startDashboardSchedule;
+  const today = toIsoDate(new Date());
+  const activeEmployees = (schedule?.employees || []).filter((employee) => employee.active !== false);
+  const absentEmployees = new Set((schedule?.weekOptions || []).filter((option) => today >= option.date_from && today <= option.date_to
+    && option.option_type !== "team_meeting" && !option.soft_pending).map((option) => String(option.employee_number)));
+  if (elements.startDashboardPersonnelTeam) {
+    elements.startDashboardPersonnelTeam.innerHTML = state.startDashboardScheduleLoading
+      ? '<p class="start-dashboard-empty">Teamdaten werden geladen.</p>'
+      : state.startDashboardScheduleError
+        ? `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardScheduleError)}</p>`
+        : `<div class="start-dashboard-stat-row"><span><strong>${activeEmployees.length}</strong><small>aktive Mitarbeitende</small></span><span><strong>${absentEmployees.size}</strong><small>heute abwesend</small></span><span><strong>${Math.max(0, activeEmployees.length - absentEmployees.size)}</strong><small>heute verfügbar</small></span></div>`;
+  }
+  if (elements.startDashboardPersonnelRequests) {
+    if (!canReadManagerRequests()) {
+      elements.startDashboardPersonnelRequests.innerHTML = '<p class="start-dashboard-empty">Keine freigegebene Antragsübersicht.</p>';
+    } else {
+      const counts = state.requestCounts || {};
+      elements.startDashboardPersonnelRequests.innerHTML = `<div class="start-dashboard-stat-row"><span><strong>${Number(counts.vacation || 0)}</strong><small>Urlaub</small></span><span><strong>${Number(counts.timeOff || 0)}</strong><small>ZA</small></span><span><strong>${Number(counts.sickness || 0) + Number(counts.amu || 0)}</strong><small>Krank/AUM</small></span></div>`;
+    }
+  }
+}
+
+function startDashboardSalesLocationName(locationId) {
+  return state.locations.find((location) => String(location.id) === String(locationId))?.name || `Filiale ${locationId}`;
+}
+
+function renderStartDashboardSalesLocationOptions() {
+  if (!elements.startDashboardSalesLocation) return;
+  const locationIds = [...new Set(state.startDashboardSalesReports.map((report) => String(report.locationId)))];
+  const preferred = String(state.startDashboardPreferences.salesLocationId || "");
+  elements.startDashboardSalesLocation.innerHTML = `<option value="">Jüngster freigegebener Bericht</option>${locationIds.map((id) => `<option value="${escapeHtmlAttribute(id)}">${escapeHtml(startDashboardSalesLocationName(id))}</option>`).join("")}`;
+  elements.startDashboardSalesLocation.value = locationIds.includes(preferred) ? preferred : "";
+}
+
+function renderStartDashboardSalesWidgets() {
+  renderStartDashboardSalesLocationOptions();
+  const detail = state.startDashboardSalesDetail;
+  if (elements.startDashboardSalesKpis) {
+    if (state.startDashboardSalesLoading) {
+      elements.startDashboardSalesKpis.innerHTML = '<p class="start-dashboard-empty">Kennzahlen werden geladen.</p>';
+    } else if (state.startDashboardSalesError) {
+      elements.startDashboardSalesKpis.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardSalesError)}</p>`;
+    } else if (!detail) {
+      elements.startDashboardSalesKpis.innerHTML = '<p class="start-dashboard-empty">Noch kein freigegebener Bericht vorhanden.</p>';
+    } else {
+      const total = detail.totals?.period?.netRevenue;
+      const current = salesMetricNumber({ netRevenue: total }, "netRevenue", "current");
+      const comparison = salesMetricNumber({ netRevenue: total }, "netRevenue", "comparison");
+      elements.startDashboardSalesKpis.innerHTML = `<div class="start-dashboard-sales-kpi"><strong>${escapeHtml(formatSalesDecimal(current, { currency: true }))}</strong><span>Umsatz netto · ${escapeHtml(startDashboardSalesLocationName(detail.report.locationId))}</span><b class="sales-metric-change ${salesMetricChangeClass(current, comparison)}">${escapeHtml(formatSalesMetricChange(current, comparison))}</b></div>`;
+    }
+  }
+  if (elements.startDashboardSalesTopGroups) {
+    if (state.startDashboardSalesLoading) {
+      elements.startDashboardSalesTopGroups.innerHTML = '<p class="start-dashboard-empty">Warengruppen werden geladen.</p>';
+    } else if (state.startDashboardSalesError) {
+      elements.startDashboardSalesTopGroups.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardSalesError)}</p>`;
+    } else {
+      const rows = (detail?.productGroups || []).map((group) => ({
+        title: `${group.externalProductGroupId} · ${group.label}`,
+        amount: salesMetricNumber(group.horizons?.period, "netRevenue", "current"),
+      })).filter((entry) => entry.amount !== null)
+        .sort((left, right) => right.amount - left.amount)
+        .slice(0, 5)
+        .map((entry) => ({ title: entry.title, detail: formatSalesDecimal(entry.amount, { currency: true }) }));
+      elements.startDashboardSalesTopGroups.innerHTML = startDashboardListMarkup(rows, "Noch keine Warengruppen verfügbar.");
+    }
+  }
+}
+
+function renderStartDashboardCustomizer() {
+  const preferences = normalizeStartDashboardPreferences(state.startDashboardDraftPreferences || state.startDashboardPreferences);
+  const hidden = new Set(preferences.hidden);
+  document.querySelectorAll("[data-start-dashboard-widget-choice]").forEach((input) => {
+    const widgetId = input.dataset.startDashboardWidgetChoice;
+    const accessDenied = widgetId.startsWith("personnel") ? !canOpenPersonnelAdministrationModule()
+      : widgetId.startsWith("sales") ? !canAccessSalesAnalytics() : false;
+    input.checked = !hidden.has(widgetId);
+    input.disabled = accessDenied;
+    input.closest("label")?.classList.toggle("hidden", accessDenied);
+  });
+}
+
+function openStartDashboardCustomizer() {
+  state.startDashboardDraftPreferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  elements.startDashboardCustomizer?.classList.remove("hidden");
+  elements.startDashboardCustomizeButton?.setAttribute("aria-expanded", "true");
+  renderStartDashboardCustomizer();
+  elements.startDashboardCustomizerClose?.focus();
+}
+
+function closeStartDashboardCustomizer({ restoreFocus = true } = {}) {
+  state.startDashboardDraftPreferences = null;
+  elements.startDashboardCustomizer?.classList.add("hidden");
+  elements.startDashboardCustomizeButton?.setAttribute("aria-expanded", "false");
+  if (restoreFocus) elements.startDashboardCustomizeButton?.focus();
+}
+
+function renderStartDashboard() {
+  if (!elements.startDashboardView) return;
+  const personnelAvailable = canOpenPersonnelAdministrationModule();
+  const salesAvailable = canAccessSalesAnalytics();
+  elements.startDashboardPersonnelGroup?.classList.toggle("hidden", !personnelAvailable);
+  elements.startDashboardSalesGroup?.classList.toggle("hidden", !salesAvailable);
+  const hidden = new Set(normalizeStartDashboardPreferences(state.startDashboardPreferences).hidden);
+  document.querySelectorAll("[data-start-dashboard-widget]").forEach((widget) => {
+    const widgetId = widget.dataset.startDashboardWidget;
+    const accessDenied = widgetId.startsWith("personnel") ? !personnelAvailable
+      : widgetId.startsWith("sales") ? !salesAvailable : false;
+    widget.classList.toggle("hidden", hidden.has(widgetId) || accessDenied);
+  });
+  renderStartDashboardScopeControls();
+  renderStartDashboardBranchWidgets();
+  renderStartDashboardPersonnelWidgets();
+  if (salesAvailable) renderStartDashboardSalesWidgets();
+  renderStartDashboardCustomizer();
+}
+
+async function loadStartDashboardSchedule() {
+  if (state.portalStatus?.installationFeatures?.schedule === false
+    || (state.portalStatus?.portalEnabled === true
+      && !state.portalSession?.user?.permissions?.includes("schedule:read"))) {
+    state.startDashboardSchedule = null;
+    state.startDashboardScheduleLoading = false;
+    state.startDashboardScheduleError = "Keine freigegebene Dienstplanansicht.";
+    renderStartDashboard();
+    return;
+  }
+  const requestId = ++state.startDashboardScheduleRequestId;
+  const locationId = startDashboardLocationId();
+  const departmentId = startDashboardDepartmentId(locationId);
+  const parameters = new URLSearchParams({ week: getMonday(new Date()), location: locationId });
+  if (departmentId) parameters.set("department", departmentId);
+  state.startDashboardScheduleLoading = true;
+  state.startDashboardScheduleError = "";
+  renderStartDashboard();
+  try {
+    const schedule = await api(`/api/schedule?${parameters.toString()}`);
+    if (requestId !== state.startDashboardScheduleRequestId) return;
+    state.startDashboardSchedule = schedule;
+  } catch (error) {
+    if (requestId !== state.startDashboardScheduleRequestId) return;
+    state.startDashboardSchedule = null;
+    state.startDashboardScheduleError = error.message;
+  } finally {
+    if (requestId === state.startDashboardScheduleRequestId) {
+      state.startDashboardScheduleLoading = false;
+      renderStartDashboard();
+    }
+  }
+}
+
+async function loadStartDashboardSales() {
+  if (!canAccessSalesAnalytics()) return;
+  const requestId = ++state.startDashboardSalesRequestId;
+  state.startDashboardSalesLoading = true;
+  state.startDashboardSalesError = "";
+  renderStartDashboard();
+  try {
+    const payload = await api("/api/sales-analytics/reports?limit=100");
+    if (requestId !== state.startDashboardSalesRequestId) return;
+    state.startDashboardSalesReports = payload.reports || [];
+    const locationId = String(state.startDashboardPreferences.salesLocationId || "");
+    const report = state.startDashboardSalesReports.find((entry) => !locationId || String(entry.locationId) === locationId)
+      || state.startDashboardSalesReports[0];
+    const detail = report
+      ? await api(`/api/sales-analytics/reports/${encodeURIComponent(report.id)}`)
+      : null;
+    if (requestId !== state.startDashboardSalesRequestId) return;
+    state.startDashboardSalesDetail = detail;
+  } catch (error) {
+    if (requestId !== state.startDashboardSalesRequestId) return;
+    state.startDashboardSalesReports = [];
+    state.startDashboardSalesDetail = null;
+    state.startDashboardSalesError = error.message;
+  } finally {
+    if (requestId === state.startDashboardSalesRequestId) {
+      state.startDashboardSalesLoading = false;
+      renderStartDashboard();
+    }
+  }
+}
+
+function loadStartDashboard() {
+  renderStartDashboard();
+  loadStartDashboardSchedule();
+  loadStartDashboardSales();
+}
+
+async function persistStartDashboardPreferences(preferences, { silent = false } = {}) {
+  const previous = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  const normalized = normalizeStartDashboardPreferences(preferences);
+  state.startDashboardPreferences = normalized;
+  localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(normalized));
+  renderStartDashboard();
+  try {
+    const result = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ startDashboardPreferences: normalized }),
+    });
+    state.startDashboardPreferences = normalizeStartDashboardPreferences(result.startDashboardPreferences || normalized);
+    localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(state.startDashboardPreferences));
+    renderStartDashboard();
+    if (!silent) showToast("Das Startdashboard wurde gespeichert.");
+    return true;
+  } catch (error) {
+    state.startDashboardPreferences = previous;
+    localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(previous));
+    renderStartDashboard();
+    if (!silent) showToast(error.message, true);
+    return false;
+  }
+}
+
 const PERSONNEL_DASHBOARD_ITEM_IDS = Object.freeze([
   "employees",
   "applications",
@@ -18328,6 +18709,7 @@ async function saveUserRights(event) {
 }
 
 const UI_APPEARANCE_VIEWS = Object.freeze([
+  "startDashboard",
   "filialAdministration",
   "planning",
   "requests",
@@ -18463,6 +18845,7 @@ function applyWorkRuleAssessmentExpanded(value) {
 
 function pageViewElement(view) {
   return ({
+    startDashboard: elements.startDashboardView,
     filialAdministration: elements.filialAdministrationView,
     planning: elements.planningView,
     requests: elements.requestsView,
@@ -18509,6 +18892,12 @@ function applyGlobalTheme(theme) {
   document.querySelectorAll("button[data-global-theme-choice]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.globalThemeChoice === normalized));
   });
+  const darkmodeToggle = document.querySelector("#sidebarDarkmodeToggle");
+  if (darkmodeToggle) {
+    const enabled = normalized === "dark";
+    darkmodeToggle.setAttribute("aria-checked", String(enabled));
+    darkmodeToggle.setAttribute("aria-label", enabled ? "Darkmode ausschalten" : "Darkmode einschalten");
+  }
   applyActivePageAppearance();
   return normalized;
 }
@@ -18774,6 +19163,15 @@ async function loadUiPreferences() {
   }
   state.personnelDashboardLayout = normalizePersonnelDashboardLayout(storedPersonnelDashboardLayout);
   renderPersonnelDashboard();
+  let storedStartDashboardPreferences = preferences?.startDashboardPreferences;
+  if (localOnly) {
+    try {
+      storedStartDashboardPreferences = JSON.parse(localStorage.getItem(startDashboardPreferencesStorageKey()) || "null");
+    } catch {}
+  }
+  state.startDashboardPreferences = normalizeStartDashboardPreferences(storedStartDashboardPreferences);
+  localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(state.startDashboardPreferences));
+  renderStartDashboard();
   let storedColumns = preferences?.employeeDisplayColumns;
   let storedSort = preferences?.employeeDisplaySort;
   if (localOnly) {
@@ -21749,6 +22147,7 @@ async function loadManagerVacationRequests() {
     if (elements.vacationHrApprovalRequired) elements.vacationHrApprovalRequired.checked = workflow.vacationHrApprovalRequired;
     renderRequestNavigation();
     renderManagerRequests();
+    renderStartDashboardPersonnelWidgets();
   } catch (error) {
     elements.requestsNavButton?.classList.toggle("hidden", error.status === 403);
     if (error.status !== 403) elements.managerVacationRequestList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
@@ -25299,7 +25698,7 @@ function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
   const definition = metricDefinitions.find(
     (entry) => entry.id === state.salesAnalytics.chartMetric,
   ) || metricDefinitions[0];
-  const groups = [...detail.productGroups]
+  const candidates = [...detail.productGroups]
     .filter((group) => group.horizons?.[horizon])
     .map((group) => ({
       group,
@@ -25307,10 +25706,24 @@ function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
       comparison: salesMetricNumber(group.horizons[horizon], definition.id, "comparison"),
     }))
     .filter((entry) => entry.current !== null || entry.comparison !== null)
-    .sort((left, right) => (right.current ?? Number.NEGATIVE_INFINITY)
+    .filter((entry) => entry.current !== 0 || entry.comparison !== 0);
+  const chartType = ["ranking", "change", "share"].includes(state.salesAnalytics.chartType)
+    ? state.salesAnalytics.chartType
+    : "ranking";
+  let groups = [];
+  if (chartType === "change") {
+    groups = candidates.map((entry) => ({
+      ...entry,
+      change: salesMetricRelativeChange(entry.current, entry.comparison),
+    })).filter((entry) => Number.isFinite(entry.change))
+      .sort((left, right) => Math.abs(right.change) - Math.abs(left.change))
+      .slice(0, 12);
+  } else {
+    groups = candidates.sort((left, right) => (right.current ?? Number.NEGATIVE_INFINITY)
       - (left.current ?? Number.NEGATIVE_INFINITY))
-    .filter((entry) => entry.current !== 0 || entry.comparison !== 0)
-    .slice(0, 12);
+      .slice(0, 12);
+  }
+  if (chartType === "share") groups = groups.filter((entry) => Number(entry.current) > 0);
   if (!groups.length) {
     renderSalesAnalyticsEmpty(
       elements.salesReportChart,
@@ -25319,10 +25732,82 @@ function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
     );
     return;
   }
+  const chart = document.createDocumentFragment();
+  if (chartType === "share") {
+    const total = candidates.reduce((sum, entry) => sum + Math.max(0, Number(entry.current) || 0), 0);
+    const palette = ["#2f7764", "#4d927d", "#72aa98", "#9bc1b4", "#d08f54", "#bd6b61", "#7d8da3", "#8d79a6", "#87935f", "#5d7770", "#b39c69", "#8790a0"];
+    const summary = document.createElement("div");
+    summary.className = "sales-chart-share-summary";
+    groups.forEach((entry, index) => {
+      const segment = document.createElement("span");
+      segment.className = "sales-chart-share-segment";
+      segment.style.width = `${total > 0 ? (entry.current / total) * 100 : 0}%`;
+      segment.style.background = palette[index % palette.length];
+      segment.title = `${entry.group.externalProductGroupId} · ${entry.group.label}`;
+      summary.append(segment);
+    });
+    chart.append(summary);
+    groups.forEach((entry, index) => {
+      const share = total > 0 ? (entry.current / total) * 100 : 0;
+      const row = document.createElement("div");
+      row.className = "sales-chart-share-row";
+      row.setAttribute("aria-label", `${entry.group.externalProductGroupId} ${entry.group.label}: ${share.toLocaleString("de-AT", { maximumFractionDigits: 1 })} Prozent Anteil`);
+      const label = document.createElement("div");
+      label.className = "sales-chart-label";
+      label.textContent = `${entry.group.externalProductGroupId} · ${entry.group.label}`;
+      const track = document.createElement("div");
+      track.className = "sales-chart-share-track";
+      const bar = document.createElement("div");
+      bar.className = "sales-chart-share-bar";
+      bar.style.width = `${Math.max(share > 0 ? 1 : 0, share)}%`;
+      bar.style.setProperty("--sales-share-color", palette[index % palette.length]);
+      track.append(bar);
+      const values = document.createElement("div");
+      values.className = "sales-chart-values";
+      const amount = document.createElement("span");
+      amount.textContent = formatSalesMetric(definition, entry.current);
+      const percentage = document.createElement("span");
+      percentage.className = "comparison";
+      percentage.textContent = `${share.toLocaleString("de-AT", { maximumFractionDigits: 1 })} %`;
+      values.append(amount, percentage);
+      row.append(label, track, values);
+      chart.append(row);
+    });
+    elements.salesReportChart?.replaceChildren(chart);
+    return;
+  }
+  if (chartType === "change") {
+    const maximumChange = Math.max(1, ...groups.map((entry) => Math.abs(entry.change)));
+    for (const entry of groups) {
+      const row = document.createElement("div");
+      row.className = "sales-chart-change-row";
+      row.setAttribute("aria-label", `${entry.group.externalProductGroupId} ${entry.group.label}: ${formatSalesMetricChange(entry.current, entry.comparison)}`);
+      const label = document.createElement("div");
+      label.className = "sales-chart-label";
+      label.textContent = `${entry.group.externalProductGroupId} · ${entry.group.label}`;
+      const track = document.createElement("div");
+      track.className = "sales-chart-change-track";
+      const bar = document.createElement("div");
+      bar.className = `sales-chart-change-bar${entry.change < 0 ? " negative" : ""}`;
+      const width = Math.max(1, (Math.abs(entry.change) / maximumChange) * 50);
+      bar.style.width = `${width}%`;
+      bar.style.left = entry.change < 0 ? `${50 - width}%` : "50%";
+      track.append(bar);
+      const values = document.createElement("div");
+      values.className = "sales-chart-values";
+      const change = document.createElement("span");
+      change.className = entry.change < 0 ? "negative" : "positive";
+      change.textContent = formatSalesMetricChange(entry.current, entry.comparison);
+      values.append(change);
+      row.append(label, track, values);
+      chart.append(row);
+    }
+    elements.salesReportChart?.replaceChildren(chart);
+    return;
+  }
   const maximum = Math.max(1, ...groups.flatMap((entry) => (
     [Math.abs(entry.current || 0), Math.abs(entry.comparison || 0)]
   )));
-  const chart = document.createDocumentFragment();
   for (const entry of groups) {
     const row = document.createElement("div");
     row.className = "sales-chart-row";
@@ -25371,74 +25856,104 @@ function salesAnalyticsGroupChange(group, horizon, metricId = "netRevenue") {
   return Number.NEGATIVE_INFINITY;
 }
 
-function renderSalesAnalyticsTableOptions(hasGrossMargin) {
-  const definitions = [
-    { value: "netRevenue_desc", label: "Umsatz absteigend" },
-    { value: "change_desc", label: "Umsatzabweichung absteigend" },
-    { value: "quantity_desc", label: "Menge absteigend" },
-    { value: "customers_desc", label: "Kunden absteigend" },
-    ...(hasGrossMargin ? [{ value: "margin_desc", label: "Rohertrag absteigend" }] : []),
-    { value: "group_asc", label: "Warengruppe aufsteigend" },
-  ];
-  if (!definitions.some((entry) => entry.value === state.salesAnalytics.tableSort)) {
-    state.salesAnalytics.tableSort = "netRevenue_desc";
-  }
-  if (elements.salesReportTableSort) {
-    const options = definitions.map((definition) => {
-      const option = document.createElement("option");
-      option.value = definition.value;
-      option.textContent = definition.label;
-      return option;
-    });
-    elements.salesReportTableSort.replaceChildren(...options);
-    elements.salesReportTableSort.value = state.salesAnalytics.tableSort;
-  }
+function salesAnalyticsTableSortKeys(hasGrossMargin) {
+  return new Set([
+    "group",
+    "quantity_current",
+    "quantity_comparison",
+    "netRevenue_current",
+    "netRevenue_comparison",
+    "netRevenue_change",
+    ...(hasGrossMargin ? ["grossMargin_current", "grossMargin_comparison"] : []),
+    "customerCount_current",
+    "customerCount_comparison",
+    "revenuePerCustomer_current",
+    "revenuePerCustomer_comparison",
+  ]);
 }
 
-function sortSalesAnalyticsGroups(groups, horizon) {
+function normalizeSalesAnalyticsTableSort(hasGrossMargin) {
+  const match = String(state.salesAnalytics.tableSort || "").match(/^(.*)_(asc|desc)$/);
+  if (!match || !salesAnalyticsTableSortKeys(hasGrossMargin).has(match[1])) {
+    state.salesAnalytics.tableSort = "netRevenue_current_desc";
+    return { key: "netRevenue_current", direction: "desc" };
+  }
+  return { key: match[1], direction: match[2] };
+}
+
+function changeSalesAnalyticsTableSort(key, hasGrossMargin) {
+  if (!salesAnalyticsTableSortKeys(hasGrossMargin).has(key)) return;
+  const current = normalizeSalesAnalyticsTableSort(hasGrossMargin);
+  const direction = current.key === key
+    ? (current.direction === "asc" ? "desc" : "asc")
+    : (key === "group" ? "asc" : "desc");
+  state.salesAnalytics.tableSort = `${key}_${direction}`;
+  renderSalesAnalyticsReport();
+}
+
+function salesAnalyticsGroupSortValue(group, horizon, key) {
+  if (key === "group") return `${group.externalProductGroupId} ${group.label}`;
+  if (key === "netRevenue_change") return salesAnalyticsGroupChange(group, horizon);
+  const side = key.endsWith("_comparison") ? "comparison" : "current";
+  const metricId = key.replace(/_(current|comparison)$/, "");
+  return salesMetricNumber(group.horizons?.[horizon], metricId, side);
+}
+
+function sortSalesAnalyticsGroups(groups, horizon, hasGrossMargin) {
   const sorted = [...groups];
-  const descendingMetric = state.salesAnalytics.tableSort === "quantity_desc"
-    ? "quantity"
-    : state.salesAnalytics.tableSort === "customers_desc"
-      ? "customerCount"
-      : state.salesAnalytics.tableSort === "margin_desc"
-        ? "grossMargin"
-        : "netRevenue";
+  const { key, direction } = normalizeSalesAnalyticsTableSort(hasGrossMargin);
+  const collator = new Intl.Collator("de-AT", { numeric: true, sensitivity: "base" });
   sorted.sort((left, right) => {
-    if (state.salesAnalytics.tableSort === "group_asc") {
-      return `${left.externalProductGroupId} ${left.label}`.localeCompare(
-        `${right.externalProductGroupId} ${right.label}`,
-        "de",
-        { numeric: true, sensitivity: "base" },
-      );
+    const leftValue = salesAnalyticsGroupSortValue(left, horizon, key);
+    const rightValue = salesAnalyticsGroupSortValue(right, horizon, key);
+    const leftMissing = leftValue === null || leftValue === undefined || Number.isNaN(leftValue);
+    const rightMissing = rightValue === null || rightValue === undefined || Number.isNaN(rightValue);
+    if (leftMissing !== rightMissing) return leftMissing ? 1 : -1;
+    let comparison = 0;
+    if (!leftMissing) {
+      comparison = typeof leftValue === "string"
+        ? collator.compare(leftValue, String(rightValue))
+        : Number(leftValue) - Number(rightValue);
     }
-    const leftValue = state.salesAnalytics.tableSort === "change_desc"
-      ? salesAnalyticsGroupChange(left, horizon)
-      : salesMetricNumber(left.horizons[horizon], descendingMetric, "current");
-    const rightValue = state.salesAnalytics.tableSort === "change_desc"
-      ? salesAnalyticsGroupChange(right, horizon)
-      : salesMetricNumber(right.horizons[horizon], descendingMetric, "current");
-    return (rightValue ?? Number.NEGATIVE_INFINITY) - (leftValue ?? Number.NEGATIVE_INFINITY)
-      || `${left.externalProductGroupId} ${left.label}`.localeCompare(
-        `${right.externalProductGroupId} ${right.label}`,
-        "de",
-        { numeric: true, sensitivity: "base" },
-      );
+    if (direction === "desc") comparison *= -1;
+    return comparison || collator.compare(
+      `${left.externalProductGroupId} ${left.label}`,
+      `${right.externalProductGroupId} ${right.label}`,
+    );
   });
   return sorted;
 }
 
-function salesAnalyticsHeaderCell(text, { rowSpan = 1, colSpan = 1, scope = "col" } = {}) {
+function salesAnalyticsHeaderCell(text, {
+  rowSpan = 1,
+  colSpan = 1,
+  scope = "col",
+  sortKey = "",
+  hasGrossMargin = false,
+} = {}) {
   const cell = document.createElement("th");
-  cell.textContent = text;
   cell.rowSpan = rowSpan;
   cell.colSpan = colSpan;
   cell.scope = scope;
+  if (!sortKey) {
+    cell.textContent = text;
+    return cell;
+  }
+  const activeSort = normalizeSalesAnalyticsTableSort(hasGrossMargin);
+  const active = activeSort.key === sortKey;
+  cell.setAttribute("aria-sort", active ? (activeSort.direction === "asc" ? "ascending" : "descending") : "none");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `sales-table-sort-button${active ? ` active ${activeSort.direction}` : ""}`;
+  button.dataset.salesTableSort = sortKey;
+  button.textContent = text;
+  button.setAttribute("aria-label", `${text} sortieren${active ? `, derzeit ${activeSort.direction === "asc" ? "aufsteigend" : "absteigend"}` : ""}`);
+  cell.append(button);
   return cell;
 }
 
 function renderSalesAnalyticsTable(detail, horizon, hasGrossMargin) {
-  renderSalesAnalyticsTableOptions(hasGrossMargin);
+  normalizeSalesAnalyticsTableSort(hasGrossMargin);
   if (elements.salesReportGroupSearch) {
     elements.salesReportGroupSearch.value = state.salesAnalytics.tableSearch;
   }
@@ -25460,19 +25975,20 @@ function renderSalesAnalyticsTable(detail, horizon, hasGrossMargin) {
   const periods = salesAnalyticsPeriods(detail, horizon);
   const topRow = document.createElement("tr");
   const detailRow = document.createElement("tr");
-  topRow.append(salesAnalyticsHeaderCell("Warengruppe", { rowSpan: 2 }));
-  const groups = [
-    { label: "Menge", columns: 2 },
-    { label: "Umsatz netto", columns: 3 },
-    ...(hasGrossMargin ? [{ label: "Rohertrag", columns: 2 }] : []),
-    { label: "Kunden", columns: 2 },
-    { label: "Umsatz/Kunde", columns: 2 },
+  topRow.append(salesAnalyticsHeaderCell("Warengruppe", { rowSpan: 2, sortKey: "group", hasGrossMargin }));
+  const metricGroups = [
+    { label: "Menge", columns: [{ label: "Aktuell", key: "quantity_current" }, { label: "Vergleich", key: "quantity_comparison" }] },
+    { label: "Umsatz netto", columns: [{ label: "Aktuell", key: "netRevenue_current" }, { label: "Vergleich", key: "netRevenue_comparison" }, { label: "Abweichung", key: "netRevenue_change" }] },
+    ...(hasGrossMargin ? [{ label: "Rohertrag", columns: [{ label: "Aktuell", key: "grossMargin_current" }, { label: "Vergleich", key: "grossMargin_comparison" }] }] : []),
+    { label: "Kunden", columns: [{ label: "Aktuell", key: "customerCount_current" }, { label: "Vergleich", key: "customerCount_comparison" }] },
+    { label: "Umsatz/Kunde", columns: [{ label: "Aktuell", key: "revenuePerCustomer_current" }, { label: "Vergleich", key: "revenuePerCustomer_comparison" }] },
   ];
-  for (const group of groups) {
-    topRow.append(salesAnalyticsHeaderCell(group.label, { colSpan: group.columns, scope: "colgroup" }));
-    detailRow.append(salesAnalyticsHeaderCell("Aktuell"));
-    detailRow.append(salesAnalyticsHeaderCell("Vergleich"));
-    if (group.label === "Umsatz netto") detailRow.append(salesAnalyticsHeaderCell("Abweichung"));
+  for (const metricGroup of metricGroups) {
+    topRow.append(salesAnalyticsHeaderCell(metricGroup.label, { colSpan: metricGroup.columns.length, scope: "colgroup" }));
+    metricGroup.columns.forEach((column) => detailRow.append(salesAnalyticsHeaderCell(column.label, {
+      sortKey: column.key,
+      hasGrossMargin,
+    })));
   }
   elements.salesReportTableHead?.replaceChildren(topRow, detailRow);
 
@@ -25480,7 +25996,7 @@ function renderSalesAnalyticsTable(detail, horizon, hasGrossMargin) {
   const allGroups = detail.productGroups.filter((group) => group.horizons?.[horizon]);
   const matchingGroups = allGroups.filter((group) => !normalizedSearch
     || `${group.externalProductGroupId} ${group.label}`.toLocaleLowerCase("de").includes(normalizedSearch));
-  const sortedGroups = sortSalesAnalyticsGroups(matchingGroups, horizon);
+  const sortedGroups = sortSalesAnalyticsGroups(matchingGroups, horizon, hasGrossMargin);
   if (elements.salesReportTableCount) {
     const resultLabel = normalizedSearch
       ? `${sortedGroups.length} von ${allGroups.length} Warengruppen`
@@ -25546,6 +26062,20 @@ function renderSalesAnalyticsReport() {
   const detail = series || state.salesAnalytics.selectedReport;
   const horizon = series ? "period" : state.salesAnalytics.horizon;
   const hasGrossMargin = detail?.rights?.grossMargin === true;
+  if (!["ranking", "change", "share"].includes(state.salesAnalytics.chartType)) {
+    state.salesAnalytics.chartType = "ranking";
+  }
+  if (elements.salesReportChartType) elements.salesReportChartType.value = state.salesAnalytics.chartType;
+  if (elements.salesReportChartPdfButton) {
+    elements.salesReportChartPdfButton.disabled = !detail || state.salesAnalytics.loading || state.salesAnalytics.seriesLoading;
+  }
+  const chartPresentation = {
+    ranking: { eyebrow: "Aktuell und Vergleich", title: "Stärkste Warengruppen" },
+    change: { eyebrow: "Relative Entwicklung", title: "Größte Abweichungen" },
+    share: { eyebrow: "Verteilung im aktuellen Zeitraum", title: "Anteile nach Warengruppe" },
+  }[state.salesAnalytics.chartType];
+  if (elements.salesAnalyticsChartEyebrow) elements.salesAnalyticsChartEyebrow.textContent = chartPresentation.eyebrow;
+  if (elements.salesAnalyticsChartTitle) elements.salesAnalyticsChartTitle.textContent = chartPresentation.title;
   const metricDefinitions = renderSalesAnalyticsMetricOptions(hasGrossMargin);
   renderSalesAnalyticsKpis(detail, horizon, hasGrossMargin);
   renderSalesAnalyticsTable(detail, horizon, hasGrossMargin);
@@ -25568,17 +26098,20 @@ function renderSalesAnalyticsReport() {
       : `${salesAnalyticsLocationName(detail.report.locationId)} · ${salesPeriodLabel(periods.current)} · Gesamtumsatz ${formatSalesDecimal(total?.netRevenue?.current, { currency: true })} · Vergleich ${formatSalesDecimal(total?.netRevenue?.comparison, { currency: true })}`;
   }
   if (elements.salesReportChartLegend) {
-    const current = document.createElement("span");
-    const comparison = document.createElement("span");
-    current.className = "current";
-    comparison.className = "comparison";
-    current.textContent = series
-      ? `Ausgewählte PDF-Zeiträume · ${salesPeriodLabel(periods.current)}`
-      : `Aktuell · ${salesPeriodLabel(periods.current)}`;
-    comparison.textContent = series
-      ? `Zugehörige Vergleichszeiträume · ${salesPeriodLabel(periods.comparison)}`
-      : `Vergleich · ${salesPeriodLabel(periods.comparison)}`;
-    elements.salesReportChartLegend.replaceChildren(current, comparison);
+    const legendEntries = state.salesAnalytics.chartType === "ranking"
+      ? [
+        { className: "current", text: series ? `Ausgewählte PDF-Zeiträume · ${salesPeriodLabel(periods.current)}` : `Aktuell · ${salesPeriodLabel(periods.current)}` },
+        { className: "comparison", text: series ? `Zugehörige Vergleichszeiträume · ${salesPeriodLabel(periods.comparison)}` : `Vergleich · ${salesPeriodLabel(periods.comparison)}` },
+      ]
+      : state.salesAnalytics.chartType === "change"
+        ? [{ className: "current", text: "Über Vergleich" }, { className: "negative", text: "Unter Vergleich" }]
+        : [{ className: "current", text: `Anteil an ${salesPeriodLabel(periods.current)}` }];
+    elements.salesReportChartLegend.replaceChildren(...legendEntries.map((entry) => {
+      const item = document.createElement("span");
+      item.className = entry.className;
+      item.textContent = entry.text;
+      return item;
+    }));
     elements.salesReportChartLegend.classList.remove("hidden");
   }
   renderSalesAnalyticsGraph(detail, horizon, metricDefinitions);
@@ -25776,6 +26309,42 @@ async function analyzeSalesReportSeries() {
   }
 }
 
+async function downloadSalesAnalyticsChartsPdf() {
+  const series = state.salesAnalytics.reportSeries;
+  const reportId = state.salesAnalytics.selectedReportId;
+  if (!series && !reportId) return;
+  const button = elements.salesReportChartPdfButton;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "PDF wird erstellt …";
+  }
+  try {
+    const body = series
+      ? {
+        reportIds: series.selection.reportIds,
+        horizon: "period",
+        metric: state.salesAnalytics.chartMetric,
+      }
+      : {
+        reportId,
+        horizon: state.salesAnalytics.horizon,
+        metric: state.salesAnalytics.chartMetric,
+      };
+    const response = await rawApi("/api/sales-analytics/charts.pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    await downloadFileResponse(response, "Grabenplaner-Verkaufsanalyse-Grafiken.pdf");
+    showToast("Die Diagramm-PDF wurde erstellt.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    if (button) button.textContent = "Grafiken als PDF";
+    renderSalesAnalyticsReport();
+  }
+}
+
 function setView(view) {
   const features = state.portalStatus?.installationFeatures || {};
   if ((view === "vacations" && features.vacation === false)
@@ -25786,7 +26355,7 @@ function setView(view) {
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "branchOrders" && !canManageBranchOrders())
-    || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
+    || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "startDashboard";
   const profileView = state.employeeProfileHost === "team" ? "personnel" : "personnelAdministration";
   if (employeeProfileIsOpen() && view !== profileView) closeEmployeeProfile({ restoreFocus: false });
   if (view !== "personnelAdministration" && (
@@ -25818,6 +26387,7 @@ function setView(view) {
     button.classList.toggle("active", active);
   });
   renderContextNavigation();
+  elements.startDashboardView?.classList.toggle("active", view === "startDashboard");
   elements.filialAdministrationView?.classList.toggle("active", view === "filialAdministration");
   elements.planningView.classList.toggle("active", view === "planning");
   elements.requestsView.classList.toggle("active", view === "requests");
@@ -25840,6 +26410,7 @@ function setView(view) {
   if (view === "requests") loadManagerVacationRequests();
   if (view === "loans") loadLoanManagement();
   if (view === "branchOrders") loadBranchOrdersManagement();
+  if (view === "startDashboard") loadStartDashboard();
   if (view === "salesAnalytics") loadSalesAnalytics();
   if (view === "rightsDashboard") loadRightsDashboard();
   if (view === "timeTracking") {
@@ -25853,7 +26424,10 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) return;
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+    setView("startDashboard");
+    return;
+  }
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -27004,6 +27578,8 @@ function openOptionsModal() {
   document.querySelector("#optionDateFrom").value = state.weekStart;
   document.querySelector("#optionDateTo").value = state.weekStart;
   document.querySelector("#optionType").value = "vacation";
+  document.querySelector("#optionType").disabled = false;
+  document.querySelector("#optionTeamWide").checked = true;
   document.querySelector("#optionAllDay").checked = true;
   const defaultHours = dayConfig(state.weekStart, state.data.settings);
   document.querySelector("#optionStartTime").value = defaultHours?.start || "09:00";
@@ -27100,6 +27676,8 @@ function fillGlobalBlockForm(block) {
 function resetOptionEditor() {
   state.editingOptionId = null;
   state.editingOptionGroupId = null;
+  document.querySelector("#optionType").disabled = false;
+  document.querySelector("#optionTeamWide").checked = true;
   elements.optionSubmitButton.textContent = "Hinzufügen";
   elements.cancelOptionEditButton.classList.add("hidden");
 }
@@ -27113,6 +27691,8 @@ function fillOptionForm(option) {
   state.editingOptionGroupId = option.group_id || null;
   document.querySelector("#optionEmployee").value = option.employee_number;
   document.querySelector("#optionType").value = option.option_type;
+  document.querySelector("#optionTeamWide").checked = isTeamWideMeetingOption(option);
+  document.querySelector("#optionType").disabled = isTeamWideMeetingOption(option);
   document.querySelector("#optionDateFrom").value = option.date_from;
   document.querySelector("#optionDateTo").value = option.date_to;
   document.querySelector("#optionAllDay").checked = optionIsAllDay(option);
@@ -27131,6 +27711,8 @@ function updateOptionCreditFields() {
   const alwaysAllDay = ["vacation", "sick", "branch", "vocational_school", "special_leave"].includes(type);
   const supportsTime = ["school", "time_off", "external_appointment", "team_meeting", "other"].includes(type);
   const manualAllDay = ["school", "external_appointment", "team_meeting", "other"].includes(type);
+  const teamMeeting = type === "team_meeting";
+  const teamWide = teamMeeting && document.querySelector("#optionTeamWide").checked;
   const allDayInput = document.querySelector("#optionAllDay");
   if (alwaysAllDay) allDayInput.checked = true;
   const allDay = allDayInput.checked || alwaysAllDay;
@@ -27139,6 +27721,10 @@ function updateOptionCreditFields() {
   const employee = state.data.employees.find((item) => item.personnel_number === employeeNumber);
   const dailyHours = employee ? Number(employee.contracted_hours) / 5 : 0;
   document.querySelector("#optionAllDayField").classList.toggle("hidden", !supportsTime);
+  document.querySelector("#optionTeamScopeField").classList.toggle("hidden", !teamMeeting);
+  document.querySelector("#optionEmployeeField").classList.toggle("hidden", teamWide);
+  document.querySelector("#optionEmployee").disabled = teamWide;
+  document.querySelector("#optionEmployee").required = !teamWide;
   allDayInput.disabled = alwaysAllDay;
   document.querySelector("#optionTimeFields").classList.toggle("hidden", allDay || !supportsTime);
   document.querySelector("#optionHoursField").classList.toggle("hidden", !manual);
@@ -27146,7 +27732,9 @@ function updateOptionCreditFields() {
   const start = document.querySelector("#optionStartTime").value;
   const end = document.querySelector("#optionEndTime").value;
   const timedHours = start && end && end > start ? (timeToMinutes(end) - timeToMinutes(start)) / 60 : 0;
-  document.querySelector("#optionCreditHint").textContent = manual
+  document.querySelector("#optionCreditHint").textContent = teamWide && !allDay
+    ? `Teamsitzung für das gesamte sichtbare Team: ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 2 }).format(timedHours)} Stunden je anwesendem Teammitglied. Krankmeldungen haben Vorrang und erzeugen keinen Konflikt.`
+    : manual
     ? "Ganztägig: Die eingetragenen Stunden werden für jeden ausgewählten Tag angerechnet."
     : type === "time_off"
       ? allDay
@@ -27160,6 +27748,12 @@ function updateOptionCreditFields() {
 function handleOptionTypeChange() {
   const type = document.querySelector("#optionType").value;
   document.querySelector("#optionAllDay").checked = ["vacation", "sick", "branch", "vocational_school", "special_leave"].includes(type);
+  if (type === "team_meeting" && !state.editingOptionId) {
+    document.querySelector("#optionTeamWide").checked = true;
+    document.querySelector("#optionAllDay").checked = false;
+    document.querySelector("#optionStartTime").value = "18:00";
+    document.querySelector("#optionEndTime").value = "20:00";
+  }
   updateOptionCreditFields();
 }
 
@@ -27183,21 +27777,7 @@ function openResetWeekModal() {
 }
 
 function renderOptionList() {
-  const options = state.data.weekOptions;
-  elements.optionList.innerHTML = options.length ? options.map((option) => `
-    <div class="option-item">
-      <span class="option-item-color" style="background:${option.color}"></span>
-      <div><strong>${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)} · ${optionLabels[option.option_type]}</strong>
-      <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""} · gerechnet ${formatHours(option.credited_minutes || 0)}</small></div>
-      <div class="option-actions">
-        <button type="button" class="edit-option" data-edit-option="${option.id}">Bearbeiten</button>
-        <button type="button" class="delete-option" data-delete-option="${option.id}">Entfernen</button>
-      </div>
-    </div>`).join("") : '<div class="empty-options">Für diese Woche sind noch keine Sonderfälle eingetragen.</div>';
-}
-
-function renderOptionList() {
-  const options = state.data.weekOptions;
+  const options = collapsedWeekOptions(state.data.weekOptions);
   const blocks = state.data.globalDayBlocks || [];
   const blockItems = blocks.map((block) => `
     <div class="option-item global-option-item">
@@ -27210,10 +27790,10 @@ function renderOptionList() {
       </div>
     </div>`);
   const optionItems = options.map((option) => `
-    <div class="option-item">
-      <span class="option-item-color" style="background:${option.color}"></span>
-      <div><strong>${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)} · ${optionLabels[option.option_type]}</strong>
-      <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""} · gerechnet ${formatHours(option.credited_minutes || 0)}</small></div>
+    <div class="option-item ${isTeamWideMeetingOption(option) ? "team-meeting-option-item" : ""}">
+      <span class="option-item-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : option.color}"></span>
+      <div><strong>${isTeamWideMeetingOption(option) ? `Ganzes Team (${option.team_member_count})` : `${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)}`} · ${optionLabels[option.option_type]}</strong>
+      <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""}${isTeamWideMeetingOption(option) ? " · Krankmeldungen bleiben vorrangig" : ` · gerechnet ${formatHours(option.credited_minutes || 0)}`}</small></div>
       <div class="option-actions ${isLocationPlannerSession() && !["vacation", "time_off"].includes(option.option_type) ? "hidden" : ""}">
         <button type="button" class="edit-option" data-edit-option="${option.id}">Bearbeiten</button>
         <button type="button" class="delete-option" data-delete-option="${option.id}">Entfernen</button>
@@ -27585,6 +28165,9 @@ async function saveOption(event) {
   }
   const body = {
     employeeNumber: document.querySelector("#optionEmployee").value,
+    teamWide: selectedType === "team_meeting" && document.querySelector("#optionTeamWide").checked,
+    locationId: state.locationId,
+    departmentId: state.departmentId || null,
     weekStart: state.weekStart,
     dateFrom: document.querySelector("#optionDateFrom").value,
     dateTo: document.querySelector("#optionDateTo").value,
@@ -29252,13 +29835,20 @@ elements.salesReportChartMetric?.addEventListener("change", () => {
   state.salesAnalytics.chartMetric = elements.salesReportChartMetric.value;
   renderSalesAnalyticsReport();
 });
+elements.salesReportChartType?.addEventListener("change", () => {
+  state.salesAnalytics.chartType = elements.salesReportChartType.value;
+  renderSalesAnalyticsReport();
+});
+elements.salesReportChartPdfButton?.addEventListener("click", downloadSalesAnalyticsChartsPdf);
 elements.salesReportGroupSearch?.addEventListener("input", () => {
   state.salesAnalytics.tableSearch = elements.salesReportGroupSearch.value;
   renderSalesAnalyticsReport();
 });
-elements.salesReportTableSort?.addEventListener("change", () => {
-  state.salesAnalytics.tableSort = elements.salesReportTableSort.value;
-  renderSalesAnalyticsReport();
+elements.salesReportTableHead?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-sales-table-sort]");
+  if (!button) return;
+  const detail = state.salesAnalytics.reportSeries || state.salesAnalytics.selectedReport;
+  changeSalesAnalyticsTableSort(button.dataset.salesTableSort, detail?.rights?.grossMargin === true);
 });
 elements.mobileNavigationToggle?.addEventListener("click", openMobileNavigation);
 elements.mobileNavigationClose?.addEventListener("click", () => closeMobileNavigation());
@@ -29690,6 +30280,9 @@ elements.loanSettingsList?.addEventListener("submit", (event) => {
 document.querySelectorAll("button[data-global-theme-choice]").forEach((button) => button.addEventListener("click", () => {
   saveGlobalTheme(button.dataset.globalThemeChoice);
 }));
+document.querySelector("#sidebarDarkmodeToggle")?.addEventListener("click", () => {
+  saveGlobalTheme(state.globalTheme === "dark" ? "light" : "dark");
+});
 elements.decreaseAppFontScale?.addEventListener("click", () => {
   applyAppFontScalePercent(Math.max(APP_FONT_SCALE_MIN, state.appFontScalePercent - APP_FONT_SCALE_STEP));
 });
@@ -30401,6 +30994,7 @@ elements.employeeLendingDelegates?.addEventListener("change", (event) => {
 });
 document.querySelector("#optionType").addEventListener("change", handleOptionTypeChange);
 document.querySelector("#optionEmployee").addEventListener("change", updateOptionCreditFields);
+document.querySelector("#optionTeamWide").addEventListener("change", updateOptionCreditFields);
 elements.globalBlockSubmitButton.addEventListener("click", saveGlobalBlock);
 elements.globalBlockDate.addEventListener("change", updateGlobalBlockHolidaySuggestion);
 elements.optionPreviousWeek.addEventListener("click", () => switchOptionsWeek(-1));
@@ -30450,6 +31044,72 @@ document.querySelector("#addEmployeeButton").addEventListener("click", async () 
   openEmployeeModal();
 });
 elements.addCentralEmployeeButton?.addEventListener("click", () => openEmployeeModal());
+elements.startDashboardBrandButton?.addEventListener("click", () => {
+  setView("startDashboard");
+  closeMobileNavigation({ restoreFocus: false });
+});
+elements.startDashboardGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-start-dashboard-view]");
+  if (!button) return;
+  if (button.dataset.startDashboardRoute === "dashboard"
+    && button.dataset.startDashboardView === "personnelAdministration") {
+    setPersonnelAdministrationTab("dashboard");
+  }
+  setView(button.dataset.startDashboardView);
+});
+elements.startDashboardCustomizeButton?.addEventListener("click", () => {
+  if (elements.startDashboardCustomizer?.classList.contains("hidden")) openStartDashboardCustomizer();
+  else closeStartDashboardCustomizer();
+});
+elements.startDashboardCustomizerClose?.addEventListener("click", () => closeStartDashboardCustomizer());
+elements.startDashboardCustomizer?.addEventListener("change", (event) => {
+  const checkbox = event.target.closest("[data-start-dashboard-widget-choice]");
+  if (!checkbox) return;
+  const preferences = normalizeStartDashboardPreferences(
+    state.startDashboardDraftPreferences || state.startDashboardPreferences,
+  );
+  const hidden = new Set(preferences.hidden);
+  if (checkbox.checked) hidden.delete(checkbox.dataset.startDashboardWidgetChoice);
+  else hidden.add(checkbox.dataset.startDashboardWidgetChoice);
+  preferences.hidden = [...hidden];
+  state.startDashboardDraftPreferences = preferences;
+});
+elements.startDashboardResetButton?.addEventListener("click", () => {
+  const current = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  state.startDashboardDraftPreferences = {
+    ...defaultStartDashboardPreferences(),
+    locationId: current.locationId,
+    departmentId: current.departmentId,
+    salesLocationId: current.salesLocationId,
+  };
+  renderStartDashboardCustomizer();
+});
+elements.startDashboardSaveButton?.addEventListener("click", async () => {
+  const preferences = normalizeStartDashboardPreferences(
+    state.startDashboardDraftPreferences || state.startDashboardPreferences,
+  );
+  elements.startDashboardSaveButton.disabled = true;
+  const saved = await persistStartDashboardPreferences(preferences);
+  elements.startDashboardSaveButton.disabled = false;
+  if (saved) closeStartDashboardCustomizer();
+});
+elements.startDashboardLocation?.addEventListener("change", async () => {
+  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  preferences.locationId = elements.startDashboardLocation.value;
+  preferences.departmentId = "";
+  if (await persistStartDashboardPreferences(preferences, { silent: true })) loadStartDashboardSchedule();
+});
+elements.startDashboardDepartment?.addEventListener("change", async () => {
+  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  preferences.locationId = elements.startDashboardLocation?.value || preferences.locationId;
+  preferences.departmentId = elements.startDashboardDepartment.value;
+  if (await persistStartDashboardPreferences(preferences, { silent: true })) loadStartDashboardSchedule();
+});
+elements.startDashboardSalesLocation?.addEventListener("change", async () => {
+  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  preferences.salesLocationId = elements.startDashboardSalesLocation.value;
+  if (await persistStartDashboardPreferences(preferences, { silent: true })) loadStartDashboardSales();
+});
 elements.filialDashboardGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filial-dashboard-view]");
   if (button) setView(button.dataset.filialDashboardView);

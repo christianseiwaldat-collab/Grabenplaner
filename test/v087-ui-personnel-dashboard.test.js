@@ -103,3 +103,61 @@ test("UI Block 1: schmale Ansichten verwenden einen vertikalen, zugänglichen Dr
   assert.match(app, /mobileNavigationPreviousFocus/);
   assert.match(app, /elements\.mainSidebar\.inert = true/);
 });
+
+test("Startdashboard: drei Hauptgruppen navigieren und zeigen nur freigegebene persönliche Inhalte", () => {
+  const section = between(
+    html,
+    '<section id="startDashboardView"',
+    '<section id="filialAdministrationView"',
+  );
+  for (const [label, target] of [
+    ["Filialverwaltung", "filialAdministration"],
+    ["Personalverwaltung", "personnelAdministration"],
+    ["Verkaufsverwaltung", "salesAdministration"],
+  ]) {
+    assert.match(section, new RegExp(`data-start-dashboard-view="${target}"[\\s\\S]{0,240}<strong>${label}<\\/strong>`));
+  }
+  for (const id of [
+    "startDashboardLocation",
+    "startDashboardDepartment",
+    "startDashboardOnDuty",
+    "startDashboardAbsences",
+    "startDashboardPersonnelTeam",
+    "startDashboardPersonnelRequests",
+    "startDashboardSalesLocation",
+    "startDashboardSalesKpis",
+    "startDashboardSalesTopGroups",
+  ]) assert.match(section, new RegExp(`id="${id}"`));
+  assert.match(app, /function renderStartDashboard\(\)/);
+  assert.match(app, /canOpenPersonnelAdministrationModule\(\)/);
+  assert.match(app, /canAccessSalesAnalytics\(\)/);
+  assert.match(app, /\/api\/schedule\?/);
+  assert.match(app, /\/api\/sales-analytics\/reports\?limit=100/);
+  assert.match(app, /preferenceKey: "start_dashboard_preferences_v1"|start-dashboard-preferences-v1/);
+  assert.match(server, /preferenceKey: "start_dashboard_preferences_v1"/);
+  assert.match(server, /function validateStartDashboardPreferences\(value\)/);
+  assert.doesNotMatch(server, /installationFeatureCatalog[\s\S]{0,400}sales:analytics/);
+});
+
+test("Verkaufsanalyse: Archiv, Sortierung, Grafikvarianten und PDF-Export sind integriert", () => {
+  const section = between(
+    html,
+    '<section id="salesAnalyticsView"',
+    '<section id="personnelView"',
+  );
+  assert.doesNotMatch(section, /Aufgearbeitete TradeFoto-Berichte/);
+  assert.match(section, /Der Warengruppenvergleich wird als strukturierter/);
+  assert.doesNotMatch(section, /id="salesReportTableSort"/);
+  assert.match(section, /id="salesReportChartType"[\s\S]*?value="ranking"[\s\S]*?value="change"[\s\S]*?value="share"/);
+  assert.match(section, /id="salesReportChartPdfButton"/);
+  assert.match(section, /<details class="sales-analytics-archive" id="salesReportArchive"/);
+  assert.ok(section.indexOf('id="salesReportArchive"') > section.indexOf('id="salesReportTableBody"'));
+  assert.match(app, /function changeSalesAnalyticsTableSort\(key, hasGrossMargin\)/);
+  assert.match(app, /data-sales-table-sort/);
+  assert.match(app, /function downloadSalesAnalyticsChartsPdf\(\)/);
+  assert.match(server, /app\.post\("\/api\/sales-analytics\/charts\.pdf"/);
+  assert.match(server, /salesAnalyticsRequestContext\(request, \{ csrf: true \}\)/);
+  assert.match(server, /projectedSalesAnalyticsChartsPdfData/);
+  assert.match(server, /sales\.report\.charts\.export/);
+  assert.match(server, /Cache-Control", "private, no-store"/);
+});

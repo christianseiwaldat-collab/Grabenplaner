@@ -121,7 +121,8 @@ test("v0.87 Block 7: Grundeinstellungen verwenden Accordions und eine globale nu
   assert.match(script, /function applyAppFontScalePercent[\s\S]*?scheduleAllSettingsPackedGrids\(\);[\s\S]*?return normalized;/);
   assert.doesNotMatch(styles, /--app-font-scale-(?:width|min-height)/);
 
-  assert.match(html, /class="sidebar-global-theme"[\s\S]*data-global-theme-choice="light"[\s\S]*data-global-theme-choice="dark"/);
+  assert.match(html, /id="sidebarSessionInfo"[\s\S]*id="sidebarDarkmodeToggle"[\s\S]*role="switch"/);
+  assert.match(script, /darkmodeToggle\.setAttribute\("aria-checked", String\(enabled\)\)/);
   assert.match(styles, /\.view \.page-theme-switch \{ display:none !important; \}/);
   assert.match(script, /function applyGlobalTheme\(theme\)[\s\S]*for \(const view of UI_APPEARANCE_VIEWS\) applyPageTheme\(view, normalized\)/);
   assert.match(script, /pageThemes: Object\.fromEntries\(UI_APPEARANCE_VIEWS\.map\(\(view\) => \[view, normalized\]\)\)/);

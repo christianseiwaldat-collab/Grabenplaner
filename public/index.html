@@ -32,15 +32,22 @@
       </button>
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
-          <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.10 Beta</span></div>
+          <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
+            <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.10 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+          </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
-          <strong id="sidebarSessionRole"></strong>
-          <span id="sidebarSessionIdentity"></span>
-          <span id="sidebarSessionPosition"></span>
-          <button id="portalLogoutButton" type="button">(Logout)</button>
+          <div class="sidebar-session-copy">
+            <strong id="sidebarSessionRole"></strong>
+            <span id="sidebarSessionIdentity"></span>
+            <span id="sidebarSessionPosition"></span>
+            <button id="portalLogoutButton" type="button">(Logout)</button>
+          </div>
+          <button class="sidebar-darkmode-toggle" id="sidebarDarkmodeToggle" type="button" role="switch" aria-checked="false" aria-label="Darkmode einschalten">
+            <span>Darkmode</span><i aria-hidden="true"><b></b></i>
+          </button>
         </div>
 
         <section class="function-search hidden" id="functionSearch" aria-label="Funktionen durchsuchen">
@@ -183,14 +190,6 @@
 
         <div class="sidebar-actions" aria-label="Ansicht und System">
           <a class="sidebar-portal-link hidden" id="employeePortalLink" href="/portal.html">Mitarbeiterportal öffnen</a>
-          <a class="sidebar-developer-contact" href="mailto:christian.seiwald.at@gmail.com">
-            <span>Developer-Kontakt</span>
-            <strong>christian.seiwald.at@gmail.com</strong>
-          </a>
-          <div class="sidebar-global-theme" role="group" aria-label="Globale Darstellung">
-            <span>Darstellung</span>
-            <div><button type="button" data-global-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-global-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
-          </div>
           <button class="sidebar-exit-button" id="systemExitButton" type="button">
             <span>Beenden</span>
           </button>
@@ -205,6 +204,61 @@
           <span><strong id="serverAlertTitle">Serverzustand prüfen</strong><small id="serverAlertMessage">Eine technische Warnung benötigt Aufmerksamkeit.</small></span>
           <em>Details öffnen</em>
         </button>
+        <section id="startDashboardView" class="view start-dashboard-view active" aria-labelledby="startDashboardTitle">
+          <header class="topbar start-dashboard-topbar">
+            <div><span class="eyebrow">Übersicht &amp; Schnellzugriff</span><h1 id="startDashboardTitle">Startdashboard</h1><p class="subtitle">Filial-, Personal- und Verkaufsinformationen im persönlichen Arbeitsüberblick.</p></div>
+            <button class="secondary-button" id="startDashboardCustomizeButton" type="button" aria-controls="startDashboardCustomizer" aria-expanded="false">Dashboard anpassen</button>
+          </header>
+          <section class="start-dashboard-customizer hidden" id="startDashboardCustomizer" aria-labelledby="startDashboardCustomizerTitle">
+            <div class="start-dashboard-customizer-heading">
+              <div><span class="eyebrow">Persönliche Inhalte</span><h2 id="startDashboardCustomizerTitle">Inhalte ein- oder ausblenden</h2><p>Die Auswahl wird benutzerbezogen gespeichert. Fehlende Fachrechte bleiben unabhängig davon gesperrt.</p></div>
+              <button class="close-button" id="startDashboardCustomizerClose" type="button" aria-label="Dashboard-Anpassung schließen">×</button>
+            </div>
+            <div class="start-dashboard-customizer-grid">
+              <label><input type="checkbox" data-start-dashboard-widget-choice="branchOnDuty" checked /><span><strong>Filiale · jetzt im Dienst</strong><small>Aktuell laufende Dienste des gewählten Bereichs.</small></span></label>
+              <label><input type="checkbox" data-start-dashboard-widget-choice="branchAbsences" checked /><span><strong>Filiale · heutige Abwesenheiten</strong><small>Urlaub, ZA, Krankheit und weitere Planungsoptionen.</small></span></label>
+              <label><input type="checkbox" data-start-dashboard-widget-choice="personnelTeam" checked /><span><strong>Personal · Teamübersicht</strong><small>Aktive und heute abwesende Mitarbeitende.</small></span></label>
+              <label><input type="checkbox" data-start-dashboard-widget-choice="personnelRequests" checked /><span><strong>Personal · offene Anträge</strong><small>Freigegebene Antragsarten und aktueller Prüfbestand.</small></span></label>
+              <label><input type="checkbox" data-start-dashboard-widget-choice="salesKpis" checked /><span><strong>Verkauf · Kennzahlen</strong><small>Umsatz und Vergleich des jüngsten freigegebenen Berichts.</small></span></label>
+              <label><input type="checkbox" data-start-dashboard-widget-choice="salesTopGroups" checked /><span><strong>Verkauf · stärkste Warengruppen</strong><small>Die führenden Warengruppen aus der Verkaufsanalyse.</small></span></label>
+            </div>
+            <div class="modal-actions"><button class="secondary-button" id="startDashboardResetButton" type="button">Standard wiederherstellen</button><span></span><button class="primary-button" id="startDashboardSaveButton" type="button">Dashboard speichern</button></div>
+          </section>
+          <div class="start-dashboard-grid" id="startDashboardGrid" aria-live="polite">
+            <article class="start-dashboard-group" id="startDashboardBranchGroup">
+              <button class="start-dashboard-group-link" type="button" data-start-dashboard-view="filialAdministration">
+                <span class="start-dashboard-group-symbol" aria-hidden="true">⌂</span><span><small>Hauptgruppe</small><strong>Filialverwaltung</strong><em>Zum Filialverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
+              </button>
+              <div class="start-dashboard-scope-controls">
+                <label><span>Filiale</span><select id="startDashboardLocation"></select></label>
+                <label><span>Abteilung</span><select id="startDashboardDepartment"></select></label>
+              </div>
+              <div class="start-dashboard-widget-grid">
+                <section class="start-dashboard-widget" data-start-dashboard-widget="branchOnDuty"><span>Jetzt im Dienst</span><div id="startDashboardOnDuty"><p>Plan wird geladen.</p></div></section>
+                <section class="start-dashboard-widget" data-start-dashboard-widget="branchAbsences"><span>Heute abwesend</span><div id="startDashboardAbsences"><p>Plan wird geladen.</p></div></section>
+              </div>
+            </article>
+            <article class="start-dashboard-group hidden" id="startDashboardPersonnelGroup">
+              <button class="start-dashboard-group-link" type="button" data-start-dashboard-view="personnelAdministration" data-start-dashboard-route="dashboard">
+                <span class="start-dashboard-group-symbol" aria-hidden="true">◎</span><span><small>Hauptgruppe</small><strong>Personalverwaltung</strong><em>Zum Personalverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
+              </button>
+              <div class="start-dashboard-widget-grid">
+                <section class="start-dashboard-widget" data-start-dashboard-widget="personnelTeam"><span>Teamübersicht</span><div id="startDashboardPersonnelTeam"><p>Personaldaten werden geladen.</p></div></section>
+                <section class="start-dashboard-widget" data-start-dashboard-widget="personnelRequests"><span>Offene Anträge</span><div id="startDashboardPersonnelRequests"><p>Anträge werden geladen.</p></div></section>
+              </div>
+            </article>
+            <article class="start-dashboard-group hidden" id="startDashboardSalesGroup">
+              <button class="start-dashboard-group-link" type="button" data-start-dashboard-view="salesAdministration">
+                <span class="start-dashboard-group-symbol" aria-hidden="true">▤</span><span><small>Hauptgruppe</small><strong>Verkaufsverwaltung</strong><em>Zum Verkaufsverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
+              </button>
+              <div class="start-dashboard-scope-controls single"><label><span>Filiale</span><select id="startDashboardSalesLocation"><option value="">Jüngster freigegebener Bericht</option></select></label></div>
+              <div class="start-dashboard-widget-grid">
+                <section class="start-dashboard-widget" data-start-dashboard-widget="salesKpis"><span>Aktuelle Kennzahlen</span><div id="startDashboardSalesKpis"><p>Verkaufsdaten werden geladen.</p></div></section>
+                <section class="start-dashboard-widget" data-start-dashboard-widget="salesTopGroups"><span>Stärkste Warengruppen</span><div id="startDashboardSalesTopGroups"><p>Verkaufsdaten werden geladen.</p></div></section>
+              </div>
+            </article>
+          </div>
+        </section>
         <section id="filialAdministrationView" class="view" aria-labelledby="filialAdministrationTitle">
           <header class="topbar">
             <div><span class="eyebrow">Filialverwaltung</span><h1 id="filialAdministrationTitle">Filialverwaltung</h1><p class="subtitle">Team, operative Abläufe und Planung im eigenen Verantwortungsbereich.</p></div>
@@ -216,7 +270,7 @@
             <div class="personnel-dashboard-grid" id="filialDashboardGrid" aria-live="polite"></div>
           </section>
         </section>
-        <section id="planningView" class="view active">
+        <section id="planningView" class="view">
           <header class="topbar">
             <div>
               <span class="eyebrow">Wochendienstplan</span>
@@ -1288,26 +1342,11 @@
 
         <section id="salesAnalyticsView" class="view sales-analytics-view" aria-labelledby="salesAnalyticsTitle">
           <header class="topbar sales-analytics-topbar">
-            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAnalyticsTitle">Verkaufsanalysen</h1><p class="subtitle">Filial-, Unternehmens- und Onlineshop-Auswertungen in einem geschützten Desktop-Arbeitsbereich.</p></div>
+            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAnalyticsTitle">Verkaufsanalysen</h1><p class="subtitle">TradeFoto-PDF-Statistiken sicher erkennen und auswerten – optimiert als Desktop für Tabellen und Grafiken. Der Warengruppenvergleich wird als strukturierter Statistikbericht übernommen. GP erkennt Filiale, Zeiträume, Warengruppen und Kennzahlen; Filialzuordnung und Währung müssen bestätigt werden. Die Original-PDF wird nicht gespeichert, Einzelbons oder Kundenbezüge werden daraus nicht erzeugt.</p></div>
             <span class="status-badge inactive" id="salesAnalyticsStatusBadge">Berichtsdaten werden geladen</span>
           </header>
 
           <div class="sales-analytics-desktop-workspace">
-            <section class="sales-analytics-foundation-card" aria-labelledby="salesAnalyticsFoundationTitle">
-              <div>
-                <span class="eyebrow">Aufgearbeitete TradeFoto-Berichte</span>
-                <h2 id="salesAnalyticsFoundationTitle">TradeFoto-PDF-Statistiken sicher erkennen und auswerten</h2>
-                <p>Der Warengruppenvergleich wird als strukturierter Statistikbericht übernommen. GP erkennt Filiale, Zeiträume, Warengruppen und Kennzahlen; Filialzuordnung und Währung müssen bestätigt werden. Die Original-PDF wird nicht gespeichert, Einzelbons oder Kundenbezüge werden daraus nicht erzeugt.</p>
-              </div>
-              <dl class="sales-analytics-boundaries">
-                <div><dt>Produktstatus</dt><dd>Fest in Grabenplaner integriert</dd></div>
-                <div><dt>Datenzugriff</dt><dd>Fail-closed und serverseitig projiziert</dd></div>
-                <div><dt>Importtyp</dt><dd>Aggregierter Warengruppenbericht</dd></div>
-                <div><dt>Prüfschritt</dt><dd>Filiale, EUR und Berichtssumme bestätigen</dd></div>
-                <div><dt>Darstellung</dt><dd>Desktop für Tabellen und Grafiken</dd></div>
-              </dl>
-            </section>
-
             <section class="sales-analytics-import-card hidden" id="salesReportImportPanel" aria-labelledby="salesReportImportTitle">
               <div class="sales-analytics-section-heading">
                 <div><span class="eyebrow">PDF-Berichtsimport</span><h2 id="salesReportImportTitle">TradeFoto-Statistik prüfen</h2><p>Geeignet ist der Bericht „Warengruppenvergleich netto“. Eine vorhandene Textschicht wird direkt gelesen; reine Raster-PDFs werden lokal erkannt und anschließend als vollständig bearbeitbarer OCR-Vorschlag angezeigt.</p></div>
@@ -1344,7 +1383,7 @@
                 <div class="sales-report-preview-table-wrap">
                   <table class="sales-report-table sales-report-preview-table"><thead id="salesReportPreviewHead"></thead><tbody id="salesReportPreviewBody"></tbody><tfoot id="salesReportPreviewFoot"></tfoot></table>
                 </div>
-                <label class="sales-report-confirmation"><input id="salesReportImportConfirmed" type="checkbox" /><span id="salesReportConfirmationText">Ich bestätige die erkannte TradeFoto-Filiale, die Zuordnung zur gewählten GP-Filiale, EUR als Währung sowie die angezeigten Prüfhilfen.</span></label>
+                <label class="sales-report-confirmation"><input id="salesReportImportConfirmed" type="checkbox" /><span id="salesReportConfirmationText">Die erkannte TradeFoto-Filiale, die gewählte GP-Filiale, EUR und Berichtssumme bestätige ich zusammen mit den angezeigten Prüfhilfen.</span></label>
                 <div class="sales-report-preview-actions"><span>Die PDF selbst wird nach der Prüfung nicht gespeichert.</span><button class="primary-button" id="salesReportApplyButton" type="button" disabled>Bericht verbindlich übernehmen</button></div>
               </div>
             </section>
@@ -1359,25 +1398,6 @@
               <p class="sales-analytics-filter-notice hidden" id="salesReportFilterNotice" role="status"></p>
             </section>
 
-            <section class="sales-analytics-archive" id="salesReportArchive" aria-labelledby="salesReportArchiveTitle">
-              <div class="sales-analytics-surface-heading">
-                <div><span class="eyebrow">PDF-Berichtsarchiv</span><h2 id="salesReportArchiveTitle">Zeiträume sicher zusammenstellen</h2><p>Einzelne Berichte bleiben auch bei Überschneidungen nutzbar. GP rechnet mehrere PDFs nur innerhalb derselben Filiale und nur bei überschneidungsfreien Berichts- und Vergleichszeiträumen zusammen.</p></div>
-                <div class="sales-report-archive-actions">
-                  <button class="secondary-button" id="salesReportSeriesClearButton" type="button" disabled>Auswahl leeren</button>
-                  <button class="primary-button" id="salesReportSeriesAnalyzeButton" type="button" disabled>Auswahl sicher analysieren</button>
-                </div>
-              </div>
-              <p class="sales-report-archive-summary" id="salesReportArchiveSelectionSummary" role="status">Noch keine PDF-Berichte für eine gemeinsame Analyse ausgewählt.</p>
-              <div class="sales-report-coverage-chart hidden" id="salesReportCoverageChart" aria-label="Zeitabdeckung der ausgewählten PDF-Berichte"></div>
-              <div class="sales-report-table-shell">
-                <table class="sales-report-table sales-report-archive-table">
-                  <thead><tr><th scope="col">Auswahl</th><th scope="col">Filiale</th><th scope="col">Berichtszeitraum</th><th scope="col">Tage</th><th scope="col">Vergleichszeitraum</th><th scope="col">Warengruppen</th><th scope="col">Import</th><th scope="col">Archivstatus</th><th scope="col">Ansicht</th></tr></thead>
-                  <tbody id="salesReportArchiveBody"></tbody>
-                </table>
-                <div class="sales-analytics-empty-surface" id="salesReportArchiveEmpty"><strong>Noch keine PDF-Berichte</strong><p>Nach einem bestätigten Import erscheint der Bericht hier als eigenständiger Zeitraum.</p></div>
-              </div>
-            </section>
-
             <section class="sales-analytics-kpis" id="salesReportKpis" aria-label="Kennzahlen des ausgewählten Berichts">
               <div class="sales-analytics-empty-kpis"><strong>Noch keine Kennzahlen</strong><span>Wählen Sie einen importierten Statistikbericht aus.</span></div>
             </section>
@@ -1385,8 +1405,12 @@
             <div class="sales-analytics-surface-grid">
               <section class="sales-analytics-surface sales-analytics-chart-surface" aria-labelledby="salesAnalyticsChartTitle">
                 <div class="sales-analytics-surface-heading">
-                  <div><span class="eyebrow">Aktuell und Vergleich</span><h2 id="salesAnalyticsChartTitle">Stärkste Warengruppen</h2><p id="salesReportSummary">Noch kein Statistikbericht ausgewählt.</p></div>
-                  <label class="sales-analytics-chart-metric"><span>Diagramm-Kennzahl</span><select id="salesReportChartMetric"><option value="netRevenue">Umsatz netto</option></select></label>
+                  <div><span class="eyebrow" id="salesAnalyticsChartEyebrow">Aktuell und Vergleich</span><h2 id="salesAnalyticsChartTitle">Stärkste Warengruppen</h2><p id="salesReportSummary">Noch kein Statistikbericht ausgewählt.</p></div>
+                  <div class="sales-analytics-chart-controls">
+                    <label class="sales-analytics-chart-metric"><span>Grafik</span><select id="salesReportChartType"><option value="ranking">Aktuell und Vergleich</option><option value="change">Abweichungen</option><option value="share">Anteile</option></select></label>
+                    <label class="sales-analytics-chart-metric"><span>Kennzahl</span><select id="salesReportChartMetric"><option value="netRevenue">Umsatz netto</option></select></label>
+                    <button class="secondary-button" id="salesReportChartPdfButton" type="button" disabled>Grafiken als PDF</button>
+                  </div>
                 </div>
                 <div class="sales-chart-legend" id="salesReportChartLegend" aria-hidden="true"><span class="current">Aktueller Zeitraum</span><span class="comparison">Vergleichszeitraum</span></div>
                 <div class="sales-analytics-chart" id="salesReportChart"><div class="sales-analytics-empty-surface"><strong>Noch keine Berichtsdaten</strong><p>Nach einer bestätigten Übernahme erscheinen hier die stärksten Warengruppen.</p></div></div>
@@ -1397,12 +1421,32 @@
                   <div><span class="eyebrow">Aktuell und Vergleich im Detail</span><h2 id="salesAnalyticsTableTitle">Warengruppen im Detail</h2><p id="salesReportTableCount">Noch keine Warengruppen ausgewählt.</p></div>
                   <div class="sales-analytics-table-controls">
                     <label><span>Warengruppe suchen</span><input id="salesReportGroupSearch" type="search" placeholder="Nummer oder Bezeichnung" autocomplete="off" /></label>
-                    <label><span>Sortierung</span><select id="salesReportTableSort"><option value="netRevenue_desc">Umsatz absteigend</option><option value="change_desc">Umsatzabweichung absteigend</option><option value="quantity_desc">Menge absteigend</option><option value="customers_desc">Kunden absteigend</option><option value="group_asc">Warengruppe aufsteigend</option></select></label>
                   </div>
                 </div>
                 <div class="sales-report-table-shell"><table class="sales-report-table sales-report-analysis-table"><thead id="salesReportTableHead"></thead><tbody id="salesReportTableBody"></tbody></table><div class="sales-analytics-empty-surface" id="salesReportTableEmpty"><strong>Noch keine Berichtsdaten</strong><p>Wählen Sie einen importierten Statistikbericht aus.</p></div></div>
               </section>
             </div>
+            <details class="sales-analytics-archive" id="salesReportArchive" aria-labelledby="salesReportArchiveTitle">
+              <summary class="sales-analytics-archive-summary-heading">
+                <span><span class="eyebrow">PDF-Berichtsarchiv</span><strong id="salesReportArchiveTitle">Zeiträume sicher zusammenstellen</strong><small>Einzelne und mehrere freigegebene Berichtszeiträume verwalten.</small></span><b aria-hidden="true"></b>
+              </summary>
+              <div class="sales-analytics-archive-content">
+                <p>Einzelne Berichte bleiben auch bei Überschneidungen nutzbar. GP rechnet mehrere PDFs nur innerhalb derselben Filiale und nur bei überschneidungsfreien Berichts- und Vergleichszeiträumen zusammen.</p>
+                <div class="sales-report-archive-actions">
+                  <button class="secondary-button" id="salesReportSeriesClearButton" type="button" disabled>Auswahl leeren</button>
+                  <button class="primary-button" id="salesReportSeriesAnalyzeButton" type="button" disabled>Auswahl sicher analysieren</button>
+                </div>
+                <p class="sales-report-archive-summary" id="salesReportArchiveSelectionSummary" role="status">Noch keine PDF-Berichte für eine gemeinsame Analyse ausgewählt.</p>
+                <div class="sales-report-coverage-chart hidden" id="salesReportCoverageChart" aria-label="Zeitabdeckung der ausgewählten PDF-Berichte"></div>
+                <div class="sales-report-table-shell">
+                  <table class="sales-report-table sales-report-archive-table">
+                    <thead><tr><th scope="col">Auswahl</th><th scope="col">Filiale</th><th scope="col">Berichtszeitraum</th><th scope="col">Tage</th><th scope="col">Vergleichszeitraum</th><th scope="col">Warengruppen</th><th scope="col">Import</th><th scope="col">Archivstatus</th><th scope="col">Ansicht</th></tr></thead>
+                    <tbody id="salesReportArchiveBody"></tbody>
+                  </table>
+                  <div class="sales-analytics-empty-surface" id="salesReportArchiveEmpty"><strong>Noch keine PDF-Berichte</strong><p>Nach einem bestätigten Import erscheint der Bericht hier als eigenständiger Zeitraum.</p></div>
+                </div>
+              </div>
+            </details>
           </div>
         </section>
 
@@ -2738,8 +2782,9 @@
           <button type="button" class="secondary-button" id="globalBlockSubmitButton">Tag sperren</button>
         </div>
         <div class="option-entry">
-          <label class="field"><span>Teammitglied</span><select id="optionEmployee" required></select></label>
+          <label class="field" id="optionEmployeeField"><span>Teammitglied</span><select id="optionEmployee" required></select></label>
           <label class="field"><span>Art</span><select id="optionType"><option value="vacation">Urlaub</option><option value="sick">Krank</option><option value="branch">Andere Filiale</option><option value="vocational_school">Berufsschule</option><option value="school">Schulung</option><option value="time_off">Zeitausgleich</option><option value="special_leave">Sonderurlaub</option><option value="external_appointment">Außer-Haus-Termin</option><option value="team_meeting">Teamsitzung</option><option value="other">Sonstiges</option></select></label>
+          <div class="field option-team-scope hidden" id="optionTeamScopeField"><span>Teilnehmende</span><label class="checkbox-line"><input id="optionTeamWide" type="checkbox" checked /> gesamtes Team</label></div>
           <label class="field"><span>Von</span><input id="optionDateFrom" type="date" required /></label>
           <label class="field"><span>Bis</span><input id="optionDateTo" type="date" required /></label>
           <div class="field option-all-day" id="optionAllDayField"><span>Umfang</span><label class="checkbox-line"><input id="optionAllDay" type="checkbox" /> ganztägig</label></div>

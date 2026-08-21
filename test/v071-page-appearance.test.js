@@ -85,6 +85,59 @@ function resetFixture() {
   }
 }
 
+function seedSalesAnalyticsPdfFixture(locationId) {
+  const reportId = crypto.createHash("sha256").update(`v071-sales-pdf-${crypto.randomUUID()}`).digest("hex");
+  const sourceHash = crypto.createHash("sha256").update(`${reportId}-source`).digest("hex");
+  db.prepare(`
+    INSERT INTO sales_aggregate_reports (
+      id, source_system, source_file_sha256, parser_version, extraction, review_method,
+      report_kind, external_branch_id, location_id, currency, period_start, period_end,
+      comparison_start, comparison_end, year_to_date_start, year_to_date_comparison_start,
+      generated_on, page_count, product_group_count, issue_count, reconciliation_status,
+      imported_by, imported_at
+    ) VALUES (
+      ?, 'tradefoto_report', ?, 2, 'pdf_text_coordinates', 'source_text_confirmed',
+      'product_group_net', '18', ?, 'EUR', '2026-07-01', '2026-07-31',
+      '2025-07-01', '2025-07-31', '2026-01-01', '2025-01-01', '2026-08-03',
+      1, 3, 0, 'match', 'v071-admin', '2026-08-21T10:00:00.000Z'
+    )
+  `).run(reportId, sourceHash, locationId);
+  const insertGroup = db.prepare(`
+    INSERT INTO sales_report_product_group_metrics (
+      report_id, horizon, external_product_group_id, product_group_label,
+      current_quantity, comparison_quantity, current_net_revenue, comparison_net_revenue,
+      current_gross_margin, comparison_gross_margin, current_customer_count,
+      comparison_customer_count, current_revenue_per_customer,
+      comparison_revenue_per_customer, source_page, source_ordinate
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+  `);
+  const groups = [
+    ["101", "Kameras", 12, 10, 1200, 1000, 320, 270, 11, 9, 109.09, 111.11],
+    ["202", "Objektive", 8, 11, 880, 1210, 250, 350, 7, 10, 125.71, 121],
+    ["303", "Zubehör", 30, 24, 750, 600, 210, 165, 25, 20, 30, 30],
+  ];
+  for (const horizon of ["period", "year_to_date"]) {
+    groups.forEach((group, index) => insertGroup.run(
+      reportId,
+      horizon,
+      group[0],
+      group[1],
+      ...group.slice(2).map((value) => Number(value).toFixed(4)),
+      String(100 + index),
+    ));
+    db.prepare(`
+      INSERT INTO sales_report_total_metrics (
+        report_id, horizon, current_quantity, comparison_quantity,
+        current_net_revenue, comparison_net_revenue, current_gross_margin,
+        comparison_gross_margin, current_customer_count, comparison_customer_count,
+        current_revenue_per_customer, comparison_revenue_per_customer, source_page
+      ) VALUES (?, ?, '50.0000', '45.0000', '2830.0000', '2810.0000',
+        '780.0000', '785.0000', '43.0000', '39.0000', '65.8100', '72.0500', 1)
+    `).run(reportId, horizon);
+  }
+  return reportId;
+}
+
 test.before(async () => {
   await new Promise((resolve, reject) => {
     httpServer = app.listen(0, "127.0.0.1", resolve);
@@ -157,6 +210,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
 
   const defaults = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(defaults.response.status, 200, JSON.stringify(defaults.payload));
+  assert.equal(defaults.payload.pageThemes.startDashboard, "light");
   assert.equal(defaults.payload.pageThemes.filialAdministration, "light");
   assert.equal(defaults.payload.pageThemes.planning, "light");
   assert.equal(defaults.payload.pageThemes.personnelAdministration, "light");
@@ -172,6 +226,13 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     order: ["employees", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
     hidden: [],
   });
+  assert.deepEqual(defaults.payload.startDashboardPreferences, {
+    version: 1,
+    hidden: [],
+    locationId: "",
+    departmentId: "",
+    salesLocationId: "",
+  });
 
   const personnelDashboardLayout = {
     version: 1,
@@ -185,11 +246,19 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     quarter: 3,
     month: 8,
   };
+  const startDashboardPreferences = {
+    version: 1,
+    hidden: ["branchAbsences", "salesTopGroups"],
+    locationId: "18",
+    departmentId: "7",
+    salesLocationId: "5",
+  };
   const changed = await requestJson("/api/portal/v1/ui-preferences", {
     method: "PUT",
     session: admin,
     body: {
       pageThemes: {
+        startDashboard: "dark",
         filialAdministration: "dark",
         planning: "dark",
         requests: "dark",
@@ -209,10 +278,12 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
       employeeDisplaySort: { key: "name", direction: "desc" },
       vacationCalendarView,
       personnelDashboardLayout,
+      startDashboardPreferences,
     },
   });
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   assert.equal(changed.payload.pageThemes.filialAdministration, "dark");
+  assert.equal(changed.payload.pageThemes.startDashboard, "dark");
   assert.equal(changed.payload.pageThemes.planning, "dark");
   assert.equal(changed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(changed.payload.pageThemes.rightsDashboard, "dark");
@@ -221,9 +292,11 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.deepEqual(changed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
   assert.deepEqual(changed.payload.vacationCalendarView, vacationCalendarView);
   assert.deepEqual(changed.payload.personnelDashboardLayout, personnelDashboardLayout);
+  assert.deepEqual(changed.payload.startDashboardPreferences, startDashboardPreferences);
 
   const refreshed = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(refreshed.payload.pageThemes.filialAdministration, "dark");
+  assert.equal(refreshed.payload.pageThemes.startDashboard, "dark");
   assert.equal(refreshed.payload.pageThemes.planning, "dark");
   assert.equal(refreshed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(refreshed.payload.appFontScalePercent, 115);
@@ -231,6 +304,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.deepEqual(refreshed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
   assert.deepEqual(refreshed.payload.vacationCalendarView, vacationCalendarView);
   assert.deepEqual(refreshed.payload.personnelDashboardLayout, personnelDashboardLayout);
+  assert.deepEqual(refreshed.payload.startDashboardPreferences, startDashboardPreferences);
 
   const managerDefaults = await requestJson("/api/portal/v1/ui-preferences", { session: manager });
   assert.equal(managerDefaults.response.status, 200, JSON.stringify(managerDefaults.payload));
@@ -240,6 +314,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.ok(managerDefaults.payload.employeeDisplayColumns.includes("name"));
   assert.equal(managerDefaults.payload.vacationCalendarView.view, "year");
   assert.deepEqual(managerDefaults.payload.personnelDashboardLayout.hidden, []);
+  assert.deepEqual(managerDefaults.payload.startDashboardPreferences.hidden, []);
 
   for (const appFontScalePercent of [75, 150]) {
     const boundary = await requestJson("/api/portal/v1/ui-preferences", {
@@ -310,6 +385,77 @@ test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen
     });
     assert.equal(invalidLayout.response.status, 400, JSON.stringify(invalidLayout.payload));
   }
+  for (const startDashboardPreferences of [
+    null,
+    { version: 2, hidden: [], locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 1, hidden: ["unknown"], locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 1, hidden: [], locationId: "18!", departmentId: "", salesLocationId: "" },
+    { version: 1, hidden: [], locationId: "18", departmentId: "A", salesLocationId: "" },
+  ]) {
+    const invalidPreferences = await requestJson("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      session: admin,
+      body: { startDashboardPreferences },
+    });
+    assert.equal(invalidPreferences.response.status, 400, JSON.stringify(invalidPreferences.payload));
+  }
   const anonymous = await requestJson("/api/portal/v1/ui-preferences");
   assert.equal(anonymous.response.status, 401, JSON.stringify(anonymous.payload));
+});
+
+test("Verkaufsanalyse: Grafikexport erzeugt aus der Rechteprojektion eine dreiseitige PDF", async () => {
+  const session = createPortalSession("v071-admin", "admin");
+  for (const permission of ["sales:analytics:access", "sales:analytics:company:read"]) {
+    db.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES ('v071-admin', ?, 'v071-admin')
+    `).run(permission);
+  }
+  const locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id);
+  const reportId = seedSalesAnalyticsPdfFixture(locationId);
+  const response = await fetch(`${baseUrl}/api/sales-analytics/charts.pdf`, {
+    method: "POST",
+    headers: {
+      Accept: "application/pdf",
+      "Content-Type": "application/json",
+      Cookie: session.cookie,
+      "X-CSRF-Token": session.csrf,
+    },
+    body: JSON.stringify({ reportId, horizon: "period", metric: "netRevenue" }),
+  });
+  const buffer = Buffer.from(await response.arrayBuffer());
+  assert.equal(response.status, 200, buffer.toString("utf8", 0, 400));
+  assert.match(response.headers.get("content-type") || "", /^application\/pdf/);
+  assert.match(response.headers.get("cache-control") || "", /private/);
+  assert.match(response.headers.get("content-disposition") || "", /Grabenplaner-Verkaufsanalyse/);
+  assert.equal(buffer.subarray(0, 5).toString("ascii"), "%PDF-");
+  assert.ok(buffer.length > 5000);
+  const qaOutput = String(process.env.SALES_CHART_PDF_QA_OUTPUT || "").trim();
+  if (qaOutput) fs.writeFileSync(qaOutput, buffer);
+
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer), disableWorker: true });
+  try {
+    const document = await loadingTask.promise;
+    assert.equal(document.numPages, 3);
+    const text = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      text.push(content.items.map((item) => item.str).join(" "));
+      page.cleanup();
+    }
+    assert.match(text[0], /Aktuell und Vergleich/);
+    assert.match(text[1], /relative Abweichungen/);
+    assert.match(text[2], /Anteile nach Warengruppe/);
+  } finally {
+    await loadingTask.destroy();
+  }
+  const audit = db.prepare(`
+    SELECT action, detail FROM audit_log
+    WHERE actor = 'v071-admin' AND action = 'sales.report.charts.export'
+    ORDER BY id DESC LIMIT 1
+  `).get();
+  assert.equal(audit.action, "sales.report.charts.export");
+  assert.equal(JSON.parse(audit.detail).metric, "netRevenue");
 });

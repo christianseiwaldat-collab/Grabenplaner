@@ -899,6 +899,7 @@ const BASELINE_TEST_FILES = Object.freeze([
   "test/v087-pl-plus-functional-rights.test.js",
   "test/v0885-weekly-hours.test.js",
   "test/v0885-past-week-user-preference.test.js",
+  "test/v09210-team-meetings.test.js",
   "test/work-rule-store.test.js",
 ]);
 

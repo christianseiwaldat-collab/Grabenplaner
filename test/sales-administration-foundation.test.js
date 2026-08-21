@@ -61,7 +61,7 @@ test("Navigation und Direktaufruf bleiben ohne Zugangsrecht fail-closed", () => 
   const visibility = between(app, "function applyRoleVisibility()", "async function bootstrapApplication()");
   assert.match(visibility, /salesAdministrationNav\?\.classList\.toggle\("hidden", !salesAnalyticsAccess\)/);
   assert.match(visibility, /salesAnalyticsNavButton\?\.classList\.toggle\("hidden", !salesAnalyticsAccess\)/);
-  assert.match(visibility, /!salesAnalyticsAccess && state\.currentView === "salesAnalytics"/);
+  assert.match(visibility, /!salesAnalyticsAccess && \["salesAdministration", "salesAnalytics"\]\.includes\(state\.currentView\)/);
 
   const groups = between(app, "function navigationGroups()", "function setNavigationCurrent");
   assert.match(groups, /salesAdministration:\s*\{\s*toggle:\s*elements\.salesAdministrationToggle,\s*children:\s*elements\.salesAdministrationNavChildren\s*\}/);

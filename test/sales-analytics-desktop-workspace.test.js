@@ -36,7 +36,7 @@ function analysisFunctions(initialSalesAnalytics = {}) {
         locationFilter: "",
         dateFrom: "",
         dateTo: "",
-        tableSort: "netRevenue_desc",
+        tableSort: "netRevenue_current_desc",
         archiveSelection: [],
         reportSeries: null,
         ...initialSalesAnalytics,
@@ -178,17 +178,17 @@ test("Horizont, Kennzahlenrecht und Sortierung verwenden die ausgewählte Berich
     { externalProductGroupId: "200", label: "B", horizons: { period: { netRevenue: { current: "10", comparison: "5" } } } },
     { externalProductGroupId: "100", label: "A", horizons: { period: { netRevenue: { current: "30", comparison: "40" } } } },
   ];
-  context.state.salesAnalytics.tableSort = "netRevenue_desc";
+  context.state.salesAnalytics.tableSort = "netRevenue_current_desc";
   assert.equal(functions.sortSalesAnalyticsGroups(groups, "period")[0].externalProductGroupId, "100");
-  context.state.salesAnalytics.tableSort = "change_desc";
+  context.state.salesAnalytics.tableSort = "netRevenue_change_desc";
   assert.equal(functions.sortSalesAnalyticsGroups(groups, "period")[0].externalProductGroupId, "200");
 });
 
 test("Rohertrag bleibt in Karten, Diagramm, Tabelle und Sortierung rechteabhängig", () => {
   assert.match(app, /detail\?\.rights\?\.grossMargin === true/);
   assert.match(app, /salesAnalyticsMetricDefinitions\(hasGrossMargin\)/);
-  assert.match(app, /hasGrossMargin \? \[\{ value: "margin_desc"/);
-  assert.match(app, /hasGrossMargin \? \[\{ label: "Rohertrag", columns: 2 \}\]/);
+  assert.match(app, /hasGrossMargin \? \["grossMargin_current", "grossMargin_comparison"\]/);
+  assert.match(app, /hasGrossMargin \? \[\{ label: "Rohertrag", columns: \[/);
   assert.match(app, /if \(hasGrossMargin\) metrics\.splice\(1, 0, SALES_ANALYTICS_MARGIN_METRIC\)/);
   assert.doesNotMatch(html, /option value="grossMargin"/);
 });
@@ -197,7 +197,6 @@ test("Breite Detailtabelle ist durchsuchbar, sortierbar und zeigt beide Zeiträu
   const view = between(html, '<section id="salesAnalyticsView"', '<section id="personnelView"');
   for (const id of [
     "salesReportGroupSearch",
-    "salesReportTableSort",
     "salesReportTableCount",
     "salesReportTableHead",
     "salesReportTableBody",
@@ -205,7 +204,10 @@ test("Breite Detailtabelle ist durchsuchbar, sortierbar und zeigt beide Zeiträu
   assert.match(app, /Aktuell \$\{salesPeriodLabel\(periods\.current\)\}/);
   assert.match(app, /Vergleich \$\{salesPeriodLabel\(periods\.comparison\)\}/);
   assert.match(app, /toLocaleLowerCase\("de"\)\.includes\(normalizedSearch\)/);
-  assert.match(app, /function sortSalesAnalyticsGroups\(groups, horizon\)/);
+  assert.match(app, /function sortSalesAnalyticsGroups\(groups, horizon, hasGrossMargin\)/);
+  assert.match(app, /button\.dataset\.salesTableSort = sortKey/);
+  assert.match(app, /cell\.setAttribute\("aria-sort"/);
+  assert.match(app, /salesReportTableHead\?\.addEventListener\("click"/);
   assert.match(styles, /\.sales-report-analysis-table th:first-child,\.sales-report-analysis-table td:first-child \{ position:sticky/);
 });
 
