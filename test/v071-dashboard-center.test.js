@@ -126,12 +126,14 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
-test("v0.71 Block 2: Dashboards stehen im Menü zuerst und enthalten drei Bereiche", () => {
+test("v0.71 Block 2: persönliches Dashboard steht zuerst und das Steuerungscenter bleibt getrennt", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");
-  assert.ok(html.indexOf("rightsDashboardNavButton") < html.indexOf("data-nav-toggle=\"planning\""));
-  assert.match(html, /<span>Dashboards<\/span>/);
+  assert.ok(html.indexOf("startDashboardNavButton") < html.indexOf("data-nav-toggle=\"planning\""));
+  assert.ok(html.indexOf("rightsDashboardNavButton") > html.indexOf("<\/nav>"));
+  assert.match(html, /id="startDashboardNavButton"[\s\S]{0,100}<span>Dashboard<\/span>/);
+  assert.match(html, /id="rightsDashboardNavButton"[\s\S]{0,100}<span>Steuerungscenter<\/span>/);
   for (const mode of ["locations", "rights", "processes"]) assert.match(html, new RegExp(`data-rights-dashboard-mode="${mode}"`));
   for (const marker of ["locationDashboardGrid", "locationDashboardFilters", "locationDashboardDate"]) assert.match(html, new RegExp(marker));
   assert.match(script, /reorderLocationDashboardCard/);

@@ -196,13 +196,79 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
       AND note = 'Quartals-TS aktualisiert'
   `).get(created.payload.groupId).count, 3);
 
-  const pdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}`, {
+  const pdfSettings = await request("/api/settings", {
+    method: "PUT",
+    auth,
+    body: {
+      locationId: LOCATION,
+      departmentId,
+      pdfTitle: "Dienstplan PDF-Test",
+      pdfFilenamePrefix: "Dienstplan PDF-Test",
+      schedulePdfDesignIds: ["timeline", "matrix"],
+      schedulePdfDesignNames: {
+        timeline: "Klare Zeitachse",
+        matrix: "Kompakte Wochenmatrix",
+      },
+      vacationPdfTitle: "Urlaubsplanung PDF-Test",
+      vacationPdfFilenamePrefix: "Urlaubsplanung PDF-Test",
+      externalBackupEnabled: false,
+      backupDirectory: "",
+      backupIntervalHours: 2,
+      breakAfterMinutes: 360,
+      breakDurationMinutes: 30,
+      saturdayBonusFrom: "13:00",
+      saturdayBonusFactor: 1.5,
+      showSunday: false,
+    },
+  });
+  assert.equal(pdfSettings.response.status, 200, pdfSettings.text);
+  const persistedPdfSettings = await request(`/api/settings?locationId=${LOCATION}&departmentId=${departmentId}`, { auth });
+  assert.equal(persistedPdfSettings.response.status, 200, persistedPdfSettings.text);
+  assert.deepEqual(persistedPdfSettings.payload.pdf_schedule_design_ids, ["timeline", "matrix"]);
+  assert.deepEqual(
+    persistedPdfSettings.payload.schedule_pdf_design_catalog.map(({ id, label }) => ({ id, label })),
+    [
+      { id: "timeline", label: "Klare Zeitachse" },
+      { id: "matrix", label: "Kompakte Wochenmatrix" },
+    ],
+  );
+  const invalidPdfDesignNames = await request("/api/settings", {
+    method: "PUT",
+    auth,
+    body: {
+      locationId: LOCATION,
+      departmentId,
+      schedulePdfDesignIds: ["timeline", "matrix"],
+      schedulePdfDesignNames: {
+        timeline: "Doppelter Name",
+        matrix: "doppelter name",
+      },
+    },
+  });
+  assert.equal(invalidPdfDesignNames.response.status, 400, invalidPdfDesignNames.text);
+  assert.equal(invalidPdfDesignNames.payload?.code, "INVALID_SCHEDULE_PDF_DESIGN_NAMES");
+
+  const pdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=timeline`, {
     auth,
     binary: true,
   });
   assert.equal(pdf.response.status, 200);
   assert.match(pdf.response.headers.get("content-type") || "", /application\/pdf/);
   assert.ok(pdf.payload.length > 3000);
+
+  const matrixPdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=matrix`, {
+    auth,
+    binary: true,
+  });
+  assert.equal(matrixPdf.response.status, 200);
+  assert.match(matrixPdf.response.headers.get("content-type") || "", /application\/pdf/);
+  assert.ok(matrixPdf.payload.length > 3000);
+
+  const unavailablePdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=unbekannt`, {
+    auth,
+  });
+  assert.equal(unavailablePdf.response.status, 400, unavailablePdf.text);
+  assert.equal(unavailablePdf.payload?.code, "INVALID_SCHEDULE_PDF_DESIGNS");
 
   const deleted = await request(`/api/week-options/${created.payload.id}`, { method: "DELETE", auth });
   assert.equal(deleted.response.status, 204, deleted.text);

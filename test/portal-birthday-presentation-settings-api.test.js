@@ -39,6 +39,7 @@ const ACTORS = Object.freeze({
   admin: `${PREFIX}admin`,
   itAdmin: `${PREFIX}it-admin`,
   developer: `${PREFIX}developer`,
+  previewDeveloper: "252",
   manager: `${PREFIX}manager`,
   foreignManager: `${PREFIX}foreign-manager`,
   departmentManager: `${PREFIX}department-manager`,
@@ -253,6 +254,26 @@ test.before(async () => {
     insertEmployee(employeeNumber, { locationId, departmentId });
     insertPortalUser(employeeNumber, role);
   }
+  const previewEmployee = db.prepare("SELECT personnel_number FROM employees WHERE personnel_number = ?").get(ACTORS.previewDeveloper);
+  if (!previewEmployee) {
+    insertEmployee(ACTORS.previewDeveloper, { locationId: homeLocation, departmentId: homeDepartment });
+  } else {
+    db.prepare(`
+      UPDATE employees
+      SET active = 1, home_location_id = ?, preferred_department_id = ?
+      WHERE personnel_number = ?
+    `).run(homeLocation, homeDepartment, ACTORS.previewDeveloper);
+  }
+  const previewPortalUser = db.prepare("SELECT employee_number FROM portal_users WHERE employee_number = ?").get(ACTORS.previewDeveloper);
+  if (!previewPortalUser) insertPortalUser(ACTORS.previewDeveloper, "developer");
+  else {
+    db.prepare(`
+      UPDATE portal_users
+      SET role = 'developer', active = 1, must_change_password = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE employee_number = ?
+    `).run(ACTORS.previewDeveloper);
+  }
+  db.prepare("DELETE FROM portal_permission_denials WHERE employee_number = ?").run(ACTORS.previewDeveloper);
   insertScope(ACTORS.manager, homeLocation, null);
   insertScope(ACTORS.foreignManager, FOREIGN_LOCATION, null);
   insertScope(ACTORS.departmentManager, homeLocation, homeDepartment);
@@ -326,6 +347,69 @@ test("Block 8 API: GET trennt PL+, FL, delegierte AL, technische Rollen und loka
     canManageTeam: true,
     canDelegateTeam: true,
   });
+});
+
+test("Developer 252 kann ein Geburtstagsdesign unabhängig vom Geburtsdatum persönlich testen", async () => {
+  const ordinaryDeveloper = await settings(createSession(ACTORS.developer));
+  assert.deepEqual(ordinaryDeveloper.developerPreview, {
+    available: false,
+    enabled: false,
+    presentationId: null,
+  });
+
+  const auth = createSession(ACTORS.previewDeveloper);
+  const before = await settings(auth);
+  assert.equal(before.developerPreview?.available, true);
+  assert.equal(before.developerPreview?.enabled, false);
+
+  const invalid = await request(
+    "/api/portal/v1/birthday-presentation-settings/developer-preview",
+    { method: "PUT", auth, body: { enabled: true, presentationId: "nicht-freigegeben" } },
+  );
+  assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
+  assert.equal(invalid.payload?.code, "PORTAL_BIRTHDAY_PRESENTATION_PREVIEW_INVALID");
+
+  const enabled = await request(
+    "/api/portal/v1/birthday-presentation-settings/developer-preview",
+    { method: "PUT", auth, body: { enabled: true, presentationId: "technik" } },
+  );
+  assert.equal(enabled.response.status, 200, JSON.stringify(enabled.payload));
+  assert.deepEqual(enabled.payload?.developerPreview, {
+    available: true,
+    enabled: true,
+    presentationId: "technik",
+  });
+  assert.equal(db.prepare(`
+    SELECT value FROM portal_user_preferences
+    WHERE employee_number = ? AND preference_key = 'birthday_presentation_preview_v1'
+  `).get(ACTORS.previewDeveloper)?.value, "technik");
+
+  const theme = await request("/api/portal/v1/me/birthday-presentation/theme", { auth });
+  assert.equal(theme.response.status, 200, JSON.stringify(theme.payload));
+  assert.deepEqual(theme.payload?.theme, { id: "technik" });
+
+  const claim = await request("/api/portal/v1/me/birthday-presentation/claim", {
+    method: "POST",
+    auth,
+    body: {},
+  });
+  assert.equal(claim.response.status, 200, JSON.stringify(claim.payload));
+  assert.equal(claim.payload?.presentation?.id, "technik");
+
+  const disabled = await request(
+    "/api/portal/v1/birthday-presentation-settings/developer-preview",
+    { method: "PUT", auth, body: { enabled: false, presentationId: null } },
+  );
+  assert.equal(disabled.response.status, 200, JSON.stringify(disabled.payload));
+  assert.equal(disabled.payload?.developerPreview?.enabled, false);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM portal_user_preferences
+    WHERE employee_number = ? AND preference_key = 'birthday_presentation_preview_v1'
+  `).get(ACTORS.previewDeveloper).count, 0);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE actor = ? AND action = 'portal.birthday-presentation.developer-preview.update'
+  `).get(ACTORS.previewDeveloper).count >= 2, true);
 });
 
 test("Block 8 API: GET projiziert nur das aktive eigene Team und erzeugt keinen Geburtsdaten- oder Listen-Leak", async () => {

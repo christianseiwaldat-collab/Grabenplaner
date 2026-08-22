@@ -561,6 +561,8 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
     { method: "POST", session: adminSession, body: {} },
   );
   assert.equal(failedEmailRetry.response.status, 503, JSON.stringify(failedEmailRetry.payload));
+  assert.equal(failedEmailRetry.payload.code, "LOAN_DOCUMENT_EMAIL_DELIVERY_FAILED");
+  assert.match(failedEmailRetry.payload.error, /SMTP|E-Mail-Versand|Leihbeleg/i);
   assert.equal(failedEmailRetry.payload.delivery.status, "failed");
   assert.equal(failedEmailRetry.payload.document.delivery.emailStatus, "failed");
   assert.equal(failedEmailRetry.payload.document.delivery.emailAttempts, 1);

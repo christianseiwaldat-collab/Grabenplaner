@@ -293,6 +293,8 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/staff-assignment-request-startup-migration.test.js",
   "test/cross-location-schedule-rights-api.test.js",
   "test/cross-location-schedule-view-api.test.js",
+  "test/loan-document-email-delivery.test.js",
+  "test/schedule-search-api.test.js",
   "test/personnel-document-history-persistence.test.js",
   "test/personnel-profile-overview-api.test.js",
   "test/personnel-profile-scoped-rights-persistence.test.js",

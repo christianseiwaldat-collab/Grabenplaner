@@ -9,6 +9,7 @@
 
   const FUNCTION_SEARCH_CATALOG_VERSION = 1;
   const SUPPORTED_VIEWS = new Set([
+    "startDashboard",
     "filialAdministration",
     "personnel",
     "loans",
@@ -77,6 +78,15 @@
   }
 
   const FUNCTION_SEARCH_CATALOG = [
+    entry(
+      "dashboard.start",
+      "Startdashboard öffnen",
+      ["Dashboard", "Persönlicher Überblick"],
+      "Öffnet die persönliche Übersicht mit den freigegebenen und individuell angeordneten Arbeitskarten.",
+      ["startseite", "startdashboard", "dashboard", "übersicht", "wochenüberblick", "schnellzugriff", "meine karten"],
+      ["startDashboardNavButton"],
+      { view: "startDashboard", focusId: "startDashboardGrid" },
+    ),
     entry(
       "filial.overview",
       "Filialverwaltung öffnen",
