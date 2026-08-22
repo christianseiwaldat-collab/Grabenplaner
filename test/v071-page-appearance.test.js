@@ -227,8 +227,10 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     hidden: [],
   });
   assert.deepEqual(defaults.payload.startDashboardPreferences, {
-    version: 1,
+    version: 2,
+    order: ["schedule", "vacation", "loans", "branchOrders", "personnel", "sales"],
     hidden: [],
+    hiddenWidgets: [],
     locationId: "",
     departmentId: "",
     salesLocationId: "",
@@ -247,8 +249,10 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     month: 8,
   };
   const startDashboardPreferences = {
-    version: 1,
-    hidden: ["branchAbsences", "salesTopGroups"],
+    version: 2,
+    order: ["vacation", "schedule", "branchOrders", "loans", "personnel", "sales"],
+    hidden: ["branchOrders"],
+    hiddenWidgets: ["branchAbsences", "salesTopGroups"],
     locationId: "18",
     departmentId: "7",
     salesLocationId: "5",
@@ -315,6 +319,49 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(managerDefaults.payload.vacationCalendarView.view, "year");
   assert.deepEqual(managerDefaults.payload.personnelDashboardLayout.hidden, []);
   assert.deepEqual(managerDefaults.payload.startDashboardPreferences.hidden, []);
+  db.prepare(`
+    INSERT INTO portal_user_preferences (employee_number, preference_key, value)
+    VALUES (?, 'start_dashboard_preferences_v1', ?)
+  `).run("v071-manager", JSON.stringify({
+    version: 1,
+    hidden: ["branchAbsences", "salesTopGroups"],
+    locationId: "18",
+    departmentId: "7",
+    salesLocationId: "5",
+  }));
+  const legacyRead = await requestJson("/api/portal/v1/ui-preferences", { session: manager });
+  assert.equal(legacyRead.response.status, 200, JSON.stringify(legacyRead.payload));
+  assert.deepEqual(legacyRead.payload.startDashboardPreferences.hiddenWidgets, ["branchAbsences", "salesTopGroups"]);
+  assert.equal(legacyRead.payload.startDashboardPreferences.version, 2);
+  const migratedLegacy = await requestJson("/api/portal/v1/ui-preferences", {
+    method: "PUT",
+    session: manager,
+    body: {
+      startDashboardPreferences: {
+        version: 1,
+        hidden: ["branchAbsences", "salesTopGroups"],
+        locationId: "18",
+        departmentId: "7",
+        salesLocationId: "5",
+      },
+    },
+  });
+  assert.equal(migratedLegacy.response.status, 200, JSON.stringify(migratedLegacy.payload));
+  assert.deepEqual(migratedLegacy.payload.startDashboardPreferences, {
+    version: 2,
+    order: ["schedule", "vacation", "loans", "branchOrders", "personnel", "sales"],
+    hidden: [],
+    hiddenWidgets: ["branchAbsences", "salesTopGroups"],
+    locationId: "18",
+    departmentId: "7",
+    salesLocationId: "5",
+  });
+  const migratedPreferenceKeys = db.prepare(`
+    SELECT preference_key FROM portal_user_preferences
+    WHERE employee_number = ? AND preference_key LIKE 'start_dashboard_preferences_v%'
+    ORDER BY preference_key
+  `).all("v071-manager").map((row) => row.preference_key);
+  assert.deepEqual(migratedPreferenceKeys, ["start_dashboard_preferences_v2"]);
 
   for (const appFontScalePercent of [75, 150]) {
     const boundary = await requestJson("/api/portal/v1/ui-preferences", {
@@ -387,7 +434,11 @@ test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen
   }
   for (const startDashboardPreferences of [
     null,
-    { version: 2, hidden: [], locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 3, order: [], hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 2, hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 2, order: ["schedule", "schedule"], hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 2, order: ["unknown"], hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 2, order: [], hidden: ["unknown"], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
     { version: 1, hidden: ["unknown"], locationId: "", departmentId: "", salesLocationId: "" },
     { version: 1, hidden: [], locationId: "18!", departmentId: "", salesLocationId: "" },
     { version: 1, hidden: [], locationId: "18", departmentId: "A", salesLocationId: "" },

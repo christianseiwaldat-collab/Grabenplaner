@@ -6,7 +6,9 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const appSource = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
+const root = path.join(__dirname, "..");
+const appSource = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
+const stylesSource = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
 
 function sourceBetween(startMarker, endMarker) {
   const start = appSource.indexOf(startMarker);
@@ -17,26 +19,21 @@ function sourceBetween(startMarker, endMarker) {
 }
 
 class FakeDetails {
-  constructor(attribute, value, { open = false, fieldSelector = "", field = null } = {}) {
+  constructor(attribute, value, { open = false } = {}) {
     this.attribute = attribute;
     this.value = value;
     this.open = open;
-    this.fieldSelector = fieldSelector;
-    this.field = field;
   }
 
   getAttribute(attribute) {
     return attribute === this.attribute ? this.value : null;
   }
-
-  querySelector(selector) {
-    return selector === this.fieldSelector ? this.field : null;
-  }
 }
 
 class FakeWorkspace {
-  constructor(details) {
+  constructor(details, selectors = new Map()) {
     this.details = details;
+    this.selectors = selectors;
   }
 
   querySelectorAll(selector) {
@@ -47,26 +44,31 @@ class FakeWorkspace {
 
   querySelector(selector) {
     const match = selector.match(/^details\[([^=]+)="([^"]+)"\]$/);
-    if (!match) return null;
-    return this.details.find((details) => details.attribute === match[1] && details.value === match[2]) || null;
+    if (match) {
+      return this.details.find((details) => details.attribute === match[1] && details.value === match[2]) || null;
+    }
+    return this.selectors.get(selector) || null;
   }
 }
 
-test("Filialbestellung behält geöffnete Bereiche beim Neurendern und fokussiert neue Positionen", () => {
+test("Filialbestellung behält geöffnete Hauptbereiche und fokussiert den Tabelleneditor", () => {
   const initialWorkspace = new FakeWorkspace([
     new FakeDetails("data-branch-orders-management-section", "catalog", { open: true }),
     new FakeDetails("data-branch-orders-management-section", "units"),
-    new FakeDetails("data-branch-orders-management-catalog-item", "item-existing", { open: true }),
   ]);
   const context = {
     CSS: { escape: (value) => String(value) },
+    Intl,
+    state: { branchOrdersManagementCatalogSort: { key: "position", direction: "asc" } },
+    escapeHtml: (value) => String(value),
+    escapeHtmlAttribute: (value) => String(value),
     elements: { branchOrdersManagementWorkspace: initialWorkspace },
   };
   const helpersSource = sourceBetween(
     "const branchOrdersManagementDisclosureAttributes",
     "function renderBranchOrdersManagement()",
   );
-  vm.runInNewContext(`${helpersSource}\nglobalThis.helpers = { captureBranchOrdersManagementDisclosureState, restoreBranchOrdersManagementDisclosureState, revealBranchOrdersManagementDisclosure };`, context);
+  vm.runInNewContext(`${helpersSource}\nglobalThis.helpers = { captureBranchOrdersManagementDisclosureState, restoreBranchOrdersManagementDisclosureState, revealBranchOrdersManagementCatalogEditor };`, context);
 
   const opened = context.helpers.captureBranchOrdersManagementDisclosureState();
   const titleField = {
@@ -75,49 +77,77 @@ test("Filialbestellung behält geöffnete Bereiche beim Neurendern und fokussier
     focus() { this.focused = true; },
     select() { this.selected = true; },
   };
+  const editor = {
+    querySelector(selector) {
+      return selector === '[data-branch-orders-management-field="catalog-item-title"]' ? titleField : null;
+    },
+  };
   const catalogSection = new FakeDetails("data-branch-orders-management-section", "catalog");
   const unitsSection = new FakeDetails("data-branch-orders-management-section", "units");
-  const existingItem = new FakeDetails("data-branch-orders-management-catalog-item", "item-existing");
-  const newItem = new FakeDetails("data-branch-orders-management-catalog-item", "item-new", {
-    fieldSelector: '[data-branch-orders-management-field="catalog-item-title"]',
-    field: titleField,
-  });
-  context.elements.branchOrdersManagementWorkspace = new FakeWorkspace([
-    catalogSection,
-    unitsSection,
-    existingItem,
-    newItem,
-  ]);
+  context.elements.branchOrdersManagementWorkspace = new FakeWorkspace(
+    [catalogSection, unitsSection],
+    new Map([['[data-branch-orders-management-catalog-editor="item-new"]', editor]]),
+  );
 
   context.helpers.restoreBranchOrdersManagementDisclosureState(opened);
   assert.equal(catalogSection.open, true);
-  assert.equal(existingItem.open, true);
   assert.equal(unitsSection.open, false);
-  assert.equal(newItem.open, false);
 
-  context.helpers.revealBranchOrdersManagementDisclosure(
-    "catalog",
-    "data-branch-orders-management-catalog-item",
-    "item-new",
-    '[data-branch-orders-management-field="catalog-item-title"]',
-  );
-  assert.equal(catalogSection.open, true);
-  assert.equal(newItem.open, true);
+  context.helpers.revealBranchOrdersManagementCatalogEditor("item-new");
   assert.equal(titleField.focused, true);
   assert.equal(titleField.selected, true);
 });
 
-test("+ Position ergänzt den Entwurf und öffnet anschließend genau den neuen Editor", () => {
+test("Positionstabelle sortiert zugänglich nach Position, Bezeichnung und Einheit", () => {
+  const context = {
+    Intl,
+    state: { branchOrdersManagementCatalogSort: { key: "title", direction: "asc" } },
+    escapeHtml: (value) => String(value),
+    escapeHtmlAttribute: (value) => String(value),
+  };
+  const sortSource = sourceBetween(
+    "const branchOrdersManagementCatalogColumns",
+    "function revealBranchOrdersManagementCatalogEditor",
+  );
+  vm.runInNewContext(`${sortSource}\nglobalThis.catalog = { sortedBranchOrdersManagementCatalogItems, branchOrdersManagementCatalogHeader };`, context);
+  const draft = {
+    items: [
+      { id: "beta", title: "Batterien", unitId: "piece", recipientId: "target-b" },
+      { id: "alpha", title: "Analogfilm", unitId: "box", recipientId: "target-a" },
+      { id: "gamma", title: "Versandtaschen", unitId: "", recipientId: "" },
+    ],
+    units: [{ id: "box", title: "Karton" }, { id: "piece", title: "Stück" }],
+    recipients: [{ id: "target-a", email: "a@example.test" }, { id: "target-b", email: "b@example.test" }],
+  };
+
+  assert.deepEqual(
+    Array.from(context.catalog.sortedBranchOrdersManagementCatalogItems(draft), (item) => item.id),
+    ["alpha", "beta", "gamma"],
+  );
+  context.state.branchOrdersManagementCatalogSort = { key: "unit", direction: "desc" };
+  assert.deepEqual(
+    Array.from(context.catalog.sortedBranchOrdersManagementCatalogItems(draft), (item) => item.id),
+    ["beta", "alpha", "gamma"],
+  );
+  assert.match(context.catalog.branchOrdersManagementCatalogHeader(), /aria-sort="descending"/);
+  assert.match(context.catalog.branchOrdersManagementCatalogHeader(), /data-branch-orders-management-sort-key="unit"/);
+  context.state.branchOrdersManagementCatalogSort = { key: "position", direction: "desc" };
+  assert.deepEqual(
+    Array.from(context.catalog.sortedBranchOrdersManagementCatalogItems(draft), (item) => item.id),
+    ["gamma", "alpha", "beta"],
+  );
+});
+
+test("Position hinzufügen übernimmt die Bezeichnung und öffnet genau den neuen Inline-Editor", () => {
   const draft = {
     recipients: [],
     units: [{ id: "unit-1", title: "Stück" }],
     items: [],
     groups: [],
   };
+  const titleField = { value: "  Speicherkarten  ", focus() {} };
   let rendered = 0;
-  let revealArguments = null;
-  let prevented = false;
-  let propagationStopped = false;
+  let revealedItemId = "";
   const button = {
     dataset: {
       branchOrdersManagementAction: "add-catalog-item",
@@ -125,13 +155,23 @@ test("+ Position ergänzt den Entwurf und öffnet anschließend genau den neuen 
     },
   };
   const context = {
-    CSS: { escape: (value) => String(value) },
-    elements: { branchOrdersManagementWorkspace: null },
-    state: { branchOrdersManagement: null },
+    elements: {
+      branchOrdersManagementWorkspace: {
+        querySelector(selector) {
+          return selector === "[data-branch-orders-management-new-item-title]" ? titleField : null;
+        },
+        querySelectorAll() { return []; },
+      },
+    },
+    state: {
+      branchOrdersManagement: null,
+      branchOrdersManagementCatalogEditingId: "",
+      branchOrdersManagementCatalogSort: { key: "position", direction: "asc" },
+    },
     captureBranchOrdersManagementDraft: () => draft,
     branchOrdersManagementClientId: () => "item-new",
     renderBranchOrdersManagement: () => { rendered += 1; },
-    revealBranchOrdersManagementDisclosure: (...args) => { revealArguments = args; },
+    revealBranchOrdersManagementCatalogEditor: (itemId) => { revealedItemId = itemId; },
     setBranchOrdersManagementMessage: () => {},
     moveBranchOrdersManagementEntry: () => {},
   };
@@ -143,23 +183,82 @@ test("+ Position ergänzt den Entwurf und öffnet anschließend genau den neuen 
 
   context.handleAction({
     target: { closest: () => button },
-    preventDefault() { prevented = true; },
-    stopPropagation() { propagationStopped = true; },
+    preventDefault() {},
+    stopPropagation() {},
   });
 
-  assert.equal(prevented, true);
-  assert.equal(propagationStopped, true);
   assert.equal(rendered, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(draft.items)), [{
     id: "item-new",
-    title: "Neue Position",
+    title: "Speicherkarten",
     unitId: "unit-1",
     recipientId: "",
   }]);
-  assert.deepEqual(Array.from(revealArguments), [
-    "catalog",
-    "data-branch-orders-management-catalog-item",
-    "item-new",
-    '[data-branch-orders-management-field="catalog-item-title"]',
-  ]);
+  assert.equal(context.state.branchOrdersManagementCatalogEditingId, "item-new");
+  assert.equal(revealedItemId, "item-new");
+});
+
+test("Bearbeiten öffnet den gewählten Editor; Löschen entfernt Position und Gruppenzuordnung", () => {
+  const draft = {
+    recipients: [],
+    units: [{ id: "unit-1", title: "Stück" }],
+    items: [{ id: "item-1", title: "Batterien", unitId: "unit-1", recipientId: "" }],
+    groups: [{ id: "group-1", title: "Theke", hint: "", itemIds: ["item-1"] }],
+  };
+  let rendered = 0;
+  let revealedItemId = "";
+  const context = {
+    elements: { branchOrdersManagementWorkspace: { querySelectorAll() { return []; } } },
+    state: {
+      branchOrdersManagement: null,
+      branchOrdersManagementCatalogEditingId: "",
+      branchOrdersManagementCatalogSort: { key: "position", direction: "asc" },
+    },
+    captureBranchOrdersManagementDraft: () => draft,
+    renderBranchOrdersManagement: () => { rendered += 1; },
+    revealBranchOrdersManagementCatalogEditor: (itemId) => { revealedItemId = itemId; },
+    setBranchOrdersManagementMessage: () => {},
+    moveBranchOrdersManagementEntry: () => {},
+  };
+  const handlerSource = sourceBetween(
+    "function handleBranchOrdersManagementAction(event)",
+    "const branchLoanOverviewColumnCatalog",
+  );
+  vm.runInNewContext(`${handlerSource}\nglobalThis.handleAction = handleBranchOrdersManagementAction;`, context);
+  const invoke = (action) => context.handleAction({
+    target: {
+      closest: () => ({
+        dataset: {
+          branchOrdersManagementAction: action,
+          branchOrdersManagementId: "item-1",
+        },
+      }),
+    },
+    preventDefault() {},
+    stopPropagation() {},
+  });
+
+  invoke("edit-catalog-item");
+  assert.equal(context.state.branchOrdersManagementCatalogEditingId, "item-1");
+  assert.equal(revealedItemId, "item-1");
+  assert.equal(rendered, 1);
+
+  invoke("remove-catalog-item");
+  assert.deepEqual(JSON.parse(JSON.stringify(draft.items)), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(draft.groups[0].itemIds)), []);
+  assert.equal(context.state.branchOrdersManagementCatalogEditingId, "");
+  assert.equal(rendered, 2);
+});
+
+test("Tabellenzeilen bleiben lesend und bieten nur kleine Textaktionen", () => {
+  const itemMarkup = sourceBetween(
+    "const catalogPositions = new Map",
+    "const groupRows = draft.groups.length",
+  );
+  assert.match(appSource, /branch-orders-management-catalog-table/);
+  assert.match(itemMarkup, />Bearbeiten<\/button>/);
+  assert.match(itemMarkup, />Löschen<\/button>/);
+  assert.doesNotMatch(itemMarkup, /<tr[^>]+data-branch-orders-management-action=/);
+  assert.match(appSource, /data-branch-orders-management-new-item-title/);
+  assert.match(stylesSource, /\.branch-orders-management-table-action[^}]*text-decoration:underline/);
 });

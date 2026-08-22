@@ -419,6 +419,14 @@ const {
   birthdayThemeEventForVienna,
 } = require("./lib/portal-birthday-presentation-claim");
 const {
+  DEFAULT_SCHEDULE_PDF_DESIGN_IDS,
+  SchedulePdfDesignValidationError,
+  normalizeSchedulePdfDesignIds,
+  normalizeSchedulePdfDesignNames,
+  resolveSchedulePdfDesign,
+  schedulePdfDesignCatalogPayload,
+} = require("./lib/schedule-pdf-designs");
+const {
   StaffAssignmentRequestError,
   insertInitialStaffAssignmentRequestHistory,
   normalizeStaffAssignmentRequestInput,
@@ -3076,6 +3084,8 @@ const defaultSettings = {
   pdf_filename_prefix: "Dienstplan",
   pdf_filename_include_kw: "1",
   pdf_filename_include_timestamp: "0",
+  pdf_schedule_designs: JSON.stringify(DEFAULT_SCHEDULE_PDF_DESIGN_IDS),
+  pdf_schedule_design_names: "{}",
   vacation_pdf_title: "Urlaubsplanung",
   vacation_pdf_filename_prefix: "Urlaubsplanung",
   vacation_pdf_filename_include_period: "1",
@@ -5413,6 +5423,14 @@ function enforceAdminApiAccess(request, _response, next) {
     if (preciseDiagnosticPermissions) {
       const session = requirePortalAnyPermission(request, preciseDiagnosticPermissions);
       request.portalSession = session;
+      return next();
+    }
+    if (["GET", "HEAD", "OPTIONS"].includes(method)
+      && /^\/schedule\/search\/?$/.test(request.path)) {
+      // Die Bereichsprüfung erfolgt in der Dienstsuche für jede tatsächlich
+      // abgefragte Filiale. Dadurch bleibt auch "alle freigegebenen Filialen"
+      // möglich, ohne einen ungeprüften globalen Kontext zu erzeugen.
+      request.portalSession = requirePortalSession(request, "schedule:read");
       return next();
     }
     const usbProvisioningRoute = /^\/usb-provisioning(?:\/|$)/.test(request.path);
@@ -17469,6 +17487,8 @@ function defaultSchedulePdfSettings(context = {}) {
     pdf_filename_prefix: title,
     pdf_filename_include_kw: "1",
     pdf_filename_include_timestamp: "0",
+    pdf_schedule_designs: JSON.stringify(DEFAULT_SCHEDULE_PDF_DESIGN_IDS),
+    pdf_schedule_design_names: "{}",
   };
 }
 
@@ -17501,10 +17521,20 @@ function applyScopedPdfSettings(settings, context, scopeType) {
   const defaults = scopeType === "vacation"
     ? defaultVacationPdfSettings(context)
     : defaultSchedulePdfSettings(context);
-  return {
+  const scopedSettings = {
     ...settings,
     ...defaults,
     ...getScopedPdfSettings(scopeType, context),
+  };
+  if (scopeType !== "schedule") return scopedSettings;
+  const designIds = normalizeSchedulePdfDesignIds(scopedSettings.pdf_schedule_designs);
+  const designNames = normalizeSchedulePdfDesignNames(scopedSettings.pdf_schedule_design_names);
+  return {
+    ...scopedSettings,
+    pdf_schedule_designs: JSON.stringify(designIds),
+    pdf_schedule_design_names: JSON.stringify(designNames),
+    pdf_schedule_design_ids: designIds,
+    schedule_pdf_design_catalog: schedulePdfDesignCatalogPayload(designNames),
   };
 }
 
@@ -20811,6 +20841,290 @@ async function submitStaffAssignmentRequest(session, input = {}) {
   } catch (error) {
     throw staffAssignmentRequestHttpError(error);
   }
+}
+
+const SCHEDULE_SEARCH_MAX_RANGE_DAYS = 731;
+const SCHEDULE_SEARCH_MAX_LIMIT = 100;
+const SCHEDULE_SEARCH_MAX_OFFSET = 5000;
+const SCHEDULE_SEARCH_SORT_KEYS = new Set([
+  "date",
+  "employee",
+  "personnelNumber",
+  "homeLocation",
+  "location",
+  "department",
+  "startTime",
+  "duration",
+  "area",
+  "assignment",
+]);
+const SCHEDULE_SEARCH_ASSIGNMENTS = new Set(["all", "home", "cross_location"]);
+const scheduleSearchCollator = new Intl.Collator("de-AT", { numeric: true, sensitivity: "base" });
+
+function scheduleSearchQueryScalar(query, key) {
+  const submitted = query?.[key];
+  if (Array.isArray(submitted) || (submitted !== null && typeof submitted === "object")) {
+    throw httpError(400, `Der Suchparameter „${key}“ darf nur einmal angegeben werden.`, "SCHEDULE_SEARCH_QUERY_INVALID");
+  }
+  const rawValue = String(submitted ?? "");
+  if (/[\u0000-\u001f\u007f]/.test(rawValue)) {
+    throw httpError(400, `Der Suchparameter „${key}“ enthält unzulässige Zeichen.`, "SCHEDULE_SEARCH_QUERY_INVALID");
+  }
+  return rawValue.trim();
+}
+
+function scheduleSearchText(query, key, maximumLength) {
+  const value = scheduleSearchQueryScalar(query, key);
+  if (value.length > maximumLength) {
+    throw httpError(400, `Der Suchparameter „${key}“ ist zu lang.`, "SCHEDULE_SEARCH_QUERY_INVALID");
+  }
+  return value;
+}
+
+function scheduleSearchIdentifier(query, key, { allowAll = false } = {}) {
+  const value = scheduleSearchText(query, key, 80);
+  if (!value || (allowAll && value === "all")) return "";
+  if (!/^[A-Za-z0-9._:-]+$/.test(value)) {
+    throw httpError(400, `Der Suchparameter „${key}“ ist ungültig.`, "SCHEDULE_SEARCH_QUERY_INVALID");
+  }
+  return value;
+}
+
+function scheduleSearchInteger(query, key, fallback, { minimum, maximum }) {
+  const value = scheduleSearchQueryScalar(query, key);
+  if (!value) return fallback;
+  if (!/^\d+$/.test(value)) {
+    throw httpError(400, `Der Suchparameter „${key}“ muss eine ganze Zahl sein.`, "SCHEDULE_SEARCH_QUERY_INVALID");
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw httpError(400, `Der Suchparameter „${key}“ liegt außerhalb des zulässigen Bereichs.`, "SCHEDULE_SEARCH_QUERY_INVALID");
+  }
+  return parsed;
+}
+
+function normalizeScheduleSearchText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("de-AT")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizedScheduleSearchQuery(query = {}) {
+  const submittedDateFrom = scheduleSearchQueryScalar(query, "dateFrom");
+  const submittedDateTo = scheduleSearchQueryScalar(query, "dateTo");
+  if ((submittedDateFrom && !isIsoDate(submittedDateFrom))
+    || (submittedDateTo && !isIsoDate(submittedDateTo))) {
+    throw httpError(400, "Bitte einen gültigen Suchzeitraum angeben.", "SCHEDULE_SEARCH_RANGE_INVALID");
+  }
+  const dateFrom = submittedDateFrom || (submittedDateTo ? addDays(submittedDateTo, -182) : viennaTodayIso());
+  const dateTo = submittedDateTo || addDays(dateFrom, 182);
+  if (dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > SCHEDULE_SEARCH_MAX_RANGE_DAYS) {
+    throw httpError(400, `Der Suchzeitraum darf höchstens ${SCHEDULE_SEARCH_MAX_RANGE_DAYS} Tage umfassen.`, "SCHEDULE_SEARCH_RANGE_INVALID");
+  }
+  const sort = scheduleSearchText(query, "sort", 40) || "date";
+  if (!SCHEDULE_SEARCH_SORT_KEYS.has(sort)) {
+    throw httpError(400, "Die gewählte Sortierung ist für die Dienstsuche nicht verfügbar.", "SCHEDULE_SEARCH_SORT_INVALID");
+  }
+  const direction = scheduleSearchText(query, "direction", 4) || "asc";
+  if (!["asc", "desc"].includes(direction)) {
+    throw httpError(400, "Die Sortierrichtung ist ungültig.", "SCHEDULE_SEARCH_SORT_INVALID");
+  }
+  const assignment = scheduleSearchText(query, "assignment", 20) || "all";
+  if (!SCHEDULE_SEARCH_ASSIGNMENTS.has(assignment)) {
+    throw httpError(400, "Der gewählte Einsatzfilter ist ungültig.", "SCHEDULE_SEARCH_ASSIGNMENT_INVALID");
+  }
+  const departmentValue = scheduleSearchQueryScalar(query, "departmentId");
+  if (departmentValue && !/^\d+$/.test(departmentValue)) {
+    throw httpError(400, "Die gewählte Abteilung ist ungültig.", "SCHEDULE_SEARCH_QUERY_INVALID");
+  }
+  const departmentId = departmentValue ? Number(departmentValue) : null;
+  if (departmentValue && (!Number.isSafeInteger(departmentId) || departmentId <= 0)) {
+    throw httpError(400, "Die gewählte Abteilung ist ungültig.", "SCHEDULE_SEARCH_QUERY_INVALID");
+  }
+  return {
+    employee: scheduleSearchText(query, "employee", 120),
+    employeeNumber: scheduleSearchIdentifier(query, "employeeNumber"),
+    dateFrom,
+    dateTo,
+    locationId: scheduleSearchIdentifier(query, "locationId", { allowAll: true }),
+    departmentId,
+    homeLocationId: scheduleSearchIdentifier(query, "homeLocationId", { allowAll: true }),
+    assignment,
+    area: scheduleSearchText(query, "area", 120),
+    sort,
+    direction,
+    limit: scheduleSearchInteger(query, "limit", 50, { minimum: 1, maximum: SCHEDULE_SEARCH_MAX_LIMIT }),
+    offset: scheduleSearchInteger(query, "offset", 0, { minimum: 0, maximum: SCHEDULE_SEARCH_MAX_OFFSET }),
+  };
+}
+
+function scheduleSearchTargetContexts(session, locations, query) {
+  let selectedLocations = locations;
+  if (query.locationId) {
+    const requested = locations.find((location) => String(location.id) === query.locationId);
+    if (!requested) {
+      throw httpError(403, "Die gewählte Filiale ist für diesen Zugang nicht freigegeben.", "SCHEDULE_SEARCH_SCOPE_DENIED");
+    }
+    selectedLocations = [requested];
+  }
+  if (query.departmentId) {
+    selectedLocations = selectedLocations.filter((location) => (
+      (location.departments || []).some((department) => Number(department.id) === query.departmentId)
+    ));
+    if (selectedLocations.length !== 1) {
+      throw httpError(403, "Die gewählte Abteilung ist für diesen Zugang nicht freigegeben.", "SCHEDULE_SEARCH_SCOPE_DENIED");
+    }
+  }
+  return selectedLocations.flatMap((location) => {
+    const locationId = String(location.id);
+    const wholeLocation = sessionHasGlobalScope(session) || (session.scopes || []).some((scope) => (
+      String(scope.locationId) === locationId && !Number(scope.departmentId || 0)
+    ));
+    const departmentIds = query.departmentId
+      ? [query.departmentId]
+      : wholeLocation
+        ? [null]
+        : (location.departments || []).map((department) => Number(department.id));
+    return departmentIds.map((departmentId) => {
+      const context = { locationId, departmentId, location };
+      assertSessionContextScope(session, context);
+      return context;
+    });
+  });
+}
+
+function scheduleSearchResultSortValue(result, key) {
+  if (key === "employee") return result.employeeName;
+  if (key === "personnelNumber") return result.personnelNumber;
+  if (key === "homeLocation") return result.homeLocationName;
+  if (key === "location") return result.locationName;
+  if (key === "department") return result.departmentName;
+  if (key === "startTime") return result.startTime;
+  if (key === "duration") return result.durationMinutes;
+  if (key === "area") return result.area;
+  if (key === "assignment") return result.crossLocation ? "standortübergreifend" : "stammfiliale";
+  return result.shiftDate;
+}
+
+function compareScheduleSearchResults(left, right, query) {
+  const leftValue = scheduleSearchResultSortValue(left, query.sort);
+  const rightValue = scheduleSearchResultSortValue(right, query.sort);
+  const primary = query.sort === "duration"
+    ? Number(leftValue) - Number(rightValue)
+    : scheduleSearchCollator.compare(String(leftValue || ""), String(rightValue || ""));
+  if (primary) return primary * (query.direction === "desc" ? -1 : 1);
+  return scheduleSearchCollator.compare(
+    `${left.shiftDate}|${left.startTime}|${left.personnelNumber}|${left.shiftId}`,
+    `${right.shiftDate}|${right.startTime}|${right.personnelNumber}|${right.shiftId}`,
+  );
+}
+
+async function searchScheduleShifts(session, input = {}) {
+  const query = normalizedScheduleSearchQuery(input);
+  const locations = await getLocationsForSession(session, false);
+  const contexts = scheduleSearchTargetContexts(session, locations, query);
+  const bundles = await Promise.all(contexts.map(async (context) => {
+    const planningQuery = {
+      locationId: context.locationId,
+      departmentId: context.departmentId,
+      weekStart: query.dateFrom,
+      weekEnd: query.dateTo,
+    };
+    const [employees, shifts] = await Promise.all([
+      planningSettingsRepository.listScheduleEmployees(planningQuery),
+      planningSettingsRepository.listScheduleShifts(planningQuery),
+    ]);
+    return { ...context, employees, shifts };
+  }));
+
+  const unfilteredResults = bundles.flatMap((bundle) => {
+    const employeeByNumber = new Map(bundle.employees.map((employee) => (
+      [String(employee.personnel_number), employee]
+    )));
+    return bundle.shifts.map((shift) => {
+      const employee = employeeByNumber.get(String(shift.employee_number)) || shift;
+      const shiftDate = String(shift.shift_date || "");
+      const startTime = String(shift.start_time || "");
+      const endTime = String(shift.end_time || "");
+      const homeLocationId = String(employee.home_location_id || "");
+      const locationId = String(bundle.locationId);
+      return {
+        shiftId: shift.id,
+        personnelNumber: String(shift.employee_number || ""),
+        employeeName: String(employee.full_name || shift.full_name || employee.nickname || shift.nickname || ""),
+        employeeNickname: String(employee.nickname || shift.nickname || ""),
+        homeLocationId,
+        homeLocationName: String(employee.home_location_name || homeLocationId),
+        locationId,
+        locationName: String(bundle.location.name || locationId),
+        departmentId: Number(shift.department_id || 0) || null,
+        departmentName: String(shift.department_name || ""),
+        shiftDate,
+        startTime,
+        endTime,
+        durationMinutes: isTime(startTime) && isTime(endTime)
+          ? Math.max(0, timeToMinutes(endTime) - timeToMinutes(startTime))
+          : 0,
+        area: String(shift.area || "").slice(0, 180),
+        crossLocation: Boolean(homeLocationId && homeLocationId !== locationId),
+        weekStart: isIsoDate(shiftDate) ? getMonday(shiftDate) : "",
+        calendarWeek: isIsoDate(shiftDate) ? getIsoWeek(shiftDate) : null,
+      };
+    });
+  });
+
+  const normalizedEmployee = normalizeScheduleSearchText(query.employee);
+  const normalizedArea = normalizeScheduleSearchText(query.area);
+  const results = unfilteredResults.filter((result) => {
+    if (query.employeeNumber
+      && normalizeScheduleSearchText(result.personnelNumber) !== normalizeScheduleSearchText(query.employeeNumber)) return false;
+    if (normalizedEmployee && !normalizeScheduleSearchText([
+      result.employeeName,
+      result.employeeNickname,
+      result.personnelNumber,
+    ].join(" ")).includes(normalizedEmployee)) return false;
+    if (query.homeLocationId && result.homeLocationId !== query.homeLocationId) return false;
+    if (query.assignment === "home" && result.crossLocation) return false;
+    if (query.assignment === "cross_location" && !result.crossLocation) return false;
+    if (normalizedArea && !normalizeScheduleSearchText(result.area).includes(normalizedArea)) return false;
+    return true;
+  }).sort((left, right) => compareScheduleSearchResults(left, right, query));
+
+  const homeLocationMap = new Map(unfilteredResults
+    .filter((result) => result.homeLocationId)
+    .map((result) => [result.homeLocationId, {
+      id: result.homeLocationId,
+      name: result.homeLocationName || result.homeLocationId,
+    }]));
+  const paged = results.slice(query.offset, query.offset + query.limit);
+  const targetLocationMap = new Map(contexts.map((context) => [context.locationId, context.location]));
+  return {
+    query,
+    paging: {
+      limit: query.limit,
+      offset: query.offset,
+      total: results.length,
+      returned: paged.length,
+      hasMore: query.offset + paged.length < results.length,
+    },
+    filters: {
+      locations: [...targetLocationMap.entries()].map(([id, location]) => ({ id, name: String(location.name || id) })),
+      departments: [...targetLocationMap.entries()].flatMap(([locationId, location]) => (location.departments || [])
+        .filter((department) => !query.departmentId || Number(department.id) === query.departmentId)
+        .map((department) => ({
+          id: Number(department.id),
+          name: String(department.name || ""),
+          locationId,
+        }))),
+      homeLocations: [...homeLocationMap.values()].sort((left, right) => (
+        scheduleSearchCollator.compare(left.name, right.name)
+      )),
+    },
+    results: paged,
+  };
 }
 
 async function getSchedule(weekValue, contextInput = {}, session = null) {
@@ -26729,6 +27043,8 @@ const brandingPreserveSettingKeys = [
   "pdf_filename_prefix",
   "pdf_filename_include_kw",
   "pdf_filename_include_timestamp",
+  "pdf_schedule_designs",
+  "pdf_schedule_design_names",
   "vacation_pdf_title",
   "vacation_pdf_filename_prefix",
   "vacation_pdf_filename_include_period",
@@ -29334,6 +29650,12 @@ app.get("/api/schedule", async (request, response) => {
   response.json(await getSchedule(request.query.week, request.query, request.portalSession));
 });
 
+app.get("/api/schedule/search", async (request, response) => {
+  const session = requirePortalReadOrLocal(request, "schedule:read");
+  response.set("Cache-Control", "private, no-store");
+  response.json(await searchScheduleShifts(session, request.query || {}));
+});
+
 app.get("/api/portal/v1/cross-location-schedules", async (request, response) => {
   const session = requireEmployeePortalSession(
     request,
@@ -31356,6 +31678,15 @@ const UI_START_DASHBOARD_WIDGETS = Object.freeze([
   "salesTopGroups",
 ]);
 const UI_START_DASHBOARD_WIDGET_SET = new Set(UI_START_DASHBOARD_WIDGETS);
+const UI_START_DASHBOARD_CARDS = Object.freeze([
+  "schedule",
+  "vacation",
+  "loans",
+  "branchOrders",
+  "personnel",
+  "sales",
+]);
+const UI_START_DASHBOARD_CARD_SET = new Set(UI_START_DASHBOARD_CARDS);
 const UI_MOBILE_PORTAL_NAVIGATION_ITEMS = Object.freeze([
   "time",
   "tasks",
@@ -31659,7 +31990,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     } catch {}
     try {
       startDashboardPreferences = normalizeStartDashboardPreferences(
-        JSON.parse(lookup.get("start_dashboard_preferences_v1") || "null"),
+        JSON.parse(lookup.get("start_dashboard_preferences_v2") || lookup.get("start_dashboard_preferences_v1") || "null"),
       );
     } catch {}
     try {
@@ -31872,7 +32203,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     }
     if (startDashboardPreferences !== undefined) {
       upserts.push({
-        preferenceKey: "start_dashboard_preferences_v1",
+        preferenceKey: "start_dashboard_preferences_v2",
         value: JSON.stringify(startDashboardPreferences),
       });
     }
@@ -31896,7 +32227,10 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     }
     await uiPreferencesRepository.saveChanges(actor.employeeNumber, {
       upserts,
-      deleteKeys: appFontScalePercent === undefined ? [] : ["dashboard_font_size"],
+      deleteKeys: [
+        ...(appFontScalePercent === undefined ? [] : ["dashboard_font_size"]),
+        ...(startDashboardPreferences === undefined ? [] : ["start_dashboard_preferences_v1"]),
+      ],
     });
   }
   if (allowPastWeekEditing !== undefined && previousAllowPastWeekEditing !== allowPastWeekEditing) {
@@ -34757,8 +35091,10 @@ function rightsAuditSummary(snapshot = {}) {
 
 function defaultStartDashboardPreferences() {
   return {
-    version: 1,
+    version: 2,
+    order: [...UI_START_DASHBOARD_CARDS],
     hidden: [],
+    hiddenWidgets: [],
     locationId: "",
     departmentId: "",
     salesLocationId: "",
@@ -34767,17 +35103,25 @@ function defaultStartDashboardPreferences() {
 
 function normalizeStartDashboardPreferences(value) {
   const fallback = defaultStartDashboardPreferences();
-  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || ![1, 2].includes(Number(value.version))) {
     return fallback;
   }
   const normalizeScopeId = (candidate, pattern) => {
     const normalized = String(candidate || "").trim();
     return normalized.length <= 80 && pattern.test(normalized) ? normalized : "";
   };
+  const legacyHidden = Number(value.version) === 1 ? value.hidden : value.hiddenWidgets;
+  const submittedOrder = Number(value.version) === 2 && Array.isArray(value.order)
+    ? [...new Set(value.order.map(String))].filter((id) => UI_START_DASHBOARD_CARD_SET.has(id))
+    : [];
   return {
-    version: 1,
-    hidden: Array.isArray(value.hidden)
-      ? [...new Set(value.hidden.map(String))].filter((id) => UI_START_DASHBOARD_WIDGET_SET.has(id))
+    version: 2,
+    order: [...submittedOrder, ...UI_START_DASHBOARD_CARDS.filter((id) => !submittedOrder.includes(id))],
+    hidden: Number(value.version) === 2 && Array.isArray(value.hidden)
+      ? [...new Set(value.hidden.map(String))].filter((id) => UI_START_DASHBOARD_CARD_SET.has(id))
+      : [],
+    hiddenWidgets: Array.isArray(legacyHidden)
+      ? [...new Set(legacyHidden.map(String))].filter((id) => UI_START_DASHBOARD_WIDGET_SET.has(id))
       : [],
     locationId: normalizeScopeId(value.locationId, /^[A-Za-z0-9._:-]*$/),
     departmentId: normalizeScopeId(value.departmentId, /^\d*$/),
@@ -34786,13 +35130,35 @@ function normalizeStartDashboardPreferences(value) {
 }
 
 function validateStartDashboardPreferences(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)
-    || Object.keys(value).some((key) => !["version", "hidden", "locationId", "departmentId", "salesLocationId"].includes(key))
-    || value.version !== 1
-    || !Array.isArray(value.hidden)
+  const version = Number(value?.version);
+  const allowedKeys = version === 1
+    ? ["version", "hidden", "locationId", "departmentId", "salesLocationId"]
+    : ["version", "order", "hidden", "hiddenWidgets", "locationId", "departmentId", "salesLocationId"];
+  const invalidLegacy = version === 1 && (
+    !Array.isArray(value.hidden)
     || value.hidden.length > UI_START_DASHBOARD_WIDGETS.length
     || new Set(value.hidden.map(String)).size !== value.hidden.length
     || value.hidden.some((id) => !UI_START_DASHBOARD_WIDGET_SET.has(String(id)))
+  );
+  const invalidCurrent = version === 2 && (
+    !Array.isArray(value.order)
+    || value.order.length > UI_START_DASHBOARD_CARDS.length
+    || new Set(value.order.map(String)).size !== value.order.length
+    || value.order.some((id) => !UI_START_DASHBOARD_CARD_SET.has(String(id)))
+    || !Array.isArray(value.hidden)
+    || value.hidden.length > UI_START_DASHBOARD_CARDS.length
+    || new Set(value.hidden.map(String)).size !== value.hidden.length
+    || value.hidden.some((id) => !UI_START_DASHBOARD_CARD_SET.has(String(id)))
+    || !Array.isArray(value.hiddenWidgets)
+    || value.hiddenWidgets.length > UI_START_DASHBOARD_WIDGETS.length
+    || new Set(value.hiddenWidgets.map(String)).size !== value.hiddenWidgets.length
+    || value.hiddenWidgets.some((id) => !UI_START_DASHBOARD_WIDGET_SET.has(String(id)))
+  );
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || ![1, 2].includes(version)
+    || Object.keys(value).some((key) => !allowedKeys.includes(key))
+    || invalidLegacy
+    || invalidCurrent
     || ![value.locationId, value.salesLocationId].every((id) => typeof id === "string" && id.length <= 80 && /^[A-Za-z0-9._:-]*$/.test(id))
     || typeof value.departmentId !== "string" || value.departmentId.length > 20 || !/^\d*$/.test(value.departmentId)) {
     throw httpError(400, "Bitte eine gültige persönliche Startdashboard-Konfiguration übermitteln.", "UI_PREFERENCES_INVALID");
@@ -39291,12 +39657,46 @@ function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
   };
   if (includeConfiguration) {
     result.articleLookup.baseUrl = row.article_lookup_base_url || "";
+    const provider = externalNotificationProviderStatus().email || {};
     result.emailDelivery = {
       enabled: Boolean(row.document_email_enabled),
       recipient: row.document_recipient_email || "",
-      provider: externalNotificationProviderStatus().email,
+      provider: {
+        ...provider,
+        loanDocumentAvailable: externalNotificationEventAvailable("email", "loan_document"),
+      },
     };
   }
+  return result;
+}
+
+async function loanDocumentRecipientEmailState(employeeNumber) {
+  const normalizedEmployeeNumber = String(employeeNumber || "").trim();
+  if (!normalizedEmployeeNumber) return { available: false, status: "not_configured", recipient: "" };
+  try {
+    const [targets, row] = await Promise.all([
+      personalNotificationMasterTargets(normalizedEmployeeNumber),
+      personalNotificationContactsRepository.get(normalizedEmployeeNumber),
+    ]);
+    const email = personalNotificationTargetState(row, targets, "email");
+    return {
+      available: email.verified === true,
+      status: email.status,
+      recipient: email.verified ? email.value : "",
+    };
+  } catch {
+    return { available: false, status: "unavailable", recipient: "" };
+  }
+}
+
+async function publicLoanLocationSettingWithEmailState(row, options = {}) {
+  const result = publicLoanLocationSetting(row, options);
+  if (!result?.documentRecipient) return result;
+  const email = await loanDocumentRecipientEmailState(result.documentRecipient.employeeNumber);
+  result.documentRecipient.emailDelivery = {
+    available: email.available,
+    status: email.status,
+  };
   return result;
 }
 
@@ -39553,8 +39953,8 @@ app.put("/api/portal/v1/loans/branch-overview-settings", async (request, respons
 
 app.get("/api/portal/v1/loans/settings", async (request, response) => {
   loanSettingsActor(request);
-  const locations = (await loanModuleRepository.listLocationSettings())
-    .map((row) => publicLoanLocationSetting(row, { includeConfiguration: true }));
+  const locations = await Promise.all((await loanModuleRepository.listLocationSettings())
+    .map((row) => publicLoanLocationSettingWithEmailState(row, { includeConfiguration: true })));
   response.json({
     locations,
     articleLookupProviders: [
@@ -39702,7 +40102,10 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
     branchOverviewColumns,
   }));
   response.json({
-    location: publicLoanLocationSetting(await loanLocationSettingRow(locationId), { includeConfiguration: true }),
+    location: await publicLoanLocationSettingWithEmailState(
+      await loanLocationSettingRow(locationId),
+      { includeConfiguration: true },
+    ),
   });
 });
 
@@ -40681,12 +41084,26 @@ function loanDocumentDeliveryRows(documentId) {
 function loanDocumentDeliverySummary(document) {
   const rows = Array.isArray(document?.deliveries) ? document.deliveries : [];
   const emailRows = rows.filter((row) => row.channel === "email");
+  const latestByRecipient = new Map();
+  for (const row of emailRows) {
+    const key = String(row.recipient_address || "").trim().toLowerCase()
+      || `employee:${String(row.recipient_employee_number || "unknown")}`;
+    latestByRecipient.set(key, row);
+  }
+  const latestEmailRows = [...latestByRecipient.values()];
   const lastEmail = emailRows.at(-1) || null;
+  const failedRecipients = latestEmailRows.filter((row) => row.status === "failed");
+  const emailStatus = failedRecipients.length
+    ? "failed"
+    : latestEmailRows.some((row) => row.status === "sent") ? "sent" : "not_requested";
   return {
     internalSent: rows.filter((row) => row.channel === "internal" && row.status === "sent").length,
     emailConfigured: emailRows.length > 0,
-    emailStatus: lastEmail?.status || "not_requested",
+    emailStatus,
     emailAttempts: emailRows.length,
+    emailRecipients: latestEmailRows.length,
+    emailFailedRecipients: failedRecipients.length,
+    emailFailureCodes: [...new Set(failedRecipients.map((row) => row.error_code).filter(Boolean))],
     lastEmailAttemptAt: lastEmail?.attempted_at || null,
   };
 }
@@ -41034,6 +41451,7 @@ async function loanDocumentRecipients(loan, documentType) {
 
 async function deliverLoanDocumentEmail(loan, document, {
   recipient = "",
+  recipientEmployeeNumber = null,
   attemptedByEmployeeNumber = null,
 } = {}) {
   const destination = String(recipient || "").trim().toLowerCase();
@@ -41067,6 +41485,7 @@ async function deliverLoanDocumentEmail(loan, document, {
   await insertLoanDocumentDelivery({
     documentId: document.id,
     channel: "email",
+    recipientEmployeeNumber,
     recipientAddress: destination,
     status,
     errorCode,
@@ -41080,6 +41499,82 @@ async function deliverLoanDocumentEmail(loan, document, {
     JSON.stringify({ loanId: loan.id, errorCode }),
   );
   return { attempted: true, status, errorCode };
+}
+
+async function configuredLoanDocumentEmailTargets(loan, setting) {
+  if (!setting?.document_email_enabled) return { targets: [], internalRecipientStatus: "not_requested" };
+  const targets = [];
+  const configuredEmployeeNumber = String(setting.document_recipient_employee_number || "").trim();
+  const internalEmployeeNumber = configuredEmployeeNumber
+    || await fallbackLoanDocumentRecipient(loan.location_id);
+  let internalRecipientStatus = "not_configured";
+  if (internalEmployeeNumber) {
+    const internalEmail = await loanDocumentRecipientEmailState(internalEmployeeNumber);
+    internalRecipientStatus = internalEmail.status;
+    if (internalEmail.available && internalEmail.recipient) {
+      targets.push({
+        recipient: internalEmail.recipient,
+        recipientEmployeeNumber: internalEmployeeNumber,
+        kind: "internal_recipient",
+      });
+    }
+  }
+  const additionalEmail = String(setting.document_recipient_email || "").trim().toLowerCase();
+  if (additionalEmail) targets.push({ recipient: additionalEmail, recipientEmployeeNumber: null, kind: "additional" });
+  const deduplicated = new Map();
+  for (const target of targets) {
+    const key = target.recipient.toLowerCase();
+    const current = deduplicated.get(key);
+    deduplicated.set(key, current
+      ? { ...current, recipientEmployeeNumber: current.recipientEmployeeNumber || target.recipientEmployeeNumber }
+      : target);
+  }
+  return { targets: [...deduplicated.values()], internalRecipientStatus };
+}
+
+function loanDocumentEmailFailureMessage(errorCodes = []) {
+  const codes = new Set(errorCodes);
+  if (codes.has("EXTERNAL_NOTIFICATION_EVENT_DISABLED")) {
+    return "Leihbeleg-E-Mails sind am Server noch nicht freigeschaltet (Ereignis „loan_document“).";
+  }
+  if (codes.has("EXTERNAL_NOTIFICATION_PROVIDER_NOT_CONFIGURED")
+    || codes.has("EXTERNAL_NOTIFICATION_SMTP_REQUIRED")) {
+    return "Der SMTP-Versand für Leihbelege ist derzeit nicht betriebsbereit.";
+  }
+  if (codes.has("EXTERNAL_NOTIFICATION_DISPATCH_DISABLED")) {
+    return "Der externe E-Mail-Versand ist administrativ deaktiviert.";
+  }
+  if (codes.has("EXTERNAL_NOTIFICATION_SENDER_NOT_APPROVED")) {
+    return "Der Absender für Leihbeleg-E-Mails ist noch nicht freigegeben.";
+  }
+  return "Mindestens eine Leihbeleg-E-Mail konnte nicht zugestellt werden.";
+}
+
+async function deliverConfiguredLoanDocumentEmails(loan, document, {
+  attemptedByEmployeeNumber = null,
+} = {}) {
+  const setting = await loanLocationSettingRow(loan.location_id);
+  const configured = await configuredLoanDocumentEmailTargets(loan, setting);
+  const deliveries = [];
+  for (const target of configured.targets) {
+    deliveries.push(await deliverLoanDocumentEmail(loan, document, {
+      recipient: target.recipient,
+      recipientEmployeeNumber: target.recipientEmployeeNumber,
+      attemptedByEmployeeNumber,
+    }));
+  }
+  const errorCodes = [...new Set(deliveries.map((delivery) => delivery.errorCode).filter(Boolean))];
+  const failed = deliveries.filter((delivery) => delivery.status === "failed").length;
+  const sent = deliveries.filter((delivery) => delivery.status === "sent").length;
+  return {
+    attempted: deliveries.length > 0,
+    status: failed ? "failed" : sent ? "sent" : "not_requested",
+    recipients: deliveries.length,
+    sent,
+    failed,
+    errorCodes,
+    internalRecipientStatus: configured.internalRecipientStatus,
+  };
 }
 
 async function notifyLoanDocumentAvailable(loan, document) {
@@ -41105,13 +41600,9 @@ async function notifyLoanDocumentAvailable(loan, document) {
       attemptedByEmployeeNumber: document.created_by_employee_number,
     });
   }
-  const setting = await loanLocationSettingRow(loan.location_id);
-  if (setting?.document_email_enabled && setting.document_recipient_email) {
-    await deliverLoanDocumentEmail(loan, document, {
-      recipient: setting.document_recipient_email,
-      attemptedByEmployeeNumber: document.created_by_employee_number,
-    });
-  }
+  await deliverConfiguredLoanDocumentEmails(loan, document, {
+    attemptedByEmployeeNumber: document.created_by_employee_number,
+  });
 }
 
 function assertLoanDocumentAccess(session, document) {
@@ -41909,11 +42400,15 @@ app.post("/api/portal/v1/loans/documents/:documentId/email", async (request, res
   if (!setting?.document_email_enabled || !setting.document_recipient_email) {
     throw httpError(409, "Für diesen Standort ist kein E-Mail-Empfänger aktiviert.", "LOAN_DOCUMENT_EMAIL_NOT_CONFIGURED");
   }
-  const delivery = await deliverLoanDocumentEmail(loan, document, {
-    recipient: setting.document_recipient_email,
+  const delivery = await deliverConfiguredLoanDocumentEmails(loan, document, {
     attemptedByEmployeeNumber: actor.employeeNumber,
   });
-  response.status(delivery.status === "sent" ? 200 : 503).json({
+  const failed = delivery.status !== "sent";
+  response.status(failed ? 503 : 200).json({
+    ...(failed ? {
+      error: loanDocumentEmailFailureMessage(delivery.errorCodes),
+      code: "LOAN_DOCUMENT_EMAIL_DELIVERY_FAILED",
+    } : {}),
     delivery,
     document: publicLoanDocument(await loanDocumentRow(document.id)),
   });
@@ -43659,6 +44154,38 @@ function portalBirthdayPresentationThemeResponse(theme = null) {
   return { theme: theme || null };
 }
 
+const PORTAL_BIRTHDAY_PREVIEW_EMPLOYEE_NUMBER = "252";
+const PORTAL_BIRTHDAY_PREVIEW_PREFERENCE_KEY = "birthday_presentation_preview_v1";
+
+function portalBirthdayPresentationForId(value) {
+  const id = String(value || "").trim();
+  return PORTAL_BIRTHDAY_PRESENTATIONS.find((presentation) => presentation.id === id) || null;
+}
+
+function portalBirthdayPresentationPreviewAvailable(actor) {
+  return isActivePersonalPortalPrincipal(actor)
+    && String(actor.role || "").trim().toLowerCase() === "developer"
+    && String(actor.employeeNumber || "").trim() === PORTAL_BIRTHDAY_PREVIEW_EMPLOYEE_NUMBER;
+}
+
+async function portalBirthdayPresentationDeveloperPreview(actor, repositories) {
+  const available = portalBirthdayPresentationPreviewAvailable(actor);
+  if (!available) {
+    return Object.freeze({ available: false, enabled: false, presentationId: null, presentation: null });
+  }
+  const row = await repositories.uiPreferences.get(
+    PORTAL_BIRTHDAY_PREVIEW_EMPLOYEE_NUMBER,
+    PORTAL_BIRTHDAY_PREVIEW_PREFERENCE_KEY,
+  );
+  const presentation = portalBirthdayPresentationForId(row?.value);
+  return Object.freeze({
+    available: true,
+    enabled: Boolean(presentation),
+    presentationId: presentation?.id || null,
+    presentation,
+  });
+}
+
 app.get("/api/portal/v1/me/birthday-presentation/theme", async (request, response) => {
   response.setHeader("Cache-Control", "private, no-store, max-age=0");
   response.setHeader("Pragma", "no-cache");
@@ -43686,6 +44213,8 @@ app.get("/api/portal/v1/me/birthday-presentation/theme", async (request, respons
         "PORTAL_LOGIN_REQUIRED",
       );
     }
+    const developerPreview = await portalBirthdayPresentationDeveloperPreview(actor, repositories);
+    if (developerPreview.presentation) return { id: developerPreview.presentation.id };
     const [policyRow, assignment] = await Promise.all([
       repositories.portalBirthdayPresentations.getPolicy(),
       repositories.portalBirthdayPresentations.getAssignment(employeeNumber),
@@ -43747,6 +44276,8 @@ app.post("/api/portal/v1/me/birthday-presentation/claim", async (request, respon
         "PORTAL_LOGIN_REQUIRED",
       );
     }
+    const developerPreview = await portalBirthdayPresentationDeveloperPreview(actor, repositories);
+    if (developerPreview.presentation) return { ...developerPreview.presentation };
     const [policyRow, assignment] = await Promise.all([
       repositories.portalBirthdayPresentations.getPolicy(),
       repositories.portalBirthdayPresentations.getAssignment(employeeNumber),
@@ -44000,12 +44531,13 @@ async function portalBirthdayPresentationDelegates(access, organization, topolog
 
 async function portalBirthdayPresentationSettingsPayload(actor, repositories) {
   const access = portalBirthdayPresentationAccess(actor);
-  const [policyRow, assignments, employees, locations, departments] = await Promise.all([
+  const [policyRow, assignments, employees, locations, departments, developerPreview] = await Promise.all([
     repositories.portalBirthdayPresentations.getPolicy(),
     repositories.portalBirthdayPresentations.listAssignments(),
     repositories.organizationPersonnel.listEmployees(),
     repositories.organizationPersonnel.listLocations(false),
     repositories.organizationPersonnel.listDepartments(false),
+    portalBirthdayPresentationDeveloperPreview(actor, repositories),
   ]);
   const topology = activePortalBirthdayPresentationTopology(locations, departments);
   const assignmentByEmployee = new Map(assignments.map((assignment) => [
@@ -44041,6 +44573,11 @@ async function portalBirthdayPresentationSettingsPayload(actor, repositories) {
     scope: portalBirthdayPresentationScopePayload(access, topology),
     policy: portalBirthdayPresentationPolicy(policyRow),
     presentations: PORTAL_BIRTHDAY_PRESENTATIONS.map((presentation) => ({ ...presentation })),
+    developerPreview: {
+      available: developerPreview.available,
+      enabled: developerPreview.enabled,
+      presentationId: developerPreview.presentationId,
+    },
     employees: visibleEmployees,
     delegates: await portalBirthdayPresentationDelegates(
       access,
@@ -44118,6 +44655,68 @@ app.get("/api/portal/v1/birthday-presentation-settings", async (request, respons
     );
     return portalBirthdayPresentationSettingsPayload(actor, repositories);
   }, { isolation: "serializable", readOnly: true });
+  response.json(result);
+});
+
+app.put("/api/portal/v1/birthday-presentation-settings/developer-preview", async (request, response) => {
+  const session = requirePortalBirthdayPresentationSession(request, { csrf: true });
+  const body = portalBirthdayPresentationInput(
+    request.body,
+    ["enabled", "presentationId"],
+    "Die persönliche Geburtstagsvorschau",
+  );
+  if (typeof body.enabled !== "boolean") {
+    throw httpError(
+      400,
+      "Bitte angeben, ob die persönliche Geburtstagsvorschau aktiviert werden soll.",
+      "PORTAL_BIRTHDAY_PRESENTATION_PREVIEW_INVALID",
+    );
+  }
+  const presentation = body.enabled ? portalBirthdayPresentationForId(body.presentationId) : null;
+  if (body.enabled && !presentation) {
+    throw httpError(
+      400,
+      "Bitte eine freigegebene Geburtstagsdarstellung für die Vorschau auswählen.",
+      "PORTAL_BIRTHDAY_PRESENTATION_PREVIEW_INVALID",
+    );
+  }
+
+  const result = await portalBirthdayPresentationSerializableMutation(async (repositories) => {
+    const actor = await portalBirthdayPresentationActor(
+      session,
+      repositories.organizationPersonnel,
+    );
+    if (!portalBirthdayPresentationPreviewAvailable(actor)) {
+      throw httpError(
+        403,
+        "Die persönliche Geburtstagsvorschau ist ausschließlich für Developer 252 verfügbar.",
+        "PORTAL_BIRTHDAY_PRESENTATION_PREVIEW_DENIED",
+      );
+    }
+    const previous = await portalBirthdayPresentationDeveloperPreview(actor, repositories);
+    await repositories.uiPreferences.saveChanges(actor.employeeNumber, {
+      upserts: presentation ? [{
+        preferenceKey: PORTAL_BIRTHDAY_PREVIEW_PREFERENCE_KEY,
+        value: presentation.id,
+      }] : [],
+      deleteKeys: presentation ? [] : [PORTAL_BIRTHDAY_PREVIEW_PREFERENCE_KEY],
+    });
+    if (previous.presentationId !== (presentation?.id || null)) {
+      await repositories.organizationPersonnel.insertAudit(
+        actor.employeeNumber,
+        "portal.birthday-presentation.developer-preview.update",
+        "portal_user_preference",
+        `${actor.employeeNumber}:${PORTAL_BIRTHDAY_PREVIEW_PREFERENCE_KEY}`,
+        JSON.stringify({
+          schemaVersion: 1,
+          previousPresentationId: previous.presentationId,
+          presentationId: presentation?.id || null,
+          enabled: Boolean(presentation),
+        }),
+      );
+    }
+    return portalBirthdayPresentationSettingsPayload(actor, repositories);
+  });
   response.json(result);
 });
 
@@ -52604,7 +53203,11 @@ app.get("/api/settings", async (request, response) => {
   }
   const context = await resolvePlanningContext(request.query || {});
   assertSessionContextScope(request.portalSession, context);
-  const settings = await settingsForLocation(context.locationId);
+  const settings = applyScopedPdfSettings(
+    await settingsForLocation(context.locationId),
+    context,
+    "schedule",
+  );
   settings.allow_past_week_editing = await pastWeekEditingAllowedForActor(request.portalSession, settings) ? "1" : "0";
   if (serverModeActive) {
     settings.external_backup_enabled = "0";
@@ -52816,6 +53419,29 @@ app.put("/api/settings", async (request, response) => {
   const vacationContext = await resolvePlanningContext({ ...body, departmentId: null, department: null });
   const scheduleDefaults = defaultSchedulePdfSettings(scheduleContext);
   const vacationDefaults = defaultVacationPdfSettings(vacationContext);
+  const currentScheduleSettings = applyScopedPdfSettings(
+    await settingsForLocation(scheduleContext.locationId),
+    scheduleContext,
+    "schedule",
+  );
+  let schedulePdfDesignIds;
+  let schedulePdfDesignNames;
+  try {
+    schedulePdfDesignIds = normalizeSchedulePdfDesignIds(
+      Object.hasOwn(body, "schedulePdfDesignIds")
+        ? body.schedulePdfDesignIds
+        : currentScheduleSettings.pdf_schedule_design_ids,
+      { strict: true },
+    );
+    schedulePdfDesignNames = Object.hasOwn(body, "schedulePdfDesignNames")
+      ? normalizeSchedulePdfDesignNames(body.schedulePdfDesignNames, { strict: true })
+      : normalizeSchedulePdfDesignNames(currentScheduleSettings.pdf_schedule_design_names);
+  } catch (error) {
+    if (error instanceof SchedulePdfDesignValidationError) {
+      throw httpError(400, error.message, error.code);
+    }
+    throw error;
+  }
   const pdfTitle = validatePdfText(body.pdfTitle || scheduleDefaults.pdf_title, "den Dienstplan-PDF-Titel");
   const pdfFilenamePrefix = validatePdfText(body.pdfFilenamePrefix || scheduleDefaults.pdf_filename_prefix, "der Dienstplan-PDF-Dateiname", { min: 5, max: 80 });
   const vacationPdfTitle = validatePdfText(body.vacationPdfTitle || vacationDefaults.vacation_pdf_title, "den Urlaubsplaner-PDF-Titel");
@@ -52957,6 +53583,8 @@ app.put("/api/settings", async (request, response) => {
       pdf_filename_prefix: pdfFilenamePrefix,
       pdf_filename_include_kw: body.pdfFilenameIncludeKw === false ? "0" : "1",
       pdf_filename_include_timestamp: body.pdfFilenameIncludeTimestamp === true ? "1" : "0",
+      pdf_schedule_designs: JSON.stringify(schedulePdfDesignIds),
+      pdf_schedule_design_names: JSON.stringify(schedulePdfDesignNames),
     }, repository);
     await saveScopedPdfSettings("vacation", vacationContext, {
       vacation_pdf_title: vacationPdfTitle,
@@ -54972,7 +55600,7 @@ function drawScheduleNoteRichText(doc, note, x, y, width, height) {
   }
 }
 
-async function drawSchedulePdf(schedule, response, createdAt = new Date()) {
+async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date()) {
   const doc = new PDFDocument({
     size: "A4",
     layout: "landscape",
@@ -55381,13 +56009,350 @@ async function drawSchedulePdf(schedule, response, createdAt = new Date()) {
   doc.end();
 }
 
+function scheduleMatrixOptionStyle(optionType) {
+  if (["vacation", "special_leave"].includes(optionType)) {
+    return { fill: "#e7f3eb", stroke: "#4f8061", text: "#244631" };
+  }
+  if (optionType === "time_off") {
+    return { fill: "#fff1cf", stroke: "#a97517", text: "#5f430d" };
+  }
+  if (optionType === "sick") {
+    return { fill: "#f8e8e6", stroke: "#a44c45", text: "#612a26" };
+  }
+  if (["school", "vocational_school"].includes(optionType)) {
+    return { fill: "#e9eef9", stroke: "#4d6995", text: "#263c60" };
+  }
+  return { fill: "#eef0f1", stroke: "#6f7b82", text: "#364148" };
+}
+
+function scheduleMatrixDayIndex(schedule, date) {
+  return Math.round(
+    (new Date(`${date}T12:00:00Z`) - new Date(`${schedule.weekStart}T12:00:00Z`)) / 86400000,
+  );
+}
+
+function scheduleMatrixCellData(schedule, employee, date) {
+  const options = collapsedScheduleWeekOptions(schedule.weekOptions)
+    .filter((option) => !isTeamWideMeetingOption(option))
+    .filter((option) => option.employee_number === employee.personnel_number)
+    .filter((option) => option.date_from <= date && option.date_to >= date);
+  const shifts = schedule.shifts
+    .filter((shift) => shift.employee_number === employee.personnel_number && shift.shift_date === date)
+    .sort((left, right) => String(left.start_time).localeCompare(String(right.start_time)));
+  const lines = [];
+  for (const option of options.slice(0, 2)) {
+    const time = optionIsAllDay(option)
+      ? "ganztägig"
+      : `${option.start_time || ""}-${option.end_time || ""}`;
+    lines.push({
+      text: `${optionLabel(option.option_type)} · ${time}`,
+      bold: true,
+      color: scheduleMatrixOptionStyle(option.option_type).text,
+    });
+  }
+  for (const shift of shifts.slice(0, Math.max(1, 3 - lines.length))) {
+    const department = !schedule.context.departmentId && shift.department_name
+      ? ` · ${shift.department_name}` : "";
+    lines.push({ text: `${shift.start_time}-${shift.end_time}${department}`, bold: false, color: "#172433" });
+  }
+  if (!lines.length) lines.push({ text: "-", bold: false, color: "#9aa4aa" });
+  if (options.length + shifts.length > lines.length) {
+    lines.push({ text: `+${options.length + shifts.length - lines.length} weitere`, bold: false, color: "#6b7680" });
+  }
+  return {
+    options,
+    shifts,
+    lines,
+    style: options.length ? scheduleMatrixOptionStyle(options[0].option_type) : null,
+  };
+}
+
+function scheduleMatrixMeetingText(meeting) {
+  const date = meeting.date_from === meeting.date_to
+    ? formatDateGerman(meeting.date_from, false)
+    : `${formatDateGerman(meeting.date_from, false)}-${formatDateGerman(meeting.date_to, false)}`;
+  const time = optionIsAllDay(meeting)
+    ? "ganztägig"
+    : `${meeting.start_time || ""}-${meeting.end_time || ""}`;
+  return `TS · ${date} · ${time}${meeting.note ? ` · ${meeting.note}` : ""}`;
+}
+
+function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
+  const doc = new PDFDocument({
+    autoFirstPage: false,
+    size: "A4",
+    layout: "landscape",
+    margin: 0,
+    info: {
+      Title: `${schedule.settings.pdf_title} · KW ${schedule.calendarWeek} · Wochenmatrix`,
+      Subject: `A4 Querformat · ${APP_NAME} ${APP_VERSION_LABEL}`,
+    },
+  });
+  doc.pipe(response);
+
+  const pageWidth = 841.89;
+  const pageHeight = 595.28;
+  const left = 22;
+  const right = 22;
+  const dayCount = settingEnabled(schedule.settings, "show_sunday") ? 7 : 6;
+  const weekdayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+  const meetings = collapsedScheduleWeekOptions(schedule.weekOptions).filter(isTeamWideMeetingOption);
+  const hasScheduleNote = Boolean(schedule.scheduleNote?.note_text?.trim());
+  const tableTop = meetings.length ? 88 : 62;
+  const tableBottom = hasScheduleNote ? 478 : 510;
+  const headerHeight = 31;
+  const summaryHeight = 21;
+  const minimumRowHeight = 33;
+  const maximumRowHeight = 54;
+  const rowsPerPage = Math.max(
+    1,
+    Math.floor((tableBottom - tableTop - headerHeight - summaryHeight) / minimumRowHeight),
+  );
+  const employees = schedule.employees.length ? schedule.employees : [null];
+  const pageRows = [];
+  for (let index = 0; index < employees.length; index += rowsPerPage) {
+    pageRows.push(employees.slice(index, index + rowsPerPage));
+  }
+
+  pageRows.forEach((employeesOnPage, pageIndex) => {
+    doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+    const pageEmployeeCount = employeesOnPage.filter(Boolean).length;
+    const rowHeight = Math.min(
+      maximumRowHeight,
+      (tableBottom - tableTop - headerHeight - summaryHeight) / Math.max(1, employeesOnPage.length),
+    );
+    const tableWidth = pageWidth - left - right;
+    const employeeColumnWidth = 148;
+    const dayWidth = (tableWidth - employeeColumnWidth) / dayCount;
+    const dataTop = tableTop + headerHeight;
+    const dataBottom = dataTop + rowHeight * employeesOnPage.length;
+    const summaryY = dataBottom;
+
+    doc.fillColor("#142033").font("Helvetica-Bold").fontSize(15).text(
+      `${schedule.settings.pdf_title} · KW ${schedule.calendarWeek}`,
+      left,
+      17,
+      { width: pageWidth - left - right - 100, ellipsis: true },
+    );
+    doc.fillColor("#677581").font("Helvetica").fontSize(7.2).text(
+      `Woche ab ${formatDateGerman(schedule.weekStart)} · Wochenmatrix · ${schedule.context.locationName || "Hauptstandort"}${schedule.context.departmentName ? ` · ${schedule.context.departmentName}` : ""}`,
+      left,
+      39,
+      { width: pageWidth - left - right - 100, ellipsis: true },
+    );
+    doc.fillColor("#53616d").font("Helvetica-Bold").fontSize(7).text(
+      pageRows.length > 1 ? `Seite ${pageIndex + 1}/${pageRows.length}` : "Design 2",
+      pageWidth - right - 92,
+      22,
+      { width: 92, align: "right" },
+    );
+
+    if (meetings.length) {
+      doc.roundedRect(left, 52, tableWidth, 25, 5).fillAndStroke("#eadff5", "#68448f");
+      doc.fillColor("#332044").font("Helvetica-Bold").fontSize(7.2).text(
+        meetings.map(scheduleMatrixMeetingText).join("   |   "),
+        left + 9,
+        60,
+        { width: tableWidth - 18, height: 10, align: "left", ellipsis: true },
+      );
+    }
+
+    doc.fillColor("#203747").rect(left, tableTop, employeeColumnWidth, headerHeight).fill();
+    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(8).text(
+      "Teammitglied",
+      left + 10,
+      tableTop + 11,
+      { width: employeeColumnWidth - 20 },
+    );
+
+    for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+      const date = addDays(schedule.weekStart, dayIndex);
+      const x = left + employeeColumnWidth + dayIndex * dayWidth;
+      const meetingToday = meetings.some((meeting) => meeting.date_from <= date && meeting.date_to >= date);
+      doc.fillColor(dayIndex >= 5 ? "#dfe6e8" : "#e8eef1").rect(x, tableTop, dayWidth, headerHeight).fill();
+      if (meetingToday) doc.fillColor("#76529a").rect(x, tableTop, dayWidth, 3).fill();
+      doc.fillColor("#162635").font("Helvetica-Bold").fontSize(dayCount === 7 ? 6.7 : 7.3).text(
+        weekdayNames[dayIndex],
+        x + 4,
+        tableTop + 7,
+        { width: dayWidth - 8, align: "center", ellipsis: true },
+      );
+      doc.fillColor("#5f6d77").font("Helvetica").fontSize(6.2).text(
+        formatDateGerman(date, false),
+        x + 4,
+        tableTop + 18,
+        { width: dayWidth - 8, align: "center" },
+      );
+    }
+
+    employeesOnPage.forEach((employee, rowIndex) => {
+      const y = dataTop + rowIndex * rowHeight;
+      const rowFill = rowIndex % 2 ? "#f8faf9" : "#ffffff";
+      doc.fillColor(rowFill).rect(left, y, tableWidth, rowHeight).fill();
+      if (!employee) {
+        doc.fillColor("#78858e").font("Helvetica").fontSize(8).text(
+          "Keine Teammitglieder im gewählten Bereich.",
+          left + 10,
+          y + rowHeight / 2 - 4,
+          { width: tableWidth - 20, align: "center" },
+        );
+        return;
+      }
+
+      const employeeColor = employee.color || "#5f7b72";
+      doc.fillColor(employeeColor).rect(left, y, 6, rowHeight).fill();
+      doc.roundedRect(left + 12, y + 8, 34, Math.max(20, rowHeight - 16), 5).fill(employeeColor);
+      doc.fillColor(contrastColor(employeeColor)).font("Helvetica-Bold").fontSize(6.7).text(
+        String(employee.personnel_number || ""),
+        left + 14,
+        y + rowHeight / 2 - 3.5,
+        { width: 30, align: "center", ellipsis: true },
+      );
+      doc.fillColor("#142033").font("Helvetica-Bold").fontSize(7.4).text(
+        employee.nickname || employee.full_name || employee.personnel_number,
+        left + 52,
+        y + Math.max(8, rowHeight / 2 - 10),
+        { width: employeeColumnWidth - 60, height: 12, ellipsis: true },
+      );
+      const employeeDetail = [employee.position_name, employee.department_name].filter(Boolean).join(" · ");
+      doc.fillColor("#75818a").font("Helvetica").fontSize(5.7).text(
+        employeeDetail || "Dienstplanung",
+        left + 52,
+        y + Math.max(19, rowHeight / 2 + 2),
+        { width: employeeColumnWidth - 60, height: 9, ellipsis: true },
+      );
+
+      for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+        const date = addDays(schedule.weekStart, dayIndex);
+        const x = left + employeeColumnWidth + dayIndex * dayWidth;
+        const cell = scheduleMatrixCellData(schedule, employee, date);
+        if (dayIndex >= 5) {
+          doc.save().fillOpacity(0.36).fillColor("#e6ebed").rect(x, y, dayWidth, rowHeight).fill().restore();
+        }
+        if (cell.style) {
+          doc.save().fillOpacity(0.88).fillColor(cell.style.fill).rect(x + 1, y + 1, dayWidth - 2, rowHeight - 2).fill().restore();
+          doc.strokeColor(cell.style.stroke).lineWidth(0.7).moveTo(x + 2, y + 2).lineTo(x + 2, y + rowHeight - 2).stroke();
+        }
+        const lineHeight = Math.max(8.1, Math.min(10.2, rowHeight / Math.max(3, cell.lines.length + 1)));
+        let lineY = y + Math.max(5, (rowHeight - lineHeight * cell.lines.length) / 2);
+        for (const line of cell.lines.slice(0, 4)) {
+          doc.fillColor(line.color).font(line.bold ? "Helvetica-Bold" : "Helvetica").fontSize(dayCount === 7 ? 5.4 : 5.9).text(
+            line.text,
+            x + 6,
+            lineY,
+            { width: dayWidth - 12, height: lineHeight, align: "left", ellipsis: true, lineBreak: false },
+          );
+          lineY += lineHeight;
+        }
+      }
+    });
+
+    doc.fillColor("#edf2f0").rect(left, summaryY, tableWidth, summaryHeight).fill();
+    doc.fillColor("#243944").font("Helvetica-Bold").fontSize(6.5).text(
+      pageEmployeeCount ? "Besetzung" : "Übersicht",
+      left + 10,
+      summaryY + 7,
+      { width: employeeColumnWidth - 20 },
+    );
+    for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+      const date = addDays(schedule.weekStart, dayIndex);
+      const x = left + employeeColumnWidth + dayIndex * dayWidth;
+      const present = employeesOnPage.filter(Boolean).filter((employee) => (
+        schedule.shifts.some((shift) => shift.employee_number === employee.personnel_number && shift.shift_date === date)
+      )).length;
+      doc.fillColor("#40535d").font("Helvetica-Bold").fontSize(6.3).text(
+        `${present} MA${meetings.some((meeting) => meeting.date_from <= date && meeting.date_to >= date) ? " · TS" : ""}`,
+        x + 4,
+        summaryY + 7,
+        { width: dayWidth - 8, align: "center", ellipsis: true },
+      );
+    }
+
+    doc.strokeColor("#81909a").lineWidth(0.65).rect(left, tableTop, tableWidth, summaryY + summaryHeight - tableTop).stroke();
+    doc.strokeColor("#81909a").lineWidth(0.65).moveTo(left + employeeColumnWidth, tableTop).lineTo(left + employeeColumnWidth, summaryY + summaryHeight).stroke();
+    for (let dayIndex = 1; dayIndex < dayCount; dayIndex += 1) {
+      const x = left + employeeColumnWidth + dayIndex * dayWidth;
+      doc.strokeColor("#8b99a2").lineWidth(0.8).moveTo(x, tableTop).lineTo(x, summaryY + summaryHeight).stroke();
+    }
+    for (let rowIndex = 0; rowIndex <= employeesOnPage.length; rowIndex += 1) {
+      const y = dataTop + rowIndex * rowHeight;
+      doc.strokeColor("#c6d0d4").lineWidth(0.35).moveTo(left, y).lineTo(left + tableWidth, y).stroke();
+    }
+
+    const legendY = summaryY + summaryHeight + 10;
+    const legendItems = [
+      { color: "#5f7b72", label: "Mitarbeitendenfarbe" },
+      { color: "#e7f3eb", label: "Urlaub / Sonderurlaub" },
+      { color: "#fff1cf", label: "Zeitausgleich" },
+      { color: "#e9eef9", label: "Schulung / Schule" },
+      { color: "#eadff5", label: "TS Teamsitzung" },
+    ];
+    let legendX = left;
+    for (const item of legendItems) {
+      doc.fillColor(item.color).roundedRect(legendX, legendY + 1, 8, 8, 1.5).fill();
+      doc.strokeColor("#87949c").lineWidth(0.3).roundedRect(legendX, legendY + 1, 8, 8, 1.5).stroke();
+      doc.fillColor("#5c6871").font("Helvetica").fontSize(5.6).text(item.label, legendX + 11, legendY + 1.5, { lineBreak: false });
+      legendX += 11 + doc.widthOfString(item.label) + 13;
+    }
+
+    if (hasScheduleNote) {
+      const noteY = Math.min(legendY + 18, pageHeight - 67);
+      doc.roundedRect(left, noteY, tableWidth, 29, 4).fillAndStroke("#fff6cf", "#c6a842");
+      doc.fillColor("#4d431e").font("Helvetica-Bold").fontSize(6.2).text("Bemerkung", left + 8, noteY + 5, { width: 57 });
+      doc.fillColor("#3f3a28").font("Helvetica").fontSize(6).text(
+        schedule.scheduleNote.note_text,
+        left + 66,
+        noteY + 5,
+        { width: tableWidth - 74, height: 18, ellipsis: true },
+      );
+    }
+
+    doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
+      `Dienstplan erstellt mit: ${APP_NAME} ${APP_VERSION_LABEL}`,
+      left,
+      pageHeight - 24,
+    );
+    doc.fillColor("#6b7684").font("Helvetica").text(
+      pdfFooterContact(schedule.settings, createdAt),
+      pageWidth - 300,
+      pageHeight - 24,
+      { width: 278, align: "right" },
+    );
+  });
+
+  doc.end();
+}
+
+function schedulePdfDesignForRequest(schedule, requestedDesignId) {
+  try {
+    return resolveSchedulePdfDesign(
+      schedule.settings.pdf_schedule_design_ids || schedule.settings.pdf_schedule_designs,
+      requestedDesignId,
+    );
+  } catch (error) {
+    if (error instanceof SchedulePdfDesignValidationError) {
+      throw httpError(400, error.message, error.code);
+    }
+    throw error;
+  }
+}
+
+async function drawSchedulePdf(schedule, response, createdAt = new Date(), designId = "timeline") {
+  if (designId === "matrix") {
+    drawScheduleMatrixPdf(schedule, response, createdAt);
+    return;
+  }
+  await drawScheduleTimelinePdf(schedule, response, createdAt);
+}
+
 app.get("/api/schedule.pdf", async (request, response) => {
   const schedule = await getSchedule(request.query.week, request.query, request.portalSession);
+  const designId = schedulePdfDesignForRequest(schedule, request.query.design);
   const createdAt = new Date();
   const filename = buildPdfFilename(schedule, createdAt);
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", contentDispositionHeader(filename));
-  await drawSchedulePdf(schedule, response, createdAt);
+  await drawSchedulePdf(schedule, response, createdAt, designId);
 });
 
 app.get("/api/vacations.pdf", async (request, response) => {
@@ -55401,9 +56366,10 @@ app.get("/api/vacations.pdf", async (request, response) => {
 
 app.get("/api/schedule-preview.pdf", async (request, response) => {
   const schedule = await getSchedule(request.query.week, request.query, request.portalSession);
+  const designId = schedulePdfDesignForRequest(schedule, request.query.design);
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", "inline");
-  await drawSchedulePdf(schedule, response, new Date());
+  await drawSchedulePdf(schedule, response, new Date(), designId);
 });
 
 app.get("/api/vacations-preview.pdf", async (request, response) => {

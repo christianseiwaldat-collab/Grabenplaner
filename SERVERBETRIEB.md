@@ -504,7 +504,11 @@ Solange `GRABENPLANER_EMAIL_DISPATCH_ENABLED=0` oder die Ereignisliste leer ist,
 
 Filialbestellungen verwenden keinen durch die Filialleitung frei wählbaren Absender. Die Anwendung leitet ihn ausschließlich aus dem aktiven Filialkonto ab, zum Beispiel `fil18-noreply@grabenplaner.eu`. Die Versanddomain `grabenplaner.eu` muss im gewählten Provider verifiziert sein. Für diesen Vorgang ist zusätzlich `GRABENPLANER_EMAIL_SENDER_APPROVED=1`, `GRABENPLANER_EMAIL_DISPATCH_ENABLED=1` und die eng begrenzte Positivliste `GRABENPLANER_EMAIL_ALLOWED_EVENTS=branch_order` erforderlich. Zieladresse, Antwortadresse und Vorlage bleiben je Ziel durch die berechtigte Filialleitung konfigurierbar.
 
+Leihbelege werden ausschließlich per SMTP als PDF-Anhang versendet; der E-Mail-Webhook darf keine Anhänge übernehmen. Dafür muss das Ereignis `loan_document` freigegeben sein. Bei aktiviertem Versand erhält der gewählte interne Belegempfänger den Beleg auch an seine aktuell bestätigte persönliche E-Mail-Adresse; zusätzlich wird die in den Standorteinstellungen hinterlegte Belegadresse bedient. Identische Adressen werden nur einmal angeschrieben. Ohne bestätigte persönliche Adresse bleibt die interne Portal-Mitteilung wirksam, der persönliche E-Mail-Versand wird jedoch ausgelassen.
+
 Das Zurücksetzen eines persönlichen Portalpassworts versendet einen einmalig verwendbaren, 30 Minuten gültigen HTTPS-Link ausschließlich an die aktuell bestätigte private E-Mail-Adresse. Dieses Ereignis wird getrennt als `password_reset` freigegeben. Sollen Filialbestellungen und Passwort-Reset über denselben Versandweg laufen, lautet die Positivliste `GRABENPLANER_EMAIL_ALLOWED_EVENTS=branch_order,password_reset`. Eine leere Liste oder eine Liste ohne `password_reset` lässt die öffentliche Reset-Anfrage aus Datenschutzgründen weiterhin generisch antworten, versendet aber keine Reset-Mail.
+
+Sind Bestellversand, Zielbestätigung, Leihbelege, Passwort-Reset und Einsatzanfragen produktiv freigegeben, lautet die eng begrenzte gemeinsame Liste: `GRABENPLANER_EMAIL_ALLOWED_EVENTS=branch_order,destination_verification,loan_document,password_reset,staff_assignment_request`.
 
 E-Mail kann über einen vorhandenen HTTPS-Benachrichtigungsdienst angebunden werden:
 

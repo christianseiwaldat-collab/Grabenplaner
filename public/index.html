@@ -34,7 +34,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.11 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.12 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -83,8 +83,8 @@
         </section>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
-          <button class="nav-item hidden" data-view="rightsDashboard" id="rightsDashboardNavButton">
-            <span class="nav-symbol">◇</span><span>Dashboards</span>
+          <button class="nav-item active" data-view="startDashboard" id="startDashboardNavButton">
+            <span class="nav-symbol">◇</span><span>Dashboard</span>
           </button>
           <section class="nav-module" id="filialManagementNav" aria-label="Filialverwaltung">
             <div class="nav-branch nav-module-heading">
@@ -106,7 +106,7 @@
               <div class="nav-submodule">
                 <div class="nav-branch">
                   <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-controls="planningNavChildren" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
-                  <button class="nav-item active" data-view="planning" id="planningNavButton">
+                  <button class="nav-item" data-view="planning" id="planningNavButton">
                     <span class="nav-symbol">▦</span><span>Dienstplanung</span>
                   </button>
                 </div>
@@ -183,6 +183,9 @@
         </nav>
 
         <div class="sidebar-settings-shortcut">
+          <button class="nav-item hidden" data-view="rightsDashboard" id="rightsDashboardNavButton">
+            <span class="nav-symbol">◈</span><span>Steuerungscenter</span>
+          </button>
           <button class="nav-item" data-view="settings" id="settingsNavButton">
             <span class="nav-symbol">⚙</span><span>Einstellungen</span>
           </button>
@@ -211,17 +214,10 @@
           </header>
           <section class="start-dashboard-customizer hidden" id="startDashboardCustomizer" aria-labelledby="startDashboardCustomizerTitle">
             <div class="start-dashboard-customizer-heading">
-              <div><span class="eyebrow">Persönliche Inhalte</span><h2 id="startDashboardCustomizerTitle">Inhalte ein- oder ausblenden</h2><p>Die Auswahl wird benutzerbezogen gespeichert. Fehlende Fachrechte bleiben unabhängig davon gesperrt.</p></div>
+              <div><span class="eyebrow">Persönliche Inhalte</span><h2 id="startDashboardCustomizerTitle">Karten einblenden und anordnen</h2><p>Die Auswahl und Rangfolge werden benutzerbezogen gespeichert. Fehlende Fachrechte bleiben unabhängig davon gesperrt.</p></div>
               <button class="close-button" id="startDashboardCustomizerClose" type="button" aria-label="Dashboard-Anpassung schließen">×</button>
             </div>
-            <div class="start-dashboard-customizer-grid">
-              <label><input type="checkbox" data-start-dashboard-widget-choice="branchOnDuty" checked /><span><strong>Filiale · jetzt im Dienst</strong><small>Aktuell laufende Dienste des gewählten Bereichs.</small></span></label>
-              <label><input type="checkbox" data-start-dashboard-widget-choice="branchAbsences" checked /><span><strong>Filiale · heutige Abwesenheiten</strong><small>Urlaub, ZA, Krankheit und weitere Planungsoptionen.</small></span></label>
-              <label><input type="checkbox" data-start-dashboard-widget-choice="personnelTeam" checked /><span><strong>Personal · Teamübersicht</strong><small>Aktive und heute abwesende Mitarbeitende.</small></span></label>
-              <label><input type="checkbox" data-start-dashboard-widget-choice="personnelRequests" checked /><span><strong>Personal · offene Anträge</strong><small>Freigegebene Antragsarten und aktueller Prüfbestand.</small></span></label>
-              <label><input type="checkbox" data-start-dashboard-widget-choice="salesKpis" checked /><span><strong>Verkauf · Kennzahlen</strong><small>Umsatz und Vergleich des jüngsten freigegebenen Berichts.</small></span></label>
-              <label><input type="checkbox" data-start-dashboard-widget-choice="salesTopGroups" checked /><span><strong>Verkauf · stärkste Warengruppen</strong><small>Die führenden Warengruppen aus der Verkaufsanalyse.</small></span></label>
-            </div>
+            <div class="start-dashboard-customizer-grid" id="startDashboardCustomizerGrid" aria-live="polite"></div>
             <div class="modal-actions"><button class="secondary-button" id="startDashboardResetButton" type="button">Standard wiederherstellen</button><span></span><button class="primary-button" id="startDashboardSaveButton" type="button">Dashboard speichern</button></div>
           </section>
           <div class="start-dashboard-grid" id="startDashboardGrid" aria-live="polite">
@@ -230,31 +226,57 @@
                 <span class="start-dashboard-group-symbol" aria-hidden="true">⌂</span><span><small>Hauptgruppe</small><strong>Filialverwaltung</strong><em>Zum Filialverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
               </button>
               <div class="start-dashboard-scope-controls">
-                <label><span>Filiale</span><select id="startDashboardLocation"></select></label>
+                <label><span>Filiale</span><span class="start-dashboard-scope-switcher"><button type="button" id="startDashboardPreviousLocation" aria-label="Vorherige freigegebene Filiale">←</button><select id="startDashboardLocation"></select><button type="button" id="startDashboardNextLocation" aria-label="Nächste freigegebene Filiale">→</button></span><small id="startDashboardLocationPosition" aria-live="polite"></small></label>
                 <label><span>Abteilung</span><select id="startDashboardDepartment"></select></label>
               </div>
-              <div class="start-dashboard-widget-grid">
-                <section class="start-dashboard-widget" data-start-dashboard-widget="branchOnDuty"><span>Jetzt im Dienst</span><div id="startDashboardOnDuty"><p>Plan wird geladen.</p></div></section>
-                <section class="start-dashboard-widget" data-start-dashboard-widget="branchAbsences"><span>Heute abwesend</span><div id="startDashboardAbsences"><p>Plan wird geladen.</p></div></section>
+              <div class="start-dashboard-card-list">
+                <section class="start-dashboard-card" data-start-dashboard-card="schedule">
+                  <button class="start-dashboard-card-link" type="button" data-start-dashboard-card-view="planning"><span><small>Aktuelle Woche</small><strong>Dienstplanung</strong><em id="startDashboardSchedulePeriod">Kalenderwoche wird geladen.</em></span><b aria-hidden="true">→</b></button>
+                  <div class="start-dashboard-card-summary" id="startDashboardScheduleSummary"><p>Plan wird geladen.</p></div>
+                  <section class="start-dashboard-widget" data-start-dashboard-widget="branchOnDuty"><span>Jetzt im Dienst</span><div id="startDashboardOnDuty"><p>Plan wird geladen.</p></div></section>
+                </section>
+                <section class="start-dashboard-card" data-start-dashboard-card="vacation">
+                  <button class="start-dashboard-card-link" type="button" data-start-dashboard-card-view="vacations"><span><small>Aktuelle Woche</small><strong>Urlaubsplanung</strong><em>Genehmigte Abwesenheiten im gewählten Bereich</em></span><b aria-hidden="true">→</b></button>
+                  <div class="start-dashboard-card-summary" id="startDashboardVacationSummary"><p>Abwesenheiten werden geladen.</p></div>
+                  <section class="start-dashboard-widget" data-start-dashboard-widget="branchAbsences"><span>Heute abwesend</span><div id="startDashboardAbsences"><p>Plan wird geladen.</p></div></section>
+                </section>
+                <section class="start-dashboard-card" data-start-dashboard-card="loans">
+                  <button class="start-dashboard-card-link" type="button" data-start-dashboard-card-view="loans"><span><small>Standortbezogen</small><strong>Leihverwaltung</strong><em>Offene, fällige und technisch auffällige Vorgänge</em></span><b aria-hidden="true">→</b></button>
+                  <div class="start-dashboard-card-summary" id="startDashboardLoanSummary"><p>Leihvorgänge werden geladen.</p></div>
+                </section>
+                <section class="start-dashboard-card" data-start-dashboard-card="branchOrders">
+                  <button class="start-dashboard-card-link" type="button" data-start-dashboard-card-view="branchOrders"><span><small>Standortbezogen</small><strong>Filialbestellungen</strong><em>Jüngste Bestellungen und Zustellstatus</em></span><b aria-hidden="true">→</b></button>
+                  <div class="start-dashboard-card-summary" id="startDashboardBranchOrdersSummary"><p>Bestellungen werden geladen.</p></div>
+                </section>
               </div>
             </article>
             <article class="start-dashboard-group hidden" id="startDashboardPersonnelGroup">
               <button class="start-dashboard-group-link" type="button" data-start-dashboard-view="personnelAdministration" data-start-dashboard-route="dashboard">
                 <span class="start-dashboard-group-symbol" aria-hidden="true">◎</span><span><small>Hauptgruppe</small><strong>Personalverwaltung</strong><em>Zum Personalverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
               </button>
-              <div class="start-dashboard-widget-grid">
-                <section class="start-dashboard-widget" data-start-dashboard-widget="personnelTeam"><span>Teamübersicht</span><div id="startDashboardPersonnelTeam"><p>Personaldaten werden geladen.</p></div></section>
-                <section class="start-dashboard-widget" data-start-dashboard-widget="personnelRequests"><span>Offene Anträge</span><div id="startDashboardPersonnelRequests"><p>Anträge werden geladen.</p></div></section>
+              <div class="start-dashboard-card-list">
+                <section class="start-dashboard-card" data-start-dashboard-card="personnel">
+                  <button class="start-dashboard-card-link" type="button" data-start-dashboard-card-view="personnelAdministration" data-start-dashboard-card-route="dashboard"><span><small>Team &amp; Anträge</small><strong>Personal</strong><em>Aktueller Personalstand und offener Prüfbestand</em></span><b aria-hidden="true">→</b></button>
+                  <div class="start-dashboard-widget-grid">
+                    <section class="start-dashboard-widget" data-start-dashboard-widget="personnelTeam"><span>Teamübersicht</span><div id="startDashboardPersonnelTeam"><p>Personaldaten werden geladen.</p></div></section>
+                    <section class="start-dashboard-widget" data-start-dashboard-widget="personnelRequests"><span>Offene Anträge</span><div id="startDashboardPersonnelRequests"><p>Anträge werden geladen.</p></div></section>
+                  </div>
+                </section>
               </div>
             </article>
             <article class="start-dashboard-group hidden" id="startDashboardSalesGroup">
               <button class="start-dashboard-group-link" type="button" data-start-dashboard-view="salesAdministration">
                 <span class="start-dashboard-group-symbol" aria-hidden="true">▤</span><span><small>Hauptgruppe</small><strong>Verkaufsverwaltung</strong><em>Zum Verkaufsverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
               </button>
-              <div class="start-dashboard-scope-controls single"><label><span>Filiale</span><select id="startDashboardSalesLocation"><option value="">Jüngster freigegebener Bericht</option></select></label></div>
-              <div class="start-dashboard-widget-grid">
-                <section class="start-dashboard-widget" data-start-dashboard-widget="salesKpis"><span>Aktuelle Kennzahlen</span><div id="startDashboardSalesKpis"><p>Verkaufsdaten werden geladen.</p></div></section>
-                <section class="start-dashboard-widget" data-start-dashboard-widget="salesTopGroups"><span>Stärkste Warengruppen</span><div id="startDashboardSalesTopGroups"><p>Verkaufsdaten werden geladen.</p></div></section>
+              <div class="start-dashboard-scope-controls single"><label><span>Filiale</span><span class="start-dashboard-scope-switcher"><button type="button" id="startDashboardPreviousSalesLocation" aria-label="Vorherige Filiale mit Verkaufsbericht">←</button><select id="startDashboardSalesLocation"><option value="">Jüngster freigegebener Bericht</option></select><button type="button" id="startDashboardNextSalesLocation" aria-label="Nächste Filiale mit Verkaufsbericht">→</button></span><small id="startDashboardSalesLocationPosition" aria-live="polite"></small></label></div>
+              <div class="start-dashboard-card-list">
+                <section class="start-dashboard-card" data-start-dashboard-card="sales">
+                  <button class="start-dashboard-card-link" type="button" data-start-dashboard-card-view="salesAdministration"><span><small>Freigegebener Bericht</small><strong>Verkaufsverwaltung</strong><em>Kennzahlen und stärkste Warengruppen</em></span><b aria-hidden="true">→</b></button>
+                  <div class="start-dashboard-widget-grid">
+                    <section class="start-dashboard-widget" data-start-dashboard-widget="salesKpis"><span>Aktuelle Kennzahlen</span><div id="startDashboardSalesKpis"><p>Verkaufsdaten werden geladen.</p></div></section>
+                    <section class="start-dashboard-widget" data-start-dashboard-widget="salesTopGroups"><span>Stärkste Warengruppen</span><div id="startDashboardSalesTopGroups"><p>Verkaufsdaten werden geladen.</p></div></section>
+                  </div>
+                </section>
               </div>
             </article>
           </div>
@@ -269,6 +291,60 @@
             </div>
             <div class="personnel-dashboard-grid" id="filialDashboardGrid" aria-live="polite"></div>
           </section>
+          <details class="schedule-search-panel" id="scheduleSearchPanel">
+            <summary class="schedule-search-summary">
+              <div><span class="eyebrow">Dienstsuche</span><h2>Bestimmte Dienste finden</h2><p>Nach Teammitglied, Personalnummer, Zeitraum und Einsatzort suchen – einschließlich vergangener und standortübergreifender Dienste.</p></div>
+              <span class="schedule-search-chevron" aria-hidden="true">›</span>
+            </summary>
+            <div class="schedule-search-body">
+              <form class="schedule-search-form" id="scheduleSearchForm">
+                <label class="field"><span>Name</span><input id="scheduleSearchEmployee" type="search" maxlength="120" autocomplete="off" placeholder="Name oder Spitzname" /></label>
+                <label class="field"><span>Personalnummer</span><input id="scheduleSearchEmployeeNumber" type="search" maxlength="80" autocomplete="off" inputmode="text" placeholder="z. B. 412" /></label>
+                <div class="field schedule-search-range"><span>Zeitraum</span><input id="scheduleSearchDateFrom" type="hidden" /><input id="scheduleSearchDateTo" type="hidden" /><button class="date-range-trigger" id="scheduleSearchDateRangeButton" type="button" aria-haspopup="dialog" aria-controls="scheduleSearchDateRangeDialog"><span><strong id="scheduleSearchDateRangeText">Zeitraum auswählen</strong><small>Ein Tag oder mehrere Tage; Vergangenheit und Zukunft möglich</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg></button></div>
+                <label class="field"><span>Einsatzfiliale</span><select id="scheduleSearchLocation"><option value="all">Alle freigegebenen Filialen</option></select></label>
+                <label class="field"><span>Abteilung</span><select id="scheduleSearchDepartment"><option value="">Alle Abteilungen</option></select></label>
+                <label class="field"><span>Stammfiliale</span><select id="scheduleSearchHomeLocation"><option value="all">Alle Stammfilialen</option></select></label>
+                <label class="field"><span>Einsatzart</span><select id="scheduleSearchAssignment"><option value="all">Alle Dienste</option><option value="cross_location">Nur standortübergreifende Einsätze</option><option value="home">Nur Dienste in der Stammfiliale</option></select></label>
+                <label class="field"><span>Bereich / Tätigkeit</span><input id="scheduleSearchArea" type="search" maxlength="120" autocomplete="off" placeholder="z. B. Fotowelt" /></label>
+                <div class="schedule-search-actions"><button class="secondary-button" id="scheduleSearchReset" type="button">Zurücksetzen</button><button class="primary-button" id="scheduleSearchSubmit" type="submit">Dienste suchen</button></div>
+              </form>
+              <p class="schedule-search-status" id="scheduleSearchStatus" role="status" aria-live="polite">Suchkriterien festlegen und „Dienste suchen“ wählen.</p>
+              <div class="schedule-search-results hidden" id="scheduleSearchResults">
+                <div class="schedule-search-result-heading"><strong id="scheduleSearchResultCount">0 Treffer</strong><span id="scheduleSearchResultRange"></span></div>
+                <div class="schedule-search-table-scroll" tabindex="0" role="region" aria-label="Suchergebnisse; horizontal scrollbar auf schmalen Bildschirmen">
+                  <table class="schedule-search-table">
+                    <thead><tr>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="date">Datum / KW</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="employee">Teammitglied</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="personnelNumber">Personalnummer</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="homeLocation">Stammfiliale</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="location">Einsatzfiliale</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="department">Abteilung</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="startTime">Dienst</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="duration">Dauer</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="area">Bereich</button></th>
+                      <th aria-sort="none"><button type="button" data-schedule-search-sort="assignment">Einsatzart</button></th>
+                      <th><span class="visually-hidden">Aktion</span></th>
+                    </tr></thead>
+                    <tbody id="scheduleSearchTableBody"></tbody>
+                  </table>
+                </div>
+                <div class="schedule-search-pagination"><button class="secondary-button" id="scheduleSearchPrevious" type="button">← Vorherige</button><span id="scheduleSearchPageStatus">Seite 1</span><button class="secondary-button" id="scheduleSearchNext" type="button">Nächste →</button></div>
+              </div>
+            </div>
+          </details>
+
+          <dialog class="modal date-range-dialog" id="scheduleSearchDateRangeDialog" aria-labelledby="scheduleSearchDateRangeDialogTitle">
+            <form id="scheduleSearchDateRangeForm">
+              <div class="modal-header"><div><span class="eyebrow">Dienstsuche</span><h2 id="scheduleSearchDateRangeDialogTitle">Suchzeitraum auswählen</h2><p>Der Zeitraum kann in der Vergangenheit oder Zukunft liegen und höchstens 731 Tage umfassen.</p></div><button class="close-button" id="scheduleSearchDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
+              <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="scheduleSearchDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="scheduleSearchDateRangeEndText">Noch nicht gewählt</strong></div></div>
+              <div class="date-range-toolbar"><button id="scheduleSearchDateRangePreviousMonth" type="button" aria-label="Vorheriger Monat">←</button><strong id="scheduleSearchDateRangeMonthLabel">Monat</strong><button id="scheduleSearchDateRangeNextMonth" type="button" aria-label="Nächster Monat">→</button></div>
+              <div class="date-range-weekdays" aria-hidden="true"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+              <div class="date-range-grid" id="scheduleSearchDateRangeGrid" role="grid" aria-label="Zeitraumkalender für die Dienstsuche"></div>
+              <label class="date-range-open-end hidden"><input id="scheduleSearchDateRangeOpenEnd" type="checkbox" /><span>Ende offen</span></label>
+              <div class="modal-actions"><span></span><button class="secondary-button" id="scheduleSearchDateRangeCancel" type="button">Abbrechen</button><button class="primary-button" id="scheduleSearchDateRangeApply" type="submit">Zeitraum übernehmen</button></div>
+            </form>
+          </dialog>
         </section>
         <section id="planningView" class="view">
           <header class="topbar">
@@ -292,7 +368,10 @@
               <button class="secondary-button reset-button" id="resetWeekButton"><span>↺</span> Zurücksetzen</button>
               <button class="secondary-button schedule-note-button" id="scheduleNoteButton" type="button"><span>✎</span><span>Bemerkung<small id="scheduleNoteButtonHint">hinzufügen</small></span></button>
               <label class="department-pdf-control hidden" id="departmentPdfControl"><span>Abteilungs-PDF</span><select id="departmentPdfSelect"></select><a class="secondary-button" id="departmentPdfButton" href="/api/schedule.pdf"><span>↓</span></a></label>
-              <a class="primary-button" id="pdfButton" href="/api/schedule.pdf"><span>↓</span> PDF exportieren</a>
+              <div class="schedule-pdf-export" id="schedulePdfExport">
+                <a class="primary-button" id="pdfButton" href="/api/schedule.pdf" aria-haspopup="menu" aria-expanded="false"><span>↓</span> PDF exportieren</a>
+                <div class="schedule-pdf-design-menu hidden" id="schedulePdfDesignMenu" role="menu" aria-label="Dienstplan-PDF-Design auswählen"></div>
+              </div>
               <div class="page-theme-switch" role="group" aria-label="Darstellung der Dienstplanung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
             </div>
           </header>
@@ -1587,7 +1666,7 @@
 
         <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
           <header class="topbar rights-dashboard-topbar">
-            <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte, Personalregeln, betriebliche Abläufe und technischen Zustand verständlich im Blick behalten.</p></div>
+            <div><span class="eyebrow">Rechte, Regeln &amp; System</span><h1>Steuerungscenter</h1><p class="subtitle">Wirksame Rechte, Personalregeln, betriebliche Abläufe und technischen Zustand im berechtigten Bereich nachvollziehbar prüfen.</p></div>
             <div class="rights-dashboard-header-actions">
               <div class="rights-dashboard-mode-switch" role="tablist" aria-label="Dashboard-Bereich">
                 <button type="button" id="rightsLocationsDashboardTab" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="true">Filialübersicht</button>
@@ -1878,6 +1957,17 @@
               <div class="settings-accordion-body settings-accordion-stack">
                 <div class="settings-card pdf-card">
                   <div class="card-heading"><div class="card-icon">Dienst</div><div><h2>PDF-Ausgabe Dienstplan</h2><p>A4 Querformat als kompakte Vektor-PDF mit anpassbarem Dateinamen.</p></div></div>
+                  <details class="settings-accordion schedule-pdf-design-settings" id="schedulePdfDesignSettings">
+                    <summary>
+                      <span class="card-icon">Design</span>
+                      <span class="settings-accordion-copy"><strong>PDF-Designs</strong><small>Designnamen bearbeiten sowie ein bis fünf Designs aktivieren und reihen.</small></span>
+                      <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+                    </summary>
+                    <div class="settings-accordion-body schedule-pdf-design-settings-body">
+                      <div class="schedule-pdf-design-settings-list" id="schedulePdfDesignSettingsList"></div>
+                      <p class="settings-note" id="schedulePdfDesignSettingsHint">Standard: nur Design 1 · Zeitachse.</p>
+                    </div>
+                  </details>
                   <label class="field"><span>Titel der PDF</span><input id="pdfTitleSetting" placeholder="Dienstplan" /></label>
                   <label class="field pdf-filename-field"><span>Dateiname vor Kalenderwoche</span><input id="pdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Dienstplan" /></label>
                   <div class="pdf-file-options">
@@ -1889,6 +1979,7 @@
                   <p class="settings-note">Standard: „Dienstplan KW31.pdf“. Der Text vor der KW muss 5 bis 80 Zeichen lang sein.</p>
                   <div class="pdf-live-preview">
                     <div><strong>PDF-Vorschau Dienstplan</strong><small>Wird erst beim Klick generiert.</small></div>
+                    <label class="field schedule-pdf-preview-design"><span>Design für die Vorschau</span><select id="schedulePdfPreviewDesign"></select></label>
                     <button type="button" class="secondary-button" id="schedulePdfPreviewButton">Vorschau erzeugen</button>
                     <iframe id="schedulePdfPreviewFrame" title="PDF-Vorschau Dienstplan"></iframe>
                   </div>
@@ -2025,12 +2116,25 @@
             </div>
             <div class="settings-card hidden" id="birthdayPresentationSettingsCard">
               <div class="card-heading"><div class="card-icon">GB</div><div><h2>Geburtstagsdarstellung</h2><p>Legt je Teammitglied eine feste, professionell geprüfte Geburtstagsvariante fest.</p></div></div>
-              <p class="settings-note security-note">Die Konfiguration zeigt keine Geburtsdaten. Die Vorschauen werden lokal mit dem GP ausgeliefert; im Mitarbeiterportal erfolgt in diesem Block noch keine Einblendung oder Designänderung.</p>
+              <p class="settings-note security-note">Die Konfiguration zeigt keine Geburtsdaten. Die Grafiken werden lokal mit dem GP ausgeliefert; die Einblendung und das Portaldesign greifen ausschließlich für freigegebene Teammitglieder rund um den Geburtstag.</p>
               <p class="birthday-presentation-scope" id="birthdayPresentationScope">Berechtigter Bereich wird geladen.</p>
               <section class="birthday-presentation-section" id="birthdayPresentationCatalogSection" aria-labelledby="birthdayPresentationCatalogTitle">
                 <div class="birthday-presentation-section-heading"><div><span class="eyebrow">Grafikkatalog</span><h3 id="birthdayPresentationCatalogTitle">Feste Geburtstagsvarianten</h3></div><span class="status-badge">Geprüfte Auswahl</span></div>
                 <p class="settings-note">Alle Varianten sind statisch, barrierearm und ohne externe Inhalte. Eigene Uploads oder freie Grafikadressen sind nicht vorgesehen.</p>
                 <div class="birthday-presentation-catalog" id="birthdayPresentationCatalog" role="list" aria-live="polite"><p class="settings-note">Grafikkatalog wird geladen.</p></div>
+              </section>
+              <section class="birthday-presentation-section birthday-presentation-developer-preview hidden" id="birthdayPresentationDeveloperPreviewSection" aria-labelledby="birthdayPresentationDeveloperPreviewTitle">
+                <div class="birthday-presentation-section-heading"><div><span class="eyebrow">Developer 252</span><h3 id="birthdayPresentationDeveloperPreviewTitle">Eigene Darstellung jederzeit testen</h3></div><span class="status-badge">Persönlich</span></div>
+                <p class="settings-note">Die gewählte Darstellung wird nur für den eigenen Account 252 aktiviert. Sie gilt sofort und unabhängig vom Geburtsdatum, bis der Testmodus wieder deaktiviert wird.</p>
+                <div class="birthday-presentation-developer-preview-controls">
+                  <label class="switch-row"><span><strong>Testmodus aktivieren</strong><small>Portaldesign und einmalige Einblendung beim nächsten Öffnen des Mitarbeiterportals testen.</small></span><input id="birthdayPresentationDeveloperPreviewEnabled" type="checkbox" /></label>
+                  <label class="field"><span>Testdesign</span><select id="birthdayPresentationDeveloperPreviewDesign"></select></label>
+                  <div class="birthday-presentation-developer-preview-actions">
+                    <button class="primary-button" id="saveBirthdayPresentationDeveloperPreviewButton" type="button">Testmodus anwenden</button>
+                    <a class="secondary-button" id="openBirthdayPresentationDeveloperPreviewButton" href="/portal.html" target="_blank" rel="noopener">Mitarbeiterportal öffnen</a>
+                  </div>
+                </div>
+                <p class="settings-note" id="birthdayPresentationDeveloperPreviewHint">Persönlicher Testmodus wird geladen.</p>
               </section>
               <section class="birthday-presentation-section hidden" id="birthdayPresentationGlobalSection" aria-labelledby="birthdayPresentationGlobalTitle">
                 <div class="birthday-presentation-section-heading"><div><span class="eyebrow">PL+</span><h3 id="birthdayPresentationGlobalTitle">Globale Freigabe</h3></div><span class="status-badge">Unternehmen</span></div>
@@ -2516,7 +2620,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.11 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.12 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.92.12 Beta · Dienstplan-PDFs, persönliches Startdashboard und Dienstsuche
+
+- Dienstplan-PDFs bieten die freigegebenen Designs „Zeitachse“ und „Wochenmatrix“. Ein bis fünf Designs können in eindeutiger Rangfolge aktiviert werden; verfügbare Designnamen sind bearbeitbar. Bei genau einem aktiven Design startet der Export direkt, sonst erscheint eine kompakte Auswahl.
+- Das persönliche Startdashboard bündelt Filial-, Personal- und Verkaufsverwaltung. Berechtigte Inhalte, Reihenfolge und sichtbare Kacheln sind benutzerbezogen einstellbar; Standort- und Verkaufsansichten lassen sich durchschalten und öffnen aus der Überschrift heraus das jeweilige Fachdashboard.
+- Dienstplanung und Urlaubsplanung zeigen kompakte Informationen der gewählten Woche. Die zuletzt verwendeten Filial-, Abteilungs- und Verkaufsbereiche bleiben für den nächsten Aufruf gespeichert.
+- Das Filialverwaltungsdashboard enthält eine ausklappbare Dienstsuche nach Teammitglied, Personalnummer, Zeitraum, Einsatz- und Stammfiliale, Abteilung, Einsatzart und Bereich. Die datensparsame Ergebnistabelle ist vollständig sortierbar und öffnet exakt die gefundene Kalenderwoche.
+- Zentrale Bestellpositionen werden in einer kompakten, sortierbaren Tabelle gepflegt. Anlage und Inline-Bearbeitung bleiben oberhalb beziehungsweise innerhalb der halben Seitenbreite; lesende Tabellenzeilen besitzen nur die kleinen Textaktionen „Bearbeiten“ und „Löschen“.
+- Developer 252 kann freigegebene Geburtstagsdarstellungen für den eigenen Portalzugang zeitlich begrenzt testen, ohne Geburtsdaten oder Darstellungen anderer Teammitglieder offenzulegen.
+- Leihbelege gehen bei aktiviertem Versand sowohl an die bestätigte persönliche Adresse des internen Belegempfängers als auch an die zusätzliche Standortadresse. Identische Ziele werden dedupliziert; fehlende SMTP- oder Ereignisfreigaben werden konkret und datensparsam gemeldet.
+- Rechte-, Scope-, CSRF-, Datenschutz-, Mobil-, PDF-, E-Mail-, Sortier-, Navigations-, Persistenz- und Integrationspfade sind gemeinsam regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.11 Beta · Stabile Filialbestellungsverwaltung
 
 - Die Verwaltung zentraler Bestellpositionen behält beim Neurendern geöffnete Hauptbereiche und Positioneneditoren bei.

@@ -80,7 +80,12 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminScript, /isEmployee === false/);
   assert.match(adminScript, /function saveBranchOrdersManagement/);
   assert.match(adminScript, /function moveBranchOrdersManagementEntry/);
-  assert.match(adminScript, /branch-orders-management-catalog-item/);
+  assert.match(adminScript, /branch-orders-management-catalog-table/);
+  assert.match(adminScript, /data-branch-orders-management-new-item-title/);
+  assert.match(adminScript, /data-branch-orders-management-action="edit-catalog-item"/);
+  assert.match(adminScript, /data-branch-orders-management-action="sort-catalog"/);
+  assert.match(adminScript, />Bearbeiten<\/button>/);
+  assert.match(adminScript, />Löschen<\/button>/);
   assert.match(adminScript, /branch-orders-management-chevron/);
   assert.match(adminScript, /\{\{employeeNickname\}\}/);
   assert.match(adminScript, /function confirmBranchOrderDelivery/);
@@ -97,7 +102,9 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminScript, /\[elements\.branchOrdersManagementSave, elements\.branchOrdersManagementSaveInline\]/);
   assert.match(adminStyles, /branch-orders-management-toolbar/);
   assert.match(adminStyles, /branch-orders-management-history-actions/);
-  assert.match(adminStyles, /branch-orders-management-catalog-item/);
+  assert.match(adminStyles, /branch-orders-management-catalog-table-wrap/);
+  assert.match(adminStyles, /branch-orders-management-table-action[^}]*text-decoration:underline/);
+  assert.match(adminStyles, /branch-orders-management-catalog-create[^}]*grid-template-columns:minmax\(0,1fr\) auto/);
   assert.match(adminStyles, /branch-orders-management-workspace \{ display:grid; grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(adminStyles, /details\[open\] > summary > \.branch-orders-management-chevron \{ transform:rotate\(90deg\)/);
   assert.match(adminStyles, /branch-orders-management-sort-actions/);

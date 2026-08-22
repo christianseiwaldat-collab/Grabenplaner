@@ -120,23 +120,44 @@ test("Startdashboard: drei Hauptgruppen navigieren und zeigen nur freigegebene p
   for (const id of [
     "startDashboardLocation",
     "startDashboardDepartment",
+    "startDashboardPreviousLocation",
+    "startDashboardNextLocation",
+    "startDashboardLocationPosition",
     "startDashboardOnDuty",
     "startDashboardAbsences",
     "startDashboardPersonnelTeam",
     "startDashboardPersonnelRequests",
     "startDashboardSalesLocation",
+    "startDashboardPreviousSalesLocation",
+    "startDashboardNextSalesLocation",
+    "startDashboardSalesLocationPosition",
     "startDashboardSalesKpis",
     "startDashboardSalesTopGroups",
+    "startDashboardScheduleSummary",
+    "startDashboardVacationSummary",
+    "startDashboardLoanSummary",
+    "startDashboardBranchOrdersSummary",
   ]) assert.match(section, new RegExp(`id="${id}"`));
+  for (const cardId of ["schedule", "vacation", "loans", "branchOrders", "personnel", "sales"]) {
+    assert.match(section, new RegExp(`data-start-dashboard-card="${cardId}"`));
+  }
   assert.match(app, /function renderStartDashboard\(\)/);
   assert.match(app, /canOpenPersonnelAdministrationModule\(\)/);
   assert.match(app, /canAccessSalesAnalytics\(\)/);
   assert.match(app, /\/api\/schedule\?/);
   assert.match(app, /\/api\/sales-analytics\/reports\?limit=100/);
-  assert.match(app, /preferenceKey: "start_dashboard_preferences_v1"|start-dashboard-preferences-v1/);
-  assert.match(server, /preferenceKey: "start_dashboard_preferences_v1"/);
+  assert.match(app, /start-dashboard-preferences-v2/);
+  assert.match(server, /preferenceKey: "start_dashboard_preferences_v2"/);
+  assert.match(app, /function navigateFromStartDashboardCard\(button\)/);
+  assert.match(app, /function cycleStartDashboardLocation\(direction\)/);
+  assert.match(app, /function cycleStartDashboardSalesLocation\(direction\)/);
+  assert.match(app, /state\.startDashboardScopeSaving/);
+  assert.match(app, /loadAll\(\{ restoreContext: false \}\)/);
+  assert.match(app, /data-start-dashboard-card-move/);
   assert.match(server, /function validateStartDashboardPreferences\(value\)/);
   assert.doesNotMatch(server, /installationFeatureCatalog[\s\S]{0,400}sales:analytics/);
+  assert.match(styles, /\.start-dashboard-scope-switcher \{[^}]*grid-template-columns:36px minmax\(0,1fr\) 36px;/);
+  assert.match(styles, /@media \(max-width:760px\) \{[\s\S]*?\.start-dashboard-scope-controls \{ grid-template-columns:1fr; \}/);
 });
 
 test("Verkaufsanalyse: Archiv, Sortierung, Grafikvarianten und PDF-Export sind integriert", () => {

@@ -35,6 +35,8 @@ const state = {
   locationId: "",
   departmentId: "",
   data: null,
+  schedulePdfDesignSelection: [],
+  schedulePdfDesignNames: {},
   employeeLendings: [],
   employeeLendingDelegates: [],
   employeeLendingCandidates: [],
@@ -54,6 +56,27 @@ const state = {
   staffAssignmentRequestReviewLoaded: false,
   staffAssignmentRequestReviewLoading: false,
   staffAssignmentRequestReviewError: "",
+  scheduleSearchDateRangeCalendar: null,
+  scheduleSearchData: null,
+  scheduleSearchLoaded: false,
+  scheduleSearchLoading: false,
+  scheduleSearchError: "",
+  scheduleSearchRequestId: 0,
+  scheduleSearchQuery: {
+    employee: "",
+    employeeNumber: "",
+    dateFrom: toIsoDate(new Date()),
+    dateTo: addDays(toIsoDate(new Date()), 182),
+    locationId: "all",
+    departmentId: "",
+    homeLocationId: "all",
+    assignment: "all",
+    area: "",
+    sort: "date",
+    direction: "asc",
+    limit: 50,
+    offset: 0,
+  },
   vacationData: null,
   locations: [],
   positions: [],
@@ -102,6 +125,7 @@ const state = {
   loanManagementLocationId: "",
   loanManagementStatus: "open",
   loanManagementLoading: false,
+  loanManagementRequestId: 0,
   branchOrdersManagement: null,
   branchOrdersManagementDraft: null,
   branchOrdersManagementHistory: [],
@@ -110,6 +134,8 @@ const state = {
   branchOrdersManagementSaving: false,
   branchOrdersManagementRequestId: 0,
   branchOrdersManagementError: "",
+  branchOrdersManagementCatalogSort: { key: "position", direction: "asc" },
+  branchOrdersManagementCatalogEditingId: "",
   loanOverviewColumns: null,
   loanOverviewColumnsLoading: false,
   loanOverviewColumnsLocationId: "",
@@ -121,8 +147,9 @@ const state = {
   locationDashboard: null,
   locationDashboardFilter: "all",
   locationDashboardDraggingId: "",
-  startDashboardPreferences: { version: 1, hidden: [], locationId: "", departmentId: "", salesLocationId: "" },
+  startDashboardPreferences: { version: 2, order: ["schedule", "vacation", "loans", "branchOrders", "personnel", "sales"], hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
   startDashboardDraftPreferences: null,
+  startDashboardScopeSaving: false,
   startDashboardSchedule: null,
   startDashboardScheduleLoading: false,
   startDashboardScheduleError: "",
@@ -132,6 +159,14 @@ const state = {
   startDashboardSalesLoading: false,
   startDashboardSalesError: "",
   startDashboardSalesRequestId: 0,
+  startDashboardLoanSummary: null,
+  startDashboardLoanLoading: false,
+  startDashboardLoanError: "",
+  startDashboardLoanRequestId: 0,
+  startDashboardBranchOrders: [],
+  startDashboardBranchOrdersLoading: false,
+  startDashboardBranchOrdersError: "",
+  startDashboardBranchOrdersRequestId: 0,
   rightsDashboardSelectedEmployeeNumber: "",
   rightsDashboardSelectedPermissionId: "",
   rightsDashboardTheme: "light",
@@ -489,11 +524,16 @@ const dayKeyByNumber = { 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday
 const preferredDayLabels = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag" };
 const fixedDayLabels = { ...preferredDayLabels, saturday: "Samstag" };
 const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thursday: "Do", friday: "Fr", saturday: "Sa" };
+const fallbackSchedulePdfDesignCatalog = Object.freeze([
+  Object.freeze({ id: "timeline", label: "Design 1 · Zeitachse", defaultLabel: "Design 1 · Zeitachse", shortLabel: "Zeitachse", description: "Klare Tagestrennung mit farbigen Mitarbeitenden-Zeilen und Zeitachsen." }),
+  Object.freeze({ id: "matrix", label: "Design 2 · Wochenmatrix", defaultLabel: "Design 2 · Wochenmatrix", shortLabel: "Wochenmatrix", description: "Kompakte Wochenübersicht mit einer Zeile je Teammitglied und gut lesbaren Tagesfeldern." }),
+]);
+const schedulePdfDesignNameLimits = Object.freeze({ min: 3, max: 60 });
 
 const elements = Object.fromEntries(
   [
-    "startDashboardView", "startDashboardBrandButton", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardSalesLocation", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "pdfButton", "timeline", "weekLockNotice", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
@@ -511,7 +551,7 @@ const elements = Object.fromEntries(
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftRulePreview", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionsScopeHint", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
-    "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
+    "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfDesignSettingsList", "schedulePdfDesignSettingsHint", "schedulePdfPreviewDesign", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "adminAccessModeLabel", "accessSettings", "portalUserAccessCard", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
@@ -526,7 +566,7 @@ const elements = Object.fromEntries(
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
-    "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationCatalogSection", "birthdayPresentationCatalog", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
+    "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationCatalogSection", "birthdayPresentationCatalog", "birthdayPresentationDeveloperPreviewSection", "birthdayPresentationDeveloperPreviewEnabled", "birthdayPresentationDeveloperPreviewDesign", "birthdayPresentationDeveloperPreviewHint", "saveBirthdayPresentationDeveloperPreviewButton", "openBirthdayPresentationDeveloperPreviewButton", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton", "sicknessCaseFields", "sicknessExpectedEnd", "sicknessReturnDate", "sicknessCaseHint",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordForm", "personnelRecordTitle", "personnelRecordContent", "personnelRecordMessage", "savePersonnelRecordButton",
@@ -2462,7 +2502,7 @@ function scheduleAdminLoginBrandingPreview() {
   adminLoginBrandingTimer = setTimeout(previewAdminLoginBranding, 300);
 }
 
-async function loadAll() {
+async function loadAll({ restoreContext = true } = {}) {
   try {
     const [locations, positions, portalStatus, roleData] = await Promise.all([
       api("/api/locations"),
@@ -2476,7 +2516,7 @@ async function loadAll() {
     state.portalRoles = roleData.roles || [];
     state.portalPermissionCatalog = roleData.catalog || [];
     setDefaultContext(state.locations);
-    restoreRememberedOverallContext(state.currentView, state.locations);
+    if (restoreContext) restoreRememberedOverallContext(state.currentView, state.locations);
     const scheduleContext = contextQuery(true);
     const vacationContext = contextQuery(state.portalSession?.user?.role === "department_manager");
     const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false;
@@ -2671,18 +2711,22 @@ function renderLoanManagement() {
 }
 
 async function loadLoanManagement() {
-  if (!canReadLoanManagement() || state.loanManagementLoading) return;
+  if (!canReadLoanManagement()) return;
+  const requestId = ++state.loanManagementRequestId;
   state.loanManagementLoading = true;
   elements.loanManagementList.innerHTML = '<p class="settings-note">Leihvorgänge werden geladen.</p>';
   try {
     const query = new URLSearchParams();
     if (state.loanManagementLocationId) query.set("locationId", state.loanManagementLocationId);
-    state.loanManagement = await api(`/api/portal/v1/loans/management/summary${query.size ? `?${query}` : ""}`);
+    const payload = await api(`/api/portal/v1/loans/management/summary${query.size ? `?${query}` : ""}`);
+    if (requestId !== state.loanManagementRequestId) return;
+    state.loanManagement = payload;
     renderLoanManagement();
   } catch (error) {
+    if (requestId !== state.loanManagementRequestId) return;
     elements.loanManagementList.innerHTML = `<p class="loan-management-empty error">${escapeHtml(error.message)}</p>`;
   } finally {
-    state.loanManagementLoading = false;
+    if (requestId === state.loanManagementRequestId) state.loanManagementLoading = false;
   }
 }
 
@@ -2841,7 +2885,6 @@ const branchOrdersManagementDisclosureAttributes = Object.freeze([
   "data-branch-orders-management-section",
   "data-branch-orders-management-recipient",
   "data-branch-orders-management-unit",
-  "data-branch-orders-management-catalog-item",
   "data-branch-orders-management-group",
 ]);
 
@@ -2881,6 +2924,66 @@ function revealBranchOrdersManagementDisclosure(sectionId, attribute, id, fieldS
   if (!details) return;
   details.open = true;
   const field = details.querySelector(fieldSelector);
+  if (!field) return;
+  field.focus();
+  if (typeof field.select === "function") field.select();
+}
+
+const branchOrdersManagementCatalogColumns = Object.freeze([
+  { key: "position", label: "Position" },
+  { key: "title", label: "Bezeichnung" },
+  { key: "unit", label: "Einheit" },
+]);
+
+const branchOrdersManagementCatalogCollator = new Intl.Collator("de-AT", {
+  numeric: true,
+  sensitivity: "base",
+});
+
+function normalizedBranchOrdersManagementCatalogSort() {
+  const requested = state.branchOrdersManagementCatalogSort || {};
+  const key = branchOrdersManagementCatalogColumns.some((column) => column.key === requested.key)
+    ? requested.key
+    : "position";
+  return { key, direction: requested.direction === "desc" ? "desc" : "asc" };
+}
+
+function branchOrdersManagementCatalogValue(item, key, draft, positions) {
+  if (key === "position") return positions.get(item.id) || 0;
+  if (key === "unit") return draft.units.find((unit) => unit.id === item.unitId)?.title || "";
+  return item.title || "";
+}
+
+function sortedBranchOrdersManagementCatalogItems(draft) {
+  const sort = normalizedBranchOrdersManagementCatalogSort();
+  const direction = sort.direction === "desc" ? -1 : 1;
+  const positions = new Map(draft.items.map((item, index) => [item.id, index + 1]));
+  return draft.items.slice().sort((left, right) => {
+    const leftValue = branchOrdersManagementCatalogValue(left, sort.key, draft, positions);
+    const rightValue = branchOrdersManagementCatalogValue(right, sort.key, draft, positions);
+    const result = sort.key === "position"
+      ? Number(leftValue) - Number(rightValue)
+      : branchOrdersManagementCatalogCollator.compare(String(leftValue), String(rightValue));
+    if (result) return result * direction;
+    return (positions.get(left.id) - positions.get(right.id)) * direction;
+  });
+}
+
+function branchOrdersManagementCatalogHeader() {
+  const sort = normalizedBranchOrdersManagementCatalogSort();
+  return `<tr>${branchOrdersManagementCatalogColumns.map((column) => {
+    const active = sort.key === column.key;
+    const ariaSort = active ? (sort.direction === "asc" ? "ascending" : "descending") : "none";
+    const indicator = active ? `<span aria-hidden="true">${sort.direction === "asc" ? "↑" : "↓"}</span>` : "";
+    return `<th aria-sort="${ariaSort}"><button class="branch-orders-management-sort-button" type="button" data-branch-orders-management-action="sort-catalog" data-branch-orders-management-sort-key="${escapeHtmlAttribute(column.key)}">${escapeHtml(column.label)}${indicator}</button></th>`;
+  }).join("")}<th><span class="visually-hidden">Aktionen</span></th></tr>`;
+}
+
+function revealBranchOrdersManagementCatalogEditor(itemId) {
+  const editor = elements.branchOrdersManagementWorkspace?.querySelector(
+    `[data-branch-orders-management-catalog-editor="${CSS.escape(itemId)}"]`,
+  );
+  const field = editor?.querySelector('[data-branch-orders-management-field="catalog-item-title"]');
   if (!field) return;
   field.focus();
   if (typeof field.select === "function") field.select();
@@ -2955,15 +3058,21 @@ function renderBranchOrdersManagement() {
       </div>
     </details>
   `).join("") : '<p class="settings-note">Noch keine Einheit angelegt.</p>';
-  const itemRows = draft.items.length ? draft.items.map((item, index) => `
-    <details class="branch-orders-management-catalog-item" data-branch-orders-management-catalog-item="${escapeHtml(item.id)}">
-      <summary><div><span class="eyebrow">Position ${index + 1}</span><h2>${escapeHtml(item.title || "Neue Position")}</h2></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
-      <div class="branch-orders-management-disclosure-body">
-      <div class="branch-orders-management-fields three-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="catalog-item-title" value="${escapeHtml(item.title)}" maxlength="180" /></label><label class="field"><span>Einheit</span><select data-branch-orders-management-field="catalog-item-unit">${unitOptions(item.unitId)}</select></label><label class="field"><span>E-Mail-Ziel</span><select data-branch-orders-management-field="catalog-item-recipient">${recipientOptions(item.recipientId)}</select></label></div>
-      <div class="branch-orders-management-row-actions"><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-catalog-item" data-branch-orders-management-id="${escapeHtml(item.id)}">Position entfernen</button></div>
-      </div>
-    </details>
-  `).join("") : '<p class="settings-note">Noch keine Position angelegt.</p>';
+  const catalogPositions = new Map(draft.items.map((item, index) => [item.id, index + 1]));
+  const itemRows = sortedBranchOrdersManagementCatalogItems(draft).map((item) => {
+    const position = catalogPositions.get(item.id) || 0;
+    const unitTitle = draft.units.find((unit) => unit.id === item.unitId)?.title || "–";
+    const editing = state.branchOrdersManagementCatalogEditingId === item.id;
+    return `
+      <tr class="branch-orders-management-catalog-row ${editing ? "is-editing" : ""}" data-branch-orders-management-catalog-row="${escapeHtml(item.id)}">
+        <td>${position}</td>
+        <td><strong>${escapeHtml(item.title || "Neue Position")}</strong></td>
+        <td>${escapeHtml(unitTitle)}</td>
+        <td><div class="branch-orders-management-table-actions"><button class="branch-orders-management-table-action" type="button" data-branch-orders-management-action="edit-catalog-item" data-branch-orders-management-id="${escapeHtml(item.id)}" aria-label="${escapeHtmlAttribute(`Position ${item.title || position} bearbeiten`)}">Bearbeiten</button><button class="branch-orders-management-table-action danger" type="button" data-branch-orders-management-action="remove-catalog-item" data-branch-orders-management-id="${escapeHtml(item.id)}" aria-label="${escapeHtmlAttribute(`Position ${item.title || position} löschen`)}">Löschen</button></div></td>
+      </tr>
+      ${editing ? `<tr class="branch-orders-management-catalog-editor-row"><td colspan="4"><div class="branch-orders-management-catalog-editor" data-branch-orders-management-catalog-item="${escapeHtml(item.id)}" data-branch-orders-management-catalog-editor="${escapeHtml(item.id)}"><div class="branch-orders-management-fields three-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="catalog-item-title" value="${escapeHtml(item.title)}" maxlength="180" /></label><label class="field"><span>Einheit</span><select data-branch-orders-management-field="catalog-item-unit">${unitOptions(item.unitId)}</select></label><label class="field"><span>E-Mail-Ziel</span><select data-branch-orders-management-field="catalog-item-recipient">${recipientOptions(item.recipientId)}</select></label></div></div></td></tr>` : ""}
+    `;
+  }).join("");
   const groupRows = draft.groups.length ? draft.groups.map((group, groupIndex) => {
     const memberships = group.itemIds.map((itemId) => draft.items.find((item) => item.id === itemId)).filter(Boolean);
     const available = draft.items.filter((item) => !group.itemIds.includes(item.id));
@@ -2983,7 +3092,7 @@ function renderBranchOrdersManagement() {
   elements.branchOrdersManagementWorkspace.innerHTML = `
     <details class="branch-orders-management-section" data-branch-orders-management-section="recipients"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</div></details>
     <details class="branch-orders-management-section" data-branch-orders-management-section="units"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">+ Einheit</button></div><div class="branch-orders-management-items">${unitRows}</div></div></details>
-    <details class="branch-orders-management-section" data-branch-orders-management-section="catalog"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">+ Position</button></div><div class="branch-orders-management-catalog-list">${itemRows}</div></div></details>
+    <details class="branch-orders-management-section" data-branch-orders-management-section="catalog"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-catalog-create"><label class="field"><span>Neue Position</span><input data-branch-orders-management-new-item-title maxlength="180" placeholder="Bezeichnung eingeben" autocomplete="off" /></label><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">Position hinzufügen</button></div><div class="branch-orders-management-catalog-table-wrap"><table class="branch-orders-management-catalog-table"><thead>${branchOrdersManagementCatalogHeader()}</thead><tbody>${itemRows || '<tr><td colspan="4" class="branch-orders-management-catalog-empty">Noch keine Position angelegt.</td></tr>'}</tbody></table></div></div></details>
     <details class="branch-orders-management-section" data-branch-orders-management-section="groups"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Bestellansicht</span><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern nur die Bestellansicht; die Übergabe wird pro Position zusammengefasst.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Anzeigegruppe</button></div>${groupRows}</div></details>`;
   restoreBranchOrdersManagementDisclosureState(openDisclosures);
   renderBranchOrdersManagementHistory();
@@ -2993,6 +3102,7 @@ async function loadBranchOrdersManagement(locationId = selectedBranchOrdersManag
   if (!canManageBranchOrders()) return;
   const normalizedLocationId = String(locationId || "").trim();
   state.branchOrdersManagementLocationId = normalizedLocationId;
+  state.branchOrdersManagementCatalogEditingId = "";
   if (!normalizedLocationId) {
     state.branchOrdersManagement = null;
     state.branchOrdersManagementDraft = null;
@@ -3087,6 +3197,7 @@ async function saveBranchOrdersManagement() {
     });
     state.branchOrdersManagement = result;
     state.branchOrdersManagementDraft = clonedBranchOrdersManagementConfiguration(result.configuration);
+    state.branchOrdersManagementCatalogEditingId = "";
     const history = await api(`/api/portal/v1/branch-orders/history?locationId=${encodeURIComponent(locationId)}&limit=50`);
     state.branchOrdersManagementHistory = history.orders || [];
     setBranchOrdersManagementMessage("Bestellkonfiguration wurde gespeichert.");
@@ -3117,7 +3228,18 @@ function handleBranchOrdersManagementAction(event) {
   const action = button.dataset.branchOrdersManagementAction;
   const id = button.dataset.branchOrdersManagementId || "";
   let revealAfterRender = null;
-  if (action === "add-recipient") {
+  if (action === "sort-catalog") {
+    const key = button.dataset.branchOrdersManagementSortKey || "position";
+    const current = normalizedBranchOrdersManagementCatalogSort();
+    state.branchOrdersManagementCatalogSort = {
+      key: branchOrdersManagementCatalogColumns.some((column) => column.key === key) ? key : "position",
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+    };
+  } else if (action === "edit-catalog-item") {
+    if (!draft.items.some((item) => item.id === id)) return;
+    state.branchOrdersManagementCatalogEditingId = id;
+    revealAfterRender = () => revealBranchOrdersManagementCatalogEditor(id);
+  } else if (action === "add-recipient") {
     const defaults = state.branchOrdersManagement?.configuration?.templateDefaults || {};
     const recipientId = branchOrdersManagementClientId("recipient");
     draft.recipients.push({
@@ -3159,22 +3281,31 @@ function handleBranchOrdersManagementAction(event) {
       setBranchOrdersManagementMessage("Bitte zuerst mindestens eine Einheit anlegen.", true);
       return;
     }
+    const titleField = elements.branchOrdersManagementWorkspace?.querySelector(
+      "[data-branch-orders-management-new-item-title]",
+    );
+    const title = String(titleField?.value || "").trim();
+    if (!title) {
+      setBranchOrdersManagementMessage("Bitte eine Bezeichnung für die neue Position eingeben.", true);
+      titleField?.focus();
+      return;
+    }
     const itemId = branchOrdersManagementClientId("item");
     draft.items.push({
       id: itemId,
-      title: "Neue Position",
+      title,
       unitId,
       recipientId: draft.recipients[0]?.id || "",
     });
-    revealAfterRender = () => revealBranchOrdersManagementDisclosure(
-      "catalog",
-      "data-branch-orders-management-catalog-item",
-      itemId,
-      '[data-branch-orders-management-field="catalog-item-title"]',
-    );
+    state.branchOrdersManagementCatalogEditingId = itemId;
+    setBranchOrdersManagementMessage("");
+    revealAfterRender = () => revealBranchOrdersManagementCatalogEditor(itemId);
   } else if (action === "remove-catalog-item") {
     draft.items = draft.items.filter((item) => item.id !== id);
     draft.groups.forEach((group) => { group.itemIds = group.itemIds.filter((itemId) => itemId !== id); });
+    if (state.branchOrdersManagementCatalogEditingId === id) {
+      state.branchOrdersManagementCatalogEditingId = "";
+    }
   } else if (action === "add-group") {
     const groupId = branchOrdersManagementClientId("group");
     draft.groups.push({
@@ -3444,6 +3575,17 @@ function renderLoanSettings() {
   elements.loanSettingsList.innerHTML = settings.length ? settings.map((location) => {
     const provider = location.emailDelivery?.provider || {};
     const selectedRecipient = location.documentRecipient?.employeeNumber || "";
+    const loanDocumentEmailAvailable = provider.loanDocumentAvailable === true;
+    const providerHint = provider.configured === false
+      ? "SMTP ist noch nicht eingerichtet."
+      : !loanDocumentEmailAvailable
+        ? "Der Server muss das E-Mail-Ereignis „loan_document“ noch freischalten."
+        : "PDF-Belege werden an die bestätigte persönliche Adresse und die zusätzliche Belegadresse versendet.";
+    const internalRecipientEmailHint = !location.documentRecipient
+      ? "Die automatisch zuständige Leitung erhält jedenfalls eine interne Mitteilung."
+      : location.documentRecipient.emailDelivery?.available
+        ? "Die bestätigte persönliche E-Mail-Adresse erhält bei aktiviertem Versand ebenfalls den PDF-Beleg."
+        : "Interne Mitteilung aktiv; für den E-Mail-Beleg fehlt noch eine aktuell bestätigte persönliche Adresse.";
     const photoOutputMode = location.photoPdf?.outputMode === "blackwhite" ? "blackwhite" : "grayscale";
     const photoOriginalRetention = location.photoPdf?.originalRetention === "delete" ? "delete" : "retain";
     return `<form class="loan-location-setting" data-loan-setting-location="${escapeHtml(location.locationId)}">
@@ -3455,11 +3597,11 @@ function renderLoanSettings() {
         <label class="field loan-setting-wide"><span>Basisadresse</span><input name="lookupBaseUrl" type="url" maxlength="1000" value="${escapeHtml(location.articleLookup?.baseUrl || "")}" placeholder="https://shop.example.com" /></label>
         <label class="field"><span>Foto-PDF-Ausgabe</span><select name="photoOutputMode"><option value="grayscale" ${photoOutputMode === "grayscale" ? "selected" : ""}>Graustufen</option><option value="blackwhite" ${photoOutputMode === "blackwhite" ? "selected" : ""}>Schwarzweiß</option></select></label>
         <label class="field loan-setting-wide"><span>Aufbereitete Farbfassungen</span><select name="photoOriginalRetention"><option value="retain" ${photoOriginalRetention === "retain" ? "selected" : ""}>Geschützt aufbewahren (sicherer Standard)</option><option value="delete" ${photoOriginalRetention === "delete" ? "selected" : ""}>Nach PDF-Verarbeitung löschen</option></select></label>
-        <label class="field"><span>Interner Belegempfänger</span><select name="documentRecipient"><option value="">Automatisch zuständige Leitung</option>${recipients.map((employee) => `<option value="${escapeHtml(employee.personnel_number)}" ${employee.personnel_number === selectedRecipient ? "selected" : ""}>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.nickname || employee.full_name)}</option>`).join("")}</select></label>
+        <label class="field"><span>Interner Belegempfänger</span><select name="documentRecipient"><option value="">Automatisch zuständige Leitung</option>${recipients.map((employee) => `<option value="${escapeHtml(employee.personnel_number)}" ${employee.personnel_number === selectedRecipient ? "selected" : ""}>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.nickname || employee.full_name)}</option>`).join("")}</select><small>${escapeHtml(internalRecipientEmailHint)}</small></label>
         <label class="field loan-setting-wide"><span>Zusätzliche Beleg-E-Mail</span><input name="emailRecipient" type="email" maxlength="320" value="${escapeHtml(location.emailDelivery?.recipient || "")}" placeholder="Optional" /></label>
       </div>
       <p class="loan-photo-retention-note"><strong>Hinweis zur Aufbewahrung:</strong> Diese Auswahl gilt für neu hochgeladene Fotos. Die metadatenfrei verkleinerte Farbfassung kann besonders bei Schäden für eine spätere Beurteilung wichtig sein; der sichere Standard ist deshalb die geschützte Aufbewahrung. Die unveränderte Handydatei wird nicht gespeichert.</p>
-      <label class="switch-row"><span><strong>Beleg zusätzlich per E-Mail senden</strong><small>${provider.configured === false ? "SMTP ist noch nicht eingerichtet." : "PDF-Beleg wird verschlüsselt gelesen und als Anlage versendet."}</small></span><input name="emailEnabled" type="checkbox" ${location.emailDelivery?.enabled ? "checked" : ""} ${provider.configured === false ? "disabled" : ""} /></label>
+      <label class="switch-row"><span><strong>Beleg zusätzlich per E-Mail senden</strong><small>${escapeHtml(providerHint)}</small></span><input name="emailEnabled" type="checkbox" ${location.emailDelivery?.enabled ? "checked" : ""} ${loanDocumentEmailAvailable ? "" : "disabled"} /></label>
       <div class="form-actions-inline"><span class="settings-note" data-loan-setting-message></span><button class="primary-button" type="submit">Standort speichern</button></div>
     </form>`;
   }).join("") : '<p class="settings-note">Es sind noch keine Standorte vorhanden.</p>';
@@ -3613,6 +3755,92 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
 }
 
+function schedulePdfDesignCatalog(settings = state.data?.settings) {
+  const supplied = Array.isArray(settings?.schedule_pdf_design_catalog)
+    ? settings.schedule_pdf_design_catalog : [];
+  const normalized = supplied.filter((design) => (
+    design && typeof design === "object" && typeof design.id === "string" && design.id.trim()
+  )).map((design) => ({
+    id: design.id.trim(),
+    label: String(design.label || design.id).trim() || design.id,
+    defaultLabel: String(design.defaultLabel || design.label || design.id).trim() || design.id,
+    shortLabel: String(design.shortLabel || design.label || design.id).trim() || design.id,
+    description: String(design.description || "").trim(),
+  }));
+  return normalized.length ? normalized : fallbackSchedulePdfDesignCatalog.map((design) => ({ ...design }));
+}
+
+function schedulePdfDesignNamesForSave() {
+  const catalog = schedulePdfDesignCatalog();
+  const normalized = {};
+  const usedNames = new Set();
+  for (const design of catalog) {
+    const rawName = Object.hasOwn(state.schedulePdfDesignNames, design.id)
+      ? state.schedulePdfDesignNames[design.id]
+      : design.label;
+    if (/[\u0000-\u001f\u007f]/u.test(String(rawName || ""))) {
+      throw new Error("Dienstplan-PDF-Designnamen müssen einzeilig sein.");
+    }
+    const name = String(rawName || "").replace(/\s+/gu, " ").trim();
+    const length = [...name].length;
+    if (length < schedulePdfDesignNameLimits.min || length > schedulePdfDesignNameLimits.max) {
+      throw new Error(`Jeder Dienstplan-PDF-Designname muss zwischen ${schedulePdfDesignNameLimits.min} und ${schedulePdfDesignNameLimits.max} Zeichen lang sein.`);
+    }
+    const key = name.toLocaleLowerCase("de");
+    if (usedNames.has(key)) throw new Error("Jeder Dienstplan-PDF-Designname muss eindeutig sein.");
+    usedNames.add(key);
+    normalized[design.id] = name;
+  }
+  state.schedulePdfDesignNames = normalized;
+  return { ...normalized };
+}
+
+function schedulePdfDesignIdsFromSettings(settings = state.data?.settings) {
+  const catalogIds = new Set(schedulePdfDesignCatalog(settings).map((design) => design.id));
+  let supplied = Array.isArray(settings?.pdf_schedule_design_ids)
+    ? settings.pdf_schedule_design_ids : [];
+  if (!supplied.length && typeof settings?.pdf_schedule_designs === "string") {
+    try {
+      const parsed = JSON.parse(settings.pdf_schedule_designs);
+      if (Array.isArray(parsed)) supplied = parsed;
+    } catch {}
+  }
+  const ids = [];
+  for (const value of supplied) {
+    const id = String(value || "").trim();
+    if (catalogIds.has(id) && !ids.includes(id)) ids.push(id);
+    if (ids.length === 5) break;
+  }
+  return ids.length ? ids : ["timeline"];
+}
+
+function closeSchedulePdfDesignMenu() {
+  elements.schedulePdfDesignMenu?.classList.add("hidden");
+  elements.pdfButton?.setAttribute("aria-expanded", "false");
+}
+
+function renderSchedulePdfExportControl() {
+  if (!elements.pdfButton) return;
+  const catalog = schedulePdfDesignCatalog();
+  const catalogById = new Map(catalog.map((design) => [design.id, design]));
+  const activeIds = schedulePdfDesignIdsFromSettings();
+  const baseUrl = `/api/schedule.pdf?week=${state.weekStart}${contextQuery(true)}`;
+  elements.pdfButton.href = `${baseUrl}&design=${encodeURIComponent(activeIds[0])}`;
+  if (!elements.schedulePdfDesignMenu) return;
+  if (activeIds.length <= 1) {
+    elements.pdfButton.removeAttribute("aria-haspopup");
+    elements.schedulePdfDesignMenu.innerHTML = "";
+    closeSchedulePdfDesignMenu();
+    return;
+  }
+  elements.pdfButton.setAttribute("aria-haspopup", "menu");
+  elements.schedulePdfDesignMenu.innerHTML = activeIds.map((id, index) => {
+    const design = catalogById.get(id) || { label: id, description: "" };
+    return `<a href="${baseUrl}&design=${encodeURIComponent(id)}" role="menuitem" data-schedule-pdf-design-export="${escapeHtml(id)}"><strong>Rang ${index + 1} · ${escapeHtml(design.label)}</strong>${design.description ? `<small>${escapeHtml(design.description)}</small>` : ""}</a>`;
+  }).join("");
+  closeSchedulePdfDesignMenu();
+}
+
 function renderHeader() {
   const end = addDays(state.weekStart, state.data.settings.show_sunday === "1" ? 6 : 5);
   const location = currentLocation();
@@ -3621,7 +3849,7 @@ function renderHeader() {
   elements.weekTitle.textContent = `${formatDate(state.weekStart, { day: "numeric", month: "long" })} – ${formatDate(end, { day: "numeric", month: "long", year: "numeric" })}`;
   elements.calendarWeek.textContent = `Kalenderwoche ${state.data.calendarWeek}${contextLabel ? ` · ${contextLabel}` : ""}`;
   elements.scheduleTitle.textContent = `${state.data.settings.pdf_title} · KW ${state.data.calendarWeek}`;
-  elements.pdfButton.href = `/api/schedule.pdf?week=${state.weekStart}${contextQuery(true)}`;
+  renderSchedulePdfExportControl();
   document.querySelector("#weekJumpDate").value = state.weekStart;
   elements.weekLockNotice.classList.toggle("hidden", !isWeekLocked());
   const hasNote = Boolean(state.data.scheduleNote?.note_text);
@@ -16520,20 +16748,46 @@ const START_DASHBOARD_WIDGET_IDS = Object.freeze([
   "salesTopGroups",
 ]);
 const START_DASHBOARD_WIDGET_ID_SET = new Set(START_DASHBOARD_WIDGET_IDS);
+const START_DASHBOARD_CARDS = Object.freeze([
+  { id: "schedule", label: "Dienstplanung", group: "Filialverwaltung" },
+  { id: "vacation", label: "Urlaubsplanung", group: "Filialverwaltung" },
+  { id: "loans", label: "Leihverwaltung", group: "Filialverwaltung" },
+  { id: "branchOrders", label: "Filialbestellungen", group: "Filialverwaltung" },
+  { id: "personnel", label: "Personal", group: "Personalverwaltung" },
+  { id: "sales", label: "Verkaufsverwaltung", group: "Verkaufsverwaltung" },
+]);
+const START_DASHBOARD_CARD_IDS = START_DASHBOARD_CARDS.map((card) => card.id);
+const START_DASHBOARD_CARD_ID_SET = new Set(START_DASHBOARD_CARD_IDS);
 
 function defaultStartDashboardPreferences() {
-  return { version: 1, hidden: [], locationId: "", departmentId: "", salesLocationId: "" };
+  return {
+    version: 2,
+    order: [...START_DASHBOARD_CARD_IDS],
+    hidden: [],
+    hiddenWidgets: [],
+    locationId: "",
+    departmentId: "",
+    salesLocationId: "",
+  };
 }
 
 function normalizeStartDashboardPreferences(value) {
   const fallback = defaultStartDashboardPreferences();
-  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || ![1, 2].includes(Number(value.version))) {
     return fallback;
   }
+  const submittedOrder = Number(value.version) === 2 && Array.isArray(value.order)
+    ? [...new Set(value.order.map(String))].filter((id) => START_DASHBOARD_CARD_ID_SET.has(id))
+    : [];
+  const legacyHidden = Number(value.version) === 1 ? value.hidden : value.hiddenWidgets;
   return {
-    version: 1,
-    hidden: Array.isArray(value.hidden)
-      ? [...new Set(value.hidden.map(String))].filter((id) => START_DASHBOARD_WIDGET_ID_SET.has(id))
+    version: 2,
+    order: [...submittedOrder, ...START_DASHBOARD_CARD_IDS.filter((id) => !submittedOrder.includes(id))],
+    hidden: Number(value.version) === 2 && Array.isArray(value.hidden)
+      ? [...new Set(value.hidden.map(String))].filter((id) => START_DASHBOARD_CARD_ID_SET.has(id))
+      : [],
+    hiddenWidgets: Array.isArray(legacyHidden)
+      ? [...new Set(legacyHidden.map(String))].filter((id) => START_DASHBOARD_WIDGET_ID_SET.has(id))
       : [],
     locationId: String(value.locationId || "").slice(0, 80),
     departmentId: /^\d+$/.test(String(value.departmentId || "")) ? String(value.departmentId) : "",
@@ -16542,7 +16796,37 @@ function normalizeStartDashboardPreferences(value) {
 }
 
 function startDashboardPreferencesStorageKey() {
+  return `grabenplaner:start-dashboard-preferences-v2:${uiPreferenceActorKey()}`;
+}
+
+function legacyStartDashboardPreferencesStorageKey() {
   return `grabenplaner:start-dashboard-preferences-v1:${uiPreferenceActorKey()}`;
+}
+
+function canReadStartDashboardSchedule() {
+  return Boolean(state.portalStatus)
+    && state.portalStatus.installationFeatures?.schedule !== false
+    && (!state.portalStatus?.portalEnabled
+      || state.portalSession?.user?.permissions?.includes("schedule:read") === true);
+}
+
+function canReadStartDashboardVacations() {
+  return Boolean(state.portalStatus)
+    && state.portalStatus.installationFeatures?.vacation !== false
+    && (!state.portalStatus?.portalEnabled
+      || state.portalSession?.user?.permissions?.includes("vacation:read") === true);
+}
+
+function startDashboardCardAccessible(cardId) {
+  if (!state.portalStatus) return false;
+  return {
+    schedule: canReadStartDashboardSchedule(),
+    vacation: canReadStartDashboardVacations() && canReadStartDashboardSchedule(),
+    loans: canReadLoanManagement(),
+    branchOrders: canManageBranchOrders(),
+    personnel: canOpenPersonnelAdministrationModule(),
+    sales: canAccessSalesAnalytics(),
+  }[cardId] === true;
 }
 
 function startDashboardLocationId(preferences = state.startDashboardPreferences) {
@@ -16567,17 +16851,73 @@ function startDashboardDepartmentId(locationId, preferences = state.startDashboa
 
 function renderStartDashboardScopeControls() {
   if (!elements.startDashboardLocation || !elements.startDashboardDepartment) return;
+  const locations = activeLocations();
   const locationId = startDashboardLocationId();
-  elements.startDashboardLocation.innerHTML = activeLocations().map((location) => (
+  elements.startDashboardLocation.innerHTML = locations.map((location) => (
     `<option value="${escapeHtmlAttribute(location.id)}">${escapeHtml(location.name)}</option>`
   )).join("");
   elements.startDashboardLocation.value = locationId;
+  elements.startDashboardLocation.disabled = state.startDashboardScopeSaving || locations.length === 0;
+  const locationIndex = locations.findIndex((location) => String(location.id) === locationId);
+  if (elements.startDashboardLocationPosition) {
+    elements.startDashboardLocationPosition.textContent = locationIndex >= 0
+      ? `Filiale ${locationIndex + 1} von ${locations.length}`
+      : "Keine freigegebene Filiale";
+  }
+  for (const button of [elements.startDashboardPreviousLocation, elements.startDashboardNextLocation]) {
+    if (button) button.disabled = state.startDashboardScopeSaving || locations.length <= 1;
+  }
   const departmentId = startDashboardDepartmentId(locationId);
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
-  elements.startDashboardDepartment.innerHTML = `${departmentOnly ? "" : '<option value="">Gesamte Filiale</option>'}${departmentsForLocation(locationId).map((department) => (
+  const departments = departmentsForLocation(locationId);
+  elements.startDashboardDepartment.innerHTML = `${departmentOnly ? "" : '<option value="">Gesamte Filiale</option>'}${departments.map((department) => (
     `<option value="${escapeHtmlAttribute(String(department.id))}">${escapeHtml(department.name)}</option>`
   )).join("")}`;
   elements.startDashboardDepartment.value = departmentId;
+  elements.startDashboardDepartment.disabled = state.startDashboardScopeSaving
+    || (departmentOnly && departments.length === 0);
+}
+
+function cycledStartDashboardValue(values, current, direction) {
+  if (!values.length) return "";
+  const currentIndex = values.indexOf(String(current || ""));
+  if (currentIndex < 0) return direction < 0 ? values.at(-1) : values[0];
+  return values[(currentIndex + direction + values.length) % values.length];
+}
+
+async function selectStartDashboardLocation(locationId) {
+  const normalizedLocationId = String(locationId || "");
+  if (state.startDashboardScopeSaving
+    || !activeLocations().some((location) => String(location.id) === normalizedLocationId)) return false;
+  state.startDashboardScopeSaving = true;
+  state.startDashboardScheduleRequestId += 1;
+  state.startDashboardLoanRequestId += 1;
+  state.startDashboardBranchOrdersRequestId += 1;
+  state.startDashboardScheduleLoading = true;
+  state.startDashboardLoanLoading = startDashboardCardAccessible("loans");
+  state.startDashboardBranchOrdersLoading = startDashboardCardAccessible("branchOrders");
+  renderStartDashboard();
+  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  preferences.locationId = normalizedLocationId;
+  preferences.departmentId = "";
+  try {
+    const saved = await persistStartDashboardPreferences(preferences, { silent: true });
+    loadStartDashboardSchedule();
+    loadStartDashboardOperations();
+    return saved;
+  } finally {
+    state.startDashboardScopeSaving = false;
+    renderStartDashboardScopeControls();
+  }
+}
+
+function cycleStartDashboardLocation(direction) {
+  const locationIds = activeLocations().map((location) => String(location.id));
+  return selectStartDashboardLocation(cycledStartDashboardValue(
+    locationIds,
+    startDashboardLocationId(),
+    direction,
+  ));
 }
 
 function startDashboardEmployeeLabel(employee) {
@@ -16591,9 +16931,40 @@ function startDashboardListMarkup(rows, emptyText) {
 
 function renderStartDashboardBranchWidgets() {
   const schedule = state.startDashboardSchedule;
+  const weekStart = getMonday(new Date());
+  const weekEnd = addDays(weekStart, 6);
   const today = toIsoDate(new Date());
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  if (elements.startDashboardSchedulePeriod) {
+    elements.startDashboardSchedulePeriod.textContent = `KW ${getIsoWeek(weekStart)} · ${formatDate(weekStart)}–${formatDate(weekEnd)}`;
+  }
+  if (elements.startDashboardScheduleSummary) {
+    if (state.startDashboardScheduleLoading) {
+      elements.startDashboardScheduleSummary.innerHTML = '<p class="start-dashboard-empty">Dienstplan wird geladen.</p>';
+    } else if (state.startDashboardScheduleError) {
+      elements.startDashboardScheduleSummary.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardScheduleError)}</p>`;
+    } else {
+      const shifts = schedule?.shifts || [];
+      const scheduledEmployees = new Set(shifts.map((shift) => String(shift.employee_number)));
+      const scheduledDays = new Set(shifts.map((shift) => String(shift.shift_date)));
+      elements.startDashboardScheduleSummary.innerHTML = `<div class="start-dashboard-stat-row"><span><strong>${scheduledEmployees.size}</strong><small>eingeteilte MA</small></span><span><strong>${shifts.length}</strong><small>Dienste</small></span><span><strong>${scheduledDays.size}</strong><small>beplante Tage</small></span></div>`;
+    }
+  }
+  if (elements.startDashboardVacationSummary) {
+    if (state.startDashboardScheduleLoading) {
+      elements.startDashboardVacationSummary.innerHTML = '<p class="start-dashboard-empty">Abwesenheiten werden geladen.</p>';
+    } else if (state.startDashboardScheduleError) {
+      elements.startDashboardVacationSummary.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardScheduleError)}</p>`;
+    } else {
+      const absences = (schedule?.weekOptions || []).filter((option) => ["vacation", "time_off"].includes(option.option_type)
+        && !option.soft_pending && dateRangesOverlap(option.date_from, option.date_to, weekStart, weekEnd));
+      const vacationCount = absences.filter((option) => option.option_type === "vacation").length;
+      const timeOffCount = absences.filter((option) => option.option_type === "time_off").length;
+      const employeeCount = new Set(absences.map((option) => String(option.employee_number))).size;
+      elements.startDashboardVacationSummary.innerHTML = `<div class="start-dashboard-stat-row"><span><strong>${vacationCount}</strong><small>Urlaub</small></span><span><strong>${timeOffCount}</strong><small>ZA</small></span><span><strong>${employeeCount}</strong><small>betroffene MA</small></span></div>`;
+    }
+  }
   if (elements.startDashboardOnDuty) {
     if (state.startDashboardScheduleLoading) {
       elements.startDashboardOnDuty.innerHTML = '<p class="start-dashboard-empty">Dienstplan wird geladen.</p>';
@@ -16661,6 +17032,48 @@ function renderStartDashboardSalesLocationOptions() {
   const preferred = String(state.startDashboardPreferences.salesLocationId || "");
   elements.startDashboardSalesLocation.innerHTML = `<option value="">Jüngster freigegebener Bericht</option>${locationIds.map((id) => `<option value="${escapeHtmlAttribute(id)}">${escapeHtml(startDashboardSalesLocationName(id))}</option>`).join("")}`;
   elements.startDashboardSalesLocation.value = locationIds.includes(preferred) ? preferred : "";
+  elements.startDashboardSalesLocation.disabled = state.startDashboardScopeSaving || locationIds.length === 0;
+  const locationIndex = locationIds.indexOf(preferred);
+  if (elements.startDashboardSalesLocationPosition) {
+    elements.startDashboardSalesLocationPosition.textContent = locationIndex >= 0
+      ? `Filiale ${locationIndex + 1} von ${locationIds.length}`
+      : locationIds.length
+        ? `Automatische Auswahl · ${locationIds.length} Filialen`
+        : "Kein freigegebener Bericht";
+  }
+  for (const button of [elements.startDashboardPreviousSalesLocation, elements.startDashboardNextSalesLocation]) {
+    if (button) button.disabled = state.startDashboardScopeSaving || locationIds.length <= 1;
+  }
+}
+
+async function selectStartDashboardSalesLocation(locationId) {
+  const normalizedLocationId = String(locationId || "");
+  const locationIds = [...new Set(state.startDashboardSalesReports.map((report) => String(report.locationId)))];
+  if (state.startDashboardScopeSaving
+    || (normalizedLocationId && !locationIds.includes(normalizedLocationId))) return false;
+  state.startDashboardScopeSaving = true;
+  state.startDashboardSalesRequestId += 1;
+  state.startDashboardSalesLoading = true;
+  renderStartDashboard();
+  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  preferences.salesLocationId = normalizedLocationId;
+  try {
+    const saved = await persistStartDashboardPreferences(preferences, { silent: true });
+    loadStartDashboardSales();
+    return saved;
+  } finally {
+    state.startDashboardScopeSaving = false;
+    renderStartDashboardSalesLocationOptions();
+  }
+}
+
+function cycleStartDashboardSalesLocation(direction) {
+  const locationIds = [...new Set(state.startDashboardSalesReports.map((report) => String(report.locationId)))];
+  return selectStartDashboardSalesLocation(cycledStartDashboardValue(
+    locationIds,
+    state.startDashboardPreferences.salesLocationId,
+    direction,
+  ));
 }
 
 function renderStartDashboardSalesWidgets() {
@@ -16698,17 +17111,45 @@ function renderStartDashboardSalesWidgets() {
   }
 }
 
+function renderStartDashboardOperationalCards() {
+  if (elements.startDashboardLoanSummary) {
+    if (state.startDashboardLoanLoading) {
+      elements.startDashboardLoanSummary.innerHTML = '<p class="start-dashboard-empty">Leihvorgänge werden geladen.</p>';
+    } else if (state.startDashboardLoanError) {
+      elements.startDashboardLoanSummary.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardLoanError)}</p>`;
+    } else {
+      const summary = state.startDashboardLoanSummary || {};
+      elements.startDashboardLoanSummary.innerHTML = `<div class="start-dashboard-stat-row"><span><strong>${Number(summary.open || 0)}</strong><small>offen</small></span><span><strong>${Number(summary.overdue || 0) + Number(summary.dueToday || 0)}</strong><small>fällig</small></span><span><strong>${Number(summary.emailFailed || 0)}</strong><small>E-Mail-Fehler</small></span></div>`;
+    }
+  }
+  if (elements.startDashboardBranchOrdersSummary) {
+    if (state.startDashboardBranchOrdersLoading) {
+      elements.startDashboardBranchOrdersSummary.innerHTML = '<p class="start-dashboard-empty">Bestellungen werden geladen.</p>';
+    } else if (state.startDashboardBranchOrdersError) {
+      elements.startDashboardBranchOrdersSummary.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardBranchOrdersError)}</p>`;
+    } else {
+      const orders = state.startDashboardBranchOrders || [];
+      const unresolved = orders.filter((order) => order.status !== "sent").length;
+      const latestWeek = Number(orders[0]?.calendarWeek || 0);
+      elements.startDashboardBranchOrdersSummary.innerHTML = `<div class="start-dashboard-stat-row"><span><strong>${orders.length}</strong><small>letzte Vorgänge</small></span><span><strong>${unresolved}</strong><small>Zustellung offen</small></span><span><strong>${latestWeek || "–"}</strong><small>jüngste KW</small></span></div>`;
+    }
+  }
+}
+
 function renderStartDashboardCustomizer() {
   const preferences = normalizeStartDashboardPreferences(state.startDashboardDraftPreferences || state.startDashboardPreferences);
   const hidden = new Set(preferences.hidden);
-  document.querySelectorAll("[data-start-dashboard-widget-choice]").forEach((input) => {
-    const widgetId = input.dataset.startDashboardWidgetChoice;
-    const accessDenied = widgetId.startsWith("personnel") ? !canOpenPersonnelAdministrationModule()
-      : widgetId.startsWith("sales") ? !canAccessSalesAnalytics() : false;
-    input.checked = !hidden.has(widgetId);
-    input.disabled = accessDenied;
-    input.closest("label")?.classList.toggle("hidden", accessDenied);
-  });
+  if (!elements.startDashboardCustomizerGrid) return;
+  const accessibleCards = preferences.order.filter((id) => startDashboardCardAccessible(id));
+  elements.startDashboardCustomizerGrid.innerHTML = accessibleCards.map((id) => {
+    const card = START_DASHBOARD_CARDS.find((entry) => entry.id === id);
+    const groupCards = accessibleCards.filter((candidate) => START_DASHBOARD_CARDS.find((entry) => entry.id === candidate)?.group === card.group);
+    const groupIndex = groupCards.indexOf(id);
+    return `<div class="start-dashboard-customizer-row">
+      <label><input type="checkbox" data-start-dashboard-card-choice="${escapeHtmlAttribute(id)}" ${hidden.has(id) ? "" : "checked"} /><span><strong>${escapeHtml(card.label)}</strong><small>${escapeHtml(card.group)} · Rang ${groupIndex + 1}</small></span></label>
+      <div class="start-dashboard-customizer-actions" aria-label="${escapeHtmlAttribute(card.label)} anordnen"><button type="button" data-start-dashboard-card-move="up" data-start-dashboard-card-id="${escapeHtmlAttribute(id)}" aria-label="${escapeHtmlAttribute(card.label)} nach oben" ${groupIndex === 0 ? "disabled" : ""}>↑</button><button type="button" data-start-dashboard-card-move="down" data-start-dashboard-card-id="${escapeHtmlAttribute(id)}" aria-label="${escapeHtmlAttribute(card.label)} nach unten" ${groupIndex === groupCards.length - 1 ? "disabled" : ""}>↓</button></div>
+    </div>`;
+  }).join("") || '<p class="start-dashboard-empty">Für diesen Zugang sind keine anpassbaren Dashboardkarten freigegeben.</p>';
 }
 
 function openStartDashboardCustomizer() {
@@ -16728,28 +17169,33 @@ function closeStartDashboardCustomizer({ restoreFocus = true } = {}) {
 
 function renderStartDashboard() {
   if (!elements.startDashboardView) return;
-  const personnelAvailable = canOpenPersonnelAdministrationModule();
-  const salesAvailable = canAccessSalesAnalytics();
-  elements.startDashboardPersonnelGroup?.classList.toggle("hidden", !personnelAvailable);
-  elements.startDashboardSalesGroup?.classList.toggle("hidden", !salesAvailable);
-  const hidden = new Set(normalizeStartDashboardPreferences(state.startDashboardPreferences).hidden);
+  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  const hidden = new Set(preferences.hidden);
+  const hiddenWidgets = new Set(preferences.hiddenWidgets);
+  const branchCardIds = ["schedule", "vacation", "loans", "branchOrders"];
+  const groupHasVisibleCard = (ids) => ids.some((id) => startDashboardCardAccessible(id) && !hidden.has(id));
+  elements.startDashboardBranchGroup?.classList.toggle("hidden", !groupHasVisibleCard(branchCardIds));
+  elements.startDashboardPersonnelGroup?.classList.toggle("hidden", !groupHasVisibleCard(["personnel"]));
+  elements.startDashboardSalesGroup?.classList.toggle("hidden", !groupHasVisibleCard(["sales"]));
+  document.querySelectorAll("[data-start-dashboard-card]").forEach((card) => {
+    const cardId = card.dataset.startDashboardCard;
+    card.style.order = String(preferences.order.indexOf(cardId));
+    card.classList.toggle("hidden", hidden.has(cardId) || !startDashboardCardAccessible(cardId));
+  });
   document.querySelectorAll("[data-start-dashboard-widget]").forEach((widget) => {
     const widgetId = widget.dataset.startDashboardWidget;
-    const accessDenied = widgetId.startsWith("personnel") ? !personnelAvailable
-      : widgetId.startsWith("sales") ? !salesAvailable : false;
-    widget.classList.toggle("hidden", hidden.has(widgetId) || accessDenied);
+    widget.classList.toggle("hidden", hiddenWidgets.has(widgetId));
   });
   renderStartDashboardScopeControls();
   renderStartDashboardBranchWidgets();
   renderStartDashboardPersonnelWidgets();
-  if (salesAvailable) renderStartDashboardSalesWidgets();
+  renderStartDashboardOperationalCards();
+  if (startDashboardCardAccessible("sales")) renderStartDashboardSalesWidgets();
   renderStartDashboardCustomizer();
 }
 
 async function loadStartDashboardSchedule() {
-  if (state.portalStatus?.installationFeatures?.schedule === false
-    || (state.portalStatus?.portalEnabled === true
-      && !state.portalSession?.user?.permissions?.includes("schedule:read"))) {
+  if (!canReadStartDashboardSchedule()) {
     state.startDashboardSchedule = null;
     state.startDashboardScheduleLoading = false;
     state.startDashboardScheduleError = "Keine freigegebene Dienstplanansicht.";
@@ -16781,7 +17227,7 @@ async function loadStartDashboardSchedule() {
 }
 
 async function loadStartDashboardSales() {
-  if (!canAccessSalesAnalytics()) return;
+  if (!startDashboardCardAccessible("sales")) return;
   const requestId = ++state.startDashboardSalesRequestId;
   state.startDashboardSalesLoading = true;
   state.startDashboardSalesError = "";
@@ -16811,10 +17257,64 @@ async function loadStartDashboardSales() {
   }
 }
 
+async function loadStartDashboardLoanSummary() {
+  if (!startDashboardCardAccessible("loans")) return;
+  const requestId = ++state.startDashboardLoanRequestId;
+  const locationId = startDashboardLocationId();
+  if (!locationId) return;
+  state.startDashboardLoanLoading = true;
+  state.startDashboardLoanError = "";
+  renderStartDashboard();
+  try {
+    const payload = await api(`/api/portal/v1/loans/management/summary?locationId=${encodeURIComponent(locationId)}`);
+    if (requestId !== state.startDashboardLoanRequestId) return;
+    state.startDashboardLoanSummary = payload.summary || {};
+  } catch (error) {
+    if (requestId !== state.startDashboardLoanRequestId) return;
+    state.startDashboardLoanSummary = null;
+    state.startDashboardLoanError = error.message;
+  } finally {
+    if (requestId === state.startDashboardLoanRequestId) {
+      state.startDashboardLoanLoading = false;
+      renderStartDashboard();
+    }
+  }
+}
+
+async function loadStartDashboardBranchOrders() {
+  if (!startDashboardCardAccessible("branchOrders")) return;
+  const requestId = ++state.startDashboardBranchOrdersRequestId;
+  const locationId = startDashboardLocationId();
+  if (!locationId) return;
+  state.startDashboardBranchOrdersLoading = true;
+  state.startDashboardBranchOrdersError = "";
+  renderStartDashboard();
+  try {
+    const payload = await api(`/api/portal/v1/branch-orders/history?locationId=${encodeURIComponent(locationId)}&limit=10`);
+    if (requestId !== state.startDashboardBranchOrdersRequestId) return;
+    state.startDashboardBranchOrders = payload.orders || [];
+  } catch (error) {
+    if (requestId !== state.startDashboardBranchOrdersRequestId) return;
+    state.startDashboardBranchOrders = [];
+    state.startDashboardBranchOrdersError = error.message;
+  } finally {
+    if (requestId === state.startDashboardBranchOrdersRequestId) {
+      state.startDashboardBranchOrdersLoading = false;
+      renderStartDashboard();
+    }
+  }
+}
+
+function loadStartDashboardOperations() {
+  loadStartDashboardLoanSummary();
+  loadStartDashboardBranchOrders();
+}
+
 function loadStartDashboard() {
   renderStartDashboard();
   loadStartDashboardSchedule();
   loadStartDashboardSales();
+  loadStartDashboardOperations();
 }
 
 async function persistStartDashboardPreferences(preferences, { silent = false } = {}) {
@@ -16840,6 +17340,39 @@ async function persistStartDashboardPreferences(preferences, { silent = false } 
     if (!silent) showToast(error.message, true);
     return false;
   }
+}
+
+async function navigateFromStartDashboardCard(button) {
+  const view = button?.dataset.startDashboardCardView;
+  if (!view) return;
+  const locationId = startDashboardLocationId();
+  const departmentId = startDashboardDepartmentId(locationId);
+  if (["planning", "vacations"].includes(view)) {
+    state.locationId = locationId;
+    state.departmentId = departmentId;
+    state.weekStart = getMonday(new Date());
+    if (view === "vacations") {
+      const now = new Date();
+      state.vacationYear = now.getFullYear();
+      state.vacationViewMode = "month";
+      state.vacationMonth = now.getMonth() + 1;
+    }
+    rememberOverallContext(view, locationId, departmentId);
+    setView(view);
+    await loadAll({ restoreContext: false });
+  } else if (view === "loans") {
+    state.loanManagementLocationId = locationId;
+    setView(view);
+  } else if (view === "branchOrders") {
+    state.branchOrdersManagementLocationId = locationId;
+    setView(view);
+  } else {
+    if (view === "personnelAdministration" && button.dataset.startDashboardCardRoute === "dashboard") {
+      setPersonnelAdministrationTab("dashboard");
+    }
+    setView(view);
+  }
+  closeMobileNavigation({ restoreFocus: false });
 }
 
 const PERSONNEL_DASHBOARD_ITEM_IDS = Object.freeze([
@@ -16893,6 +17426,297 @@ function renderFilialDashboard() {
       <span class="personnel-dashboard-card-copy"><small>${escapeHtml(item.eyebrow)}</small><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.description)}</span></span>
       <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
     </button>`).join("");
+  renderScheduleSearch();
+}
+
+const SCHEDULE_SEARCH_SORT_KEYS = new Set([
+  "date", "employee", "personnelNumber", "homeLocation", "location",
+  "department", "startTime", "duration", "area", "assignment",
+]);
+
+function defaultScheduleSearchQuery() {
+  const today = toIsoDate(new Date());
+  return {
+    employee: "",
+    employeeNumber: "",
+    dateFrom: today,
+    dateTo: addDays(today, 182),
+    locationId: "all",
+    departmentId: "",
+    homeLocationId: "all",
+    assignment: "all",
+    area: "",
+    sort: "date",
+    direction: "asc",
+    limit: 50,
+    offset: 0,
+  };
+}
+
+function scheduleSearchLocationOptions() {
+  return activeLocations().map((location) => ({
+    id: String(location.id),
+    name: String(location.name || location.id),
+  }));
+}
+
+function scheduleSearchDepartmentOptions(locationId) {
+  const serverOptions = Array.isArray(state.scheduleSearchData?.filters?.departments)
+    ? state.scheduleSearchData.filters.departments
+    : [];
+  const localOptions = activeLocations().flatMap((location) => (
+    departmentsForLocation(location.id).map((department) => ({
+      id: department.id,
+      name: department.name,
+      locationId: location.id,
+    }))
+  ));
+  const locationsById = new Map(activeLocations().map((location) => [String(location.id), location]));
+  const byId = new Map();
+  for (const department of [...localOptions, ...serverOptions]) {
+    const id = String(department?.id || "");
+    const departmentLocationId = String(department?.locationId || "");
+    if (!id || (locationId !== "all" && departmentLocationId !== locationId)) continue;
+    const location = locationsById.get(departmentLocationId);
+    byId.set(id, {
+      id,
+      name: String(department?.name || id),
+      locationId: departmentLocationId,
+      locationName: String(location?.name || departmentLocationId),
+    });
+  }
+  return [...byId.values()].sort((left, right) => (
+    `${left.locationName}|${left.name}`.localeCompare(`${right.locationName}|${right.name}`, "de-AT", { numeric: true, sensitivity: "base" })
+  ));
+}
+
+function scheduleSearchHomeLocationOptions() {
+  const byId = new Map(scheduleSearchLocationOptions().map((location) => [location.id, location]));
+  for (const location of state.scheduleSearchData?.filters?.homeLocations || []) {
+    const id = String(location?.id || "");
+    if (id) byId.set(id, { id, name: String(location?.name || id) });
+  }
+  return [...byId.values()].sort((left, right) => (
+    left.name.localeCompare(right.name, "de-AT", { numeric: true, sensitivity: "base" })
+  ));
+}
+
+function scheduleSearchRangeLabel() {
+  const query = state.scheduleSearchQuery || defaultScheduleSearchQuery();
+  return window.GrabenplanerDateRangeCalendar?.rangeLabel?.(query.dateFrom, query.dateTo)
+    || `${formatDate(query.dateFrom)} – ${formatDate(query.dateTo)}`;
+}
+
+function renderScheduleSearchFilters() {
+  const query = state.scheduleSearchQuery || defaultScheduleSearchQuery();
+  if (elements.scheduleSearchEmployee) elements.scheduleSearchEmployee.value = query.employee;
+  if (elements.scheduleSearchEmployeeNumber) elements.scheduleSearchEmployeeNumber.value = query.employeeNumber;
+  if (elements.scheduleSearchDateFrom) elements.scheduleSearchDateFrom.value = query.dateFrom;
+  if (elements.scheduleSearchDateTo) elements.scheduleSearchDateTo.value = query.dateTo;
+  if (elements.scheduleSearchDateRangeText) elements.scheduleSearchDateRangeText.textContent = scheduleSearchRangeLabel();
+  if (elements.scheduleSearchLocation) {
+    const locations = scheduleSearchLocationOptions();
+    elements.scheduleSearchLocation.innerHTML = '<option value="all">Alle freigegebenen Filialen</option>' + locations.map((location) => (
+      `<option value="${escapeHtmlAttribute(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`
+    )).join("");
+    elements.scheduleSearchLocation.value = locations.some((location) => location.id === query.locationId) ? query.locationId : "all";
+  }
+  const selectedLocationId = elements.scheduleSearchLocation?.value || "all";
+  if (elements.scheduleSearchDepartment) {
+    const departments = scheduleSearchDepartmentOptions(selectedLocationId);
+    elements.scheduleSearchDepartment.innerHTML = '<option value="">Alle Abteilungen</option>' + departments.map((department) => (
+      `<option value="${escapeHtmlAttribute(department.id)}">${selectedLocationId === "all" && department.locationName ? `${escapeHtml(department.locationName)} · ` : ""}${escapeHtml(department.name)}</option>`
+    )).join("");
+    elements.scheduleSearchDepartment.value = departments.some((department) => department.id === String(query.departmentId || ""))
+      ? String(query.departmentId)
+      : "";
+  }
+  if (elements.scheduleSearchHomeLocation) {
+    const locations = scheduleSearchHomeLocationOptions();
+    elements.scheduleSearchHomeLocation.innerHTML = '<option value="all">Alle Stammfilialen</option>' + locations.map((location) => (
+      `<option value="${escapeHtmlAttribute(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`
+    )).join("");
+    elements.scheduleSearchHomeLocation.value = locations.some((location) => location.id === query.homeLocationId)
+      ? query.homeLocationId
+      : "all";
+  }
+  if (elements.scheduleSearchAssignment) elements.scheduleSearchAssignment.value = query.assignment;
+  if (elements.scheduleSearchArea) elements.scheduleSearchArea.value = query.area;
+}
+
+function scheduleSearchResultRows() {
+  const results = state.scheduleSearchData?.results || [];
+  if (!results.length) return '<tr><td colspan="11" class="schedule-search-empty">Keine passenden Dienste im gewählten Zeitraum gefunden.</td></tr>';
+  return results.map((result, index) => {
+    const employeeName = result.employeeNickname && result.employeeNickname !== result.employeeName
+      ? `<strong>${escapeHtml(result.employeeNickname)}</strong><small>${escapeHtml(result.employeeName)}</small>`
+      : `<strong>${escapeHtml(result.employeeName)}</strong>`;
+    const assignment = result.crossLocation ? "Standortübergreifend" : "Stammfiliale";
+    return `<tr>
+      <td><strong>${escapeHtml(formatDate(result.shiftDate))}</strong><small>KW ${escapeHtml(result.calendarWeek)}</small></td>
+      <td>${employeeName}</td>
+      <td>${escapeHtml(result.personnelNumber)}</td>
+      <td>${escapeHtml(result.homeLocationName || "—")}</td>
+      <td>${escapeHtml(result.locationName || "—")}</td>
+      <td>${escapeHtml(result.departmentName || "Gesamtplan")}</td>
+      <td><strong>${escapeHtml(result.startTime)}–${escapeHtml(result.endTime)}</strong></td>
+      <td>${escapeHtml(formatHours(Number(result.durationMinutes || 0)))}</td>
+      <td>${escapeHtml(result.area || "—")}</td>
+      <td><span class="schedule-search-assignment ${result.crossLocation ? "cross-location" : "home-location"}">${escapeHtml(assignment)}</span></td>
+      <td><button class="schedule-search-open" type="button" data-schedule-search-result="${index}">Dienstplan öffnen</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function renderScheduleSearchSort() {
+  const query = state.scheduleSearchQuery || defaultScheduleSearchQuery();
+  elements.scheduleSearchPanel?.querySelectorAll("[data-schedule-search-sort]").forEach((button) => {
+    const active = button.dataset.scheduleSearchSort === query.sort;
+    button.classList.toggle("active", active);
+    button.classList.toggle("ascending", active && query.direction === "asc");
+    button.classList.toggle("descending", active && query.direction === "desc");
+    button.closest("th")?.setAttribute("aria-sort", active ? (query.direction === "asc" ? "ascending" : "descending") : "none");
+  });
+}
+
+function renderScheduleSearch() {
+  if (!elements.scheduleSearchPanel) return;
+  const allowed = canReadStartDashboardSchedule();
+  elements.scheduleSearchPanel.classList.toggle("hidden", !allowed);
+  if (!allowed) return;
+  renderScheduleSearchFilters();
+  renderScheduleSearchSort();
+  if (elements.scheduleSearchSubmit) elements.scheduleSearchSubmit.disabled = state.scheduleSearchLoading;
+  if (elements.scheduleSearchReset) elements.scheduleSearchReset.disabled = state.scheduleSearchLoading;
+  const paging = state.scheduleSearchData?.paging || { total: 0, limit: state.scheduleSearchQuery.limit, offset: state.scheduleSearchQuery.offset };
+  const total = Number(paging.total || 0);
+  const offset = Number(paging.offset || 0);
+  const limit = Number(paging.limit || state.scheduleSearchQuery.limit || 50);
+  if (elements.scheduleSearchStatus) {
+    elements.scheduleSearchStatus.classList.toggle("error", Boolean(state.scheduleSearchError));
+    elements.scheduleSearchStatus.textContent = state.scheduleSearchLoading
+      ? "Dienste werden gesucht …"
+      : state.scheduleSearchError
+        ? state.scheduleSearchError
+        : state.scheduleSearchLoaded
+          ? (total ? `${total} passende${total === 1 ? "r Dienst" : " Dienste"} gefunden.` : "Keine passenden Dienste gefunden.")
+          : "Suchkriterien festlegen und „Dienste suchen“ wählen.";
+  }
+  elements.scheduleSearchResults?.classList.toggle("hidden", !state.scheduleSearchLoaded || Boolean(state.scheduleSearchError));
+  if (!state.scheduleSearchLoaded || state.scheduleSearchError) return;
+  if (elements.scheduleSearchTableBody) elements.scheduleSearchTableBody.innerHTML = scheduleSearchResultRows();
+  if (elements.scheduleSearchResultCount) elements.scheduleSearchResultCount.textContent = `${total} Treffer`;
+  const first = total ? offset + 1 : 0;
+  const last = Math.min(offset + limit, total);
+  if (elements.scheduleSearchResultRange) elements.scheduleSearchResultRange.textContent = total ? `${first}–${last} von ${total}` : "Keine Ergebnisse";
+  const page = total ? Math.floor(offset / limit) + 1 : 1;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  if (elements.scheduleSearchPageStatus) elements.scheduleSearchPageStatus.textContent = `Seite ${page} von ${pages}`;
+  if (elements.scheduleSearchPrevious) elements.scheduleSearchPrevious.disabled = state.scheduleSearchLoading || offset <= 0;
+  if (elements.scheduleSearchNext) elements.scheduleSearchNext.disabled = state.scheduleSearchLoading || offset + limit >= total;
+}
+
+function submittedScheduleSearchQuery({ offset = 0 } = {}) {
+  return {
+    ...state.scheduleSearchQuery,
+    employee: String(elements.scheduleSearchEmployee?.value || "").trim(),
+    employeeNumber: String(elements.scheduleSearchEmployeeNumber?.value || "").trim(),
+    dateFrom: elements.scheduleSearchDateFrom?.value || state.scheduleSearchQuery.dateFrom,
+    dateTo: elements.scheduleSearchDateTo?.value || state.scheduleSearchQuery.dateTo,
+    locationId: elements.scheduleSearchLocation?.value || "all",
+    departmentId: elements.scheduleSearchDepartment?.value || "",
+    homeLocationId: elements.scheduleSearchHomeLocation?.value || "all",
+    assignment: elements.scheduleSearchAssignment?.value || "all",
+    area: String(elements.scheduleSearchArea?.value || "").trim(),
+    offset,
+  };
+}
+
+function scheduleSearchParameters(query) {
+  const parameters = new URLSearchParams();
+  for (const key of ["employee", "employeeNumber", "dateFrom", "dateTo", "locationId", "departmentId", "homeLocationId", "assignment", "area", "sort", "direction", "limit", "offset"]) {
+    const value = query[key];
+    if (value !== "" && value !== null && value !== undefined) parameters.set(key, String(value));
+  }
+  return parameters;
+}
+
+async function loadScheduleSearch({ query = null } = {}) {
+  if (!canReadStartDashboardSchedule()) return;
+  const submitted = query || submittedScheduleSearchQuery({ offset: 0 });
+  const requestId = ++state.scheduleSearchRequestId;
+  state.scheduleSearchQuery = submitted;
+  state.scheduleSearchLoading = true;
+  state.scheduleSearchError = "";
+  renderScheduleSearch();
+  try {
+    const result = await api(`/api/schedule/search?${scheduleSearchParameters(submitted)}`);
+    if (requestId !== state.scheduleSearchRequestId) return;
+    state.scheduleSearchData = result;
+    state.scheduleSearchLoaded = true;
+  } catch (error) {
+    if (requestId !== state.scheduleSearchRequestId) return;
+    state.scheduleSearchData = null;
+    state.scheduleSearchLoaded = false;
+    state.scheduleSearchError = error.message;
+  } finally {
+    if (requestId === state.scheduleSearchRequestId) {
+      state.scheduleSearchLoading = false;
+      renderScheduleSearch();
+    }
+  }
+}
+
+function initializeScheduleSearchDateRangeCalendar() {
+  const factory = window.GrabenplanerDateRangeCalendar?.createDateRangeCalendar;
+  if (!factory || !elements.scheduleSearchDateRangeDialog) return;
+  state.scheduleSearchDateRangeCalendar = factory({
+    dialog: elements.scheduleSearchDateRangeDialog,
+    form: elements.scheduleSearchDateRangeForm,
+    grid: elements.scheduleSearchDateRangeGrid,
+    title: elements.scheduleSearchDateRangeMonthLabel,
+    startText: elements.scheduleSearchDateRangeStartText,
+    endText: elements.scheduleSearchDateRangeEndText,
+    previousButton: elements.scheduleSearchDateRangePreviousMonth,
+    nextButton: elements.scheduleSearchDateRangeNextMonth,
+    openEndCheckbox: elements.scheduleSearchDateRangeOpenEnd,
+    applyButton: elements.scheduleSearchDateRangeApply,
+    closeButtons: [elements.scheduleSearchDateRangeClose, elements.scheduleSearchDateRangeCancel],
+  });
+  elements.scheduleSearchDateRangeButton?.addEventListener("click", () => {
+    state.scheduleSearchDateRangeCalendar.open({
+      start: elements.scheduleSearchDateFrom?.value || state.scheduleSearchQuery.dateFrom,
+      end: elements.scheduleSearchDateTo?.value || state.scheduleSearchQuery.dateTo,
+      maxEndDays: 730,
+      allowOpenEnd: false,
+      onCommit(start, end) {
+        state.scheduleSearchQuery.dateFrom = start;
+        state.scheduleSearchQuery.dateTo = end;
+        state.scheduleSearchQuery.offset = 0;
+        if (elements.scheduleSearchDateFrom) elements.scheduleSearchDateFrom.value = start;
+        if (elements.scheduleSearchDateTo) elements.scheduleSearchDateTo.value = end;
+        if (elements.scheduleSearchDateRangeText) elements.scheduleSearchDateRangeText.textContent = scheduleSearchRangeLabel();
+      },
+    });
+  });
+}
+
+async function openScheduleSearchResult(index) {
+  const result = state.scheduleSearchData?.results?.[Number(index)];
+  if (!result) return;
+  state.locationId = String(result.locationId || state.locationId);
+  state.departmentId = result.departmentId ? String(result.departmentId) : "";
+  state.weekStart = String(result.weekStart || getMonday(new Date(`${result.shiftDate}T12:00:00`)));
+  rememberOverallContext("planning", state.locationId, state.departmentId);
+  setView("planning");
+  await loadAll({ restoreContext: false });
+  window.setTimeout(() => {
+    const target = [...document.querySelectorAll("[data-shift-id]")].find((button) => (
+      String(button.dataset.shiftId) === String(result.shiftId)
+    ));
+    target?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    target?.focus({ preventScroll: true });
+  }, 0);
 }
 
 function personnelDashboardCatalog() {
@@ -17448,6 +18272,113 @@ function renderPositions() {
   `).join("") : '<div class="empty-options">Keine Positionen angelegt.</div>';
 }
 
+function renderSchedulePdfDesignSettings() {
+  if (!elements.schedulePdfDesignSettingsList) return;
+  const catalog = schedulePdfDesignCatalog();
+  const activeIds = state.schedulePdfDesignSelection.length
+    ? [...state.schedulePdfDesignSelection]
+    : schedulePdfDesignIdsFromSettings();
+  const activeSet = new Set(activeIds);
+  elements.schedulePdfDesignSettingsList.innerHTML = catalog.map((design) => {
+    const active = activeSet.has(design.id);
+    const rank = active ? activeIds.indexOf(design.id) + 1 : 0;
+    const displayName = Object.hasOwn(state.schedulePdfDesignNames, design.id)
+      ? state.schedulePdfDesignNames[design.id]
+      : design.label;
+    const defaultName = design.defaultLabel || design.label;
+    const rankOptions = activeIds.map((_, index) => (
+      `<option value="${index + 1}" ${rank === index + 1 ? "selected" : ""}>Rang ${index + 1}</option>`
+    )).join("");
+    return `<article class="schedule-pdf-design-setting-row" data-schedule-pdf-design-row="${escapeHtml(design.id)}">
+      <label class="schedule-pdf-design-setting-choice">
+        <input type="checkbox" data-schedule-pdf-design-enabled="${escapeHtml(design.id)}" ${active ? "checked" : ""} />
+        <span><strong data-schedule-pdf-design-heading="${escapeHtml(design.id)}">${escapeHtml(displayName || "Designname fehlt")}</strong><small>${escapeHtml(design.description)}</small></span>
+      </label>
+      <div class="schedule-pdf-design-name-control">
+        <label><span>Designname</span><input type="text" minlength="${schedulePdfDesignNameLimits.min}" maxlength="${schedulePdfDesignNameLimits.max}" required value="${escapeHtml(displayName)}" data-schedule-pdf-design-name="${escapeHtml(design.id)}" aria-label="Designname für ${escapeHtml(defaultName)}" /></label>
+        <button type="button" class="schedule-pdf-design-name-reset" data-reset-schedule-pdf-design-name="${escapeHtml(design.id)}" ${displayName === defaultName ? "disabled" : ""}>Standardname</button>
+      </div>
+      <label class="schedule-pdf-design-rank"><span>Reihung</span><select data-schedule-pdf-design-rank="${escapeHtml(design.id)}" ${active ? "" : "disabled"}>${rankOptions || '<option value="">-</option>'}</select></label>
+    </article>`;
+  }).join("");
+
+  if (elements.schedulePdfDesignSettingsHint) {
+    elements.schedulePdfDesignSettingsHint.textContent = activeIds.length === 1
+      ? `${state.schedulePdfDesignNames[activeIds[0]] || catalog.find((design) => design.id === activeIds[0])?.label || activeIds[0]} ist aktiv; der Export startet direkt.`
+      : `${activeIds.length} Designs sind aktiv. Beim Export erscheint die Auswahl in dieser Rangfolge.`;
+  }
+  if (elements.schedulePdfPreviewDesign) {
+    const previous = elements.schedulePdfPreviewDesign.value;
+    elements.schedulePdfPreviewDesign.innerHTML = activeIds.map((id, index) => {
+      const design = catalog.find((entry) => entry.id === id);
+      return `<option value="${escapeHtml(id)}">Rang ${index + 1} · ${escapeHtml(state.schedulePdfDesignNames[id] || design?.label || id)}</option>`;
+    }).join("");
+    elements.schedulePdfPreviewDesign.value = activeIds.includes(previous) ? previous : activeIds[0];
+  }
+}
+
+function updateSchedulePdfDesignName(target) {
+  const input = target.closest("[data-schedule-pdf-design-name]");
+  if (!input) return;
+  const id = String(input.dataset.schedulePdfDesignName || "");
+  state.schedulePdfDesignNames[id] = input.value;
+  const row = input.closest("[data-schedule-pdf-design-row]");
+  const heading = row?.querySelector(`[data-schedule-pdf-design-heading="${CSS.escape(id)}"]`);
+  if (heading) heading.textContent = input.value.trim() || "Designname fehlt";
+  const design = schedulePdfDesignCatalog().find((entry) => entry.id === id);
+  const resetButton = row?.querySelector("[data-reset-schedule-pdf-design-name]");
+  if (resetButton) resetButton.disabled = input.value === (design?.defaultLabel || design?.label || "");
+}
+
+function resetSchedulePdfDesignName(target) {
+  const button = target.closest("[data-reset-schedule-pdf-design-name]");
+  if (!button) return;
+  const id = String(button.dataset.resetSchedulePdfDesignName || "");
+  const design = schedulePdfDesignCatalog().find((entry) => entry.id === id);
+  if (!design) return;
+  state.schedulePdfDesignNames[id] = design.defaultLabel || design.label;
+  renderSchedulePdfDesignSettings();
+}
+
+function updateSchedulePdfDesignSelection(target) {
+  const enabledInput = target.closest("[data-schedule-pdf-design-enabled]");
+  if (enabledInput) {
+    const id = String(enabledInput.dataset.schedulePdfDesignEnabled || "");
+    const activeIds = [...state.schedulePdfDesignSelection];
+    if (enabledInput.checked) {
+      if (!activeIds.includes(id) && activeIds.length >= 5) {
+        enabledInput.checked = false;
+        showToast("Es können höchstens fünf Dienstplan-PDF-Designs gleichzeitig aktiv sein.", true);
+        return;
+      }
+      if (!activeIds.includes(id)) activeIds.push(id);
+    } else {
+      if (activeIds.length <= 1) {
+        enabledInput.checked = true;
+        showToast("Mindestens ein Dienstplan-PDF-Design muss aktiv bleiben.", true);
+        return;
+      }
+      const index = activeIds.indexOf(id);
+      if (index >= 0) activeIds.splice(index, 1);
+    }
+    state.schedulePdfDesignSelection = activeIds;
+    renderSchedulePdfDesignSettings();
+    return;
+  }
+
+  const rankSelect = target.closest("[data-schedule-pdf-design-rank]");
+  if (!rankSelect) return;
+  const id = String(rankSelect.dataset.schedulePdfDesignRank || "");
+  const nextIndex = Number(rankSelect.value) - 1;
+  const activeIds = [...state.schedulePdfDesignSelection];
+  const currentIndex = activeIds.indexOf(id);
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= activeIds.length) return;
+  activeIds.splice(currentIndex, 1);
+  activeIds.splice(nextIndex, 0, id);
+  state.schedulePdfDesignSelection = activeIds;
+  renderSchedulePdfDesignSettings();
+}
+
 function renderSettings() {
   const settings = state.data.settings;
   const vacationSettings = state.vacationData?.settings || settings;
@@ -17463,6 +18394,9 @@ function renderSettings() {
   document.querySelector("#pdfFilenamePrefix").value = settings.pdf_filename_prefix || settings.pdf_title || "Dienstplan";
   document.querySelector("#pdfFilenameIncludeKw").checked = settings.pdf_filename_include_kw !== "0";
   document.querySelector("#pdfFilenameIncludeTimestamp").checked = settings.pdf_filename_include_timestamp === "1";
+  state.schedulePdfDesignSelection = schedulePdfDesignIdsFromSettings(settings);
+  state.schedulePdfDesignNames = Object.fromEntries(schedulePdfDesignCatalog(settings).map((design) => [design.id, design.label]));
+  renderSchedulePdfDesignSettings();
   document.querySelector("#vacationPdfTitleSetting").value = vacationSettings.vacation_pdf_title || "Urlaubsplanung";
   document.querySelector("#vacationPdfFilenamePrefix").value = vacationSettings.vacation_pdf_filename_prefix || vacationSettings.vacation_pdf_title || "Urlaubsplanung";
   document.querySelector("#vacationPdfFilenameIncludePeriod").checked = vacationSettings.vacation_pdf_filename_include_period !== "0";
@@ -19247,7 +20181,11 @@ async function loadUiPreferences() {
   let storedStartDashboardPreferences = preferences?.startDashboardPreferences;
   if (localOnly) {
     try {
-      storedStartDashboardPreferences = JSON.parse(localStorage.getItem(startDashboardPreferencesStorageKey()) || "null");
+      storedStartDashboardPreferences = JSON.parse(
+        localStorage.getItem(startDashboardPreferencesStorageKey())
+          || localStorage.getItem(legacyStartDashboardPreferencesStorageKey())
+          || "null",
+      );
     } catch {}
   }
   state.startDashboardPreferences = normalizeStartDashboardPreferences(storedStartDashboardPreferences);
@@ -21820,6 +22758,31 @@ function renderBirthdayPresentationSettings(result) {
   }
   renderBirthdayPresentationCatalog();
 
+  const developerPreview = state.birthdayPresentationSettings.developerPreview || {};
+  elements.birthdayPresentationDeveloperPreviewSection?.classList.toggle(
+    "hidden",
+    developerPreview.available !== true,
+  );
+  if (developerPreview.available === true) {
+    const catalog = birthdayPresentationCatalog();
+    const selectedId = catalog.some((presentation) => presentation.id === developerPreview.presentationId)
+      ? developerPreview.presentationId : (catalog[0]?.id || "standard");
+    if (elements.birthdayPresentationDeveloperPreviewEnabled) {
+      elements.birthdayPresentationDeveloperPreviewEnabled.checked = developerPreview.enabled === true;
+    }
+    if (elements.birthdayPresentationDeveloperPreviewDesign) {
+      elements.birthdayPresentationDeveloperPreviewDesign.innerHTML = catalog.map((presentation) => (
+        `<option value="${escapeHtml(presentation.id)}" ${presentation.id === selectedId ? "selected" : ""}>${escapeHtml(presentation.label)}</option>`
+      )).join("");
+      elements.birthdayPresentationDeveloperPreviewDesign.disabled = developerPreview.enabled !== true;
+    }
+    if (elements.birthdayPresentationDeveloperPreviewHint) {
+      elements.birthdayPresentationDeveloperPreviewHint.textContent = developerPreview.enabled === true
+        ? `Testmodus ist aktiv: ${catalog.find((presentation) => presentation.id === selectedId)?.label || selectedId}.`
+        : "Testmodus ist deaktiviert; der reguläre Geburtstagszeitraum bleibt maßgeblich.";
+    }
+  }
+
   elements.birthdayPresentationGlobalSection?.classList.toggle("hidden", capabilities.canManageGlobal !== true);
   if (elements.birthdayPresentationEnabled) {
     elements.birthdayPresentationEnabled.checked = state.birthdayPresentationSettings.policy?.enabled === true;
@@ -21927,6 +22890,32 @@ async function saveBirthdayPresentationSettings() {
   } catch (error) {
     showToast(error.message, true);
     await loadBirthdayPresentationSettings().catch(() => {});
+  }
+}
+
+async function saveBirthdayPresentationDeveloperPreview() {
+  if (!state.birthdayPresentationSettings?.developerPreview?.available) return;
+  const enabled = elements.birthdayPresentationDeveloperPreviewEnabled?.checked === true;
+  const presentationId = String(elements.birthdayPresentationDeveloperPreviewDesign?.value || "");
+  if (enabled && !presentationId) {
+    showToast("Bitte ein Geburtstagsdesign für den Testmodus auswählen.", true);
+    return;
+  }
+  elements.saveBirthdayPresentationDeveloperPreviewButton.disabled = true;
+  try {
+    const result = await api("/api/portal/v1/birthday-presentation-settings/developer-preview", {
+      method: "PUT",
+      body: JSON.stringify({ enabled, presentationId: enabled ? presentationId : null }),
+    });
+    renderBirthdayPresentationSettings(result);
+    showToast(enabled
+      ? "Der persönliche Geburtstags-Testmodus ist aktiv. Das Mitarbeiterportal kann jetzt geöffnet werden."
+      : "Der persönliche Geburtstags-Testmodus wurde deaktiviert.");
+  } catch (error) {
+    showToast(error.message, true);
+    await loadBirthdayPresentationSettings().catch(() => {});
+  } finally {
+    elements.saveBirthdayPresentationDeveloperPreviewButton.disabled = false;
   }
 }
 
@@ -29557,6 +30546,7 @@ async function saveSettings(silent = false) {
     const canSavePastWeekPreference = !portalEnabled
       || (permissions.includes("schedule:write") && permissions.includes("settings:write"));
     const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing").checked;
+    const schedulePdfDesignNames = schedulePdfDesignNamesForSave();
     const payload = {
         locationId: state.locationId,
         departmentId: state.departmentId || "",
@@ -29564,6 +30554,8 @@ async function saveSettings(silent = false) {
         pdfFilenamePrefix: document.querySelector("#pdfFilenamePrefix").value,
         pdfFilenameIncludeKw: document.querySelector("#pdfFilenameIncludeKw").checked,
         pdfFilenameIncludeTimestamp: document.querySelector("#pdfFilenameIncludeTimestamp").checked,
+        schedulePdfDesignIds: [...state.schedulePdfDesignSelection],
+        schedulePdfDesignNames,
         vacationPdfTitle: document.querySelector("#vacationPdfTitleSetting").value,
         vacationPdfFilenamePrefix: document.querySelector("#vacationPdfFilenamePrefix").value,
         vacationPdfFilenameIncludePeriod: document.querySelector("#vacationPdfFilenameIncludePeriod").checked,
@@ -29709,7 +30701,8 @@ function updatePdfPreview() {
 async function generateSchedulePdfPreview() {
   const saved = await saveSettings(true);
   if (!saved) return;
-  elements.schedulePdfPreviewFrame.src = `/api/schedule-preview.pdf?week=${state.weekStart}${contextQuery(true)}&t=${Date.now()}`;
+  const designId = elements.schedulePdfPreviewDesign?.value || state.schedulePdfDesignSelection[0] || "timeline";
+  elements.schedulePdfPreviewFrame.src = `/api/schedule-preview.pdf?week=${state.weekStart}${contextQuery(true)}&design=${encodeURIComponent(designId)}&t=${Date.now()}`;
   showToast("Dienstplan-PDF-Vorschau wurde erzeugt.");
 }
 
@@ -30256,12 +31249,44 @@ elements.saveAmuSettingsButton?.addEventListener("click", saveAmuSettings);
 elements.saveAmuAccessPolicyButton?.addEventListener("click", saveAmuAccessPolicy);
 elements.saveGreetingSettingsButton?.addEventListener("click", saveGreetingSettings);
 elements.saveBirthdayPresentationSettingsButton?.addEventListener("click", saveBirthdayPresentationSettings);
+elements.saveBirthdayPresentationDeveloperPreviewButton?.addEventListener("click", saveBirthdayPresentationDeveloperPreview);
+elements.birthdayPresentationDeveloperPreviewEnabled?.addEventListener("change", () => {
+  const enabled = elements.birthdayPresentationDeveloperPreviewEnabled.checked;
+  elements.birthdayPresentationDeveloperPreviewDesign.disabled = !enabled;
+  elements.birthdayPresentationDeveloperPreviewHint.textContent = enabled
+    ? "Nach dem Anwenden erscheint das gewählte Design für Account 252 sofort im Mitarbeiterportal."
+    : "Nach dem Anwenden gilt wieder ausschließlich der reguläre Geburtstagszeitraum.";
+});
 elements.birthdayPresentationEmployeeSearch?.addEventListener("input", filterBirthdayPresentationEmployees);
 elements.birthdayPresentationLocationFilter?.addEventListener("change", filterBirthdayPresentationEmployees);
 elements.birthdayPresentationSettingsCard?.addEventListener("change", (event) => {
   if (event.target.matches("#birthdayPresentationEnabled, [data-birthday-presentation-employee], [data-birthday-presentation-delegate]")) {
     updateBirthdayPresentationSettingsState();
   }
+});
+elements.schedulePdfDesignSettingsList?.addEventListener("change", (event) => {
+  updateSchedulePdfDesignSelection(event.target);
+});
+elements.schedulePdfDesignSettingsList?.addEventListener("input", (event) => {
+  updateSchedulePdfDesignName(event.target);
+});
+elements.schedulePdfDesignSettingsList?.addEventListener("click", (event) => {
+  resetSchedulePdfDesignName(event.target);
+});
+elements.pdfButton?.addEventListener("click", (event) => {
+  if (schedulePdfDesignIdsFromSettings().length <= 1) return;
+  event.preventDefault();
+  const opening = elements.schedulePdfDesignMenu?.classList.contains("hidden") !== false;
+  elements.schedulePdfDesignMenu?.classList.toggle("hidden", !opening);
+  elements.pdfButton.setAttribute("aria-expanded", String(opening));
+  if (opening) elements.schedulePdfDesignMenu?.querySelector("[role='menuitem']")?.focus();
+});
+elements.schedulePdfDesignMenu?.addEventListener("click", () => closeSchedulePdfDesignMenu());
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("#schedulePdfExport")) closeSchedulePdfDesignMenu();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeSchedulePdfDesignMenu();
 });
 elements.rightsEmployeeSearch?.addEventListener("input", renderRightsManagement);
 elements.rightsUserList?.addEventListener("click", (event) => {
@@ -30325,6 +31350,14 @@ elements.branchOrdersManagementWorkspace?.addEventListener("input", (event) => {
 elements.branchOrdersManagementWorkspace?.addEventListener("change", (event) => {
   const field = event.target.closest?.("[data-branch-orders-management-field]");
   if (field) updateBranchOrdersManagementDraftFromField(field);
+});
+elements.branchOrdersManagementWorkspace?.addEventListener("keydown", (event) => {
+  const field = event.target.closest?.("[data-branch-orders-management-new-item-title]");
+  if (!field || event.key !== "Enter") return;
+  event.preventDefault();
+  elements.branchOrdersManagementWorkspace?.querySelector(
+    '[data-branch-orders-management-action="add-catalog-item"]',
+  )?.click();
 });
 elements.branchOrdersManagementWorkspace?.addEventListener("click", handleBranchOrdersManagementAction);
 elements.branchOrdersManagementHistory?.addEventListener("click", (event) => {
@@ -31130,6 +32163,11 @@ elements.startDashboardBrandButton?.addEventListener("click", () => {
   closeMobileNavigation({ restoreFocus: false });
 });
 elements.startDashboardGrid?.addEventListener("click", (event) => {
+  const cardButton = event.target.closest("[data-start-dashboard-card-view]");
+  if (cardButton) {
+    navigateFromStartDashboardCard(cardButton).catch((error) => showToast(error.message, true));
+    return;
+  }
   const button = event.target.closest("[data-start-dashboard-view]");
   if (!button) return;
   if (button.dataset.startDashboardRoute === "dashboard"
@@ -31144,16 +32182,36 @@ elements.startDashboardCustomizeButton?.addEventListener("click", () => {
 });
 elements.startDashboardCustomizerClose?.addEventListener("click", () => closeStartDashboardCustomizer());
 elements.startDashboardCustomizer?.addEventListener("change", (event) => {
-  const checkbox = event.target.closest("[data-start-dashboard-widget-choice]");
+  const checkbox = event.target.closest("[data-start-dashboard-card-choice]");
   if (!checkbox) return;
   const preferences = normalizeStartDashboardPreferences(
     state.startDashboardDraftPreferences || state.startDashboardPreferences,
   );
   const hidden = new Set(preferences.hidden);
-  if (checkbox.checked) hidden.delete(checkbox.dataset.startDashboardWidgetChoice);
-  else hidden.add(checkbox.dataset.startDashboardWidgetChoice);
+  if (checkbox.checked) hidden.delete(checkbox.dataset.startDashboardCardChoice);
+  else hidden.add(checkbox.dataset.startDashboardCardChoice);
   preferences.hidden = [...hidden];
   state.startDashboardDraftPreferences = preferences;
+});
+elements.startDashboardCustomizerGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-start-dashboard-card-move]");
+  if (!button || button.disabled) return;
+  const preferences = normalizeStartDashboardPreferences(
+    state.startDashboardDraftPreferences || state.startDashboardPreferences,
+  );
+  const cardId = button.dataset.startDashboardCardId;
+  const cardGroup = START_DASHBOARD_CARDS.find((card) => card.id === cardId)?.group;
+  const groupOrder = preferences.order.filter((id) => START_DASHBOARD_CARDS.find((card) => card.id === id)?.group === cardGroup
+    && startDashboardCardAccessible(id));
+  const currentGroupIndex = groupOrder.indexOf(cardId);
+  const targetGroupIndex = currentGroupIndex + (button.dataset.startDashboardCardMove === "up" ? -1 : 1);
+  const targetId = groupOrder[targetGroupIndex];
+  if (!targetId) return;
+  const currentIndex = preferences.order.indexOf(cardId);
+  const targetIndex = preferences.order.indexOf(targetId);
+  [preferences.order[currentIndex], preferences.order[targetIndex]] = [preferences.order[targetIndex], preferences.order[currentIndex]];
+  state.startDashboardDraftPreferences = preferences;
+  renderStartDashboardCustomizer();
 });
 elements.startDashboardResetButton?.addEventListener("click", () => {
   const current = normalizeStartDashboardPreferences(state.startDashboardPreferences);
@@ -31175,25 +32233,82 @@ elements.startDashboardSaveButton?.addEventListener("click", async () => {
   if (saved) closeStartDashboardCustomizer();
 });
 elements.startDashboardLocation?.addEventListener("change", async () => {
-  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
-  preferences.locationId = elements.startDashboardLocation.value;
-  preferences.departmentId = "";
-  if (await persistStartDashboardPreferences(preferences, { silent: true })) loadStartDashboardSchedule();
+  await selectStartDashboardLocation(elements.startDashboardLocation.value);
 });
+elements.startDashboardPreviousLocation?.addEventListener("click", () => cycleStartDashboardLocation(-1));
+elements.startDashboardNextLocation?.addEventListener("click", () => cycleStartDashboardLocation(1));
 elements.startDashboardDepartment?.addEventListener("change", async () => {
+  if (state.startDashboardScopeSaving) return;
+  state.startDashboardScopeSaving = true;
+  state.startDashboardScheduleRequestId += 1;
+  state.startDashboardScheduleLoading = true;
+  renderStartDashboard();
   const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
   preferences.locationId = elements.startDashboardLocation?.value || preferences.locationId;
   preferences.departmentId = elements.startDashboardDepartment.value;
-  if (await persistStartDashboardPreferences(preferences, { silent: true })) loadStartDashboardSchedule();
+  try {
+    await persistStartDashboardPreferences(preferences, { silent: true });
+    loadStartDashboardSchedule();
+  } finally {
+    state.startDashboardScopeSaving = false;
+    renderStartDashboardScopeControls();
+  }
 });
 elements.startDashboardSalesLocation?.addEventListener("change", async () => {
-  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
-  preferences.salesLocationId = elements.startDashboardSalesLocation.value;
-  if (await persistStartDashboardPreferences(preferences, { silent: true })) loadStartDashboardSales();
+  await selectStartDashboardSalesLocation(elements.startDashboardSalesLocation.value);
 });
+elements.startDashboardPreviousSalesLocation?.addEventListener("click", () => cycleStartDashboardSalesLocation(-1));
+elements.startDashboardNextSalesLocation?.addEventListener("click", () => cycleStartDashboardSalesLocation(1));
 elements.filialDashboardGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filial-dashboard-view]");
   if (button) setView(button.dataset.filialDashboardView);
+});
+elements.scheduleSearchPanel?.addEventListener("toggle", () => {
+  if (elements.scheduleSearchPanel.open && !state.scheduleSearchLoaded && !state.scheduleSearchLoading) {
+    loadScheduleSearch({ query: { ...state.scheduleSearchQuery, offset: 0 } });
+  }
+});
+elements.scheduleSearchForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  loadScheduleSearch({ query: submittedScheduleSearchQuery({ offset: 0 }) });
+});
+elements.scheduleSearchReset?.addEventListener("click", () => {
+  state.scheduleSearchQuery = defaultScheduleSearchQuery();
+  state.scheduleSearchData = null;
+  state.scheduleSearchLoaded = false;
+  state.scheduleSearchError = "";
+  renderScheduleSearch();
+  loadScheduleSearch({ query: { ...state.scheduleSearchQuery } });
+});
+elements.scheduleSearchLocation?.addEventListener("change", () => {
+  state.scheduleSearchQuery = submittedScheduleSearchQuery({ offset: 0 });
+  state.scheduleSearchQuery.departmentId = "";
+  renderScheduleSearchFilters();
+});
+elements.scheduleSearchPanel?.addEventListener("click", (event) => {
+  const sortButton = event.target.closest("[data-schedule-search-sort]");
+  if (sortButton && SCHEDULE_SEARCH_SORT_KEYS.has(sortButton.dataset.scheduleSearchSort)) {
+    const key = sortButton.dataset.scheduleSearchSort;
+    const query = submittedScheduleSearchQuery({ offset: 0 });
+    query.direction = query.sort === key && query.direction === "asc" ? "desc" : "asc";
+    query.sort = key;
+    loadScheduleSearch({ query });
+    return;
+  }
+  const resultButton = event.target.closest("[data-schedule-search-result]");
+  if (resultButton) openScheduleSearchResult(resultButton.dataset.scheduleSearchResult);
+});
+elements.scheduleSearchPrevious?.addEventListener("click", () => {
+  const query = submittedScheduleSearchQuery({
+    offset: Math.max(0, Number(state.scheduleSearchQuery.offset || 0) - Number(state.scheduleSearchQuery.limit || 50)),
+  });
+  loadScheduleSearch({ query });
+});
+elements.scheduleSearchNext?.addEventListener("click", () => {
+  const query = submittedScheduleSearchQuery({
+    offset: Number(state.scheduleSearchQuery.offset || 0) + Number(state.scheduleSearchQuery.limit || 50),
+  });
+  loadScheduleSearch({ query });
 });
 elements.salesDashboardGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-sales-dashboard-view]");
@@ -32088,6 +33203,7 @@ elements.vacationCalendar.addEventListener("click", (event) => {
 
 initializeRequestBlackoutDateRangeCalendar();
 initializeStaffAssignmentRequestDateRangeCalendar();
+initializeScheduleSearchDateRangeCalendar();
 bootstrapApplication();
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked")) loadSystemInfo();
