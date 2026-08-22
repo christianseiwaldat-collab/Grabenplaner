@@ -2837,6 +2837,55 @@ async function confirmBranchOrderDelivery(orderId) {
   }
 }
 
+const branchOrdersManagementDisclosureAttributes = Object.freeze([
+  "data-branch-orders-management-section",
+  "data-branch-orders-management-recipient",
+  "data-branch-orders-management-unit",
+  "data-branch-orders-management-catalog-item",
+  "data-branch-orders-management-group",
+]);
+
+function captureBranchOrdersManagementDisclosureState() {
+  const workspace = elements.branchOrdersManagementWorkspace;
+  const opened = new Map();
+  if (!workspace) return opened;
+  for (const attribute of branchOrdersManagementDisclosureAttributes) {
+    opened.set(attribute, new Set(
+      [...workspace.querySelectorAll(`details[${attribute}][open]`)]
+        .map((details) => details.getAttribute(attribute))
+        .filter(Boolean),
+    ));
+  }
+  return opened;
+}
+
+function restoreBranchOrdersManagementDisclosureState(opened) {
+  const workspace = elements.branchOrdersManagementWorkspace;
+  if (!workspace || !(opened instanceof Map)) return;
+  for (const [attribute, values] of opened.entries()) {
+    for (const value of values) {
+      const details = workspace.querySelector(`details[${attribute}="${CSS.escape(value)}"]`);
+      if (details) details.open = true;
+    }
+  }
+}
+
+function revealBranchOrdersManagementDisclosure(sectionId, attribute, id, fieldSelector) {
+  const workspace = elements.branchOrdersManagementWorkspace;
+  if (!workspace) return;
+  const section = workspace.querySelector(
+    `details[data-branch-orders-management-section="${CSS.escape(sectionId)}"]`,
+  );
+  if (section) section.open = true;
+  const details = workspace.querySelector(`details[${attribute}="${CSS.escape(id)}"]`);
+  if (!details) return;
+  details.open = true;
+  const field = details.querySelector(fieldSelector);
+  if (!field) return;
+  field.focus();
+  if (typeof field.select === "function") field.select();
+}
+
 function renderBranchOrdersManagement() {
   if (!elements.branchOrdersView) return;
   const locations = branchOrdersManagementLocations();
@@ -2867,6 +2916,7 @@ function renderBranchOrdersManagement() {
     if (saveButton) saveButton.disabled = saveDisabled;
   }
   if (!elements.branchOrdersManagementWorkspace) return;
+  const openDisclosures = captureBranchOrdersManagementDisclosureState();
   if (!selectedLocationId) {
     elements.branchOrdersManagementWorkspace.innerHTML = '<p class="branch-orders-management-empty error">Für die Bestellverwaltung ist kein Standort freigegeben.</p>';
     renderBranchOrdersManagementHistory();
@@ -2931,10 +2981,11 @@ function renderBranchOrdersManagement() {
       </details>`;
   }).join("") : '<p class="settings-note">Noch keine Anzeigegruppe angelegt.</p>';
   elements.branchOrdersManagementWorkspace.innerHTML = `
-    <details class="branch-orders-management-section"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</div></details>
-    <details class="branch-orders-management-section"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">+ Einheit</button></div><div class="branch-orders-management-items">${unitRows}</div></div></details>
-    <details class="branch-orders-management-section"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">+ Position</button></div><div class="branch-orders-management-catalog-list">${itemRows}</div></div></details>
-    <details class="branch-orders-management-section"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Bestellansicht</span><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern nur die Bestellansicht; die Übergabe wird pro Position zusammengefasst.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Anzeigegruppe</button></div>${groupRows}</div></details>`;
+    <details class="branch-orders-management-section" data-branch-orders-management-section="recipients"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</div></details>
+    <details class="branch-orders-management-section" data-branch-orders-management-section="units"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">+ Einheit</button></div><div class="branch-orders-management-items">${unitRows}</div></div></details>
+    <details class="branch-orders-management-section" data-branch-orders-management-section="catalog"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">+ Position</button></div><div class="branch-orders-management-catalog-list">${itemRows}</div></div></details>
+    <details class="branch-orders-management-section" data-branch-orders-management-section="groups"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Bestellansicht</span><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern nur die Bestellansicht; die Übergabe wird pro Position zusammengefasst.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Anzeigegruppe</button></div>${groupRows}</div></details>`;
+  restoreBranchOrdersManagementDisclosureState(openDisclosures);
   renderBranchOrdersManagementHistory();
 }
 
@@ -3065,20 +3116,35 @@ function handleBranchOrdersManagementAction(event) {
   if (!draft) return;
   const action = button.dataset.branchOrdersManagementAction;
   const id = button.dataset.branchOrdersManagementId || "";
+  let revealAfterRender = null;
   if (action === "add-recipient") {
     const defaults = state.branchOrdersManagement?.configuration?.templateDefaults || {};
+    const recipientId = branchOrdersManagementClientId("recipient");
     draft.recipients.push({
-      id: branchOrdersManagementClientId("recipient"),
+      id: recipientId,
       email: "",
       replyToEmail: "",
       subjectTemplate: defaults.subjectTemplate || "Filialbestellung {{locationName}} · KW {{calendarWeek}}",
       bodyTemplate: defaults.bodyTemplate || "{{items}}",
     });
+    revealAfterRender = () => revealBranchOrdersManagementDisclosure(
+      "recipients",
+      "data-branch-orders-management-recipient",
+      recipientId,
+      '[data-branch-orders-management-field="recipient-email"]',
+    );
   } else if (action === "remove-recipient") {
     draft.recipients = draft.recipients.filter((recipient) => recipient.id !== id);
     draft.items.forEach((item) => { if (item.recipientId === id) item.recipientId = ""; });
   } else if (action === "add-unit") {
-    draft.units.push({ id: branchOrdersManagementClientId("unit"), title: "Neue Einheit" });
+    const unitId = branchOrdersManagementClientId("unit");
+    draft.units.push({ id: unitId, title: "Neue Einheit" });
+    revealAfterRender = () => revealBranchOrdersManagementDisclosure(
+      "units",
+      "data-branch-orders-management-unit",
+      unitId,
+      '[data-branch-orders-management-field="unit-title"]',
+    );
   } else if (action === "remove-unit") {
     if (draft.items.some((item) => item.unitId === id)) {
       setBranchOrdersManagementMessage("Diese Einheit wird noch von einer Position verwendet.", true);
@@ -3093,22 +3159,36 @@ function handleBranchOrdersManagementAction(event) {
       setBranchOrdersManagementMessage("Bitte zuerst mindestens eine Einheit anlegen.", true);
       return;
     }
+    const itemId = branchOrdersManagementClientId("item");
     draft.items.push({
-      id: branchOrdersManagementClientId("item"),
+      id: itemId,
       title: "Neue Position",
       unitId,
       recipientId: draft.recipients[0]?.id || "",
     });
+    revealAfterRender = () => revealBranchOrdersManagementDisclosure(
+      "catalog",
+      "data-branch-orders-management-catalog-item",
+      itemId,
+      '[data-branch-orders-management-field="catalog-item-title"]',
+    );
   } else if (action === "remove-catalog-item") {
     draft.items = draft.items.filter((item) => item.id !== id);
     draft.groups.forEach((group) => { group.itemIds = group.itemIds.filter((itemId) => itemId !== id); });
   } else if (action === "add-group") {
+    const groupId = branchOrdersManagementClientId("group");
     draft.groups.push({
-      id: branchOrdersManagementClientId("group"),
+      id: groupId,
       title: "Neue Anzeigegruppe",
       hint: "",
       itemIds: [],
     });
+    revealAfterRender = () => revealBranchOrdersManagementDisclosure(
+      "groups",
+      "data-branch-orders-management-group",
+      groupId,
+      '[data-branch-orders-management-field="group-title"]',
+    );
   } else if (action === "remove-group") {
     draft.groups = draft.groups.filter((group) => group.id !== id);
   } else if (action === "move-group") {
@@ -3135,6 +3215,7 @@ function handleBranchOrdersManagementAction(event) {
     }
   }
   renderBranchOrdersManagement();
+  if (revealAfterRender) revealAfterRender();
 }
 
 const branchLoanOverviewColumnCatalog = Object.freeze([
