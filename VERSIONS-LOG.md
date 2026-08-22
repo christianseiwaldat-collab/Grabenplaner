@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.11 Beta · Stabile Filialbestellungsverwaltung
+
+- Die Verwaltung zentraler Bestellpositionen behält beim Neurendern geöffnete Hauptbereiche und Positioneneditoren bei.
+- „+ Position“ öffnet die neu angelegte Position unmittelbar und fokussiert das Titelfeld. Die entsprechenden Anlageaktionen für E-Mail-Ziele, Maßeinheiten und Anzeigegruppen verhalten sich konsistent.
+- Regressionstests sichern den Offen-Zustand sowie die gezielte Navigation zum neu angelegten Editor ab.
+
 ## v0.92.10 Beta · Standortübergreifende Einsatzanfragen und Geburtstagsportal
 
 - Berechtigte Leitungen sehen für aktuelle und nächste Woche die notwendigen Planungsdaten fremder Filialen rein lesend und ohne fremde Wochenstunden, Arbeitsregelbewertungen oder vertrauliche Planungsdetails.
