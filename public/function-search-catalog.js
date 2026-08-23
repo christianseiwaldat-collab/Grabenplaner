@@ -559,7 +559,7 @@
       ["Dashboards", "Filialübersicht"],
       "Öffnet das berechtigte Dashboard zur aktuellen Situation der Filialen.",
       ["dashboard", "filialstatus", "standortübersicht", "abwesenheiten", "filialkarten", "heute", "location dashboard"],
-      ["rightsDashboardNavButton", "rightsLocationsDashboardTab"],
+      ["startDashboardControlCenterButton", "rightsLocationsDashboardTab"],
       { view: "rightsDashboard", dashboardMode: "locations", focusId: "rightsDashboardLocationsPanel" },
     ),
     entry(
@@ -568,7 +568,7 @@
       ["Dashboards", "Rechteübersicht"],
       "Öffnet die berechtigte Lesesicht auf Rollen, Bereiche und wirksame Rechte.",
       ["rechte dashboard", "berechtigungen", "rollen", "zugriff", "rechteherkunft", "permissions", "rechteübersicht"],
-      ["rightsDashboardNavButton", "rightsPermissionsDashboardTab"],
+      ["startDashboardControlCenterButton", "rightsPermissionsDashboardTab"],
       { view: "rightsDashboard", dashboardMode: "rights", focusId: "rightsDashboardRightsPanel" },
     ),
     entry(
@@ -577,7 +577,7 @@
       ["Dashboards", "Personal-Regelwerk"],
       "Öffnet die bereichsbezogene Lesesicht und Planvorschau des Personal-Regelwerks.",
       ["regel dashboard", "arbeitszeitregeln", "planvorschau", "regelprofile", "geltung", "personalregeln", "simulation"],
-      ["rightsDashboardNavButton", "personnelRulesDashboardTab"],
+      ["startDashboardControlCenterButton", "personnelRulesDashboardTab"],
       { view: "rightsDashboard", dashboardMode: "personnelRules", focusId: "personnelRulesDashboardPanel" },
     ),
     entry(
@@ -586,7 +586,7 @@
       ["Dashboards", "Abläufe & Prozesse"],
       "Öffnet die berechtigte Prozessbibliothek und ihre unverändernde Simulation.",
       ["ablauf", "prozess", "prozessbibliothek", "zuständigkeit", "workflow", "simulation", "betriebsablauf"],
-      ["rightsDashboardNavButton", "rightsProcessesDashboardTab"],
+      ["startDashboardControlCenterButton", "rightsProcessesDashboardTab"],
       { view: "rightsDashboard", dashboardMode: "processes", focusId: "rightsDashboardProcessesPanel" },
     ),
     entry(
@@ -595,7 +595,7 @@
       ["Dashboards", "System-Center"],
       "Öffnet die berechtigte technische Systemübersicht.",
       ["systemcenter", "systemstatus", "server", "diagnose", "technik", "betrieb", "health"],
-      ["rightsDashboardNavButton", "systemCenterDashboardTab"],
+      ["startDashboardControlCenterButton", "systemCenterDashboardTab"],
       { view: "rightsDashboard", dashboardMode: "systemCenter", focusId: "systemCenterPanel" },
     ),
 

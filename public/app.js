@@ -147,7 +147,7 @@ const state = {
   locationDashboard: null,
   locationDashboardFilter: "all",
   locationDashboardDraggingId: "",
-  startDashboardPreferences: { version: 2, order: ["schedule", "vacation", "loans", "branchOrders", "personnel", "sales"], hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
+  startDashboardPreferences: { version: 3, order: ["schedule", "vacation", "loans", "branchOrders", "personnel", "sales"], hidden: [], hiddenWidgets: [], groupSizes: { branch: "standard", personnel: "standard", sales: "standard" }, locationId: "", departmentId: "", salesLocationId: "" },
   startDashboardDraftPreferences: null,
   startDashboardScopeSaving: false,
   startDashboardSchedule: null,
@@ -532,7 +532,7 @@ const schedulePdfDesignNameLimits = Object.freeze({ min: 3, max: 60 });
 
 const elements = Object.fromEntries(
   [
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -1950,12 +1950,27 @@ function applyRoleVisibility() {
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
   const updateAccess = !lanActive || permissions.includes("update:write");
   const personnelRulesDashboardAccess = canReadPersonnelRulesDashboard();
-  elements.rightsDashboardNavButton?.classList.toggle("hidden", !(rightsAccess || personnelRulesDashboardAccess || systemCenterAccess));
   document.querySelectorAll('[data-dashboard-capability="rights"]').forEach((button) => button.classList.toggle("hidden", !rightsAccess));
   document.querySelectorAll('[data-dashboard-capability="workRules"]').forEach((button) => button.classList.toggle("hidden", !personnelRulesDashboardAccess));
   document.querySelectorAll('[data-dashboard-capability="system"]').forEach((button) => button.classList.toggle("hidden", !systemCenterAccess));
-  if (!accessibleDashboardModes().includes(state.rightsDashboardMode)) {
-    state.rightsDashboardMode = accessibleDashboardModes()[0] || "systemCenter";
+  const dashboardModes = accessibleDashboardModes();
+  if (!dashboardModes.includes(state.rightsDashboardMode)) {
+    state.rightsDashboardMode = dashboardModes[0] || "systemCenter";
+  }
+  const startDashboardMode = dashboardModes.includes("systemCenter") ? "systemCenter" : dashboardModes[0] || "";
+  elements.startDashboardControlCenterButton?.classList.toggle("hidden", !startDashboardMode);
+  if (elements.startDashboardControlCenterButton) {
+    elements.startDashboardControlCenterButton.dataset.startDashboardMode = startDashboardMode;
+  }
+  if (elements.startDashboardControlCenterTitle) {
+    elements.startDashboardControlCenterTitle.textContent = startDashboardMode === "systemCenter"
+      ? "System-Center"
+      : "Steuerungscenter";
+  }
+  if (elements.startDashboardControlCenterDescription) {
+    elements.startDashboardControlCenterDescription.textContent = startDashboardMode === "systemCenter"
+      ? "Technischen Zustand, Sicherungen und Wiederherstellbarkeit prüfen."
+      : "Berechtigte Filial-, Rechte-, Regel- und Prozessübersichten öffnen.";
   }
   const anySettingsAccess = settingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
     || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
@@ -3080,12 +3095,12 @@ function renderBranchOrdersManagement() {
       <details class="branch-orders-management-group" data-branch-orders-management-group="${escapeHtml(group.id)}">
         <summary><div><span class="eyebrow">Anzeigegruppe</span><h2>${escapeHtml(group.title || "Neue Anzeigegruppe")}</h2></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
         <div class="branch-orders-management-disclosure-body">
-        <div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="-1" ${groupIndex ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="1" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Gruppe entfernen</button></div>
-        <div class="branch-orders-management-fields two-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="group-title" value="${escapeHtml(group.title)}" maxlength="120" /></label><label class="field"><span>Hinweis im Bestellformular</span><input data-branch-orders-management-field="group-hint" value="${escapeHtml(group.hint)}" maxlength="400" /></label></div>
-        <div class="branch-orders-management-items">${memberships.length ? memberships.map((item, index) => `
-          <div class="branch-orders-management-item"><strong>${escapeHtml(item.title || "Neue Position")}</strong><span>${escapeHtml(draft.units.find((unit) => unit.id === item.unitId)?.title || "")}</span><div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="1" ${index < memberships.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}">Entfernen</button></div></div>
-        `).join("") : '<p class="settings-note">Noch keine Position zugeordnet.</p>'}</div>
-        ${available.length ? `<div class="branch-orders-management-group-add"><select data-branch-orders-management-group-item-select="${escapeHtml(group.id)}"><option value="">Position zuordnen</option>${available.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || "Neue Position")}</option>`).join("")}</select><button class="text-button" type="button" data-branch-orders-management-action="add-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}">+ Zuordnen</button></div>` : ""}
+        <div class="branch-orders-management-group-toolbar"><span>Gruppe ${groupIndex + 1} von ${draft.groups.length}</span><div class="branch-orders-management-table-actions"><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="-1" aria-label="Anzeigegruppe nach oben verschieben" ${groupIndex ? "" : "disabled"}>↑</button><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="1" aria-label="Anzeigegruppe nach unten verschieben" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="branch-orders-management-table-action danger" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Gruppe löschen</button></div></div>
+        <div class="branch-orders-management-fields two-columns branch-orders-management-group-fields"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="group-title" value="${escapeHtml(group.title)}" maxlength="120" /></label><label class="field"><span>Hinweis im Bestellformular</span><input data-branch-orders-management-field="group-hint" value="${escapeHtml(group.hint)}" maxlength="400" /></label></div>
+        <div class="branch-orders-management-group-table-wrap"><table class="branch-orders-management-group-table"><thead><tr><th>Position</th><th>Bezeichnung</th><th>Einheit</th><th><span class="visually-hidden">Aktionen</span></th></tr></thead><tbody>${memberships.length ? memberships.map((item, index) => `
+          <tr><td>${index + 1}</td><td><strong>${escapeHtml(item.title || "Neue Position")}</strong></td><td>${escapeHtml(draft.units.find((unit) => unit.id === item.unitId)?.title || "–")}</td><td><div class="branch-orders-management-table-actions"><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="-1" aria-label="${escapeHtmlAttribute(`${item.title || `Position ${index + 1}`} nach oben verschieben`)}" ${index ? "" : "disabled"}>↑</button><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="1" aria-label="${escapeHtmlAttribute(`${item.title || `Position ${index + 1}`} nach unten verschieben`)}" ${index < memberships.length - 1 ? "" : "disabled"}>↓</button><button class="branch-orders-management-table-action danger" type="button" data-branch-orders-management-action="remove-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}">Entfernen</button></div></td></tr>
+        `).join("") : '<tr><td colspan="4" class="branch-orders-management-catalog-empty">Noch keine Position zugeordnet.</td></tr>'}</tbody></table></div>
+        ${available.length ? `<div class="branch-orders-management-group-add"><select aria-label="Position zur Anzeigegruppe hinzufügen" data-branch-orders-management-group-item-select="${escapeHtml(group.id)}"><option value="">Position zuordnen</option>${available.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || "Neue Position")}</option>`).join("")}</select><button class="branch-orders-management-table-action" type="button" data-branch-orders-management-action="add-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}">Zuordnen</button></div>` : ""}
         </div>
       </details>`;
   }).join("") : '<p class="settings-note">Noch keine Anzeigegruppe angelegt.</p>';
@@ -16748,23 +16763,45 @@ const START_DASHBOARD_WIDGET_IDS = Object.freeze([
   "salesTopGroups",
 ]);
 const START_DASHBOARD_WIDGET_ID_SET = new Set(START_DASHBOARD_WIDGET_IDS);
+const START_DASHBOARD_WIDGETS = Object.freeze([
+  { id: "branchOnDuty", cardId: "schedule", label: "Jetzt im Dienst" },
+  { id: "branchAbsences", cardId: "vacation", label: "Heute abwesend" },
+  { id: "personnelTeam", cardId: "personnel", label: "Teamübersicht" },
+  { id: "personnelRequests", cardId: "personnel", label: "Offene Anträge" },
+  { id: "salesKpis", cardId: "sales", label: "Aktuelle Kennzahlen" },
+  { id: "salesTopGroups", cardId: "sales", label: "Stärkste Warengruppen" },
+]);
+const START_DASHBOARD_GROUPS = Object.freeze([
+  { id: "branch", label: "Filialverwaltung", cardIds: ["schedule", "vacation", "loans", "branchOrders"] },
+  { id: "personnel", label: "Personalverwaltung", cardIds: ["personnel"] },
+  { id: "sales", label: "Verkaufsverwaltung", cardIds: ["sales"] },
+]);
+const START_DASHBOARD_GROUP_IDS = START_DASHBOARD_GROUPS.map((group) => group.id);
+const START_DASHBOARD_GROUP_SIZE_OPTIONS = Object.freeze([
+  { id: "compact", label: "Kompakt · 1/4 Breite" },
+  { id: "standard", label: "Standard · 1/3 Breite" },
+  { id: "wide", label: "Breit · 2/3 Breite" },
+  { id: "full", label: "Groß · volle Breite" },
+]);
+const START_DASHBOARD_GROUP_SIZE_ID_SET = new Set(START_DASHBOARD_GROUP_SIZE_OPTIONS.map((option) => option.id));
 const START_DASHBOARD_CARDS = Object.freeze([
-  { id: "schedule", label: "Dienstplanung", group: "Filialverwaltung" },
-  { id: "vacation", label: "Urlaubsplanung", group: "Filialverwaltung" },
-  { id: "loans", label: "Leihverwaltung", group: "Filialverwaltung" },
-  { id: "branchOrders", label: "Filialbestellungen", group: "Filialverwaltung" },
-  { id: "personnel", label: "Personal", group: "Personalverwaltung" },
-  { id: "sales", label: "Verkaufsverwaltung", group: "Verkaufsverwaltung" },
+  { id: "schedule", label: "Dienstplanung", groupId: "branch" },
+  { id: "vacation", label: "Urlaubsplanung", groupId: "branch" },
+  { id: "loans", label: "Leihverwaltung", groupId: "branch" },
+  { id: "branchOrders", label: "Filialbestellungen", groupId: "branch" },
+  { id: "personnel", label: "Personal", groupId: "personnel" },
+  { id: "sales", label: "Verkaufsverwaltung", groupId: "sales" },
 ]);
 const START_DASHBOARD_CARD_IDS = START_DASHBOARD_CARDS.map((card) => card.id);
 const START_DASHBOARD_CARD_ID_SET = new Set(START_DASHBOARD_CARD_IDS);
 
 function defaultStartDashboardPreferences() {
   return {
-    version: 2,
+    version: 3,
     order: [...START_DASHBOARD_CARD_IDS],
     hidden: [],
     hiddenWidgets: [],
+    groupSizes: Object.fromEntries(START_DASHBOARD_GROUP_IDS.map((id) => [id, "standard"])),
     locationId: "",
     departmentId: "",
     salesLocationId: "",
@@ -16773,22 +16810,32 @@ function defaultStartDashboardPreferences() {
 
 function normalizeStartDashboardPreferences(value) {
   const fallback = defaultStartDashboardPreferences();
-  if (!value || typeof value !== "object" || Array.isArray(value) || ![1, 2].includes(Number(value.version))) {
+  const version = Number(value?.version);
+  if (!value || typeof value !== "object" || Array.isArray(value) || ![1, 2, 3].includes(version)) {
     return fallback;
   }
-  const submittedOrder = Number(value.version) === 2 && Array.isArray(value.order)
+  const submittedOrder = version >= 2 && Array.isArray(value.order)
     ? [...new Set(value.order.map(String))].filter((id) => START_DASHBOARD_CARD_ID_SET.has(id))
     : [];
-  const legacyHidden = Number(value.version) === 1 ? value.hidden : value.hiddenWidgets;
+  const legacyHidden = version === 1 ? value.hidden : value.hiddenWidgets;
+  const submittedGroupSizes = version === 3 && value.groupSizes && typeof value.groupSizes === "object" && !Array.isArray(value.groupSizes)
+    ? value.groupSizes
+    : {};
   return {
-    version: 2,
+    version: 3,
     order: [...submittedOrder, ...START_DASHBOARD_CARD_IDS.filter((id) => !submittedOrder.includes(id))],
-    hidden: Number(value.version) === 2 && Array.isArray(value.hidden)
+    hidden: version >= 2 && Array.isArray(value.hidden)
       ? [...new Set(value.hidden.map(String))].filter((id) => START_DASHBOARD_CARD_ID_SET.has(id))
       : [],
     hiddenWidgets: Array.isArray(legacyHidden)
       ? [...new Set(legacyHidden.map(String))].filter((id) => START_DASHBOARD_WIDGET_ID_SET.has(id))
       : [],
+    groupSizes: Object.fromEntries(START_DASHBOARD_GROUP_IDS.map((id) => [
+      id,
+      START_DASHBOARD_GROUP_SIZE_ID_SET.has(String(submittedGroupSizes[id]))
+        ? String(submittedGroupSizes[id])
+        : "standard",
+    ])),
     locationId: String(value.locationId || "").slice(0, 80),
     departmentId: /^\d+$/.test(String(value.departmentId || "")) ? String(value.departmentId) : "",
     salesLocationId: String(value.salesLocationId || "").slice(0, 80),
@@ -16796,10 +16843,14 @@ function normalizeStartDashboardPreferences(value) {
 }
 
 function startDashboardPreferencesStorageKey() {
+  return `grabenplaner:start-dashboard-preferences-v3:${uiPreferenceActorKey()}`;
+}
+
+function legacyStartDashboardPreferencesV2StorageKey() {
   return `grabenplaner:start-dashboard-preferences-v2:${uiPreferenceActorKey()}`;
 }
 
-function legacyStartDashboardPreferencesStorageKey() {
+function legacyStartDashboardPreferencesV1StorageKey() {
   return `grabenplaner:start-dashboard-preferences-v1:${uiPreferenceActorKey()}`;
 }
 
@@ -17139,17 +17190,30 @@ function renderStartDashboardOperationalCards() {
 function renderStartDashboardCustomizer() {
   const preferences = normalizeStartDashboardPreferences(state.startDashboardDraftPreferences || state.startDashboardPreferences);
   const hidden = new Set(preferences.hidden);
+  const hiddenWidgets = new Set(preferences.hiddenWidgets);
   if (!elements.startDashboardCustomizerGrid) return;
   const accessibleCards = preferences.order.filter((id) => startDashboardCardAccessible(id));
-  elements.startDashboardCustomizerGrid.innerHTML = accessibleCards.map((id) => {
-    const card = START_DASHBOARD_CARDS.find((entry) => entry.id === id);
-    const groupCards = accessibleCards.filter((candidate) => START_DASHBOARD_CARDS.find((entry) => entry.id === candidate)?.group === card.group);
-    const groupIndex = groupCards.indexOf(id);
-    return `<div class="start-dashboard-customizer-row">
-      <label><input type="checkbox" data-start-dashboard-card-choice="${escapeHtmlAttribute(id)}" ${hidden.has(id) ? "" : "checked"} /><span><strong>${escapeHtml(card.label)}</strong><small>${escapeHtml(card.group)} · Rang ${groupIndex + 1}</small></span></label>
-      <div class="start-dashboard-customizer-actions" aria-label="${escapeHtmlAttribute(card.label)} anordnen"><button type="button" data-start-dashboard-card-move="up" data-start-dashboard-card-id="${escapeHtmlAttribute(id)}" aria-label="${escapeHtmlAttribute(card.label)} nach oben" ${groupIndex === 0 ? "disabled" : ""}>↑</button><button type="button" data-start-dashboard-card-move="down" data-start-dashboard-card-id="${escapeHtmlAttribute(id)}" aria-label="${escapeHtmlAttribute(card.label)} nach unten" ${groupIndex === groupCards.length - 1 ? "disabled" : ""}>↓</button></div>
-    </div>`;
-  }).join("") || '<p class="start-dashboard-empty">Für diesen Zugang sind keine anpassbaren Dashboardkarten freigegeben.</p>';
+  elements.startDashboardCustomizerGrid.innerHTML = START_DASHBOARD_GROUPS.map((group) => {
+    const groupCards = accessibleCards.filter((id) => group.cardIds.includes(id));
+    if (!groupCards.length) return "";
+    const rows = groupCards.map((id, groupIndex) => {
+      const card = START_DASHBOARD_CARDS.find((entry) => entry.id === id);
+      const cardHidden = hidden.has(id);
+      const subwidgets = START_DASHBOARD_WIDGETS.filter((widget) => widget.cardId === id);
+      return `<div class="start-dashboard-customizer-row">
+        <div class="start-dashboard-customizer-row-main">
+          <label><input type="checkbox" data-start-dashboard-card-choice="${escapeHtmlAttribute(id)}" ${cardHidden ? "" : "checked"} /><span><strong>${escapeHtml(card.label)}</strong><small>Inhalt · Rang ${groupIndex + 1}</small></span></label>
+          <div class="start-dashboard-customizer-actions" aria-label="${escapeHtmlAttribute(card.label)} anordnen"><button type="button" data-start-dashboard-card-move="up" data-start-dashboard-card-id="${escapeHtmlAttribute(id)}" aria-label="${escapeHtmlAttribute(card.label)} nach oben" ${groupIndex === 0 ? "disabled" : ""}>↑</button><button type="button" data-start-dashboard-card-move="down" data-start-dashboard-card-id="${escapeHtmlAttribute(id)}" aria-label="${escapeHtmlAttribute(card.label)} nach unten" ${groupIndex === groupCards.length - 1 ? "disabled" : ""}>↓</button></div>
+        </div>
+        ${subwidgets.length ? `<div class="start-dashboard-customizer-subcontents" aria-label="Detailinhalte von ${escapeHtmlAttribute(card.label)}">${subwidgets.map((widget) => `<label><input type="checkbox" data-start-dashboard-widget-choice="${escapeHtmlAttribute(widget.id)}" data-start-dashboard-parent-card="${escapeHtmlAttribute(id)}" ${hiddenWidgets.has(widget.id) ? "" : "checked"} ${cardHidden ? "disabled" : ""} /><span>${escapeHtml(widget.label)}</span></label>`).join("")}</div>` : ""}
+      </div>`;
+    }).join("");
+    const sizeOptions = START_DASHBOARD_GROUP_SIZE_OPTIONS.map((option) => `<option value="${escapeHtmlAttribute(option.id)}" ${preferences.groupSizes[group.id] === option.id ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+    return `<section class="start-dashboard-customizer-group" data-start-dashboard-customizer-group="${escapeHtmlAttribute(group.id)}">
+      <header><div><strong>${escapeHtml(group.label)}</strong><small>Widget und enthaltene Informationen</small></div><label class="start-dashboard-size-choice"><span>Widget-Größe</span><select data-start-dashboard-group-size="${escapeHtmlAttribute(group.id)}">${sizeOptions}</select></label></header>
+      <div class="start-dashboard-customizer-group-rows">${rows}</div>
+    </section>`;
+  }).join("") || '<p class="start-dashboard-empty">Für diesen Zugang sind keine anpassbaren Dashboard-Inhalte freigegeben.</p>';
 }
 
 function openStartDashboardCustomizer() {
@@ -17177,6 +17241,13 @@ function renderStartDashboard() {
   elements.startDashboardBranchGroup?.classList.toggle("hidden", !groupHasVisibleCard(branchCardIds));
   elements.startDashboardPersonnelGroup?.classList.toggle("hidden", !groupHasVisibleCard(["personnel"]));
   elements.startDashboardSalesGroup?.classList.toggle("hidden", !groupHasVisibleCard(["sales"]));
+  for (const [groupId, element] of [
+    ["branch", elements.startDashboardBranchGroup],
+    ["personnel", elements.startDashboardPersonnelGroup],
+    ["sales", elements.startDashboardSalesGroup],
+  ]) {
+    if (element) element.dataset.startDashboardSize = preferences.groupSizes[groupId] || "standard";
+  }
   document.querySelectorAll("[data-start-dashboard-card]").forEach((card) => {
     const cardId = card.dataset.startDashboardCard;
     card.style.order = String(preferences.order.indexOf(cardId));
@@ -20183,7 +20254,8 @@ async function loadUiPreferences() {
     try {
       storedStartDashboardPreferences = JSON.parse(
         localStorage.getItem(startDashboardPreferencesStorageKey())
-          || localStorage.getItem(legacyStartDashboardPreferencesStorageKey())
+          || localStorage.getItem(legacyStartDashboardPreferencesV2StorageKey())
+          || localStorage.getItem(legacyStartDashboardPreferencesV1StorageKey())
           || "null",
       );
     } catch {}
@@ -27425,7 +27497,7 @@ function setView(view) {
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "branchOrders" && !canManageBranchOrders())
-    || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "startDashboard";
+    || (view === "rightsDashboard" && accessibleDashboardModes().length === 0)) view = "startDashboard";
   const profileView = state.employeeProfileHost === "team" ? "personnel" : "personnelAdministration";
   if (employeeProfileIsOpen() && view !== profileView) closeEmployeeProfile({ restoreFocus: false });
   if (view !== "personnelAdministration" && (
@@ -32162,6 +32234,15 @@ elements.startDashboardBrandButton?.addEventListener("click", () => {
   setView("startDashboard");
   closeMobileNavigation({ restoreFocus: false });
 });
+elements.startDashboardControlCenterButton?.addEventListener("click", () => {
+  const requestedMode = elements.startDashboardControlCenterButton.dataset.startDashboardMode;
+  const modes = accessibleDashboardModes();
+  const mode = modes.includes(requestedMode) ? requestedMode : modes[0];
+  if (!mode) return;
+  state.rightsDashboardMode = mode;
+  setView("rightsDashboard");
+  if (state.currentView === "rightsDashboard") setRightsDashboardMode(mode);
+});
 elements.startDashboardGrid?.addEventListener("click", (event) => {
   const cardButton = event.target.closest("[data-start-dashboard-card-view]");
   if (cardButton) {
@@ -32182,6 +32263,30 @@ elements.startDashboardCustomizeButton?.addEventListener("click", () => {
 });
 elements.startDashboardCustomizerClose?.addEventListener("click", () => closeStartDashboardCustomizer());
 elements.startDashboardCustomizer?.addEventListener("change", (event) => {
+  const sizeSelect = event.target.closest("[data-start-dashboard-group-size]");
+  if (sizeSelect) {
+    const preferences = normalizeStartDashboardPreferences(
+      state.startDashboardDraftPreferences || state.startDashboardPreferences,
+    );
+    const groupId = sizeSelect.dataset.startDashboardGroupSize;
+    if (START_DASHBOARD_GROUP_IDS.includes(groupId) && START_DASHBOARD_GROUP_SIZE_ID_SET.has(sizeSelect.value)) {
+      preferences.groupSizes[groupId] = sizeSelect.value;
+      state.startDashboardDraftPreferences = preferences;
+    }
+    return;
+  }
+  const widgetCheckbox = event.target.closest("[data-start-dashboard-widget-choice]");
+  if (widgetCheckbox) {
+    const preferences = normalizeStartDashboardPreferences(
+      state.startDashboardDraftPreferences || state.startDashboardPreferences,
+    );
+    const hiddenWidgets = new Set(preferences.hiddenWidgets);
+    if (widgetCheckbox.checked) hiddenWidgets.delete(widgetCheckbox.dataset.startDashboardWidgetChoice);
+    else hiddenWidgets.add(widgetCheckbox.dataset.startDashboardWidgetChoice);
+    preferences.hiddenWidgets = [...hiddenWidgets];
+    state.startDashboardDraftPreferences = preferences;
+    return;
+  }
   const checkbox = event.target.closest("[data-start-dashboard-card-choice]");
   if (!checkbox) return;
   const preferences = normalizeStartDashboardPreferences(
@@ -32192,6 +32297,9 @@ elements.startDashboardCustomizer?.addEventListener("change", (event) => {
   else hidden.add(checkbox.dataset.startDashboardCardChoice);
   preferences.hidden = [...hidden];
   state.startDashboardDraftPreferences = preferences;
+  elements.startDashboardCustomizerGrid?.querySelectorAll(`[data-start-dashboard-parent-card="${CSS.escape(checkbox.dataset.startDashboardCardChoice)}"]`).forEach((input) => {
+    input.disabled = !checkbox.checked;
+  });
 });
 elements.startDashboardCustomizerGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-start-dashboard-card-move]");
@@ -32200,8 +32308,8 @@ elements.startDashboardCustomizerGrid?.addEventListener("click", (event) => {
     state.startDashboardDraftPreferences || state.startDashboardPreferences,
   );
   const cardId = button.dataset.startDashboardCardId;
-  const cardGroup = START_DASHBOARD_CARDS.find((card) => card.id === cardId)?.group;
-  const groupOrder = preferences.order.filter((id) => START_DASHBOARD_CARDS.find((card) => card.id === id)?.group === cardGroup
+  const cardGroupId = START_DASHBOARD_CARDS.find((card) => card.id === cardId)?.groupId;
+  const groupOrder = preferences.order.filter((id) => START_DASHBOARD_CARDS.find((card) => card.id === id)?.groupId === cardGroupId
     && startDashboardCardAccessible(id));
   const currentGroupIndex = groupOrder.indexOf(cardId);
   const targetGroupIndex = currentGroupIndex + (button.dataset.startDashboardCardMove === "up" ? -1 : 1);

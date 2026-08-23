@@ -146,18 +146,23 @@ test("Startdashboard: drei Hauptgruppen navigieren und zeigen nur freigegebene p
   assert.match(app, /canAccessSalesAnalytics\(\)/);
   assert.match(app, /\/api\/schedule\?/);
   assert.match(app, /\/api\/sales-analytics\/reports\?limit=100/);
-  assert.match(app, /start-dashboard-preferences-v2/);
-  assert.match(server, /preferenceKey: "start_dashboard_preferences_v2"/);
+  assert.match(app, /start-dashboard-preferences-v3/);
+  assert.match(server, /preferenceKey: "start_dashboard_preferences_v3"/);
   assert.match(app, /function navigateFromStartDashboardCard\(button\)/);
   assert.match(app, /function cycleStartDashboardLocation\(direction\)/);
   assert.match(app, /function cycleStartDashboardSalesLocation\(direction\)/);
   assert.match(app, /state\.startDashboardScopeSaving/);
   assert.match(app, /loadAll\(\{ restoreContext: false \}\)/);
   assert.match(app, /data-start-dashboard-card-move/);
+  assert.match(app, /data-start-dashboard-group-size/);
+  assert.match(app, /data-start-dashboard-widget-choice/);
+  assert.match(app, /groupSizes: Object\.fromEntries/);
   assert.match(server, /function validateStartDashboardPreferences\(value\)/);
   assert.doesNotMatch(server, /installationFeatureCatalog[\s\S]{0,400}sales:analytics/);
   assert.match(styles, /\.start-dashboard-scope-switcher \{[^}]*grid-template-columns:36px minmax\(0,1fr\) 36px;/);
-  assert.match(styles, /@media \(max-width:760px\) \{[\s\S]*?\.start-dashboard-scope-controls \{ grid-template-columns:1fr; \}/);
+  assert.match(styles, /\.start-dashboard-group\[data-start-dashboard-size="compact"\] \{ grid-column:span 3; \}/);
+  assert.match(styles, /\.start-dashboard-group\[data-start-dashboard-size="full"\] \{ grid-column:1 \/ -1; \}/);
+  assert.match(styles, /@media \(max-width:760px\) \{[\s\S]*?\.start-dashboard-group\[data-start-dashboard-size\] \{ grid-column:1; \}[\s\S]*?\.start-dashboard-scope-controls \{ grid-template-columns:1fr; \}/);
 });
 
 test("Verkaufsanalyse: Archiv, Sortierung, Grafikvarianten und PDF-Export sind integriert", () => {

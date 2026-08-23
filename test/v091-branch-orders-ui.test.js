@@ -81,6 +81,9 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminScript, /function saveBranchOrdersManagement/);
   assert.match(adminScript, /function moveBranchOrdersManagementEntry/);
   assert.match(adminScript, /branch-orders-management-catalog-table/);
+  assert.match(adminScript, /branch-orders-management-group-table/);
+  assert.match(adminScript, /branch-orders-management-group-toolbar/);
+  assert.match(adminScript, /branch-orders-management-order-button/);
   assert.match(adminScript, /data-branch-orders-management-new-item-title/);
   assert.match(adminScript, /data-branch-orders-management-action="edit-catalog-item"/);
   assert.match(adminScript, /data-branch-orders-management-action="sort-catalog"/);
@@ -103,6 +106,8 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminStyles, /branch-orders-management-toolbar/);
   assert.match(adminStyles, /branch-orders-management-history-actions/);
   assert.match(adminStyles, /branch-orders-management-catalog-table-wrap/);
+  assert.match(adminStyles, /branch-orders-management-group-table-wrap/);
+  assert.match(adminStyles, /branch-orders-management-group-fields/);
   assert.match(adminStyles, /branch-orders-management-table-action[^}]*text-decoration:underline/);
   assert.match(adminStyles, /branch-orders-management-catalog-create[^}]*grid-template-columns:minmax\(0,1fr\) auto/);
   assert.match(adminStyles, /branch-orders-management-workspace \{ display:grid; grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);

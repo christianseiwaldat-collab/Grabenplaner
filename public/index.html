@@ -34,7 +34,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.12 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.13 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -183,9 +183,6 @@
         </nav>
 
         <div class="sidebar-settings-shortcut">
-          <button class="nav-item hidden" data-view="rightsDashboard" id="rightsDashboardNavButton">
-            <span class="nav-symbol">◈</span><span>Steuerungscenter</span>
-          </button>
           <button class="nav-item" data-view="settings" id="settingsNavButton">
             <span class="nav-symbol">⚙</span><span>Einstellungen</span>
           </button>
@@ -212,16 +209,21 @@
             <div><span class="eyebrow">Übersicht &amp; Schnellzugriff</span><h1 id="startDashboardTitle">Startdashboard</h1><p class="subtitle">Filial-, Personal- und Verkaufsinformationen im persönlichen Arbeitsüberblick.</p></div>
             <button class="secondary-button" id="startDashboardCustomizeButton" type="button" aria-controls="startDashboardCustomizer" aria-expanded="false">Dashboard anpassen</button>
           </header>
+          <button class="start-dashboard-control-center hidden" id="startDashboardControlCenterButton" type="button">
+            <span class="start-dashboard-control-center-symbol" aria-hidden="true">◈</span>
+            <span><small>Schnellzugriff</small><strong id="startDashboardControlCenterTitle">System-Center</strong><em id="startDashboardControlCenterDescription">Technischen Zustand, Sicherungen und Wiederherstellbarkeit prüfen.</em></span>
+            <b aria-hidden="true">→</b>
+          </button>
           <section class="start-dashboard-customizer hidden" id="startDashboardCustomizer" aria-labelledby="startDashboardCustomizerTitle">
             <div class="start-dashboard-customizer-heading">
-              <div><span class="eyebrow">Persönliche Inhalte</span><h2 id="startDashboardCustomizerTitle">Karten einblenden und anordnen</h2><p>Die Auswahl und Rangfolge werden benutzerbezogen gespeichert. Fehlende Fachrechte bleiben unabhängig davon gesperrt.</p></div>
+              <div><span class="eyebrow">Persönliche Widgets</span><h2 id="startDashboardCustomizerTitle">Größe, Inhalte und Rangfolge festlegen</h2><p>Widget-Größe und Inhalte werden benutzerbezogen gespeichert. Fehlende Fachrechte bleiben unabhängig davon gesperrt.</p></div>
               <button class="close-button" id="startDashboardCustomizerClose" type="button" aria-label="Dashboard-Anpassung schließen">×</button>
             </div>
             <div class="start-dashboard-customizer-grid" id="startDashboardCustomizerGrid" aria-live="polite"></div>
             <div class="modal-actions"><button class="secondary-button" id="startDashboardResetButton" type="button">Standard wiederherstellen</button><span></span><button class="primary-button" id="startDashboardSaveButton" type="button">Dashboard speichern</button></div>
           </section>
           <div class="start-dashboard-grid" id="startDashboardGrid" aria-live="polite">
-            <article class="start-dashboard-group" id="startDashboardBranchGroup">
+            <article class="start-dashboard-group" id="startDashboardBranchGroup" data-start-dashboard-group="branch" data-start-dashboard-size="standard">
               <button class="start-dashboard-group-link" type="button" data-start-dashboard-view="filialAdministration">
                 <span class="start-dashboard-group-symbol" aria-hidden="true">⌂</span><span><small>Hauptgruppe</small><strong>Filialverwaltung</strong><em>Zum Filialverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
               </button>
@@ -250,7 +252,7 @@
                 </section>
               </div>
             </article>
-            <article class="start-dashboard-group hidden" id="startDashboardPersonnelGroup">
+            <article class="start-dashboard-group hidden" id="startDashboardPersonnelGroup" data-start-dashboard-group="personnel" data-start-dashboard-size="standard">
               <button class="start-dashboard-group-link" type="button" data-start-dashboard-view="personnelAdministration" data-start-dashboard-route="dashboard">
                 <span class="start-dashboard-group-symbol" aria-hidden="true">◎</span><span><small>Hauptgruppe</small><strong>Personalverwaltung</strong><em>Zum Personalverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
               </button>
@@ -264,7 +266,7 @@
                 </section>
               </div>
             </article>
-            <article class="start-dashboard-group hidden" id="startDashboardSalesGroup">
+            <article class="start-dashboard-group hidden" id="startDashboardSalesGroup" data-start-dashboard-group="sales" data-start-dashboard-size="standard">
               <button class="start-dashboard-group-link" type="button" data-start-dashboard-view="salesAdministration">
                 <span class="start-dashboard-group-symbol" aria-hidden="true">▤</span><span><small>Hauptgruppe</small><strong>Verkaufsverwaltung</strong><em>Zum Verkaufsverwaltungsdashboard</em></span><b aria-hidden="true">→</b>
               </button>
@@ -2620,7 +2622,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.12 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.13 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

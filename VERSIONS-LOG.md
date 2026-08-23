@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.13 Beta · Konfigurierbare Startwidgets und kompakter Bestellkatalog
+
+- Das persönliche Startdashboard bietet berechtigungsgefilterte Widgets in vier Größen. Inhalte innerhalb eines Widgets lassen sich auswählen und anordnen; Größe, Inhalt, Rangfolge und zuletzt gewählte Ansicht werden benutzerbezogen gespeichert und aus älteren Präferenzständen migriert.
+- Der System-Center-Zugang liegt als kompakter, berechtigungsgefilterter Schnellzugriff im Startdashboard. Der zusätzliche Seitenleistenbutton entfällt, damit die Navigation schlank bleibt.
+- Die Bestellkonfiguration stellt Anzeigegruppen als kompakte, tabellarische Liste dar. Bearbeiten, Sortieren und Entfernen bleiben mit kleinen, klaren Aktionen erreichbar, ohne großflächige Positionskarten.
+- Der Standardkatalog ergänzt die Anzeigegruppe „Fotowelt – Plotter“ um 30 Papierpositionen aus vier praxisnahen Gruppen: Rollenware, A4, A3+ und A2. Bestehende Installationen erhalten die Ergänzung einmalig und versioniert; individuelle Gruppennamen, Empfänger und spätere Löschungen bleiben erhalten.
+- Rechte-, Persistenz-, Migration-, Layout-, Mobil-, Bestell- und Integrationspfade sind gemeinsam regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.12 Beta · Dienstplan-PDFs, persönliches Startdashboard und Dienstsuche
 
 - Dienstplan-PDFs bieten die freigegebenen Designs „Zeitachse“ und „Wochenmatrix“. Ein bis fünf Designs können in eindeutiger Rangfolge aktiviert werden; verfügbare Designnamen sind bearbeitbar. Bei genau einem aktiven Design startet der Export direkt, sonst erscheint eine kompakte Auswahl.

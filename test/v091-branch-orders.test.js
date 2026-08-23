@@ -48,6 +48,7 @@ const {
 const LOCATION = "18";
 const OTHER_LOCATION = "19";
 const LEGACY_LOCATION = "20";
+const CONTENT_UPGRADE_LOCATION = "21";
 const HR = "v091hr";
 const MANAGER = "252";
 const EMPLOYEE = "275";
@@ -56,6 +57,38 @@ const IT_ADMIN = "v091-it-admin";
 const ORGANIZATION_LOGIN = "fil18";
 const INITIAL_PASSWORD = "Filialkonto-v091!";
 const ACTIVE_PASSWORD = "Filialkonto-aktiv-v091!";
+const PLOTTER_PAPER_TITLES = Object.freeze([
+  "Papierrolle – Photorag Ultra Smooth",
+  "Papierrolle – Hemp",
+  "Papierrolle – German Etching",
+  "Papierrolle – Photo Rag Baryta",
+  "Papierrolle – FineArt Baryta",
+  "Papierrolle – Photo Glossy",
+  "Papierrolle – Premium Canvas Satin",
+  "Papierrolle – Photo Luster",
+  "Papierrolle – Goya Canvas",
+  "Papierrolle – Metallic",
+  "DIN A4 – Photo Rag Bright White 310 gsm",
+  "DIN A4 – Photo Rag Metallic 340 gsm",
+  "DIN A4 – German Etching 310 gsm",
+  "DIN A4 – Photo Rag Baryta 315 gsm",
+  "DIN A4 – Photo Rag Ultra Smooth 305 gsm",
+  "DIN A4 – Hemp 290 gsm",
+  "DIN A4 – Fine Art Baryta 325 gsm",
+  "DIN A3+ – Fine Art Baryta 325 gsm",
+  "DIN A3+ – Photo Rag Metallic 340 gsm",
+  "DIN A3+ – Hemp 290 gsm",
+  "DIN A3+ – Photo Rag Baryta 315 gsm",
+  "DIN A3+ – German Etching 310 gsm",
+  "DIN A3+ – Photo Rag Ultra Smooth 305 gsm",
+  "DIN A3+ – Photo Rag Bright White 310 gsm",
+  "DIN A2 – German Etching 310 gsm",
+  "DIN A2 – Hemp 290 gsm",
+  "DIN A2 – Photo Rag Bright White 310 gsm",
+  "DIN A2 – Photo Rag Ultra Smooth 305 gsm",
+  "DIN A2 – Fine Art Baryta 325 gsm",
+  "DIN A2 – Photo Rag Metallic 340 gsm",
+]);
 
 let baseUrl;
 let httpServer;
@@ -197,6 +230,7 @@ test.before(() => {
   ensureLocation(LOCATION, "Filiale 18");
   ensureLocation(OTHER_LOCATION, "Andere Filiale");
   ensureLocation(LEGACY_LOCATION, "Legacy-Katalog");
+  ensureLocation(CONTENT_UPGRADE_LOCATION, "Bestehender Katalog");
   ensureEmployee(HR, "Herta Personal", LOCATION, "hr");
   ensureEmployee(MANAGER, "Mara Filialleitung", LOCATION, "manager");
   ensureEmployee(EMPLOYEE, "Marie-Theres", LOCATION, "employee");
@@ -389,6 +423,15 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       .items.find((item) => item.title === "Hutpapier");
     assert.ok(plotterHutpapier);
     assert.equal(plotterHutpapier.id, packagingHutpapier.id);
+    const plotterPapers = catalog.groups.find((group) => group.title === "Fotowelt – Plotter")
+      .items.filter((item) => PLOTTER_PAPER_TITLES.includes(item.title));
+    assert.deepEqual(new Set(plotterPapers.map((item) => item.title)), new Set(PLOTTER_PAPER_TITLES));
+    assert.equal(plotterPapers.filter((item) => item.title.startsWith("Papierrolle")).length, 10);
+    assert.equal(plotterPapers.filter((item) => item.title.startsWith("DIN A4")).length, 7);
+    assert.equal(plotterPapers.filter((item) => item.title.startsWith("DIN A3+")).length, 7);
+    assert.equal(plotterPapers.filter((item) => item.title.startsWith("DIN A2")).length, 6);
+    assert.ok(plotterPapers.filter((item) => item.title.startsWith("Papierrolle")).every((item) => item.unit === "Rolle"));
+    assert.ok(plotterPapers.filter((item) => item.title.startsWith("DIN ")).every((item) => item.unit === "Packung"));
   });
 
   await t.test("nur PL+ konfiguriert Einheiten, Antwortadresse und Vorlagen", async () => {
@@ -537,6 +580,77 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       body: { locationId: LOCATION, configuration: original },
     });
     assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
+  });
+
+  await t.test("bestehende Plotterkataloge erhalten die Papierliste genau einmal und behalten ihre Konfiguration", async () => {
+    const now = "2031-03-11T08:00:00.000Z";
+    db.prepare(`
+      INSERT INTO branch_order_location_settings
+        (location_id, initialized_at, initialized_by, updated_at, updated_by)
+      VALUES (?, ?, 'v091-existing', ?, 'v091-existing')
+    `).run(CONTENT_UPGRADE_LOCATION, now, now);
+    db.prepare(`
+      INSERT INTO branch_order_recipients
+        (id, location_id, email, reply_to_email, subject_template, body_template,
+         created_at, created_by, updated_at, updated_by)
+      VALUES ('v091-existing-recipient', ?, 'individuell@example.test', 'individuell@example.test',
+              'Bestellung {{locationName}}', '{{items}}', ?, 'v091-existing', ?, 'v091-existing')
+    `).run(CONTENT_UPGRADE_LOCATION, now, now);
+    for (const [id, title, sortOrder] of [
+      ["v091-existing-roll", "Rolle", 1],
+      ["v091-existing-pack", "Packung", 2],
+    ]) {
+      db.prepare(`
+        INSERT INTO branch_order_units
+          (id, location_id, title, active, sort_order, created_at, created_by, updated_at, updated_by)
+        VALUES (?, ?, ?, 1, ?, ?, 'v091-existing', ?, 'v091-existing')
+      `).run(id, CONTENT_UPGRADE_LOCATION, title, sortOrder, now, now);
+    }
+    db.prepare(`
+      INSERT INTO branch_order_groups
+        (id, location_id, recipient_id, title, hint, active, sort_order,
+         created_at, created_by, updated_at, updated_by)
+      VALUES ('v091-existing-plotter', ?, NULL, 'Eigene Plottergruppe', 'Individuell', 1, 1,
+              ?, 'v091-existing', ?, 'v091-existing')
+    `).run(CONTENT_UPGRADE_LOCATION, now, now);
+    db.prepare(`
+      INSERT INTO branch_order_catalog_items
+        (id, location_id, recipient_id, unit_id, title, active, sort_order,
+         created_at, created_by, updated_at, updated_by)
+      VALUES ('v091-existing-ink', ?, 'v091-existing-recipient', 'v091-existing-roll',
+              'Plottertinten Canon', 1, 1, ?, 'v091-existing', ?, 'v091-existing')
+    `).run(CONTENT_UPGRADE_LOCATION, now, now);
+    db.prepare(`
+      INSERT INTO branch_order_group_items (group_id, item_id, sort_order)
+      VALUES ('v091-existing-plotter', 'v091-existing-ink', 1)
+    `).run();
+
+    const upgraded = await requestJson(
+      `/api/portal/v1/branch-orders/settings?locationId=${CONTENT_UPGRADE_LOCATION}`,
+      { session: hrSession },
+    );
+    assert.equal(upgraded.response.status, 200, JSON.stringify(upgraded.payload));
+    const configuration = upgraded.payload.configuration;
+    const papers = configuration.items.filter((item) => PLOTTER_PAPER_TITLES.includes(item.title));
+    assert.equal(papers.length, PLOTTER_PAPER_TITLES.length);
+    assert.ok(papers.every((item) => item.recipientId === "v091-existing-recipient"));
+    const plotter = configuration.groups.find((group) => group.id === "v091-existing-plotter");
+    assert.equal(plotter.title, "Eigene Plottergruppe");
+    assert.ok(papers.every((item) => plotter.itemIds.includes(item.id)));
+    assert.equal(db.prepare(`
+      SELECT catalog_content_version AS version
+      FROM branch_order_location_settings
+      WHERE location_id = ?
+    `).get(CONTENT_UPGRADE_LOCATION).version, 1);
+
+    const removedPaper = papers[0];
+    db.prepare("DELETE FROM branch_order_catalog_items WHERE id = ?").run(removedPaper.id);
+    const reloaded = await requestJson(
+      `/api/portal/v1/branch-orders/settings?locationId=${CONTENT_UPGRADE_LOCATION}`,
+      { session: hrSession },
+    );
+    assert.equal(reloaded.response.status, 200, JSON.stringify(reloaded.payload));
+    assert.equal(reloaded.payload.configuration.items.some((item) => item.title === removedPaper.title), false);
   });
 
   await t.test("alte Standardgruppen werden ohne Positionsverlust in Anzeigegruppen überführt", async () => {
