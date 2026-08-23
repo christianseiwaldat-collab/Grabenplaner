@@ -44,6 +44,9 @@ const {
   db,
   releaseInstanceLockForTests,
 } = require("../server");
+const {
+  createSqliteBranchOrderOperations,
+} = require("../lib/persistence/sqlite/operations/branch-orders");
 
 const LOCATION = "18";
 const OTHER_LOCATION = "19";
@@ -624,6 +627,9 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       INSERT INTO branch_order_group_items (group_id, item_id, sort_order)
       VALUES ('v091-existing-plotter', 'v091-existing-ink', 1)
     `).run();
+
+    const startupOperations = createSqliteBranchOrderOperations(db);
+    assert.equal(startupOperations.ensureConfiguredLocationCatalogContent(), 1);
 
     const upgraded = await requestJson(
       `/api/portal/v1/branch-orders/settings?locationId=${CONTENT_UPGRADE_LOCATION}`,
