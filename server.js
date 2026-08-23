@@ -31687,6 +31687,10 @@ const UI_START_DASHBOARD_CARDS = Object.freeze([
   "sales",
 ]);
 const UI_START_DASHBOARD_CARD_SET = new Set(UI_START_DASHBOARD_CARDS);
+const UI_START_DASHBOARD_GROUPS = Object.freeze(["branch", "personnel", "sales"]);
+const UI_START_DASHBOARD_GROUP_SET = new Set(UI_START_DASHBOARD_GROUPS);
+const UI_START_DASHBOARD_GROUP_SIZES = Object.freeze(["compact", "standard", "wide", "full"]);
+const UI_START_DASHBOARD_GROUP_SIZE_SET = new Set(UI_START_DASHBOARD_GROUP_SIZES);
 const UI_MOBILE_PORTAL_NAVIGATION_ITEMS = Object.freeze([
   "time",
   "tasks",
@@ -31990,7 +31994,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     } catch {}
     try {
       startDashboardPreferences = normalizeStartDashboardPreferences(
-        JSON.parse(lookup.get("start_dashboard_preferences_v2") || lookup.get("start_dashboard_preferences_v1") || "null"),
+        JSON.parse(lookup.get("start_dashboard_preferences_v3") || lookup.get("start_dashboard_preferences_v2") || lookup.get("start_dashboard_preferences_v1") || "null"),
       );
     } catch {}
     try {
@@ -32203,7 +32207,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     }
     if (startDashboardPreferences !== undefined) {
       upserts.push({
-        preferenceKey: "start_dashboard_preferences_v2",
+        preferenceKey: "start_dashboard_preferences_v3",
         value: JSON.stringify(startDashboardPreferences),
       });
     }
@@ -32229,7 +32233,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
       upserts,
       deleteKeys: [
         ...(appFontScalePercent === undefined ? [] : ["dashboard_font_size"]),
-        ...(startDashboardPreferences === undefined ? [] : ["start_dashboard_preferences_v1"]),
+        ...(startDashboardPreferences === undefined ? [] : ["start_dashboard_preferences_v1", "start_dashboard_preferences_v2"]),
       ],
     });
   }
@@ -35091,10 +35095,11 @@ function rightsAuditSummary(snapshot = {}) {
 
 function defaultStartDashboardPreferences() {
   return {
-    version: 2,
+    version: 3,
     order: [...UI_START_DASHBOARD_CARDS],
     hidden: [],
     hiddenWidgets: [],
+    groupSizes: Object.fromEntries(UI_START_DASHBOARD_GROUPS.map((id) => [id, "standard"])),
     locationId: "",
     departmentId: "",
     salesLocationId: "",
@@ -35103,26 +35108,36 @@ function defaultStartDashboardPreferences() {
 
 function normalizeStartDashboardPreferences(value) {
   const fallback = defaultStartDashboardPreferences();
-  if (!value || typeof value !== "object" || Array.isArray(value) || ![1, 2].includes(Number(value.version))) {
+  const version = Number(value?.version);
+  if (!value || typeof value !== "object" || Array.isArray(value) || ![1, 2, 3].includes(version)) {
     return fallback;
   }
   const normalizeScopeId = (candidate, pattern) => {
     const normalized = String(candidate || "").trim();
     return normalized.length <= 80 && pattern.test(normalized) ? normalized : "";
   };
-  const legacyHidden = Number(value.version) === 1 ? value.hidden : value.hiddenWidgets;
-  const submittedOrder = Number(value.version) === 2 && Array.isArray(value.order)
+  const legacyHidden = version === 1 ? value.hidden : value.hiddenWidgets;
+  const submittedOrder = version >= 2 && Array.isArray(value.order)
     ? [...new Set(value.order.map(String))].filter((id) => UI_START_DASHBOARD_CARD_SET.has(id))
     : [];
+  const submittedGroupSizes = version === 3 && value.groupSizes && typeof value.groupSizes === "object" && !Array.isArray(value.groupSizes)
+    ? value.groupSizes
+    : {};
   return {
-    version: 2,
+    version: 3,
     order: [...submittedOrder, ...UI_START_DASHBOARD_CARDS.filter((id) => !submittedOrder.includes(id))],
-    hidden: Number(value.version) === 2 && Array.isArray(value.hidden)
+    hidden: version >= 2 && Array.isArray(value.hidden)
       ? [...new Set(value.hidden.map(String))].filter((id) => UI_START_DASHBOARD_CARD_SET.has(id))
       : [],
     hiddenWidgets: Array.isArray(legacyHidden)
       ? [...new Set(legacyHidden.map(String))].filter((id) => UI_START_DASHBOARD_WIDGET_SET.has(id))
       : [],
+    groupSizes: Object.fromEntries(UI_START_DASHBOARD_GROUPS.map((id) => [
+      id,
+      UI_START_DASHBOARD_GROUP_SIZE_SET.has(String(submittedGroupSizes[id]))
+        ? String(submittedGroupSizes[id])
+        : "standard",
+    ])),
     locationId: normalizeScopeId(value.locationId, /^[A-Za-z0-9._:-]*$/),
     departmentId: normalizeScopeId(value.departmentId, /^\d*$/),
     salesLocationId: normalizeScopeId(value.salesLocationId, /^[A-Za-z0-9._:-]*$/),
@@ -35133,14 +35148,16 @@ function validateStartDashboardPreferences(value) {
   const version = Number(value?.version);
   const allowedKeys = version === 1
     ? ["version", "hidden", "locationId", "departmentId", "salesLocationId"]
-    : ["version", "order", "hidden", "hiddenWidgets", "locationId", "departmentId", "salesLocationId"];
+    : version === 2
+      ? ["version", "order", "hidden", "hiddenWidgets", "locationId", "departmentId", "salesLocationId"]
+      : ["version", "order", "hidden", "hiddenWidgets", "groupSizes", "locationId", "departmentId", "salesLocationId"];
   const invalidLegacy = version === 1 && (
     !Array.isArray(value.hidden)
     || value.hidden.length > UI_START_DASHBOARD_WIDGETS.length
     || new Set(value.hidden.map(String)).size !== value.hidden.length
     || value.hidden.some((id) => !UI_START_DASHBOARD_WIDGET_SET.has(String(id)))
   );
-  const invalidCurrent = version === 2 && (
+  const invalidCurrent = [2, 3].includes(version) && (
     !Array.isArray(value.order)
     || value.order.length > UI_START_DASHBOARD_CARDS.length
     || new Set(value.order.map(String)).size !== value.order.length
@@ -35153,9 +35170,15 @@ function validateStartDashboardPreferences(value) {
     || value.hiddenWidgets.length > UI_START_DASHBOARD_WIDGETS.length
     || new Set(value.hiddenWidgets.map(String)).size !== value.hiddenWidgets.length
     || value.hiddenWidgets.some((id) => !UI_START_DASHBOARD_WIDGET_SET.has(String(id)))
+    || (version === 3 && (
+      !value.groupSizes || typeof value.groupSizes !== "object" || Array.isArray(value.groupSizes)
+      || Object.keys(value.groupSizes).length !== UI_START_DASHBOARD_GROUPS.length
+      || Object.keys(value.groupSizes).some((id) => !UI_START_DASHBOARD_GROUP_SET.has(id))
+      || UI_START_DASHBOARD_GROUPS.some((id) => !UI_START_DASHBOARD_GROUP_SIZE_SET.has(String(value.groupSizes[id])))
+    ))
   );
   if (!value || typeof value !== "object" || Array.isArray(value)
-    || ![1, 2].includes(version)
+    || ![1, 2, 3].includes(version)
     || Object.keys(value).some((key) => !allowedKeys.includes(key))
     || invalidLegacy
     || invalidCurrent

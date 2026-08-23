@@ -78,6 +78,7 @@ function resetFixture() {
     const locationId = db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id;
     ensureEmployee("v071-admin", "Ada Ansicht", locationId);
     ensureEmployee("v071-manager", "Mara Ansicht", locationId);
+    ensureEmployee("v071-legacy-v2", "Lena Altansicht", locationId);
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
@@ -207,6 +208,7 @@ test("v0.92.6: Antragssperren nutzen unter dem Urlaubskalender einen einklappbar
 test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbezogen", async () => {
   const admin = createPortalSession("v071-admin", "admin");
   const manager = createPortalSession("v071-manager", "manager");
+  const legacyV2 = createPortalSession("v071-legacy-v2", "manager");
 
   const defaults = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(defaults.response.status, 200, JSON.stringify(defaults.payload));
@@ -227,10 +229,11 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     hidden: [],
   });
   assert.deepEqual(defaults.payload.startDashboardPreferences, {
-    version: 2,
+    version: 3,
     order: ["schedule", "vacation", "loans", "branchOrders", "personnel", "sales"],
     hidden: [],
     hiddenWidgets: [],
+    groupSizes: { branch: "standard", personnel: "standard", sales: "standard" },
     locationId: "",
     departmentId: "",
     salesLocationId: "",
@@ -249,10 +252,11 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     month: 8,
   };
   const startDashboardPreferences = {
-    version: 2,
+    version: 3,
     order: ["vacation", "schedule", "branchOrders", "loans", "personnel", "sales"],
     hidden: ["branchOrders"],
     hiddenWidgets: ["branchAbsences", "salesTopGroups"],
+    groupSizes: { branch: "wide", personnel: "compact", sales: "full" },
     locationId: "18",
     departmentId: "7",
     salesLocationId: "5",
@@ -319,6 +323,39 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(managerDefaults.payload.vacationCalendarView.view, "year");
   assert.deepEqual(managerDefaults.payload.personnelDashboardLayout.hidden, []);
   assert.deepEqual(managerDefaults.payload.startDashboardPreferences.hidden, []);
+  const legacyV2Preferences = {
+    version: 2,
+    order: ["vacation", "schedule", "loans", "branchOrders", "personnel", "sales"],
+    hidden: ["branchOrders"],
+    hiddenWidgets: ["branchOnDuty"],
+    locationId: "18",
+    departmentId: "7",
+    salesLocationId: "5",
+  };
+  db.prepare(`
+    INSERT INTO portal_user_preferences (employee_number, preference_key, value)
+    VALUES (?, 'start_dashboard_preferences_v2', ?)
+  `).run("v071-legacy-v2", JSON.stringify(legacyV2Preferences));
+  const legacyV2Read = await requestJson("/api/portal/v1/ui-preferences", { session: legacyV2 });
+  assert.equal(legacyV2Read.response.status, 200, JSON.stringify(legacyV2Read.payload));
+  assert.deepEqual(legacyV2Read.payload.startDashboardPreferences, {
+    ...legacyV2Preferences,
+    version: 3,
+    groupSizes: { branch: "standard", personnel: "standard", sales: "standard" },
+  });
+  const migratedV2 = await requestJson("/api/portal/v1/ui-preferences", {
+    method: "PUT",
+    session: legacyV2,
+    body: { startDashboardPreferences: legacyV2Preferences },
+  });
+  assert.equal(migratedV2.response.status, 200, JSON.stringify(migratedV2.payload));
+  assert.equal(migratedV2.payload.startDashboardPreferences.version, 3);
+  const migratedV2PreferenceKeys = db.prepare(`
+    SELECT preference_key FROM portal_user_preferences
+    WHERE employee_number = ? AND preference_key LIKE 'start_dashboard_preferences_v%'
+    ORDER BY preference_key
+  `).all("v071-legacy-v2").map((row) => row.preference_key);
+  assert.deepEqual(migratedV2PreferenceKeys, ["start_dashboard_preferences_v3"]);
   db.prepare(`
     INSERT INTO portal_user_preferences (employee_number, preference_key, value)
     VALUES (?, 'start_dashboard_preferences_v1', ?)
@@ -332,7 +369,12 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   const legacyRead = await requestJson("/api/portal/v1/ui-preferences", { session: manager });
   assert.equal(legacyRead.response.status, 200, JSON.stringify(legacyRead.payload));
   assert.deepEqual(legacyRead.payload.startDashboardPreferences.hiddenWidgets, ["branchAbsences", "salesTopGroups"]);
-  assert.equal(legacyRead.payload.startDashboardPreferences.version, 2);
+  assert.equal(legacyRead.payload.startDashboardPreferences.version, 3);
+  assert.deepEqual(legacyRead.payload.startDashboardPreferences.groupSizes, {
+    branch: "standard",
+    personnel: "standard",
+    sales: "standard",
+  });
   const migratedLegacy = await requestJson("/api/portal/v1/ui-preferences", {
     method: "PUT",
     session: manager,
@@ -348,10 +390,11 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   });
   assert.equal(migratedLegacy.response.status, 200, JSON.stringify(migratedLegacy.payload));
   assert.deepEqual(migratedLegacy.payload.startDashboardPreferences, {
-    version: 2,
+    version: 3,
     order: ["schedule", "vacation", "loans", "branchOrders", "personnel", "sales"],
     hidden: [],
     hiddenWidgets: ["branchAbsences", "salesTopGroups"],
+    groupSizes: { branch: "standard", personnel: "standard", sales: "standard" },
     locationId: "18",
     departmentId: "7",
     salesLocationId: "5",
@@ -361,7 +404,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     WHERE employee_number = ? AND preference_key LIKE 'start_dashboard_preferences_v%'
     ORDER BY preference_key
   `).all("v071-manager").map((row) => row.preference_key);
-  assert.deepEqual(migratedPreferenceKeys, ["start_dashboard_preferences_v2"]);
+  assert.deepEqual(migratedPreferenceKeys, ["start_dashboard_preferences_v3"]);
 
   for (const appFontScalePercent of [75, 150]) {
     const boundary = await requestJson("/api/portal/v1/ui-preferences", {
@@ -434,7 +477,10 @@ test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen
   }
   for (const startDashboardPreferences of [
     null,
+    { version: 4, order: [], hidden: [], hiddenWidgets: [], groupSizes: {}, locationId: "", departmentId: "", salesLocationId: "" },
     { version: 3, order: [], hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 3, order: [], hidden: [], hiddenWidgets: [], groupSizes: { branch: "wide", personnel: "standard", sales: "enorm" }, locationId: "", departmentId: "", salesLocationId: "" },
+    { version: 3, order: [], hidden: [], hiddenWidgets: [], groupSizes: { branch: "wide", personnel: "standard", sales: "full", unknown: "compact" }, locationId: "", departmentId: "", salesLocationId: "" },
     { version: 2, hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
     { version: 2, order: ["schedule", "schedule"], hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },
     { version: 2, order: ["unknown"], hidden: [], hiddenWidgets: [], locationId: "", departmentId: "", salesLocationId: "" },

@@ -262,3 +262,19 @@ test("Tabellenzeilen bleiben lesend und bieten nur kleine Textaktionen", () => {
   assert.match(appSource, /data-branch-orders-management-new-item-title/);
   assert.match(stylesSource, /\.branch-orders-management-table-action[^}]*text-decoration:underline/);
 });
+
+test("Anzeigegruppen verwenden eine kompakte Tabelle statt großer Positionskarten", () => {
+  const groupMarkup = sourceBetween(
+    "const groupRows = draft.groups.length",
+    "elements.branchOrdersManagementWorkspace.innerHTML =",
+  );
+  assert.match(groupMarkup, /branch-orders-management-group-table/);
+  assert.match(groupMarkup, /branch-orders-management-group-toolbar/);
+  assert.match(groupMarkup, /branch-orders-management-group-fields/);
+  assert.match(groupMarkup, /branch-orders-management-order-button/);
+  assert.match(groupMarkup, />Gruppe löschen<\/button>/);
+  assert.match(groupMarkup, />Entfernen<\/button>/);
+  assert.doesNotMatch(groupMarkup, /class="branch-orders-management-item"><strong>\$\{escapeHtml\(item\.title/);
+  assert.match(stylesSource, /\.branch-orders-management-group-table[^}]*min-width:510px/);
+  assert.match(stylesSource, /\.branch-orders-management-group-fields :is\(input,select\)[^}]*min-height:36px/);
+});
