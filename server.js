@@ -3194,6 +3194,7 @@ ensureSqliteBranchOrdersSchema(db);
 const sqliteBranchOrderOperations = createSqliteBranchOrderOperations(db);
 const sqliteEmployeeLocationLendingOperations = createSqliteEmployeeLocationLendingOperations(db);
 sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
+sqliteBranchOrderOperations.ensureConfiguredLocationCatalogContent();
 let applicationInitialization = null;
 let configuredAdminSnapshot = false;
 let portalScopeProjectionSnapshot = Object.freeze({

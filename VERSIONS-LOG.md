@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.92.14 Beta · Vollständige Bestellkatalog-Migration beim Serverstart
+
+- Bereits konfigurierte Filialkataloge erhalten die versionierte Plotterpapier-Ergänzung beim Serverstart und nicht erst beim ersten Öffnen der Bestellverwaltung.
+- Die Migration verwendet unverändert die fachliche Kataloglogik, bleibt wiederholbar und bewahrt individuelle Gruppennamen, Empfänger sowie bewusst später gelöschte Positionen.
+
 ## v0.92.13 Beta · Konfigurierbare Startwidgets und kompakter Bestellkatalog
 
 - Das persönliche Startdashboard bietet berechtigungsgefilterte Widgets in vier Größen. Inhalte innerhalb eines Widgets lassen sich auswählen und anordnen; Größe, Inhalt, Rangfolge und zuletzt gewählte Ansicht werden benutzerbezogen gespeichert und aus älteren Präferenzständen migriert.
