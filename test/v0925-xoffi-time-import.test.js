@@ -289,8 +289,13 @@ function createSession(employeeNumber) {
 }
 
 function currentMonday() {
-  const now = new Date();
-  const value = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12));
+  const [year, month, dayOfMonth] = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Vienna",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date()).split("-").map(Number);
+  const value = new Date(Date.UTC(year, month - 1, dayOfMonth, 12));
   const day = value.getUTCDay() || 7;
   value.setUTCDate(value.getUTCDate() - day + 1);
   return value.toISOString().slice(0, 10);

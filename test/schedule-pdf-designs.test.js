@@ -118,6 +118,38 @@ test("Einstellungen und Dienstplanung verdrahten Rangfolge, Direkt-Export und Au
   assert.match(server, /function drawScheduleMatrixPdf/);
 });
 
+test("Wochenmatrix verdrahtet Punktgrößen, Hervorhebung, Kopftext und bereichsbezogenen Endpoint", () => {
+  const html = read("public/index.html");
+  const app = read("public/app.js");
+  const server = read("server.js");
+
+  assert.match(html, /id="scheduleMatrixTimeFontSize"[\s\S]*value="6">Sehr klein · 6 pt<[\s\S]*value="8\.5">Klein · 8,5 pt<[\s\S]*value="11">Standard · 11 pt<[\s\S]*value="14\.5">Groß · 14,5 pt<[\s\S]*value="18">Sehr groß · 18 pt</);
+  assert.match(html, /id="scheduleMatrixDetailFontSize"[\s\S]*value="6">Klein · 6 pt<[\s\S]*value="8">Standard · 8 pt<[\s\S]*value="9\.5">Groß · 9,5 pt</);
+  assert.match(html, /id="scheduleMatrixTimeFontBold" type="checkbox"/);
+  assert.match(html, /id="scheduleMatrixTimeEmployeeColor" type="checkbox"/);
+  assert.match(html, /id="scheduleMatrixHeaderText" maxlength="200"/);
+  assert.match(html, /class="settings-card pdf-card" id="schedulePdfSettingsCard"/);
+  assert.match(html, /class="settings-card pdf-card" id="vacationPdfSettingsCard"/);
+
+  assert.match(app, /scheduleMatrixTimeFontSize:\s*document\.querySelector\("#scheduleMatrixTimeFontSize"\)\.value/);
+  assert.match(app, /scheduleMatrixTimeFontBold:\s*document\.querySelector\("#scheduleMatrixTimeFontBold"\)\.checked/);
+  assert.match(app, /scheduleMatrixTimeEmployeeColor:\s*document\.querySelector\("#scheduleMatrixTimeEmployeeColor"\)\.checked/);
+  assert.match(app, /api\("\/api\/portal\/v1\/schedule-pdf-settings"/);
+  assert.match(app, /vacationPdfSettingsCard\?\.classList\.toggle\("hidden", !settingsAccess\)/);
+
+  assert.match(server, /const SCHEDULE_MATRIX_TIME_FONT_SIZES = Object\.freeze\(\["6", "8\.5", "11", "14\.5", "18"\]\)/);
+  assert.match(server, /const SCHEDULE_MATRIX_DETAIL_FONT_SIZES = Object\.freeze\(\["6", "8", "9\.5"\]\)/);
+  assert.match(server, /normalized\.length <= 200[\s\S]*SCHEDULE_MATRIX_HEADER_TEXT_INVALID/);
+  assert.match(server, /app\.put\("\/api\/portal\/v1\/schedule-pdf-settings"/);
+  assert.match(server, /SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION = "schedule:pdf:settings:write"/);
+  assert.match(server, /const timeFont = timeFontBold \? "Helvetica-Bold" : "Helvetica"/);
+  assert.match(server, /fillColor\(timeEmployeeColor \? scheduleMatrixEmployeeTextColor\(employeeColor\) : "#172433"\)/);
+  assert.match(server, /contrastOnWhite\(candidate\) < 4\.5/);
+  assert.match(server, /livePersonnelLearningRoleAdministrationActor\([\s\S]*assertSessionContextScope\(liveSession, context\)/);
+  assert.match(server, /return `Teamsitzung \(TS\) · \$\{date\} · \$\{time\}/);
+  assert.doesNotMatch(server, /label:\s*"Mitarbeitendenfarbe"/);
+});
+
 test("Developer-252-Testmodus ist persönlich, serverseitig begrenzt und auditierbar", () => {
   const html = read("public/index.html");
   const app = read("public/app.js");

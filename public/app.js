@@ -136,6 +136,7 @@ const state = {
   branchOrdersManagementError: "",
   branchOrdersManagementCatalogSort: { key: "position", direction: "asc" },
   branchOrdersManagementCatalogEditingId: "",
+  branchOrdersManagementCatalogSearch: "",
   loanOverviewColumns: null,
   loanOverviewColumnsLoading: false,
   loanOverviewColumnsLocationId: "",
@@ -529,13 +530,14 @@ const fallbackSchedulePdfDesignCatalog = Object.freeze([
   Object.freeze({ id: "matrix", label: "Design 2 · Wochenmatrix", defaultLabel: "Design 2 · Wochenmatrix", shortLabel: "Wochenmatrix", description: "Kompakte Wochenübersicht mit einer Zeile je Teammitglied und gut lesbaren Tagesfeldern." }),
 ]);
 const schedulePdfDesignNameLimits = Object.freeze({ min: 3, max: 60 });
+const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 
 const elements = Object.fromEntries(
   [
     "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
-    "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
+    "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount", "vacationAccountsButton", "vacationAccountsModal", "vacationAccountsYear", "loadVacationAccountsButton", "vacationAccountsSummary", "vacationAccountsList",
@@ -1829,6 +1831,7 @@ function applyRoleVisibility() {
   const role = state.portalSession?.user?.role || "admin";
   const globalAdministration = !lanActive || ["developer", "it_admin", "admin", "hr"].includes(role);
   const settingsAccess = !lanActive || permissions.includes("settings:write");
+  const pdfSettingsAccess = settingsAccess || permissions.includes(schedulePdfSettingsWritePermission);
   const scheduleSettingsAccess = !lanActive
     || permissions.includes("schedule:cross_location:settings:write");
   const rightsAccess = globalAdministration && (!lanActive || permissions.includes("rights:read"));
@@ -1972,13 +1975,13 @@ function applyRoleVisibility() {
       ? "Technischen Zustand, Sicherungen und Wiederherstellbarkeit prüfen."
       : "Berechtigte Filial-, Rechte-, Regel- und Prozessübersichten öffnen.";
   }
-  const anySettingsAccess = settingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
+  const anySettingsAccess = settingsAccess || pdfSettingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
     || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
     || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess
     || loanSettingsAccess || mobilePortalLocationDisplayAccess || birthdayPresentationSettingsAccess || updateAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
-    general: settingsAccess || brandingAccess || loanSettingsAccess,
+    general: settingsAccess || pdfSettingsAccess || brandingAccess || loanSettingsAccess,
     schedule: settingsAccess || scheduleSettingsAccess,
     personnel: settingsAccess || positionWriteAccess || wifiSettingsAccess,
     vacation: features.vacation !== false && (settingsAccess || globalAdministration),
@@ -2001,7 +2004,7 @@ function applyRoleVisibility() {
   const integrationTabActive = document.querySelector('[data-settings-tab="integrations"]')?.classList.contains("active");
   const dataProtectionTabActive = document.querySelector('[data-settings-tab="dataProtection"]')?.classList.contains("active");
   const backupTabActive = document.querySelector('[data-settings-tab="backup"]')?.classList.contains("active");
-  elements.saveSettingsButton?.classList.toggle("hidden", (!(settingsAccess || brandingAccess || (scheduleTabActive && scheduleSettingsAccess)) && !backupTabActive)
+  elements.saveSettingsButton?.classList.toggle("hidden", (!(settingsAccess || pdfSettingsAccess || brandingAccess || (scheduleTabActive && scheduleSettingsAccess)) && !backupTabActive)
     || integrationTabActive || dataProtectionTabActive
     || (timeTrackingTabActive && !settingsAccess)
     || (backupTabActive && (serverActive || !backupConfigurationAccess)));
@@ -2076,7 +2079,8 @@ function applyRoleVisibility() {
   elements.viewBehaviorSettingsCard?.classList.toggle("hidden", !(settingsAccess && globalAdministration));
   elements.loanSettingsCard?.classList.toggle("hidden", !loanSettingsAccess);
   elements.brandingSettings?.classList.toggle("hidden", !brandingAccess);
-  elements.pdfSettings?.classList.toggle("hidden", !settingsAccess);
+  elements.pdfSettings?.classList.toggle("hidden", !pdfSettingsAccess);
+  elements.vacationPdfSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.wifiSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || features.wifiSuggestions === false || features.timeTracking === false);
   elements.employeeImportCard?.classList.toggle("hidden", !personnelImportAccess);
   elements.importProfileCard?.classList.toggle("hidden", !(integrationReadAccess || personnelImportAccess));
@@ -2984,6 +2988,43 @@ function sortedBranchOrdersManagementCatalogItems(draft) {
   });
 }
 
+function normalizeBranchOrdersManagementCatalogSearch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("de-AT")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function applyBranchOrdersManagementCatalogSearch() {
+  const workspace = elements.branchOrdersManagementWorkspace;
+  if (!workspace) return;
+  const query = normalizeBranchOrdersManagementCatalogSearch(state.branchOrdersManagementCatalogSearch);
+  const rows = [...workspace.querySelectorAll("[data-branch-orders-management-catalog-row]")];
+  let visible = 0;
+  for (const row of rows) {
+    const matches = !query || normalizeBranchOrdersManagementCatalogSearch(
+      row.dataset.branchOrdersManagementCatalogSearchText,
+    ).includes(query);
+    row.hidden = !matches;
+    const itemId = row.dataset.branchOrdersManagementCatalogRow || "";
+    const editorRow = workspace.querySelector(
+      `[data-branch-orders-management-catalog-editor-row="${CSS.escape(itemId)}"]`,
+    );
+    if (editorRow) editorRow.hidden = !matches;
+    if (matches) visible += 1;
+  }
+  const empty = workspace.querySelector("[data-branch-orders-management-catalog-search-empty]");
+  if (empty) empty.hidden = visible > 0 || !rows.length;
+  const status = workspace.querySelector("[data-branch-orders-management-catalog-search-status]");
+  if (status) {
+    status.textContent = query
+      ? `${visible} von ${rows.length} Positionen`
+      : `${rows.length} Position${rows.length === 1 ? "" : "en"}`;
+  }
+}
+
 function branchOrdersManagementCatalogHeader() {
   const sort = normalizedBranchOrdersManagementCatalogSort();
   return `<tr>${branchOrdersManagementCatalogColumns.map((column) => {
@@ -3077,15 +3118,16 @@ function renderBranchOrdersManagement() {
   const itemRows = sortedBranchOrdersManagementCatalogItems(draft).map((item) => {
     const position = catalogPositions.get(item.id) || 0;
     const unitTitle = draft.units.find((unit) => unit.id === item.unitId)?.title || "–";
+    const searchText = `${position} ${item.title || ""} ${unitTitle}`;
     const editing = state.branchOrdersManagementCatalogEditingId === item.id;
     return `
-      <tr class="branch-orders-management-catalog-row ${editing ? "is-editing" : ""}" data-branch-orders-management-catalog-row="${escapeHtml(item.id)}">
+      <tr class="branch-orders-management-catalog-row ${editing ? "is-editing" : ""}" data-branch-orders-management-catalog-row="${escapeHtml(item.id)}" data-branch-orders-management-catalog-search-text="${escapeHtmlAttribute(searchText)}">
         <td>${position}</td>
         <td><strong>${escapeHtml(item.title || "Neue Position")}</strong></td>
         <td>${escapeHtml(unitTitle)}</td>
         <td><div class="branch-orders-management-table-actions"><button class="branch-orders-management-table-action" type="button" data-branch-orders-management-action="edit-catalog-item" data-branch-orders-management-id="${escapeHtml(item.id)}" aria-label="${escapeHtmlAttribute(`Position ${item.title || position} bearbeiten`)}">Bearbeiten</button><button class="branch-orders-management-table-action danger" type="button" data-branch-orders-management-action="remove-catalog-item" data-branch-orders-management-id="${escapeHtml(item.id)}" aria-label="${escapeHtmlAttribute(`Position ${item.title || position} löschen`)}">Löschen</button></div></td>
       </tr>
-      ${editing ? `<tr class="branch-orders-management-catalog-editor-row"><td colspan="4"><div class="branch-orders-management-catalog-editor" data-branch-orders-management-catalog-item="${escapeHtml(item.id)}" data-branch-orders-management-catalog-editor="${escapeHtml(item.id)}"><div class="branch-orders-management-fields three-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="catalog-item-title" value="${escapeHtml(item.title)}" maxlength="180" /></label><label class="field"><span>Einheit</span><select data-branch-orders-management-field="catalog-item-unit">${unitOptions(item.unitId)}</select></label><label class="field"><span>E-Mail-Ziel</span><select data-branch-orders-management-field="catalog-item-recipient">${recipientOptions(item.recipientId)}</select></label></div></div></td></tr>` : ""}
+      ${editing ? `<tr class="branch-orders-management-catalog-editor-row" data-branch-orders-management-catalog-editor-row="${escapeHtml(item.id)}"><td colspan="4"><div class="branch-orders-management-catalog-editor" data-branch-orders-management-catalog-item="${escapeHtml(item.id)}" data-branch-orders-management-catalog-editor="${escapeHtml(item.id)}"><div class="branch-orders-management-fields three-columns"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="catalog-item-title" value="${escapeHtml(item.title)}" maxlength="180" /></label><label class="field"><span>Einheit</span><select data-branch-orders-management-field="catalog-item-unit">${unitOptions(item.unitId)}</select></label><label class="field"><span>E-Mail-Ziel</span><select data-branch-orders-management-field="catalog-item-recipient">${recipientOptions(item.recipientId)}</select></label></div></div></td></tr>` : ""}
     `;
   }).join("");
   const groupRows = draft.groups.length ? draft.groups.map((group, groupIndex) => {
@@ -3107,9 +3149,10 @@ function renderBranchOrdersManagement() {
   elements.branchOrdersManagementWorkspace.innerHTML = `
     <details class="branch-orders-management-section" data-branch-orders-management-section="recipients"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</div></details>
     <details class="branch-orders-management-section" data-branch-orders-management-section="units"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">+ Einheit</button></div><div class="branch-orders-management-items">${unitRows}</div></div></details>
-    <details class="branch-orders-management-section" data-branch-orders-management-section="catalog"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-catalog-create"><label class="field"><span>Neue Position</span><input data-branch-orders-management-new-item-title maxlength="180" placeholder="Bezeichnung eingeben" autocomplete="off" /></label><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">Position hinzufügen</button></div><div class="branch-orders-management-catalog-table-wrap"><table class="branch-orders-management-catalog-table"><thead>${branchOrdersManagementCatalogHeader()}</thead><tbody>${itemRows || '<tr><td colspan="4" class="branch-orders-management-catalog-empty">Noch keine Position angelegt.</td></tr>'}</tbody></table></div></div></details>
+    <details class="branch-orders-management-section" data-branch-orders-management-section="catalog"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-catalog-create"><label class="field"><span>Neue Position</span><input data-branch-orders-management-new-item-title maxlength="180" placeholder="Bezeichnung eingeben" autocomplete="off" /></label><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">Position hinzufügen</button></div><div class="branch-orders-management-catalog-search"><label class="field"><span>Positionen suchen</span><input type="search" inputmode="search" autocomplete="off" placeholder="Bezeichnung, Einheit oder Position" value="${escapeHtmlAttribute(state.branchOrdersManagementCatalogSearch)}" data-branch-orders-management-catalog-search /></label><p data-branch-orders-management-catalog-search-status aria-live="polite"></p></div><div class="branch-orders-management-catalog-table-wrap"><table class="branch-orders-management-catalog-table"><thead>${branchOrdersManagementCatalogHeader()}</thead><tbody>${itemRows || '<tr><td colspan="4" class="branch-orders-management-catalog-empty">Noch keine Position angelegt.</td></tr>'}${itemRows ? '<tr data-branch-orders-management-catalog-search-empty hidden><td colspan="4" class="branch-orders-management-catalog-empty">Keine passende Position gefunden.</td></tr>' : ""}</tbody></table></div></div></details>
     <details class="branch-orders-management-section" data-branch-orders-management-section="groups"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Bestellansicht</span><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern nur die Bestellansicht; die Übergabe wird pro Position zusammengefasst.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Anzeigegruppe</button></div>${groupRows}</div></details>`;
   restoreBranchOrdersManagementDisclosureState(openDisclosures);
+  applyBranchOrdersManagementCatalogSearch();
   renderBranchOrdersManagementHistory();
 }
 
@@ -3118,6 +3161,7 @@ async function loadBranchOrdersManagement(locationId = selectedBranchOrdersManag
   const normalizedLocationId = String(locationId || "").trim();
   state.branchOrdersManagementLocationId = normalizedLocationId;
   state.branchOrdersManagementCatalogEditingId = "";
+  state.branchOrdersManagementCatalogSearch = "";
   if (!normalizedLocationId) {
     state.branchOrdersManagement = null;
     state.branchOrdersManagementDraft = null;
@@ -18468,6 +18512,15 @@ function renderSettings() {
   state.schedulePdfDesignSelection = schedulePdfDesignIdsFromSettings(settings);
   state.schedulePdfDesignNames = Object.fromEntries(schedulePdfDesignCatalog(settings).map((design) => [design.id, design.label]));
   renderSchedulePdfDesignSettings();
+  document.querySelector("#scheduleMatrixTimeFontSize").value = ["6", "8.5", "11", "14.5", "18"].includes(
+    String(settings.pdf_schedule_matrix_time_font_size),
+  ) ? String(settings.pdf_schedule_matrix_time_font_size) : "6";
+  document.querySelector("#scheduleMatrixDetailFontSize").value = ["6", "8", "9.5"].includes(
+    String(settings.pdf_schedule_matrix_detail_font_size),
+  ) ? String(settings.pdf_schedule_matrix_detail_font_size) : "6";
+  document.querySelector("#scheduleMatrixTimeFontBold").checked = settings.pdf_schedule_matrix_time_font_bold === "1";
+  document.querySelector("#scheduleMatrixTimeEmployeeColor").checked = settings.pdf_schedule_matrix_time_employee_color === "1";
+  document.querySelector("#scheduleMatrixHeaderText").value = settings.pdf_schedule_matrix_header_text || "Design 2";
   document.querySelector("#vacationPdfTitleSetting").value = vacationSettings.vacation_pdf_title || "Urlaubsplanung";
   document.querySelector("#vacationPdfFilenamePrefix").value = vacationSettings.vacation_pdf_filename_prefix || vacationSettings.vacation_pdf_title || "Urlaubsplanung";
   document.querySelector("#vacationPdfFilenameIncludePeriod").checked = vacationSettings.vacation_pdf_filename_include_period !== "0";
@@ -27614,6 +27667,8 @@ function setSettingsTab(tab) {
   }
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
+  const canSaveSchedulePdfSettings = canSaveGeneralSettings
+    || state.portalSession?.user?.permissions?.includes(schedulePdfSettingsWritePermission);
   const canSaveScheduleSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("schedule:cross_location:settings:write");
   const canSaveBackupSettings = !state.portalStatus?.portalEnabled
@@ -27627,7 +27682,7 @@ function setSettingsTab(tab) {
       ? !canSaveBackupSettings
       : activeTab === "schedule"
         ? !(canSaveScheduleSettings || canSaveGeneralSettings)
-        : !(canSaveGeneralSettings || (activeTab === "general" && canSaveBranding))));
+        : !(canSaveGeneralSettings || (activeTab === "general" && (canSaveBranding || canSaveSchedulePdfSettings)))));
   if (activeTab === "access") {
     if (!elements.portalUserAccessCard?.classList.contains("hidden")) loadPortalUsers();
     if (canManageMobilePortalLocationDisplay()) loadMobilePortalLocationDisplay();
@@ -30612,6 +30667,8 @@ async function saveSettings(silent = false) {
     const portalEnabled = state.portalStatus?.portalEnabled === true;
     const activeSettingsTab = document.querySelector("[data-settings-tab].active")?.dataset.settingsTab || "general";
     const canSaveGeneralSettings = !portalEnabled || permissions.includes("settings:write");
+    const canSaveSchedulePdfSettings = canSaveGeneralSettings
+      || permissions.includes(schedulePdfSettingsWritePermission);
     const canSaveScheduleSettings = !portalEnabled
       || permissions.includes("schedule:cross_location:settings:write");
     const canSaveBranding = !portalEnabled || permissions.includes("branding:write");
@@ -30619,15 +30676,23 @@ async function saveSettings(silent = false) {
       || (permissions.includes("schedule:write") && permissions.includes("settings:write"));
     const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing").checked;
     const schedulePdfDesignNames = schedulePdfDesignNamesForSave();
+    const schedulePdfPayload = {
+      locationId: state.locationId,
+      departmentId: state.departmentId || "",
+      pdfTitle: document.querySelector("#pdfTitleSetting").value,
+      pdfFilenamePrefix: document.querySelector("#pdfFilenamePrefix").value,
+      pdfFilenameIncludeKw: document.querySelector("#pdfFilenameIncludeKw").checked,
+      pdfFilenameIncludeTimestamp: document.querySelector("#pdfFilenameIncludeTimestamp").checked,
+      schedulePdfDesignIds: [...state.schedulePdfDesignSelection],
+      schedulePdfDesignNames,
+      scheduleMatrixTimeFontSize: document.querySelector("#scheduleMatrixTimeFontSize").value,
+      scheduleMatrixDetailFontSize: document.querySelector("#scheduleMatrixDetailFontSize").value,
+      scheduleMatrixTimeFontBold: document.querySelector("#scheduleMatrixTimeFontBold").checked,
+      scheduleMatrixTimeEmployeeColor: document.querySelector("#scheduleMatrixTimeEmployeeColor").checked,
+      scheduleMatrixHeaderText: document.querySelector("#scheduleMatrixHeaderText").value,
+    };
     const payload = {
-        locationId: state.locationId,
-        departmentId: state.departmentId || "",
-        pdfTitle: document.querySelector("#pdfTitleSetting").value,
-        pdfFilenamePrefix: document.querySelector("#pdfFilenamePrefix").value,
-        pdfFilenameIncludeKw: document.querySelector("#pdfFilenameIncludeKw").checked,
-        pdfFilenameIncludeTimestamp: document.querySelector("#pdfFilenameIncludeTimestamp").checked,
-        schedulePdfDesignIds: [...state.schedulePdfDesignSelection],
-        schedulePdfDesignNames,
+        ...schedulePdfPayload,
         vacationPdfTitle: document.querySelector("#vacationPdfTitleSetting").value,
         vacationPdfFilenamePrefix: document.querySelector("#vacationPdfFilenamePrefix").value,
         vacationPdfFilenameIncludePeriod: document.querySelector("#vacationPdfFilenameIncludePeriod").checked,
@@ -30675,6 +30740,12 @@ async function saveSettings(silent = false) {
       await api("/api/settings", {
         method: "PUT",
         body: JSON.stringify(payload),
+      });
+    }
+    if (canSaveSchedulePdfSettings && !canSaveGeneralSettings) {
+      await api("/api/portal/v1/schedule-pdf-settings", {
+        method: "PUT",
+        body: JSON.stringify(schedulePdfPayload),
       });
     }
     if (activeSettingsTab === "schedule" && canSaveScheduleSettings && !canSaveGeneralSettings) {
@@ -31416,6 +31487,12 @@ elements.branchOrdersManagementLocation?.addEventListener("change", () => {
   loadBranchOrdersManagement(state.branchOrdersManagementLocationId);
 });
 elements.branchOrdersManagementWorkspace?.addEventListener("input", (event) => {
+  const search = event.target.closest?.("[data-branch-orders-management-catalog-search]");
+  if (search) {
+    state.branchOrdersManagementCatalogSearch = search.value;
+    applyBranchOrdersManagementCatalogSearch();
+    return;
+  }
   const field = event.target.closest?.("[data-branch-orders-management-field]");
   if (field) updateBranchOrdersManagementDraftFromField(field);
 });

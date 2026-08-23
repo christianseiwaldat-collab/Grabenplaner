@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.15 Beta · Anpassbare Wochenmatrix und Katalogsuche
+
+- Die alternative Dienstplan-Wochenmatrix bietet gestufte Punktgrößen für Uhrzeiten und Zusatzzeilen, optionale Fettschrift sowie Uhrzeiten in der hinterlegten Teammitgliedfarbe. Abteilung oder Arbeitsbereich steht platzsparend unter der Uhrzeit.
+- Ein bereichsgebundenes, delegierbares Recht erlaubt berechtigten Filial- und Abteilungsleitungen, Dienstplan-PDF-Designs und einen eigenen Matrix-Kopftext mit bis zu 200 Zeichen ausschließlich im freigegebenen Bereich zu pflegen; Änderungen werden protokolliert.
+- Urlaub, Sonderurlaub, Zeitausgleich und Schulung sind in der Matrix deutlicher gekennzeichnet. Die kompakte Legende verzichtet auf den erklärungsarmen Eintrag „Mitarbeitendenfarbe“; Teamsitzungen werden unterhalb der Matrix als „Teamsitzung (TS)“ ausgeschrieben.
+- Die Dienstplan- und Urlaubs-PDF-Konfiguration nutzt die volle Breite ihres Einstellungsbereichs. Der zentrale Bestellkatalog erhält eine sofortige Suche nach Position, Bezeichnung und Einheit bei unverändert sortierbarer Tabelle.
+- Rechte-, Scope-, Validierungs-, PDF-, Layout-, Such-, Mobil-, Persistenz- und Integrationspfade sind regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.14 Beta · Vollständige Bestellkatalog-Migration beim Serverstart
 
 - Bereits konfigurierte Filialkataloge erhalten die versionierte Plotterpapier-Ergänzung beim Serverstart und nicht erst beim ersten Öffnen der Bestellverwaltung.

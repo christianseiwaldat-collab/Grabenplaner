@@ -736,7 +736,8 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .settings-accordion-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); grid-auto-rows: max-content; align-items: start; gap: 15px; }
 .settings-accordion-grid > .settings-card,
 .settings-accordion-grid > .settings-card:first-child { min-width: 0; grid-column: auto; }
-.settings-accordion-stack { display: grid; grid-auto-rows: max-content; align-items: start; gap: 15px; }
+.settings-accordion-stack { display: grid; grid-template-columns:minmax(0,1fr); grid-auto-rows: max-content; align-items: start; gap: 15px; }
+.settings-accordion-stack > .settings-card { grid-column:1 / -1; min-width:0; width:100%; }
 .settings-packed-grid {
   --settings-grid-gap: 15px;
   grid-auto-flow: row;
@@ -924,7 +925,19 @@ html[data-ui-mode="mobile"] .app-shell { padding-top:var(--deployment-banner-hei
 .schedule-pdf-design-name-reset:disabled { color:var(--muted); cursor:default; opacity:.55; text-decoration:none; }
 .schedule-pdf-design-rank { display:grid; gap:3px; color:var(--muted); font-size:7.5px; font-weight:750; }
 .schedule-pdf-design-rank select { min-width:0; padding:6px 24px 6px 8px; font-size:8px; }
+.schedule-matrix-pdf-settings { overflow:hidden; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.schedule-matrix-pdf-settings > summary { display:grid; grid-template-columns:minmax(0,1fr) 24px; align-items:center; gap:10px; min-height:54px; padding:10px 12px; list-style:none; cursor:pointer; }
+.schedule-matrix-pdf-settings > summary::-webkit-details-marker { display:none; }
+.schedule-matrix-pdf-settings > summary strong,.schedule-matrix-pdf-settings > summary small { display:block; }
+.schedule-matrix-pdf-settings > summary strong { font-size:9px; }
+.schedule-matrix-pdf-settings > summary small { margin-top:3px; color:var(--muted); font-size:7.5px; line-height:1.4; }
+.schedule-matrix-pdf-settings[open] > summary { border-bottom:1px solid var(--line); }
+.schedule-matrix-pdf-settings[open] > summary .settings-accordion-chevron { transform:rotate(90deg); }
+.schedule-matrix-pdf-settings-body { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; padding:12px; background:var(--surface-soft); }
+.schedule-matrix-pdf-settings-body > .field,.schedule-matrix-pdf-settings-body > .switch-row { margin:0; }
+.schedule-matrix-header-text { grid-column:1 / -1; }
 .schedule-pdf-preview-design { margin:0; }
+@media (max-width:760px) { .schedule-matrix-pdf-settings-body { grid-template-columns:1fr; } .schedule-matrix-header-text { grid-column:1; } }
 .backup-actions { display: flex; align-items: end; justify-content: flex-start; padding-top: 21px; }
 .backup-import-row { align-items: end; }
 .database-backup-path { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #dce2df; border-radius: 10px; background: #f8faf8; }
@@ -4505,6 +4518,9 @@ details[open] > summary > .branch-orders-management-chevron { transform:rotate(9
 .branch-orders-management-unit > .branch-orders-management-disclosure-body { padding:0 12px 12px; }
 .branch-orders-management-catalog-create { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:8px; }
 .branch-orders-management-catalog-create .secondary-button { min-height:42px; white-space:nowrap; }
+.branch-orders-management-catalog-search { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:10px; }
+.branch-orders-management-catalog-search .field { margin:0; }
+.branch-orders-management-catalog-search > p { min-width:100px; margin:0 0 10px; color:var(--muted); font-size:8.5px; font-weight:750; text-align:right; white-space:nowrap; }
 .branch-orders-management-catalog-table-wrap,.branch-orders-management-group-table-wrap { min-width:0; overflow-x:auto; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
 .branch-orders-management-catalog-table,.branch-orders-management-group-table { width:100%; min-width:540px; border-collapse:collapse; table-layout:auto; }
 .branch-orders-management-catalog-table th,.branch-orders-management-group-table th { padding:9px 10px; color:var(--muted); background:var(--surface-soft); font-size:9px; text-align:left; text-transform:uppercase; letter-spacing:.06em; }

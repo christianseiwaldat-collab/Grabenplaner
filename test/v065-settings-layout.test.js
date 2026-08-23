@@ -67,10 +67,25 @@ test("Block 7: Leihe, Branding und PDF sind geschlossene Bereiche der Grundeinst
   assert.match(general, /id="brandingAssignmentList"/);
   assert.match(general, /id="pdfTitleSetting"/);
   assert.match(general, /id="vacationPdfTitleSetting"/);
+  assert.equal(
+    (general.match(/class="settings-card pdf-card"/g) || []).length,
+    2,
+    "Dienstplan- und Urlaubs-PDF müssen als zwei eigene Karten im PDF-Accordion liegen",
+  );
 
   assert.match(styles, /\.settings-two-column \{[^}]*grid-auto-rows:\s*max-content;[^}]*align-items:\s*start;/);
   assert.match(styles, /\.settings-card \{[^}]*align-self:\s*start;[^}]*height:\s*auto;/);
   assert.match(styles, /\.settings-accordion-grid \{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\);[^}]*grid-auto-rows:\s*max-content;[^}]*align-items:\s*start;/);
+  assert.match(
+    styles,
+    /\.settings-accordion-stack \{[^}]*grid-template-columns:\s*minmax\(0,1fr\);/,
+    "der PDF-Accordion-Stack braucht eine explizite volle Spalte",
+  );
+  assert.match(
+    styles,
+    /\.settings-accordion-stack > \.settings-card \{[^}]*grid-column:\s*1 \/ -1;[^}]*min-width:\s*0;[^}]*width:\s*100%;/,
+    "beide PDF-Karten müssen die volle Accordion-Breite belegen",
+  );
   assert.match(styles, /\.settings-packed-grid \{[^}]*grid-auto-flow:\s*row;[^}]*grid-auto-rows:\s*1px;[^}]*row-gap:\s*0;/);
   assert.match(app, /Math\.ceil\(item\.offsetHeight \+ 15\)/);
   assert.match(app, /new ResizeObserver/);

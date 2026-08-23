@@ -138,6 +138,95 @@ test("Positionstabelle sortiert zugänglich nach Position, Bezeichnung und Einhe
   );
 });
 
+test("Positionssuche filtert Bezeichnung, Einheit und Positionsnummer ohne die Sortierung zu verändern", () => {
+  const rows = [
+    {
+      hidden: false,
+      dataset: {
+        branchOrdersManagementCatalogRow: "paper",
+        branchOrdersManagementCatalogSearchText: "12 Fotopapier Hochglanz Packung",
+      },
+    },
+    {
+      hidden: false,
+      dataset: {
+        branchOrdersManagementCatalogRow: "roll",
+        branchOrdersManagementCatalogSearchText: "4 Plotterrolle Matt Rolle",
+      },
+    },
+    {
+      hidden: false,
+      dataset: {
+        branchOrdersManagementCatalogRow: "battery",
+        branchOrdersManagementCatalogSearchText: "1 Batteriesammelbehälter Stück",
+      },
+    },
+  ];
+  const editorRows = new Map(rows.map((row) => [
+    row.dataset.branchOrdersManagementCatalogRow,
+    { hidden: false },
+  ]));
+  const empty = { hidden: true };
+  const status = { textContent: "" };
+  const workspace = {
+    querySelectorAll(selector) {
+      return selector === "[data-branch-orders-management-catalog-row]" ? rows : [];
+    },
+    querySelector(selector) {
+      if (selector === "[data-branch-orders-management-catalog-search-empty]") return empty;
+      if (selector === "[data-branch-orders-management-catalog-search-status]") return status;
+      const editor = selector.match(/^\[data-branch-orders-management-catalog-editor-row="([^"]+)"\]$/);
+      return editor ? editorRows.get(editor[1]) || null : null;
+    },
+  };
+  const context = {
+    CSS: { escape: (value) => String(value) },
+    elements: { branchOrdersManagementWorkspace: workspace },
+    state: {
+      branchOrdersManagementCatalogSearch: "",
+      branchOrdersManagementCatalogSort: { key: "title", direction: "desc" },
+    },
+  };
+  const searchSource = sourceBetween(
+    "function normalizeBranchOrdersManagementCatalogSearch(value)",
+    "function branchOrdersManagementCatalogHeader()",
+  );
+  vm.runInNewContext(
+    `${searchSource}\nglobalThis.catalogSearch = applyBranchOrdersManagementCatalogSearch;`,
+    context,
+  );
+  const originalOrder = rows.map((row) => row.dataset.branchOrdersManagementCatalogRow);
+  const originalSort = { ...context.state.branchOrdersManagementCatalogSort };
+  const search = (query) => {
+    context.state.branchOrdersManagementCatalogSearch = query;
+    context.catalogSearch();
+  };
+
+  search("hochglanz");
+  assert.deepEqual(rows.map((row) => row.hidden), [false, true, true], "Bezeichnung");
+  assert.equal(status.textContent, "1 von 3 Positionen");
+
+  search("stuck");
+  assert.deepEqual(rows.map((row) => row.hidden), [true, true, false], "Einheit, akzentunabhängig");
+  assert.equal(status.textContent, "1 von 3 Positionen");
+
+  search("4");
+  assert.deepEqual(rows.map((row) => row.hidden), [true, false, true], "Positionsnummer");
+  assert.equal(editorRows.get("roll").hidden, false, "der zugehörige Editor bleibt mit der Zeile sichtbar");
+
+  search("nicht vorhanden");
+  assert.deepEqual(rows.map((row) => row.hidden), [true, true, true]);
+  assert.equal(empty.hidden, false);
+  assert.equal(status.textContent, "0 von 3 Positionen");
+
+  search("");
+  assert.deepEqual(rows.map((row) => row.hidden), [false, false, false]);
+  assert.equal(empty.hidden, true);
+  assert.equal(status.textContent, "3 Positionen");
+  assert.deepEqual(rows.map((row) => row.dataset.branchOrdersManagementCatalogRow), originalOrder);
+  assert.deepEqual(context.state.branchOrdersManagementCatalogSort, originalSort);
+});
+
 test("Position hinzufügen übernimmt die Bezeichnung und öffnet genau den neuen Inline-Editor", () => {
   const draft = {
     recipients: [],

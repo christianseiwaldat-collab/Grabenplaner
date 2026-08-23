@@ -641,6 +641,7 @@ const BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION = "branch_portal:display:manage";
 const MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION = "mobile_portal:location_display:manage";
 const XOFFI_TIME_IMPORT_PERMISSION = "xoffi_time_import:manage";
 const STAFF_ASSIGNMENTS_MANAGE_PERMISSION = "staff_assignments:manage";
+const SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION = "schedule:pdf:settings:write";
 const BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION = "organization_accounts:password:manage";
 const mobilePortalLocationDisplayModules = Object.freeze([
   { id: "time", label: "Zeit", description: "Zeiterfassung und Zeitkonto" },
@@ -760,6 +761,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE, label: "Standortübergreifenden Einsatz für die eigene Filiale anfragen", description: "Aus einem fremden Dienstplan einen stundenweisen, ganztägigen oder mehrtägigen Einsatz für die eigene Filiale und den eigenen Abteilungsbereich anfragen; noch keine Einsatzfreigabe.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW, label: "Einsatzanfragen der eigenen Stammfiliale entscheiden", description: "Anfragen zu Teammitgliedern des eigenen Verantwortungsbereichs prüfen und entscheiden; direkte Filialeinsätze bleiben ein getrenntes Recht.", group: "Dienstplanung", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE, label: "Standortübergreifende Einsatzanfragen konfigurieren", description: "PL+-Metarecht für Sicht-, AL- und Benachrichtigungseinstellungen; vermittelt allein keinen Zugriff auf fremde Dienstpläne oder Anfragen.", group: "Dienstplanung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION, label: "Dienstplan-PDF im eigenen Bereich gestalten", description: "Titel, Dateiname, Designauswahl und Wochenmatrix-Darstellung ausschließlich im freigegebenen Filial- oder Abteilungsbereich bearbeiten.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE, label: "Geburtstagsdarstellung im eigenen Team festlegen", description: "Wählt ausschließlich eine freigegebene Darstellungs-ID für das eigene aktive Filial- oder Abteilungsteam; vermittelt keinen Zugriff auf Geburtsdatum, Alter oder Geburtstagslisten.", group: "Mitarbeiterportal", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "developer"] },
   { id: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE, label: "Geburtstagsdarstellungen global freigeben", description: "PL+-Metarecht für die globale Aktivierung; vermittelt weder Geburtstagsdaten noch Teamzugriff.", group: "Mitarbeiterportal", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: STAFF_ASSIGNMENTS_MANAGE_PERMISSION, label: "Temporäre Filialeinsätze verwalten", description: "Mitarbeitende des eigenen Verantwortungsbereichs zeitlich begrenzt einer anderen Filiale zuweisen.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
@@ -1674,6 +1676,9 @@ const ownGovernancePermissions = [
   "own_privacy_export:read",
 ];
 for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, ownGovernancePermissions);
+for (const roleId of ["hr", "admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION]);
+}
 const personnelLifecycleBusinessRolePermissions = Object.freeze([
   "personnel:candidates:read",
   "personnel:applications:write",
@@ -3086,6 +3091,11 @@ const defaultSettings = {
   pdf_filename_include_timestamp: "0",
   pdf_schedule_designs: JSON.stringify(DEFAULT_SCHEDULE_PDF_DESIGN_IDS),
   pdf_schedule_design_names: "{}",
+  pdf_schedule_matrix_time_font_size: "6",
+  pdf_schedule_matrix_time_font_bold: "0",
+  pdf_schedule_matrix_time_employee_color: "0",
+  pdf_schedule_matrix_detail_font_size: "6",
+  pdf_schedule_matrix_header_text: "Design 2",
   vacation_pdf_title: "Urlaubsplanung",
   vacation_pdf_filename_prefix: "Urlaubsplanung",
   vacation_pdf_filename_include_period: "1",
@@ -17479,6 +17489,27 @@ function pdfDepartmentKey(context = {}) {
   return context.departmentId ? String(context.departmentId) : "";
 }
 
+const SCHEDULE_MATRIX_TIME_FONT_SIZES = Object.freeze(["6", "8.5", "11", "14.5", "18"]);
+const SCHEDULE_MATRIX_DETAIL_FONT_SIZES = Object.freeze(["6", "8", "9.5"]);
+
+function normalizeScheduleMatrixFontSize(value, allowed, fallback, { strict = false } = {}) {
+  const normalized = String(value ?? "").trim().replace(",", ".");
+  if (allowed.includes(normalized)) return normalized;
+  if (strict) {
+    throw httpError(400, "Die gewählte Schriftgröße für die Wochenmatrix ist ungültig.", "SCHEDULE_MATRIX_FONT_SIZE_INVALID");
+  }
+  return fallback;
+}
+
+function normalizeScheduleMatrixHeaderText(value, { strict = false } = {}) {
+  const normalized = String(value ?? "").trim();
+  if (normalized.length <= 200 && !/[\x00-\x1F\x7F]/.test(normalized)) return normalized;
+  if (strict) {
+    throw httpError(400, "Der Kopftext der Wochenmatrix muss einzeilig sein und darf höchstens 200 Zeichen enthalten.", "SCHEDULE_MATRIX_HEADER_TEXT_INVALID");
+  }
+  return "Design 2";
+}
+
 function defaultSchedulePdfSettings(context = {}) {
   const titleParts = [`${context.departmentName ? "Abteilungsplan" : "Dienstplan"} ${context.locationName || "Hauptstandort"}`];
   if (context.departmentName) titleParts.push(context.departmentName);
@@ -17490,6 +17521,11 @@ function defaultSchedulePdfSettings(context = {}) {
     pdf_filename_include_timestamp: "0",
     pdf_schedule_designs: JSON.stringify(DEFAULT_SCHEDULE_PDF_DESIGN_IDS),
     pdf_schedule_design_names: "{}",
+    pdf_schedule_matrix_time_font_size: "6",
+    pdf_schedule_matrix_time_font_bold: "0",
+    pdf_schedule_matrix_time_employee_color: "0",
+    pdf_schedule_matrix_detail_font_size: "6",
+    pdf_schedule_matrix_header_text: "Design 2",
   };
 }
 
@@ -17534,6 +17570,19 @@ function applyScopedPdfSettings(settings, context, scopeType) {
     ...scopedSettings,
     pdf_schedule_designs: JSON.stringify(designIds),
     pdf_schedule_design_names: JSON.stringify(designNames),
+    pdf_schedule_matrix_time_font_size: normalizeScheduleMatrixFontSize(
+      scopedSettings.pdf_schedule_matrix_time_font_size,
+      SCHEDULE_MATRIX_TIME_FONT_SIZES,
+      "6",
+    ),
+    pdf_schedule_matrix_time_font_bold: scopedSettings.pdf_schedule_matrix_time_font_bold === "1" ? "1" : "0",
+    pdf_schedule_matrix_time_employee_color: scopedSettings.pdf_schedule_matrix_time_employee_color === "1" ? "1" : "0",
+    pdf_schedule_matrix_detail_font_size: normalizeScheduleMatrixFontSize(
+      scopedSettings.pdf_schedule_matrix_detail_font_size,
+      SCHEDULE_MATRIX_DETAIL_FONT_SIZES,
+      "6",
+    ),
+    pdf_schedule_matrix_header_text: normalizeScheduleMatrixHeaderText(scopedSettings.pdf_schedule_matrix_header_text),
     pdf_schedule_design_ids: designIds,
     schedule_pdf_design_catalog: schedulePdfDesignCatalogPayload(designNames),
   };
@@ -17565,6 +17614,28 @@ function validatePdfText(value, fieldName, { min = 1, max = 80 } = {}) {
     throw httpError(400, `${fieldName} muss zwischen ${min} und ${max} Zeichen lang sein.`);
   }
   return text;
+}
+
+const SCHEDULE_PDF_SCOPED_SETTING_KEYS = Object.freeze([
+  "pdf_title",
+  "pdf_filename_prefix",
+  "pdf_filename_include_kw",
+  "pdf_filename_include_timestamp",
+  "pdf_schedule_designs",
+  "pdf_schedule_design_names",
+  "pdf_schedule_matrix_time_font_size",
+  "pdf_schedule_matrix_time_font_bold",
+  "pdf_schedule_matrix_time_employee_color",
+  "pdf_schedule_matrix_detail_font_size",
+  "pdf_schedule_matrix_header_text",
+]);
+
+function schedulePdfScopedSettingsPayload(settings = {}) {
+  return {
+    ...Object.fromEntries(SCHEDULE_PDF_SCOPED_SETTING_KEYS.map((key) => [key, settings[key]])),
+    pdf_schedule_design_ids: [...(settings.pdf_schedule_design_ids || [])],
+    schedule_pdf_design_catalog: [...(settings.schedule_pdf_design_catalog || [])],
+  };
 }
 
 function validateBrandText(value, fallback, max = 100) {
@@ -27046,6 +27117,11 @@ const brandingPreserveSettingKeys = [
   "pdf_filename_include_timestamp",
   "pdf_schedule_designs",
   "pdf_schedule_design_names",
+  "pdf_schedule_matrix_time_font_size",
+  "pdf_schedule_matrix_time_font_bold",
+  "pdf_schedule_matrix_time_employee_color",
+  "pdf_schedule_matrix_detail_font_size",
+  "pdf_schedule_matrix_header_text",
   "vacation_pdf_title",
   "vacation_pdf_filename_prefix",
   "vacation_pdf_filename_include_period",
@@ -53241,6 +53317,156 @@ app.get("/api/settings", async (request, response) => {
   response.json(settings);
 });
 
+app.get("/api/portal/v1/schedule-pdf-settings", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION, "settings:write"],
+  );
+  const context = await resolvePlanningContext(request.query || {});
+  assertSessionContextScope(session, context);
+  const settings = applyScopedPdfSettings(
+    await settingsForLocation(context.locationId),
+    context,
+    "schedule",
+  );
+  response.json({
+    context,
+    settings: schedulePdfScopedSettingsPayload(settings),
+  });
+});
+
+app.put("/api/portal/v1/schedule-pdf-settings", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    [SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION, "settings:write"],
+    { csrf: true },
+  );
+  const body = request.body || {};
+  const context = await resolvePlanningContext(body);
+  assertSessionContextScope(session, context);
+  const defaults = defaultSchedulePdfSettings(context);
+  const currentSettings = applyScopedPdfSettings(
+    await settingsForLocation(context.locationId),
+    context,
+    "schedule",
+  );
+  let designIds;
+  let designNames;
+  try {
+    designIds = normalizeSchedulePdfDesignIds(
+      Object.hasOwn(body, "schedulePdfDesignIds")
+        ? body.schedulePdfDesignIds
+        : currentSettings.pdf_schedule_design_ids,
+      { strict: true },
+    );
+    designNames = Object.hasOwn(body, "schedulePdfDesignNames")
+      ? normalizeSchedulePdfDesignNames(body.schedulePdfDesignNames, { strict: true })
+      : normalizeSchedulePdfDesignNames(currentSettings.pdf_schedule_design_names);
+  } catch (error) {
+    if (error instanceof SchedulePdfDesignValidationError) {
+      throw httpError(400, error.message, error.code);
+    }
+    throw error;
+  }
+  for (const booleanKey of [
+    "pdfFilenameIncludeKw",
+    "pdfFilenameIncludeTimestamp",
+    "scheduleMatrixTimeFontBold",
+    "scheduleMatrixTimeEmployeeColor",
+  ]) {
+    if (Object.hasOwn(body, booleanKey) && typeof body[booleanKey] !== "boolean") {
+      throw httpError(400, "Die Dienstplan-PDF-Einstellungen enthalten einen ungültigen Schalter.", "SCHEDULE_PDF_BOOLEAN_INVALID");
+    }
+  }
+  const values = {
+    pdf_title: validatePdfText(body.pdfTitle || currentSettings.pdf_title || defaults.pdf_title, "den Dienstplan-PDF-Titel"),
+    pdf_filename_prefix: validatePdfText(
+      body.pdfFilenamePrefix || currentSettings.pdf_filename_prefix || defaults.pdf_filename_prefix,
+      "der Dienstplan-PDF-Dateiname",
+      { min: 5, max: 80 },
+    ),
+    pdf_filename_include_kw: Object.hasOwn(body, "pdfFilenameIncludeKw")
+      ? (body.pdfFilenameIncludeKw ? "1" : "0")
+      : currentSettings.pdf_filename_include_kw,
+    pdf_filename_include_timestamp: Object.hasOwn(body, "pdfFilenameIncludeTimestamp")
+      ? (body.pdfFilenameIncludeTimestamp ? "1" : "0")
+      : currentSettings.pdf_filename_include_timestamp,
+    pdf_schedule_designs: JSON.stringify(designIds),
+    pdf_schedule_design_names: JSON.stringify(designNames),
+    pdf_schedule_matrix_time_font_size: normalizeScheduleMatrixFontSize(
+      Object.hasOwn(body, "scheduleMatrixTimeFontSize")
+        ? body.scheduleMatrixTimeFontSize
+        : currentSettings.pdf_schedule_matrix_time_font_size,
+      SCHEDULE_MATRIX_TIME_FONT_SIZES,
+      "6",
+      { strict: true },
+    ),
+    pdf_schedule_matrix_time_font_bold: Object.hasOwn(body, "scheduleMatrixTimeFontBold")
+      ? (body.scheduleMatrixTimeFontBold ? "1" : "0")
+      : currentSettings.pdf_schedule_matrix_time_font_bold,
+    pdf_schedule_matrix_time_employee_color: Object.hasOwn(body, "scheduleMatrixTimeEmployeeColor")
+      ? (body.scheduleMatrixTimeEmployeeColor ? "1" : "0")
+      : currentSettings.pdf_schedule_matrix_time_employee_color,
+    pdf_schedule_matrix_detail_font_size: normalizeScheduleMatrixFontSize(
+      Object.hasOwn(body, "scheduleMatrixDetailFontSize")
+        ? body.scheduleMatrixDetailFontSize
+        : currentSettings.pdf_schedule_matrix_detail_font_size,
+      SCHEDULE_MATRIX_DETAIL_FONT_SIZES,
+      "6",
+      { strict: true },
+    ),
+    pdf_schedule_matrix_header_text: normalizeScheduleMatrixHeaderText(
+      Object.hasOwn(body, "scheduleMatrixHeaderText")
+        ? body.scheduleMatrixHeaderText
+        : currentSettings.pdf_schedule_matrix_header_text,
+      { strict: true },
+    ),
+  };
+  const before = schedulePdfScopedSettingsPayload(currentSettings);
+  const changedKeys = Object.keys(values).filter((key) => String(currentSettings[key] ?? "") !== String(values[key]));
+  await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    let liveSession = session;
+    if (!isLocalSystemSession(session)) {
+      liveSession = await livePersonnelLearningRoleAdministrationActor(
+        session,
+        repositories.organizationPersonnel,
+      );
+      if (![SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION, "settings:write"]
+        .some((permission) => liveSession?.permissions?.includes(permission))) {
+        throw httpError(403, "Für diese Aktion fehlt die aktuell wirksame Berechtigung.", "PORTAL_PERMISSION_DENIED");
+      }
+      assertSessionContextScope(liveSession, context);
+    }
+    await saveScopedPdfSettings("schedule", context, values, repositories.planningSettings);
+    if (changedKeys.length) {
+      await repositories.organizationPersonnel.insertAudit(
+        liveSession?.employeeNumber || "local",
+        "schedule.pdf.settings.update",
+        "schedule_pdf_settings",
+        `${context.locationId}:${context.departmentId || "all"}`,
+        JSON.stringify({
+          locationId: context.locationId,
+          departmentId: context.departmentId || null,
+          changedKeys: changedKeys.sort(),
+          before,
+          after: values,
+        }),
+      );
+    }
+  }, { isolation: "serializable" });
+  await refreshPlanningSettingsReadModel();
+  const settings = applyScopedPdfSettings(
+    await settingsForLocation(context.locationId),
+    context,
+    "schedule",
+  );
+  response.json({
+    context,
+    settings: schedulePdfScopedSettingsPayload(settings),
+  });
+});
+
 app.get("/api/branding/export", async (request, response) => {
   requirePortalAdminOrLocal(request, "branding:read");
   const kit = await brandingKitForExport(request.query);
@@ -53466,6 +53692,39 @@ app.put("/api/settings", async (request, response) => {
     }
     throw error;
   }
+  const scheduleMatrixTimeFontSize = normalizeScheduleMatrixFontSize(
+    Object.hasOwn(body, "scheduleMatrixTimeFontSize")
+      ? body.scheduleMatrixTimeFontSize
+      : currentScheduleSettings.pdf_schedule_matrix_time_font_size,
+    SCHEDULE_MATRIX_TIME_FONT_SIZES,
+    "6",
+    { strict: true },
+  );
+  const scheduleMatrixDetailFontSize = normalizeScheduleMatrixFontSize(
+    Object.hasOwn(body, "scheduleMatrixDetailFontSize")
+      ? body.scheduleMatrixDetailFontSize
+      : currentScheduleSettings.pdf_schedule_matrix_detail_font_size,
+    SCHEDULE_MATRIX_DETAIL_FONT_SIZES,
+    "6",
+    { strict: true },
+  );
+  const scheduleMatrixHeaderText = normalizeScheduleMatrixHeaderText(
+    Object.hasOwn(body, "scheduleMatrixHeaderText")
+      ? body.scheduleMatrixHeaderText
+      : currentScheduleSettings.pdf_schedule_matrix_header_text,
+    { strict: true },
+  );
+  for (const booleanKey of ["scheduleMatrixTimeFontBold", "scheduleMatrixTimeEmployeeColor"]) {
+    if (Object.hasOwn(body, booleanKey) && typeof body[booleanKey] !== "boolean") {
+      throw httpError(400, "Die Dienstplan-PDF-Einstellungen enthalten einen ungültigen Schalter.", "SCHEDULE_PDF_BOOLEAN_INVALID");
+    }
+  }
+  const scheduleMatrixTimeFontBold = Object.hasOwn(body, "scheduleMatrixTimeFontBold")
+    ? body.scheduleMatrixTimeFontBold === true
+    : currentScheduleSettings.pdf_schedule_matrix_time_font_bold === "1";
+  const scheduleMatrixTimeEmployeeColor = Object.hasOwn(body, "scheduleMatrixTimeEmployeeColor")
+    ? body.scheduleMatrixTimeEmployeeColor === true
+    : currentScheduleSettings.pdf_schedule_matrix_time_employee_color === "1";
   const pdfTitle = validatePdfText(body.pdfTitle || scheduleDefaults.pdf_title, "den Dienstplan-PDF-Titel");
   const pdfFilenamePrefix = validatePdfText(body.pdfFilenamePrefix || scheduleDefaults.pdf_filename_prefix, "der Dienstplan-PDF-Dateiname", { min: 5, max: 80 });
   const vacationPdfTitle = validatePdfText(body.vacationPdfTitle || vacationDefaults.vacation_pdf_title, "den Urlaubsplaner-PDF-Titel");
@@ -53609,6 +53868,11 @@ app.put("/api/settings", async (request, response) => {
       pdf_filename_include_timestamp: body.pdfFilenameIncludeTimestamp === true ? "1" : "0",
       pdf_schedule_designs: JSON.stringify(schedulePdfDesignIds),
       pdf_schedule_design_names: JSON.stringify(schedulePdfDesignNames),
+      pdf_schedule_matrix_time_font_size: scheduleMatrixTimeFontSize,
+      pdf_schedule_matrix_time_font_bold: scheduleMatrixTimeFontBold ? "1" : "0",
+      pdf_schedule_matrix_time_employee_color: scheduleMatrixTimeEmployeeColor ? "1" : "0",
+      pdf_schedule_matrix_detail_font_size: scheduleMatrixDetailFontSize,
+      pdf_schedule_matrix_header_text: scheduleMatrixHeaderText,
     }, repository);
     await saveScopedPdfSettings("vacation", vacationContext, {
       vacation_pdf_title: vacationPdfTitle,
@@ -54943,6 +55207,34 @@ function contrastColor(hex) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 155 ? "#15202f" : "#ffffff";
 }
 
+function scheduleMatrixEmployeeTextColor(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(String(hex || ""))) return "#172433";
+  const original = hexToRgb(hex);
+  const linear = (channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+  const contrastOnWhite = ({ r, g, b }) => {
+    const luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+    return 1.05 / (luminance + 0.05);
+  };
+  let candidate = original;
+  let factor = 1;
+  while (contrastOnWhite(candidate) < 4.5 && factor > 0.2) {
+    factor -= 0.05;
+    candidate = {
+      r: Math.round(original.r * factor),
+      g: Math.round(original.g * factor),
+      b: Math.round(original.b * factor),
+    };
+  }
+  return `#${[candidate.r, candidate.g, candidate.b]
+    .map((channel) => channel.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
 function formatOptionDateRange(option) {
   return option.date_from === option.date_to
     ? formatDateGerman(option.date_from, false)
@@ -56035,18 +56327,18 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
 
 function scheduleMatrixOptionStyle(optionType) {
   if (["vacation", "special_leave"].includes(optionType)) {
-    return { fill: "#e7f3eb", stroke: "#4f8061", text: "#244631" };
+    return { fill: "#cfe8d7", stroke: "#2f6f48", text: "#173b25" };
   }
   if (optionType === "time_off") {
-    return { fill: "#fff1cf", stroke: "#a97517", text: "#5f430d" };
+    return { fill: "#ffe3a1", stroke: "#9a6508", text: "#523600" };
   }
   if (optionType === "sick") {
-    return { fill: "#f8e8e6", stroke: "#a44c45", text: "#612a26" };
+    return { fill: "#f4d6d2", stroke: "#944139", text: "#54231f" };
   }
   if (["school", "vocational_school"].includes(optionType)) {
-    return { fill: "#e9eef9", stroke: "#4d6995", text: "#263c60" };
+    return { fill: "#dce6f8", stroke: "#3f5f91", text: "#213a61" };
   }
-  return { fill: "#eef0f1", stroke: "#6f7b82", text: "#364148" };
+  return { fill: "#e4e8ea", stroke: "#5f6c74", text: "#2d3940" };
 }
 
 function scheduleMatrixDayIndex(schedule, date) {
@@ -56064,24 +56356,32 @@ function scheduleMatrixCellData(schedule, employee, date) {
     .filter((shift) => shift.employee_number === employee.personnel_number && shift.shift_date === date)
     .sort((left, right) => String(left.start_time).localeCompare(String(right.start_time)));
   const lines = [];
-  for (const option of options.slice(0, 2)) {
+  const displayedOptions = options.slice(0, 2);
+  for (const option of displayedOptions) {
     const time = optionIsAllDay(option)
       ? "ganztägig"
       : `${option.start_time || ""}-${option.end_time || ""}`;
     lines.push({
+      type: "option",
       text: `${optionLabel(option.option_type)} · ${time}`,
       bold: true,
       color: scheduleMatrixOptionStyle(option.option_type).text,
     });
   }
-  for (const shift of shifts.slice(0, Math.max(1, 3 - lines.length))) {
+  const displayedShifts = shifts.slice(0, Math.max(1, 3 - displayedOptions.length));
+  for (const shift of displayedShifts) {
     const department = !schedule.context.departmentId && shift.department_name
-      ? ` · ${shift.department_name}` : "";
-    lines.push({ text: `${shift.start_time}-${shift.end_time}${department}`, bold: false, color: "#172433" });
+      ? String(shift.department_name) : "";
+    lines.push({
+      type: "shift",
+      timeText: `${shift.start_time}-${shift.end_time}`,
+      detailText: department,
+    });
   }
-  if (!lines.length) lines.push({ text: "-", bold: false, color: "#9aa4aa" });
-  if (options.length + shifts.length > lines.length) {
-    lines.push({ text: `+${options.length + shifts.length - lines.length} weitere`, bold: false, color: "#6b7680" });
+  if (!lines.length) lines.push({ type: "empty", text: "-" });
+  const displayedEntries = displayedOptions.length + displayedShifts.length;
+  if (options.length + shifts.length > displayedEntries) {
+    lines.push({ type: "more", text: `+${options.length + shifts.length - displayedEntries} weitere` });
   }
   return {
     options,
@@ -56098,7 +56398,43 @@ function scheduleMatrixMeetingText(meeting) {
   const time = optionIsAllDay(meeting)
     ? "ganztägig"
     : `${meeting.start_time || ""}-${meeting.end_time || ""}`;
-  return `TS · ${date} · ${time}${meeting.note ? ` · ${meeting.note}` : ""}`;
+  return `Teamsitzung (TS) · ${date} · ${time}${meeting.note ? ` · ${meeting.note}` : ""}`;
+}
+
+function scheduleMatrixFittedFontSize(doc, text, font, preferredSize, width, minimumSize = 5.2) {
+  doc.font(font).fontSize(preferredSize);
+  const measured = doc.widthOfString(String(text || ""));
+  if (!measured || measured <= width) return preferredSize;
+  return Math.max(minimumSize, preferredSize * (width / measured));
+}
+
+function scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize) {
+  if (timeFontSize >= 18) return 70;
+  if (timeFontSize >= 14.5) return 62;
+  if (timeFontSize >= 11) return 52;
+  if (timeFontSize >= 8.5) return 43;
+  return Math.max(35, Math.ceil(timeFontSize + detailFontSize + 19));
+}
+
+function scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize) {
+  if (entry.type === "shift") {
+    return timeFontSize + 2 + (entry.detailText ? detailFontSize + 2 : 0);
+  }
+  if (entry.type === "option") return Math.max(9, detailFontSize + 2);
+  return 8;
+}
+
+function scheduleMatrixContentRowHeight(schedule, employee, dayCount, timeFontSize, detailFontSize) {
+  if (!employee) return 35;
+  let required = 0;
+  for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+    const cell = scheduleMatrixCellData(schedule, employee, addDays(schedule.weekStart, dayIndex));
+    const contentHeight = cell.lines
+      .slice(0, 4)
+      .reduce((sum, entry) => sum + scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize), 0);
+    required = Math.max(required, contentHeight + 8);
+  }
+  return Math.ceil(required);
 }
 
 function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
@@ -56122,17 +56458,40 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const weekdayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const meetings = collapsedScheduleWeekOptions(schedule.weekOptions).filter(isTeamWideMeetingOption);
   const hasScheduleNote = Boolean(schedule.scheduleNote?.note_text?.trim());
-  const tableTop = meetings.length ? 88 : 62;
-  const tableBottom = hasScheduleNote ? 478 : 510;
+  const timeFontSize = Number(normalizeScheduleMatrixFontSize(
+    schedule.settings.pdf_schedule_matrix_time_font_size,
+    SCHEDULE_MATRIX_TIME_FONT_SIZES,
+    "6",
+  ));
+  const detailFontSize = Number(normalizeScheduleMatrixFontSize(
+    schedule.settings.pdf_schedule_matrix_detail_font_size,
+    SCHEDULE_MATRIX_DETAIL_FONT_SIZES,
+    "6",
+  ));
+  const timeFontBold = settingEnabled(schedule.settings, "pdf_schedule_matrix_time_font_bold");
+  const timeEmployeeColor = settingEnabled(schedule.settings, "pdf_schedule_matrix_time_employee_color");
+  const matrixHeaderText = normalizeScheduleMatrixHeaderText(schedule.settings.pdf_schedule_matrix_header_text);
+  const tableTop = 62;
+  const postTableHeight = 18 + (meetings.length ? 33 : 0) + (hasScheduleNote ? 36 : 0);
+  const tableBottom = Math.min(510, 555 - postTableHeight);
   const headerHeight = 31;
   const summaryHeight = 21;
-  const minimumRowHeight = 33;
-  const maximumRowHeight = 54;
+  const employees = schedule.employees.length ? schedule.employees : [null];
+  const minimumRowHeight = Math.max(
+    scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize),
+    ...employees.map((employee) => scheduleMatrixContentRowHeight(
+      schedule,
+      employee,
+      dayCount,
+      timeFontSize,
+      detailFontSize,
+    )),
+  );
+  const maximumRowHeight = Math.max(54, minimumRowHeight + 10);
   const rowsPerPage = Math.max(
     1,
     Math.floor((tableBottom - tableTop - headerHeight - summaryHeight) / minimumRowHeight),
   );
-  const employees = schedule.employees.length ? schedule.employees : [null];
   const pageRows = [];
   for (let index = 0; index < employees.length; index += rowsPerPage) {
     pageRows.push(employees.slice(index, index + rowsPerPage));
@@ -56156,30 +56515,26 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       `${schedule.settings.pdf_title} · KW ${schedule.calendarWeek}`,
       left,
       17,
-      { width: pageWidth - left - right - 100, ellipsis: true },
+      { width: tableWidth - 230, ellipsis: true },
     );
     doc.fillColor("#677581").font("Helvetica").fontSize(7.2).text(
       `Woche ab ${formatDateGerman(schedule.weekStart)} · Wochenmatrix · ${schedule.context.locationName || "Hauptstandort"}${schedule.context.departmentName ? ` · ${schedule.context.departmentName}` : ""}`,
       left,
       39,
-      { width: pageWidth - left - right - 100, ellipsis: true },
+      { width: tableWidth - 230, ellipsis: true },
     );
-    doc.fillColor("#53616d").font("Helvetica-Bold").fontSize(7).text(
-      pageRows.length > 1 ? `Seite ${pageIndex + 1}/${pageRows.length}` : "Design 2",
-      pageWidth - right - 92,
-      22,
-      { width: 92, align: "right" },
+    doc.fillColor("#344b57").font("Helvetica-Bold").fontSize(6.3).text(
+      matrixHeaderText,
+      pageWidth - right - 215,
+      15,
+      { width: 215, height: 25, align: "right", ellipsis: true },
     );
-
-    if (meetings.length) {
-      doc.roundedRect(left, 52, tableWidth, 25, 5).fillAndStroke("#eadff5", "#68448f");
-      doc.fillColor("#332044").font("Helvetica-Bold").fontSize(7.2).text(
-        meetings.map(scheduleMatrixMeetingText).join("   |   "),
-        left + 9,
-        60,
-        { width: tableWidth - 18, height: 10, align: "left", ellipsis: true },
-      );
-    }
+    if (pageRows.length > 1) doc.fillColor("#6b7780").font("Helvetica").fontSize(5.8).text(
+      `Seite ${pageIndex + 1}/${pageRows.length}`,
+      pageWidth - right - 215,
+      43,
+      { width: 215, align: "right" },
+    );
 
     doc.fillColor("#203747").rect(left, tableTop, employeeColumnWidth, headerHeight).fill();
     doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(8).text(
@@ -56238,8 +56593,8 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
         y + Math.max(8, rowHeight / 2 - 10),
         { width: employeeColumnWidth - 60, height: 12, ellipsis: true },
       );
-      const employeeDetail = [employee.position_name, employee.department_name].filter(Boolean).join(" · ");
-      doc.fillColor("#75818a").font("Helvetica").fontSize(5.7).text(
+      const employeeDetail = employee.position_name || employee.department_name || "Dienstplanung";
+      doc.fillColor("#75818a").font("Helvetica").fontSize(5.4).text(
         employeeDetail || "Dienstplanung",
         left + 52,
         y + Math.max(19, rowHeight / 2 + 2),
@@ -56254,19 +56609,79 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
           doc.save().fillOpacity(0.36).fillColor("#e6ebed").rect(x, y, dayWidth, rowHeight).fill().restore();
         }
         if (cell.style) {
-          doc.save().fillOpacity(0.88).fillColor(cell.style.fill).rect(x + 1, y + 1, dayWidth - 2, rowHeight - 2).fill().restore();
-          doc.strokeColor(cell.style.stroke).lineWidth(0.7).moveTo(x + 2, y + 2).lineTo(x + 2, y + rowHeight - 2).stroke();
+          doc.fillColor(cell.style.fill).rect(x + 1, y + 1, dayWidth - 2, rowHeight - 2).fill();
+          doc.strokeColor(cell.style.stroke).lineWidth(0.85).rect(x + 1.5, y + 1.5, dayWidth - 3, rowHeight - 3).stroke();
+          doc.fillColor(cell.style.stroke).rect(x + 1.5, y + 1.5, 3, rowHeight - 3).fill();
         }
-        const lineHeight = Math.max(8.1, Math.min(10.2, rowHeight / Math.max(3, cell.lines.length + 1)));
-        let lineY = y + Math.max(5, (rowHeight - lineHeight * cell.lines.length) / 2);
+        const availableCellHeight = rowHeight - 8;
+        const visibleLines = [];
+        let contentHeight = 0;
         for (const line of cell.lines.slice(0, 4)) {
-          doc.fillColor(line.color).font(line.bold ? "Helvetica-Bold" : "Helvetica").fontSize(dayCount === 7 ? 5.4 : 5.9).text(
-            line.text,
-            x + 6,
-            lineY,
-            { width: dayWidth - 12, height: lineHeight, align: "left", ellipsis: true, lineBreak: false },
-          );
-          lineY += lineHeight;
+          const entryHeight = scheduleMatrixEntryHeight(line, timeFontSize, detailFontSize);
+          if (visibleLines.length && contentHeight + entryHeight > availableCellHeight) break;
+          visibleLines.push(line);
+          contentHeight += entryHeight;
+        }
+        let lineY = y + Math.max(4, (rowHeight - contentHeight) / 2);
+        for (const line of visibleLines) {
+          if (line.type === "shift") {
+            const timeFont = timeFontBold ? "Helvetica-Bold" : "Helvetica";
+            const effectiveTimeSize = scheduleMatrixFittedFontSize(
+              doc,
+              line.timeText,
+              timeFont,
+              timeFontSize,
+              dayWidth - 14,
+            );
+            doc.fillColor(timeEmployeeColor ? scheduleMatrixEmployeeTextColor(employeeColor) : "#172433").font(timeFont).fontSize(effectiveTimeSize).text(
+              line.timeText,
+              x + 7,
+              lineY,
+              { width: dayWidth - 14, height: timeFontSize + 2, align: "left", ellipsis: true, lineBreak: false },
+            );
+            lineY += timeFontSize + 2;
+            if (line.detailText) {
+              const effectiveDetailSize = scheduleMatrixFittedFontSize(
+                doc,
+                line.detailText,
+                "Helvetica",
+                detailFontSize,
+                dayWidth - 14,
+                5.2,
+              );
+              doc.fillColor("#5f6d77").font("Helvetica").fontSize(effectiveDetailSize).text(
+                line.detailText,
+                x + 7,
+                lineY,
+                { width: dayWidth - 14, height: detailFontSize + 2, align: "left", ellipsis: true, lineBreak: false },
+              );
+              lineY += detailFontSize + 2;
+            }
+          } else if (line.type === "option") {
+            const optionFontSize = Math.max(7, Math.min(9.5, detailFontSize));
+            const effectiveOptionSize = scheduleMatrixFittedFontSize(
+              doc,
+              line.text,
+              "Helvetica-Bold",
+              optionFontSize,
+              dayWidth - 14,
+            );
+            doc.fillColor(line.color).font("Helvetica-Bold").fontSize(effectiveOptionSize).text(
+              line.text,
+              x + 7,
+              lineY,
+              { width: dayWidth - 14, height: optionFontSize + 2, align: "left", ellipsis: true, lineBreak: false },
+            );
+            lineY += Math.max(9, detailFontSize + 2);
+          } else {
+            doc.fillColor(line.type === "empty" ? "#9aa4aa" : "#66737c").font("Helvetica").fontSize(5.8).text(
+              line.text,
+              x + 7,
+              lineY,
+              { width: dayWidth - 14, height: 8, align: line.type === "empty" ? "center" : "left", ellipsis: true, lineBreak: false },
+            );
+            lineY += 8;
+          }
         }
       }
     });
@@ -56303,24 +56718,40 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       doc.strokeColor("#c6d0d4").lineWidth(0.35).moveTo(left, y).lineTo(left + tableWidth, y).stroke();
     }
 
-    const legendY = summaryY + summaryHeight + 10;
-    const legendItems = [
-      { color: "#5f7b72", label: "Mitarbeitendenfarbe" },
-      { color: "#e7f3eb", label: "Urlaub / Sonderurlaub" },
-      { color: "#fff1cf", label: "Zeitausgleich" },
-      { color: "#e9eef9", label: "Schulung / Schule" },
-      { color: "#eadff5", label: "TS Teamsitzung" },
-    ];
-    let legendX = left;
-    for (const item of legendItems) {
-      doc.fillColor(item.color).roundedRect(legendX, legendY + 1, 8, 8, 1.5).fill();
-      doc.strokeColor("#87949c").lineWidth(0.3).roundedRect(legendX, legendY + 1, 8, 8, 1.5).stroke();
-      doc.fillColor("#5c6871").font("Helvetica").fontSize(5.6).text(item.label, legendX + 11, legendY + 1.5, { lineBreak: false });
-      legendX += 11 + doc.widthOfString(item.label) + 13;
+    let postTableY = summaryY + summaryHeight + 7;
+    if (meetings.length) {
+      doc.roundedRect(left, postTableY, tableWidth, 26, 5).fillAndStroke("#eadff5", "#68448f");
+      doc.fillColor("#332044").font("Helvetica-Bold").fontSize(7.2).text(
+        meetings.map(scheduleMatrixMeetingText).join("   |   "),
+        left + 9,
+        postTableY + 8,
+        { width: tableWidth - 18, height: 11, align: "left", ellipsis: true, lineBreak: false },
+      );
+      postTableY += 33;
     }
 
+    const legendY = postTableY;
+    const legendItems = [
+      { color: "#cfe8d7", stroke: "#2f6f48", label: "Urlaub / Sonderurlaub" },
+      { color: "#ffe3a1", stroke: "#9a6508", label: "Zeitausgleich (ZA)" },
+      { color: "#dce6f8", stroke: "#3f5f91", label: "Schulung / Schule" },
+    ];
+    doc.font("Helvetica-Bold").fontSize(5.7);
+    const legendWidth = legendItems.reduce(
+      (sum, item) => sum + 12 + doc.widthOfString(item.label) + 14,
+      0,
+    );
+    let legendX = left + tableWidth - legendWidth;
+    for (const item of legendItems) {
+      doc.fillColor(item.color).roundedRect(legendX, legendY, 10, 9, 1.5).fill();
+      doc.strokeColor(item.stroke).lineWidth(0.55).roundedRect(legendX, legendY, 10, 9, 1.5).stroke();
+      doc.fillColor("#4f5d66").font("Helvetica-Bold").fontSize(5.7).text(item.label, legendX + 13, legendY + 1, { lineBreak: false });
+      legendX += 12 + doc.widthOfString(item.label) + 14;
+    }
+    postTableY += 18;
+
     if (hasScheduleNote) {
-      const noteY = Math.min(legendY + 18, pageHeight - 67);
+      const noteY = Math.min(postTableY, pageHeight - 67);
       doc.roundedRect(left, noteY, tableWidth, 29, 4).fillAndStroke("#fff6cf", "#c6a842");
       doc.fillColor("#4d431e").font("Helvetica-Bold").fontSize(6.2).text("Bemerkung", left + 8, noteY + 5, { width: 57 });
       doc.fillColor("#3f3a28").font("Helvetica").fontSize(6).text(

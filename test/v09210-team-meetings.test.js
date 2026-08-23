@@ -88,6 +88,37 @@ async function request(route, { method = "GET", auth = null, body, binary = fals
   return { response, payload, text };
 }
 
+async function pdfTextDetails(buffer) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({
+    data: Uint8Array.from(buffer),
+    disableWorker: true,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+  const document = await loadingTask.promise;
+  try {
+    const pages = [];
+    const items = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const pageItems = content.items.filter((item) => typeof item.str === "string");
+      pages.push(pageItems.map((item) => item.str).join(" "));
+      items.push(...pageItems.map((item) => ({ ...item, pageNumber })));
+      page.cleanup();
+    }
+    return {
+      pageCount: document.numPages,
+      pages,
+      text: pages.join("\n"),
+      items,
+    };
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
 test.before(async () => {
   const positionId = db.prepare("SELECT id FROM positions ORDER BY sort_order, id LIMIT 1").get().id;
   const daySettings = db.prepare("SELECT day_settings_json FROM locations ORDER BY id LIMIT 1").get()?.day_settings_json || "{}";
@@ -112,6 +143,21 @@ test.before(async () => {
       (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
     VALUES (?, ?, ?, ?, '17:00', '20:00', 'Testteam', 'Bestehender Dienst trotz Krankmeldung')
   `).run(MEMBER_SICK_WITH_SHIFT, LOCATION, departmentId, MEETING_DATE);
+  db.prepare(`
+    INSERT INTO shifts
+      (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
+    VALUES (?, ?, ?, ?, '09:00', '12:00', 'Testteam', 'Regulärer Dienst für Matrix-PDF')
+  `).run(DEVELOPER, LOCATION, departmentId, WEEK_START);
+  db.prepare(`
+    INSERT INTO week_options
+      (employee_number, week_start, date_from, date_to, option_type, note, all_day)
+    VALUES (?, ?, '2035-03-13', '2035-03-13', 'vacation', 'Urlaub für Matrix-PDF', 1)
+  `).run(DEVELOPER, WEEK_START);
+  db.prepare(`
+    INSERT INTO week_options
+      (employee_number, week_start, date_from, date_to, option_type, note, all_day)
+    VALUES (?, ?, '2035-03-14', '2035-03-14', 'time_off', 'ZA für Matrix-PDF', 1)
+  `).run(DEVELOPER, WEEK_START);
 
   await new Promise((resolve, reject) => {
     httpServer = app.listen(0, "127.0.0.1", resolve);
@@ -218,7 +264,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
       breakDurationMinutes: 30,
       saturdayBonusFrom: "13:00",
       saturdayBonusFactor: 1.5,
-      showSunday: false,
+      showSunday: true,
     },
   });
   assert.equal(pdfSettings.response.status, 200, pdfSettings.text);
@@ -248,6 +294,95 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.equal(invalidPdfDesignNames.response.status, 400, invalidPdfDesignNames.text);
   assert.equal(invalidPdfDesignNames.payload?.code, "INVALID_SCHEDULE_PDF_DESIGN_NAMES");
 
+  const managerAuth = session(MEMBER_LATER_SICK, "manager");
+  const managerDenied = await request(`/api/portal/v1/schedule-pdf-settings?locationId=${LOCATION}`, {
+    auth: managerAuth,
+  });
+  assert.equal(managerDenied.response.status, 403, managerDenied.text);
+  db.prepare(`
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+    VALUES (?, 'schedule:pdf:settings:write', ?)
+  `).run(MEMBER_LATER_SICK, DEVELOPER);
+  const managerScopedUpdate = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT",
+    auth: managerAuth,
+    body: { locationId: LOCATION, scheduleMatrixHeaderText: "FL-Matrix im eigenen Bereich" },
+  });
+  assert.equal(managerScopedUpdate.response.status, 200, managerScopedUpdate.text);
+  assert.equal(
+    managerScopedUpdate.payload.settings.pdf_schedule_matrix_header_text,
+    "FL-Matrix im eigenen Bereich",
+  );
+  const foreignLocationId = String(db.prepare("SELECT id FROM locations WHERE id <> ? ORDER BY id LIMIT 1").get(LOCATION).id);
+  const managerForeignScope = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT",
+    auth: managerAuth,
+    body: { locationId: foreignLocationId, scheduleMatrixHeaderText: "Nicht erlaubt" },
+  });
+  assert.equal(managerForeignScope.response.status, 403, managerForeignScope.text);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE actor = ? AND action = 'schedule.pdf.settings.update'
+  `).get(MEMBER_LATER_SICK).count, 1);
+
+  const maximumHeaderText = "M".repeat(200);
+  const matrixSettings = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT",
+    auth,
+    body: {
+      locationId: LOCATION,
+      schedulePdfDesignIds: ["timeline", "matrix"],
+      scheduleMatrixTimeFontSize: "18",
+      scheduleMatrixDetailFontSize: "9.5",
+      scheduleMatrixTimeFontBold: true,
+      scheduleMatrixTimeEmployeeColor: true,
+      scheduleMatrixHeaderText: maximumHeaderText,
+    },
+  });
+  assert.equal(matrixSettings.response.status, 200, matrixSettings.text);
+  assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_time_font_size, "18");
+  assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_detail_font_size, "9.5");
+  assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_time_font_bold, "1");
+  assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_time_employee_color, "1");
+  assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_header_text, maximumHeaderText);
+
+  const persistedMatrixSettings = await request(`/api/portal/v1/schedule-pdf-settings?locationId=${LOCATION}`, { auth });
+  assert.equal(persistedMatrixSettings.response.status, 200, persistedMatrixSettings.text);
+  assert.equal(persistedMatrixSettings.payload.context.locationId, LOCATION);
+  assert.equal(persistedMatrixSettings.payload.context.departmentId, null);
+  assert.equal(persistedMatrixSettings.payload.settings.pdf_schedule_matrix_header_text.length, 200);
+
+  const oversizedHeader = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT",
+    auth,
+    body: { locationId: LOCATION, scheduleMatrixHeaderText: "X".repeat(201) },
+  });
+  assert.equal(oversizedHeader.response.status, 400, oversizedHeader.text);
+  assert.equal(oversizedHeader.payload?.code, "SCHEDULE_MATRIX_HEADER_TEXT_INVALID");
+
+  const invalidMatrixFontSize = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT",
+    auth,
+    body: { locationId: LOCATION, scheduleMatrixTimeFontSize: "19" },
+  });
+  assert.equal(invalidMatrixFontSize.response.status, 400, invalidMatrixFontSize.text);
+  assert.equal(invalidMatrixFontSize.payload?.code, "SCHEDULE_MATRIX_FONT_SIZE_INVALID");
+
+  const invalidMatrixBoolean = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT",
+    auth,
+    body: { locationId: LOCATION, scheduleMatrixTimeFontBold: "true" },
+  });
+  assert.equal(invalidMatrixBoolean.response.status, 400, invalidMatrixBoolean.text);
+  assert.equal(invalidMatrixBoolean.payload?.code, "SCHEDULE_PDF_BOOLEAN_INVALID");
+
+  const renderMatrixSettings = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT",
+    auth,
+    body: { locationId: LOCATION, scheduleMatrixHeaderText: "Matrix-Testkopf" },
+  });
+  assert.equal(renderMatrixSettings.response.status, 200, renderMatrixSettings.text);
+
   const pdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=timeline`, {
     auth,
     binary: true,
@@ -256,13 +391,32 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.match(pdf.response.headers.get("content-type") || "", /application\/pdf/);
   assert.ok(pdf.payload.length > 3000);
 
-  const matrixPdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=matrix`, {
+  const matrixPdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&design=matrix`, {
     auth,
     binary: true,
   });
   assert.equal(matrixPdf.response.status, 200);
   assert.match(matrixPdf.response.headers.get("content-type") || "", /application\/pdf/);
   assert.ok(matrixPdf.payload.length > 3000);
+  if (process.env.GRABENPLANER_PDF_QA_OUTPUT) {
+    const qaOutputPath = path.resolve(process.env.GRABENPLANER_PDF_QA_OUTPUT);
+    fs.mkdirSync(path.dirname(qaOutputPath), { recursive: true });
+    fs.writeFileSync(qaOutputPath, matrixPdf.payload);
+  }
+  const matrixPdfDetails = await pdfTextDetails(matrixPdf.payload);
+  assert.equal(matrixPdfDetails.pageCount, 1);
+  assert.match(matrixPdfDetails.text, /Matrix-Testkopf/);
+  assert.match(matrixPdfDetails.text, /Teamsitzung \(TS\)/);
+  assert.match(matrixPdfDetails.text, /18:30-20:00/);
+  assert.match(matrixPdfDetails.text, /09:00-12:00/);
+  assert.match(matrixPdfDetails.text, /Testteam/);
+  assert.doesNotMatch(matrixPdfDetails.text, /Mitarbeitendenfarbe/);
+  const regularShiftTime = matrixPdfDetails.items.find((item) => item.str === "09:00-12:00");
+  assert.ok(regularShiftTime, "Der reguläre Dienst muss als eigener PDF-Textlauf vorhanden sein.");
+  assert.ok(
+    Number(regularShiftTime.height) > 8 && Number(regularShiftTime.height) <= 18.1,
+    `Die konfigurierte 18-pt-Uhrzeit muss im 7-Tage-Fall nur passgenau verkleinert werden (ist ${regularShiftTime.height} pt).`,
+  );
 
   const unavailablePdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=unbekannt`, {
     auth,
