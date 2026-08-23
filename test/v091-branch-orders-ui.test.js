@@ -87,6 +87,12 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminScript, /data-branch-orders-management-new-item-title/);
   assert.match(adminScript, /data-branch-orders-management-action="edit-catalog-item"/);
   assert.match(adminScript, /data-branch-orders-management-action="sort-catalog"/);
+  assert.match(adminScript, /data-branch-orders-management-catalog-search/);
+  assert.match(adminScript, /type="search" inputmode="search" autocomplete="off"/);
+  assert.match(adminScript, /placeholder="Bezeichnung, Einheit oder Position"/);
+  assert.match(adminScript, /const searchText = `\$\{position\} \$\{item\.title \|\| ""\} \$\{unitTitle\}`/);
+  assert.match(adminScript, /data-branch-orders-management-catalog-search-status aria-live="polite"/);
+  assert.match(adminScript, /Keine passende Position gefunden/);
   assert.match(adminScript, />Bearbeiten<\/button>/);
   assert.match(adminScript, />Löschen<\/button>/);
   assert.match(adminScript, /branch-orders-management-chevron/);
@@ -106,6 +112,7 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminStyles, /branch-orders-management-toolbar/);
   assert.match(adminStyles, /branch-orders-management-history-actions/);
   assert.match(adminStyles, /branch-orders-management-catalog-table-wrap/);
+  assert.match(adminStyles, /branch-orders-management-catalog-search[^}]*grid-template-columns:minmax\(0,1fr\) auto/);
   assert.match(adminStyles, /branch-orders-management-group-table-wrap/);
   assert.match(adminStyles, /branch-orders-management-group-fields/);
   assert.match(adminStyles, /branch-orders-management-table-action[^}]*text-decoration:underline/);

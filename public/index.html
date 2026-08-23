@@ -34,7 +34,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.14 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.15 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1957,7 +1957,7 @@
                 <span class="settings-accordion-chevron" aria-hidden="true">›</span>
               </summary>
               <div class="settings-accordion-body settings-accordion-stack">
-                <div class="settings-card pdf-card">
+                <div class="settings-card pdf-card" id="schedulePdfSettingsCard">
                   <div class="card-heading"><div class="card-icon">Dienst</div><div><h2>PDF-Ausgabe Dienstplan</h2><p>A4 Querformat als kompakte Vektor-PDF mit anpassbarem Dateinamen.</p></div></div>
                   <details class="settings-accordion schedule-pdf-design-settings" id="schedulePdfDesignSettings">
                     <summary>
@@ -1968,6 +1968,19 @@
                     <div class="settings-accordion-body schedule-pdf-design-settings-body">
                       <div class="schedule-pdf-design-settings-list" id="schedulePdfDesignSettingsList"></div>
                       <p class="settings-note" id="schedulePdfDesignSettingsHint">Standard: nur Design 1 · Zeitachse.</p>
+                      <details class="schedule-matrix-pdf-settings">
+                        <summary>
+                          <span><strong>Alternative Wochenmatrix formatieren</strong><small>Uhrzeiten, Zusatzzeile und Kopftext für Design 2 festlegen.</small></span>
+                          <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+                        </summary>
+                        <div class="schedule-matrix-pdf-settings-body">
+                          <label class="field"><span>Schriftgröße der Uhrzeiten</span><select id="scheduleMatrixTimeFontSize"><option value="6">Sehr klein · 6 pt</option><option value="8.5">Klein · 8,5 pt</option><option value="11">Standard · 11 pt</option><option value="14.5">Groß · 14,5 pt</option><option value="18">Sehr groß · 18 pt</option></select><small>Bei sieben Wochentagen oder sehr langen Zeiten wird nur bei Bedarf passgenau verkleinert.</small></label>
+                          <label class="field"><span>Schriftgröße der Zusatzzeile</span><select id="scheduleMatrixDetailFontSize"><option value="6">Klein · 6 pt</option><option value="8">Standard · 8 pt</option><option value="9.5">Groß · 9,5 pt</option></select><small>Abteilung oder Arbeitsbereich steht direkt unter der Uhrzeit.</small></label>
+                          <label class="switch-row"><span><strong>Uhrzeiten fett darstellen</strong><small>Hebt Beginn und Ende des Dienstes stärker hervor.</small></span><input id="scheduleMatrixTimeFontBold" type="checkbox" /></label>
+                          <label class="switch-row"><span><strong>Uhrzeiten in der MA-Farbe darstellen</strong><small>Verwendet die im Dienstplan hinterlegte Farbe des Teammitglieds.</small></span><input id="scheduleMatrixTimeEmployeeColor" type="checkbox" /></label>
+                          <label class="field schedule-matrix-header-text"><span>Kopftext rechts oben</span><input id="scheduleMatrixHeaderText" maxlength="200" value="Design 2" /><small>Für berechtigte FL/AL im eigenen Bereich bearbeitbar · maximal 200 Zeichen.</small></label>
+                        </div>
+                      </details>
                     </div>
                   </details>
                   <label class="field"><span>Titel der PDF</span><input id="pdfTitleSetting" placeholder="Dienstplan" /></label>
@@ -1986,7 +1999,7 @@
                     <iframe id="schedulePdfPreviewFrame" title="PDF-Vorschau Dienstplan"></iframe>
                   </div>
                 </div>
-                <div class="settings-card pdf-card">
+                <div class="settings-card pdf-card" id="vacationPdfSettingsCard">
                   <div class="card-heading"><div class="card-icon">Urlaub</div><div><h2>PDF-Ausgabe Urlaubsplanung</h2><p>Nur für Monats-, Quartals- und Jahresübersichten des Urlaubsplaners.</p></div></div>
                   <label class="field"><span>Titel der PDF</span><input id="vacationPdfTitleSetting" placeholder="Urlaubsplanung" /></label>
                   <label class="field pdf-filename-field"><span>Dateiname vor Zeitraum</span><input id="vacationPdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Urlaubsplanung" /></label>
@@ -2622,7 +2635,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.14 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.15 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
