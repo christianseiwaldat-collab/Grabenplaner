@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.17 Beta · Sichtbare Einsätze in anderen Filialen
+
+- Dienstplan-PDFs der Stammfiliale kennzeichnen aktive, ausgehende Filialeinsätze am betreffenden Tag als „Andere Filiale“, auch wenn der konkrete Dienst ausschließlich im Zielstandort geführt wird.
+- Der Zielstandort zeigt weiterhin den tatsächlichen Dienst mit Uhrzeit. Die Stammfiliale erhält keine fremden Dienstdetails, und Wochenstunden werden durch die zusätzliche PDF-Kennzeichnung nicht doppelt gezählt.
+- Zeitachsen- und Matrixdesign, Ganztags- und Teileinsätze, Überschneidungsbegrenzung, Deduplizierung, Standorttrennung sowie exakte Wochen- und Filialsummen sind regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.16 Beta · Präzisierte Wochenmatrix und standortübergreifende Einplanung
 
 - Die Dienstplan- und Urlaubs-PDF-Einstellungen nutzen ihre gesamte Kartenbreite in einem gleichmäßigen, responsiven Raster; Vorschau und umfangreiche Optionen werden nicht mehr durch eine dauerhaft reservierte Seitenspalte eingeengt.
