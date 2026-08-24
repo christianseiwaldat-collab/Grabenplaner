@@ -1710,6 +1710,7 @@ test("Personalmodul: DB-Import verwirft entschluesselbare, aber semantisch besch
     method: "POST",
     auth: admin,
     body: {
+      dataProcessingAuthorizationConfirmed: true,
       profile: {
         firstName: "Import",
         lastName: "Integritaet",

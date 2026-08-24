@@ -786,7 +786,10 @@
                 <option value="talent_pool">Talentpool</option>
                 <option value="archived">Archiviert</option>
               </select></label>
-              <button class="secondary-button" id="refreshPersonnelCandidatesButton" type="button">Aktualisieren</button>
+              <div class="personnel-candidate-toolbar-actions">
+                <button class="primary-button hidden" id="addPersonnelCandidateButton" type="button">+ Bewerber anlegen</button>
+                <button class="secondary-button" id="refreshPersonnelCandidatesButton" type="button">Aktualisieren</button>
+              </div>
             </div>
             <p class="personnel-candidate-status" id="personnelCandidateStatus" role="status" aria-live="polite">Bewerbungen werden beim Öffnen geladen.</p>
             <div class="personnel-candidate-workspace">
@@ -2793,6 +2796,43 @@
           </details>
         </div>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteEmployeeButton">Teammitglied löschen</button><span></span><button type="button" class="secondary-button" data-close="employeeModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal personnel-candidate-create-modal" id="personnelCandidateCreateModal" aria-labelledby="personnelCandidateCreateTitle" aria-describedby="personnelCandidateCreateDescription">
+      <form id="personnelCandidateCreateForm" autocomplete="off">
+        <div class="modal-header">
+          <div><h2 id="personnelCandidateCreateTitle">Bewerber anlegen</h2><p id="personnelCandidateCreateDescription">Grundprofil und auf Wunsch gleich die erste Bewerbung strukturiert erfassen.</p></div>
+          <button class="close-button" type="button" data-close="personnelCandidateCreateModal" aria-label="Schließen">×</button>
+        </div>
+        <div class="form-grid personnel-candidate-create-profile">
+          <label class="field"><span>Vorname</span><input name="firstName" maxlength="100" autocomplete="off" required /></label>
+          <label class="field"><span>Nachname</span><input name="lastName" maxlength="100" autocomplete="off" required /></label>
+          <label class="field"><span>E-Mail</span><input name="email" type="email" maxlength="254" autocomplete="off" /></label>
+          <label class="field"><span>Telefon</span><input name="phone" type="tel" maxlength="80" autocomplete="off" /></label>
+        </div>
+        <p class="personnel-candidate-create-hint">Mindestens E-Mail-Adresse oder Telefonnummer angeben.</p>
+        <fieldset class="personnel-candidate-create-application" id="personnelCandidateCreateApplication">
+          <legend>Erste Bewerbung <span>optional</span></legend>
+          <div class="form-grid">
+            <label class="field"><span>Gewünschter Standort</span><select name="desiredLocationId" id="personnelCandidateCreateLocation"><option value="">Noch nicht zugeordnet</option></select></label>
+            <label class="field"><span>Gewünschte Abteilung</span><select name="desiredDepartmentId" id="personnelCandidateCreateDepartment" disabled><option value="">Gesamte Filiale / noch offen</option></select></label>
+            <label class="field"><span>Gewünschte Tätigkeit</span><input name="desiredRoleTitle" maxlength="180" autocomplete="off" /></label>
+            <label class="field"><span>Verfügbar ab</span><input name="availableFrom" type="date" /></label>
+            <label class="field full-width" id="personnelCandidateCreateSourceField"><span>Quelle der Bewerbung</span><input name="source" maxlength="200" autocomplete="off" placeholder="z. B. persönliche Bewerbung, Karriereseite" /></label>
+          </div>
+        </fieldset>
+        <label class="personnel-candidate-authorization-check" id="personnelCandidateAuthorizationCheck">
+          <input id="personnelCandidateAuthorizationConfirmed" name="dataProcessingAuthorizationConfirmed" type="checkbox" required aria-describedby="personnelCandidateAuthorizationHelp personnelCandidateAuthorizationState" />
+          <span class="personnel-candidate-authorization-copy">
+            <strong>EDV-Erlaubnis bestätigen</strong>
+            <span id="personnelCandidateAuthorizationHelp">Ich bestätige, dass die erforderliche Erlaubnis zur EDV-gestützten Verarbeitung dieser Bewerberdaten im Grabenplaner vorliegt.</span>
+            <small>Diese Bestätigung dokumentiert den vorliegenden Nachweis; sie ersetzt ihn nicht.</small>
+          </span>
+          <span class="personnel-candidate-authorization-state" id="personnelCandidateAuthorizationState">Bestätigung erforderlich</span>
+        </label>
+        <p class="personnel-candidate-create-message" id="personnelCandidateCreateMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button class="secondary-button" type="button" data-close="personnelCandidateCreateModal">Abbrechen</button><button class="primary-button" id="personnelCandidateCreateSubmit" type="submit" disabled>Bewerber anlegen</button></div>
       </form>
     </dialog>
 

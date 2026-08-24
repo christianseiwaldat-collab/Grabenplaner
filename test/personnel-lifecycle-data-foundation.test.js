@@ -601,7 +601,25 @@ test("Personalmodul-Datenfundament: Backup- und Importprüfung erfassen Bewerber
 test("Personalmodul-Datenfundament: Service verschlüsselt Daten, erzwingt Revisionen und schützt Historien", async () => {
   const fixture = await serviceFixture();
   try {
+    for (const submitted of [undefined, false, "true", 1]) {
+      const input = {
+        profile: {
+          firstName: "Nicht",
+          lastName: "Anlegen",
+          email: "nicht-anlegen@example.invalid",
+        },
+      };
+      if (submitted !== undefined) input.dataProcessingAuthorizationConfirmed = submitted;
+      await assert.rejects(
+        fixture.service.createCandidate(input, "HR-0"),
+        (error) => error?.code === "PERSONNEL_LIFECYCLE_DATA_PROCESSING_AUTHORIZATION_REQUIRED",
+      );
+      assert.equal(fixture.database.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 0);
+      assert.equal(fixture.database.prepare("SELECT COUNT(*) AS count FROM candidate_applications").get().count, 0);
+      assert.equal(fixture.database.prepare("SELECT COUNT(*) AS count FROM candidate_events").get().count, 0);
+    }
     const created = await fixture.service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
       profile: {
         firstName: "Geheimname",
         lastName: "Beispiel",
@@ -617,6 +635,13 @@ test("Personalmodul-Datenfundament: Service verschlüsselt Daten, erzwingt Revis
     assert.equal(created.applications.length, 1);
     assert.equal(created.applications[0].status, "new");
     assert.equal(created.history.length, 2);
+    const creationEvent = created.history.find(({ eventType }) => eventType === "candidate_created");
+    assert.deepEqual(creationEvent.detail.dataProcessingAuthorization, {
+      confirmed: true,
+      statementVersion: "candidate-data-processing-authorization-v1",
+    });
+    assert.equal(creationEvent.actorEmployeeNumber, "HR-1");
+    assert.match(creationEvent.createdAt, /^\d{4}-\d{2}-\d{2}T/);
 
     const rawProtected = [
       ...fixture.database.prepare("SELECT protected_payload FROM candidates").all(),

@@ -146,6 +146,7 @@ function departmentManagerSession({
 test("Personal-Lifecycle-Rechte und Rollenvertrag bleiben exakt und klein", () => {
   assert.deepEqual(P, {
     CANDIDATES_READ: "personnel:candidates:read",
+    CANDIDATES_CREATE: "personnel:candidates:create",
     CANDIDATES_WRITE: "personnel:candidates:write",
     APPLICATIONS_WRITE: "personnel:applications:write",
     CONFIDENTIAL_READ: "personnel:candidates:confidential:read",
@@ -162,6 +163,7 @@ test("Personal-Lifecycle-Rechte und Rollenvertrag bleiben exakt und klein", () =
 test("globale PL liest mit Fachrechten vollständig; PL+ bleibt eine Zusatz-Capability", () => {
   const basePermissions = [
     P.CANDIDATES_READ,
+    P.CANDIDATES_CREATE,
     P.CANDIDATES_WRITE,
     P.APPLICATIONS_WRITE,
     P.CONFIDENTIAL_READ,
@@ -177,10 +179,21 @@ test("globale PL liest mit Fachrechten vollständig; PL+ bleibt eine Zusatz-Capa
   });
   assert.equal(pl.global, true);
   assert.equal(pl.canReadCandidates, true);
+  assert.equal(pl.canCreateCandidates, true);
   assert.equal(pl.canReadConfidential, true);
   assert.equal(pl.canConvertCandidates, true);
   assert.equal(pl.canDelegateCandidates, false);
   assert.equal(pl.canReadApplication(application("unscoped", null, null)), true);
+
+  const centralWriteDenied = personnelLifecycleAccessForSession({
+    employeeNumber: "pl-write-denied",
+    role: "hr",
+    permissions: basePermissions.filter((permission) => permission !== P.CANDIDATES_WRITE),
+    explicitScopes: [],
+    permissionScopes: [],
+  });
+  assert.equal(centralWriteDenied.canReadCandidates, true);
+  assert.equal(centralWriteDenied.canCreateCandidates, false);
 
   const source = candidate();
   const projection = projectPersonnelLifecycleCandidate(source, pl, { detail: true });
@@ -228,6 +241,7 @@ test("IT-Admin bleibt auch mit manipuliert eingetragenen Fachrechten vollständi
   });
   assert.deepEqual(personnelLifecycleCapabilities(access), {
     canReadCandidates: false,
+    canCreateCandidates: false,
     canWriteCandidates: false,
     canWriteApplications: false,
     canReadConfidential: false,
@@ -258,7 +272,12 @@ test("PL+-Fachscope ohne allgemeinen Portalbereich bleibt für FL geschlossen", 
 
 test("FL wirkt nur standortweit und nur in der Schnittmenge beider Scope-Quellen", () => {
   const access = personnelLifecycleAccessForSession(managerSession({
-    permissions: [P.CANDIDATES_READ, P.APPLICATIONS_WRITE, P.CANDIDATES_DELEGATE],
+    permissions: [
+      P.CANDIDATES_READ,
+      P.CANDIDATES_CREATE,
+      P.APPLICATIONS_WRITE,
+      P.CANDIDATES_DELEGATE,
+    ],
     explicitScopes: [{ locationId: LOCATION_A, departmentId: null }],
     permissionScopes: [
       permissionScope(P.CANDIDATES_READ, LOCATION_A),
@@ -268,12 +287,24 @@ test("FL wirkt nur standortweit und nur in der Schnittmenge beider Scope-Quellen
     ],
   }));
   assert.equal(access.canReadCandidates, true);
+  assert.equal(access.canCreateCandidates, true);
   assert.equal(access.canWriteApplications, true);
   assert.equal(access.canDelegateCandidates, false);
   assert.equal(access.canReadApplication(application("a-1", LOCATION_A, DEPARTMENT_A)), true);
   assert.equal(access.canReadApplication(application("a-2", LOCATION_A, DEPARTMENT_B)), true);
   assert.equal(access.canReadApplication(application("b", LOCATION_B, DEPARTMENT_B)), false);
   assert.equal(access.canWriteApplication(application("a-write", LOCATION_A, DEPARTMENT_A)), true);
+  assert.equal(access.canCreateCandidate(application("a-create", LOCATION_A, DEPARTMENT_A)), true);
+  assert.equal(access.canCreateCandidate(application("b-create", LOCATION_B, DEPARTMENT_B)), false);
+
+  const createDenied = personnelLifecycleAccessForSession(managerSession({
+    permissions: [P.CANDIDATES_READ, P.APPLICATIONS_WRITE],
+    permissionScopes: [
+      permissionScope(P.CANDIDATES_READ, LOCATION_A),
+      permissionScope(P.APPLICATIONS_WRITE, LOCATION_A),
+    ],
+  }));
+  assert.equal(createDenied.canCreateCandidates, false);
 
   const departmentOnly = personnelLifecycleAccessForSession(managerSession({
     explicitScopes: [{ locationId: LOCATION_A, departmentId: DEPARTMENT_A }],
@@ -304,6 +335,7 @@ test("AL benötigt auf beiden Seiten dieselbe konkrete Abteilung", () => {
     ],
   }));
   assert.equal(access.canReadCandidates, true);
+  assert.equal(access.canCreateCandidates, false);
   assert.equal(access.canReadApplication(application("matching", LOCATION_A, DEPARTMENT_A)), true);
   assert.equal(access.canReadApplication(application("other-department", LOCATION_A, DEPARTMENT_B)), false);
   assert.equal(access.canReadApplication(application("whole-location", LOCATION_A, null)), false);

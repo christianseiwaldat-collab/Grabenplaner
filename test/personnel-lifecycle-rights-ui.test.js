@@ -43,13 +43,88 @@ test("Bewerberseite besitzt eine reale datensparsame Liste und Detailansicht", (
     "personnelCandidateScopeBadge",
     "personnelCandidateSearch",
     "personnelCandidateStatusFilter",
+    "addPersonnelCandidateButton",
     "refreshPersonnelCandidatesButton",
     "personnelCandidateStatus",
     "personnelCandidateList",
     "personnelCandidateDetail",
   ]) assert.match(section, new RegExp(`id="${id}"`));
   assert.doesNotMatch(section, /Noch keine Bewerberdaten/);
-  assert.doesNotMatch(section, /Bewerber anlegen|Bereich ändern|Dokument hochladen|Umwandeln|data-(?:create|convert)-candidate/i);
+  assert.doesNotMatch(section, /Bereich ändern|Dokument hochladen|Umwandeln|data-convert-candidate/i);
+});
+
+test("Bewerberanlage ist capability-gebunden und verlangt die hervorgehobene EDV-Bestätigung", () => {
+  const modal = between(
+    html,
+    '<dialog class="modal wide-modal personnel-candidate-create-modal"',
+    "</dialog>",
+  );
+  for (const id of [
+    "personnelCandidateCreateForm",
+    "personnelCandidateCreateLocation",
+    "personnelCandidateCreateDepartment",
+    "personnelCandidateAuthorizationCheck",
+    "personnelCandidateAuthorizationConfirmed",
+    "personnelCandidateAuthorizationState",
+    "personnelCandidateCreateMessage",
+    "personnelCandidateCreateSubmit",
+  ]) assert.match(modal, new RegExp(`id="${id}"`));
+  assert.match(modal, /id="personnelCandidateCreateForm" autocomplete="off"/);
+  assert.match(modal, /name="email" type="email" maxlength="254" autocomplete="off"/);
+  assert.match(modal, /id="personnelCandidateCreateSourceField"/);
+  assert.match(modal, /name="dataProcessingAuthorizationConfirmed" type="checkbox" required/);
+  assert.doesNotMatch(modal, /(?:checked|aria-checked="true")/);
+  assert.match(modal, /EDV-Erlaubnis bestätigen/);
+  assert.match(modal, /Erlaubnis zur EDV-gestützten Verarbeitung dieser Bewerberdaten im Grabenplaner vorliegt/);
+
+  const rendering = between(
+    app,
+    "function renderPersonnelCandidateOverview()",
+    "function setPersonnelCandidateCreateMessage(",
+  );
+  assert.match(rendering, /classList\.toggle\("hidden", !capabilities\.canCreateCandidates\)/);
+  assert.match(rendering, /if \(!capabilities\.canCreateCandidates\) \{[\s\S]*?createModal\.close\(\)[\s\S]*?createForm\?\.reset\(\)/);
+  assert.match(rendering, /!capabilities\.canWriteApplications[\s\S]*?desiredRoleTitle[\s\S]*?availableFrom[\s\S]*?source/);
+  assert.match(rendering, /canWriteSource = capabilities\.canWriteApplications && capabilities\.canWriteConfidential/);
+  assert.match(rendering, /sourceField\?\.classList\.toggle\("hidden", !canWriteSource\)/);
+  assert.doesNotMatch(rendering, /\.role|role\s*[=!]/);
+
+  const creation = between(
+    app,
+    "function setPersonnelCandidateCreateMessage(",
+    "async function loadPersonnelCandidates(",
+  );
+  assert.match(creation, /dataProcessingAuthorizationConfirmed: true/);
+  assert.match(creation, /!state\.personnelCandidateCapabilities\.canCreateCandidates/);
+  assert.match(creation, /requiresApplicationOnCreate === true/);
+  assert.match(creation, /createScope\?\.locationIds/);
+  assert.match(creation, /Bitte einen für Bewerbungen freigegebenen eigenen Standort auswählen/);
+  assert.match(creation, /!elements\.personnelCandidateAuthorizationConfirmed\?\.checked/);
+  assert.match(creation, /personnelCandidateCreateSubmit\.disabled/);
+  assert.match(creation, /personnelCandidateCreateForm\.reset\(\)/);
+  assert.match(creation, /state\.personnelCandidateCapabilities\.canWriteConfidential[\s\S]*?form\.elements\.source/);
+  assert.match(creation, /method: "POST"/);
+});
+
+test("Bewerberdialog bleibt auch im Darkmode kontrastreich", () => {
+  const darkModal = between(
+    styles,
+    'html[data-active-page-theme="dark"] .personnel-candidate-create-modal {',
+    'html[data-active-page-theme="dark"] .personnel-candidate-create-application',
+  );
+  for (const variable of [
+    "--surface",
+    "--surface-soft",
+    "--ink",
+    "--muted",
+    "--line",
+    "--warning-surface",
+    "--warning-ink",
+    "--success-surface",
+    "--success-ink",
+    "--danger-ink",
+  ]) assert.match(darkModal, new RegExp(variable));
+  assert.match(styles, /personnel-candidate-create-modal :is\(\.field > span,\.personnel-candidate-create-application legend\)/);
 });
 
 test("Bewerberliste und Detail werden ausschließlich über die vorhandene API geladen", () => {
@@ -67,6 +142,9 @@ test("Serverfähigkeiten werden vollständig und fail-closed ausgewertet", () =>
   for (const key of [
     "scope",
     "canReadCandidates",
+    "canCreateCandidates",
+    "createScope",
+    "requiresApplicationOnCreate",
     "canWriteCandidates",
     "canWriteApplications",
     "canReadConfidential",
@@ -104,10 +182,20 @@ test("Rechteeditor behandelt lokale Personalmodul-Rechte als Bereichsrechte und 
   );
   assert.match(organizational, /"personnel:candidates:read"/);
   assert.match(organizational, /"personnel:applications:write"/);
+  assert.match(organizational, /"personnel:candidates:create"/);
   assert.match(organizational, /"personnel:workflows:read"/);
   assert.match(organizational, /"personnel:workflows:draft:write"/);
   assert.match(organizational, /"personnel:workflows:publish"/);
   assert.match(organizational, /"personnel:workflows:local:supplement"/);
+  const createDependencies = between(
+    app,
+    "const permissionDependencyRules = Object.freeze([",
+    "function rightsEditorEffectivePermissionSet(",
+  );
+  assert.match(createDependencies, /permissionId: "personnel:candidates:create"[\s\S]*?requiredPermissionId: "personnel:candidates:read"/);
+  assert.match(createDependencies, /permissionId: "personnel:candidates:create"[\s\S]*?requiredPermissionId: "personnel:applications:write"/);
+  assert.match(createDependencies, /permissionId: "personnel:candidates:create"[\s\S]*?requiredPermissionId: "personnel:candidates:write"[\s\S]*?applicableRoles:/);
+  assert.match(app, /dormantCreateRight[\s\S]*?ohne erforderliche Basisrechte nicht wirksam/);
 
   const dependencies = between(
     app,
@@ -140,6 +228,14 @@ test("Rechteeditor behandelt lokale Personalmodul-Rechte als Bereichsrechte und 
   );
   assert.match(enforcement, /while \(changed\)/);
   assert.match(enforcement, /removedPermissions\.add\(dependency\.permissionId\)/);
+
+  const employeeProfileNormalization = between(
+    app,
+    "function normalizeEmployeeAccessDraftForRole(",
+    "function renderEmployeeAccessProfile(",
+  );
+  assert.match(employeeProfileNormalization, /if \(dependency\.deferredRoleDefault\) continue;/);
+  assert.match(employeeProfileNormalization, /dependency\.applicableRoles[\s\S]*?!dependency\.applicableRoles\.includes\(roleId\)/);
 });
 
 test("IT-Admin kann die HR-Rolle weder zuweisen noch bestehende HR-Zugänge verwalten", () => {
@@ -216,4 +312,6 @@ test("Bewerberansicht bleibt bis 320 Pixel ohne horizontale Tabellenachse", () =
   assert.match(styles, /@media \(max-width:900px\) \{[\s\S]*?\.personnel-candidate-workspace \{ grid-template-columns:1fr; \}/);
   assert.match(styles, /@media \(max-width:700px\) \{[\s\S]*?\.personnel-candidate-toolbar,.personnel-candidate-status-form(?:,[^{]+)? \{ grid-template-columns:1fr; \}/);
   assert.match(styles, /@media \(max-width:420px\) \{[\s\S]*?\.personnel-candidate-facts \{ grid-template-columns:1fr; \}/);
+  assert.match(candidateStyles, /\.personnel-candidate-authorization-check \{[^}]*grid-template-columns:26px minmax\(0,1fr\) auto/);
+  assert.match(styles, /@media \(max-width:420px\) \{[\s\S]*?\.personnel-candidate-authorization-check \{ grid-template-columns:24px minmax\(0,1fr\);/);
 });
