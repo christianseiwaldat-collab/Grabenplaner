@@ -1105,6 +1105,29 @@ test("temporäre Filialeinsätze sind eng berechtigt, konfliktgeprüft und revis
     });
     assert.equal(nonOverlappingHome.response.status, 201, nonOverlappingHome.text);
 
+    const homeScheduleWithExternalShift = await requestJson(
+      `/api/schedule?week=2031-04-07&location=${HOME}&department=${homeDepartment}`,
+      { session: homeManager },
+    );
+    assert.equal(homeScheduleWithExternalShift.response.status, 200, homeScheduleWithExternalShift.text);
+    assert.equal(homeScheduleWithExternalShift.payload.plannedTotals[EMPLOYEE], 240);
+    assert.equal(homeScheduleWithExternalShift.payload.totals[EMPLOYEE], 240);
+    assert.equal(homeScheduleWithExternalShift.payload.inStoreTotals[EMPLOYEE], 120);
+    assert.equal(
+      homeScheduleWithExternalShift.payload.shifts.filter((entry) => entry.employee_number === EMPLOYEE).length,
+      1,
+      "Fremdfilialdienste dürfen nur in die Stundensumme einfließen, nicht als fremde Plandetails erscheinen.",
+    );
+
+    const destinationScheduleWithIncomingShift = await requestJson(
+      `/api/schedule?week=2031-04-07&location=${DESTINATION}&department=${destinationDepartment}`,
+      { session: destinationManager },
+    );
+    assert.equal(destinationScheduleWithIncomingShift.response.status, 200, destinationScheduleWithIncomingShift.text);
+    assert.equal(destinationScheduleWithIncomingShift.payload.plannedTotals[EMPLOYEE], 120);
+    assert.equal(destinationScheduleWithIncomingShift.payload.totals[EMPLOYEE], 120);
+    assert.equal(destinationScheduleWithIncomingShift.payload.inStoreTotals[EMPLOYEE], 120);
+
     const overlappingHome = await requestJson("/api/shifts", {
       method: "POST",
       session: homeManager,
@@ -1112,6 +1135,46 @@ test("temporäre Filialeinsätze sind eng berechtigt, konfliktgeprüft und revis
     });
     assert.equal(overlappingHome.response.status, 409, overlappingHome.text);
     assert.equal(overlappingHome.payload.code, "STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT");
+  });
+
+  await t.test("acht Stunden in der Zielfiliale zählen in der Einplanung der Stammfiliale", async () => {
+    const assignmentId = "v0921-eight-hours-total";
+    let shiftId = null;
+    db.prepare(`
+      INSERT INTO employee_location_lendings (
+        id, employee_number, home_location_id, destination_location_id,
+        destination_department_id, date_from, date_to, all_day, start_time,
+        end_time, note, status, revision, created_by, created_at, updated_by, updated_at
+      ) VALUES (?, ?, ?, ?, ?, '2031-05-12', '2031-05-12', 1, NULL, NULL,
+        '', 'active', 1, 'v0921-test', CURRENT_TIMESTAMP, 'v0921-test', CURRENT_TIMESTAMP)
+    `).run(assignmentId, SECOND_EMPLOYEE, HOME, DESTINATION, secondDestinationDepartment);
+    try {
+      shiftId = Number(db.prepare(`
+        INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time)
+        VALUES (?, ?, ?, '2031-05-12', '09:00', '17:30')
+      `).run(SECOND_EMPLOYEE, DESTINATION, secondDestinationDepartment).lastInsertRowid);
+
+      const homeSchedule = await requestJson(
+        `/api/schedule?week=2031-05-12&location=${HOME}&department=${secondHomeDepartment}`,
+        { session: homeManager },
+      );
+      assert.equal(homeSchedule.response.status, 200, homeSchedule.text);
+      assert.equal(homeSchedule.payload.plannedTotals[SECOND_EMPLOYEE], 480);
+      assert.equal(homeSchedule.payload.totals[SECOND_EMPLOYEE], 480);
+      assert.equal(homeSchedule.payload.inStoreTotals[SECOND_EMPLOYEE], 0);
+      assert.equal(homeSchedule.payload.shifts.some((entry) => Number(entry.id) === shiftId), false);
+
+      const destinationSchedule = await requestJson(
+        `/api/schedule?week=2031-05-12&location=${DESTINATION}&department=${secondDestinationDepartment}`,
+        { session: destinationManager },
+      );
+      assert.equal(destinationSchedule.response.status, 200, destinationSchedule.text);
+      assert.equal(destinationSchedule.payload.plannedTotals[SECOND_EMPLOYEE], 480);
+      assert.equal(destinationSchedule.payload.inStoreTotals[SECOND_EMPLOYEE], 480);
+    } finally {
+      if (shiftId) db.prepare("DELETE FROM shifts WHERE id = ?").run(shiftId);
+      db.prepare("DELETE FROM employee_location_lendings WHERE id = ?").run(assignmentId);
+    }
   });
 
   await t.test("Zeitgrenze, Viertelstundenraster und Zielabteilung werden serverseitig erzwungen", async () => {

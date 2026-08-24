@@ -21221,9 +21221,10 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     filterDepartment: context.departmentId ? 1 : 0,
     weekStart,
   };
-  const [employeeRows, shiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows] = await Promise.all([
+  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
+    planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
     planningSettingsRepository.listScheduleWeekOptions(planningQuery),
     planningSettingsRepository.listScheduleLendings(planningQuery),
     timeTrackingRepository.listActiveXoffiWeekRows(xoffiQuery),
@@ -21231,11 +21232,33 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     timeTrackingRepository.listLatestXoffiBalances(xoffiQuery),
   ]);
   const employees = employeeRows.map(serializeEmployee);
+  const visibleEmployeeNumbers = new Set(employees.map((employee) => employee.personnel_number));
+  const homeEmployeeNumbers = new Set(employees
+    .filter((employee) => String(employee.home_location_id) === String(context.locationId))
+    .map((employee) => employee.personnel_number));
   const shifts = await Promise.all(
     shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings) })),
   );
+  const externalShiftRows = employeeWeekShiftRows.filter((shift) => (
+    visibleEmployeeNumbers.has(shift.employee_number)
+    && homeEmployeeNumbers.has(shift.employee_number)
+    && String(shift.location_id || context.locationId) !== String(context.locationId)
+  ));
+  const externalLocationIds = [...new Set(externalShiftRows
+    .map((shift) => String(shift.location_id || ""))
+    .filter(Boolean))];
+  const externalLocationSettings = new Map(await Promise.all(externalLocationIds.map(async (locationId) => (
+    [locationId, await settingsForLocation(locationId)]
+  ))));
+  const externalShifts = await Promise.all(externalShiftRows.map(async (shift) => ({
+    ...shift,
+    ...await shiftMetrics(
+      shift,
+      externalLocationSettings.get(String(shift.location_id || "")) || settings,
+    ),
+  })));
+  const countedWeekShifts = [...shifts, ...externalShifts];
   const weekOptions = storedWeekOptions.map((option) => ({ ...option }));
-  const visibleEmployeeNumbers = new Set(employees.map((employee) => employee.personnel_number));
   const pendingTimeOff = (await absenceManagementRepository.pendingTimeOffForRange({
     dateFrom: weekStart,
     dateTo: weekEnd,
@@ -21271,7 +21294,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     optionCreditTotals[employee.personnel_number] = 0;
     sicknessCreditTotals[employee.personnel_number] = 0;
   }
-  for (const shift of shifts) {
+  for (const shift of countedWeekShifts) {
     const minuteBasis = scheduleShiftMinuteBasis(shift);
     totals[shift.employee_number] = addScheduleMinutes(
       totals[shift.employee_number],
@@ -21281,17 +21304,20 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       plannedTotals[shift.employee_number],
       minuteBasis.plannedMinutes,
     );
-    inStoreTotals[shift.employee_number] = addScheduleMinutes(
-      inStoreTotals[shift.employee_number],
-      minuteBasis.plannedMinutes,
-    );
     bonusTotals[shift.employee_number] = addScheduleMinutes(
       bonusTotals[shift.employee_number],
       minuteBasis.bonusMinutes,
     );
   }
+  for (const shift of shifts) {
+    const minuteBasis = scheduleShiftMinuteBasis(shift);
+    inStoreTotals[shift.employee_number] = addScheduleMinutes(
+      inStoreTotals[shift.employee_number],
+      minuteBasis.plannedMinutes,
+    );
+  }
   const scheduledEmployeeDates = new Set(
-    shifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`),
+    countedWeekShifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`),
   );
   const sicknessCreditDates = new Set(
     sicknessCredits
@@ -56326,6 +56352,9 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
 }
 
 function scheduleMatrixOptionStyle(optionType) {
+  if (optionType === "team_meeting") {
+    return { fill: "#eadff5", stroke: "#68448f", text: "#332044" };
+  }
   if (["vacation", "special_leave"].includes(optionType)) {
     return { fill: "#cfe8d7", stroke: "#2f6f48", text: "#173b25" };
   }
@@ -56350,42 +56379,70 @@ function scheduleMatrixDayIndex(schedule, date) {
 function scheduleMatrixCellData(schedule, employee, date) {
   const options = collapsedScheduleWeekOptions(schedule.weekOptions)
     .filter((option) => !isTeamWideMeetingOption(option))
-    .filter((option) => option.employee_number === employee.personnel_number)
+    .filter((option) => String(option.employee_number) === String(employee.personnel_number))
     .filter((option) => option.date_from <= date && option.date_to >= date);
   const shifts = schedule.shifts
-    .filter((shift) => shift.employee_number === employee.personnel_number && shift.shift_date === date)
+    .filter((shift) => String(shift.employee_number) === String(employee.personnel_number) && shift.shift_date === date)
     .sort((left, right) => String(left.start_time).localeCompare(String(right.start_time)));
-  const lines = [];
-  const displayedOptions = options.slice(0, 2);
-  for (const option of displayedOptions) {
-    const time = optionIsAllDay(option)
-      ? "ganztägig"
-      : `${option.start_time || ""}-${option.end_time || ""}`;
-    lines.push({
+  const meetingGroups = new Set();
+  const meetings = (schedule.weekOptions || []).filter((option) => {
+    if (!isTeamWideMeetingOption(option)
+      || String(option.employee_number) !== String(employee.personnel_number)
+      || option.date_from > date || option.date_to < date
+      || meetingGroups.has(option.group_id)) return false;
+    meetingGroups.add(option.group_id);
+    return true;
+  });
+  const entries = options.map((option) => {
+    const time = optionIsAllDay(option) ? "ganztägig" : `${option.start_time || ""}-${option.end_time || ""}`;
+    return {
       type: "option",
       text: `${optionLabel(option.option_type)} · ${time}`,
-      bold: true,
       color: scheduleMatrixOptionStyle(option.option_type).text,
-    });
-  }
-  const displayedShifts = shifts.slice(0, Math.max(1, 3 - displayedOptions.length));
-  for (const shift of displayedShifts) {
+      sortTime: optionIsAllDay(option) ? "00:00" : String(option.start_time || "00:00"),
+      sortOrder: 0,
+    };
+  });
+  for (const shift of shifts) {
     const department = !schedule.context.departmentId && shift.department_name
       ? String(shift.department_name) : "";
-    lines.push({
+    entries.push({
       type: "shift",
       timeText: `${shift.start_time}-${shift.end_time}`,
       detailText: department,
+      sortTime: String(shift.start_time || "00:00"),
+      sortOrder: 1,
     });
   }
-  if (!lines.length) lines.push({ type: "empty", text: "-" });
-  const displayedEntries = displayedOptions.length + displayedShifts.length;
-  if (options.length + shifts.length > displayedEntries) {
-    lines.push({ type: "more", text: `+${options.length + shifts.length - displayedEntries} weitere` });
+  for (const meeting of meetings) {
+    entries.push({
+      type: "meeting",
+      text: `TS · ${optionIsAllDay(meeting) ? "ganztägig" : `${meeting.start_time || ""}-${meeting.end_time || ""}`}`,
+      color: scheduleMatrixOptionStyle("team_meeting").text,
+      sortTime: optionIsAllDay(meeting) ? "23:59" : String(meeting.start_time || "23:59"),
+      sortOrder: 2,
+    });
   }
+  entries.sort((left, right) => String(left.sortTime).localeCompare(String(right.sortTime))
+    || left.sortOrder - right.sortOrder);
+  let lines = [...entries];
+  if (entries.length > 4) {
+    const prioritized = [
+      ...entries.filter((entry) => entry.type === "meeting"),
+      ...entries.filter((entry) => entry.type === "shift"),
+      ...entries.filter((entry) => !["meeting", "shift"].includes(entry.type)),
+    ].slice(0, 3);
+    const selectedEntries = new Set(prioritized);
+    lines = [
+      ...entries.filter((entry) => selectedEntries.has(entry)),
+      { type: "more", text: `+${entries.length - prioritized.length} weitere` },
+    ];
+  }
+  if (!lines.length) lines.push({ type: "empty", text: "-" });
   return {
     options,
     shifts,
+    meetings,
     lines,
     style: options.length ? scheduleMatrixOptionStyle(options[0].option_type) : null,
   };
@@ -56420,8 +56477,57 @@ function scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize) {
   if (entry.type === "shift") {
     return timeFontSize + 2 + (entry.detailText ? detailFontSize + 2 : 0);
   }
-  if (entry.type === "option") return Math.max(9, detailFontSize + 2);
+  if (["option", "meeting"].includes(entry.type)) return Math.max(9, detailFontSize + 2);
   return 8;
+}
+
+function scheduleMatrixSummaryForDate(schedule, date) {
+  const visibleEmployeeNumbers = new Set((schedule.employees || [])
+    .map((employee) => String(employee.personnel_number)));
+  const categories = {
+    MA: new Set(),
+    U: new Set(),
+    ZA: new Set(),
+    K: new Set(),
+    BS: new Set(),
+    S: new Set(),
+    A: new Set(),
+  };
+  for (const shift of schedule.shifts || []) {
+    if (shift.shift_date === date && visibleEmployeeNumbers.has(String(shift.employee_number))) {
+      categories.MA.add(String(shift.employee_number));
+    }
+  }
+  const categoryByOptionType = {
+    vacation: "U",
+    special_leave: "U",
+    time_off: "ZA",
+    sick: "K",
+    vocational_school: "BS",
+    school: "S",
+    branch: "A",
+  };
+  for (const option of schedule.weekOptions || []) {
+    if (option.soft_pending || option.date_from > date || option.date_to < date) continue;
+    const category = categoryByOptionType[option.option_type];
+    const employeeNumber = String(option.employee_number || "");
+    if (category && visibleEmployeeNumbers.has(employeeNumber)) categories[category].add(employeeNumber);
+  }
+  for (const credit of schedule.sicknessCredits || []) {
+    const employeeNumber = String(credit.employee_number || "");
+    if (credit.date === date && visibleEmployeeNumbers.has(employeeNumber)) categories.K.add(employeeNumber);
+  }
+  for (const assignment of schedule.staffAssignments || []) {
+    const employeeNumber = String(assignment.employee_number || "");
+    if (String(assignment.home_location_id || "") !== String(schedule.context.locationId)
+      || assignment.date_from > date || assignment.date_to < date
+      || !visibleEmployeeNumbers.has(employeeNumber)) continue;
+    categories.A.add(employeeNumber);
+  }
+  return Object.entries(categories)
+    .filter(([code, employees]) => code === "MA" || employees.size > 0)
+    .map(([code, employees]) => `${employees.size}${code}`)
+    .join(", ");
 }
 
 function scheduleMatrixContentRowHeight(schedule, employee, dayCount, timeFontSize, detailFontSize) {
@@ -56475,7 +56581,8 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const postTableHeight = 18 + (meetings.length ? 33 : 0) + (hasScheduleNote ? 36 : 0);
   const tableBottom = Math.min(510, 555 - postTableHeight);
   const headerHeight = 31;
-  const summaryHeight = 21;
+  const summaryGap = (5 / 25.4) * 72;
+  const summaryHeight = 27;
   const employees = schedule.employees.length ? schedule.employees : [null];
   const minimumRowHeight = Math.max(
     scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize),
@@ -56490,7 +56597,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const maximumRowHeight = Math.max(54, minimumRowHeight + 10);
   const rowsPerPage = Math.max(
     1,
-    Math.floor((tableBottom - tableTop - headerHeight - summaryHeight) / minimumRowHeight),
+    Math.floor((tableBottom - tableTop - headerHeight - summaryGap - summaryHeight) / minimumRowHeight),
   );
   const pageRows = [];
   for (let index = 0; index < employees.length; index += rowsPerPage) {
@@ -56502,14 +56609,14 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
     const pageEmployeeCount = employeesOnPage.filter(Boolean).length;
     const rowHeight = Math.min(
       maximumRowHeight,
-      (tableBottom - tableTop - headerHeight - summaryHeight) / Math.max(1, employeesOnPage.length),
+      (tableBottom - tableTop - headerHeight - summaryGap - summaryHeight) / Math.max(1, employeesOnPage.length),
     );
     const tableWidth = pageWidth - left - right;
     const employeeColumnWidth = 148;
     const dayWidth = (tableWidth - employeeColumnWidth) / dayCount;
     const dataTop = tableTop + headerHeight;
     const dataBottom = dataTop + rowHeight * employeesOnPage.length;
-    const summaryY = dataBottom;
+    const summaryY = dataBottom + summaryGap;
 
     doc.fillColor("#142033").font("Helvetica-Bold").fontSize(15).text(
       `${schedule.settings.pdf_title} · KW ${schedule.calendarWeek}`,
@@ -56657,7 +56764,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
               );
               lineY += detailFontSize + 2;
             }
-          } else if (line.type === "option") {
+          } else if (["option", "meeting"].includes(line.type)) {
             const optionFontSize = Math.max(7, Math.min(9.5, detailFontSize));
             const effectiveOptionSize = scheduleMatrixFittedFontSize(
               doc,
@@ -56690,28 +56797,28 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
     doc.fillColor("#243944").font("Helvetica-Bold").fontSize(6.5).text(
       pageEmployeeCount ? "Besetzung" : "Übersicht",
       left + 10,
-      summaryY + 7,
+      summaryY + 9,
       { width: employeeColumnWidth - 20 },
     );
     for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
       const date = addDays(schedule.weekStart, dayIndex);
       const x = left + employeeColumnWidth + dayIndex * dayWidth;
-      const present = employeesOnPage.filter(Boolean).filter((employee) => (
-        schedule.shifts.some((shift) => shift.employee_number === employee.personnel_number && shift.shift_date === date)
-      )).length;
-      doc.fillColor("#40535d").font("Helvetica-Bold").fontSize(6.3).text(
-        `${present} MA${meetings.some((meeting) => meeting.date_from <= date && meeting.date_to >= date) ? " · TS" : ""}`,
+      doc.fillColor("#40535d").font("Helvetica-Bold").fontSize(5.7).text(
+        scheduleMatrixSummaryForDate(schedule, date),
         x + 4,
-        summaryY + 7,
-        { width: dayWidth - 8, align: "center", ellipsis: true },
+        summaryY + 5,
+        { width: dayWidth - 8, height: summaryHeight - 8, align: "center", lineGap: 1 },
       );
     }
 
-    doc.strokeColor("#81909a").lineWidth(0.65).rect(left, tableTop, tableWidth, summaryY + summaryHeight - tableTop).stroke();
-    doc.strokeColor("#81909a").lineWidth(0.65).moveTo(left + employeeColumnWidth, tableTop).lineTo(left + employeeColumnWidth, summaryY + summaryHeight).stroke();
+    doc.strokeColor("#81909a").lineWidth(0.65).rect(left, tableTop, tableWidth, dataBottom - tableTop).stroke();
+    doc.strokeColor("#81909a").lineWidth(0.65).rect(left, summaryY, tableWidth, summaryHeight).stroke();
+    doc.strokeColor("#81909a").lineWidth(0.65).moveTo(left + employeeColumnWidth, tableTop).lineTo(left + employeeColumnWidth, dataBottom).stroke();
+    doc.strokeColor("#81909a").lineWidth(0.65).moveTo(left + employeeColumnWidth, summaryY).lineTo(left + employeeColumnWidth, summaryY + summaryHeight).stroke();
     for (let dayIndex = 1; dayIndex < dayCount; dayIndex += 1) {
       const x = left + employeeColumnWidth + dayIndex * dayWidth;
-      doc.strokeColor("#8b99a2").lineWidth(0.8).moveTo(x, tableTop).lineTo(x, summaryY + summaryHeight).stroke();
+      doc.strokeColor("#8b99a2").lineWidth(0.8).moveTo(x, tableTop).lineTo(x, dataBottom).stroke();
+      doc.strokeColor("#8b99a2").lineWidth(0.8).moveTo(x, summaryY).lineTo(x, summaryY + summaryHeight).stroke();
     }
     for (let rowIndex = 0; rowIndex <= employeesOnPage.length; rowIndex += 1) {
       const y = dataTop + rowIndex * rowHeight;
@@ -56732,9 +56839,12 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
 
     const legendY = postTableY;
     const legendItems = [
-      { color: "#cfe8d7", stroke: "#2f6f48", label: "Urlaub / Sonderurlaub" },
-      { color: "#ffe3a1", stroke: "#9a6508", label: "Zeitausgleich (ZA)" },
-      { color: "#dce6f8", stroke: "#3f5f91", label: "Schulung / Schule" },
+      { color: "#cfe8d7", stroke: "#2f6f48", label: "U Urlaub / Sonderurlaub" },
+      { color: "#ffe3a1", stroke: "#9a6508", label: "ZA Zeitausgleich" },
+      { color: "#f4d6d2", stroke: "#944139", label: "K Krankenstand" },
+      { color: "#dce6f8", stroke: "#3f5f91", label: "BS Berufsschule" },
+      { color: "#dce6f8", stroke: "#3f5f91", label: "S Schulung" },
+      { color: "#e4e8ea", stroke: "#5f6c74", label: "A Andere Filiale" },
     ];
     doc.font("Helvetica-Bold").fontSize(5.7);
     const legendWidth = legendItems.reduce(

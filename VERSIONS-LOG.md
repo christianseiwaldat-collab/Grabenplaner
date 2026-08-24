@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.16 Beta · Präzisierte Wochenmatrix und standortübergreifende Einplanung
+
+- Die Dienstplan- und Urlaubs-PDF-Einstellungen nutzen ihre gesamte Kartenbreite in einem gleichmäßigen, responsiven Raster; Vorschau und umfangreiche Optionen werden nicht mehr durch eine dauerhaft reservierte Seitenspalte eingeengt.
+- Teamsitzungen erscheinen zusätzlich zur ausgeschriebenen Erklärung direkt in jeder betroffenen Matrixzelle, zeitlich nach dem regulären Dienst und auch dann, wenn ein Teammitglied krankheitsbedingt ausfällt.
+- Zwischen der letzten Teamzeile und der Tageszusammenfassung liegen druckgenaue fünf Millimeter Abstand. Die Besetzungszeile zählt Mitarbeitende, Urlaub, Zeitausgleich, Krankenstand, Berufsschule, Schulung und andere Filialen mit einer vollständigen Kürzellegende.
+- Dienste in einer anderen Filiale fließen in die gesamte Wochen-Einplanung des Stammteams ein. Die lokale Filialsumme und die sichtbaren Dienstdetails bleiben weiterhin auf den geöffneten Standort begrenzt.
+- Layout-, PDF-, Rechte-, Datenschutz-, Filialeinsatz-, Stunden- und Integrationspfade sind regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.15 Beta · Anpassbare Wochenmatrix und Katalogsuche
 
 - Die alternative Dienstplan-Wochenmatrix bietet gestufte Punktgrößen für Uhrzeiten und Zusatzzeilen, optionale Fettschrift sowie Uhrzeiten in der hinterlegten Teammitgliedfarbe. Abteilung oder Arbeitsbereich steht platzsparend unter der Uhrzeit.

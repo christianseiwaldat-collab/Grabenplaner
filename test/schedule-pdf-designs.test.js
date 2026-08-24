@@ -116,6 +116,8 @@ test("Einstellungen und Dienstplanung verdrahten Rangfolge, Direkt-Export und Au
   assert.match(server, /designId === "matrix"/);
   assert.match(server, /async function drawScheduleTimelinePdf/);
   assert.match(server, /function drawScheduleMatrixPdf/);
+  assert.match(server, /const summaryGap = \(5 \/ 25\.4\) \* 72/);
+  assert.match(server, /scheduleMatrixSummaryForDate\(schedule, date\)/);
 });
 
 test("Wochenmatrix verdrahtet Punktgrößen, Hervorhebung, Kopftext und bereichsbezogenen Endpoint", () => {
