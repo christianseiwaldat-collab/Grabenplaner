@@ -72,6 +72,11 @@ test("Block 7: Leihe, Branding und PDF sind geschlossene Bereiche der Grundeinst
     2,
     "Dienstplan- und Urlaubs-PDF müssen als zwei eigene Karten im PDF-Accordion liegen",
   );
+  assert.equal(
+    (general.match(/class="pdf-settings-fields"/g) || []).length,
+    2,
+    "beide PDF-Karten brauchen einen vollbreiten inneren Einstellungsraster",
+  );
 
   assert.match(styles, /\.settings-two-column \{[^}]*grid-auto-rows:\s*max-content;[^}]*align-items:\s*start;/);
   assert.match(styles, /\.settings-card \{[^}]*align-self:\s*start;[^}]*height:\s*auto;/);
@@ -86,6 +91,17 @@ test("Block 7: Leihe, Branding und PDF sind geschlossene Bereiche der Grundeinst
     /\.settings-accordion-stack > \.settings-card \{[^}]*grid-column:\s*1 \/ -1;[^}]*min-width:\s*0;[^}]*width:\s*100%;/,
     "beide PDF-Karten müssen die volle Accordion-Breite belegen",
   );
+  assert.match(
+    styles,
+    /\.pdf-card \{[^}]*grid-template-columns:\s*minmax\(0,1fr\);/,
+    "PDF-Karten dürfen intern keine dauerhaft reservierte Vorschau-Spalte behalten",
+  );
+  assert.match(
+    styles,
+    /\.pdf-settings-fields \{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\);[^}]*width:\s*100%;/,
+    "die PDF-Felder müssen die gesamte Kartenbreite als gleichmäßigen Raster nutzen",
+  );
+  assert.doesNotMatch(styles, /\.pdf-card > :not\(\.card-heading\):not\(\.pdf-live-preview\)/);
   assert.match(styles, /\.settings-packed-grid \{[^}]*grid-auto-flow:\s*row;[^}]*grid-auto-rows:\s*1px;[^}]*row-gap:\s*0;/);
   assert.match(app, /Math\.ceil\(item\.offsetHeight \+ 15\)/);
   assert.match(app, /new ResizeObserver/);

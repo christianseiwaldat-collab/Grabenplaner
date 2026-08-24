@@ -4873,7 +4873,7 @@ function renderHoursOverview() {
         <div><strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.full_name)}</small></div>
       </div>
       <div class="hours-values">
-        <span><small>Eingeteilt</small><strong>${hoursOverviewValue(planned)}</strong></span>
+        <span><small>Eingeteilt gesamt</small><strong>${hoursOverviewValue(planned)}</strong></span>
         <span><small>Sonderfälle</small><strong>${hoursOverviewValue(optionCredit)}</strong></span>
         <span><small>Gewertet</small><strong>${hoursOverviewValue(counted)}</strong></span>
         <span><small>Wochen-Soll</small><strong>${hoursOverviewValue(target)}</strong></span>

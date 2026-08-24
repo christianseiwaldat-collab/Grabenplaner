@@ -34,7 +34,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.15 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.16 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1983,15 +1983,17 @@
                       </details>
                     </div>
                   </details>
-                  <label class="field"><span>Titel der PDF</span><input id="pdfTitleSetting" placeholder="Dienstplan" /></label>
-                  <label class="field pdf-filename-field"><span>Dateiname vor Kalenderwoche</span><input id="pdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Dienstplan" /></label>
-                  <div class="pdf-file-options">
-                    <label><input id="pdfFilenameIncludeKw" type="checkbox" /> Kalenderwoche automatisch anhängen</label>
-                    <label><input id="pdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
+                  <div class="pdf-settings-fields">
+                    <label class="field"><span>Titel der PDF</span><input id="pdfTitleSetting" placeholder="Dienstplan" /></label>
+                    <label class="field pdf-filename-field"><span>Dateiname vor Kalenderwoche</span><input id="pdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Dienstplan" /></label>
+                    <div class="pdf-file-options pdf-settings-wide">
+                      <label><input id="pdfFilenameIncludeKw" type="checkbox" /> Kalenderwoche automatisch anhängen</label>
+                      <label><input id="pdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
+                    </div>
+                    <div class="preview-line"><span>Titelvorschau</span><strong id="pdfTitlePreview"></strong></div>
+                    <div class="preview-line"><span>Dateiname</span><strong id="pdfFilenamePreview"></strong></div>
+                    <p class="settings-note pdf-settings-wide">Standard: „Dienstplan KW31.pdf“. Der Text vor der KW muss 5 bis 80 Zeichen lang sein.</p>
                   </div>
-                  <div class="preview-line"><span>Titelvorschau</span><strong id="pdfTitlePreview"></strong></div>
-                  <div class="preview-line"><span>Dateiname</span><strong id="pdfFilenamePreview"></strong></div>
-                  <p class="settings-note">Standard: „Dienstplan KW31.pdf“. Der Text vor der KW muss 5 bis 80 Zeichen lang sein.</p>
                   <div class="pdf-live-preview">
                     <div><strong>PDF-Vorschau Dienstplan</strong><small>Wird erst beim Klick generiert.</small></div>
                     <label class="field schedule-pdf-preview-design"><span>Design für die Vorschau</span><select id="schedulePdfPreviewDesign"></select></label>
@@ -2001,22 +2003,24 @@
                 </div>
                 <div class="settings-card pdf-card" id="vacationPdfSettingsCard">
                   <div class="card-heading"><div class="card-icon">Urlaub</div><div><h2>PDF-Ausgabe Urlaubsplanung</h2><p>Nur für Monats-, Quartals- und Jahresübersichten des Urlaubsplaners.</p></div></div>
-                  <label class="field"><span>Titel der PDF</span><input id="vacationPdfTitleSetting" placeholder="Urlaubsplanung" /></label>
-                  <label class="field pdf-filename-field"><span>Dateiname vor Zeitraum</span><input id="vacationPdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Urlaubsplanung" /></label>
-                  <div class="pdf-file-options">
-                    <label><input id="vacationPdfFilenameIncludePeriod" type="checkbox" /> Zeitraum automatisch anhängen</label>
-                    <label><input id="vacationPdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
+                  <div class="pdf-settings-fields">
+                    <label class="field"><span>Titel der PDF</span><input id="vacationPdfTitleSetting" placeholder="Urlaubsplanung" /></label>
+                    <label class="field pdf-filename-field"><span>Dateiname vor Zeitraum</span><input id="vacationPdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Urlaubsplanung" /></label>
+                    <div class="pdf-file-options pdf-settings-wide">
+                      <label><input id="vacationPdfFilenameIncludePeriod" type="checkbox" /> Zeitraum automatisch anhängen</label>
+                      <label><input id="vacationPdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
+                    </div>
+                    <label class="field pdf-settings-wide"><span>Kalenderdarstellung</span><select id="vacationPdfCalendarStyle"><option value="bars">Durchgezogene Urlaubslinien</option><option value="dots">Einzelne Farb-Punkte je Tag</option></select></label>
+                    <div class="pdf-file-options vacation-balance-options pdf-settings-wide">
+                      <label><input id="vacationPdfShowBalance" type="checkbox" /> Resturlaub je Teammitglied anzeigen</label>
+                      <label><input id="vacationPdfBalanceShowEntitlement" type="checkbox" /> Jahresurlaub per 1.1. anzeigen</label>
+                      <label><input id="vacationPdfBalanceShowPlanned" type="checkbox" /> Eingeplanten Urlaub anzeigen</label>
+                      <label><input id="vacationPdfBalanceShowConsumed" type="checkbox" /> Bereits konsumierten Urlaub anzeigen</label>
+                    </div>
+                    <div class="preview-line"><span>Titelvorschau</span><strong id="vacationPdfTitlePreview"></strong></div>
+                    <div class="preview-line"><span>Dateiname</span><strong id="vacationPdfFilenamePreview"></strong></div>
+                    <p class="settings-note pdf-settings-wide">Urlaubs-PDFs werden einheitlich als A4 Querformat ausgegeben. Die PDF ist vektorbasiert und dadurch unabhängig von DPI gestochen scharf.</p>
                   </div>
-                  <label class="field"><span>Kalenderdarstellung</span><select id="vacationPdfCalendarStyle"><option value="bars">Durchgezogene Urlaubslinien</option><option value="dots">Einzelne Farb-Punkte je Tag</option></select></label>
-                  <div class="pdf-file-options vacation-balance-options">
-                    <label><input id="vacationPdfShowBalance" type="checkbox" /> Resturlaub je Teammitglied anzeigen</label>
-                    <label><input id="vacationPdfBalanceShowEntitlement" type="checkbox" /> Jahresurlaub per 1.1. anzeigen</label>
-                    <label><input id="vacationPdfBalanceShowPlanned" type="checkbox" /> Eingeplanten Urlaub anzeigen</label>
-                    <label><input id="vacationPdfBalanceShowConsumed" type="checkbox" /> Bereits konsumierten Urlaub anzeigen</label>
-                  </div>
-                  <div class="preview-line"><span>Titelvorschau</span><strong id="vacationPdfTitlePreview"></strong></div>
-                  <div class="preview-line"><span>Dateiname</span><strong id="vacationPdfFilenamePreview"></strong></div>
-                  <p class="settings-note">Urlaubs-PDFs werden einheitlich als A4 Querformat ausgegeben. Die PDF ist vektorbasiert und dadurch unabhängig von DPI gestochen scharf.</p>
                   <div class="pdf-live-preview">
                     <div><strong>PDF-Vorschau Urlaub</strong><small>Aktuelle Urlaubsansicht als echte PDF.</small></div>
                     <button type="button" class="secondary-button" id="vacationPdfPreviewButton">Vorschau erzeugen</button>
@@ -2635,7 +2639,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.15 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.16 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

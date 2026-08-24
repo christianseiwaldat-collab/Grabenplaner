@@ -149,6 +149,11 @@ test.before(async () => {
     VALUES (?, ?, ?, ?, '09:00', '12:00', 'Testteam', 'Regulärer Dienst für Matrix-PDF')
   `).run(DEVELOPER, LOCATION, departmentId, WEEK_START);
   db.prepare(`
+    INSERT INTO shifts
+      (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
+    VALUES (?, ?, ?, ?, '09:00', '18:00', 'Testteam', 'Regulärer Dienst vor Teamsitzung')
+  `).run(DEVELOPER, LOCATION, departmentId, MEETING_DATE);
+  db.prepare(`
     INSERT INTO week_options
       (employee_number, week_start, date_from, date_to, option_type, note, all_day)
     VALUES (?, ?, '2035-03-13', '2035-03-13', 'vacation', 'Urlaub für Matrix-PDF', 1)
@@ -158,6 +163,17 @@ test.before(async () => {
       (employee_number, week_start, date_from, date_to, option_type, note, all_day)
     VALUES (?, ?, '2035-03-14', '2035-03-14', 'time_off', 'ZA für Matrix-PDF', 1)
   `).run(DEVELOPER, WEEK_START);
+  for (const [employeeNumber, date, optionType, note] of [
+    [MEMBER_LATER_SICK, "2035-03-12", "vocational_school", "Berufsschule für Matrix-PDF"],
+    [MEMBER_LATER_SICK, "2035-03-13", "school", "Schulung für Matrix-PDF"],
+    [MEMBER_LATER_SICK, "2035-03-14", "branch", "Andere Filiale für Matrix-PDF"],
+  ]) {
+    db.prepare(`
+      INSERT INTO week_options
+        (employee_number, week_start, date_from, date_to, option_type, note, all_day)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `).run(employeeNumber, WEEK_START, date, date, optionType, note);
+  }
 
   await new Promise((resolve, reject) => {
     httpServer = app.listen(0, "127.0.0.1", resolve);
@@ -391,6 +407,18 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.match(pdf.response.headers.get("content-type") || "", /application\/pdf/);
   assert.ok(pdf.payload.length > 3000);
 
+  for (const [optionType, note] of [
+    ["vacation", "Überfüllungstest Urlaub"],
+    ["time_off", "Überfüllungstest ZA"],
+    ["school", "Überfüllungstest Schulung"],
+  ]) {
+    db.prepare(`
+      INSERT INTO week_options
+        (employee_number, week_start, date_from, date_to, option_type, note, all_day)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `).run(DEVELOPER, WEEK_START, MEETING_DATE, MEETING_DATE, optionType, note);
+  }
+
   const matrixPdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&design=matrix`, {
     auth,
     binary: true,
@@ -409,13 +437,42 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.match(matrixPdfDetails.text, /Teamsitzung \(TS\)/);
   assert.match(matrixPdfDetails.text, /18:30-20:00/);
   assert.match(matrixPdfDetails.text, /09:00-12:00/);
+  assert.match(matrixPdfDetails.text, /09:00-18:00/);
   assert.match(matrixPdfDetails.text, /Testteam/);
+  assert.match(matrixPdfDetails.text, /\d+MA/);
+  assert.match(matrixPdfDetails.text, /1U/);
+  assert.match(matrixPdfDetails.text, /1ZA/);
+  assert.match(matrixPdfDetails.text, /2K/);
+  assert.match(matrixPdfDetails.text, /1BS/);
+  assert.match(matrixPdfDetails.text, /1S/);
+  assert.match(matrixPdfDetails.text, /1A/);
   assert.doesNotMatch(matrixPdfDetails.text, /Mitarbeitendenfarbe/);
   const regularShiftTime = matrixPdfDetails.items.find((item) => item.str === "09:00-12:00");
   assert.ok(regularShiftTime, "Der reguläre Dienst muss als eigener PDF-Textlauf vorhanden sein.");
   assert.ok(
     Number(regularShiftTime.height) > 8 && Number(regularShiftTime.height) <= 18.1,
     `Die konfigurierte 18-pt-Uhrzeit muss im 7-Tage-Fall nur passgenau verkleinert werden (ist ${regularShiftTime.height} pt).`,
+  );
+  const meetingDayShift = matrixPdfDetails.items.find((item) => item.str === "09:00-18:00");
+  const meetingCellEntry = matrixPdfDetails.items.find((item) => (
+    item.str.includes("TS")
+    && item.str.includes("18:30-20:00")
+    && meetingDayShift
+    && Math.abs(Number(item.transform?.[4]) - Number(meetingDayShift.transform?.[4])) < 8
+  ));
+  assert.ok(meetingDayShift && meetingCellEntry, "Dienst und TS müssen als getrennte Textläufe in derselben Matrixzelle stehen.");
+  assert.ok(
+    Number(meetingDayShift.transform[5]) > Number(meetingCellEntry.transform[5]),
+    "Die TS muss unter dem regulären Dienst stehen.",
+  );
+  assert.ok(
+    matrixPdfDetails.items.filter((item) => item.str.includes("18:30-20:00")).length >= 2,
+    "Die TS-Zeit muss in der Matrixzelle und in der ausgeschriebenen Erklärung vorkommen.",
+  );
+  assert.match(
+    matrixPdfDetails.text,
+    /\+2 weitere/,
+    "Der Überfüllungsfall muss weitere Einträge kompakt zusammenfassen, ohne Dienst oder TS zu verdrängen.",
   );
 
   const unavailablePdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=unbekannt`, {
