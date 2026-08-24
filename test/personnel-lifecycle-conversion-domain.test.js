@@ -69,6 +69,7 @@ async function fixture() {
 
 async function candidateAtPreboarding(service, suffix = "") {
   const candidate = await service.createCandidate({
+    dataProcessingAuthorizationConfirmed: true,
     profile: {
       firstName: `Ada${suffix}`,
       lastName: "Beispiel",
@@ -320,6 +321,7 @@ test("M3-Domäne: Statusautomat und weitere offene Bewerbungen sperren die Mitar
   const context = await fixture();
   try {
     const newCandidate = await context.service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
       profile: {
         firstName: "Noch",
         lastName: "Nichtbereit",
@@ -507,6 +509,7 @@ test("M3-Domäne: M2-Read-only-Modus fragt Conversion-Daten nicht ab und sperrt 
     const repository = createPersonnelLifecycleRepository(context.provider);
     const service = context.serviceFor(repository, { conversionAvailable: false });
     const candidate = await service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
       profile: {
         firstName: "M2",
         lastName: "Import",

@@ -1234,6 +1234,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const personnelLifecyclePermissionIds = new Set([
       "personnel:candidates:read",
       "personnel:applications:write",
+      "personnel:candidates:create",
       "personnel:candidates:write",
       "personnel:candidates:confidential:read",
       "personnel:candidates:confidential:write",

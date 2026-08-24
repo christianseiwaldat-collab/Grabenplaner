@@ -252,6 +252,7 @@ test("Personalmodul M3: kontrollierte Einstellung ist atomar, idempotent und dat
       method: "POST",
       auth: admin,
       body: {
+        dataProcessingAuthorizationConfirmed: true,
         profile: {
           firstName: "Mira",
           lastName: piiMarker,
@@ -568,6 +569,7 @@ test("Personalmodul-API: Feature, Zentralrecht, Sensitivrecht und CSRF bleiben f
       auth: admin,
       includeCsrf: false,
       body: {
+        dataProcessingAuthorizationConfirmed: true,
         profile: {
           firstName: "Keine",
           lastName: "Mutation",
@@ -581,6 +583,126 @@ test("Personalmodul-API: Feature, Zentralrecht, Sensitivrecht und CSRF bleiben f
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 0);
 });
 
+test("Personalmodul-API: Bewerberanlage verlangt eine ausdrücklich bestätigte EDV-Erlaubnis", async () => {
+  setPersonnelLifecycleEnabled(true);
+  const admin = createSession("101", "admin");
+  const profile = {
+    firstName: "Erlaubnis",
+    lastName: "Prüfung",
+    email: "edv-erlaubnis@example.invalid",
+  };
+
+  for (const submitted of [undefined, false, null, "true", 1, {}]) {
+    const body = { profile };
+    if (submitted !== undefined) body.dataProcessingAuthorizationConfirmed = submitted;
+    const denied = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+      method: "POST",
+      auth: admin,
+      body,
+    });
+    assert.equal(denied.response.status, 400, JSON.stringify(denied.payload));
+    assert.equal(
+      denied.payload.code,
+      "PERSONNEL_LIFECYCLE_DATA_PROCESSING_AUTHORIZATION_REQUIRED",
+    );
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_applications").get().count, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_events").get().count, 0);
+  }
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE action = 'personnel-lifecycle.candidate.create'
+  `).get().count, 0);
+
+  const created = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+    method: "POST",
+    auth: admin,
+    body: {
+      dataProcessingAuthorizationConfirmed: true,
+      profile,
+    },
+  });
+  assert.equal(created.response.status, 201, JSON.stringify(created.payload));
+  const creationEvent = created.payload.candidate.history.find(
+    ({ eventType }) => eventType === "candidate_created",
+  );
+  assert.deepEqual(creationEvent.detail.dataProcessingAuthorization, {
+    confirmed: true,
+    statementVersion: "candidate-data-processing-authorization-v1",
+  });
+  assert.equal(creationEvent.actorEmployeeNumber, "101");
+  assert.match(creationEvent.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+
+  const audit = db.prepare(`
+    SELECT detail FROM audit_log
+    WHERE action = 'personnel-lifecycle.candidate.create'
+    ORDER BY id DESC LIMIT 1
+  `).get();
+  assert.deepEqual(JSON.parse(audit.detail), {
+    applicationCount: 0,
+    dataProcessingAuthorizationConfirmed: true,
+  });
+  assert.doesNotMatch(audit.detail, /Erlaubnis|Prüfung|example\.invalid/i);
+
+  db.prepare(`
+    INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
+    VALUES ('101', 'personnel:candidates:write', 'personnel-lifecycle-api-test')
+  `).run();
+  const centralWriteDenied = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+    method: "POST",
+    auth: admin,
+    body: {
+      dataProcessingAuthorizationConfirmed: true,
+      profile: {
+        firstName: "Nicht",
+        lastName: "Angelegt",
+        email: "central-write-denied@example.invalid",
+      },
+    },
+  });
+  assert.equal(centralWriteDenied.response.status, 403, JSON.stringify(centralWriteDenied.payload));
+  assert.equal(centralWriteDenied.payload.code, "PERSONNEL_LIFECYCLE_PERMISSION_REQUIRED");
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 1);
+});
+
+test("Personalmodul-API: Bewerberanlage rollt nach einem nachgelagerten Ereignisfehler vollständig zurück", async () => {
+  setPersonnelLifecycleEnabled(true);
+  const admin = createSession("101", "admin");
+  db.exec(`
+    CREATE TRIGGER test_candidate_creation_rollback
+    BEFORE INSERT ON candidate_events
+    WHEN NEW.event_type = 'candidate_created'
+    BEGIN
+      SELECT RAISE(ABORT, 'test candidate creation rollback');
+    END
+  `);
+  try {
+    const failed = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+      method: "POST",
+      auth: admin,
+      body: {
+        dataProcessingAuthorizationConfirmed: true,
+        profile: {
+          firstName: "Rollback",
+          lastName: "Prüfung",
+          email: "rollback@example.invalid",
+        },
+      },
+    });
+    assert.equal(failed.response.status, 400);
+    assert.equal(failed.payload.code, "PERSONNEL_LIFECYCLE_REFERENCE_INVALID");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_applications").get().count, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_events").get().count, 0);
+    assert.equal(db.prepare(`
+      SELECT COUNT(*) AS count FROM audit_log
+      WHERE action = 'personnel-lifecycle.candidate.create'
+    `).get().count, 0);
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS test_candidate_creation_rollback");
+  }
+});
+
 test("Personalmodul-API: Create, Read, Update und Status liefern stabile Erfolgs- und Fehlerverträge", async () => {
   setPersonnelLifecycleEnabled(true);
   const admin = createSession("101", "admin");
@@ -591,6 +713,7 @@ test("Personalmodul-API: Create, Read, Update und Status liefern stabile Erfolgs
       method: "POST",
       auth: admin,
       body: {
+        dataProcessingAuthorizationConfirmed: true,
         profile: {
           firstName: "Ada",
           lastName: "Beispiel",
@@ -629,6 +752,7 @@ test("Personalmodul-API: Create, Read, Update und Status liefern stabile Erfolgs
         method: "POST",
         auth: admin,
         body: {
+          dataProcessingAuthorizationConfirmed: true,
           profile: {
             firstName: `Test ${index}`,
             lastName: "Bewerbung",
@@ -830,6 +954,7 @@ test("Personalmodul-API: Create, Read, Update und Status liefern stabile Erfolgs
       method: "POST",
       auth: admin,
       body: {
+        dataProcessingAuthorizationConfirmed: true,
         profile: {
           firstName: "Read",
           lastName: "Denied",

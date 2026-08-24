@@ -876,6 +876,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.ARCHIVE, label: "O8-Workflow-Versionen archivieren", description: "Künftige Veröffentlichungen additiv archivieren; im O8-Minimalumfang ohne Mutationsendpunkt.", group: "Onboarding & Offboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "personnel:candidates:read", label: "Bewerbungen im freigegebenen Bereich lesen", description: "Datensparsame Bewerber- und Bewerbungsdaten ausschließlich in einem von PL+ fachlich freigegebenen Standort oder einer freigegebenen Abteilung lesen.", group: "Bewerbungen & Preboarding", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:applications:write", label: "Bewerbungen im freigegebenen Bereich bearbeiten", description: "Strukturierte Bewerbungsdaten und Status ausschließlich im von PL+ freigegebenen Bereich bearbeiten; keine Kandidatenstammdaten, vertraulichen PL-Felder oder Umwandlung.", group: "Bewerbungen & Preboarding", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: "personnel:candidates:create", label: "Bewerber im eigenen freigegebenen Standort anlegen", description: "Entziehbares Grundrecht der Filialleitung: neue Bewerber ausschließlich mit einer ersten Bewerbung in einem bereits von PL+ freigegebenen eigenen Standort anlegen; keine Profilbearbeitung, vertraulichen Felder oder Umwandlung.", group: "Bewerbungen & Preboarding", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "developer"] },
   { id: "personnel:candidates:write", label: "Bewerber zentral anlegen und bearbeiten", description: "Kandidatenstammdaten und neue Bewerbungen unternehmensweit verwalten.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "personnel:candidates:confidential:read", label: "Vertrauliche Bewerberdaten lesen", description: "PL-vertrauliche Bewerbungsfelder, Dokumentmetadaten und vollständige Historie lesen; nicht an lokale Leitungen delegierbar.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "personnel:candidates:confidential:write", label: "Vertrauliche Bewerberdaten bearbeiten", description: "PL-vertrauliche Bewerbungsfelder bearbeiten; nicht an lokale Leitungen delegierbar.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
@@ -1682,11 +1683,13 @@ for (const roleId of ["hr", "admin", "developer"]) {
 const personnelLifecycleBusinessRolePermissions = Object.freeze([
   "personnel:candidates:read",
   "personnel:applications:write",
+  "personnel:candidates:create",
   "personnel:candidates:write",
   "personnel:candidates:confidential:read",
   "personnel:candidates:confidential:write",
   "personnel:candidates:convert",
 ]);
+addBuiltinRolePermissions("manager", ["personnel:candidates:create"]);
 addBuiltinRolePermissions("hr", personnelLifecycleBusinessRolePermissions);
 for (const roleId of ["admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [
@@ -9285,6 +9288,7 @@ function manageablePortalPermissionsForActor(actor) {
     if (!actor.permissions?.includes("personnel:candidates:delegate")) {
       manageable.delete("personnel:candidates:read");
       manageable.delete("personnel:applications:write");
+      manageable.delete("personnel:candidates:create");
     }
     if (!actor.permissions?.includes(PERSONNEL_WORKFLOW_PERMISSIONS.DELEGATE)) {
       manageable.delete(PERSONNEL_WORKFLOW_PERMISSIONS.READ);
@@ -9386,7 +9390,7 @@ async function portalTargetHasPersonnelLifecycleDelegation(
     .some((permission) => PERSONNEL_LEARNING_OPERATIONAL_PERMISSION_IDS.includes(permission));
   return hasPersonnelLearningRoleAccess
     || grants.some((permission) => personnelLifecyclePermissionIds.has(permission))
-    || denials.some((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))
+    || denials.some((permission) => personnelLifecyclePermissionIds.has(permission))
     || grants.some((permission) => (
       PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
     ))
@@ -45240,6 +45244,11 @@ const PERSONNEL_LIFECYCLE_ROUTE_ACTIONS = Object.freeze({
     capability: "canWriteCandidates",
     write: true,
   }),
+  candidateCreate: Object.freeze({
+    permission: PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_CREATE,
+    capability: "canCreateCandidates",
+    write: true,
+  }),
   applicationWrite: Object.freeze({
     permission: PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
     capability: "canWriteApplications",
@@ -45265,6 +45274,12 @@ function publicPersonnelLifecycleCapabilities(access) {
     .filter(Boolean))];
   const departmentIds = [...new Set(readScopes.map((scope) => Number(scope.departmentId || 0))
     .filter((departmentId) => Number.isSafeInteger(departmentId) && departmentId > 0))];
+  const createScopes = access?.allowedScopesByPermission?.[
+    PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_CREATE
+  ] || [];
+  const createLocationIds = [...new Set(createScopes
+    .map((entry) => String(entry.locationId || ""))
+    .filter(Boolean))];
   const scope = access?.global
     ? { type: "global" }
     : access?.role === "manager"
@@ -45272,9 +45287,17 @@ function publicPersonnelLifecycleCapabilities(access) {
       : access?.role === "department_manager"
         ? { type: "department", locationIds, departmentIds }
         : { type: "none" };
+  const createScope = access?.canCreateCandidates !== true
+    ? { type: "none", locationIds: [] }
+    : access?.global
+      ? { type: "global", locationIds: [] }
+      : { type: "location", locationIds: createLocationIds };
   return Object.freeze({
     scope,
     canReadCandidates: access?.canReadCandidates === true,
+    canCreateCandidates: access?.canCreateCandidates === true,
+    createScope,
+    requiresApplicationOnCreate: access?.canCreateCandidates === true && !access?.global,
     canWriteCandidates: access?.canWriteCandidates === true,
     canWriteApplications: access?.canWriteApplications === true,
     canReadConfidential: access?.canReadConfidential === true,
@@ -45337,6 +45360,7 @@ function requirePersonnelLifecycleAccess(request, { action = "read" } = {}) {
       const readsConfidential = action === "confidentialRead"
         || access.canReadConfidential;
       const writesConfidential = action === "candidateWrite"
+        || action === "candidateCreate"
         || action === "convert"
         || (action === "applicationWrite" && access.canWriteConfidential);
       const requiredSensitive = writesConfidential
@@ -46961,6 +46985,202 @@ const PERSONNEL_LIFECYCLE_CONFIDENTIAL_APPLICATION_FIELDS = new Set([
   "communicationNotes",
   "tags",
 ]);
+const PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_CREATE_FIELDS = new Set([
+  "dataProcessingAuthorizationConfirmed",
+  "profile",
+  "application",
+]);
+const PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_PROFILE_CREATE_FIELDS = new Set([
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+]);
+const PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_CREATE_FIELDS = new Set([
+  "desiredPositionId",
+  "desiredLocationId",
+  "desiredDepartmentId",
+  "desiredWeeklyMinutes",
+  "desiredWeeklyHours",
+  "availableFrom",
+  "desiredRoleTitle",
+  "employmentType",
+]);
+const PERSONNEL_LIFECYCLE_CANDIDATE_CREATE_AUDIT_FIELD_KEYS = new Set([
+  "root",
+  "profile",
+  "application",
+  "application.desiredLocationId",
+  "application.desiredDepartmentId",
+]);
+
+function personnelLifecyclePlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function auditPersonnelLifecycleCandidateCreateDenied(
+  accessContext,
+  request,
+  reason,
+  fieldKeys = [],
+) {
+  const safeFieldKeys = [...new Set((Array.isArray(fieldKeys) ? fieldKeys : [])
+    .map((field) => String(field || "").trim())
+    .filter((field) => PERSONNEL_LIFECYCLE_CANDIDATE_CREATE_AUDIT_FIELD_KEYS.has(field)))].sort();
+  auditPortal(
+    accessContext.session.employeeNumber,
+    "personnel-lifecycle.candidate.create.denied",
+    "candidate",
+    "new",
+    JSON.stringify({
+      reason: String(reason || "PERSONNEL_LIFECYCLE_CREATE_DENIED").slice(0, 120),
+      route: personnelRecordDeniedRoute(request),
+      fieldKeys: safeFieldKeys,
+    }),
+  );
+}
+
+async function localPersonnelLifecycleCandidateCreateInput(request, accessContext) {
+  const submitted = request.body;
+  if (!personnelLifecyclePlainObject(submitted)) {
+    throw httpError(400, "Bitte gültige Bewerberdaten übermitteln.", "PERSONNEL_LIFECYCLE_INVALID");
+  }
+  const unknownRootFields = Object.keys(submitted)
+    .filter((field) => !PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_CREATE_FIELDS.has(field));
+  if (unknownRootFields.length) {
+    auditPersonnelLifecycleCandidateCreateDenied(
+      accessContext,
+      request,
+      "PERSONNEL_LIFECYCLE_LOCAL_FIELD_FORBIDDEN",
+      ["root"],
+    );
+    throw httpError(
+      403,
+      "Die Filialleitung darf bei der Bewerberanlage nur die vorgesehenen Stammdaten und die erste Bewerbung erfassen.",
+      "PERSONNEL_LIFECYCLE_LOCAL_FIELD_FORBIDDEN",
+    );
+  }
+  const profile = submitted.profile;
+  if (!personnelLifecyclePlainObject(profile)) {
+    throw httpError(400, "Bitte gültige Bewerberstammdaten übermitteln.", "PERSONNEL_LIFECYCLE_INVALID");
+  }
+  const forbiddenProfileFields = Object.keys(profile)
+    .filter((field) => !PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_PROFILE_CREATE_FIELDS.has(field));
+  if (forbiddenProfileFields.length) {
+    auditPersonnelLifecycleCandidateCreateDenied(
+      accessContext,
+      request,
+      "PERSONNEL_LIFECYCLE_LOCAL_PROFILE_FIELD_FORBIDDEN",
+      ["profile"],
+    );
+    throw httpError(
+      403,
+      "Die Filialleitung darf bei der Anlage nur Name, E-Mail-Adresse und Telefonnummer erfassen.",
+      "PERSONNEL_LIFECYCLE_LOCAL_PROFILE_FIELD_FORBIDDEN",
+    );
+  }
+  const application = submitted.application;
+  if (!personnelLifecyclePlainObject(application)) {
+    throw httpError(
+      400,
+      "Die Filialleitung muss bei der Anlage eine erste Bewerbung zuordnen.",
+      "PERSONNEL_LIFECYCLE_INITIAL_APPLICATION_REQUIRED",
+    );
+  }
+  const forbiddenApplicationFields = Object.keys(application)
+    .filter((field) => !PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_CREATE_FIELDS.has(field));
+  if (forbiddenApplicationFields.length) {
+    auditPersonnelLifecycleCandidateCreateDenied(
+      accessContext,
+      request,
+      "PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_FIELD_FORBIDDEN",
+      ["application"],
+    );
+    throw httpError(
+      403,
+      "Die Filialleitung darf keine vertraulichen oder internen Bewerbungsfelder erfassen.",
+      "PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_FIELD_FORBIDDEN",
+    );
+  }
+  const desiredLocationId = String(application.desiredLocationId || "").trim();
+  if (!desiredLocationId) {
+    throw httpError(
+      400,
+      "Für die erste Bewerbung muss der eigene Standort ausgewählt werden.",
+      "PERSONNEL_LIFECYCLE_LOCATION_REQUIRED",
+    );
+  }
+  const desiredDepartmentIdValue = application.desiredDepartmentId;
+  const desiredDepartmentId = desiredDepartmentIdValue === null
+      || desiredDepartmentIdValue === undefined
+      || desiredDepartmentIdValue === ""
+    ? null
+    : Number(desiredDepartmentIdValue);
+  if (desiredDepartmentId !== null
+    && (!Number.isSafeInteger(desiredDepartmentId) || desiredDepartmentId <= 0)) {
+    throw httpError(400, "Die ausgewählte Abteilung ist ungültig.", "PERSONNEL_LIFECYCLE_INVALID");
+  }
+  const scope = { desiredLocationId, desiredDepartmentId };
+  if (!accessContext.access.canCreateCandidate(scope)
+    || !accessContext.access.canReadApplication(scope)
+    || !accessContext.access.canWriteApplication(scope)) {
+    auditPersonnelLifecycleCandidateCreateDenied(
+      accessContext,
+      request,
+      "PERSONNEL_LIFECYCLE_CREATE_SCOPE_DENIED",
+      ["application.desiredLocationId", ...(desiredDepartmentId ? ["application.desiredDepartmentId"] : [])],
+    );
+    throw httpError(
+      403,
+      "Der Bewerber darf nur im eigenen, für Bewerbungen freigegebenen Standort angelegt werden.",
+      "PERSONNEL_LIFECYCLE_CREATE_SCOPE_DENIED",
+    );
+  }
+  const [locations, departments] = await Promise.all([
+    organizationPersonnelRepository.listLocations(false),
+    organizationPersonnelRepository.listDepartments(false),
+  ]);
+  const location = locations.find((entry) => (
+    String(entry.id || "") === desiredLocationId && entry.active !== false && Number(entry.active) !== 0
+  ));
+  if (!location) {
+    throw httpError(
+      400,
+      "Der ausgewählte Standort ist nicht aktiv.",
+      "PERSONNEL_LIFECYCLE_REFERENCE_INVALID",
+    );
+  }
+  if (desiredDepartmentId !== null) {
+    const department = departments.find((entry) => (
+      Number(entry.id) === desiredDepartmentId
+        && String(entry.location_id || entry.locationId || "") === desiredLocationId
+        && entry.active !== false
+        && Number(entry.active) !== 0
+    ));
+    if (!department) {
+      throw httpError(
+        400,
+        "Die ausgewählte Abteilung ist nicht aktiv oder gehört nicht zum ausgewählten Standort.",
+        "PERSONNEL_LIFECYCLE_REFERENCE_INVALID",
+      );
+    }
+  }
+  const sanitizedApplication = {};
+  for (const field of PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_CREATE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(application, field)) continue;
+    if (field === "desiredLocationId") sanitizedApplication[field] = desiredLocationId;
+    else if (field === "desiredDepartmentId") {
+      if (desiredDepartmentId !== null) sanitizedApplication[field] = desiredDepartmentId;
+    } else sanitizedApplication[field] = application[field];
+  }
+  return {
+    dataProcessingAuthorizationConfirmed: submitted.dataProcessingAuthorizationConfirmed,
+    profile: Object.fromEntries([...PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_PROFILE_CREATE_FIELDS]
+      .filter((field) => Object.prototype.hasOwnProperty.call(profile, field))
+      .map((field) => [field, profile[field]])),
+    application: sanitizedApplication,
+  };
+}
 
 function assertPersonnelLifecycleApplicationInput(
   request,
@@ -48288,10 +48508,13 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates", async (request, respons
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateWrite" });
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateCreate" });
   const { session, access, capabilities } = accessContext;
   try {
-    if (request.body?.application) {
+    let createInput = request.body || {};
+    if (!access.global) {
+      createInput = await localPersonnelLifecycleCandidateCreateInput(request, accessContext);
+    } else if (request.body?.application) {
       if (!access.canWriteApplications) {
         auditPersonnelLifecycleAccessDenied(
           session,
@@ -48315,16 +48538,27 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, respon
       );
     }
     const created = await requirePersonnelLifecycleService().createCandidate(
-      request.body || {},
+      createInput,
       session.employeeNumber,
     );
     const candidate = projectPersonnelLifecycleCandidate(created, access, { detail: true });
+    const application = Array.isArray(created.applications) ? created.applications[0] : null;
     auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.candidate.create",
       "candidate",
-      candidate.id,
-      JSON.stringify({ applicationCount: candidate.applications.length }),
+      created.id,
+      JSON.stringify(access.global ? {
+        applicationCount: Array.isArray(created.applications) ? created.applications.length : 0,
+        dataProcessingAuthorizationConfirmed: true,
+      } : {
+        schemaVersion: 2,
+        localScoped: true,
+        applicationCount: Array.isArray(created.applications) ? created.applications.length : 0,
+        desiredLocationId: String(application?.desiredLocationId || ""),
+        desiredDepartmentId: Number(application?.desiredDepartmentId || 0) || null,
+        dataProcessingAuthorizationConfirmed: true,
+      }),
     );
     response.status(201).json({ candidate, capabilities });
   } catch (error) {

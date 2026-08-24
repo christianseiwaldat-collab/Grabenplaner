@@ -263,6 +263,7 @@ async function createCandidate(auth, marker, locationId, departmentId) {
     method: "POST",
     auth,
     body: {
+      dataProcessingAuthorizationConfirmed: true,
       profile: {
         firstName: marker,
         lastName: "Synthetic",
@@ -686,6 +687,164 @@ test("Personalmodul R1 HTTP: FL und AL sehen nur ihren Bereich vor der Paginatio
   }
 });
 
+test("Personalmodul R1 HTTP: FL legt Bewerber nur im freigegebenen Standort an und PL+ kann das Recht entziehen", async () => {
+  const plPlus = createSession(EMPLOYEES.plPlus, "admin");
+  createSession(EMPLOYEES.fl, "manager");
+  const scopedPermissions = [P.CANDIDATES_READ, P.APPLICATIONS_WRITE];
+  const ownLocationScope = [{ locationId: organization.locationA, departmentId: null }];
+  const granted = await updateRights(
+    plPlus,
+    EMPLOYEES.fl,
+    scopedPermissions,
+    ownLocationScope,
+  );
+  assert.equal(granted.response.status, 200, JSON.stringify(granted.payload));
+  const fl = createSession(EMPLOYEES.fl, "manager");
+  const createBody = {
+    dataProcessingAuthorizationConfirmed: true,
+    profile: {
+      firstName: "Lokale",
+      lastName: "Bewerbung",
+      email: "local-candidate@example.invalid",
+      phone: "+43 660 5550199",
+    },
+    application: {
+      desiredLocationId: organization.locationA,
+      desiredDepartmentId: organization.departmentA,
+      desiredRoleTitle: "Fotowelt",
+      employmentType: "Teilzeit",
+    },
+  };
+
+  const created = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+    method: "POST",
+    auth: fl,
+    body: createBody,
+  });
+  assert.equal(created.response.status, 201, JSON.stringify(created.payload));
+  assert.equal(created.payload.capabilities.canCreateCandidates, true);
+  assert.equal(created.payload.capabilities.canWriteCandidates, false);
+  assert.equal(created.payload.capabilities.requiresApplicationOnCreate, true);
+  assert.deepEqual(created.payload.capabilities.createScope, {
+    type: "location",
+    locationIds: [organization.locationA],
+  });
+  assert.equal(created.payload.candidate.profile.firstName, "Lokale");
+  assert.equal(created.payload.candidate.profile.lastName, "Bewerbung");
+  assert.equal(created.payload.candidate.profile.email, "local-candidate@example.invalid");
+  assert.equal(created.payload.candidate.applications.length, 1);
+  assert.equal(
+    created.payload.candidate.applications[0].desiredLocationId,
+    organization.locationA,
+  );
+  assert.equal(
+    created.payload.candidate.applications[0].desiredDepartmentId,
+    organization.departmentA,
+  );
+  assertConfidentialKeysAbsent(created.payload.candidate);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_applications").get().count, 1);
+
+  const successAudit = db.prepare(`
+    SELECT detail
+    FROM audit_log
+    WHERE actor = ? AND action = 'personnel-lifecycle.candidate.create'
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(EMPLOYEES.fl);
+  assert.ok(successAudit);
+  const successDetail = JSON.parse(successAudit.detail);
+  assert.equal(successDetail.schemaVersion, 2);
+  assert.equal(successDetail.localScoped, true);
+  assert.equal(successDetail.applicationCount, 1);
+  assert.equal(successDetail.desiredLocationId, organization.locationA);
+  assert.equal(successDetail.desiredDepartmentId, organization.departmentA);
+  assert.equal(successAudit.detail.includes("local-candidate@example.invalid"), false);
+  assert.equal(successAudit.detail.includes("Lokale"), false);
+
+  const foreign = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+    method: "POST",
+    auth: fl,
+    body: {
+      ...createBody,
+      profile: { ...createBody.profile, email: "foreign-candidate@example.invalid" },
+      application: {
+        ...createBody.application,
+        desiredLocationId: organization.locationB,
+        desiredDepartmentId: organization.departmentC,
+      },
+    },
+  });
+  assert.equal(foreign.response.status, 403, JSON.stringify(foreign.payload));
+  assert.equal(foreign.payload.code, "PERSONNEL_LIFECYCLE_CREATE_SCOPE_DENIED");
+
+  const confidential = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+    method: "POST",
+    auth: fl,
+    body: {
+      ...createBody,
+      profile: { ...createBody.profile, email: "forbidden-candidate@example.invalid" },
+      application: {
+        ...createBody.application,
+        source: "CONFIDENTIAL-LOCAL-SOURCE",
+        "pii-property-name@example.invalid": "nicht protokollieren",
+      },
+    },
+  });
+  assert.equal(confidential.response.status, 403, JSON.stringify(confidential.payload));
+  assert.equal(
+    confidential.payload.code,
+    "PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_FIELD_FORBIDDEN",
+  );
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_applications").get().count, 1);
+  const deniedAudits = db.prepare(`
+    SELECT detail
+    FROM audit_log
+    WHERE actor = ? AND action = 'personnel-lifecycle.candidate.create.denied'
+    ORDER BY id
+  `).all(EMPLOYEES.fl);
+  assert.equal(deniedAudits.length, 2);
+  const deniedAuditText = JSON.stringify(deniedAudits.map((row) => JSON.parse(row.detail)));
+  assert.equal(deniedAuditText.includes("foreign-candidate@example.invalid"), false);
+  assert.equal(deniedAuditText.includes("forbidden-candidate@example.invalid"), false);
+  assert.equal(deniedAuditText.includes("CONFIDENTIAL-LOCAL-SOURCE"), false);
+  assert.equal(deniedAuditText.includes("pii-property-name@example.invalid"), false);
+  assert.equal(deniedAuditText.includes('"fieldKeys":["application"]'), true);
+
+  const revoked = await request(`/api/portal/v1/rights/${EMPLOYEES.fl}`, {
+    method: "PUT",
+    auth: plPlus,
+    body: {
+      grantedPermissions: scopedPermissions,
+      deniedPermissions: [P.CANDIDATES_CREATE],
+      scopes: ownLocationScope,
+    },
+  });
+  assert.equal(revoked.response.status, 200, JSON.stringify(revoked.payload));
+  assert.deepEqual(db.prepare(`
+    SELECT permission, denied_by AS deniedBy
+    FROM portal_permission_denials
+    WHERE employee_number = ?
+  `).all(EMPLOYEES.fl).map((row) => ({ ...row })), [{
+    permission: P.CANDIDATES_CREATE,
+    deniedBy: EMPLOYEES.plPlus,
+  }]);
+
+  const flAfterRevocation = createSession(EMPLOYEES.fl, "manager");
+  const afterRevocation = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+    method: "POST",
+    auth: flAfterRevocation,
+    body: {
+      ...createBody,
+      profile: { ...createBody.profile, email: "revoked-candidate@example.invalid" },
+    },
+  });
+  assert.equal(afterRevocation.response.status, 403, JSON.stringify(afterRevocation.payload));
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_applications").get().count, 1);
+});
+
 test("Personalmodul R1 HTTP: lokale Mutationen und Scope-Verwaltung bleiben eng begrenzt", async () => {
   const plPlus = createSession(EMPLOYEES.plPlus, "admin");
   createSession(EMPLOYEES.fl, "manager");
@@ -740,12 +899,25 @@ test("Personalmodul R1 HTTP: lokale Mutationen und Scope-Verwaltung bleiben eng 
   assert.equal(transitioned.response.status, 200, JSON.stringify(transitioned.payload));
   const currentRevision = transitioned.payload.application.revision;
 
-  const deniedRequests = [
-    request("/api/portal/v1/personnel-lifecycle/candidates", {
+  const missingInitialApplication = await request(
+    "/api/portal/v1/personnel-lifecycle/candidates",
+    {
       method: "POST",
       auth: fl,
-      body: { profile: { firstName: "Nicht", lastName: "Erlaubt" } },
-    }),
+      body: {
+        dataProcessingAuthorizationConfirmed: true,
+        profile: { firstName: "Nicht", lastName: "Erlaubt" },
+      },
+    },
+  );
+  assert.equal(missingInitialApplication.response.status, 400,
+    JSON.stringify(missingInitialApplication.payload));
+  assert.equal(
+    missingInitialApplication.payload.code,
+    "PERSONNEL_LIFECYCLE_INITIAL_APPLICATION_REQUIRED",
+  );
+
+  const deniedRequests = [
     request(`/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}`, {
       method: "PUT",
       auth: fl,

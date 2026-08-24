@@ -183,6 +183,7 @@ async function createCandidateFixture(auth, departmentId) {
     method: "POST",
     auth,
     body: {
+      dataProcessingAuthorizationConfirmed: true,
       profile: {
         firstName: "M5",
         lastName: "Synthetic",
