@@ -138,6 +138,43 @@ test("Positionstabelle sortiert zugänglich nach Position, Bezeichnung und Einhe
   );
 });
 
+test("Maßeinheiten und Gruppenpositionen sortieren alphanumerisch und numerisch natürlich", () => {
+  const context = {
+    Intl,
+    state: { branchOrdersManagementUnitSort: { key: "title", direction: "asc" } },
+    escapeHtml: (value) => String(value),
+    escapeHtmlAttribute: (value) => String(value),
+  };
+  const sortSource = sourceBetween(
+    "const branchOrdersManagementCatalogColumns",
+    "function normalizeBranchOrdersManagementCatalogSearch",
+  );
+  vm.runInNewContext(`${sortSource}\nglobalThis.sorting = { sortedBranchOrdersManagementUnits, branchOrdersManagementUnitHeader, sortedBranchOrdersManagementItemIdsAlpha };`, context);
+  const draft = {
+    units: [
+      { id: "u10", title: "Karton 10" },
+      { id: "u2", title: "Karton 2" },
+      { id: "u1", title: "Bogen" },
+    ],
+    items: [
+      { id: "i10", title: "Plotter 10" },
+      { id: "i2", title: "Plotter 2" },
+      { id: "ia", title: "Analogfilm" },
+    ],
+  };
+  assert.deepEqual(
+    Array.from(context.sorting.sortedBranchOrdersManagementUnits(draft), (unit) => unit.id),
+    ["u1", "u2", "u10"],
+  );
+  assert.deepEqual(
+    Array.from(context.sorting.sortedBranchOrdersManagementItemIdsAlpha(draft, ["i10", "ia", "i2"])),
+    ["ia", "i2", "i10"],
+  );
+  assert.deepEqual(draft.items.map((item) => item.id), ["i10", "i2", "ia"]);
+  assert.match(context.sorting.branchOrdersManagementUnitHeader(), /aria-sort="ascending"/);
+  assert.match(context.sorting.branchOrdersManagementUnitHeader(), /data-branch-orders-management-sort-key="title"/);
+});
+
 test("Positionssuche filtert Bezeichnung, Einheit und Positionsnummer ohne die Sortierung zu verändern", () => {
   const rows = [
     {
@@ -339,6 +376,54 @@ test("Bearbeiten öffnet den gewählten Editor; Löschen entfernt Position und G
   assert.equal(rendered, 2);
 });
 
+test("A–Z-Aktion speichert die alphanumerische Reihenfolge nur in der gewählten Anzeigegruppe", () => {
+  const draft = {
+    recipients: [],
+    units: [],
+    items: [
+      { id: "item-10", title: "Plotter 10" },
+      { id: "item-2", title: "Plotter 2" },
+      { id: "item-a", title: "Analogfilm" },
+    ],
+    groups: [
+      { id: "group-1", itemIds: ["item-10", "item-a", "item-2"] },
+      { id: "group-2", itemIds: ["item-10", "item-a", "item-2"] },
+    ],
+  };
+  const collator = new Intl.Collator("de-AT", { numeric: true, sensitivity: "base" });
+  const context = {
+    state: { branchOrdersManagementCatalogEditingId: "", branchOrdersManagementUnitEditingId: "" },
+    captureBranchOrdersManagementDraft: () => draft,
+    renderBranchOrdersManagement: () => {},
+    setBranchOrdersManagementMessage: () => {},
+    moveBranchOrdersManagementEntry: () => {},
+    sortedBranchOrdersManagementItemIdsAlpha(source, itemIds) {
+      const byId = new Map(source.items.map((item) => [item.id, item]));
+      return itemIds.slice().sort((left, right) => collator.compare(
+        byId.get(left)?.title || "",
+        byId.get(right)?.title || "",
+      ));
+    },
+  };
+  const handlerSource = sourceBetween(
+    "function handleBranchOrdersManagementAction(event)",
+    "const branchLoanOverviewColumnCatalog",
+  );
+  vm.runInNewContext(`${handlerSource}\nglobalThis.handleAction = handleBranchOrdersManagementAction;`, context);
+  context.handleAction({
+    target: { closest: () => ({
+      dataset: {
+        branchOrdersManagementAction: "sort-group-items-alpha",
+        branchOrdersManagementGroupId: "group-1",
+      },
+    }) },
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  assert.deepEqual(Array.from(draft.groups[0].itemIds), ["item-a", "item-2", "item-10"]);
+  assert.deepEqual(Array.from(draft.groups[1].itemIds), ["item-10", "item-a", "item-2"]);
+});
+
 test("Tabellenzeilen bleiben lesend und bieten nur kleine Textaktionen", () => {
   const itemMarkup = sourceBetween(
     "const catalogPositions = new Map",
@@ -363,7 +448,43 @@ test("Anzeigegruppen verwenden eine kompakte Tabelle statt großer Positionskart
   assert.match(groupMarkup, /branch-orders-management-order-button/);
   assert.match(groupMarkup, />Gruppe löschen<\/button>/);
   assert.match(groupMarkup, />Entfernen<\/button>/);
+  assert.match(groupMarkup, />Positionen A–Z sortieren<\/button>/);
+  assert.match(groupMarkup, /available = draft\.items\.filter[\s\S]*branchOrdersManagementCatalogCollator\.compare/);
   assert.doesNotMatch(groupMarkup, /class="branch-orders-management-item"><strong>\$\{escapeHtml\(item\.title/);
   assert.match(stylesSource, /\.branch-orders-management-group-table[^}]*min-width:510px/);
   assert.match(stylesSource, /\.branch-orders-management-group-fields :is\(input,select\)[^}]*min-height:36px/);
+});
+
+test("Maßeinheiten verwenden eine kompakte sortierbare Tabelle mit expliziten Textaktionen", () => {
+  const unitMarkup = sourceBetween(
+    "const unitPositions = new Map",
+    "const catalogPositions = new Map",
+  );
+  assert.match(unitMarkup, /branch-orders-management-unit-row/);
+  assert.match(unitMarkup, /data-branch-orders-management-action="edit-unit"/);
+  assert.match(unitMarkup, />Bearbeiten<\/button>/);
+  assert.match(unitMarkup, />Löschen<\/button>/);
+  assert.doesNotMatch(unitMarkup, /<details class="branch-orders-management-item branch-orders-management-unit"/);
+  assert.match(appSource, /branch-orders-management-unit-table/);
+  assert.match(appSource, /data-branch-orders-management-new-unit-title/);
+  assert.match(stylesSource, /\.branch-orders-management-unit-table[^}]*min-width:480px/);
+});
+
+test("Maßeinheiteneditor schützt Attributwerte einschließlich Anführungszeichen", () => {
+  const escapeSource = sourceBetween(
+    "function escapeHtmlAttribute(value)",
+    "function activeLocations()",
+  );
+  const context = {};
+  vm.runInNewContext(`${escapeSource}\nglobalThis.escapeAttribute = escapeHtmlAttribute;`, context);
+  assert.equal(
+    context.escapeAttribute('Stück" autofocus onfocus="alert(1)'),
+    "Stück&quot; autofocus onfocus=&quot;alert(1)",
+  );
+  const unitMarkup = sourceBetween(
+    "const unitPositions = new Map",
+    "const catalogPositions = new Map",
+  );
+  assert.match(unitMarkup, /value="\$\{escapeHtmlAttribute\(unit\.title\)\}"/);
+  assert.doesNotMatch(unitMarkup, /value="\$\{escapeHtml\(unit\.title\)\}"/);
 });

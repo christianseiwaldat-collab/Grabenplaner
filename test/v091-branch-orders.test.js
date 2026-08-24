@@ -46,7 +46,11 @@ const {
 } = require("../server");
 const {
   createSqliteBranchOrderOperations,
+  ensureSqliteBranchOrdersSchema,
 } = require("../lib/persistence/sqlite/operations/branch-orders");
+const {
+  openSqliteLegacyDatabase,
+} = require("../lib/persistence/sqlite/provider");
 
 const LOCATION = "18";
 const OTHER_LOCATION = "19";
@@ -99,6 +103,29 @@ let hrSession;
 let managerSession;
 let itAdminSession;
 let organizationSession;
+
+async function extractPdfText(buffer) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const task = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    disableWorker: true,
+    useSystemFonts: true,
+  });
+  try {
+    const document = await task.promise;
+    const pages = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      pages.push(content.items.map((item) => item.str).join(" "));
+      page.cleanup();
+    }
+    await document.cleanup();
+    return pages.join(" ").replace(/\s+/g, " ").trim();
+  } finally {
+    await task.destroy();
+  }
+}
 
 function ensureLocation(id, name) {
   db.prepare(`
@@ -256,6 +283,79 @@ test.after(async () => {
   try { db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
+});
+
+test("v0.91: bestehende Empfänger und Zustellungen erhalten idempotent sichere CC- und PDF-Standardwerte", () => {
+  const legacy = openSqliteLegacyDatabase(":memory:");
+  try {
+    legacy.exec(`
+      CREATE TABLE locations (id TEXT PRIMARY KEY);
+      INSERT INTO locations (id) VALUES ('18');
+      CREATE TABLE branch_order_recipients (
+        id TEXT PRIMARY KEY,
+        location_id TEXT NOT NULL,
+        email TEXT NOT NULL COLLATE NOCASE,
+        reply_to_email TEXT NOT NULL DEFAULT '',
+        subject_template TEXT NOT NULL,
+        body_template TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        updated_by TEXT NOT NULL,
+        UNIQUE(location_id, email)
+      );
+      INSERT INTO branch_order_recipients
+        (id, location_id, email, reply_to_email, subject_template, body_template,
+         created_at, created_by, updated_at, updated_by)
+      VALUES ('legacy-recipient', '18', 'legacy@example.test', 'reply@example.test',
+              'Bestellung', 'Inhalt', '2031-01-01', 'test', '2031-01-01', 'test');
+      CREATE TABLE branch_order_deliveries (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        sender_email TEXT NOT NULL DEFAULT '',
+        recipient_email TEXT NOT NULL,
+        reply_to_email TEXT NOT NULL,
+        subject_snapshot TEXT NOT NULL,
+        body_snapshot TEXT NOT NULL,
+        status TEXT NOT NULL,
+        failure_code TEXT NOT NULL DEFAULT '',
+        attempted_at TEXT,
+        sent_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO branch_order_deliveries
+        (id, order_id, sender_email, recipient_email, reply_to_email,
+         subject_snapshot, body_snapshot, status, created_at, updated_at)
+      VALUES ('legacy-delivery', 'legacy-order', 'fil18-noreply@grabenplaner.eu',
+              'legacy@example.test', 'reply@example.test', 'Bestellung', 'Inhalt',
+              'sent', '2031-01-01', '2031-01-01');
+    `);
+    ensureSqliteBranchOrdersSchema(legacy);
+    ensureSqliteBranchOrdersSchema(legacy);
+    assert.deepEqual({ ...legacy.prepare(`
+      SELECT cc_email AS ccEmail, primary_delivery_mode AS primaryDeliveryMode,
+             cc_delivery_mode AS ccDeliveryMode
+      FROM branch_order_recipients WHERE id = 'legacy-recipient'
+    `).get() }, {
+      ccEmail: "",
+      primaryDeliveryMode: "message",
+      ccDeliveryMode: "message",
+    });
+    assert.deepEqual({ ...legacy.prepare(`
+      SELECT recipient_role AS recipientRole, delivery_mode AS deliveryMode,
+             attachment_filename AS attachmentFilename, attachment_sha256 AS attachmentSha256
+      FROM branch_order_deliveries WHERE id = 'legacy-delivery'
+    `).get() }, {
+      recipientRole: "primary",
+      deliveryMode: "message",
+      attachmentFilename: "",
+      attachmentSha256: "",
+    });
+    assert.equal(legacy.prepare("PRAGMA quick_check").get().quick_check, "ok");
+  } finally {
+    legacy.close();
+  }
 });
 
 test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", async (t) => {
@@ -460,10 +560,33 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     const settings = await requestJson("/api/portal/v1/branch-orders/settings", { session: hrSession });
     assert.equal(settings.response.status, 200, JSON.stringify(settings.payload));
     assert.equal(settings.payload.locationId, LOCATION);
+    assert.equal(settings.payload.emailDelivery.available, true);
+    assert.equal(settings.payload.emailDelivery.attachmentsAvailable, true);
     const configuration = settings.payload.configuration;
     const recipient = configuration.recipients[0];
     assert.ok(recipient);
     assert.equal(recipient.replyToEmail, recipient.email);
+    assert.equal(recipient.ccEmail, "");
+    assert.equal(recipient.primaryDeliveryMode, "message");
+    assert.equal(recipient.ccDeliveryMode, "message");
+    const duplicateCc = structuredClone(configuration);
+    duplicateCc.recipients[0].ccEmail = duplicateCc.recipients[0].email;
+    const duplicateCcDenied = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: duplicateCc },
+    });
+    assert.equal(duplicateCcDenied.response.status, 400, JSON.stringify(duplicateCcDenied.payload));
+    assert.equal(duplicateCcDenied.payload.code, "BRANCH_ORDER_CC_EMAIL_DUPLICATE");
+    const invalidMode = structuredClone(configuration);
+    invalidMode.recipients[0].primaryDeliveryMode = "unbekannt";
+    const invalidModeDenied = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: invalidMode },
+    });
+    assert.equal(invalidModeDenied.response.status, 400, JSON.stringify(invalidModeDenied.payload));
+    assert.equal(invalidModeDenied.payload.code, "BRANCH_ORDER_DELIVERY_MODE_INVALID");
     const originalRecipientEmail = recipient.email;
     const ds40Before = configuration.items.find((item) => item.title === "Fotodrucker: Mediaset DS40");
     assert.ok(ds40Before);
@@ -496,6 +619,102 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       body: { locationId: LOCATION, configuration: saved.payload.configuration },
     });
     assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
+
+    const deliveryConfiguration = structuredClone(restored.payload.configuration);
+    const deliveryRecipient = deliveryConfiguration.recipients[0];
+    deliveryRecipient.ccEmail = "cc-audit@example.test";
+    deliveryRecipient.primaryDeliveryMode = "message_pdf";
+    deliveryRecipient.ccDeliveryMode = "pdf_only";
+    const deliverySaved = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: deliveryConfiguration },
+    });
+    assert.equal(deliverySaved.response.status, 200, JSON.stringify(deliverySaved.payload));
+    assert.equal(deliverySaved.payload.configuration.recipients[0].ccEmail, "cc-audit@example.test");
+    assert.equal(deliverySaved.payload.configuration.recipients[0].primaryDeliveryMode, "message_pdf");
+    assert.equal(deliverySaved.payload.configuration.recipients[0].ccDeliveryMode, "pdf_only");
+    const deliveryAudit = db.prepare(`
+      SELECT detail
+      FROM audit_log
+      WHERE action = 'branch-order.settings.update' AND entity_id = ?
+      ORDER BY id DESC LIMIT 1
+    `).get(LOCATION);
+    const deliveryAuditDetail = JSON.parse(deliveryAudit.detail);
+    const deliveryAuditChange = deliveryAuditDetail.recipientDeliveryChanges
+      .find((change) => change.id === deliveryRecipient.id);
+    assert.ok(deliveryAuditChange);
+    assert.deepEqual(deliveryAuditChange.after, {
+      ccConfigured: true,
+      primaryDeliveryMode: "message_pdf",
+      ccDeliveryMode: "pdf_only",
+    });
+    assert.doesNotMatch(deliveryAudit.detail, /cc-audit@example\.test|antworten@grabenplaner\.eu/);
+
+    const legacyConfiguration = structuredClone(deliverySaved.payload.configuration);
+    delete legacyConfiguration.recipients[0].ccEmail;
+    delete legacyConfiguration.recipients[0].primaryDeliveryMode;
+    delete legacyConfiguration.recipients[0].ccDeliveryMode;
+    const legacySaved = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: legacyConfiguration },
+    });
+    assert.equal(legacySaved.response.status, 200, JSON.stringify(legacySaved.payload));
+    assert.equal(legacySaved.payload.configuration.recipients[0].ccEmail, "cc-audit@example.test");
+    assert.equal(legacySaved.payload.configuration.recipients[0].primaryDeliveryMode, "message_pdf");
+    assert.equal(legacySaved.payload.configuration.recipients[0].ccDeliveryMode, "pdf_only");
+
+    const swappedCcConfiguration = structuredClone(legacySaved.payload.configuration);
+    swappedCcConfiguration.recipients[0].ccEmail = "cc-audit-neu@example.test";
+    const swappedCc = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: swappedCcConfiguration },
+    });
+    assert.equal(swappedCc.response.status, 200, JSON.stringify(swappedCc.payload));
+    const swappedCcAudit = db.prepare(`
+      SELECT detail
+      FROM audit_log
+      WHERE action = 'branch-order.settings.update' AND entity_id = ?
+      ORDER BY id DESC LIMIT 1
+    `).get(LOCATION);
+    const swappedCcAuditDetail = JSON.parse(swappedCcAudit.detail);
+    const swappedCcAuditChange = swappedCcAuditDetail.recipientDeliveryChanges
+      .find((change) => change.id === deliveryRecipient.id);
+    assert.equal(swappedCcAuditChange.ccAddressChanged, true);
+    assert.equal(swappedCcAuditChange.before.ccConfigured, true);
+    assert.equal(swappedCcAuditChange.after.ccConfigured, true);
+    assert.doesNotMatch(swappedCcAudit.detail, /cc-audit(?:-neu)?@example\.test/);
+
+    const explicitlyClearedConfiguration = structuredClone(swappedCc.payload.configuration);
+    explicitlyClearedConfiguration.recipients[0].ccEmail = "";
+    explicitlyClearedConfiguration.recipients[0].primaryDeliveryMode = "message";
+    explicitlyClearedConfiguration.recipients[0].ccDeliveryMode = "message";
+    const explicitlyCleared = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: explicitlyClearedConfiguration },
+    });
+    assert.equal(explicitlyCleared.response.status, 200, JSON.stringify(explicitlyCleared.payload));
+    assert.equal(explicitlyCleared.payload.configuration.recipients[0].ccEmail, "");
+    assert.equal(explicitlyCleared.payload.configuration.recipients[0].primaryDeliveryMode, "message");
+    assert.equal(explicitlyCleared.payload.configuration.recipients[0].ccDeliveryMode, "message");
+
+    const operations = createSqliteBranchOrderOperations(db);
+    const beforeUnavailablePdfSave = operations.settingsSnapshot(LOCATION);
+    const unavailablePdfConfiguration = structuredClone(beforeUnavailablePdfSave);
+    unavailablePdfConfiguration.recipients[0].primaryDeliveryMode = "message_pdf";
+    assert.throws(
+      () => operations.replaceConfiguration(
+        LOCATION,
+        unavailablePdfConfiguration,
+        "v091-test",
+        { pdfDeliveryAvailable: false },
+      ),
+      (error) => error?.code === "BRANCH_ORDER_PDF_DELIVERY_UNAVAILABLE" && error?.status === 409,
+    );
+    assert.deepEqual(operations.settingsSnapshot(LOCATION), beforeUnavailablePdfSave);
 
     const otherManager = createEmployeeSession(OTHER_MANAGER);
     const denied = await requestJson(`/api/portal/v1/branch-orders/settings?locationId=${LOCATION}`, { session: otherManager });
@@ -945,6 +1164,199 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     });
     assert.equal(consumedDraft.response.status, 200, JSON.stringify(consumedDraft.payload));
     assert.equal(consumedDraft.payload.draft, null);
+  });
+
+  await t.test("Hauptadresse und CC erhalten unabhängig Text mit PDF oder ausschließlich die Bestell-PDF", async () => {
+    const settings = await requestJson("/api/portal/v1/branch-orders/settings", { session: hrSession });
+    assert.equal(settings.response.status, 200, JSON.stringify(settings.payload));
+    const originalConfiguration = structuredClone(settings.payload.configuration);
+    const configuration = structuredClone(originalConfiguration);
+    const ds80Configuration = configuration.items.find((item) => item.title === "Fotodrucker: Mediaset DS80");
+    assert.ok(ds80Configuration);
+    const recipient = configuration.recipients.find((entry) => entry.id === ds80Configuration.recipientId);
+    assert.ok(recipient);
+    recipient.ccEmail = "cc-filialbestellung@example.test";
+    recipient.primaryDeliveryMode = "message_pdf";
+    recipient.ccDeliveryMode = "pdf_only";
+    const configured = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration },
+    });
+    assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
+    assert.equal(configured.payload.configuration.recipients
+      .find((entry) => entry.id === recipient.id).ccDeliveryMode, "pdf_only");
+
+    const refreshedCatalog = await requestJson("/api/portal/v1/branch-orders/catalog", { session: organizationSession });
+    assert.equal(refreshedCatalog.response.status, 200, JSON.stringify(refreshedCatalog.payload));
+    assert.equal(JSON.stringify(refreshedCatalog.payload).includes("cc-filialbestellung@example.test"), false);
+    const ds80 = refreshedCatalog.payload.groups.find((group) => group.title === "Fotowelt – Sofortdruck")
+      .items.find((item) => item.title === "Fotodrucker: Mediaset DS80");
+    const sentBefore = sentMails.length;
+    const result = await requestJson("/api/portal/v1/branch-orders", {
+      method: "POST",
+      session: organizationSession,
+      body: { employeeNumber: EMPLOYEE, draftRevision: 0, items: [{ itemId: ds80.id, quantity: 1 }] },
+    });
+    assert.equal(result.response.status, 201, JSON.stringify(result.payload));
+    assert.deepEqual(result.payload.delivery, {
+      status: "sent", total: 2, sent: 2, failed: 0, pending: 0,
+    });
+    const [primaryMail, ccMail] = sentMails.slice(sentBefore);
+    assert.equal(primaryMail.to, recipient.email);
+    assert.match(primaryMail.text, /Fotodrucker: Mediaset DS80/);
+    assert.equal(primaryMail.attachments.length, 1);
+    assert.equal(ccMail.to, "cc-filialbestellung@example.test");
+    assert.equal(ccMail.text, "");
+    assert.equal(ccMail.attachments.length, 1);
+    assert.equal(primaryMail.attachments[0].filename, ccMail.attachments[0].filename);
+    assert.equal(Buffer.compare(primaryMail.attachments[0].content, ccMail.attachments[0].content), 0);
+
+    const storedPdf = db.prepare(`
+      SELECT pdf_filename AS filename, pdf_sha256 AS sha256, pdf_content AS content
+      FROM branch_orders WHERE id = ?
+    `).get(result.payload.order.id);
+    assert.equal(primaryMail.attachments[0].filename, storedPdf.filename);
+    assert.equal(Buffer.compare(primaryMail.attachments[0].content, Buffer.from(storedPdf.content)), 0);
+    const deliveries = db.prepare(`
+      SELECT recipient_role AS recipientRole, delivery_mode AS deliveryMode,
+             recipient_email AS recipientEmail, attachment_filename AS attachmentFilename,
+             attachment_sha256 AS attachmentSha256, body_snapshot AS bodySnapshot
+      FROM branch_order_deliveries
+      WHERE order_id = ?
+      ORDER BY CASE recipient_role WHEN 'primary' THEN 0 ELSE 1 END
+    `).all(result.payload.order.id).map((row) => ({ ...row }));
+    assert.deepEqual(deliveries, [{
+      recipientRole: "primary",
+      deliveryMode: "message_pdf",
+      recipientEmail: recipient.email,
+      attachmentFilename: storedPdf.filename,
+      attachmentSha256: storedPdf.sha256,
+      bodySnapshot: primaryMail.text,
+    }, {
+      recipientRole: "cc",
+      deliveryMode: "pdf_only",
+      recipientEmail: "cc-filialbestellung@example.test",
+      attachmentFilename: storedPdf.filename,
+      attachmentSha256: storedPdf.sha256,
+      bodySnapshot: "",
+    }]);
+
+    const branchHistory = await requestJson("/api/portal/v1/branch-orders/history?limit=10", {
+      session: organizationSession,
+    });
+    assert.equal(branchHistory.response.status, 200, JSON.stringify(branchHistory.payload));
+    assert.equal(JSON.stringify(branchHistory.payload).includes("cc-filialbestellung@example.test"), false);
+
+    failNextMail = true;
+    const partial = await requestJson("/api/portal/v1/branch-orders", {
+      method: "POST",
+      session: organizationSession,
+      body: { employeeNumber: EMPLOYEE, draftRevision: 0, items: [{ itemId: ds80.id, quantity: 2 }] },
+    });
+    assert.equal(partial.response.status, 202, JSON.stringify(partial.payload));
+    assert.deepEqual(partial.payload.delivery, {
+      status: "partial", total: 2, sent: 1, failed: 1, pending: 0,
+    });
+    assert.deepEqual(db.prepare(`
+      SELECT recipient_role AS recipientRole, status
+      FROM branch_order_deliveries WHERE order_id = ?
+      ORDER BY CASE recipient_role WHEN 'primary' THEN 0 ELSE 1 END
+    `).all(partial.payload.order.id).map((row) => ({ ...row })), [
+      { recipientRole: "primary", status: "failed" },
+      { recipientRole: "cc", status: "sent" },
+    ]);
+    const restored = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: originalConfiguration },
+    });
+    assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
+  });
+
+  await t.test("Bestell-PDFs trennen Positionen strikt nach E-Mail-Ziel", async () => {
+    const settings = await requestJson("/api/portal/v1/branch-orders/settings", { session: hrSession });
+    assert.equal(settings.response.status, 200, JSON.stringify(settings.payload));
+    const originalConfiguration = structuredClone(settings.payload.configuration);
+    const configuration = structuredClone(originalConfiguration);
+    const itemA = configuration.items.find((item) => item.title === "Batteriesammelbehälter");
+    const itemB = configuration.items.find((item) => item.title === "Bilderbonuskarten");
+    assert.ok(itemA);
+    assert.ok(itemB);
+    const recipientA = configuration.recipients.find((recipient) => recipient.id === itemA.recipientId);
+    const recipientB = configuration.recipients.find((recipient) => recipient.id === itemB.recipientId);
+    assert.ok(recipientA);
+    assert.ok(recipientB);
+    assert.notEqual(recipientA.id, recipientB.id);
+    for (const recipient of [recipientA, recipientB]) {
+      recipient.ccEmail = "";
+      recipient.primaryDeliveryMode = "message_pdf";
+      recipient.ccDeliveryMode = "message";
+    }
+    const configured = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration },
+    });
+    assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
+
+    const sentBefore = sentMails.length;
+    const result = await requestJson("/api/portal/v1/branch-orders", {
+      method: "POST",
+      session: organizationSession,
+      body: {
+        employeeNumber: EMPLOYEE,
+        draftRevision: 0,
+        items: [
+          { itemId: itemA.id, quantity: 1 },
+          { itemId: itemB.id, quantity: 2 },
+        ],
+      },
+    });
+    assert.equal(result.response.status, 201, JSON.stringify(result.payload));
+    const mails = sentMails.slice(sentBefore);
+    assert.equal(mails.length, 2);
+    const mailA = mails.find((mail) => mail.to === recipientA.email);
+    const mailB = mails.find((mail) => mail.to === recipientB.email);
+    assert.ok(mailA);
+    assert.ok(mailB);
+    assert.equal(mailA.attachments.length, 1);
+    assert.equal(mailB.attachments.length, 1);
+    const [pdfTextA, pdfTextB] = await Promise.all([
+      extractPdfText(mailA.attachments[0].content),
+      extractPdfText(mailB.attachments[0].content),
+    ]);
+    assert.match(pdfTextA, /Batteriesammelbehälter/);
+    assert.doesNotMatch(pdfTextA, /Bilderbonuskarten/);
+    assert.match(pdfTextB, /Bilderbonuskarten/);
+    assert.doesNotMatch(pdfTextB, /Batteriesammelbehälter/);
+
+    const storedPdf = db.prepare(`
+      SELECT pdf_content AS content
+      FROM branch_orders WHERE id = ?
+    `).get(result.payload.order.id);
+    const totalPdfText = await extractPdfText(Buffer.from(storedPdf.content));
+    assert.match(totalPdfText, /Batteriesammelbehälter/);
+    assert.match(totalPdfText, /Bilderbonuskarten/);
+    const deliveries = db.prepare(`
+      SELECT recipient_email AS recipientEmail, attachment_sha256 AS attachmentSha256
+      FROM branch_order_deliveries
+      WHERE order_id = ?
+    `).all(result.payload.order.id);
+    const deliveryA = deliveries.find((delivery) => delivery.recipientEmail === recipientA.email);
+    const deliveryB = deliveries.find((delivery) => delivery.recipientEmail === recipientB.email);
+    const mailAHash = crypto.createHash("sha256").update(mailA.attachments[0].content).digest("hex");
+    const mailBHash = crypto.createHash("sha256").update(mailB.attachments[0].content).digest("hex");
+    assert.equal(deliveryA.attachmentSha256, mailAHash);
+    assert.equal(deliveryB.attachmentSha256, mailBHash);
+    assert.notEqual(deliveryA.attachmentSha256, deliveryB.attachmentSha256);
+
+    const restored = await requestJson("/api/portal/v1/branch-orders/settings", {
+      method: "PUT",
+      session: hrSession,
+      body: { locationId: LOCATION, configuration: originalConfiguration },
+    });
+    assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
   });
 
   await t.test("PL+ kann Marie-Theres (275) für persönliche Filialbestellungen freischalten", async () => {

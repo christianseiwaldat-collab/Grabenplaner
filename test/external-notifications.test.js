@@ -405,6 +405,94 @@ test("Filialbestellungen verwenden nur den abgeleiteten Grabenplaner-No-Reply-Ab
   );
 });
 
+test("Filialbestellungen versenden die Bestell-PDF je Versandart oder ausschließlich als PDF", async () => {
+  const mails = [];
+  const pdf = Buffer.from("%PDF-1.7\nFilialbestellung");
+  const adapter = createExternalNotificationAdapter({
+    configuration: { email: enabledSmtp("branch_order") },
+    smtpTransport: {
+      async sendMail(value) {
+        mails.push(value);
+        return { accepted: [value.to] };
+      },
+    },
+  });
+
+  await adapter.sendBranchOrder({
+    sender: "fil18-noreply@grabenplaner.eu",
+    recipient: "lager@example.test",
+    replyTo: "fil18@example.test",
+    subject: "Filialbestellung",
+    text: "Bestellpositionen",
+    deliveryMode: "message_pdf",
+    attachment: { filename: "Bestellung:KW35.pdf", buffer: pdf },
+  });
+  await adapter.sendBranchOrder({
+    sender: "fil18-noreply@grabenplaner.eu",
+    recipient: "cc@example.test",
+    replyTo: "fil18@example.test",
+    subject: "Filialbestellung",
+    text: "",
+    deliveryMode: "pdf_only",
+    attachment: { filename: "Filialbestellung.pdf", buffer: pdf },
+  });
+
+  assert.equal(mails.length, 2);
+  assert.equal(mails[0].text, "Bestellpositionen");
+  assert.equal(mails[0].attachments[0].filename, "Bestellung-KW35.pdf");
+  assert.deepEqual(mails[0].attachments[0].content, pdf);
+  assert.equal(mails[1].text, "");
+  assert.equal(mails[1].attachments[0].contentType, "application/pdf");
+
+  await assert.rejects(
+    adapter.sendBranchOrder({
+      sender: "fil18-noreply@grabenplaner.eu",
+      recipient: "lager@example.test",
+      replyTo: "fil18@example.test",
+      subject: "Filialbestellung",
+      text: "Bestellpositionen",
+      deliveryMode: "unbekannt",
+    }),
+    { code: "EXTERNAL_NOTIFICATION_DELIVERY_MODE_INVALID" },
+  );
+  await assert.rejects(
+    adapter.sendBranchOrder({
+      sender: "fil18-noreply@grabenplaner.eu",
+      recipient: "lager@example.test",
+      replyTo: "fil18@example.test",
+      subject: "Filialbestellung",
+      text: "",
+      deliveryMode: "pdf_only",
+      attachment: { filename: "Filialbestellung.pdf", buffer: Buffer.alloc(0) },
+    }),
+    { code: "EXTERNAL_NOTIFICATION_ATTACHMENT_INVALID" },
+  );
+});
+
+test("Bestell-PDFs werden über E-Mail-Webhooks nicht stillschweigend ohne Anhang versendet", async () => {
+  const adapter = createExternalNotificationAdapter({
+    configuration: {
+      emailWebhook: {
+        enabled: true,
+        url: "https://notify.example.test/email",
+      },
+    },
+    fetchImplementation: async () => ({ ok: true }),
+  });
+  await assert.rejects(
+    adapter.sendBranchOrder({
+      sender: "fil18-noreply@grabenplaner.eu",
+      recipient: "lager@example.test",
+      replyTo: "fil18@example.test",
+      subject: "Filialbestellung",
+      text: "Bestellpositionen",
+      deliveryMode: "message_pdf",
+      attachment: { filename: "Filialbestellung.pdf", buffer: Buffer.from("%PDF") },
+    }),
+    { code: "EXTERNAL_NOTIFICATION_SMTP_REQUIRED" },
+  );
+});
+
 test("Leihbelege werden nur per SMTP und als PDF-Anhang versendet", async () => {
   let mail;
   const pdf = Buffer.from("%PDF-1.7\nTest");

@@ -15,6 +15,7 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   const admin = read("public/index.html");
   const adminScript = read("public/app.js");
   const adminStyles = read("public/styles.css");
+  const server = read("server.js");
 
   assert.match(html, /id="branchOrdersTab"/);
   assert.match(html, /id="branchOrdersView"/);
@@ -87,6 +88,18 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminScript, /data-branch-orders-management-new-item-title/);
   assert.match(adminScript, /data-branch-orders-management-action="edit-catalog-item"/);
   assert.match(adminScript, /data-branch-orders-management-action="sort-catalog"/);
+  assert.match(adminScript, /data-branch-orders-management-action="sort-units"/);
+  assert.match(adminScript, /data-branch-orders-management-action="sort-group-items-alpha"/);
+  assert.match(adminScript, /data-branch-orders-management-field="recipient-cc-email"/);
+  assert.match(adminScript, /data-branch-orders-management-field="recipient-primary-delivery-mode"/);
+  assert.match(adminScript, /data-branch-orders-management-field="recipient-cc-delivery-mode"/);
+  assert.match(adminScript, /\["message_pdf", "E-Mail-Text \+ Bestell-PDF"\]/);
+  assert.match(adminScript, /!emailDelivery\.attachmentsAvailable \? "disabled"/);
+  assert.match(adminScript, /value="\$\{escapeHtmlAttribute\(recipient\.ccEmail\)\}"/);
+  assert.match(adminScript, /value="\$\{escapeHtmlAttribute\(recipient\.subjectTemplate\)\}"/);
+  assert.match(adminScript, /Bestell-PDFs können erst nach Freischaltung eines SMTP-Versands aktiviert werden/);
+  assert.match(adminScript, /branch-orders-management-unit-table/);
+  assert.match(adminScript, /data-branch-orders-management-new-unit-title/);
   assert.match(adminScript, /data-branch-orders-management-catalog-search/);
   assert.match(adminScript, /type="search" inputmode="search" autocomplete="off"/);
   assert.match(adminScript, /placeholder="Bezeichnung, Einheit oder Position"/);
@@ -112,6 +125,7 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
   assert.match(adminStyles, /branch-orders-management-toolbar/);
   assert.match(adminStyles, /branch-orders-management-history-actions/);
   assert.match(adminStyles, /branch-orders-management-catalog-table-wrap/);
+  assert.match(adminStyles, /branch-orders-management-unit-table-wrap/);
   assert.match(adminStyles, /branch-orders-management-catalog-search[^}]*grid-template-columns:minmax\(0,1fr\) auto/);
   assert.match(adminStyles, /branch-orders-management-group-table-wrap/);
   assert.match(adminStyles, /branch-orders-management-group-fields/);
@@ -135,4 +149,16 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
     assert.match(styles, /color-mix\(in srgb,var\(--schedule-person-color\) 38%,#fff\)/);
   assert.match(styles, /branch-order-group-toggle/);
   assert.match(styles, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(script, /data-branch-order-settings-field="recipient-cc-email"/);
+  assert.match(script, /data-branch-order-sort-group-items/);
+  assert.match(script, /branch-order-unit-table/);
+  assert.match(script, /emailDelivery\.attachmentsAvailable/);
+
+  assert.match(server, /attachmentsAvailable: Boolean\(available && email\.transport === "smtp"\)/);
+  assert.match(server, /recipientDeliveryChanges: branchOrderRecipientDeliveryAuditChanges/);
+  assert.match(server, /\{ pdfDeliveryAvailable: emailDelivery\.attachmentsAvailable \}/);
+  const pdfCapabilityCheck = server.indexOf("if (branchOrderConfigurationRequiresPdf(configuration) && !emailDelivery.attachmentsAvailable)");
+  const orderCreation = server.indexOf("sqliteBranchOrderOperations.createOrder", pdfCapabilityCheck);
+  assert.ok(pdfCapabilityCheck >= 0, "PDF-Fähigkeitsprüfung fehlt");
+  assert.ok(orderCreation > pdfCapabilityCheck, "PDF-Fähigkeit muss vor dem Persistieren der Bestellung geprüft werden");
 });

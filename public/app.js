@@ -137,6 +137,8 @@ const state = {
   branchOrdersManagementCatalogSort: { key: "position", direction: "asc" },
   branchOrdersManagementCatalogEditingId: "",
   branchOrdersManagementCatalogSearch: "",
+  branchOrdersManagementUnitSort: { key: "position", direction: "asc" },
+  branchOrdersManagementUnitEditingId: "",
   loanOverviewColumns: null,
   loanOverviewColumnsLoading: false,
   loanOverviewColumnsLocationId: "",
@@ -2781,6 +2783,9 @@ function clonedBranchOrdersManagementConfiguration(configuration = {}) {
     recipients: (configuration.recipients || []).map((recipient) => ({
       id: String(recipient.id || ""),
       email: String(recipient.email || ""),
+      ccEmail: String(recipient.ccEmail || ""),
+      primaryDeliveryMode: String(recipient.primaryDeliveryMode || "message"),
+      ccDeliveryMode: String(recipient.ccDeliveryMode || "message"),
       replyToEmail: String(recipient.replyToEmail || ""),
       subjectTemplate: String(recipient.subjectTemplate || ""),
       bodyTemplate: String(recipient.bodyTemplate || ""),
@@ -2903,7 +2908,6 @@ async function confirmBranchOrderDelivery(orderId) {
 const branchOrdersManagementDisclosureAttributes = Object.freeze([
   "data-branch-orders-management-section",
   "data-branch-orders-management-recipient",
-  "data-branch-orders-management-unit",
   "data-branch-orders-management-group",
 ]);
 
@@ -2958,6 +2962,54 @@ const branchOrdersManagementCatalogCollator = new Intl.Collator("de-AT", {
   numeric: true,
   sensitivity: "base",
 });
+
+const branchOrdersManagementUnitColumns = Object.freeze([
+  { key: "position", label: "Position" },
+  { key: "title", label: "Maßeinheit" },
+]);
+
+function normalizedBranchOrdersManagementUnitSort() {
+  const requested = state.branchOrdersManagementUnitSort || {};
+  const key = branchOrdersManagementUnitColumns.some((column) => column.key === requested.key)
+    ? requested.key
+    : "position";
+  return { key, direction: requested.direction === "desc" ? "desc" : "asc" };
+}
+
+function sortedBranchOrdersManagementUnits(draft) {
+  const sort = normalizedBranchOrdersManagementUnitSort();
+  const direction = sort.direction === "desc" ? -1 : 1;
+  const positions = new Map(draft.units.map((unit, index) => [unit.id, index + 1]));
+  return draft.units.slice().sort((left, right) => {
+    const result = sort.key === "position"
+      ? (positions.get(left.id) || 0) - (positions.get(right.id) || 0)
+      : branchOrdersManagementCatalogCollator.compare(left.title || "", right.title || "");
+    if (result) return result * direction;
+    return ((positions.get(left.id) || 0) - (positions.get(right.id) || 0)) * direction;
+  });
+}
+
+function branchOrdersManagementUnitHeader() {
+  const sort = normalizedBranchOrdersManagementUnitSort();
+  return `<tr>${branchOrdersManagementUnitColumns.map((column) => {
+    const active = sort.key === column.key;
+    const ariaSort = active ? (sort.direction === "asc" ? "ascending" : "descending") : "none";
+    const indicator = active ? `<span aria-hidden="true">${sort.direction === "asc" ? "↑" : "↓"}</span>` : "";
+    return `<th aria-sort="${ariaSort}"><button class="branch-orders-management-sort-button" type="button" data-branch-orders-management-action="sort-units" data-branch-orders-management-sort-key="${escapeHtmlAttribute(column.key)}">${escapeHtml(column.label)}${indicator}</button></th>`;
+  }).join("")}<th><span class="visually-hidden">Aktionen</span></th></tr>`;
+}
+
+function sortedBranchOrdersManagementItemIdsAlpha(draft, itemIds) {
+  const positionById = new Map(draft.items.map((item, index) => [item.id, index]));
+  const itemById = new Map(draft.items.map((item) => [item.id, item]));
+  return itemIds.slice().sort((leftId, rightId) => {
+    const result = branchOrdersManagementCatalogCollator.compare(
+      itemById.get(leftId)?.title || "",
+      itemById.get(rightId)?.title || "",
+    );
+    return result || (positionById.get(leftId) || 0) - (positionById.get(rightId) || 0);
+  });
+}
 
 function normalizedBranchOrdersManagementCatalogSort() {
   const requested = state.branchOrdersManagementCatalogSort || {};
@@ -3045,6 +3097,16 @@ function revealBranchOrdersManagementCatalogEditor(itemId) {
   if (typeof field.select === "function") field.select();
 }
 
+function revealBranchOrdersManagementUnitEditor(unitId) {
+  const editor = elements.branchOrdersManagementWorkspace?.querySelector(
+    `[data-branch-orders-management-unit-editor="${CSS.escape(unitId)}"]`,
+  );
+  const field = editor?.querySelector('[data-branch-orders-management-field="unit-title"]');
+  if (!field) return;
+  field.focus();
+  if (typeof field.select === "function") field.select();
+}
+
 function renderBranchOrdersManagement() {
   if (!elements.branchOrdersView) return;
   const locations = branchOrdersManagementLocations();
@@ -3066,8 +3128,10 @@ function renderBranchOrdersManagement() {
       ? "Kein freigegebener Standort."
       : state.branchOrdersManagementLoading
         ? "Bestellkonfiguration wird geladen …"
-        : emailDelivery.available
-          ? "E-Mail-Übergabe ist technisch freigeschaltet."
+        : emailDelivery.available && emailDelivery.attachmentsAvailable
+          ? "E-Mail-Übergabe einschließlich Bestell-PDF ist technisch freigeschaltet."
+          : emailDelivery.available
+            ? "E-Mail-Text ist freigeschaltet; Bestell-PDFs benötigen zusätzlich einen SMTP-Versand."
           : "Konfiguration kann gespeichert werden; die E-Mail-Übergabe ist technisch noch nicht freigeschaltet.";
   }
   const saveDisabled = !draft || state.branchOrdersManagementSaving || state.branchOrdersManagementLoading;
@@ -3091,29 +3155,38 @@ function renderBranchOrdersManagement() {
     `<option value="" ${selectedRecipientId ? "" : "selected"}>Kein E-Mail-Ziel</option>`,
     ...draft.recipients.map((recipient) => `<option value="${escapeHtml(recipient.id)}" ${recipient.id === selectedRecipientId ? "selected" : ""}>${escapeHtml(recipient.email || "Neue Zieladresse")}</option>`),
   ].join("");
-  const unitOptions = (selectedUnitId) => draft.units.map((unit) => (
+  const unitOptions = (selectedUnitId) => draft.units.slice().sort((left, right) => (
+    branchOrdersManagementCatalogCollator.compare(left.title || "", right.title || "")
+  )).map((unit) => (
     `<option value="${escapeHtml(unit.id)}" ${unit.id === selectedUnitId ? "selected" : ""}>${escapeHtml(unit.title || "Neue Einheit")}</option>`
   )).join("");
+  const deliveryModeOptions = (selectedMode) => [
+    ["message", "Nur E-Mail-Text"],
+    ["message_pdf", "E-Mail-Text + Bestell-PDF"],
+    ["pdf_only", "Nur Bestell-PDF"],
+  ].map(([value, label]) => (
+    `<option value="${value}" ${selectedMode === value ? "selected" : ""} ${value !== "message" && !emailDelivery.attachmentsAvailable ? "disabled" : ""}>${label}</option>`
+  )).join("");
   const recipientRows = draft.recipients.length ? draft.recipients.map((recipient) => `
-    <details class="branch-orders-management-recipient" data-branch-orders-management-recipient="${escapeHtml(recipient.id)}">
+    <details class="branch-orders-management-recipient" data-branch-orders-management-recipient="${escapeHtmlAttribute(recipient.id)}">
       <summary><div><span class="eyebrow">E-Mail-Ziel</span><h2>${escapeHtml(recipient.email || "Neue Zieladresse")}</h2></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
       <div class="branch-orders-management-disclosure-body">
-      <div class="branch-orders-management-fields two-columns"><label class="field"><span>Zieladresse</span><input type="email" data-branch-orders-management-field="recipient-email" value="${escapeHtml(recipient.email)}" maxlength="320" autocomplete="email" /></label><label class="field"><span>Antwortadresse</span><input type="email" data-branch-orders-management-field="recipient-reply-to" value="${escapeHtml(recipient.replyToEmail)}" maxlength="320" autocomplete="email" /><small>Wird im verpflichtenden No-Reply-Hinweis genannt.</small></label></div>
-      <label class="field"><span>E-Mail-Betreff</span><input data-branch-orders-management-field="recipient-subject" value="${escapeHtml(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNickname}}, {{employeeNumber}}, {{weekStart}}, {{submittedAt}}, {{items}}.</small></label>
+      <div class="branch-orders-management-fields two-columns"><label class="field"><span>Primäre Zieladresse</span><input type="email" data-branch-orders-management-field="recipient-email" value="${escapeHtmlAttribute(recipient.email)}" maxlength="320" autocomplete="email" /></label><label class="field"><span>CC-Adresse (optional)</span><input type="email" data-branch-orders-management-field="recipient-cc-email" value="${escapeHtmlAttribute(recipient.ccEmail)}" maxlength="320" autocomplete="email" /><small>Die CC-Kopie wird wegen der unabhängigen Versandart separat zugestellt.</small></label><label class="field"><span>Versand an Hauptadresse</span><select data-branch-orders-management-field="recipient-primary-delivery-mode">${deliveryModeOptions(recipient.primaryDeliveryMode)}</select></label><label class="field"><span>Versand an CC-Adresse</span><select data-branch-orders-management-field="recipient-cc-delivery-mode">${deliveryModeOptions(recipient.ccDeliveryMode)}</select></label><label class="field"><span>Antwortadresse</span><input type="email" data-branch-orders-management-field="recipient-reply-to" value="${escapeHtmlAttribute(recipient.replyToEmail)}" maxlength="320" autocomplete="email" /><small>Wird im verpflichtenden No-Reply-Hinweis genannt.</small></label></div>
+      <label class="field"><span>E-Mail-Betreff</span><input data-branch-orders-management-field="recipient-subject" value="${escapeHtmlAttribute(recipient.subjectTemplate)}" maxlength="180" /><small>Platzhalter: {{locationName}}, {{calendarWeek}}, {{employeeName}}, {{employeeNickname}}, {{employeeNumber}}, {{weekStart}}, {{submittedAt}}, {{items}}.</small></label>
       <label class="field"><span>E-Mail-Text</span><textarea data-branch-orders-management-field="recipient-body" rows="6" maxlength="8000">${escapeHtml(recipient.bodyTemplate)}</textarea><small>No-Reply-Hinweis und Antwortadresse werden serverseitig ergänzt.</small></label>
       <div class="branch-orders-management-row-actions"><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-recipient" data-branch-orders-management-id="${escapeHtml(recipient.id)}">E-Mail-Ziel entfernen</button></div>
       </div>
     </details>
   `).join("") : '<p class="settings-note">Noch kein E-Mail-Ziel angelegt.</p>';
-  const unitRows = draft.units.length ? draft.units.map((unit, index) => `
-    <details class="branch-orders-management-item branch-orders-management-unit" data-branch-orders-management-unit="${escapeHtml(unit.id)}">
-      <summary><strong>${escapeHtml(unit.title || "Neue Einheit")}</strong><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
-      <div class="branch-orders-management-disclosure-body">
-      <label class="field"><span>Einheit</span><input data-branch-orders-management-field="unit-title" value="${escapeHtml(unit.title)}" maxlength="40" /></label>
-      <div class="branch-orders-management-sort-actions"><button class="text-button" type="button" data-branch-orders-management-action="move-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}" data-branch-orders-management-direction="-1" ${index ? "" : "disabled"}>↑</button><button class="text-button" type="button" data-branch-orders-management-action="move-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}" data-branch-orders-management-direction="1" ${index < draft.units.length - 1 ? "" : "disabled"}>↓</button><button class="text-button danger-button" type="button" data-branch-orders-management-action="remove-unit" data-branch-orders-management-id="${escapeHtml(unit.id)}">Entfernen</button></div>
-      </div>
-    </details>
-  `).join("") : '<p class="settings-note">Noch keine Einheit angelegt.</p>';
+  const unitPositions = new Map(draft.units.map((unit, index) => [unit.id, index + 1]));
+  const unitRows = sortedBranchOrdersManagementUnits(draft).map((unit) => {
+    const index = draft.units.findIndex((entry) => entry.id === unit.id);
+    const editing = state.branchOrdersManagementUnitEditingId === unit.id;
+    return `
+      <tr class="branch-orders-management-unit-row ${editing ? "is-editing" : ""}" data-branch-orders-management-unit="${escapeHtmlAttribute(unit.id)}"><td>${unitPositions.get(unit.id) || 0}</td><td><strong>${escapeHtml(unit.title || "Neue Einheit")}</strong></td><td><div class="branch-orders-management-table-actions"><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-unit" data-branch-orders-management-id="${escapeHtmlAttribute(unit.id)}" data-branch-orders-management-direction="-1" aria-label="${escapeHtmlAttribute(`Einheit ${unit.title || index + 1} nach oben verschieben`)}" ${index ? "" : "disabled"}>↑</button><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-unit" data-branch-orders-management-id="${escapeHtmlAttribute(unit.id)}" data-branch-orders-management-direction="1" aria-label="${escapeHtmlAttribute(`Einheit ${unit.title || index + 1} nach unten verschieben`)}" ${index < draft.units.length - 1 ? "" : "disabled"}>↓</button><button class="branch-orders-management-table-action" type="button" data-branch-orders-management-action="edit-unit" data-branch-orders-management-id="${escapeHtmlAttribute(unit.id)}">Bearbeiten</button><button class="branch-orders-management-table-action danger" type="button" data-branch-orders-management-action="remove-unit" data-branch-orders-management-id="${escapeHtmlAttribute(unit.id)}">Löschen</button></div></td></tr>
+      ${editing ? `<tr class="branch-orders-management-unit-editor-row"><td colspan="3"><div class="branch-orders-management-unit-editor" data-branch-orders-management-unit="${escapeHtmlAttribute(unit.id)}" data-branch-orders-management-unit-editor="${escapeHtmlAttribute(unit.id)}"><label class="field"><span>Maßeinheit</span><input data-branch-orders-management-field="unit-title" value="${escapeHtmlAttribute(unit.title)}" maxlength="40" /></label></div></td></tr>` : ""}
+    `;
+  }).join("");
   const catalogPositions = new Map(draft.items.map((item, index) => [item.id, index + 1]));
   const itemRows = sortedBranchOrdersManagementCatalogItems(draft).map((item) => {
     const position = catalogPositions.get(item.id) || 0;
@@ -3132,12 +3205,14 @@ function renderBranchOrdersManagement() {
   }).join("");
   const groupRows = draft.groups.length ? draft.groups.map((group, groupIndex) => {
     const memberships = group.itemIds.map((itemId) => draft.items.find((item) => item.id === itemId)).filter(Boolean);
-    const available = draft.items.filter((item) => !group.itemIds.includes(item.id));
+    const available = draft.items.filter((item) => !group.itemIds.includes(item.id)).sort((left, right) => (
+      branchOrdersManagementCatalogCollator.compare(left.title || "", right.title || "")
+    ));
     return `
       <details class="branch-orders-management-group" data-branch-orders-management-group="${escapeHtml(group.id)}">
         <summary><div><span class="eyebrow">Anzeigegruppe</span><h2>${escapeHtml(group.title || "Neue Anzeigegruppe")}</h2></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary>
         <div class="branch-orders-management-disclosure-body">
-        <div class="branch-orders-management-group-toolbar"><span>Gruppe ${groupIndex + 1} von ${draft.groups.length}</span><div class="branch-orders-management-table-actions"><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="-1" aria-label="Anzeigegruppe nach oben verschieben" ${groupIndex ? "" : "disabled"}>↑</button><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="1" aria-label="Anzeigegruppe nach unten verschieben" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="branch-orders-management-table-action danger" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Gruppe löschen</button></div></div>
+        <div class="branch-orders-management-group-toolbar"><span>Gruppe ${groupIndex + 1} von ${draft.groups.length}</span><div class="branch-orders-management-table-actions"><button class="branch-orders-management-table-action" type="button" data-branch-orders-management-action="sort-group-items-alpha" data-branch-orders-management-group-id="${escapeHtml(group.id)}">Positionen A–Z sortieren</button><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="-1" aria-label="Anzeigegruppe nach oben verschieben" ${groupIndex ? "" : "disabled"}>↑</button><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group" data-branch-orders-management-id="${escapeHtml(group.id)}" data-branch-orders-management-direction="1" aria-label="Anzeigegruppe nach unten verschieben" ${groupIndex < draft.groups.length - 1 ? "" : "disabled"}>↓</button><button class="branch-orders-management-table-action danger" type="button" data-branch-orders-management-action="remove-group" data-branch-orders-management-id="${escapeHtml(group.id)}">Gruppe löschen</button></div></div>
         <div class="branch-orders-management-fields two-columns branch-orders-management-group-fields"><label class="field"><span>Bezeichnung</span><input data-branch-orders-management-field="group-title" value="${escapeHtml(group.title)}" maxlength="120" /></label><label class="field"><span>Hinweis im Bestellformular</span><input data-branch-orders-management-field="group-hint" value="${escapeHtml(group.hint)}" maxlength="400" /></label></div>
         <div class="branch-orders-management-group-table-wrap"><table class="branch-orders-management-group-table"><thead><tr><th>Position</th><th>Bezeichnung</th><th>Einheit</th><th><span class="visually-hidden">Aktionen</span></th></tr></thead><tbody>${memberships.length ? memberships.map((item, index) => `
           <tr><td>${index + 1}</td><td><strong>${escapeHtml(item.title || "Neue Position")}</strong></td><td>${escapeHtml(draft.units.find((unit) => unit.id === item.unitId)?.title || "–")}</td><td><div class="branch-orders-management-table-actions"><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="-1" aria-label="${escapeHtmlAttribute(`${item.title || `Position ${index + 1}`} nach oben verschieben`)}" ${index ? "" : "disabled"}>↑</button><button class="branch-orders-management-order-button" type="button" data-branch-orders-management-action="move-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}" data-branch-orders-management-direction="1" aria-label="${escapeHtmlAttribute(`${item.title || `Position ${index + 1}`} nach unten verschieben`)}" ${index < memberships.length - 1 ? "" : "disabled"}>↓</button><button class="branch-orders-management-table-action danger" type="button" data-branch-orders-management-action="remove-group-item" data-branch-orders-management-group-id="${escapeHtml(group.id)}" data-branch-orders-management-item-id="${escapeHtml(item.id)}">Entfernen</button></div></td></tr>
@@ -3147,8 +3222,8 @@ function renderBranchOrdersManagement() {
       </details>`;
   }).join("") : '<p class="settings-note">Noch keine Anzeigegruppe angelegt.</p>';
   elements.branchOrdersManagementWorkspace.innerHTML = `
-    <details class="branch-orders-management-section" data-branch-orders-management-section="recipients"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine eigene Ziel- und Antwortadresse sowie eigene Vorlage.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</div></details>
-    <details class="branch-orders-management-section" data-branch-orders-management-section="units"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">+ Einheit</button></div><div class="branch-orders-management-items">${unitRows}</div></div></details>
+    <details class="branch-orders-management-section" data-branch-orders-management-section="recipients"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Empfang</span><h2>E-Mail-Ziele und Vorlagen</h2><p>Jedes Ziel hat eine Hauptadresse, eine optionale CC-Kopie und je Adresse eine eigene Versandart.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-recipient">+ E-Mail-Ziel</button></div>${recipientRows}</div></details>
+    <details class="branch-orders-management-section" data-branch-orders-management-section="units"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Maßeinheiten</h2><p>Einheiten können standortbezogen angelegt, umbenannt, sortiert und entfernt werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-unit-create"><label class="field"><span>Neue Maßeinheit</span><input data-branch-orders-management-new-unit-title maxlength="40" placeholder="Bezeichnung eingeben" autocomplete="off" /></label><button class="secondary-button" type="button" data-branch-orders-management-action="add-unit">Hinzufügen</button></div><div class="branch-orders-management-unit-table-wrap"><table class="branch-orders-management-unit-table"><thead>${branchOrdersManagementUnitHeader()}</thead><tbody>${unitRows || '<tr><td colspan="3" class="branch-orders-management-catalog-empty">Noch keine Maßeinheit angelegt.</td></tr>'}</tbody></table></div></div></details>
     <details class="branch-orders-management-section" data-branch-orders-management-section="catalog"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Katalog</span><h2>Zentrale Positionen</h2><p>Jede Position wird einmal gepflegt und kann mehreren Anzeigegruppen zugeordnet werden.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-catalog-create"><label class="field"><span>Neue Position</span><input data-branch-orders-management-new-item-title maxlength="180" placeholder="Bezeichnung eingeben" autocomplete="off" /></label><button class="secondary-button" type="button" data-branch-orders-management-action="add-catalog-item">Position hinzufügen</button></div><div class="branch-orders-management-catalog-search"><label class="field"><span>Positionen suchen</span><input type="search" inputmode="search" autocomplete="off" placeholder="Bezeichnung, Einheit oder Position" value="${escapeHtmlAttribute(state.branchOrdersManagementCatalogSearch)}" data-branch-orders-management-catalog-search /></label><p data-branch-orders-management-catalog-search-status aria-live="polite"></p></div><div class="branch-orders-management-catalog-table-wrap"><table class="branch-orders-management-catalog-table"><thead>${branchOrdersManagementCatalogHeader()}</thead><tbody>${itemRows || '<tr><td colspan="4" class="branch-orders-management-catalog-empty">Noch keine Position angelegt.</td></tr>'}${itemRows ? '<tr data-branch-orders-management-catalog-search-empty hidden><td colspan="4" class="branch-orders-management-catalog-empty">Keine passende Position gefunden.</td></tr>' : ""}</tbody></table></div></div></details>
     <details class="branch-orders-management-section" data-branch-orders-management-section="groups"><summary class="branch-orders-management-section-heading"><div><span class="eyebrow">Bestellansicht</span><h2>Anzeigegruppen</h2><p>Reihenfolge und Zuordnung steuern nur die Bestellansicht; die Übergabe wird pro Position zusammengefasst.</p></div><span class="branch-orders-management-chevron" aria-hidden="true">›</span></summary><div class="branch-orders-management-section-body"><div class="branch-orders-management-section-actions"><button class="secondary-button" type="button" data-branch-orders-management-action="add-group">+ Anzeigegruppe</button></div>${groupRows}</div></details>`;
   restoreBranchOrdersManagementDisclosureState(openDisclosures);
@@ -3162,6 +3237,7 @@ async function loadBranchOrdersManagement(locationId = selectedBranchOrdersManag
   state.branchOrdersManagementLocationId = normalizedLocationId;
   state.branchOrdersManagementCatalogEditingId = "";
   state.branchOrdersManagementCatalogSearch = "";
+  state.branchOrdersManagementUnitEditingId = "";
   if (!normalizedLocationId) {
     state.branchOrdersManagement = null;
     state.branchOrdersManagementDraft = null;
@@ -3210,6 +3286,9 @@ function updateBranchOrdersManagementDraftFromField(field) {
     const target = draft.recipients.find((entry) => entry.id === recipient.dataset.branchOrdersManagementRecipient);
     if (!target) return;
     if (key === "recipient-email") target.email = field.value;
+    if (key === "recipient-cc-email") target.ccEmail = field.value;
+    if (key === "recipient-primary-delivery-mode") target.primaryDeliveryMode = field.value;
+    if (key === "recipient-cc-delivery-mode") target.ccDeliveryMode = field.value;
     if (key === "recipient-reply-to") target.replyToEmail = field.value;
     if (key === "recipient-subject") target.subjectTemplate = field.value;
     if (key === "recipient-body") target.bodyTemplate = field.value;
@@ -3246,6 +3325,17 @@ async function saveBranchOrdersManagement() {
   const locationId = selectedBranchOrdersManagementLocationId();
   const draft = captureBranchOrdersManagementDraft();
   if (!locationId || !draft || state.branchOrdersManagementSaving) return;
+  const requiresPdfDelivery = draft.recipients.some((recipient) => (
+    recipient.primaryDeliveryMode !== "message"
+    || (recipient.ccEmail && recipient.ccDeliveryMode !== "message")
+  ));
+  if (requiresPdfDelivery && state.branchOrdersManagement?.emailDelivery?.attachmentsAvailable !== true) {
+    setBranchOrdersManagementMessage(
+      "Bestell-PDFs können erst nach Freischaltung eines SMTP-Versands aktiviert werden.",
+      true,
+    );
+    return;
+  }
   state.branchOrdersManagementSaving = true;
   setBranchOrdersManagementMessage("Bestellkonfiguration wird gespeichert …");
   renderBranchOrdersManagement();
@@ -3257,6 +3347,7 @@ async function saveBranchOrdersManagement() {
     state.branchOrdersManagement = result;
     state.branchOrdersManagementDraft = clonedBranchOrdersManagementConfiguration(result.configuration);
     state.branchOrdersManagementCatalogEditingId = "";
+    state.branchOrdersManagementUnitEditingId = "";
     const history = await api(`/api/portal/v1/branch-orders/history?locationId=${encodeURIComponent(locationId)}&limit=50`);
     state.branchOrdersManagementHistory = history.orders || [];
     setBranchOrdersManagementMessage("Bestellkonfiguration wurde gespeichert.");
@@ -3294,6 +3385,13 @@ function handleBranchOrdersManagementAction(event) {
       key: branchOrdersManagementCatalogColumns.some((column) => column.key === key) ? key : "position",
       direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
     };
+  } else if (action === "sort-units") {
+    const key = button.dataset.branchOrdersManagementSortKey || "position";
+    const current = normalizedBranchOrdersManagementUnitSort();
+    state.branchOrdersManagementUnitSort = {
+      key: branchOrdersManagementUnitColumns.some((column) => column.key === key) ? key : "position",
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+    };
   } else if (action === "edit-catalog-item") {
     if (!draft.items.some((item) => item.id === id)) return;
     state.branchOrdersManagementCatalogEditingId = id;
@@ -3304,6 +3402,9 @@ function handleBranchOrdersManagementAction(event) {
     draft.recipients.push({
       id: recipientId,
       email: "",
+      ccEmail: "",
+      primaryDeliveryMode: "message",
+      ccDeliveryMode: "message",
       replyToEmail: "",
       subjectTemplate: defaults.subjectTemplate || "Filialbestellung {{locationName}} · KW {{calendarWeek}}",
       bodyTemplate: defaults.bodyTemplate || "{{items}}",
@@ -3318,22 +3419,36 @@ function handleBranchOrdersManagementAction(event) {
     draft.recipients = draft.recipients.filter((recipient) => recipient.id !== id);
     draft.items.forEach((item) => { if (item.recipientId === id) item.recipientId = ""; });
   } else if (action === "add-unit") {
-    const unitId = branchOrdersManagementClientId("unit");
-    draft.units.push({ id: unitId, title: "Neue Einheit" });
-    revealAfterRender = () => revealBranchOrdersManagementDisclosure(
-      "units",
-      "data-branch-orders-management-unit",
-      unitId,
-      '[data-branch-orders-management-field="unit-title"]',
+    const titleField = elements.branchOrdersManagementWorkspace?.querySelector(
+      "[data-branch-orders-management-new-unit-title]",
     );
+    const title = String(titleField?.value || "").trim();
+    if (!title) {
+      setBranchOrdersManagementMessage("Bitte eine Bezeichnung für die neue Maßeinheit eingeben.", true);
+      titleField?.focus();
+      return;
+    }
+    const unitId = branchOrdersManagementClientId("unit");
+    draft.units.push({ id: unitId, title });
+    state.branchOrdersManagementUnitEditingId = unitId;
+    setBranchOrdersManagementMessage("");
+    revealAfterRender = () => revealBranchOrdersManagementUnitEditor(unitId);
+  } else if (action === "edit-unit") {
+    if (!draft.units.some((unit) => unit.id === id)) return;
+    state.branchOrdersManagementUnitEditingId = id;
+    revealAfterRender = () => revealBranchOrdersManagementUnitEditor(id);
   } else if (action === "remove-unit") {
     if (draft.items.some((item) => item.unitId === id)) {
       setBranchOrdersManagementMessage("Diese Einheit wird noch von einer Position verwendet.", true);
       return;
     }
     draft.units = draft.units.filter((unit) => unit.id !== id);
+    if (state.branchOrdersManagementUnitEditingId === id) {
+      state.branchOrdersManagementUnitEditingId = "";
+    }
   } else if (action === "move-unit") {
     moveBranchOrdersManagementEntry(draft.units, id, Number(button.dataset.branchOrdersManagementDirection));
+    state.branchOrdersManagementUnitSort = { key: "position", direction: "asc" };
   } else if (action === "add-catalog-item") {
     const unitId = draft.units[0]?.id || "";
     if (!unitId) {
@@ -3403,6 +3518,9 @@ function handleBranchOrdersManagementAction(event) {
         Number(button.dataset.branchOrdersManagementDirection),
       );
     }
+  } else if (action === "sort-group-items-alpha") {
+    const group = draft.groups.find((entry) => entry.id === button.dataset.branchOrdersManagementGroupId);
+    if (group) group.itemIds = sortedBranchOrdersManagementItemIdsAlpha(draft, group.itemIds);
   }
   renderBranchOrdersManagement();
   if (revealAfterRender) revealAfterRender();
@@ -31501,8 +31619,17 @@ elements.branchOrdersManagementWorkspace?.addEventListener("change", (event) => 
   if (field) updateBranchOrdersManagementDraftFromField(field);
 });
 elements.branchOrdersManagementWorkspace?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const unitField = event.target.closest?.("[data-branch-orders-management-new-unit-title]");
+  if (unitField) {
+    event.preventDefault();
+    elements.branchOrdersManagementWorkspace?.querySelector(
+      '[data-branch-orders-management-action="add-unit"]',
+    )?.click();
+    return;
+  }
   const field = event.target.closest?.("[data-branch-orders-management-new-item-title]");
-  if (!field || event.key !== "Enter") return;
+  if (!field) return;
   event.preventDefault();
   elements.branchOrdersManagementWorkspace?.querySelector(
     '[data-branch-orders-management-action="add-catalog-item"]',
