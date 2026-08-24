@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.18 Beta · Filialbestellungen und bereichsgebundene Bewerberanlage
+
+- Anzeigegruppen können ihre Positionen alphanumerisch sortieren; die Zuordnungsauswahl ist ebenfalls alphanumerisch geordnet. Maßeinheiten werden in einer kompakten, sortierbaren Liste statt großflächiger Karten gepflegt.
+- E-Mail-Ziele unterstützen eine optionale CC-Adresse. Haupt- und CC-Empfang lassen sich unabhängig als Nachricht, Nachricht mit Bestell-PDF oder ausschließlich Bestell-PDF konfigurieren; Versandbelege bleiben revisionssicher und datensparsam.
+- Filialleitungen können Bewerber im ausdrücklich von PL+ freigegebenen eigenen Standort anlegen. Dafür sind das Bewerber-Leserecht, das lokale Bewerbungsrecht, eine erste Bewerbung sowie die bestätigte Erlaubnis zur EDV-Verarbeitung zwingend erforderlich.
+- Das neue FL-Grundrecht zur Bewerberanlage ist durch PL+ entziehbar. Abteilungsleitungen erhalten es nicht automatisch; bestehende Bewerber, vertrauliche Felder, Umwandlungen und weiterführende zentrale Bearbeitungen bleiben geschützt.
+- Rechte-, Scope-, Audit-, Datenschutz-, E-Mail-, PDF-, Sortier-, Mobil-, Persistenz- und Integrationspfade sind gemeinsam regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.17 Beta · Sichtbare Einsätze in anderen Filialen
 
 - Dienstplan-PDFs der Stammfiliale kennzeichnen aktive, ausgehende Filialeinsätze am betreffenden Tag als „Andere Filiale“, auch wenn der konkrete Dienst ausschließlich im Zielstandort geführt wird.
