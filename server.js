@@ -55303,6 +55303,83 @@ function collapsedScheduleWeekOptions(options = []) {
   return [...meetings.values(), ...individual];
 }
 
+function schedulePdfAssignmentOptionAlreadyPresent(weekOptions, assignment, date) {
+  return weekOptions.some((option) => {
+    if (option.option_type !== "branch"
+      || String(option.employee_number || "") !== String(assignment.employee_number || "")
+      || option.date_from > date || option.date_to < date) return false;
+    if (Number(assignment.all_day ?? 1) === 1) return optionIsAllDay(option);
+    return !optionIsAllDay(option)
+      && String(option.start_time || "") === String(assignment.start_time || "")
+      && String(option.end_time || "") === String(assignment.end_time || "");
+  });
+}
+
+function schedulePdfWeekOptions(schedule) {
+  const weekOptions = [...(schedule.weekOptions || [])];
+  const employeesByNumber = new Map((schedule.employees || []).map((employee) => [
+    String(employee.personnel_number || ""),
+    employee,
+  ]));
+  for (const assignment of schedule.staffAssignments || []) {
+    const employeeNumber = String(assignment.employee_number || "");
+    const employee = employeesByNumber.get(employeeNumber);
+    if (!employee
+      || String(assignment.home_location_id || "") !== String(schedule.context.locationId || "")
+      || assignment.date_from > schedule.weekEnd || assignment.date_to < schedule.weekStart) continue;
+
+    const allDay = Number(assignment.all_day ?? 1) === 1;
+    if (!allDay && (!isTime(assignment.start_time) || !isTime(assignment.end_time)
+      || assignment.start_time >= assignment.end_time)) continue;
+    const dateFrom = assignment.date_from < schedule.weekStart ? schedule.weekStart : assignment.date_from;
+    const dateTo = assignment.date_to > schedule.weekEnd ? schedule.weekEnd : assignment.date_to;
+    const uncoveredDates = [];
+    for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+      if (!schedulePdfAssignmentOptionAlreadyPresent(weekOptions, assignment, date)) uncoveredDates.push(date);
+    }
+
+    const destination = [
+      assignment.destination_location_name,
+      assignment.destination_department_name,
+    ].map((value) => String(value || "").trim()).filter(Boolean).join(" · ");
+    let segmentStart = null;
+    let segmentEnd = null;
+    const appendSegment = () => {
+      if (!segmentStart) return;
+      weekOptions.push({
+        id: `pdf-staff-assignment-${assignment.id}-${segmentStart}`,
+        group_id: null,
+        employee_number: employeeNumber,
+        nickname: employee.nickname || assignment.employee_nickname || employee.full_name || employeeNumber,
+        color: employee.color || "#9aa2a4",
+        week_start: schedule.weekStart,
+        date_from: segmentStart,
+        date_to: segmentEnd,
+        option_type: "branch",
+        note: `Temporärer Filialeinsatz${destination ? ` · ${destination}` : ""}`,
+        all_day: allDay ? 1 : 0,
+        start_time: allDay ? null : assignment.start_time,
+        end_time: allDay ? null : assignment.end_time,
+        credited_minutes_per_day: 0,
+        pdf_staff_assignment: true,
+      });
+    };
+    for (const date of uncoveredDates) {
+      if (!segmentStart || addDays(segmentEnd, 1) !== date) {
+        appendSegment();
+        segmentStart = date;
+      }
+      segmentEnd = date;
+    }
+    appendSegment();
+  }
+  return weekOptions;
+}
+
+function scheduleForPdf(schedule) {
+  return { ...schedule, weekOptions: schedulePdfWeekOptions(schedule) };
+}
+
 function monthName(monthNumber, format = "long") {
   return new Intl.DateTimeFormat("de-AT", { month: format, timeZone: "UTC" }).format(
     new Date(Date.UTC(2026, monthNumber - 1, 1, 12)),
@@ -56903,11 +56980,12 @@ function schedulePdfDesignForRequest(schedule, requestedDesignId) {
 }
 
 async function drawSchedulePdf(schedule, response, createdAt = new Date(), designId = "timeline") {
+  const projectedSchedule = scheduleForPdf(schedule);
   if (designId === "matrix") {
-    drawScheduleMatrixPdf(schedule, response, createdAt);
+    drawScheduleMatrixPdf(projectedSchedule, response, createdAt);
     return;
   }
-  await drawScheduleTimelinePdf(schedule, response, createdAt);
+  await drawScheduleTimelinePdf(projectedSchedule, response, createdAt);
 }
 
 app.get("/api/schedule.pdf", async (request, response) => {

@@ -236,8 +236,9 @@ test("Block 5: Tastatur-, Screenreader-, Mobile- und Bewegungsreduktion sind vol
 
 test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenzfrei klassifiziert", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.92.16-beta");
-  assert.match(read("README.md"), /v0\.92\.16 Beta/);
+  assert.equal(packageJson.version, "0.92.17-beta");
+  assert.match(read("README.md"), /v0\.92\.17 Beta/);
+  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.17 Beta · Sichtbare Einsätze in anderen Filialen/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.16 Beta · Präzisierte Wochenmatrix und standortübergreifende Einplanung/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.15 Beta · Anpassbare Wochenmatrix und Katalogsuche/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.14 Beta · Vollständige Bestellkatalog-Migration beim Serverstart/);
@@ -248,7 +249,7 @@ test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenz
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.9 Beta · Neustartsichere Schulungsbelege/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.8 Beta · Schulungsprozesse und Fähigkeitsprofile/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.7 Beta · Berechtigungsgefilterte Funktionssuche/);
-  assert.equal(JSON.parse(read(".devcontainer/devcontainer.json")).name, "Grabenplaner v0.92.16 Codespaces-Demo");
+  assert.equal(JSON.parse(read(".devcontainer/devcontainer.json")).name, "Grabenplaner v0.92.17 Codespaces-Demo");
 
   const runtimeFiles = [
     "public/function-search-catalog.js",

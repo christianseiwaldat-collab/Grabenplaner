@@ -136,6 +136,37 @@ async function requestJson(route, { method = "GET", session = null, body } = {})
   return { response, payload, text };
 }
 
+async function requestPdf(route, { session = null } = {}) {
+  const headers = { Accept: "application/pdf" };
+  if (session?.cookie) headers.Cookie = session.cookie;
+  const response = await fetch(`${baseUrl}${route}`, { headers });
+  return { response, payload: Buffer.from(await response.arrayBuffer()) };
+}
+
+async function pdfText(buffer) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({
+    data: Uint8Array.from(buffer),
+    disableWorker: true,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+  const document = await loadingTask.promise;
+  try {
+    const pages = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      pages.push(content.items.filter((item) => typeof item.str === "string")
+        .map((item) => item.str).join(" "));
+      page.cleanup();
+    }
+    return pages.join("\n");
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
 function assignment(overrides = {}) {
   return {
     employeeNumber: EMPLOYEE,
@@ -1164,13 +1195,60 @@ test("temporäre Filialeinsätze sind eng berechtigt, konfliktgeprüft und revis
       assert.equal(homeSchedule.payload.inStoreTotals[SECOND_EMPLOYEE], 0);
       assert.equal(homeSchedule.payload.shifts.some((entry) => Number(entry.id) === shiftId), false);
 
+      db.prepare(`
+        INSERT OR IGNORE INTO portal_permission_grants (employee_number, permission, granted_by)
+        VALUES (?, 'schedule:pdf:settings:write', 'v0921-test')
+      `).run(HR);
+      for (const [locationId, departmentId] of [
+        [HOME, secondHomeDepartment],
+        [DESTINATION, secondDestinationDepartment],
+      ]) {
+        const pdfSettings = await requestJson("/api/portal/v1/schedule-pdf-settings", {
+          method: "PUT",
+          session: hr,
+          body: { locationId, departmentId, schedulePdfDesignIds: ["timeline", "matrix"] },
+        });
+        assert.equal(pdfSettings.response.status, 200, pdfSettings.text);
+      }
+
+      const homeTimelinePdf = await requestPdf(
+        `/api/schedule.pdf?week=2031-05-12&locationId=${HOME}&departmentId=${secondHomeDepartment}&design=timeline`,
+        { session: homeManager },
+      );
+      assert.equal(homeTimelinePdf.response.status, 200);
+      const homeTimelineText = await pdfText(homeTimelinePdf.payload);
+      assert.match(homeTimelineText, /Sophie: Andere Filiale/);
+      assert.match(homeTimelineText, /Temporärer Filialeinsatz/);
+      assert.match(homeTimelineText, /Zielfiliale/);
+      assert.match(homeTimelineText, /Zweite Ziel-?\s*Abteilung/);
+
+      const homeMatrixPdf = await requestPdf(
+        `/api/schedule.pdf?week=2031-05-12&locationId=${HOME}&departmentId=${secondHomeDepartment}&design=matrix`,
+        { session: homeManager },
+      );
+      assert.equal(homeMatrixPdf.response.status, 200);
+      const homeMatrixText = await pdfText(homeMatrixPdf.payload);
+      assert.match(homeMatrixText, /Andere Filiale · ganztägig/);
+      assert.match(homeMatrixText, /1A/);
+      assert.doesNotMatch(homeMatrixText, /09:00-17:30/);
+
       const destinationSchedule = await requestJson(
         `/api/schedule?week=2031-05-12&location=${DESTINATION}&department=${secondDestinationDepartment}`,
         { session: destinationManager },
       );
       assert.equal(destinationSchedule.response.status, 200, destinationSchedule.text);
       assert.equal(destinationSchedule.payload.plannedTotals[SECOND_EMPLOYEE], 480);
+      assert.equal(destinationSchedule.payload.totals[SECOND_EMPLOYEE], 480);
       assert.equal(destinationSchedule.payload.inStoreTotals[SECOND_EMPLOYEE], 480);
+
+      const destinationMatrixPdf = await requestPdf(
+        `/api/schedule.pdf?week=2031-05-12&locationId=${DESTINATION}&departmentId=${secondDestinationDepartment}&design=matrix`,
+        { session: destinationManager },
+      );
+      assert.equal(destinationMatrixPdf.response.status, 200);
+      const destinationMatrixText = await pdfText(destinationMatrixPdf.payload);
+      assert.match(destinationMatrixText, /09:00-17:30/);
+      assert.doesNotMatch(destinationMatrixText, /Andere Filiale · ganztägig/);
     } finally {
       if (shiftId) db.prepare("DELETE FROM shifts WHERE id = ?").run(shiftId);
       db.prepare("DELETE FROM employee_location_lendings WHERE id = ?").run(assignmentId);
