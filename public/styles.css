@@ -4521,11 +4521,23 @@ details[open] > summary > .branch-orders-management-chevron { transform:rotate(9
 .branch-orders-management-unit > .branch-orders-management-disclosure-body { padding:0 12px 12px; }
 .branch-orders-management-catalog-create { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:8px; }
 .branch-orders-management-catalog-create .secondary-button { min-height:42px; white-space:nowrap; }
+.branch-orders-management-unit-create { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:8px; }
+.branch-orders-management-unit-create .secondary-button { min-height:42px; white-space:nowrap; }
 .branch-orders-management-catalog-search { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:10px; }
 .branch-orders-management-catalog-search .field { margin:0; }
 .branch-orders-management-catalog-search > p { min-width:100px; margin:0 0 10px; color:var(--muted); font-size:8.5px; font-weight:750; text-align:right; white-space:nowrap; }
 .branch-orders-management-catalog-table-wrap,.branch-orders-management-group-table-wrap { min-width:0; overflow-x:auto; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
 .branch-orders-management-catalog-table,.branch-orders-management-group-table { width:100%; min-width:540px; border-collapse:collapse; table-layout:auto; }
+.branch-orders-management-unit-table-wrap { min-width:0; overflow-x:auto; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
+.branch-orders-management-unit-table { width:100%; min-width:480px; border-collapse:collapse; table-layout:auto; }
+.branch-orders-management-unit-table th { padding:9px 10px; color:var(--muted); background:var(--surface-soft); font-size:9px; text-align:left; text-transform:uppercase; letter-spacing:.06em; }
+.branch-orders-management-unit-table td { padding:10px; border-top:1px solid var(--line); font-size:10px; vertical-align:middle; }
+.branch-orders-management-unit-table td:first-child { width:70px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.branch-orders-management-unit-table td:nth-child(2) { min-width:190px; }
+.branch-orders-management-unit-table td:last-child { width:1%; white-space:nowrap; }
+.branch-orders-management-unit-row:hover td,.branch-orders-management-unit-row.is-editing td { background:color-mix(in srgb,var(--green) 5%,var(--surface)); }
+.branch-orders-management-unit-editor-row td { padding:0 10px 10px; background:color-mix(in srgb,var(--green) 5%,var(--surface)); }
+.branch-orders-management-unit-editor { padding:11px; border:1px solid color-mix(in srgb,var(--green) 38%,var(--line)); border-radius:10px; background:var(--surface); }
 .branch-orders-management-catalog-table th,.branch-orders-management-group-table th { padding:9px 10px; color:var(--muted); background:var(--surface-soft); font-size:9px; text-align:left; text-transform:uppercase; letter-spacing:.06em; }
 .branch-orders-management-catalog-table td,.branch-orders-management-group-table td { padding:10px; border-top:1px solid var(--line); font-size:10px; vertical-align:middle; }
 .branch-orders-management-catalog-table td:first-child { width:70px; color:var(--muted); font-variant-numeric:tabular-nums; }
@@ -4601,7 +4613,7 @@ html[data-active-page-theme="dark"] #loansView .loan-summary-card.email_failed {
 html[data-active-page-theme="dark"] #loansView .loan-summary-card.due_today,
 html[data-active-page-theme="dark"] #loansView .loan-summary-card.confirmation { color:var(--warning-ink); border-color:#786735; background:var(--warning-surface); }
 html[data-active-page-theme="dark"] #loansView .loan-management-warning { color:var(--warning-ink); border-color:#786735; background:var(--warning-surface); }
-html[data-active-page-theme="dark"] #branchOrdersView :is(.branch-orders-management-toolbar,.branch-orders-management-section,.branch-orders-management-history,.branch-orders-management-item,.branch-orders-management-catalog-table-wrap,.branch-orders-management-catalog-editor,.branch-orders-management-empty) { color:var(--ink); border-color:var(--line); background:var(--surface); }
+html[data-active-page-theme="dark"] #branchOrdersView :is(.branch-orders-management-toolbar,.branch-orders-management-section,.branch-orders-management-history,.branch-orders-management-item,.branch-orders-management-catalog-table-wrap,.branch-orders-management-unit-table-wrap,.branch-orders-management-catalog-editor,.branch-orders-management-unit-editor,.branch-orders-management-empty) { color:var(--ink); border-color:var(--line); background:var(--surface); }
 html[data-active-page-theme="dark"] #branchOrdersView :is(.branch-orders-management-recipient,.branch-orders-management-group,.branch-orders-management-history-entry) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
 html[data-active-page-theme="dark"] #settingsView :is(.loan-location-setting,.loan-photo-attachment) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
 html[data-active-page-theme="dark"] #settingsView .loan-photo-retention-note { color:var(--warning-ink); border-color:#786735; background:var(--warning-surface); }
@@ -4625,6 +4637,8 @@ html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { 
   .branch-orders-management-group-add { grid-template-columns:1fr; }
   .branch-orders-management-catalog-create { grid-template-columns:1fr; }
   .branch-orders-management-catalog-create .secondary-button { justify-self:start; }
+  .branch-orders-management-unit-create { grid-template-columns:1fr; }
+  .branch-orders-management-unit-create .secondary-button { justify-self:start; }
   .loan-management-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .f18-migration-form,.f18-migration-mappings { grid-template-columns:1fr; }
   .f18-migration-mappings > :is(h3,p) { grid-column:auto; }

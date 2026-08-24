@@ -38846,10 +38846,52 @@ function publicBranchOrderHistory(order) {
 
 function branchOrderEmailStatus() {
   const email = externalNotificationAdapter.getProviderStatus()?.email || {};
+  const available = externalNotificationAdapter.canSendEvent("email", "branch_order");
   return {
-    available: externalNotificationAdapter.canSendEvent("email", "branch_order"),
+    available,
+    attachmentsAvailable: Boolean(available && email.transport === "smtp"),
     issueCode: email.issueCode || null,
   };
+}
+
+function branchOrderConfigurationRequiresPdf(configuration = {}) {
+  return (configuration.recipients || []).some((recipient) => (
+    recipient.primaryDeliveryMode !== "message"
+    || (recipient.ccEmail && recipient.ccDeliveryMode !== "message")
+  ));
+}
+
+function branchOrderRecipientDeliveryAuditChanges(beforeConfiguration = {}, afterConfiguration = {}) {
+  const stateById = (configuration) => new Map((configuration.recipients || []).map((recipient) => [
+    String(recipient.id),
+    {
+      ccAddress: String(recipient.ccEmail || "").trim().toLocaleLowerCase("de-AT"),
+      ccConfigured: Boolean(String(recipient.ccEmail || "").trim()),
+      primaryDeliveryMode: String(recipient.primaryDeliveryMode || "message"),
+      ccDeliveryMode: String(recipient.ccDeliveryMode || "message"),
+    },
+  ]));
+  const auditState = (state) => state ? {
+    ccConfigured: state.ccConfigured,
+    primaryDeliveryMode: state.primaryDeliveryMode,
+    ccDeliveryMode: state.ccDeliveryMode,
+  } : null;
+  const beforeById = stateById(beforeConfiguration);
+  const afterById = stateById(afterConfiguration);
+  return [...new Set([...beforeById.keys(), ...afterById.keys()])].sort().flatMap((id) => {
+    const before = beforeById.get(id) || null;
+    const after = afterById.get(id) || null;
+    if (JSON.stringify(before) === JSON.stringify(after)) return [];
+    const ccAddressChanged = Boolean(
+      before?.ccAddress && after?.ccAddress && before.ccAddress !== after.ccAddress,
+    );
+    return [{
+      id,
+      before: auditState(before),
+      after: auditState(after),
+      ...(ccAddressChanged ? { ccAddressChanged: true } : {}),
+    }];
+  });
 }
 
 app.get("/api/portal/v1/branch-orders/catalog", async (request, response) => {
@@ -38938,6 +38980,15 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
   const senderEmail = branchOrderSenderEmail(session, locationId);
   let order;
   try {
+    const emailDelivery = branchOrderEmailStatus();
+    const configuration = sqliteBranchOrderOperations.settingsSnapshot(locationId);
+    if (branchOrderConfigurationRequiresPdf(configuration) && !emailDelivery.attachmentsAvailable) {
+      throw httpError(
+        409,
+        "Die Bestellung benötigt einen freigeschalteten SMTP-Versand für die Bestell-PDF.",
+        "BRANCH_ORDER_PDF_DELIVERY_UNAVAILABLE",
+      );
+    }
     order = await sqliteBranchOrderOperations.createOrder(locationId, {
       selectedEmployeeNumber: context.selectedEmployeeNumber || request.body?.employeeNumber,
       items: request.body?.items,
@@ -38969,6 +39020,13 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
         replyTo: delivery.replyToEmail,
         subject: delivery.subject,
         text: delivery.body,
+        deliveryMode: delivery.deliveryMode,
+        ...(delivery.attachPdf ? {
+          attachment: {
+            filename: delivery.attachmentFilename,
+            buffer: delivery.attachmentContent,
+          },
+        } : {}),
       });
       sqliteBranchOrderOperations.markDelivery(delivery.id, { status: "sent" });
     } catch (error) {
@@ -39017,20 +39075,24 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {
+    const previousConfiguration = sqliteBranchOrderOperations.settingsSnapshot(locationId);
+    const emailDelivery = branchOrderEmailStatus();
     const configuration = sqliteBranchOrderOperations.replaceConfiguration(
       locationId,
       request.body?.configuration,
       portalActorId(session),
+      { pdfDeliveryAvailable: emailDelivery.attachmentsAvailable },
     );
     auditPortal(portalActorId(session), "branch-order.settings.update", "branch_order_location", locationId, JSON.stringify({
       recipientCount: configuration.recipients.length,
       groupCount: configuration.groups.length,
       itemCount: configuration.groups.reduce((count, group) => count + group.items.length, 0),
+      recipientDeliveryChanges: branchOrderRecipientDeliveryAuditChanges(previousConfiguration, configuration),
     }));
     response.json({
       locationId,
       configuration,
-      emailDelivery: branchOrderEmailStatus(),
+      emailDelivery,
     });
   } catch (error) {
     throw branchOrderHttpError(error);
