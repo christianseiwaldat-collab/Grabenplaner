@@ -297,6 +297,11 @@ const {
   prepareLoanPhoto,
 } = require("./lib/loan-photo");
 const {
+  CandidatePhotoError,
+  MAX_CANDIDATE_PHOTO_INPUT_BYTES,
+  prepareCandidatePhoto,
+} = require("./lib/candidate-photo");
+const {
   LoanPhotoPdfError,
   renderLoanPhotoPdf,
 } = require("./lib/loan-photo-pdf");
@@ -45274,12 +45279,24 @@ function publicPersonnelLifecycleCapabilities(access) {
     .filter(Boolean))];
   const departmentIds = [...new Set(readScopes.map((scope) => Number(scope.departmentId || 0))
     .filter((departmentId) => Number.isSafeInteger(departmentId) && departmentId > 0))];
+  const applicationWriteScopes = access?.allowedScopesByPermission?.[
+    PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE
+  ] || [];
+  const applicationWriteLocationIds = [...new Set(applicationWriteScopes
+    .map((entry) => String(entry.locationId || ""))
+    .filter(Boolean))];
+  const applicationWriteDepartmentIds = [...new Set(applicationWriteScopes
+    .map((entry) => Number(entry.departmentId || 0))
+    .filter((departmentId) => Number.isSafeInteger(departmentId) && departmentId > 0))];
   const createScopes = access?.allowedScopesByPermission?.[
     PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_CREATE
   ] || [];
   const createLocationIds = [...new Set(createScopes
     .map((entry) => String(entry.locationId || ""))
     .filter(Boolean))];
+  const createDepartmentIds = [...new Set(createScopes
+    .map((entry) => Number(entry.departmentId || 0))
+    .filter((departmentId) => Number.isSafeInteger(departmentId) && departmentId > 0))];
   const scope = access?.global
     ? { type: "global" }
     : access?.role === "manager"
@@ -45291,9 +45308,27 @@ function publicPersonnelLifecycleCapabilities(access) {
     ? { type: "none", locationIds: [] }
     : access?.global
       ? { type: "global", locationIds: [] }
-      : { type: "location", locationIds: createLocationIds };
+      : {
+          type: createDepartmentIds.length ? "department" : "location",
+          locationIds: createLocationIds,
+          ...(createDepartmentIds.length ? { departmentIds: createDepartmentIds } : {}),
+        };
+  const applicationWriteScope = access?.canWriteApplications !== true
+    ? { type: "none", locationIds: [] }
+    : access?.global
+      ? { type: "global", locationIds: [] }
+      : access?.role === "manager"
+        ? { type: "location", locationIds: applicationWriteLocationIds }
+        : access?.role === "department_manager"
+          ? {
+              type: "department",
+              locationIds: applicationWriteLocationIds,
+              departmentIds: applicationWriteDepartmentIds,
+            }
+          : { type: "none", locationIds: [] };
   return Object.freeze({
     scope,
+    applicationWriteScope,
     canReadCandidates: access?.canReadCandidates === true,
     canCreateCandidates: access?.canCreateCandidates === true,
     createScope,
@@ -46888,6 +46923,10 @@ function candidatePersonnelRecordInput(profile = {}) {
     firstName: String(profile.firstName || ""),
     lastName: String(profile.lastName || ""),
   };
+  if (profile.birthDate) identity.birthDate = String(profile.birthDate);
+  if (Array.isArray(profile.citizenships) && profile.citizenships.length) {
+    identity.nationality = profile.citizenships.join(", ").slice(0, 160);
+  }
   const address = Object.fromEntries(Object.entries(profile.address || {})
     .filter(([, fieldValue]) => String(fieldValue || "").trim()));
   const sensitive = { identity };
@@ -46922,6 +46961,8 @@ function personnelLifecycleRouteError(error) {
   if (error instanceof PersonnelLifecycleError) {
     const status = error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND
       ? 404
+      : error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.FORBIDDEN
+        ? 403
       : error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.CONFLICT
         ? 409
         : error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.INTEGRITY
@@ -46965,6 +47006,9 @@ const PERSONNEL_LIFECYCLE_APPLICATION_UPDATE_FIELDS = new Set([
   "internalRating",
   "internalNotes",
   "communicationNotes",
+  "competencyRatings",
+  "targetAreas",
+  "trialAppointments",
   "tags",
 ]);
 const PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_UPDATE_FIELDS = new Set([
@@ -46975,6 +47019,9 @@ const PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_UPDATE_FIELDS = new Set([
   "availableFrom",
   "desiredRoleTitle",
   "employmentType",
+  "competencyRatings",
+  "targetAreas",
+  "trialAppointments",
 ]);
 const PERSONNEL_LIFECYCLE_CONFIDENTIAL_APPLICATION_FIELDS = new Set([
   "ownerEmployeeNumber",
@@ -46995,6 +47042,9 @@ const PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_PROFILE_CREATE_FIELDS = new Set([
   "lastName",
   "email",
   "phone",
+  "address",
+  "birthDate",
+  "citizenships",
 ]);
 const PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_CREATE_FIELDS = new Set([
   "desiredPositionId",
@@ -47005,6 +47055,9 @@ const PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_CREATE_FIELDS = new Set([
   "availableFrom",
   "desiredRoleTitle",
   "employmentType",
+  "competencyRatings",
+  "targetAreas",
+  "trialAppointments",
 ]);
 const PERSONNEL_LIFECYCLE_CANDIDATE_CREATE_AUDIT_FIELD_KEYS = new Set([
   "root",
@@ -47016,6 +47069,94 @@ const PERSONNEL_LIFECYCLE_CANDIDATE_CREATE_AUDIT_FIELD_KEYS = new Set([
 
 function personnelLifecyclePlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function personnelLifecycleStructuredApplicationScopes(submitted) {
+  const scopes = [];
+  for (const field of ["targetAreas", "trialAppointments"]) {
+    if (!Object.prototype.hasOwnProperty.call(submitted, field)) continue;
+    if (!Array.isArray(submitted[field])) {
+      throw httpError(400, "Die Bewerbungsbereiche sind ungültig.", "PERSONNEL_LIFECYCLE_INVALID");
+    }
+    for (const entry of submitted[field]) {
+      if (!personnelLifecyclePlainObject(entry)) {
+        throw httpError(400, "Ein Bewerbungsbereich ist ungültig.", "PERSONNEL_LIFECYCLE_INVALID");
+      }
+      const locationId = String(entry.locationId || "").trim();
+      const departmentId = entry.departmentId === null || entry.departmentId === undefined
+          || entry.departmentId === ""
+        ? null
+        : Number(entry.departmentId);
+      if (!locationId || (departmentId !== null
+        && (!Number.isSafeInteger(departmentId) || departmentId <= 0))) {
+        throw httpError(400, "Ein Bewerbungsbereich ist ungültig.", "PERSONNEL_LIFECYCLE_INVALID");
+      }
+      scopes.push({ field, locationId, departmentId });
+    }
+  }
+  return scopes;
+}
+
+async function assertPersonnelLifecycleStructuredApplicationScopes(
+  submitted,
+  accessContext,
+  request,
+  { deferUnwritableEntriesToDeltaCheck = false } = {},
+) {
+  const scopes = personnelLifecycleStructuredApplicationScopes(submitted);
+  if (!scopes.length) return;
+  const { access, session } = accessContext;
+  for (const scope of scopes) {
+    const accessScope = {
+      desiredLocationId: scope.locationId,
+      desiredDepartmentId: scope.departmentId,
+    };
+    const writable = access.global || (access.canReadApplication(accessScope)
+      && access.canWriteApplication(accessScope));
+    // Only the lifecycle service can compare the protected current payload transactionally.
+    // Deferral does not authorize the entry; any non-identical foreign delta is rejected there.
+    if (!writable && !deferUnwritableEntriesToDeltaCheck) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED",
+        PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+      );
+      throw httpError(
+        403,
+        "Schnuppertermine und Zielfilialen dürfen nur im freigegebenen eigenen Bereich erfasst werden.",
+        "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED",
+      );
+    }
+    scope.writable = writable;
+  }
+  const [locations, departments] = await Promise.all([
+    organizationPersonnelRepository.listLocations(false),
+    organizationPersonnelRepository.listDepartments(false),
+  ]);
+  for (const scope of scopes) {
+    if (!scope.writable) continue;
+    if (!locations.some((entry) => String(entry.id || "") === scope.locationId
+      && entry.active !== false && Number(entry.active) !== 0)) {
+      throw httpError(
+        400,
+        "Eine ausgewählte Filiale ist nicht aktiv.",
+        "PERSONNEL_LIFECYCLE_REFERENCE_INVALID",
+      );
+    }
+    if (scope.departmentId !== null && !departments.some((entry) => (
+      Number(entry.id) === scope.departmentId
+        && String(entry.location_id || entry.locationId || "") === scope.locationId
+        && entry.active !== false
+        && Number(entry.active) !== 0
+    ))) {
+      throw httpError(
+        400,
+        "Eine ausgewählte Abteilung ist nicht aktiv oder gehört nicht zur Filiale.",
+        "PERSONNEL_LIFECYCLE_REFERENCE_INVALID",
+      );
+    }
+  }
 }
 
 function auditPersonnelLifecycleCandidateCreateDenied(
@@ -47075,7 +47216,7 @@ async function localPersonnelLifecycleCandidateCreateInput(request, accessContex
     );
     throw httpError(
       403,
-      "Die Filialleitung darf bei der Anlage nur Name, E-Mail-Adresse und Telefonnummer erfassen.",
+      "Die Filialleitung darf bei der Anlage nur die vorgesehenen Bewerberstammdaten erfassen.",
       "PERSONNEL_LIFECYCLE_LOCAL_PROFILE_FIELD_FORBIDDEN",
     );
   }
@@ -47165,6 +47306,11 @@ async function localPersonnelLifecycleCandidateCreateInput(request, accessContex
       );
     }
   }
+  await assertPersonnelLifecycleStructuredApplicationScopes(
+    application,
+    accessContext,
+    request,
+  );
   const sanitizedApplication = {};
   for (const field of PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_CREATE_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(application, field)) continue;
@@ -47173,19 +47319,27 @@ async function localPersonnelLifecycleCandidateCreateInput(request, accessContex
       if (desiredDepartmentId !== null) sanitizedApplication[field] = desiredDepartmentId;
     } else sanitizedApplication[field] = application[field];
   }
+  const sanitizedProfile = {};
+  for (const field of PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_PROFILE_CREATE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(profile, field)) continue;
+    if (field === "address") {
+      const address = personnelLifecyclePlainObject(profile.address) ? profile.address : {};
+      sanitizedProfile.address = Object.fromEntries(["postalCode", "city"]
+        .filter((key) => Object.prototype.hasOwnProperty.call(address, key))
+        .map((key) => [key, address[key]]));
+    } else sanitizedProfile[field] = profile[field];
+  }
   return {
     dataProcessingAuthorizationConfirmed: submitted.dataProcessingAuthorizationConfirmed,
-    profile: Object.fromEntries([...PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_PROFILE_CREATE_FIELDS]
-      .filter((field) => Object.prototype.hasOwnProperty.call(profile, field))
-      .map((field) => [field, profile[field]])),
+    profile: sanitizedProfile,
     application: sanitizedApplication,
   };
 }
 
-function assertPersonnelLifecycleApplicationInput(
+async function assertPersonnelLifecycleApplicationInput(
   request,
   accessContext,
-  { statusOnly = false } = {},
+  { statusOnly = false, deferStructuredScopeDeltaCheck = false } = {},
 ) {
   const submitted = request.body;
   if (!submitted || typeof submitted !== "object" || Array.isArray(submitted)) {
@@ -47217,11 +47371,18 @@ function assertPersonnelLifecycleApplicationInput(
         "PERSONNEL_LIFECYCLE_LOCAL_FIELD_FORBIDDEN",
       );
     }
+    await assertPersonnelLifecycleStructuredApplicationScopes(
+      submitted,
+      accessContext,
+      request,
+      { deferUnwritableEntriesToDeltaCheck: deferStructuredScopeDeltaCheck },
+    );
     return;
   }
   const requestedFields = Object.keys(submitted);
   const changesScope = requestedFields.some((key) => (
     key === "desiredLocationId" || key === "desiredDepartmentId"
+      || key === "targetAreas" || key === "trialAppointments"
   ));
   if (changesScope && !access.canWriteCandidates) {
     auditPersonnelLifecycleAccessDenied(
@@ -47252,6 +47413,11 @@ function assertPersonnelLifecycleApplicationInput(
       "PERSONNEL_LIFECYCLE_CONFIDENTIAL_PERMISSION_REQUIRED",
     );
   }
+  await assertPersonnelLifecycleStructuredApplicationScopes(
+    submitted,
+    accessContext,
+    request,
+  );
 }
 
 function auditPersonnelLifecycleScopedNotFound(accessContext, request, error) {
@@ -48482,10 +48648,12 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates", async (request, respons
       access,
     });
     const candidates = result.items
-      .map((candidate) => projectPersonnelLifecycleCandidate(
-        candidate,
-        access,
-        { detail: false },
+      .map((candidate) => withPersonnelCandidatePhotoUrl(
+        projectPersonnelLifecycleCandidate(
+          candidate,
+          access,
+          { detail: false },
+        ),
       ))
       .filter(Boolean);
     auditPortal(
@@ -48528,7 +48696,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, respon
           "PERSONNEL_LIFECYCLE_APPLICATION_WRITE_PERMISSION_REQUIRED",
         );
       }
-      assertPersonnelLifecycleApplicationInput(
+      await assertPersonnelLifecycleApplicationInput(
         {
           body: request.body.application,
           method: request.method,
@@ -48541,7 +48709,9 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, respon
       createInput,
       session.employeeNumber,
     );
-    const candidate = projectPersonnelLifecycleCandidate(created, access, { detail: true });
+    const candidate = withPersonnelCandidatePhotoUrl(
+      projectPersonnelLifecycleCandidate(created, access, { detail: true }),
+    );
     const application = Array.isArray(created.applications) ? created.applications[0] : null;
     auditPortal(
       session.employeeNumber,
@@ -48572,7 +48742,9 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (req
   try {
     const detail = await requirePersonnelLifecycleService()
       .getCandidate(request.params.candidateId, { access });
-    const candidate = projectPersonnelLifecycleCandidate(detail, access, { detail: true });
+    const candidate = withPersonnelCandidatePhotoUrl(
+      projectPersonnelLifecycleCandidate(detail, access, { detail: true }),
+    );
     if (!candidate) {
       throw new PersonnelLifecycleError(
         "Der Bewerber wurde nicht gefunden.",
@@ -48593,6 +48765,171 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (req
   }
 });
 
+app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "read" });
+  const { session, access } = accessContext;
+  response.set({
+    "Cache-Control": "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    "X-Content-Type-Options": "nosniff",
+  });
+  try {
+    const reference = await requirePersonnelLifecycleService().candidatePhotoFile(
+      request.params.candidateId,
+      { access },
+    );
+    if (!reference) {
+      throw new PersonnelLifecycleError(
+        "Das Bewerberfoto wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_CANDIDATE_NOT_FOUND",
+        PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
+      );
+    }
+    const content = requireAmuStorage().readBuffer({
+      storageKey: reference.storageKey,
+      byteSize: reference.sizeBytes,
+      sha256: reference.contentSha256,
+      detectedMime: reference.mediaType,
+      originalFilename: "Bewerberfoto.jpg",
+    });
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.candidate.photo.read",
+      "candidate",
+      reference.candidateId,
+      JSON.stringify({ versionNumber: reference.versionNumber }),
+    );
+    response.set({
+      "Content-Type": "image/jpeg",
+      "Content-Disposition": "inline; filename=\"Bewerberfoto.jpg\"",
+    });
+    response.send(content);
+  } catch (error) {
+    if (String(error?.code || "").startsWith("AMU_")) {
+      auditPortal(
+        session.employeeNumber,
+        "personnel-lifecycle.candidate.photo.integrity-failed",
+        "candidate",
+        String(request.params.candidateId || ""),
+      );
+      throw httpError(
+        503,
+        "Das Bewerberfoto konnte nicht integer gelesen werden.",
+        "CANDIDATE_PHOTO_INTEGRITY_FAILED",
+      );
+    }
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const { session, access, capabilities } = accessContext;
+  let stored = null;
+  let committed = false;
+  amuMutationInProgress += 1;
+  try {
+    const detail = await requirePersonnelLifecycleService().getCandidate(
+      request.params.candidateId,
+      { access },
+    );
+    if (!detail || (!access.global
+      && !detail.applications.some((application) => access.canWriteApplication(application)))) {
+      throw new PersonnelLifecycleError(
+        "Der Bewerber wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_CANDIDATE_NOT_FOUND",
+        PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
+      );
+    }
+    let upload;
+    try {
+      upload = await parsePersonnelDocumentMultipart(request, {
+        maxFileBytes: MAX_CANDIDATE_PHOTO_INPUT_BYTES,
+      });
+    } catch (error) {
+      candidatePhotoUploadError(error);
+    }
+    const storage = requireAmuStorage();
+    await storage.scanBuffer({
+      buffer: upload.document.buffer,
+      originalName: upload.document.originalName,
+      maxBytes: MAX_CANDIDATE_PHOTO_INPUT_BYTES,
+    });
+    const prepared = await prepareCandidatePhoto({
+      buffer: upload.document.buffer,
+      originalName: upload.document.originalName,
+    });
+    stored = await storage.saveBuffer({
+      buffer: prepared.buffer,
+      originalName: prepared.filename,
+      maxBytes: 1024 * 1024,
+    });
+    const version = {
+      storageKey: stored.storageKey,
+      contentSha256: stored.sha256,
+      sizeBytes: stored.byteSize,
+      mediaType: stored.detectedMime,
+      originalFilename: stored.originalFilename,
+      note: `Aufbereitet auf ${prepared.width} × ${prepared.height} Pixel`,
+    };
+    let photo;
+    if (detail.photo?.id) {
+      photo = await requirePersonnelLifecycleService().addDocumentVersion(
+        detail.id,
+        detail.photo.id,
+        version,
+        session.employeeNumber,
+        { access },
+      );
+    } else {
+      photo = await requirePersonnelLifecycleService().registerDocument(
+        detail.id,
+        {
+          categoryId: "profile-photo",
+          visibility: "scoped_leadership",
+          title: "Bewerberfoto",
+          description: "Kompaktes Foto für die strukturierte Bewerberübersicht.",
+        },
+        version,
+        session.employeeNumber,
+        { access },
+      );
+    }
+    committed = true;
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.candidate.photo.upload",
+      "candidate",
+      detail.id,
+      JSON.stringify({
+        documentId: photo.id,
+        versionNumber: photo.currentVersion,
+        replacement: Boolean(detail.photo?.id),
+      }),
+    );
+    response.status(detail.photo?.id ? 200 : 201).json({
+      photo: {
+        id: photo.id,
+        currentVersion: photo.currentVersion,
+        mediaType: stored.detectedMime,
+        sizeBytes: stored.byteSize,
+        updatedAt: photo.updatedAt,
+        downloadUrl: `/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(detail.id)}/photo`,
+      },
+      capabilities,
+    });
+  } catch (error) {
+    if (!committed && stored?.storageKey) {
+      try { requireAmuStorage().deleteBlob(stored.storageKey); } catch {}
+    }
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    candidatePhotoUploadError(error);
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
+});
+
 app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (request, response) => {
   const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateWrite" });
   const { session, access, capabilities } = accessContext;
@@ -48602,7 +48939,9 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (req
       request.body || {},
       session.employeeNumber,
     );
-    const candidate = projectPersonnelLifecycleCandidate(updated, access, { detail: true });
+    const candidate = withPersonnelCandidatePhotoUrl(
+      projectPersonnelLifecycleCandidate(updated, access, { detail: true }),
+    );
     auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.candidate.update",
@@ -48633,7 +48972,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
     );
   }
   try {
-    assertPersonnelLifecycleApplicationInput(request, accessContext);
+    await assertPersonnelLifecycleApplicationInput(request, accessContext);
     const created = await requirePersonnelLifecycleService().addApplication(
       request.params.candidateId,
       request.body || {},
@@ -48657,7 +48996,11 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
   const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
   const { session, access, capabilities } = accessContext;
   try {
-    assertPersonnelLifecycleApplicationInput(request, accessContext);
+    await assertPersonnelLifecycleApplicationInput(
+      request,
+      accessContext,
+      { deferStructuredScopeDeltaCheck: true },
+    );
     const updated = await requirePersonnelLifecycleService().updateApplication(
       request.params.candidateId,
       request.params.applicationId,
@@ -48680,11 +49023,104 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
   }
 });
 
+app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/team-feedback", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    const detail = await requirePersonnelLifecycleService().getCandidate(
+      request.params.candidateId,
+      { access },
+    );
+    const application = detail?.applications?.find((entry) => (
+      entry.id === String(request.params.applicationId || "")
+        && access.canWriteApplication(entry)
+    ));
+    if (!application) {
+      throw new PersonnelLifecycleError(
+        "Die Bewerbung wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_APPLICATION_NOT_FOUND",
+        PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
+      );
+    }
+    const employeeNumber = String(request.body?.employeeNumber || "").trim();
+    const employee = (await organizationPersonnelRepository.listEmployees()).find((entry) => (
+      String(entry.personnel_number || entry.employeeNumber || "") === employeeNumber
+        && entry.active !== false
+        && Number(entry.active) !== 0
+    ));
+    if (!employee) {
+      throw httpError(
+        400,
+        "Das rückmeldende aktive Teammitglied wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_TEAM_MEMBER_INVALID",
+      );
+    }
+    if (!access.global) {
+      const locationIds = new Set([
+        application.desiredLocationId,
+        ...(application.targetAreas || []).map((area) => area.locationId),
+        ...(application.trialAppointments || []).map((appointment) => appointment.locationId),
+      ].map((value) => String(value || "")).filter(Boolean));
+      const employeeLocationId = String(employee.home_location_id || employee.homeLocationId || "");
+      const employeeDepartmentId = Number(
+        employee.preferred_department_id || employee.preferredDepartmentId || 0,
+      ) || null;
+      const feedbackScopes = access.allowedScopesByPermission?.[
+        PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE
+      ] || [];
+      const employeeInWritableScope = feedbackScopes.some((scope) => (
+        String(scope.locationId || "") === employeeLocationId
+          && (!scope.departmentId || Number(scope.departmentId) === employeeDepartmentId)
+      ));
+      if (!locationIds.has(employeeLocationId) || !employeeInWritableScope) {
+        throw httpError(
+          403,
+          "Teamrückmeldungen dürfen nur für Teammitglieder des freigegebenen Bewerbungsbereichs erfasst werden.",
+          "PERSONNEL_LIFECYCLE_TEAM_MEMBER_SCOPE_DENIED",
+        );
+      }
+    }
+    const updated = await requirePersonnelLifecycleService().addTeamFeedback(
+      detail.id,
+      application.id,
+      request.body || {},
+      session.employeeNumber,
+      { access },
+    );
+    const projected = projectPersonnelLifecycleApplication(updated, access);
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.application.team-feedback.add",
+      "candidate_application",
+      application.id,
+      JSON.stringify({
+        candidateId: detail.id,
+        employeeNumber,
+        trialAppointmentLinked: Boolean(request.body?.trialAppointmentId),
+        ratingProvided: request.body?.rating !== null && request.body?.rating !== undefined
+          && request.body?.rating !== "",
+      }),
+    );
+    response.status(201).json({ application: projected, capabilities });
+  } catch (error) {
+    if (error?.code === "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED") {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+      );
+    }
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
 app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/status", async (request, response) => {
   const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
   const { session, access, capabilities } = accessContext;
   try {
-    assertPersonnelLifecycleApplicationInput(request, accessContext, { statusOnly: true });
+    await assertPersonnelLifecycleApplicationInput(request, accessContext, { statusOnly: true });
     const transitioned = await requirePersonnelLifecycleService().transitionApplication(
       request.params.candidateId,
       request.params.applicationId,
@@ -53638,6 +54074,41 @@ app.get("/api/settings", async (request, response) => {
   }
   response.json(settings);
 });
+
+function withPersonnelCandidatePhotoUrl(candidate) {
+  if (!candidate || typeof candidate !== "object" || !candidate.photo) return candidate;
+  return {
+    ...candidate,
+    photo: {
+      ...candidate.photo,
+      downloadUrl: `/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}/photo`,
+    },
+  };
+}
+
+function candidatePhotoUploadError(error) {
+  if (error instanceof PersonnelLifecycleError) {
+    personnelLifecycleRouteError(error);
+  }
+  if (error instanceof CandidatePhotoError) {
+    throw httpError(error.status, error.message, error.code);
+  }
+  if (error?.code?.startsWith?.("AMU_")) {
+    const status = error.code.includes("TOO_LARGE") || error.code.includes("LIMIT")
+      ? 413 : error.code.includes("TYPE") || error.code.includes("HEIC") ? 415 : 400;
+    throw httpError(status, error.message, error.code.replace(/^AMU_/, "CANDIDATE_PHOTO_"));
+  }
+  if (error?.code?.startsWith?.("PERSONNEL_DOCUMENT_")) {
+    throw httpError(
+      error.status || 400,
+      String(error.message || "Das Bewerberfoto konnte nicht gelesen werden.")
+        .replaceAll("Personalakt-Dokument", "Bewerberfoto")
+        .replaceAll("Dokument", "Foto"),
+      error.code.replace(/^PERSONNEL_DOCUMENT_/, "CANDIDATE_PHOTO_"),
+    );
+  }
+  throw error;
+}
 
 app.get("/api/portal/v1/schedule-pdf-settings", async (request, response) => {
   const session = requirePortalAnyPermissionOrLocal(

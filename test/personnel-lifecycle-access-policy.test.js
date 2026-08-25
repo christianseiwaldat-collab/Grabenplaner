@@ -363,6 +363,30 @@ test("fehlende Genehmigungsidentität und strukturell ungültige Fachscopes öff
 test("lokale Liste und Detail filtern Mehrfachbewerbungen und vertrauliche Schlüssel", () => {
   const access = personnelLifecycleAccessForSession(managerSession());
   const source = candidate();
+  Object.assign(source.applications[0], {
+    competencyRatings: [{ id: "fachlich", label: "Fachlich", rating: 4, note: "Detailnotiz" }],
+    targetAreas: [{ locationId: LOCATION_A, departmentId: DEPARTMENT_A, preferred: true }],
+    teamFeedback: [{
+      id: "feedback-1",
+      trialAppointmentId: "trial-1",
+      employeeNumber: "252",
+      rating: 5,
+      comment: "Vertrauliche Teamrückmeldung",
+      recordedByEmployeeNumber: "101",
+      recordedAt: "2026-08-24T10:00:00.000Z",
+    }],
+    trialAppointments: [{
+      id: "trial-1",
+      dateFrom: "2026-09-03",
+      dateTo: "2026-09-03",
+      startTime: "09:00",
+      endTime: "12:00",
+      locationId: LOCATION_A,
+      departmentId: DEPARTMENT_A,
+      status: "planned",
+      note: "Vertrauliche Terminnotiz",
+    }],
+  });
   const listProjection = projectPersonnelLifecycleCandidateList(source, access);
   const detailProjection = projectPersonnelLifecycleCandidateDetail(source, access);
 
@@ -372,11 +396,30 @@ test("lokale Liste und Detail filtern Mehrfachbewerbungen und vertrauliche Schl�
     lastName: "Beispiel",
     email: "nora@example.test",
     phone: "+43 512 555123",
+    residence: {
+      postalCode: "6020",
+      city: "Innsbruck",
+    },
   });
   assert.deepEqual(listProjection.applications.map(({ id }) => id), ["application-local"]);
   assert.deepEqual(detailProjection.applications.map(({ id }) => id), ["application-local"]);
   assert.equal(listProjection.applications[0].desiredRoleTitle, "Verkauf");
-  assert.equal(listProjection.applications[0].employmentType, "full_time");
+  assert.deepEqual(Object.keys(listProjection.applications[0]).sort(), [
+    "candidateId",
+    "createdAt",
+    "desiredDepartmentId",
+    "desiredLocationId",
+    "desiredRoleTitle",
+    "id",
+    "status",
+    "statusChangedAt",
+    "updatedAt",
+  ]);
+  assert.deepEqual(detailProjection.applications[0].competencyRatings, source.applications[0].competencyRatings);
+  assert.deepEqual(detailProjection.applications[0].targetAreas, source.applications[0].targetAreas);
+  assert.deepEqual(detailProjection.applications[0].teamFeedback, source.applications[0].teamFeedback);
+  assert.deepEqual(detailProjection.applications[0].trialAppointments, source.applications[0].trialAppointments);
+  assert.equal(detailProjection.applications[0].canWrite, false);
 
   const forbiddenKeys = new Set([
     "address",
@@ -429,6 +472,29 @@ test("globale Leseberechtigung ohne vertrauliches Zusatzrecht bleibt datensparsa
   assert.equal(Object.hasOwn(projected.applications[0], "source"), false);
 });
 
+test("lokale Projektion kennzeichnet Schreibbarkeit je sichtbarer Bewerbung", () => {
+  const access = personnelLifecycleAccessForSession(managerSession({
+    permissions: [P.CANDIDATES_READ, P.APPLICATIONS_WRITE],
+    explicitScopes: [
+      { locationId: LOCATION_A, departmentId: null },
+      { locationId: LOCATION_B, departmentId: null },
+    ],
+    permissionScopes: [
+      permissionScope(P.CANDIDATES_READ, LOCATION_A),
+      permissionScope(P.CANDIDATES_READ, LOCATION_B),
+      permissionScope(P.APPLICATIONS_WRITE, LOCATION_A),
+    ],
+  }));
+  const projected = projectPersonnelLifecycleCandidateDetail(candidate(), access);
+  assert.deepEqual(
+    projected.applications.map(({ id, canWrite }) => ({ id, canWrite })),
+    [
+      { id: "application-local", canWrite: true },
+      { id: "application-foreign", canWrite: false },
+    ],
+  );
+});
+
 test("Listenprojektion entfernt vollständig unsichtbare Bewerber", () => {
   const access = personnelLifecycleAccessForSession(managerSession());
   const visible = candidate();
@@ -454,6 +520,10 @@ test("lokaler Systemzugriff bleibt vollständig, ohne IT-Admin zu privilegieren"
   });
   assert.equal(local.localSystem, true);
   assert.equal(local.canDelegateCandidates, true);
+  const localList = projectPersonnelLifecycleCandidateList(source, local);
+  assert.deepEqual(localList.profile, { firstName: "Nora", lastName: "Beispiel" });
+  assert.equal(Object.hasOwn(localList.applications[0], "internalNotes"), false);
+  assert.equal(Object.hasOwn(localList.applications[0], "canWrite"), false);
   assert.deepEqual(projectPersonnelLifecycleCandidate(source, local, { detail: true }), source);
 
   for (const forged of [

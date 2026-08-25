@@ -610,6 +610,10 @@ test("Personalmodul R1 HTTP: FL und AL sehen nur ihren Bereich vor der Paginatio
     type: "location",
     locationIds: [organization.locationA],
   });
+  assert.deepEqual(firstPage.payload.capabilities.applicationWriteScope, {
+    type: "location",
+    locationIds: [organization.locationA],
+  });
   assertConfidentialKeysAbsent(firstPage.payload.candidates);
   assertConfidentialKeysAbsent(secondPage.payload.candidates);
 
@@ -631,6 +635,11 @@ test("Personalmodul R1 HTTP: FL und AL sehen nur ihren Bereich vor der Paginatio
   );
   assert.equal(alDetail.response.status, 200, JSON.stringify(alDetail.payload));
   assert.deepEqual(alDetail.payload.capabilities.scope, {
+    type: "department",
+    locationIds: [organization.locationA],
+    departmentIds: [organization.departmentA],
+  });
+  assert.deepEqual(alDetail.payload.capabilities.applicationWriteScope, {
     type: "department",
     locationIds: [organization.locationA],
     departmentIds: [organization.departmentA],
@@ -685,6 +694,227 @@ test("Personalmodul R1 HTTP: FL und AL sehen nur ihren Bereich vor der Paginatio
   ]) {
     assert.equal(denialText.includes(privateValue), false, `Denied-Audit enthält ${privateValue}`);
   }
+});
+
+test("Personalmodul R1 HTTP: Bewerbungs-Schreibbereich bleibt vom groesseren Lesebereich getrennt", async () => {
+  const fl = createSession(EMPLOYEES.fl, "manager");
+  const insertAccessScope = db.prepare(`
+    INSERT INTO portal_access_scopes (
+      employee_number, location_id, department_id, assigned_by
+    ) VALUES (?, ?, 0, ?)
+  `);
+  insertAccessScope.run(EMPLOYEES.fl, organization.locationA, EMPLOYEES.plPlus);
+  insertAccessScope.run(EMPLOYEES.fl, organization.locationB, EMPLOYEES.plPlus);
+
+  const insertPermission = db.prepare(`
+    INSERT INTO portal_permission_grants (
+      employee_number, permission, granted_by
+    ) VALUES (?, ?, ?)
+  `);
+  insertPermission.run(EMPLOYEES.fl, P.CANDIDATES_READ, EMPLOYEES.plPlus);
+  insertPermission.run(EMPLOYEES.fl, P.APPLICATIONS_WRITE, EMPLOYEES.plPlus);
+
+  const insertPermissionScope = db.prepare(`
+    INSERT INTO portal_permission_scope_grants (
+      employee_number, permission, location_id, department_id, approved_by
+    ) VALUES (?, ?, ?, 0, ?)
+  `);
+  insertPermissionScope.run(
+    EMPLOYEES.fl,
+    P.CANDIDATES_READ,
+    organization.locationA,
+    EMPLOYEES.plPlus,
+  );
+  insertPermissionScope.run(
+    EMPLOYEES.fl,
+    P.CANDIDATES_READ,
+    organization.locationB,
+    EMPLOYEES.plPlus,
+  );
+  insertPermissionScope.run(
+    EMPLOYEES.fl,
+    P.APPLICATIONS_WRITE,
+    organization.locationA,
+    EMPLOYEES.plPlus,
+  );
+
+  const result = await request(
+    "/api/portal/v1/personnel-lifecycle/candidates?limit=1&offset=0",
+    { auth: fl },
+  );
+  assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  assert.deepEqual(result.payload.capabilities.scope, {
+    type: "location",
+    locationIds: [organization.locationA, organization.locationB],
+  });
+  assert.deepEqual(result.payload.capabilities.applicationWriteScope, {
+    type: "location",
+    locationIds: [organization.locationA],
+  });
+  assert.deepEqual(result.payload.capabilities.createScope, {
+    type: "location",
+    locationIds: [organization.locationA],
+  });
+});
+
+test("Personalmodul R1 HTTP: Teamfeedback bleibt für AL abteilungsgebunden und für FL standortweit", async () => {
+  const plPlus = createSession(EMPLOYEES.plPlus, "admin");
+  createSession(EMPLOYEES.fl, "manager");
+  createSession(EMPLOYEES.al, "department_manager");
+  const permissions = [P.CANDIDATES_READ, P.APPLICATIONS_WRITE];
+  assert.equal((await updateRights(
+    plPlus,
+    EMPLOYEES.fl,
+    permissions,
+    [{ locationId: organization.locationA, departmentId: null }],
+  )).response.status, 200);
+  assert.equal((await updateRights(
+    plPlus,
+    EMPLOYEES.al,
+    permissions,
+    [{ locationId: organization.locationA, departmentId: organization.departmentA }],
+  )).response.status, 200);
+
+  const upsertTeamMember = db.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, home_location_id,
+      preferred_department_id, active
+    ) VALUES (?, ?, ?, ?, ?, 1)
+    ON CONFLICT(personnel_number) DO UPDATE SET
+      full_name = excluded.full_name,
+      nickname = excluded.nickname,
+      home_location_id = excluded.home_location_id,
+      preferred_department_id = excluded.preferred_department_id,
+      active = 1
+  `);
+  upsertTeamMember.run(
+    "R1-TEAM-A",
+    "R1 Teammitglied Abteilung A",
+    "Team A",
+    organization.locationA,
+    organization.departmentA,
+  );
+  upsertTeamMember.run(
+    "R1-TEAM-B",
+    "R1 Teammitglied Abteilung B",
+    "Team B",
+    organization.locationA,
+    organization.departmentB,
+  );
+
+  const candidate = await createCandidate(
+    plPlus,
+    "TEAM-FEEDBACK-SCOPE",
+    organization.locationA,
+    organization.departmentA,
+  );
+  const application = candidate.applications[0];
+  const al = createSession(EMPLOYEES.al, "department_manager");
+  const fl = createSession(EMPLOYEES.fl, "manager");
+
+  const ownDepartmentFeedback = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/team-feedback`,
+    {
+      method: "POST",
+      auth: al,
+      body: {
+        revision: application.revision,
+        employeeNumber: "R1-TEAM-A",
+        rating: 4,
+        comment: "Freigegebene Abteilung",
+      },
+    },
+  );
+  assert.equal(
+    ownDepartmentFeedback.response.status,
+    201,
+    JSON.stringify(ownDepartmentFeedback.payload),
+  );
+  assert.deepEqual(ownDepartmentFeedback.payload.capabilities.scope, {
+    type: "department",
+    locationIds: [organization.locationA],
+    departmentIds: [organization.departmentA],
+  });
+  assert.deepEqual(ownDepartmentFeedback.payload.capabilities.createScope, {
+    type: "none",
+    locationIds: [],
+  });
+  assert.equal(ownDepartmentFeedback.payload.application.teamFeedback.length, 1);
+  assert.equal(
+    ownDepartmentFeedback.payload.application.teamFeedback[0].employeeNumber,
+    "R1-TEAM-A",
+  );
+  assert.equal(
+    ownDepartmentFeedback.payload.application.teamFeedback[0].recordedByEmployeeNumber,
+    EMPLOYEES.al,
+  );
+
+  const foreignDepartmentFeedback = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/team-feedback`,
+    {
+      method: "POST",
+      auth: al,
+      body: {
+        revision: ownDepartmentFeedback.payload.application.revision,
+        employeeNumber: "R1-TEAM-B",
+        rating: 5,
+        comment: "Darf für AL nicht gespeichert werden",
+      },
+    },
+  );
+  assert.equal(
+    foreignDepartmentFeedback.response.status,
+    403,
+    JSON.stringify(foreignDepartmentFeedback.payload),
+  );
+  assert.equal(
+    foreignDepartmentFeedback.payload.code,
+    "PERSONNEL_LIFECYCLE_TEAM_MEMBER_SCOPE_DENIED",
+  );
+  assert.equal(
+    db.prepare("SELECT revision FROM candidate_applications WHERE id = ?")
+      .get(application.id).revision,
+    ownDepartmentFeedback.payload.application.revision,
+  );
+
+  const sameLocationOtherDepartmentFeedback = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/team-feedback`,
+    {
+      method: "POST",
+      auth: fl,
+      body: {
+        revision: ownDepartmentFeedback.payload.application.revision,
+        employeeNumber: "R1-TEAM-B",
+        rating: 5,
+        comment: "FL darf das gesamte freigegebene Team der Filiale erfassen",
+      },
+    },
+  );
+  assert.equal(
+    sameLocationOtherDepartmentFeedback.response.status,
+    201,
+    JSON.stringify(sameLocationOtherDepartmentFeedback.payload),
+  );
+  assert.deepEqual(sameLocationOtherDepartmentFeedback.payload.capabilities.scope, {
+    type: "location",
+    locationIds: [organization.locationA],
+  });
+  assert.deepEqual(sameLocationOtherDepartmentFeedback.payload.capabilities.createScope, {
+    type: "location",
+    locationIds: [organization.locationA],
+  });
+  assert.equal(
+    Object.hasOwn(
+      sameLocationOtherDepartmentFeedback.payload.capabilities.createScope,
+      "departmentIds",
+    ),
+    false,
+  );
+  assert.deepEqual(
+    sameLocationOtherDepartmentFeedback.payload.application.teamFeedback
+      .map(({ employeeNumber }) => employeeNumber),
+    ["R1-TEAM-A", "R1-TEAM-B"],
+  );
 });
 
 test("Personalmodul R1 HTTP: FL legt Bewerber nur im freigegebenen Standort an und PL+ kann das Recht entziehen", async () => {
@@ -1074,6 +1304,206 @@ test("Personalmodul R1 HTTP: lokale Mutationen und Scope-Verwaltung bleiben eng 
     scope.departmentId === organization.departmentB
       && scope.approvedBy === EMPLOYEES.plPlus
   )));
+});
+
+test("Personalmodul R1 HTTP: unveränderte fremde Detailbereiche blockieren lokale Bewerbungsänderungen nicht", async () => {
+  const plPlus = createSession(EMPLOYEES.plPlus, "admin");
+  createSession(EMPLOYEES.fl, "manager");
+  createSession(EMPLOYEES.al, "department_manager");
+  const permissions = [P.CANDIDATES_READ, P.APPLICATIONS_WRITE];
+  assert.equal((await updateRights(
+    plPlus,
+    EMPLOYEES.fl,
+    permissions,
+    [{ locationId: organization.locationA, departmentId: null }],
+  )).response.status, 200);
+  assert.equal((await updateRights(
+    plPlus,
+    EMPLOYEES.al,
+    permissions,
+    [{ locationId: organization.locationA, departmentId: organization.departmentA }],
+  )).response.status, 200);
+  const fl = createSession(EMPLOYEES.fl, "manager");
+  const al = createSession(EMPLOYEES.al, "department_manager");
+
+  const candidate = await createCandidate(
+    plPlus,
+    "STRUCTURED-DELTA",
+    organization.locationA,
+    organization.departmentA,
+  );
+  const initial = candidate.applications[0];
+  const emptiedOwnScope = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}`,
+    {
+      method: "PUT",
+      auth: fl,
+      body: { revision: initial.revision, targetAreas: [] },
+    },
+  );
+  assert.equal(emptiedOwnScope.response.status, 403, JSON.stringify(emptiedOwnScope.payload));
+  assert.equal(emptiedOwnScope.payload.code, "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED");
+  assert.deepEqual(
+    { ...db.prepare(`
+      SELECT revision, desired_location_id AS desiredLocationId,
+             desired_department_id AS desiredDepartmentId
+      FROM candidate_applications
+      WHERE id = ?
+    `).get(initial.id) },
+    {
+      revision: initial.revision,
+      desiredLocationId: organization.locationA,
+      desiredDepartmentId: organization.departmentA,
+    },
+  );
+  const targetAreas = [
+    {
+      locationId: organization.locationA,
+      departmentId: organization.departmentA,
+      preferred: true,
+    },
+    {
+      locationId: organization.locationB,
+      departmentId: organization.departmentC,
+      preferred: false,
+    },
+  ];
+  const trialAppointments = [
+    {
+      id: "trial-own",
+      dateFrom: "2026-09-03",
+      dateTo: "2026-09-03",
+      startTime: "09:00",
+      endTime: "12:00",
+      locationId: organization.locationA,
+      departmentId: organization.departmentA,
+      status: "planned",
+      note: "Eigener Bereich",
+    },
+    {
+      id: "trial-foreign",
+      dateFrom: "2026-09-04",
+      dateTo: "2026-09-04",
+      startTime: "13:00",
+      endTime: "16:00",
+      locationId: organization.locationB,
+      departmentId: organization.departmentC,
+      status: "planned",
+      note: "Fremder Bereich bleibt erhalten",
+    },
+  ];
+  const seeded = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}`,
+    {
+      method: "PUT",
+      auth: plPlus,
+      body: { revision: initial.revision, targetAreas, trialAppointments },
+    },
+  );
+  assert.equal(seeded.response.status, 200, JSON.stringify(seeded.payload));
+
+  let current = seeded.payload.application;
+  for (const [auth, roleTitle] of [
+    [fl, "FL ändert nur die Tätigkeit"],
+    [al, "AL ändert nur die Tätigkeit"],
+  ]) {
+    const unchangedForeign = await request(
+      `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}`,
+      {
+        method: "PUT",
+        auth,
+        body: {
+          revision: current.revision,
+          desiredRoleTitle: roleTitle,
+          targetAreas: current.targetAreas,
+          trialAppointments: current.trialAppointments,
+        },
+      },
+    );
+    assert.equal(
+      unchangedForeign.response.status,
+      200,
+      JSON.stringify(unchangedForeign.payload),
+    );
+    current = unchangedForeign.payload.application;
+    assert.deepEqual(current.targetAreas, targetAreas);
+    assert.deepEqual(current.trialAppointments, trialAppointments);
+  }
+
+  const deniedBodies = [
+    {
+      targetAreas: current.targetAreas.filter((area) => (
+        String(area.locationId) !== String(organization.locationB)
+      )),
+      trialAppointments: current.trialAppointments,
+    },
+    {
+      targetAreas: current.targetAreas,
+      trialAppointments: current.trialAppointments.map((appointment) => (
+        appointment.id === "trial-foreign"
+          ? { ...appointment, note: "Unzulässig verändert" }
+          : appointment
+      )),
+    },
+    {
+      targetAreas: current.targetAreas,
+      trialAppointments: [...current.trialAppointments, {
+        id: "trial-foreign-new",
+        dateFrom: "2026-09-05",
+        dateTo: "2026-09-05",
+        startTime: null,
+        endTime: null,
+        locationId: organization.locationB,
+        departmentId: organization.departmentC,
+        status: "planned",
+        note: "Unzulässiger neuer Fremdbereich",
+      }],
+    },
+  ];
+  for (const body of deniedBodies) {
+    const denied = await request(
+      `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}`,
+      {
+        method: "PUT",
+        auth: al,
+        body: { revision: current.revision, ...body },
+      },
+    );
+    assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
+    assert.equal(denied.payload.code, "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED");
+    assert.equal(
+      db.prepare("SELECT revision FROM candidate_applications WHERE id = ?")
+        .get(initial.id).revision,
+      current.revision,
+    );
+  }
+
+  const ownAppointmentChanged = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}`,
+    {
+      method: "PUT",
+      auth: al,
+      body: {
+        revision: current.revision,
+        targetAreas: current.targetAreas,
+        trialAppointments: current.trialAppointments.map((appointment) => (
+          appointment.id === "trial-own"
+            ? { ...appointment, note: "Im eigenen Bereich geändert" }
+            : appointment
+        )),
+      },
+    },
+  );
+  assert.equal(
+    ownAppointmentChanged.response.status,
+    200,
+    JSON.stringify(ownAppointmentChanged.payload),
+  );
+  assert.equal(
+    ownAppointmentChanged.payload.application.trialAppointments
+      .find(({ id }) => id === "trial-foreign").note,
+    "Fremder Bereich bleibt erhalten",
+  );
 });
 
 test("Personalmodul R1 HTTP: Scope-Verwaltung respektiert Sperre, Aktivstatus und IT-Grenze", async () => {

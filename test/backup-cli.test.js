@@ -77,7 +77,7 @@ test("standalone backup creates a verifiable committed pair on Windows-compatibl
   }
 });
 
-test("Windows server backup rejects a snapshot with a missing protected loan file", () => {
+test("Windows server backup rejects snapshots with missing protected loan or candidate files", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-windows-backup-verify-"));
   const protectedRoot = path.join(root, "private", "amu");
   const sourceDatabase = path.join(root, "source.db");
@@ -117,6 +117,40 @@ test("Windows server backup rejects a snapshot with a missing protected loan fil
     });
     assert.notEqual(result.status, 0, result.stdout);
     assert.match(result.stderr, /referenzierte geschützte Datei|referenzierte geschuetzte Datei/i);
+
+    const candidateDatabase = new DatabaseSync(sourceDatabase);
+    candidateDatabase.exec(`
+      DELETE FROM loan_documents;
+      CREATE TABLE candidate_document_versions (
+        document_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL,
+        storage_key TEXT NOT NULL,
+        PRIMARY KEY (document_id, version_number)
+      );
+      INSERT INTO candidate_document_versions (document_id, version_number, storage_key)
+      VALUES ('candidate-photo', 1, 'cc/cccccccc-cccc-4ccc-8ccc-cccccccccccc.amu');
+    `);
+    candidateDatabase.close();
+    const candidateTargetDatabase = path.join(root, "candidate-snapshot.db");
+    const candidateProtectedBackup = path.join(root, "candidate-snapshot.amu");
+    const candidateResult = spawnSync(process.execPath, [
+      "-",
+      sourceDatabase,
+      candidateTargetDatabase,
+      path.join(__dirname, "..", "lib", "database-lock.js"),
+      path.join(__dirname, "..", "lib", "amu-storage.js"),
+      protectedRoot,
+      candidateProtectedBackup,
+      path.basename(candidateTargetDatabase),
+    ], {
+      input: nodeScript,
+      encoding: "utf8",
+    });
+    assert.notEqual(candidateResult.status, 0, candidateResult.stdout);
+    assert.match(
+      candidateResult.stderr,
+      /referenzierte geschützte Datei|referenzierte geschuetzte Datei/i,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
