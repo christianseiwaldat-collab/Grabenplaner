@@ -2805,22 +2805,60 @@
           <div><h2 id="personnelCandidateCreateTitle">Bewerber anlegen</h2><p id="personnelCandidateCreateDescription">Grundprofil und auf Wunsch gleich die erste Bewerbung strukturiert erfassen.</p></div>
           <button class="close-button" type="button" data-close="personnelCandidateCreateModal" aria-label="Schließen">×</button>
         </div>
-        <div class="form-grid personnel-candidate-create-profile">
-          <label class="field"><span>Vorname</span><input name="firstName" maxlength="100" autocomplete="off" required /></label>
-          <label class="field"><span>Nachname</span><input name="lastName" maxlength="100" autocomplete="off" required /></label>
-          <label class="field"><span>E-Mail</span><input name="email" type="email" maxlength="254" autocomplete="off" /></label>
-          <label class="field"><span>Telefon</span><input name="phone" type="tel" maxlength="80" autocomplete="off" /></label>
+        <p class="personnel-candidate-required-hint"><span aria-hidden="true">*</span> an Vor- und Nachname = Pflichtfeld · „* optional“ an E-Mail und Telefon = einzeln optional; mindestens ein Kontaktweg ist erforderlich.</p>
+        <div class="personnel-candidate-create-identity">
+          <label class="personnel-candidate-photo-picker" id="personnelCandidateCreatePhotoField" for="personnelCandidateCreatePhoto">
+            <img id="personnelCandidateCreatePhotoPreview" alt="Ausgewähltes Bewerberfoto" hidden />
+            <span class="personnel-candidate-photo-placeholder" aria-hidden="true">Foto</span>
+            <span><strong>Bewerberfoto</strong><small>Optional · JPG, PNG oder WebP · höchstens 5 MB</small></span>
+            <input id="personnelCandidateCreatePhoto" name="photo" type="file" accept="image/jpeg,image/png,image/webp" />
+          </label>
+          <div class="form-grid personnel-candidate-create-profile">
+            <label class="field"><span>Vorname <i class="personnel-candidate-required-marker" aria-hidden="true">*</i><span class="visually-hidden">Pflichtfeld</span></span><input name="firstName" maxlength="100" autocomplete="off" required /></label>
+            <label class="field"><span>Nachname <i class="personnel-candidate-required-marker" aria-hidden="true">*</i><span class="visually-hidden">Pflichtfeld</span></span><input name="lastName" maxlength="100" autocomplete="off" required /></label>
+            <label class="field"><span>E-Mail <small class="personnel-candidate-optional-marker">* optional</small></span><input name="email" type="email" maxlength="254" autocomplete="off" /></label>
+            <label class="field"><span>Telefon <small class="personnel-candidate-optional-marker">* optional</small></span><input name="phone" type="tel" maxlength="80" autocomplete="off" /></label>
+          </div>
         </div>
-        <p class="personnel-candidate-create-hint">Mindestens E-Mail-Adresse oder Telefonnummer angeben.</p>
+        <details class="personnel-candidate-create-details">
+          <summary><span><strong>Weitere Personendaten</strong><small>Optional: Geburtsdatum, Wohnort und Staatsangehörigkeit</small></span><i aria-hidden="true">›</i></summary>
+          <div class="form-grid personnel-candidate-create-details-body">
+            <label class="field"><span>Geburtsdatum</span><input name="birthDate" type="date" /></label>
+            <label class="field"><span>Postleitzahl</span><input name="postalCode" maxlength="24" autocomplete="postal-code" /></label>
+            <label class="field"><span>Wohnort</span><input name="city" maxlength="120" autocomplete="address-level2" /></label>
+            <label class="field"><span>Staatsangehörigkeit(en)</span><input name="citizenships" maxlength="400" autocomplete="off" placeholder="z. B. Österreich; Italien" /><small>Mehrere Angaben mit Semikolon trennen.</small></label>
+          </div>
+        </details>
         <fieldset class="personnel-candidate-create-application" id="personnelCandidateCreateApplication">
           <legend>Erste Bewerbung <span>optional</span></legend>
           <div class="form-grid">
-            <label class="field"><span>Gewünschter Standort</span><select name="desiredLocationId" id="personnelCandidateCreateLocation"><option value="">Noch nicht zugeordnet</option></select></label>
-            <label class="field"><span>Gewünschte Abteilung</span><select name="desiredDepartmentId" id="personnelCandidateCreateDepartment" disabled><option value="">Gesamte Filiale / noch offen</option></select></label>
+            <label class="field"><span>Primäre Zielfiliale <i class="personnel-candidate-required-marker personnel-candidate-location-required hidden" aria-hidden="true">*</i></span><select name="desiredLocationId" id="personnelCandidateCreateLocation"><option value="">Noch nicht zugeordnet</option></select></label>
+            <label class="field"><span>Primäre Zielabteilung</span><select name="desiredDepartmentId" id="personnelCandidateCreateDepartment" disabled><option value="">Gesamte Filiale / noch offen</option></select></label>
             <label class="field"><span>Gewünschte Tätigkeit</span><input name="desiredRoleTitle" maxlength="180" autocomplete="off" /></label>
             <label class="field"><span>Verfügbar ab</span><input name="availableFrom" type="date" /></label>
             <label class="field full-width" id="personnelCandidateCreateSourceField"><span>Quelle der Bewerbung</span><input name="source" maxlength="200" autocomplete="off" placeholder="z. B. persönliche Bewerbung, Karriereseite" /></label>
           </div>
+          <details class="personnel-candidate-create-details personnel-candidate-application-details">
+            <summary><span><strong>Weitere Zielbereiche</strong><small>Mehrere Filialen und Abteilungen strukturiert vormerken</small></span><i aria-hidden="true">›</i></summary>
+            <div class="personnel-candidate-create-details-body">
+              <div class="personnel-candidate-repeater" id="personnelCandidateCreateTargetAreas"></div>
+              <button class="secondary-button personnel-candidate-add-row" id="personnelCandidateCreateAddTargetArea" type="button">+ Zielfiliale hinzufügen</button>
+            </div>
+          </details>
+          <details class="personnel-candidate-create-details personnel-candidate-application-details">
+            <summary><span><strong>Schnuppertermine</strong><small>Einzelne Tage oder Zeiträume, auch in mehreren Filialen</small></span><i aria-hidden="true">›</i></summary>
+            <div class="personnel-candidate-create-details-body">
+              <div class="personnel-candidate-repeater" id="personnelCandidateCreateTrialAppointments"></div>
+              <button class="secondary-button personnel-candidate-add-row" id="personnelCandidateCreateAddTrialAppointment" type="button">+ Schnuppertermin hinzufügen</button>
+            </div>
+          </details>
+          <details class="personnel-candidate-create-details personnel-candidate-application-details">
+            <summary><span><strong>Kompetenzbewertung</strong><small>Optionale Bewertung von 1 bis 5; weitere Kompetenzen ergänzbar</small></span><i aria-hidden="true">›</i></summary>
+            <div class="personnel-candidate-create-details-body">
+              <div class="personnel-candidate-rating-list" id="personnelCandidateCreateCompetencyRatings"></div>
+              <button class="secondary-button personnel-candidate-add-row" id="personnelCandidateCreateAddCompetencyRating" type="button">+ Kompetenz hinzufügen</button>
+            </div>
+          </details>
         </fieldset>
         <label class="personnel-candidate-authorization-check" id="personnelCandidateAuthorizationCheck">
           <input id="personnelCandidateAuthorizationConfirmed" name="dataProcessingAuthorizationConfirmed" type="checkbox" required aria-describedby="personnelCandidateAuthorizationHelp personnelCandidateAuthorizationState" />
@@ -2833,6 +2871,18 @@
         </label>
         <p class="personnel-candidate-create-message" id="personnelCandidateCreateMessage" role="status" aria-live="polite"></p>
         <div class="modal-actions"><span></span><span></span><button class="secondary-button" type="button" data-close="personnelCandidateCreateModal">Abbrechen</button><button class="primary-button" id="personnelCandidateCreateSubmit" type="submit" disabled>Bewerber anlegen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal date-range-dialog" id="personnelCandidateTrialDateRangeDialog" aria-labelledby="personnelCandidateTrialDateRangeDialogTitle">
+      <form id="personnelCandidateTrialDateRangeForm">
+        <div class="modal-header"><div><span class="eyebrow">Bewerbung &amp; Preboarding</span><h2 id="personnelCandidateTrialDateRangeDialogTitle">Schnupperzeitraum auswählen</h2><p>Für einen einzelnen Schnuppertag denselben Tag als Beginn und Ende auswählen.</p></div><button class="close-button" id="personnelCandidateTrialDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
+        <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="personnelCandidateTrialDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="personnelCandidateTrialDateRangeEndText">Noch nicht gewählt</strong></div></div>
+        <div class="date-range-toolbar"><button id="personnelCandidateTrialDateRangePreviousMonth" type="button" aria-label="Vorheriger Monat">←</button><strong id="personnelCandidateTrialDateRangeMonthLabel">Monat</strong><button id="personnelCandidateTrialDateRangeNextMonth" type="button" aria-label="Nächster Monat">→</button></div>
+        <div class="date-range-weekdays" aria-hidden="true"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+        <div class="date-range-grid" id="personnelCandidateTrialDateRangeGrid" role="grid" aria-label="Zeitraumkalender für Schnuppertermine"></div>
+        <label class="date-range-open-end hidden"><input id="personnelCandidateTrialDateRangeOpenEnd" type="checkbox" /><span>Ende offen</span></label>
+        <div class="modal-actions"><span></span><button class="secondary-button" id="personnelCandidateTrialDateRangeCancel" type="button">Abbrechen</button><button class="primary-button" id="personnelCandidateTrialDateRangeApply" type="submit">Zeitraum übernehmen</button></div>
       </form>
     </dialog>
 

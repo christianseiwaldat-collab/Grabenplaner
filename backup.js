@@ -43,6 +43,7 @@ function verifyStandaloneBackupPair(paths) {
     for (const reference of [
       { table: "amu_documents", where: "WHERE status = 'active'" },
       { table: "personnel_record_documents", where: "WHERE status = 'active'" },
+      { table: "candidate_document_versions", where: "" },
       { table: "loan_documents", where: "" },
       { table: "loan_photo_attachments", where: "" },
       {

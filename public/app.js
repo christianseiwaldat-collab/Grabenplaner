@@ -299,6 +299,10 @@ const state = {
   personnelCandidateDetailLoading: false,
   personnelCandidateMutationPending: "",
   personnelCandidateCreatePending: false,
+  personnelCandidatePhotoObjectUrl: "",
+  personnelCandidateEditPhotoObjectUrl: "",
+  personnelCandidateTrialDateRangeCalendar: null,
+  personnelCandidateTrialDateRangeRow: null,
   personnelCandidateLoadError: "",
   personnelCandidateDetailError: "",
   personnelWorkflowInstances: [],
@@ -551,6 +555,7 @@ const elements = Object.fromEntries(
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
     "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelCandidateCreatePhotoField", "personnelCandidateCreatePhoto", "personnelCandidateCreatePhotoPreview", "personnelCandidateCreateTargetAreas", "personnelCandidateCreateAddTargetArea", "personnelCandidateCreateTrialAppointments", "personnelCandidateCreateAddTrialAppointment", "personnelCandidateCreateCompetencyRatings", "personnelCandidateCreateAddCompetencyRating", "personnelCandidateTrialDateRangeDialog", "personnelCandidateTrialDateRangeForm", "personnelCandidateTrialDateRangeStartText", "personnelCandidateTrialDateRangeEndText", "personnelCandidateTrialDateRangePreviousMonth", "personnelCandidateTrialDateRangeMonthLabel", "personnelCandidateTrialDateRangeNextMonth", "personnelCandidateTrialDateRangeGrid", "personnelCandidateTrialDateRangeOpenEnd", "personnelCandidateTrialDateRangeClose", "personnelCandidateTrialDateRangeCancel", "personnelCandidateTrialDateRangeApply",
     "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelLearningTab", "personnelLearningSection", "personnelLearningDashboardPanel", "refreshPersonnelLearningDashboardButton", "personnelLearningDashboardStatus", "personnelLearningDashboardSummary", "personnelLearningDashboardScope", "personnelLearningDashboardAssignments", "personnelLearningDashboardEmployee", "personnelLearningSkillTree", "personnelLearningProcessesPanel", "personnelLearningSummary", "personnelLearningSearch", "personnelLearningTypeFilter", "personnelLearningStatusFilter", "refreshPersonnelLearningButton", "personnelLearningStatus", "personnelLearningList", "addPersonnelLearningModuleButton", "personnelLearningModal", "personnelLearningForm", "personnelLearningModalTitle", "personnelLearningModuleId", "personnelLearningExpectedReceipt", "personnelLearningModuleCode", "personnelLearningModuleType", "personnelLearningScope", "personnelLearningTitle", "personnelLearningSummaryInput", "personnelLearningObjective", "personnelLearningEstimatedMinutes", "personnelLearningVerificationMode", "personnelLearningTags", "personnelLearningVersionNote", "personnelLearningSteps", "addPersonnelLearningStepButton", "personnelLearningMessage", "savePersonnelLearningButton", "personnelLearningSkillsPanel", "personnelLearningSkillSummary", "personnelLearningSkillSearch", "personnelLearningSkillStatusFilter", "refreshPersonnelLearningSkillsButton", "personnelLearningSkillStatus", "personnelLearningSkillList", "addPersonnelLearningSkillButton", "personnelLearningSkillModal", "personnelLearningSkillForm", "personnelLearningSkillModalTitle", "personnelLearningSkillId", "personnelLearningSkillExpectedReceipt", "personnelLearningSkillCode", "personnelLearningSkillCategory", "personnelLearningSkillScope", "personnelLearningSkillTitle", "personnelLearningSkillSummaryInput", "personnelLearningSkillTags", "personnelLearningSkillVersionNote", "personnelLearningSkillLevels", "personnelLearningSkillMessage", "savePersonnelLearningSkillButton", "personnelLearningCompetenciesPanel", "personnelLearningCompetencySummary", "personnelLearningCompetencySearch", "personnelLearningCompetencyEmployee", "personnelLearningCompetencyStatusFilter", "refreshPersonnelLearningCompetenciesButton", "addPersonnelLearningCompetencyButton", "personnelLearningCompetencyStatus", "personnelLearningCompetencyEmployeeSummary", "personnelLearningCompetencyList", "personnelLearningCompetencyModal", "personnelLearningCompetencyForm", "personnelLearningCompetencyModalTitle", "personnelLearningCompetencyId", "personnelLearningCompetencyExpectedReceipt", "personnelLearningCompetencyEmployeeNumber", "personnelLearningCompetencyPerson", "personnelLearningCompetencySkill", "personnelLearningCompetencyLevel", "personnelLearningCompetencyTrainer", "personnelLearningCompetencyLevelPreview", "personnelLearningCompetencyMessage", "savePersonnelLearningCompetencyButton", "personnelLearningAssignmentsPanel", "personnelLearningAssignmentSummary", "personnelLearningAssignmentSearch", "personnelLearningAssignmentLearnerFilter", "personnelLearningAssignmentStatusFilter", "refreshPersonnelLearningAssignmentsButton", "addPersonnelLearningAssignmentButton", "personnelLearningAssignmentStatus", "personnelLearningAssignmentList", "personnelLearningAssignmentModal", "personnelLearningAssignmentForm", "personnelLearningAssignmentModalTitle", "personnelLearningAssignmentId", "personnelLearningAssignmentExpectedReceipt", "personnelLearningAssignmentProcess", "personnelLearningAssignmentLearner", "personnelLearningAssignmentTrainerSearch", "personnelLearningAssignmentTrainerCount", "personnelLearningAssignmentTrainerList", "personnelLearningAssignmentBindingPreview", "personnelLearningAssignmentMessage", "savePersonnelLearningAssignmentButton", "personnelLearningProgressModal", "personnelLearningProgressForm", "personnelLearningProgressModalTitle", "personnelLearningProgressAssignmentId", "personnelLearningProgressAssignmentReceipt", "personnelLearningProgressExpectedReceipt", "personnelLearningProgressSummary", "personnelLearningProgressCount", "personnelLearningProgressStepList", "personnelLearningProgressFinalized", "personnelLearningProgressResult", "personnelLearningProgressAssessmentNote", "personnelLearningProgressCorrectionReasonField", "personnelLearningProgressCorrectionReason", "personnelLearningProgressHistoryDetails", "personnelLearningProgressHistory", "personnelLearningProgressMessage", "savePersonnelLearningProgressButton", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList", "personnelLifecycleInterfacesSection", "personnelLifecycleInterfacesStatus", "personnelLifecycleInterfacesList", "personnelLifecycleAutomationSection", "personnelLifecycleAutomationStatus", "personnelLifecycleAutomationCatalog", "personnelLifecycleAutomationSummary", "personnelLifecycleAutomationList",
     "personnelWorkflowInstanceWorkspace", "personnelLifecycleEditorSection", "personnelLifecycleEditorEntryTitle", "openPersonnelLifecycleEditorButton", "personnelLifecycleEditorEntryStatus", "personnelLifecycleEditorDialog", "personnelLifecycleEditorTitle", "closePersonnelLifecycleEditorButton", "personnelLifecycleEditorStatus", "personnelLifecycleEditorWorkspace", "personnelLifecycleEditorWorkflowType", "personnelLifecycleEditorCatalogHint", "personnelLifecycleEditorWorkflowCode", "personnelLifecycleEditorDraftTitle", "personnelLifecycleEditorDraftDescription", "personnelLifecycleEditorScopeType", "personnelLifecycleEditorRequirementKind", "addPersonnelLifecycleEditorStepButton", "personnelLifecycleEditorFlow", "personnelLifecycleEditorInspectorForm", "personnelLifecycleEditorInspectorFields", "personnelLifecycleEditorStepType", "personnelLifecycleEditorStepTitle", "personnelLifecycleEditorStepDescription", "personnelLifecycleEditorResponsibilityClass", "personnelLifecycleEditorStepRequired", "movePersonnelLifecycleEditorStepUpButton", "movePersonnelLifecycleEditorStepDownButton", "removePersonnelLifecycleEditorStepButton", "personnelLifecycleEditorValidation", "personnelLifecycleEditorValidationTitle", "personnelLifecycleEditorValidationResult", "resetPersonnelLifecycleEditorButton", "validatePersonnelLifecycleEditorButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
@@ -11721,9 +11726,397 @@ const PERSONNEL_CANDIDATE_REASON_STATUSES = Object.freeze(new Set([
   "archived",
 ]));
 
+const PERSONNEL_CANDIDATE_DEFAULT_COMPETENCIES = Object.freeze([
+  "Fachliche Eignung",
+  "Zusammenarbeit / Auftreten",
+  "Branchenerfahrung",
+  "Ausbildung / Qualifikation",
+  "Berufserfahrung",
+  "Sprachkenntnisse",
+]);
+
+const PERSONNEL_CANDIDATE_RATING_LABELS = Object.freeze({
+  1: "Sehr gering",
+  2: "Eher gering",
+  3: "Passend",
+  4: "Gut",
+  5: "Sehr gut",
+});
+
+const PERSONNEL_CANDIDATE_TRIAL_STATUS_LABELS = Object.freeze({
+  planned: "Geplant",
+  completed: "Erledigt",
+  cancelled: "Abgesagt",
+});
+
+const PERSONNEL_CANDIDATE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+const PERSONNEL_CANDIDATE_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function personnelCandidateClientId(prefix = "candidate") {
+  const token = globalThis.crypto?.randomUUID?.()
+    || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${token}`;
+}
+
+function personnelCandidateCitizenships(value) {
+  const values = Array.isArray(value)
+    ? value
+    : String(value || "").split(/[;\n]/);
+  return [...new Set(values.map((entry) => String(entry || "").trim()).filter(Boolean))];
+}
+
+function personnelCandidateAge(birthDate) {
+  const value = String(birthDate || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  if ((today.getMonth() + 1) < month
+    || ((today.getMonth() + 1) === month && today.getDate() < day)) age -= 1;
+  return Number.isSafeInteger(age) && age >= 0 && age <= 130 ? age : null;
+}
+
+function personnelCandidateLocation(locationId) {
+  const id = String(locationId || "").trim();
+  return (state.locations || []).find((entry) => String(entry?.id || "") === id) || null;
+}
+
+function personnelCandidateDepartment(locationId, departmentId) {
+  const location = personnelCandidateLocation(locationId);
+  const id = Number(departmentId || 0);
+  return (location?.departments || []).find((entry) => Number(entry?.id || 0) === id) || null;
+}
+
+function personnelCandidateLocationName(locationId) {
+  const location = personnelCandidateLocation(locationId);
+  return String(location?.name || locationId || "Nicht angegeben");
+}
+
+function personnelCandidateDepartmentName(locationId, departmentId) {
+  if (!departmentId) return "Gesamte Filiale";
+  const department = personnelCandidateDepartment(locationId, departmentId);
+  return String(department?.name || departmentId || "Gesamte Filiale");
+}
+
+function personnelCandidateLocationOptions(selected = "", { allowEmpty = true, scopeMode = "detail" } = {}) {
+  const selectedId = String(selected || "");
+  const scope = scopeMode === "create"
+    ? state.personnelCandidateCapabilities.createScope
+    : state.personnelCandidateCapabilities.applicationWriteScope;
+  const scopeType = String(scope?.type || "").toLowerCase();
+  const scopedLocationIds = [
+    ...(Array.isArray(scope?.locationIds) ? scope.locationIds : []),
+    ...(scope?.locationId ? [scope.locationId] : []),
+  ].map((locationId) => String(locationId || "")).filter(Boolean);
+  const allowedLocationIds = scopeType && scopeType !== "global"
+    ? new Set(scopedLocationIds)
+    : null;
+  const locations = (state.locations || [])
+    .filter((location) => location?.active !== false && String(location?.id || "").trim())
+    .filter((location) => !allowedLocationIds
+      || allowedLocationIds.has(String(location.id))
+      || String(location.id) === selectedId)
+    .sort((left, right) => String(left.name || left.id).localeCompare(
+      String(right.name || right.id), "de-AT", { numeric: true, sensitivity: "base" },
+    ));
+  return [
+    ...(allowEmpty ? ['<option value="">Filiale auswählen</option>'] : []),
+    ...locations.map((location) => `<option value="${escapeHtmlAttribute(location.id)}"${String(location.id) === selectedId ? " selected" : ""}>${escapeHtml(location.name || location.id)}</option>`),
+  ].join("");
+}
+
+function personnelCandidateDepartmentOptions(locationId, selected = "", { scopeMode = "detail" } = {}) {
+  const selectedId = String(selected || "");
+  const location = personnelCandidateLocation(locationId);
+  const scope = scopeMode === "create"
+    ? state.personnelCandidateCapabilities.createScope
+    : state.personnelCandidateCapabilities.applicationWriteScope;
+  const departmentScope = String(scope?.type || "").toLowerCase() === "department"
+    ? new Set((Array.isArray(scope?.departmentIds) ? scope.departmentIds : [])
+      .map((departmentId) => String(departmentId || ""))
+      .filter(Boolean))
+    : null;
+  const departments = (location?.departments || [])
+    .filter((department) => department?.active !== false && Number.isSafeInteger(Number(department?.id)))
+    .filter((department) => !departmentScope
+      || departmentScope.has(String(department.id))
+      || String(department.id) === selectedId)
+    .sort((left, right) => String(left.name || left.id).localeCompare(
+      String(right.name || right.id), "de-AT", { numeric: true, sensitivity: "base" },
+    ));
+  return [
+    ...(departmentScope ? [] : ['<option value="">Gesamte Filiale / noch offen</option>']),
+    ...departments.map((department) => `<option value="${escapeHtmlAttribute(department.id)}"${String(department.id) === selectedId ? " selected" : ""}>${escapeHtml(department.name || department.id)}</option>`),
+  ].join("");
+}
+
+function renderPersonnelCandidateTargetAreaEditorRow(area = {}, {
+  removable = true,
+  preferredName = "",
+  scopeMode = "detail",
+  readOnly = false,
+  preferredLocked = false,
+} = {}) {
+  const locationId = String(area.locationId || "");
+  const departmentId = area.departmentId === null || area.departmentId === undefined
+    ? "" : String(area.departmentId);
+  const locked = readOnly === true && Boolean(locationId);
+  return `<div class="personnel-candidate-repeater-row personnel-candidate-target-row${locked ? " personnel-candidate-readonly-scope" : ""}" data-candidate-target-area-row data-candidate-scope-mode="${escapeHtmlAttribute(scopeMode)}"${locked ? ` data-candidate-readonly-scope="true" data-candidate-readonly-payload="${escapeHtmlAttribute(JSON.stringify(area))}"` : ""}>
+    <label class="field"><span>Filiale</span><select data-candidate-target-location required ${locked ? "disabled" : ""}>${personnelCandidateLocationOptions(locationId, { scopeMode })}</select></label>
+    <label class="field"><span>Abteilung</span><select data-candidate-target-department ${locationId && !locked ? "" : "disabled"}>${personnelCandidateDepartmentOptions(locationId, departmentId, { scopeMode })}</select></label>
+    ${preferredName ? `<label class="personnel-candidate-preferred-choice"><input type="radio" name="${escapeHtmlAttribute(preferredName)}" data-candidate-target-preferred ${area.preferred ? "checked" : ""} ${locked || preferredLocked ? "disabled" : ""} /><span>Bevorzugt</span></label>` : ""}
+    ${locked ? '<span class="personnel-candidate-readonly-scope-label">Nur lesbar</span>' : (removable ? '<button class="personnel-candidate-row-remove" type="button" data-candidate-remove-row aria-label="Zielfiliale entfernen">Entfernen</button>' : "")}
+  </div>`;
+}
+
+function renderPersonnelCandidateTrialEditorRow(appointment = {}, {
+  scopeMode = "detail",
+  readOnly = false,
+} = {}) {
+  const id = String(appointment.id || personnelCandidateClientId("trial"));
+  const locationId = String(appointment.locationId || "");
+  const departmentId = appointment.departmentId === null || appointment.departmentId === undefined
+    ? "" : String(appointment.departmentId);
+  const status = Object.hasOwn(PERSONNEL_CANDIDATE_TRIAL_STATUS_LABELS, appointment.status)
+    ? appointment.status : "planned";
+  const locked = readOnly === true && Boolean(locationId);
+  const dateFrom = String(appointment.dateFrom || "").slice(0, 10);
+  const dateTo = String(appointment.dateTo || appointment.dateFrom || "").slice(0, 10);
+  const rangeLabel = window.GrabenplanerDateRangeCalendar?.rangeLabel(dateFrom, dateTo)
+    || (dateFrom ? `${formatDate(dateFrom)} – ${formatDate(dateTo || dateFrom)}` : "Zeitraum auswählen");
+  return `<div class="personnel-candidate-repeater-row personnel-candidate-trial-row${locked ? " personnel-candidate-readonly-scope" : ""}" data-candidate-trial-row data-candidate-row-id="${escapeHtmlAttribute(id)}" data-candidate-scope-mode="${escapeHtmlAttribute(scopeMode)}"${locked ? ` data-candidate-readonly-scope="true" data-candidate-readonly-payload="${escapeHtmlAttribute(JSON.stringify(appointment))}"` : ""}>
+    <div class="personnel-candidate-trial-range">
+      <div class="field"><span>Zeitraum</span>
+        <input data-candidate-trial-from type="hidden" value="${escapeHtmlAttribute(dateFrom)}" ${locked ? "disabled" : ""} />
+        <input data-candidate-trial-to type="hidden" value="${escapeHtmlAttribute(dateTo)}" ${locked ? "disabled" : ""} />
+        <button class="date-range-trigger" data-candidate-trial-range-button type="button" aria-haspopup="dialog" aria-controls="personnelCandidateTrialDateRangeDialog" ${locked ? "disabled" : ""}><span><strong data-candidate-trial-range-text>${escapeHtml(rangeLabel)}</strong><small>Ein Tag oder mehrere Tage</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg></button>
+      </div>
+    </div>
+    <div class="personnel-candidate-trial-times">
+      <label class="field"><span>Beginn</span><input data-candidate-trial-start type="time" value="${escapeHtmlAttribute(appointment.startTime || "")}" ${locked ? "disabled" : ""} /></label>
+      <label class="field"><span>Ende</span><input data-candidate-trial-end type="time" value="${escapeHtmlAttribute(appointment.endTime || "")}" ${locked ? "disabled" : ""} /></label>
+    </div>
+    <label class="field"><span>Filiale</span><select data-candidate-trial-location required ${locked ? "disabled" : ""}>${personnelCandidateLocationOptions(locationId, { scopeMode })}</select></label>
+    <label class="field"><span>Abteilung</span><select data-candidate-trial-department ${locationId && !locked ? "" : "disabled"}>${personnelCandidateDepartmentOptions(locationId, departmentId, { scopeMode })}</select></label>
+    <label class="field"><span>Status</span><select data-candidate-trial-status ${locked ? "disabled" : ""}>${Object.entries(PERSONNEL_CANDIDATE_TRIAL_STATUS_LABELS).map(([value, label]) => `<option value="${value}"${value === status ? " selected" : ""}>${label}</option>`).join("")}</select></label>
+    <label class="field personnel-candidate-row-note"><span>Organisatorischer Hinweis</span><input data-candidate-trial-note maxlength="1000" value="${escapeHtmlAttribute(appointment.note || "")}" autocomplete="off" ${locked ? "disabled" : ""} /></label>
+    ${locked ? '<span class="personnel-candidate-readonly-scope-label">Nur lesbar</span>' : '<button class="personnel-candidate-row-remove" type="button" data-candidate-remove-row aria-label="Schnuppertermin entfernen">Entfernen</button>'}
+  </div>`;
+}
+
+function updatePersonnelCandidateTrialRangeText(row) {
+  const dateFrom = String(row?.querySelector("[data-candidate-trial-from]")?.value || "");
+  const dateTo = String(row?.querySelector("[data-candidate-trial-to]")?.value || dateFrom);
+  const text = row?.querySelector("[data-candidate-trial-range-text]");
+  if (!text) return;
+  text.textContent = window.GrabenplanerDateRangeCalendar?.rangeLabel(dateFrom, dateTo)
+    || (dateFrom ? `${formatDate(dateFrom)} – ${formatDate(dateTo || dateFrom)}` : "Zeitraum auswählen");
+}
+
+function openPersonnelCandidateTrialDateRangeCalendar(button) {
+  const row = button?.closest("[data-candidate-trial-row]");
+  if (!row || button.disabled || row.dataset.candidateReadonlyScope === "true") return;
+  if (!state.personnelCandidateTrialDateRangeCalendar) {
+    showToast("Der Zeitraumkalender konnte nicht geladen werden.", true);
+    return;
+  }
+  const from = row.querySelector("[data-candidate-trial-from]");
+  const to = row.querySelector("[data-candidate-trial-to]");
+  state.personnelCandidateTrialDateRangeRow = row;
+  state.personnelCandidateTrialDateRangeCalendar.open({
+    start: from?.value || "",
+    end: to?.value || "",
+    allowOpenEnd: false,
+    onCommit(dateFrom, dateTo) {
+      if (!row.isConnected) return;
+      if (from) from.value = dateFrom;
+      if (to) to.value = dateTo || dateFrom;
+      row.classList.remove("has-validation-error");
+      button.removeAttribute("aria-invalid");
+      updatePersonnelCandidateTrialRangeText(row);
+      button.focus();
+    },
+  });
+}
+
+function initializePersonnelCandidateTrialDateRangeCalendar() {
+  const factory = window.GrabenplanerDateRangeCalendar?.createDateRangeCalendar;
+  if (!factory || !elements.personnelCandidateTrialDateRangeDialog) return;
+  state.personnelCandidateTrialDateRangeCalendar = factory({
+    dialog: elements.personnelCandidateTrialDateRangeDialog,
+    form: elements.personnelCandidateTrialDateRangeForm,
+    grid: elements.personnelCandidateTrialDateRangeGrid,
+    title: elements.personnelCandidateTrialDateRangeMonthLabel,
+    startText: elements.personnelCandidateTrialDateRangeStartText,
+    endText: elements.personnelCandidateTrialDateRangeEndText,
+    previousButton: elements.personnelCandidateTrialDateRangePreviousMonth,
+    nextButton: elements.personnelCandidateTrialDateRangeNextMonth,
+    openEndCheckbox: elements.personnelCandidateTrialDateRangeOpenEnd,
+    applyButton: elements.personnelCandidateTrialDateRangeApply,
+    closeButtons: [
+      elements.personnelCandidateTrialDateRangeClose,
+      elements.personnelCandidateTrialDateRangeCancel,
+    ],
+  });
+  elements.personnelCandidateTrialDateRangeDialog.addEventListener("close", () => {
+    state.personnelCandidateTrialDateRangeRow = null;
+  });
+}
+
+function renderPersonnelCandidateRatingInputs(name, selectedRating = null) {
+  const selected = Number(selectedRating || 0);
+  return `<div class="personnel-candidate-rating-scale" role="radiogroup" aria-label="Bewertung von 1 bis 5">${Object.entries(PERSONNEL_CANDIDATE_RATING_LABELS).map(([value, label]) => `<label class="personnel-candidate-rating-score score-${value}" title="${escapeHtmlAttribute(`${value}: ${label}`)}"><input type="radio" name="${escapeHtmlAttribute(name)}" value="${value}" ${Number(value) === selected ? "checked" : ""} /><span><strong>${value}</strong><small>${escapeHtml(label)}</small></span></label>`).join("")}</div>`;
+}
+
+function renderPersonnelCandidateRatingEditorRow(rating = {}, { standard = false } = {}) {
+  const id = String(rating.id || personnelCandidateClientId("rating"));
+  const label = String(rating.label || "");
+  return `<fieldset class="personnel-candidate-rating-row" data-candidate-rating-row data-candidate-row-id="${escapeHtmlAttribute(id)}" data-candidate-standard-rating="${String(standard)}">
+    <legend>${standard ? escapeHtml(label) : "Eigene Kompetenz"}</legend>
+    ${standard
+      ? `<input data-candidate-rating-label type="hidden" value="${escapeHtmlAttribute(label)}" />`
+      : `<label class="field"><span>Bezeichnung</span><input data-candidate-rating-label maxlength="120" value="${escapeHtmlAttribute(label)}" placeholder="Kompetenz benennen" required /></label>`}
+    ${renderPersonnelCandidateRatingInputs(`candidate-rating-${id}`, rating.rating)}
+    <label class="field personnel-candidate-rating-note"><span>Sachlicher Hinweis</span><input data-candidate-rating-note maxlength="1000" value="${escapeHtmlAttribute(rating.note || "")}" autocomplete="off" placeholder="Optional: konkrete Beobachtung oder Grundlage" /></label>
+    ${standard ? "" : '<button class="personnel-candidate-row-remove" type="button" data-candidate-remove-row aria-label="Kompetenz entfernen">Entfernen</button>'}
+  </fieldset>`;
+}
+
+function personnelCandidateRatingsForEditor(ratings) {
+  const values = Array.isArray(ratings) ? ratings : [];
+  const used = new Set();
+  const standard = PERSONNEL_CANDIDATE_DEFAULT_COMPETENCIES.map((label) => {
+    const index = values.findIndex((entry, candidateIndex) => (
+      !used.has(candidateIndex) && String(entry?.label || "").toLocaleLowerCase("de-AT") === label.toLocaleLowerCase("de-AT")
+    ));
+    if (index >= 0) used.add(index);
+    return { ...(index >= 0 ? values[index] : {}), label, standard: true };
+  });
+  return [...standard, ...values.filter((entry, index) => !used.has(index)).map((entry) => ({ ...entry, standard: false }))];
+}
+
+function renderPersonnelCandidateRatingsEditor(container, ratings = []) {
+  if (!container) return;
+  container.innerHTML = personnelCandidateRatingsForEditor(ratings)
+    .map((rating) => renderPersonnelCandidateRatingEditorRow(rating, { standard: rating.standard }))
+    .join("");
+}
+
+function personnelCandidateReadOnlyStructuredPayload(row) {
+  if (row?.dataset.candidateReadonlyScope !== "true") return null;
+  try {
+    const value = JSON.parse(String(row.dataset.candidateReadonlyPayload || ""));
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function personnelCandidateTargetAreasFrom(container, primary = null) {
+  const rows = [...(container?.querySelectorAll("[data-candidate-target-area-row]") || [])];
+  const values = rows.map((row) => {
+    const readOnly = personnelCandidateReadOnlyStructuredPayload(row);
+    if (readOnly) return readOnly;
+    const locationId = String(row.querySelector("[data-candidate-target-location]")?.value || "").trim();
+    const departmentValue = String(row.querySelector("[data-candidate-target-department]")?.value || "").trim();
+    return locationId ? {
+      locationId,
+      departmentId: departmentValue ? Number(departmentValue) : null,
+      preferred: row.querySelector("[data-candidate-target-preferred]")?.checked === true,
+    } : null;
+  }).filter(Boolean);
+  if (primary?.locationId) values.unshift({
+    locationId: primary.locationId,
+    departmentId: primary.departmentId || null,
+    preferred: !values.some((entry) => entry.preferred),
+  });
+  if (values.length && !values.some((entry) => entry.preferred)) values[0].preferred = true;
+  const preferredIndex = values.findIndex((entry) => entry.preferred);
+  return values.map((entry, index) => ({ ...entry, preferred: index === preferredIndex }));
+}
+
+function personnelCandidateTrialAppointmentsFrom(container) {
+  return [...(container?.querySelectorAll("[data-candidate-trial-row]") || [])].map((row) => {
+    const readOnly = personnelCandidateReadOnlyStructuredPayload(row);
+    if (readOnly) return readOnly;
+    const dateFrom = String(row.querySelector("[data-candidate-trial-from]")?.value || "").trim();
+    const dateTo = String(row.querySelector("[data-candidate-trial-to]")?.value || dateFrom).trim();
+    const locationId = String(row.querySelector("[data-candidate-trial-location]")?.value || "").trim();
+    const departmentValue = String(row.querySelector("[data-candidate-trial-department]")?.value || "").trim();
+    return dateFrom && dateTo && locationId ? {
+      id: String(row.dataset.candidateRowId || personnelCandidateClientId("trial")),
+      dateFrom,
+      dateTo,
+      startTime: String(row.querySelector("[data-candidate-trial-start]")?.value || ""),
+      endTime: String(row.querySelector("[data-candidate-trial-end]")?.value || ""),
+      locationId,
+      departmentId: departmentValue ? Number(departmentValue) : null,
+      status: String(row.querySelector("[data-candidate-trial-status]")?.value || "planned"),
+      note: String(row.querySelector("[data-candidate-trial-note]")?.value || "").trim(),
+    } : null;
+  }).filter(Boolean);
+}
+
+function personnelCandidateRatingsFrom(container) {
+  return [...(container?.querySelectorAll("[data-candidate-rating-row]") || [])].map((row) => {
+    const label = String(row.querySelector("[data-candidate-rating-label]")?.value || "").trim();
+    const rating = Number(row.querySelector('input[type="radio"]:checked')?.value || 0);
+    return label && rating >= 1 && rating <= 5 ? {
+      id: String(row.dataset.candidateRowId || personnelCandidateClientId("rating")),
+      label,
+      rating,
+      note: String(row.querySelector("[data-candidate-rating-note]")?.value || "").trim(),
+    } : null;
+  }).filter(Boolean);
+}
+
+function validatePersonnelCandidateTargetRows(container, primary = null) {
+  const seen = new Set();
+  if (primary?.locationId) seen.add(`${primary.locationId}\0${primary.departmentId ?? "*"}`);
+  for (const row of container?.querySelectorAll("[data-candidate-target-area-row]") || []) {
+    const location = row.querySelector("[data-candidate-target-location]");
+    const department = row.querySelector("[data-candidate-target-department]");
+    const readOnly = personnelCandidateReadOnlyStructuredPayload(row);
+    const locationId = String(readOnly?.locationId || location?.value || "").trim();
+    const departmentId = String(readOnly?.departmentId || department?.value || "").trim() || "*";
+    const key = locationId ? `${locationId}\0${departmentId}` : "";
+    const duplicate = Boolean(key) && seen.has(key);
+    location?.setCustomValidity(duplicate ? "Dieser Zielbereich wurde bereits ausgewählt." : "");
+    if (key) seen.add(key);
+  }
+}
+
+function syncPersonnelCandidateLocationRow(select) {
+  const row = select?.closest("[data-candidate-target-area-row],[data-candidate-trial-row]");
+  if (!row) return;
+  const locationId = String(select.value || "");
+  const department = row.querySelector("[data-candidate-target-department],[data-candidate-trial-department]");
+  if (!department) return;
+  department.innerHTML = personnelCandidateDepartmentOptions(locationId, "", {
+    scopeMode: row.dataset.candidateScopeMode || "detail",
+  });
+  department.disabled = !locationId;
+}
+
+function personnelCandidatePhotoFile(input) {
+  const file = input?.files?.[0] || null;
+  if (!file) return null;
+  if (!PERSONNEL_CANDIDATE_PHOTO_TYPES.has(file.type)) {
+    input.setCustomValidity("Bitte ein JPG-, PNG- oder WebP-Bild auswählen.");
+    return null;
+  }
+  if (file.size > PERSONNEL_CANDIDATE_PHOTO_MAX_BYTES) {
+    input.setCustomValidity("Das Bewerberfoto darf höchstens 5 MB groß sein.");
+    return null;
+  }
+  input.setCustomValidity("");
+  return file;
+}
+
 function defaultPersonnelCandidateCapabilities() {
   return {
     scope: null,
+    applicationWriteScope: null,
     canReadCandidates: false,
     canCreateCandidates: false,
     createScope: null,
@@ -11740,6 +12133,10 @@ function normalizePersonnelCandidateCapabilities(value) {
   const submitted = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return {
     scope: submitted.scope && typeof submitted.scope === "object" ? submitted.scope : null,
+    applicationWriteScope: submitted.applicationWriteScope
+      && typeof submitted.applicationWriteScope === "object"
+      ? submitted.applicationWriteScope
+      : null,
     canReadCandidates: submitted.canReadCandidates === true,
     canCreateCandidates: submitted.canCreateCandidates === true,
     createScope: submitted.createScope && typeof submitted.createScope === "object"
@@ -11814,8 +12211,14 @@ function personnelCandidatePrimaryApplication(candidate, preferredStatus = "") {
 function personnelCandidateOrganization(application) {
   if (!application) return "Noch keine Stelle zugeordnet";
   const role = String(application.desiredRoleTitle || application.positionName || "").trim();
-  const location = String(application.desiredLocationName || application.locationName || application.desiredLocationId || "").trim();
-  const department = String(application.desiredDepartmentName || application.departmentName || application.desiredDepartmentId || "").trim();
+  const targetAreas = Array.isArray(application.targetAreas) ? application.targetAreas : [];
+  const primary = targetAreas.find((entry) => entry?.preferred) || targetAreas[0] || null;
+  const location = String(primary
+    ? personnelCandidateLocationName(primary.locationId)
+    : application.desiredLocationName || application.locationName || application.desiredLocationId || "").trim();
+  const department = String(primary
+    ? personnelCandidateDepartmentName(primary.locationId, primary.departmentId)
+    : application.desiredDepartmentName || application.departmentName || application.desiredDepartmentId || "").trim();
   return [role, location, department].filter(Boolean).join(" · ") || "Noch keine Stelle zugeordnet";
 }
 
@@ -11862,6 +12265,16 @@ function filteredPersonnelCandidates() {
         entry.desiredDepartmentId,
       ]),
       profile.email,
+      profile.phone,
+      profile.address?.postalCode,
+      profile.address?.city,
+      profile.residence?.postalCode,
+      profile.residence?.city,
+      ...(Array.isArray(profile.citizenships) ? profile.citizenships : []),
+      ...applications.flatMap((entry) => (Array.isArray(entry.targetAreas) ? entry.targetAreas : []).flatMap((area) => [
+        personnelCandidateLocationName(area.locationId),
+        personnelCandidateDepartmentName(area.locationId, area.departmentId),
+      ])),
     ].filter(Boolean).join(" ").toLocaleLowerCase("de-AT");
     return searchable.includes(query);
   });
@@ -11880,6 +12293,7 @@ function clearPersonnelLifecycleCandidateState(message = "") {
   state.personnelCandidateCreatePending = false;
   state.personnelCandidateLoadError = message;
   state.personnelCandidateDetailError = "";
+  resetPersonnelCandidateCreateEnhancements();
   if (elements.personnelCandidateCreateModal?.open) elements.personnelCandidateCreateModal.close();
   renderPersonnelCandidateOverview();
 }
@@ -11913,9 +12327,10 @@ function renderPersonnelCandidateList() {
     const status = application?.status || "";
     const selected = candidate.id === state.selectedPersonnelCandidateId;
     return `<button class="personnel-candidate-list-item${selected ? " active" : ""}" type="button" data-personnel-candidate-id="${escapeHtmlAttribute(candidate.id)}" aria-pressed="${String(selected)}">
-      <span class="personnel-candidate-list-title"><strong>${escapeHtml(personnelCandidateName(candidate))}</strong><span class="personnel-candidate-status-badge${personnelCandidateStatusClass(status)}">${escapeHtml(personnelCandidateStatusLabel(status))}</span></span>
+      ${personnelCandidatePhotoMarkup(candidate, "list")}
+      <span class="personnel-candidate-list-copy"><span class="personnel-candidate-list-title"><strong>${escapeHtml(personnelCandidateName(candidate))}</strong><span class="personnel-candidate-status-badge${personnelCandidateStatusClass(status)}">${escapeHtml(personnelCandidateStatusLabel(status))}</span></span>
       <span>${escapeHtml(personnelCandidateOrganization(application))}</span>
-      <small>Aktualisiert: ${escapeHtml(formatPersonnelCandidateTimestamp(application?.updatedAt || candidate.updatedAt))}</small>
+      <small>Aktualisiert: ${escapeHtml(formatPersonnelCandidateTimestamp(application?.updatedAt || candidate.updatedAt))}</small></span>
     </button>`;
   }).join("");
 }
@@ -11924,9 +12339,197 @@ function personnelCandidateFact(label, value) {
   return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "Nicht angegeben"))}</strong></div>`;
 }
 
+function personnelCandidatePhotoMarkup(candidate, className = "") {
+  const photo = candidate?.photo && typeof candidate.photo === "object" ? candidate.photo : null;
+  const downloadUrl = String(photo?.downloadUrl || "").trim();
+  return downloadUrl
+    ? `<img class="personnel-candidate-photo ${escapeHtmlAttribute(className)}" src="${escapeHtmlAttribute(downloadUrl)}" alt="Foto von ${escapeHtmlAttribute(personnelCandidateName(candidate))}" loading="lazy" />`
+    : `<span class="personnel-candidate-photo personnel-candidate-photo-empty ${escapeHtmlAttribute(className)}" aria-hidden="true">${escapeHtml(personnelCandidateName(candidate).split(/\s+/).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase() || "?" )}</span>`;
+}
+
+function personnelCandidateDateRangeLabel(entry) {
+  const from = String(entry?.dateFrom || "").slice(0, 10);
+  const to = String(entry?.dateTo || from).slice(0, 10);
+  if (!from) return "Termin nicht angegeben";
+  return from === to ? formatDate(from) : `${formatDate(from)}–${formatDate(to)}`;
+}
+
+function renderPersonnelCandidateRatingDisplay(rating) {
+  const value = Number(rating?.rating || 0);
+  const label = PERSONNEL_CANDIDATE_RATING_LABELS[value] || "Nicht bewertet";
+  return `<div class="personnel-candidate-rating-display" role="img" aria-label="${escapeHtmlAttribute(`${rating?.label || "Kompetenz"}: ${value} von 5, ${label}`)}">
+    ${Array.from({ length: 5 }, (_, index) => `<span class="score-${index + 1}${index + 1 === value ? " current" : ""}" aria-hidden="true">${index + 1}</span>`).join("")}
+    <strong>${value}/5 · ${escapeHtml(label)}</strong>
+  </div>`;
+}
+
+function personnelCandidateTargetAreas(application) {
+  const values = Array.isArray(application?.targetAreas) ? application.targetAreas.filter(Boolean) : [];
+  if (values.length) return values;
+  return application?.desiredLocationId ? [{
+    locationId: application.desiredLocationId,
+    departmentId: application.desiredDepartmentId || null,
+    preferred: true,
+  }] : [];
+}
+
+function personnelCandidateTrialAppointments(application) {
+  return Array.isArray(application?.trialAppointments) ? application.trialAppointments.filter(Boolean) : [];
+}
+
+function personnelCandidateCompetencyRatings(application) {
+  return Array.isArray(application?.competencyRatings) ? application.competencyRatings.filter(Boolean) : [];
+}
+
+function personnelCandidateTeamFeedback(application) {
+  return Array.isArray(application?.teamFeedback) ? application.teamFeedback.filter(Boolean) : [];
+}
+
+function renderPersonnelCandidateTargetAreas(application) {
+  const areas = personnelCandidateTargetAreas(application);
+  return areas.length ? `<div class="personnel-candidate-compact-list">${areas.map((area) => `<div><span>${area.preferred ? "Bevorzugt" : "Weiterer Bereich"}</span><strong>${escapeHtml(personnelCandidateLocationName(area.locationId))}</strong><small>${escapeHtml(personnelCandidateDepartmentName(area.locationId, area.departmentId))}</small></div>`).join("")}</div>`
+    : '<p class="personnel-candidate-section-empty">Noch kein Zielbereich hinterlegt.</p>';
+}
+
+function renderPersonnelCandidateTrialAppointments(application) {
+  const appointments = personnelCandidateTrialAppointments(application);
+  return appointments.length ? `<div class="personnel-candidate-trial-list">${appointments.map((appointment) => {
+    const status = PERSONNEL_CANDIDATE_TRIAL_STATUS_LABELS[appointment.status] || "Geplant";
+    const times = [appointment.startTime, appointment.endTime].filter(Boolean).join("–");
+    return `<article><header><strong>${escapeHtml(personnelCandidateDateRangeLabel(appointment))}</strong><span class="personnel-candidate-trial-status status-${escapeHtmlAttribute(appointment.status || "planned")}">${escapeHtml(status)}</span></header><p>${escapeHtml(personnelCandidateLocationName(appointment.locationId))} · ${escapeHtml(personnelCandidateDepartmentName(appointment.locationId, appointment.departmentId))}${times ? ` · ${escapeHtml(times)} Uhr` : ""}</p>${appointment.note ? `<small>${escapeHtml(appointment.note)}</small>` : ""}</article>`;
+  }).join("")}</div>` : '<p class="personnel-candidate-section-empty">Noch kein Schnuppertermin hinterlegt.</p>';
+}
+
+function renderPersonnelCandidateCompetencyRatings(application) {
+  const ratings = personnelCandidateCompetencyRatings(application);
+  return ratings.length ? `<div class="personnel-candidate-rating-summary">${ratings.map((rating) => `<article><header><strong>${escapeHtml(rating.label)}</strong>${renderPersonnelCandidateRatingDisplay(rating)}</header>${rating.note ? `<p>${escapeHtml(rating.note)}</p>` : ""}</article>`).join("")}</div>`
+    : '<p class="personnel-candidate-section-empty">Noch keine Kompetenz bewertet.</p>';
+}
+
+function personnelCandidateVisibleEmployees() {
+  const candidates = [
+    ...(Array.isArray(state.allEmployees) ? state.allEmployees : []),
+    ...(Array.isArray(state.personnelDirectory) ? state.personnelDirectory : []),
+    ...(Array.isArray(state.data?.employees) ? state.data.employees : []),
+  ];
+  const byNumber = new Map();
+  for (const employee of candidates) {
+    if (!employee || employee.active === false || Number(employee.active) === 0) continue;
+    const employeeNumber = String(employee.employeeNumber || employee.personnel_number || "").trim();
+    if (!employeeNumber || byNumber.has(employeeNumber)) continue;
+    byNumber.set(employeeNumber, {
+      employeeNumber,
+      fullName: String(employee.fullName || employee.full_name || employee.name || employeeNumber),
+      locationId: String(employee.homeLocationId || employee.home_location_id || employee.locationId || ""),
+      departmentId: Number(
+        employee.preferredDepartmentId || employee.preferred_department_id || employee.departmentId || 0,
+      ) || null,
+    });
+  }
+  return [...byNumber.values()].sort((left, right) => left.fullName.localeCompare(
+    right.fullName, "de-AT", { numeric: true, sensitivity: "base" },
+  ));
+}
+
+function personnelCandidateTeamEmployeeOptions(selected = "", application = null) {
+  const selectedNumber = String(selected || "");
+  const applicationWriteScope = state.personnelCandidateCapabilities.applicationWriteScope;
+  const scopeType = String(applicationWriteScope?.type || "").toLowerCase();
+  const allowedDepartmentIds = scopeType === "department"
+    ? new Set((applicationWriteScope?.departmentIds || [])
+      .map((departmentId) => Number(departmentId || 0))
+      .filter((departmentId) => Number.isSafeInteger(departmentId) && departmentId > 0))
+    : null;
+  const writableLocationIds = scopeType === "global"
+    ? null
+    : new Set((applicationWriteScope?.locationIds || [])
+      .map((locationId) => String(locationId || ""))
+      .filter(Boolean));
+  const allowedLocationIds = scopeType === "global" || !application
+    ? null
+    : new Set([
+      application.desiredLocationId,
+      ...personnelCandidateTargetAreas(application).map((area) => area.locationId),
+      ...personnelCandidateTrialAppointments(application).map((appointment) => appointment.locationId),
+    ].map((locationId) => String(locationId || "")).filter(Boolean));
+  return [
+    '<option value="">Teammitglied auswählen</option>',
+    ...personnelCandidateVisibleEmployees()
+      .filter((employee) => (
+        (!allowedLocationIds || allowedLocationIds.has(employee.locationId))
+          && (!writableLocationIds || writableLocationIds.has(employee.locationId))
+          && (!allowedDepartmentIds || allowedDepartmentIds.has(employee.departmentId))
+      ))
+      .map((employee) => `<option value="${escapeHtmlAttribute(employee.employeeNumber)}"${employee.employeeNumber === selectedNumber ? " selected" : ""}>${escapeHtml(employee.fullName)} · ${escapeHtml(employee.employeeNumber)}${employee.locationId ? ` · ${escapeHtml(personnelCandidateLocationName(employee.locationId))}` : ""}</option>`),
+  ].join("");
+}
+
+function renderPersonnelCandidateTeamFeedback(application) {
+  const entries = personnelCandidateTeamFeedback(application);
+  const appointments = personnelCandidateTrialAppointments(application);
+  const canWrite = canWritePersonnelCandidateApplication(application);
+  const feedback = entries.length ? `<div class="personnel-candidate-feedback-list">${entries.map((entry) => {
+    const visibleEmployee = personnelCandidateVisibleEmployees()
+      .find((candidate) => candidate.employeeNumber === String(entry.employeeNumber || ""));
+    const employee = entry.employeeName || entry.fullName
+      || (visibleEmployee ? `${visibleEmployee.fullName} · ${visibleEmployee.employeeNumber}` : entry.employeeNumber)
+      || "Teammitglied";
+    return `<article><header><strong>${escapeHtml(employee)}</strong>${renderPersonnelCandidateRatingDisplay({ label: "Teamrückmeldung", rating: entry.rating })}</header>${entry.comment ? `<p>${escapeHtml(entry.comment)}</p>` : ""}<small>${escapeHtml(formatPersonnelCandidateTimestamp(entry.recordedAt || entry.createdAt || entry.updatedAt, "Zeitpunkt nicht angegeben"))}${entry.recordedByName || entry.recordedByEmployeeNumber ? ` · erfasst durch ${escapeHtml(entry.recordedByName || entry.recordedByEmployeeNumber)}` : ""}</small></article>`;
+  }).join("")}</div>` : '<p class="personnel-candidate-section-empty">Noch keine Teamrückmeldung hinterlegt.</p>';
+  const form = canWrite && appointments.length ? `<form class="personnel-candidate-feedback-form" data-personnel-candidate-team-feedback-form data-application-id="${escapeHtmlAttribute(application.id)}">
+    <label class="field"><span>Rückmeldung von</span><select name="employeeNumber" required>${personnelCandidateTeamEmployeeOptions("", application)}</select></label>
+    <label class="field"><span>Schnuppertermin</span><select name="trialAppointmentId" required><option value="">Termin auswählen</option>${appointments.map((appointment) => `<option value="${escapeHtmlAttribute(appointment.id)}">${escapeHtml(personnelCandidateDateRangeLabel(appointment))} · ${escapeHtml(personnelCandidateLocationName(appointment.locationId))}</option>`).join("")}</select></label>
+    <fieldset><legend>Gesamteindruck</legend>${renderPersonnelCandidateRatingInputs(`candidate-feedback-${application.id}`)}</fieldset>
+    <label class="field personnel-candidate-feedback-comment"><span>Sachlicher Kommentar <small class="personnel-candidate-optional-marker">* optional</small></span><textarea name="comment" rows="3" maxlength="2000" placeholder="Optional: konkrete, arbeitsbezogene Beobachtung"></textarea></label>
+    <div class="personnel-candidate-form-actions"><small>Die rückmeldende Person und die erfassende Person werden getrennt revisionssicher dokumentiert.</small><button class="secondary-button" type="submit">Rückmeldung speichern</button></div>
+  </form>` : "";
+  return `${feedback}${form}`;
+}
+
+function renderPersonnelCandidateProfileEditor(candidate) {
+  if (!state.personnelCandidateCapabilities.canWriteCandidates) return "";
+  const profile = personnelCandidateProfile(candidate);
+  const address = profile.address && typeof profile.address === "object"
+    ? profile.address
+    : (profile.residence && typeof profile.residence === "object" ? profile.residence : {});
+  return `<details class="personnel-candidate-detail-section personnel-candidate-editor-section">
+    <summary><span><strong>Profil bearbeiten</strong><small>Kontakt- und Personendaten</small></span><i aria-hidden="true">›</i></summary>
+    <form class="personnel-candidate-detail-form" data-personnel-candidate-profile-form>
+      <p class="personnel-candidate-required-hint"><span aria-hidden="true">*</span> an Vor- und Nachname = Pflichtfeld · „* optional“ an E-Mail und Telefon = einzeln optional; mindestens ein Kontaktweg ist erforderlich.</p>
+      <div class="form-grid">
+        <label class="field"><span>Vorname <i class="personnel-candidate-required-marker" aria-hidden="true">*</i></span><input name="firstName" maxlength="100" value="${escapeHtmlAttribute(profile.firstName || "")}" required /></label>
+        <label class="field"><span>Nachname <i class="personnel-candidate-required-marker" aria-hidden="true">*</i></span><input name="lastName" maxlength="100" value="${escapeHtmlAttribute(profile.lastName || "")}" required /></label>
+        <label class="field"><span>E-Mail <small class="personnel-candidate-optional-marker">* optional</small></span><input name="email" type="email" maxlength="254" value="${escapeHtmlAttribute(profile.email || "")}" /></label>
+        <label class="field"><span>Telefon <small class="personnel-candidate-optional-marker">* optional</small></span><input name="phone" type="tel" maxlength="80" value="${escapeHtmlAttribute(profile.phone || "")}" /></label>
+        <label class="field"><span>Geburtsdatum</span><input name="birthDate" type="date" value="${escapeHtmlAttribute(String(profile.birthDate || "").slice(0, 10))}" /></label>
+        <label class="field"><span>Postleitzahl</span><input name="postalCode" maxlength="24" value="${escapeHtmlAttribute(address.postalCode || "")}" /></label>
+        <label class="field"><span>Wohnort</span><input name="city" maxlength="120" value="${escapeHtmlAttribute(address.city || "")}" /></label>
+        <label class="field"><span>Staatsangehörigkeit(en)</span><input name="citizenships" maxlength="400" value="${escapeHtmlAttribute(personnelCandidateCitizenships(profile.citizenships).join("; "))}" /><small>Mehrere Angaben mit Semikolon trennen.</small></label>
+      </div>
+      <div class="personnel-candidate-form-actions"><span></span><button class="primary-button" type="submit">Profil speichern</button></div>
+    </form>
+  </details>`;
+}
+
+function renderPersonnelCandidatePhotoEditor(candidate) {
+  if (!canWritePersonnelCandidatePhoto(candidate)) return "";
+  const currentPhotoUrl = String(candidate?.photo?.downloadUrl || "");
+  return `<details class="personnel-candidate-detail-section personnel-candidate-editor-section">
+    <summary><span><strong>Bewerberfoto</strong><small>Foto neu hochladen oder ersetzen</small></span><i aria-hidden="true">›</i></summary>
+    <form class="personnel-candidate-detail-form personnel-candidate-photo-form" data-personnel-candidate-photo-form>
+      <div class="personnel-candidate-photo-edit-row">
+        <img data-personnel-candidate-photo-edit-preview data-original-src="${escapeHtmlAttribute(currentPhotoUrl)}" ${currentPhotoUrl ? `src="${escapeHtmlAttribute(currentPhotoUrl)}"` : "hidden"} alt="Vorschau des Bewerberfotos" />
+        <span class="personnel-candidate-photo-placeholder" data-personnel-candidate-photo-edit-placeholder ${currentPhotoUrl ? "hidden" : ""} aria-hidden="true">Foto</span>
+        <label class="field"><span>Bilddatei</span><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required /><small>JPG, PNG oder WebP, höchstens 5 MB.</small></label>
+      </div>
+      <div class="personnel-candidate-form-actions"><small>Das vorhandene Foto bleibt bis zum erfolgreichen Hochladen erhalten.</small><button class="primary-button" type="submit">Foto speichern</button></div>
+    </form>
+  </details>`;
+}
+
 function renderPersonnelCandidateStatusForm(candidateId, application) {
   const transitions = PERSONNEL_CANDIDATE_STATUS_TRANSITIONS[application.status] || [];
-  if (!state.personnelCandidateCapabilities.canWriteApplications || !transitions.length) return "";
+  if (!canWritePersonnelCandidateApplication(application) || !transitions.length) return "";
   const pending = state.personnelCandidateMutationPending === application.id;
   return `<form class="personnel-candidate-status-form" data-personnel-candidate-status-form data-candidate-id="${escapeHtmlAttribute(candidateId)}" data-application-id="${escapeHtmlAttribute(application.id)}">
     <label class="field"><span>Nächster Status</span><select name="status" required ${pending ? "disabled" : ""}>
@@ -11943,22 +12546,60 @@ function renderPersonnelCandidateApplication(candidateId, application) {
   const weeklyHours = Number.isFinite(weeklyMinutes) && weeklyMinutes > 0
     ? `${(weeklyMinutes / 60).toLocaleString("de-AT", { maximumFractionDigits: 2 })} Std.`
     : "Nicht angegeben";
+  const canWrite = canWritePersonnelCandidateApplication(application);
+  const targetAreas = personnelCandidateTargetAreas(application);
+  const appointments = personnelCandidateTrialAppointments(application);
+  const ratings = personnelCandidateCompetencyRatings(application);
+  const hasReadOnlyPreferredArea = targetAreas.some((area) => (
+    area.preferred === true && !canWritePersonnelCandidateStructuredScope(area)
+  ));
+  const targetRows = (targetAreas.length ? targetAreas : [{ preferred: true }])
+    .map((area) => renderPersonnelCandidateTargetAreaEditorRow(area, {
+      removable: targetAreas.length > 1 && canWritePersonnelCandidateStructuredScope(area),
+      preferredName: `candidate-preferred-${application.id}`,
+      readOnly: !canWritePersonnelCandidateStructuredScope(area),
+      preferredLocked: hasReadOnlyPreferredArea,
+    })).join("");
+  const trialRows = appointments.map((appointment) => renderPersonnelCandidateTrialEditorRow(
+    appointment,
+    { readOnly: !canWritePersonnelCandidateStructuredScope(appointment) },
+  )).join("");
+  const ratingRows = personnelCandidateRatingsForEditor(ratings)
+    .map((rating) => renderPersonnelCandidateRatingEditorRow(rating, { standard: rating.standard }))
+    .join("");
   return `<article class="personnel-candidate-application">
     <header><div><span class="eyebrow">Bewerbung</span><h4>${escapeHtml(application.desiredRoleTitle || application.positionName || "Stelle nicht angegeben")}</h4></div><span class="personnel-candidate-status-badge${personnelCandidateStatusClass(application.status)}">${escapeHtml(personnelCandidateStatusLabel(application.status))}</span></header>
     <div class="personnel-candidate-facts">
-      ${personnelCandidateFact("Standort", application.desiredLocationName || application.locationName || application.desiredLocationId)}
-      ${personnelCandidateFact("Abteilung", application.desiredDepartmentName || application.departmentName || application.desiredDepartmentId)}
+      ${personnelCandidateFact("Zielbereiche", String(targetAreas.length || (application.desiredLocationId ? 1 : 0)))}
+      ${personnelCandidateFact("Schnuppertermine", String(appointments.length))}
       ${personnelCandidateFact("Verfügbar ab", application.availableFrom ? formatDate(String(application.availableFrom).slice(0, 10)) : "Nicht angegeben")}
       ${personnelCandidateFact("Wochenumfang", weeklyHours)}
       ${personnelCandidateFact("Beschäftigungsart", application.employmentType)}
       ${personnelCandidateFact("Stand", formatPersonnelCandidateTimestamp(application.updatedAt || application.statusChangedAt))}
     </div>
+    <details class="personnel-candidate-detail-section" open><summary><span><strong>Zielbereiche</strong><small>${targetAreas.length} ${targetAreas.length === 1 ? "Filiale oder Abteilung" : "Filialen oder Abteilungen"}</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateTargetAreas(application)}</div></details>
+    <details class="personnel-candidate-detail-section"><summary><span><strong>Schnuppertermine</strong><small>${appointments.length} ${appointments.length === 1 ? "Termin" : "Termine"}</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateTrialAppointments(application)}</div></details>
+    <details class="personnel-candidate-detail-section"><summary><span><strong>Kompetenzbewertung</strong><small>${ratings.length} von ${PERSONNEL_CANDIDATE_DEFAULT_COMPETENCIES.length} Standardkompetenzen oder Ergänzungen bewertet</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateCompetencyRatings(application)}</div></details>
+    <details class="personnel-candidate-detail-section"><summary><span><strong>Teamrückmeldungen</strong><small>${personnelCandidateTeamFeedback(application).length} dokumentiert</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateTeamFeedback(application)}</div></details>
+    ${canWrite ? `<details class="personnel-candidate-detail-section personnel-candidate-editor-section"><summary><span><strong>Bewerbung bearbeiten</strong><small>Zielbereiche, Schnuppertermine und Bewertungen</small></span><i aria-hidden="true">›</i></summary>
+      <form class="personnel-candidate-detail-form personnel-candidate-application-editor" data-personnel-candidate-application-form data-application-id="${escapeHtmlAttribute(application.id)}">
+        <div class="form-grid"><label class="field"><span>Gewünschte Tätigkeit</span><input name="desiredRoleTitle" maxlength="180" value="${escapeHtmlAttribute(application.desiredRoleTitle || "")}" /></label><label class="field"><span>Verfügbar ab</span><input name="availableFrom" type="date" value="${escapeHtmlAttribute(String(application.availableFrom || "").slice(0, 10))}" /></label></div>
+        <section class="personnel-candidate-editor-group"><header><div><strong>Zielbereiche</strong><small>Genau ein Bereich kann als bevorzugt markiert werden. Bereiche außerhalb der eigenen Freigabe bleiben sichtbar und unverändert erhalten.</small></div><button class="secondary-button" type="button" data-candidate-add-target-area>+ Zielfiliale</button></header><div class="personnel-candidate-repeater" data-candidate-target-area-list>${targetRows}</div></section>
+        <section class="personnel-candidate-editor-group"><header><div><strong>Schnuppertermine</strong><small>Ein Tag oder Zeitraum je Filiale. Fremde Bereiche werden nur lesend angezeigt.</small></div><button class="secondary-button" type="button" data-candidate-add-trial>+ Schnuppertermin</button></header><div class="personnel-candidate-repeater" data-candidate-trial-list>${trialRows}</div></section>
+        <section class="personnel-candidate-editor-group"><header><div><strong>Kompetenzbewertung</strong><small>Zahlen und Texte ergänzen die Rot–Gelb–Grün-Darstellung.</small></div><button class="secondary-button" type="button" data-candidate-add-rating>+ Kompetenz</button></header><div class="personnel-candidate-rating-list" data-candidate-rating-list>${ratingRows}</div></section>
+        <div class="personnel-candidate-form-actions"><small>Änderungen werden revisionsgebunden gespeichert.</small><button class="primary-button" type="submit">Bewerbung speichern</button></div>
+      </form>
+    </details>` : ""}
     ${renderPersonnelCandidateStatusForm(candidateId, application)}
   </article>`;
 }
 
 function renderPersonnelCandidateDetail() {
   if (!elements.personnelCandidateDetail) return;
+  if (state.personnelCandidateEditPhotoObjectUrl) {
+    URL.revokeObjectURL(state.personnelCandidateEditPhotoObjectUrl);
+    state.personnelCandidateEditPhotoObjectUrl = "";
+  }
   if (state.personnelCandidateDetailLoading) {
     elements.personnelCandidateDetail.innerHTML = '<div class="personnel-candidate-empty"><strong>Details werden geladen</strong><p>Die freigegebenen Bewerbungsdaten werden abgerufen.</p></div>';
     return;
@@ -11974,18 +12615,28 @@ function renderPersonnelCandidateDetail() {
   }
   const profile = personnelCandidateProfile(candidate);
   const applications = personnelCandidateApplications(candidate);
+  const age = personnelCandidateAge(profile.birthDate);
+  const address = profile.address && typeof profile.address === "object"
+    ? profile.address
+    : (profile.residence && typeof profile.residence === "object" ? profile.residence : {});
+  const residence = [address.postalCode, address.city].filter(Boolean).join(" ");
   elements.personnelCandidateDetail.innerHTML = `<div class="personnel-candidate-detail-heading">
-      <div><span class="eyebrow">Bewerberprofil</span><h3>${escapeHtml(personnelCandidateName(candidate))}</h3><p>Getrennte Bewerberentität ohne Personalnummer.</p></div>
+      <div class="personnel-candidate-detail-identity">${personnelCandidatePhotoMarkup(candidate, "detail")}<div><span class="eyebrow">Bewerberprofil</span><h3>${escapeHtml(personnelCandidateName(candidate))}</h3><p>Getrennte Bewerberentität ohne Personalnummer.</p></div></div>
       <span class="personnel-candidate-status-badge${candidate.state === "archived" ? " status-archived" : ""}">${candidate.state === "archived" ? "Archiviert" : "Aktiv"}</span>
     </div>
     ${state.personnelCandidateDetailError ? `<p class="personnel-candidate-inline-error">${escapeHtml(state.personnelCandidateDetailError)}</p>` : ""}
     <div class="personnel-candidate-facts personnel-candidate-contact-facts">
       ${personnelCandidateFact("E-Mail", profile.email)}
       ${personnelCandidateFact("Telefon", profile.phone)}
+      ${personnelCandidateFact("Alter", age === null ? "Nicht angegeben" : `${age} Jahre`)}
+      ${personnelCandidateFact("Wohnort", residence)}
+      ${personnelCandidateFact("Staatsangehörigkeit(en)", personnelCandidateCitizenships(profile.citizenships).join(", "))}
       ${personnelCandidateFact("Bewerbungen", String(applications.length))}
       ${personnelCandidateFact("Zuletzt aktualisiert", formatPersonnelCandidateTimestamp(candidate.updatedAt))}
     </div>
-    <div class="personnel-candidate-privacy-note"><strong>Datensparsame Ansicht</strong><p>Es werden ausschließlich Kontaktdaten und freigegebene Bewerbungsangaben dargestellt. Vertrauliche Bewertungs- und Verlaufsdaten bleiben ausgeblendet.</p></div>
+    <div class="personnel-candidate-privacy-note"><strong>Datensparsame Ansicht</strong><p>Es werden ausschließlich serverseitig freigegebene Profil-, Bewerbungs- und Bewertungsangaben dargestellt. Nicht freigegebene vertrauliche Felder bleiben ausgeblendet.</p></div>
+    ${renderPersonnelCandidateProfileEditor(candidate)}
+    ${renderPersonnelCandidatePhotoEditor(candidate)}
     <div class="personnel-candidate-applications">
       ${applications.length
         ? applications.map((application) => renderPersonnelCandidateApplication(candidate.id, application)).join("")
@@ -12004,6 +12655,11 @@ function renderPersonnelCandidateOverview() {
     createForm?.reset();
   }
   applicationFieldset?.classList.toggle("hidden", !capabilities.canWriteApplications);
+  elements.personnelCandidateCreatePhotoField?.classList.toggle("hidden", !capabilities.canWriteApplications);
+  if (!capabilities.canWriteApplications && elements.personnelCandidateCreatePhoto) {
+    elements.personnelCandidateCreatePhoto.value = "";
+    elements.personnelCandidateCreatePhoto.setCustomValidity("");
+  }
   if (!capabilities.canWriteApplications && createForm) {
     for (const fieldName of [
       "desiredLocationId",
@@ -12055,6 +12711,109 @@ function setPersonnelCandidateCreateMessage(message = "", isError = false) {
   elements.personnelCandidateCreateMessage.classList.toggle("error", Boolean(message) && isError);
 }
 
+function resetPersonnelCandidateCreateEnhancements() {
+  if (state.personnelCandidatePhotoObjectUrl) URL.revokeObjectURL(state.personnelCandidatePhotoObjectUrl);
+  state.personnelCandidatePhotoObjectUrl = "";
+  if (elements.personnelCandidateCreatePhoto) {
+    elements.personnelCandidateCreatePhoto.value = "";
+    elements.personnelCandidateCreatePhoto.setCustomValidity("");
+  }
+  if (elements.personnelCandidateCreatePhotoPreview) {
+    elements.personnelCandidateCreatePhotoPreview.removeAttribute("src");
+    elements.personnelCandidateCreatePhotoPreview.hidden = true;
+  }
+  const placeholder = elements.personnelCandidateCreatePhotoField
+    ?.querySelector(".personnel-candidate-photo-placeholder");
+  if (placeholder) placeholder.hidden = false;
+  if (elements.personnelCandidateCreateTargetAreas) elements.personnelCandidateCreateTargetAreas.innerHTML = "";
+  if (elements.personnelCandidateCreateTrialAppointments) elements.personnelCandidateCreateTrialAppointments.innerHTML = "";
+  renderPersonnelCandidateRatingsEditor(elements.personnelCandidateCreateCompetencyRatings, []);
+}
+
+function updatePersonnelCandidateCreatePhotoPreview() {
+  const input = elements.personnelCandidateCreatePhoto;
+  const preview = elements.personnelCandidateCreatePhotoPreview;
+  const placeholder = elements.personnelCandidateCreatePhotoField
+    ?.querySelector(".personnel-candidate-photo-placeholder");
+  if (!input || !preview) return;
+  if (state.personnelCandidatePhotoObjectUrl) URL.revokeObjectURL(state.personnelCandidatePhotoObjectUrl);
+  state.personnelCandidatePhotoObjectUrl = "";
+  const file = personnelCandidatePhotoFile(input);
+  if (!file) {
+    preview.removeAttribute("src");
+    preview.hidden = true;
+    if (placeholder) placeholder.hidden = false;
+    return;
+  }
+  state.personnelCandidatePhotoObjectUrl = URL.createObjectURL(file);
+  preview.src = state.personnelCandidatePhotoObjectUrl;
+  preview.hidden = false;
+  if (placeholder) placeholder.hidden = true;
+}
+
+function updatePersonnelCandidateDetailPhotoPreview(input) {
+  const form = input?.closest("[data-personnel-candidate-photo-form]");
+  const preview = form?.querySelector("[data-personnel-candidate-photo-edit-preview]");
+  const placeholder = form?.querySelector("[data-personnel-candidate-photo-edit-placeholder]");
+  if (!form || !preview) return;
+  if (state.personnelCandidateEditPhotoObjectUrl) {
+    URL.revokeObjectURL(state.personnelCandidateEditPhotoObjectUrl);
+    state.personnelCandidateEditPhotoObjectUrl = "";
+  }
+  const file = personnelCandidatePhotoFile(input);
+  if (!file) {
+    const originalSrc = String(preview.dataset.originalSrc || "");
+    if (originalSrc) preview.src = originalSrc;
+    else preview.removeAttribute("src");
+    preview.hidden = !originalSrc;
+    if (placeholder) placeholder.hidden = Boolean(originalSrc);
+    return;
+  }
+  state.personnelCandidateEditPhotoObjectUrl = URL.createObjectURL(file);
+  preview.src = state.personnelCandidateEditPhotoObjectUrl;
+  preview.hidden = false;
+  if (placeholder) placeholder.hidden = true;
+}
+
+function canWritePersonnelCandidateApplication(application) {
+  return state.personnelCandidateCapabilities.canWriteApplications
+    && (state.personnelCandidateCapabilities.scope?.type === "global"
+      || application?.canWrite === true);
+}
+
+function canWritePersonnelCandidateStructuredScope(entry) {
+  const scope = state.personnelCandidateCapabilities.applicationWriteScope;
+  const scopeType = String(scope?.type || "none").toLowerCase();
+  if (scopeType === "global") return true;
+  const locationId = String(entry?.locationId || "");
+  if (!locationId || !(scope?.locationIds || []).some((value) => String(value) === locationId)) {
+    return false;
+  }
+  if (scopeType === "location") return true;
+  if (scopeType !== "department") return false;
+  const departmentId = Number(entry?.departmentId || 0);
+  return Number.isSafeInteger(departmentId) && departmentId > 0
+    && (scope?.departmentIds || []).some((value) => Number(value) === departmentId);
+}
+
+function canWritePersonnelCandidatePhoto(candidate) {
+  const applications = personnelCandidateApplications(candidate);
+  return state.personnelCandidateCapabilities.canWriteApplications
+    && (state.personnelCandidateCapabilities.scope?.type === "global"
+      || applications.some((application) => canWritePersonnelCandidateApplication(application)));
+}
+
+async function uploadPersonnelCandidatePhoto(candidateId, file) {
+  if (!candidateId || !file) return null;
+  const formData = new FormData();
+  formData.append("document", file, file.name || "Bewerberfoto");
+  const response = await rawApi(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidateId)}/photo`, {
+    method: "POST",
+    body: formData,
+  });
+  return response.status === 204 ? null : response.json();
+}
+
 function syncPersonnelCandidateAuthorizationState() {
   const confirmed = elements.personnelCandidateAuthorizationConfirmed?.checked === true;
   elements.personnelCandidateAuthorizationCheck?.classList.toggle("confirmed", confirmed);
@@ -12099,6 +12858,8 @@ function populatePersonnelCandidateCreateLocations() {
     : "";
   elements.personnelCandidateCreateLocation.required = localCreate;
   elements.personnelCandidateCreateLocation.disabled = localCreate && locations.length === 1;
+  elements.personnelCandidateCreateForm?.querySelector(".personnel-candidate-location-required")
+    ?.classList.toggle("hidden", !localCreate);
   const requirementLabel = elements.personnelCandidateCreateApplication?.querySelector("legend span");
   if (requirementLabel) requirementLabel.textContent = localCreate ? "erforderlich" : "optional";
   updatePersonnelCandidateCreateDepartments();
@@ -12107,18 +12868,11 @@ function populatePersonnelCandidateCreateLocations() {
 function updatePersonnelCandidateCreateDepartments() {
   if (!elements.personnelCandidateCreateDepartment) return;
   const locationId = String(elements.personnelCandidateCreateLocation?.value || "");
-  const location = (state.locations || []).find((entry) => String(entry?.id || "") === locationId);
-  const departments = (location?.departments || [])
-    .filter((department) => department?.active !== false && Number.isInteger(Number(department?.id)))
-    .sort((left, right) => String(left.name || left.id).localeCompare(
-      String(right.name || right.id),
-      "de-AT",
-      { numeric: true, sensitivity: "base" },
-    ));
-  elements.personnelCandidateCreateDepartment.innerHTML = [
-    '<option value="">Gesamte Filiale / noch offen</option>',
-    ...departments.map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name || department.id)}</option>`),
-  ].join("");
+  elements.personnelCandidateCreateDepartment.innerHTML = personnelCandidateDepartmentOptions(
+    locationId,
+    "",
+    { scopeMode: "create" },
+  );
   elements.personnelCandidateCreateDepartment.disabled = !locationId;
 }
 
@@ -12127,6 +12881,7 @@ function openPersonnelCandidateCreateModal() {
     || !elements.personnelCandidateCreateModal
     || !elements.personnelCandidateCreateForm) return;
   elements.personnelCandidateCreateForm.reset();
+  resetPersonnelCandidateCreateEnhancements();
   elements.personnelCandidateCreateApplication?.classList.toggle(
     "hidden",
     !state.personnelCandidateCapabilities.canWriteApplications,
@@ -12158,6 +12913,11 @@ async function savePersonnelCandidate(event) {
     elements.personnelCandidateAuthorizationConfirmed?.focus();
     return;
   }
+  const photo = personnelCandidatePhotoFile(elements.personnelCandidateCreatePhoto);
+  if (elements.personnelCandidateCreatePhoto?.files?.length && !photo) {
+    elements.personnelCandidateCreatePhoto.reportValidity();
+    return;
+  }
   const body = {
     dataProcessingAuthorizationConfirmed: true,
     profile: {
@@ -12165,6 +12925,12 @@ async function savePersonnelCandidate(event) {
       lastName: String(form.elements.lastName.value || "").trim(),
       email,
       phone,
+      birthDate: String(form.elements.birthDate?.value || "").trim() || null,
+      address: {
+        postalCode: String(form.elements.postalCode?.value || "").trim(),
+        city: String(form.elements.city?.value || "").trim(),
+      },
+      citizenships: personnelCandidateCitizenships(form.elements.citizenships?.value),
     },
   };
   if (state.personnelCandidateCapabilities.canWriteApplications) {
@@ -12188,16 +12954,36 @@ async function savePersonnelCandidate(event) {
         ? "Bitte einen für Bewerbungen freigegebenen eigenen Standort auswählen."
         : "",
     );
-    if (localCreate || desiredLocationId || desiredDepartmentId || desiredRoleTitle || availableFrom || source) {
+    const primaryTargetArea = desiredLocationId ? {
+      locationId: desiredLocationId,
+      departmentId: desiredDepartmentId ? Number(desiredDepartmentId) : null,
+    } : null;
+    validatePersonnelCandidateTargetRows(elements.personnelCandidateCreateTargetAreas, primaryTargetArea);
+    const targetAreas = personnelCandidateTargetAreasFrom(
+      elements.personnelCandidateCreateTargetAreas,
+      primaryTargetArea,
+    );
+    const trialAppointments = personnelCandidateTrialAppointmentsFrom(
+      elements.personnelCandidateCreateTrialAppointments,
+    );
+    const competencyRatings = personnelCandidateRatingsFrom(
+      elements.personnelCandidateCreateCompetencyRatings,
+    );
+    if (localCreate || desiredLocationId || desiredDepartmentId || desiredRoleTitle || availableFrom || source
+      || targetAreas.length || trialAppointments.length || competencyRatings.length) {
       body.application = {
         ...(desiredLocationId ? { desiredLocationId } : {}),
         ...(desiredDepartmentId ? { desiredDepartmentId: Number(desiredDepartmentId) } : {}),
         ...(desiredRoleTitle ? { desiredRoleTitle } : {}),
         ...(availableFrom ? { availableFrom } : {}),
         ...(source ? { source } : {}),
+        targetAreas,
+        trialAppointments,
+        competencyRatings,
       };
     }
   }
+  if (!validatePersonnelCandidateTrialRows(form)) return;
   if (!form.reportValidity()) return;
 
   state.personnelCandidateCreatePending = true;
@@ -12210,12 +12996,22 @@ async function savePersonnelCandidate(event) {
       body: JSON.stringify(body),
     });
     const candidateId = String(result?.candidate?.id || "");
+    let photoError = "";
+    if (candidateId && photo) {
+      try {
+        await uploadPersonnelCandidatePhoto(candidateId, photo);
+      } catch (error) {
+        photoError = error.message || "Das Bewerberfoto konnte nicht gespeichert werden.";
+      }
+    }
     elements.personnelCandidateCreateModal.close();
     await loadPersonnelCandidates({ force: true });
     if (candidateId && state.personnelCandidateCapabilities.canReadCandidates) {
       await loadPersonnelCandidateDetail(candidateId);
     }
-    showToast("Der Bewerber wurde angelegt und die EDV-Erlaubnis revisionssicher bestätigt.");
+    showToast(photoError
+      ? `Der Bewerber wurde angelegt; ${photoError}`
+      : "Der Bewerber wurde angelegt und die EDV-Erlaubnis revisionssicher bestätigt.", Boolean(photoError));
   } catch (error) {
     if ([401, 403].includes(error.status)) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
@@ -12344,7 +13140,8 @@ async function savePersonnelCandidateApplicationStatus(event) {
   ));
   const status = form.elements.status.value;
   const allowedTransitions = PERSONNEL_CANDIDATE_STATUS_TRANSITIONS[application?.status] || [];
-  if (!application || !allowedTransitions.includes(status)) {
+  if (!application || !canWritePersonnelCandidateApplication(application)
+    || !allowedTransitions.includes(status)) {
     state.personnelCandidateDetailError = "Der gewählte Statuswechsel ist nicht mehr verfügbar. Bitte Details aktualisieren.";
     renderPersonnelCandidateDetail();
     return;
@@ -12379,6 +13176,256 @@ async function savePersonnelCandidateApplicationStatus(event) {
     state.personnelCandidateMutationPending = "";
     renderPersonnelCandidateOverview();
   }
+}
+
+async function savePersonnelCandidateProfile(form) {
+  const candidate = state.selectedPersonnelCandidate;
+  if (!form || !candidate || !state.personnelCandidateCapabilities.canWriteCandidates
+    || state.personnelCandidateMutationPending) return;
+  const email = String(form.elements.email?.value || "").trim();
+  const phone = String(form.elements.phone?.value || "").trim();
+  form.elements.email?.setCustomValidity(email || phone
+    ? ""
+    : "Bitte E-Mail-Adresse oder Telefonnummer angeben.");
+  if (!form.reportValidity()) return;
+  state.personnelCandidateMutationPending = "profile";
+  state.personnelCandidateDetailError = "";
+  try {
+    await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        revision: candidate.revision,
+        profile: {
+          firstName: String(form.elements.firstName.value || "").trim(),
+          lastName: String(form.elements.lastName.value || "").trim(),
+          email,
+          phone,
+          birthDate: String(form.elements.birthDate?.value || "").trim() || null,
+          address: {
+            postalCode: String(form.elements.postalCode?.value || "").trim(),
+            city: String(form.elements.city?.value || "").trim(),
+          },
+          citizenships: personnelCandidateCitizenships(form.elements.citizenships?.value),
+        },
+      }),
+    });
+    await loadPersonnelCandidates({ force: true });
+    await loadPersonnelCandidateDetail(candidate.id);
+    showToast("Das Bewerberprofil wurde gespeichert.");
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    state.personnelCandidateDetailError = error.message || "Das Bewerberprofil konnte nicht gespeichert werden.";
+    if (error.status === 409) await loadPersonnelCandidateDetail(candidate.id);
+  } finally {
+    state.personnelCandidateMutationPending = "";
+    renderPersonnelCandidateOverview();
+  }
+}
+
+async function savePersonnelCandidatePhoto(form) {
+  const candidate = state.selectedPersonnelCandidate;
+  if (!form || !candidate || !canWritePersonnelCandidatePhoto(candidate)
+    || state.personnelCandidateMutationPending) return;
+  const photoInput = form.elements.photo;
+  const photo = personnelCandidatePhotoFile(photoInput);
+  if (!photo) {
+    photoInput?.reportValidity();
+    return;
+  }
+  if (!form.reportValidity()) return;
+  state.personnelCandidateMutationPending = "photo";
+  state.personnelCandidateDetailError = "";
+  try {
+    await uploadPersonnelCandidatePhoto(candidate.id, photo);
+    await loadPersonnelCandidates({ force: true });
+    await loadPersonnelCandidateDetail(candidate.id);
+    showToast("Das Bewerberfoto wurde gespeichert.");
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    state.personnelCandidateDetailError = error.message || "Das Bewerberfoto konnte nicht gespeichert werden.";
+    renderPersonnelCandidateOverview();
+  } finally {
+    state.personnelCandidateMutationPending = "";
+    renderPersonnelCandidateOverview();
+  }
+}
+
+function validatePersonnelCandidateTrialRows(form) {
+  let valid = true;
+  let firstInvalidRangeButton = null;
+  for (const row of form?.querySelectorAll("[data-candidate-trial-row]") || []) {
+    if (row.dataset.candidateReadonlyScope === "true") continue;
+    const from = row.querySelector("[data-candidate-trial-from]");
+    const to = row.querySelector("[data-candidate-trial-to]");
+    const start = row.querySelector("[data-candidate-trial-start]");
+    const end = row.querySelector("[data-candidate-trial-end]");
+    const rangeButton = row.querySelector("[data-candidate-trial-range-button]");
+    const invalidRange = !from?.value || !to?.value || to.value < from.value;
+    row.classList.toggle("has-validation-error", invalidRange);
+    if (rangeButton) {
+      rangeButton.toggleAttribute("aria-invalid", invalidRange);
+      if (invalidRange && !firstInvalidRangeButton) firstInvalidRangeButton = rangeButton;
+    }
+    const incompleteTime = Boolean(start?.value) !== Boolean(end?.value);
+    start?.setCustomValidity(incompleteTime ? "Bitte Beginn und Ende gemeinsam angeben." : "");
+    end?.setCustomValidity(incompleteTime
+      ? "Bitte Beginn und Ende gemeinsam angeben."
+      : (from?.value === to?.value && start?.value && end.value <= start.value
+        ? "Das Ende muss nach dem Beginn liegen."
+        : ""));
+    if (invalidRange || incompleteTime
+      || (from?.value === to?.value && start?.value && end?.value <= start.value)) valid = false;
+  }
+  if (firstInvalidRangeButton) {
+    showToast("Bitte für jeden Schnuppertermin einen gültigen Zeitraum auswählen.", true);
+    firstInvalidRangeButton.focus();
+  }
+  return valid;
+}
+
+async function savePersonnelCandidateApplication(form) {
+  const candidate = state.selectedPersonnelCandidate;
+  const applicationId = String(form?.dataset.applicationId || "");
+  const application = personnelCandidateApplications(candidate).find((entry) => entry.id === applicationId);
+  if (!form || !candidate || !application || !canWritePersonnelCandidateApplication(application)
+    || state.personnelCandidateMutationPending) return;
+  if (!validatePersonnelCandidateTrialRows(form)) return;
+  validatePersonnelCandidateTargetRows(form.querySelector("[data-candidate-target-area-list]"));
+  if (!form.reportValidity()) return;
+  const targetAreas = personnelCandidateTargetAreasFrom(form.querySelector("[data-candidate-target-area-list]"));
+  if (!targetAreas.length) {
+    state.personnelCandidateDetailError = "Bitte mindestens einen Zielbereich auswählen.";
+    renderPersonnelCandidateDetail();
+    return;
+  }
+  state.personnelCandidateMutationPending = applicationId;
+  state.personnelCandidateDetailError = "";
+  try {
+    await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}/applications/${encodeURIComponent(application.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        revision: application.revision,
+        desiredRoleTitle: String(form.elements.desiredRoleTitle?.value || "").trim(),
+        availableFrom: String(form.elements.availableFrom?.value || "").trim() || null,
+        targetAreas,
+        trialAppointments: personnelCandidateTrialAppointmentsFrom(form.querySelector("[data-candidate-trial-list]")),
+        competencyRatings: personnelCandidateRatingsFrom(form.querySelector("[data-candidate-rating-list]")),
+      }),
+    });
+    await loadPersonnelCandidates({ force: true });
+    await loadPersonnelCandidateDetail(candidate.id);
+    showToast("Bewerbungsdaten, Schnuppertermine und Bewertungen wurden gespeichert.");
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    state.personnelCandidateDetailError = error.message || "Die Bewerbungsdaten konnten nicht gespeichert werden.";
+    if (error.status === 409) await loadPersonnelCandidateDetail(candidate.id);
+  } finally {
+    state.personnelCandidateMutationPending = "";
+    renderPersonnelCandidateOverview();
+  }
+}
+
+async function savePersonnelCandidateTeamFeedback(form) {
+  const candidate = state.selectedPersonnelCandidate;
+  const applicationId = String(form?.dataset.applicationId || "");
+  const application = personnelCandidateApplications(candidate).find((entry) => entry.id === applicationId);
+  if (!form || !candidate || !application || !canWritePersonnelCandidateApplication(application)
+    || state.personnelCandidateMutationPending) return;
+  const ratingInputs = [...form.querySelectorAll('input[type="radio"]')];
+  const rating = Number(ratingInputs.find((input) => input.checked)?.value || 0);
+  ratingInputs[0]?.setCustomValidity(rating >= 1 && rating <= 5
+    ? ""
+    : "Bitte für die Teamrückmeldung eine Bewertung von 1 bis 5 auswählen.");
+  if (!form.reportValidity()) return;
+  state.personnelCandidateMutationPending = `feedback:${applicationId}`;
+  state.personnelCandidateDetailError = "";
+  try {
+    await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}/applications/${encodeURIComponent(application.id)}/team-feedback`, {
+      method: "POST",
+      body: JSON.stringify({
+        employeeNumber: String(form.elements.employeeNumber?.value || "").trim(),
+        trialAppointmentId: String(form.elements.trialAppointmentId?.value || "").trim(),
+        rating,
+        comment: String(form.elements.comment?.value || "").trim(),
+        revision: application.revision,
+      }),
+    });
+    await loadPersonnelCandidates({ force: true });
+    await loadPersonnelCandidateDetail(candidate.id);
+    showToast("Die Teamrückmeldung wurde revisionssicher gespeichert.");
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    state.personnelCandidateDetailError = error.message || "Die Teamrückmeldung konnte nicht gespeichert werden.";
+    if (error.status === 409) await loadPersonnelCandidateDetail(candidate.id);
+  } finally {
+    state.personnelCandidateMutationPending = "";
+    renderPersonnelCandidateOverview();
+  }
+}
+
+function handlePersonnelCandidateDetailSubmit(event) {
+  const profileForm = event.target.closest("[data-personnel-candidate-profile-form]");
+  const photoForm = event.target.closest("[data-personnel-candidate-photo-form]");
+  const applicationForm = event.target.closest("[data-personnel-candidate-application-form]");
+  const feedbackForm = event.target.closest("[data-personnel-candidate-team-feedback-form]");
+  const statusForm = event.target.closest("[data-personnel-candidate-status-form]");
+  if (!profileForm && !photoForm && !applicationForm && !feedbackForm && !statusForm) return;
+  event.preventDefault();
+  if (profileForm) savePersonnelCandidateProfile(profileForm);
+  else if (photoForm) savePersonnelCandidatePhoto(photoForm);
+  else if (applicationForm) savePersonnelCandidateApplication(applicationForm);
+  else if (feedbackForm) savePersonnelCandidateTeamFeedback(feedbackForm);
+  else savePersonnelCandidateApplicationStatus(event);
+}
+
+function handlePersonnelCandidateDynamicClick(event) {
+  const rangeButton = event.target.closest("[data-candidate-trial-range-button]");
+  if (rangeButton) {
+    openPersonnelCandidateTrialDateRangeCalendar(rangeButton);
+    return true;
+  }
+  const remove = event.target.closest("[data-candidate-remove-row]");
+  if (remove) {
+    const row = remove.closest("[data-candidate-target-area-row],[data-candidate-trial-row],[data-candidate-rating-row]");
+    row?.remove();
+    return true;
+  }
+  const targetButton = event.target.closest("[data-candidate-add-target-area]");
+  if (targetButton) {
+    const list = targetButton.closest("form")?.querySelector("[data-candidate-target-area-list]");
+    list?.insertAdjacentHTML("beforeend", renderPersonnelCandidateTargetAreaEditorRow({}, {
+      preferredName: `candidate-preferred-${targetButton.closest("form")?.dataset.applicationId || personnelCandidateClientId("area")}`,
+    }));
+    list?.querySelector("[data-candidate-target-area-row]:last-child [data-candidate-target-location]")?.focus();
+    return true;
+  }
+  const trialButton = event.target.closest("[data-candidate-add-trial]");
+  if (trialButton) {
+    const list = trialButton.closest("form")?.querySelector("[data-candidate-trial-list]");
+    list?.insertAdjacentHTML("beforeend", renderPersonnelCandidateTrialEditorRow());
+    list?.querySelector("[data-candidate-trial-row]:last-child [data-candidate-trial-range-button]")?.focus();
+    return true;
+  }
+  const ratingButton = event.target.closest("[data-candidate-add-rating]");
+  if (ratingButton) {
+    const list = ratingButton.closest("form")?.querySelector("[data-candidate-rating-list]");
+    list?.insertAdjacentHTML("beforeend", renderPersonnelCandidateRatingEditorRow());
+    list?.querySelector("[data-candidate-rating-row]:last-child [data-candidate-rating-label]")?.focus();
+    return true;
+  }
+  return false;
 }
 
 const PERSONNEL_WORKFLOW_TYPE_LABELS = Object.freeze({
@@ -33223,6 +34270,52 @@ elements.personnelCandidateStatusFilter?.addEventListener("change", (event) => {
 });
 elements.addPersonnelCandidateButton?.addEventListener("click", openPersonnelCandidateCreateModal);
 elements.personnelCandidateCreateLocation?.addEventListener("change", updatePersonnelCandidateCreateDepartments);
+elements.personnelCandidateCreatePhoto?.addEventListener("change", updatePersonnelCandidateCreatePhotoPreview);
+elements.personnelCandidateCreateAddTargetArea?.addEventListener("click", () => {
+  elements.personnelCandidateCreateTargetAreas?.insertAdjacentHTML(
+    "beforeend",
+    renderPersonnelCandidateTargetAreaEditorRow({}, {
+      preferredName: "personnel-candidate-create-preferred-area",
+      scopeMode: "create",
+    }),
+  );
+  elements.personnelCandidateCreateTargetAreas
+    ?.querySelector("[data-candidate-target-area-row]:last-child [data-candidate-target-location]")?.focus();
+});
+elements.personnelCandidateCreateAddTrialAppointment?.addEventListener("click", () => {
+  elements.personnelCandidateCreateTrialAppointments?.insertAdjacentHTML(
+    "beforeend",
+    renderPersonnelCandidateTrialEditorRow({}, { scopeMode: "create" }),
+  );
+  elements.personnelCandidateCreateTrialAppointments
+    ?.querySelector("[data-candidate-trial-row]:last-child [data-candidate-trial-range-button]")?.focus();
+});
+elements.personnelCandidateCreateAddCompetencyRating?.addEventListener("click", () => {
+  elements.personnelCandidateCreateCompetencyRatings?.insertAdjacentHTML(
+    "beforeend",
+    renderPersonnelCandidateRatingEditorRow(),
+  );
+  elements.personnelCandidateCreateCompetencyRatings
+    ?.querySelector("[data-candidate-rating-row]:last-child [data-candidate-rating-label]")?.focus();
+});
+elements.personnelCandidateCreateApplication?.addEventListener("click", (event) => {
+  const rangeButton = event.target.closest("[data-candidate-trial-range-button]");
+  if (rangeButton) {
+    openPersonnelCandidateTrialDateRangeCalendar(rangeButton);
+    return;
+  }
+  const remove = event.target.closest("[data-candidate-remove-row]");
+  remove?.closest("[data-candidate-target-area-row],[data-candidate-trial-row],[data-candidate-rating-row]")?.remove();
+});
+elements.personnelCandidateCreateApplication?.addEventListener("change", (event) => {
+  if (event.target.matches("[data-candidate-target-location],[data-candidate-trial-location]")) {
+    syncPersonnelCandidateLocationRow(event.target);
+  }
+  if (event.target.matches("[data-candidate-trial-from]")) {
+    const to = event.target.closest("[data-candidate-trial-row]")?.querySelector("[data-candidate-trial-to]");
+    if (to && !to.value) to.value = event.target.value;
+  }
+});
 elements.personnelCandidateAuthorizationConfirmed?.addEventListener("change", () => {
   setPersonnelCandidateCreateMessage();
   syncPersonnelCandidateAuthorizationState();
@@ -33237,6 +34330,7 @@ elements.personnelCandidateCreateForm?.addEventListener("input", () => {
 elements.personnelCandidateCreateForm?.addEventListener("submit", savePersonnelCandidate);
 elements.personnelCandidateCreateModal?.addEventListener("close", () => {
   elements.personnelCandidateCreateForm?.reset();
+  resetPersonnelCandidateCreateEnhancements();
   setPersonnelCandidateCreateMessage();
   syncPersonnelCandidateAuthorizationState();
 });
@@ -33250,11 +34344,24 @@ elements.personnelCandidateList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-personnel-candidate-id]");
   if (button) loadPersonnelCandidateDetail(button.dataset.personnelCandidateId);
 });
+elements.personnelCandidateDetail?.addEventListener("click", (event) => {
+  handlePersonnelCandidateDynamicClick(event);
+});
 elements.personnelCandidateDetail?.addEventListener("change", (event) => {
   const form = event.target.closest("[data-personnel-candidate-status-form]");
   if (form && event.target.name === "status") updatePersonnelCandidateReasonField(form);
+  if (event.target.matches("[data-candidate-target-location],[data-candidate-trial-location]")) {
+    syncPersonnelCandidateLocationRow(event.target);
+  }
+  if (event.target.matches("[data-candidate-trial-from]")) {
+    const to = event.target.closest("[data-candidate-trial-row]")?.querySelector("[data-candidate-trial-to]");
+    if (to && !to.value) to.value = event.target.value;
+  }
+  if (event.target.matches("[data-personnel-candidate-photo-form] input[name='photo']")) {
+    updatePersonnelCandidateDetailPhotoPreview(event.target);
+  }
 });
-elements.personnelCandidateDetail?.addEventListener("submit", savePersonnelCandidateApplicationStatus);
+elements.personnelCandidateDetail?.addEventListener("submit", handlePersonnelCandidateDetailSubmit);
 elements.personnelWorkflowInstanceStatusFilter?.addEventListener("change", (event) => {
   state.personnelWorkflowInstanceStatusFilter = ["all", "open", "resolved"].includes(event.target.value)
     ? event.target.value
@@ -33843,6 +34950,7 @@ elements.vacationCalendar.addEventListener("click", (event) => {
 initializeRequestBlackoutDateRangeCalendar();
 initializeStaffAssignmentRequestDateRangeCalendar();
 initializeScheduleSearchDateRangeCalendar();
+initializePersonnelCandidateTrialDateRangeCalendar();
 bootstrapApplication();
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked")) loadSystemInfo();

@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const sharp = require("sharp");
 
 const { createAmuStorage } = require("../lib/amu-storage");
 const {
@@ -85,6 +86,27 @@ async function request(route, {
     method,
     headers,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+  return { response, payload };
+}
+
+async function multipartRequest(route, { auth, form }) {
+  const headers = { Accept: "application/json" };
+  if (auth) {
+    headers.Cookie = auth.cookie;
+    headers["X-CSRF-Token"] = auth.csrf;
+  }
+  const response = await fetch(`${baseUrl}${route}`, {
+    method: "POST",
+    headers,
+    body: form,
   });
   const text = await response.text();
   let payload = null;
@@ -540,7 +562,7 @@ test("Personalmodul-API: Feature, Zentralrecht, Sensitivrecht und CSRF bleiben f
     { auth: admin },
   );
   assert.equal(featureEnabled.response.status, 200, JSON.stringify(featureEnabled.payload));
-  assert.equal(featureEnabled.payload.categories.length, 6);
+  assert.equal(featureEnabled.payload.categories.length, 7);
 
   const sensitiveOnly = createSession("103", "manager");
   grantSensitivePersonnelAccess("103");
@@ -1094,4 +1116,233 @@ test("Personalmodul M2: Candidate-Dokument bleibt beim Blob-Abgleich erhalten", 
     detectedMime: stored.detectedMime,
     originalFilename: stored.originalFilename,
   }), content);
+});
+
+test("Personalmodul Recruiting: strukturierte Profildaten, Teamfeedback und Bewerberfoto funktionieren gemeinsam", async () => {
+  setPersonnelLifecycleEnabled(true);
+  const admin = createSession("101", "admin");
+  grantSensitivePersonnelAccess("101");
+  const location = db.prepare(`
+    SELECT id
+    FROM locations
+    WHERE active = 1
+    ORDER BY id
+    LIMIT 1
+  `).get();
+  assert.ok(location?.id);
+  const department = db.prepare(`
+    SELECT id
+    FROM departments
+    WHERE active = 1 AND location_id = ?
+    ORDER BY id
+    LIMIT 1
+  `).get(String(location.id));
+  const departmentId = department?.id ? Number(department.id) : null;
+  const trialAppointmentId = crypto.randomUUID();
+
+  const created = await request(
+    "/api/portal/v1/personnel-lifecycle/candidates",
+    {
+      method: "POST",
+      auth: admin,
+      body: {
+        dataProcessingAuthorizationConfirmed: true,
+        profile: {
+          firstName: "Foto",
+          lastName: "Kandidatin",
+          phone: "+43 660 1234567",
+          birthDate: "1997-04-12",
+          address: { postalCode: "6020", city: "Innsbruck" },
+          citizenships: ["Österreich"],
+        },
+        application: {
+          desiredLocationId: String(location.id),
+          desiredDepartmentId: departmentId,
+          targetAreas: [{
+            locationId: String(location.id),
+            departmentId,
+            preferred: true,
+          }],
+          trialAppointments: [{
+            id: trialAppointmentId,
+            dateFrom: "2026-09-10",
+            dateTo: "2026-09-11",
+            startTime: "09:00",
+            endTime: "17:00",
+            locationId: String(location.id),
+            departmentId,
+            status: "planned",
+            note: "Zwei Schnuppertage",
+          }],
+          competencyRatings: [
+            { id: "fachlich", label: "Fachlich", rating: 4, note: "Guter Eindruck" },
+            { id: "menschlich", label: "Menschlich", rating: 5, note: "Sehr passend" },
+          ],
+        },
+      },
+    },
+  );
+  assert.equal(created.response.status, 201, JSON.stringify(created.payload));
+  const candidate = created.payload.candidate;
+  let application = candidate.applications[0];
+  assert.equal(candidate.profile.email, "");
+  assert.equal(candidate.profile.phone, "+43 660 1234567");
+  assert.equal(candidate.profile.birthDate, "1997-04-12");
+  assert.equal(candidate.profile.address.city, "Innsbruck");
+  assert.deepEqual(candidate.profile.citizenships, ["Österreich"]);
+  assert.equal(application.targetAreas[0].preferred, true);
+  assert.equal(application.trialAppointments[0].id, trialAppointmentId);
+  assert.deepEqual(application.competencyRatings.map(({ rating }) => rating), [4, 5]);
+
+  db.prepare(`
+    INSERT INTO locations (id, name, active)
+    VALUES ('candidate-alternate', 'Alternative Testfiliale', 1)
+  `).run();
+  const alternateLocation = db.prepare(`
+    SELECT id
+    FROM locations
+    WHERE active = 1 AND id <> ?
+    ORDER BY id
+    LIMIT 1
+  `).get(String(location.id));
+  assert.ok(alternateLocation?.id);
+  const changedPreferredArea = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}`,
+    {
+      method: "PUT",
+      auth: admin,
+      body: {
+        revision: application.revision,
+        targetAreas: [
+          {
+            locationId: String(location.id),
+            departmentId,
+            preferred: false,
+          },
+          {
+            locationId: String(alternateLocation.id),
+            departmentId: null,
+            preferred: true,
+          },
+        ],
+      },
+    },
+  );
+  assert.equal(changedPreferredArea.response.status, 200, JSON.stringify(changedPreferredArea.payload));
+  application = changedPreferredArea.payload.application;
+  assert.equal(application.desiredLocationId, String(alternateLocation.id));
+  assert.equal(application.desiredDepartmentId, null);
+  assert.equal(application.targetAreas.filter((area) => area.preferred).length, 1);
+
+  const employee = db.prepare(`
+    SELECT personnel_number
+    FROM employees
+    WHERE active = 1
+    ORDER BY personnel_number
+    LIMIT 1
+  `).get();
+  assert.ok(employee?.personnel_number);
+  const feedback = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/team-feedback`,
+    {
+      method: "POST",
+      auth: admin,
+      body: {
+        revision: application.revision,
+        employeeNumber: String(employee.personnel_number),
+        trialAppointmentId,
+        rating: 5,
+        comment: "Rückmeldung aus dem Team",
+        recordedByEmployeeNumber: "manipuliert",
+        recordedAt: "1990-01-01T00:00:00.000Z",
+      },
+    },
+  );
+  assert.equal(feedback.response.status, 201, JSON.stringify(feedback.payload));
+  const storedFeedback = feedback.payload.application.teamFeedback[0];
+  assert.equal(storedFeedback.employeeNumber, String(employee.personnel_number));
+  assert.equal(storedFeedback.recordedByEmployeeNumber, "101");
+  assert.notEqual(storedFeedback.recordedAt, "1990-01-01T00:00:00.000Z");
+  assert.equal(storedFeedback.comment, "Rückmeldung aus dem Team");
+
+  const photoInput = await sharp({
+    create: {
+      width: 1600,
+      height: 1200,
+      channels: 3,
+      background: { r: 40, g: 120, b: 180 },
+    },
+  }).png().toBuffer();
+  const form = new FormData();
+  form.append("document", new Blob([photoInput], { type: "image/png" }), "kandidatin.png");
+  const uploaded = await multipartRequest(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/photo`,
+    { auth: admin, form },
+  );
+  assert.equal(uploaded.response.status, 201, JSON.stringify(uploaded.payload));
+  assert.equal(uploaded.payload.photo.currentVersion, 1);
+  assert.equal(uploaded.payload.photo.mediaType, "image/jpeg");
+  assert.match(uploaded.payload.photo.downloadUrl, /\/photo$/);
+
+  const photoResponse = await fetch(
+    `${baseUrl}/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/photo`,
+    { headers: { Cookie: admin.cookie } },
+  );
+  assert.equal(photoResponse.status, 200);
+  assert.equal(photoResponse.headers.get("content-type"), "image/jpeg");
+  assert.match(photoResponse.headers.get("cache-control") || "", /no-store/);
+  const photo = Buffer.from(await photoResponse.arrayBuffer());
+  const photoMetadata = await sharp(photo).metadata();
+  assert.equal(Math.max(photoMetadata.width, photoMetadata.height), 768);
+
+  const reread = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}`,
+    { auth: admin },
+  );
+  assert.equal(reread.response.status, 200, JSON.stringify(reread.payload));
+  assert.equal(reread.payload.candidate.photo.currentVersion, 1);
+  assert.match(reread.payload.candidate.photo.downloadUrl, /\/photo$/);
+  const listed = await request(
+    "/api/portal/v1/personnel-lifecycle/candidates?limit=50&offset=0",
+    { auth: admin },
+  );
+  assert.equal(listed.response.status, 200, JSON.stringify(listed.payload));
+  const listedCandidate = listed.payload.candidates.find((entry) => entry.id === candidate.id);
+  assert.equal(listedCandidate.photo.currentVersion, 1);
+  assert.match(listedCandidate.photo.downloadUrl, /\/photo$/);
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS count FROM candidate_document_versions WHERE document_id = ?")
+      .get(uploaded.payload.photo.id).count,
+    1,
+  );
+
+  const profileOnly = await request(
+    "/api/portal/v1/personnel-lifecycle/candidates",
+    {
+      method: "POST",
+      auth: admin,
+      body: {
+        dataProcessingAuthorizationConfirmed: true,
+        profile: {
+          firstName: "Nur",
+          lastName: "Profil",
+          phone: "+43 660 7654321",
+        },
+      },
+    },
+  );
+  assert.equal(profileOnly.response.status, 201, JSON.stringify(profileOnly.payload));
+  assert.deepEqual(profileOnly.payload.candidate.applications, []);
+  const profileOnlyPhotoForm = new FormData();
+  profileOnlyPhotoForm.append(
+    "document",
+    new Blob([photoInput], { type: "image/png" }),
+    "profil-ohne-bewerbung.png",
+  );
+  const profileOnlyPhoto = await multipartRequest(
+    `/api/portal/v1/personnel-lifecycle/candidates/${profileOnly.payload.candidate.id}/photo`,
+    { auth: admin, form: profileOnlyPhotoForm },
+  );
+  assert.equal(profileOnlyPhoto.response.status, 201, JSON.stringify(profileOnlyPhoto.payload));
+  assert.equal(profileOnlyPhoto.payload.photo.currentVersion, 1);
 });

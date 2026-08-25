@@ -25,6 +25,7 @@ const {
 } = require("../lib/persistence/sqlite/operations/maintenance");
 const {
   PERSONNEL_LIFECYCLE_MIGRATION_ID,
+  PERSONNEL_LIFECYCLE_PROFILE_PHOTO_CATEGORY_MIGRATION_ID,
   PERSONNEL_LIFECYCLE_TABLE_DEFINITIONS,
   PERSONNEL_LIFECYCLE_TABLE_NAMES,
   PERSONNEL_LIFECYCLE_TRIGGER_DEFINITIONS,
@@ -117,6 +118,28 @@ async function serviceFixture() {
     },
   };
 }
+
+test("Personalmodul-Datenfundament: Dokumentmutationen lesen ihr Ergebnis vor dem Commit", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "..", "lib", "personnel-lifecycle.js"),
+    "utf8",
+  );
+  const registerDocument = source.slice(
+    source.indexOf("  async function registerDocument("),
+    source.indexOf("  async function candidatePhotoFile("),
+  );
+  const addDocumentVersion = source.slice(
+    source.indexOf("  async function addDocumentVersion("),
+    source.indexOf("  async function listCandidates("),
+  );
+
+  assert.match(registerDocument, /registeredDocument = await serializeDocument\([\s\S]*transactionRepository\.getDocument/);
+  assert.match(registerDocument, /\}, \{ isolation: "serializable" \}\);\s*return registeredDocument;/);
+  assert.match(addDocumentVersion, /versionedDocument = await serializeDocument\([\s\S]*transactionRepository\.getDocument/);
+  assert.match(addDocumentVersion, /\}, \{ isolation: "serializable" \}\);\s*return versionedDocument;/);
+  assert.doesNotMatch(registerDocument, /return await repository\.getDocument/);
+  assert.doesNotMatch(addDocumentVersion, /return await repository\.getDocument/);
+});
 
 test("Personalmodul-Datenfundament: jedes typisierte Statement besitzt genau eine SQLite-Bindung", () => {
   const statements = Object.values(PERSONNEL_LIFECYCLE_STATEMENTS);
@@ -221,6 +244,7 @@ test("Personalmodul-Datenfundament: Bewerber bleiben ohne Personalnummer und His
         { code: "reference", builtin: 1, active: 1 },
         { code: "work_sample", builtin: 1, active: 1 },
         { code: "other", builtin: 1, active: 1 },
+        { code: "profile_photo", builtin: 1, active: 1 },
       ],
     );
     assert.deepEqual(
@@ -316,6 +340,179 @@ test("Personalmodul-Datenfundament: Startup-Migration sichert vor Reparatur und 
       database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = ?")
         .get(PERSONNEL_LIFECYCLE_MIGRATION_ID).count,
       1,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("Personalmodul-Datenfundament: bestehender v0.89-Katalog erhält Bewerberfoto erst nach Backup und eigener Migration", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  try {
+    runMigrations(database);
+    database.exec(`
+      DELETE FROM schema_migrations
+      WHERE id = '${PERSONNEL_LIFECYCLE_PROFILE_PHOTO_CATEGORY_MIGRATION_ID}';
+      DELETE FROM candidate_document_categories WHERE id = 'profile-photo';
+      INSERT INTO candidate_document_categories (
+        id, code, label, default_visibility, retention_disposition,
+        default_retention_days, transfer_eligible, active, builtin, sort_order
+      ) VALUES (
+        'custom-portfolio', 'custom_portfolio', 'Portfolio', 'recruiting',
+        'manual_review', NULL, 0, 1, 0, 900
+      );
+      INSERT INTO candidates (
+        id, state, protected_payload, revision, created_by, updated_by, created_at, updated_at
+      ) VALUES (
+        'candidate-existing-v089', 'active', 'enc:v2:existing', 1,
+        'PL-1', 'PL-1', '2026-08-25T08:00:00.000Z', '2026-08-25T08:00:00.000Z'
+      );
+    `);
+
+    let backupObserved = false;
+    const migrated = runMigrations(database, {
+      databaseExistedBeforeOpen: true,
+      onBackup() {
+        backupObserved = true;
+        assert.equal(
+          database.prepare("SELECT COUNT(*) AS count FROM candidate_document_categories WHERE id = 'profile-photo'")
+            .get().count,
+          0,
+        );
+        assert.equal(
+          database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = ?")
+            .get(PERSONNEL_LIFECYCLE_PROFILE_PHOTO_CATEGORY_MIGRATION_ID).count,
+          0,
+        );
+        assert.equal(
+          database.prepare("SELECT COUNT(*) AS count FROM candidates WHERE id = 'candidate-existing-v089'")
+            .get().count,
+          1,
+        );
+      },
+    });
+
+    assert.equal(backupObserved, true);
+    assert.equal(migrated.personnelLifecycleProfilePhotoCategoryMigrationRequired, true);
+    assert.equal(
+      migrated.personnelLifecycleProfilePhotoCategoryCatalogBeforeMigration.state,
+      "legacy",
+    );
+    assert.deepEqual(migrated.personnelLifecycleProfilePhotoCategoryMigrationResult, {
+      migrated: true,
+      deferred: false,
+    });
+    assert.deepEqual(
+      {
+        ...database.prepare(`
+          SELECT id, code, label, default_visibility, retention_disposition,
+                 default_retention_days, transfer_eligible, active, builtin, sort_order
+          FROM candidate_document_categories
+          WHERE id = 'profile-photo'
+        `).get(),
+      },
+      {
+        id: "profile-photo",
+        code: "profile_photo",
+        label: "Bewerberfoto",
+        default_visibility: "scoped_leadership",
+        retention_disposition: "manual_review",
+        default_retention_days: null,
+        transfer_eligible: 0,
+        active: 1,
+        builtin: 1,
+        sort_order: 70,
+      },
+    );
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM candidate_document_categories WHERE id = 'custom-portfolio'")
+        .get().count,
+      1,
+    );
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM candidates WHERE id = 'candidate-existing-v089'")
+        .get().count,
+      1,
+    );
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = ?")
+        .get(PERSONNEL_LIFECYCLE_PROFILE_PHOTO_CATEGORY_MIGRATION_ID).count,
+      1,
+    );
+
+    const catalogBeforeRepeat = database.prepare(`
+      SELECT id, code, label, active, builtin, sort_order, created_at, updated_at
+      FROM candidate_document_categories
+      ORDER BY sort_order, id
+    `).all().map((row) => ({ ...row }));
+    const repeated = runMigrations(database, { databaseExistedBeforeOpen: true });
+    assert.equal(repeated.personnelLifecycleProfilePhotoCategoryMigrationRequired, false);
+    assert.equal(
+      repeated.personnelLifecycleProfilePhotoCategoryCatalogBeforeMigration.state,
+      "current",
+    );
+    assert.deepEqual(repeated.personnelLifecycleProfilePhotoCategoryMigrationResult, {
+      migrated: false,
+      deferred: false,
+    });
+    assert.deepEqual(
+      database.prepare(`
+        SELECT id, code, label, active, builtin, sort_order, created_at, updated_at
+        FROM candidate_document_categories
+        ORDER BY sort_order, id
+      `).all().map((row) => ({ ...row })),
+      catalogBeforeRepeat,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("Personalmodul-Datenfundament: abweichende Bewerberfoto-Katalogzeile bricht nach Backup unverändert ab", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  try {
+    runMigrations(database);
+    database.exec(`
+      DELETE FROM schema_migrations
+      WHERE id = '${PERSONNEL_LIFECYCLE_PROFILE_PHOTO_CATEGORY_MIGRATION_ID}';
+      UPDATE candidate_document_categories
+      SET active = 0, updated_at = '2026-08-25T08:30:00.000Z'
+      WHERE id = 'profile-photo';
+    `);
+    let backupObserved = false;
+    assert.throws(
+      () => runMigrations(database, {
+        databaseExistedBeforeOpen: true,
+        onBackup() {
+          backupObserved = true;
+          assert.deepEqual(
+            { ...database.prepare(`
+              SELECT active, updated_at
+              FROM candidate_document_categories
+              WHERE id = 'profile-photo'
+            `).get() },
+            { active: 0, updated_at: "2026-08-25T08:30:00.000Z" },
+          );
+        },
+      }),
+      (error) => (
+        error?.code === "PERSONNEL_LIFECYCLE_PROFILE_PHOTO_CATEGORY_MIGRATION_UNSAFE"
+        && error?.details?.includes("profile-photo-reserved-row-conflict")
+      ),
+    );
+    assert.equal(backupObserved, true);
+    assert.deepEqual(
+      { ...database.prepare(`
+        SELECT active, updated_at
+        FROM candidate_document_categories
+        WHERE id = 'profile-photo'
+      `).get() },
+      { active: 0, updated_at: "2026-08-25T08:30:00.000Z" },
+    );
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = ?")
+        .get(PERSONNEL_LIFECYCLE_PROFILE_PHOTO_CATEGORY_MIGRATION_ID).count,
+      0,
     );
   } finally {
     database.close();
@@ -595,6 +792,406 @@ test("Personalmodul-Datenfundament: Backup- und Importprüfung erfassen Bewerber
     if (resolvedRoot.startsWith(path.resolve(os.tmpdir()) + path.sep)) {
       fs.rmSync(resolvedRoot, { recursive: true, force: true });
     }
+  }
+});
+
+test("Personalmodul-Datenfundament: Recruitingprofil, Schnuppertermine und Bewertungen bleiben geschützt und integer", async () => {
+  const fixture = await serviceFixture();
+  try {
+    fixture.database.prepare("INSERT INTO locations (id, name) VALUES ('05', 'Filiale 05'), ('18', 'Filiale 18')").run();
+    fixture.database.prepare("INSERT INTO departments (id, location_id, name) VALUES (7, '18', 'Fotowelt')").run();
+    const created = await fixture.service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
+      profile: {
+        firstName: "Mira",
+        lastName: "Muster",
+        phone: "+43 660 1234567",
+        birthDate: "1998-02-28",
+        citizenships: ["Österreich", "Deutschland", "Österreich"],
+        address: {
+          street: "Beispielweg 7",
+          postalCode: "6020",
+          city: "Innsbruck",
+          state: "Tirol",
+          country: "Österreich",
+        },
+      },
+      application: {
+        desiredRoleTitle: "Fotowelt",
+        targetAreas: [
+          { locationId: "05", preferred: false },
+          { locationId: "18", departmentId: 7, preferred: true },
+        ],
+        trialAppointments: [
+          {
+            id: "trial-2026-09-01",
+            dateFrom: "2026-09-01",
+            dateTo: "2026-09-01",
+            startTime: "09:00",
+            endTime: "13:00",
+            locationId: "05",
+            status: "planned",
+            note: "Erster Schnuppertag",
+          },
+          {
+            id: "trial-2026-09-03",
+            dateFrom: "2026-09-03",
+            dateTo: "2026-09-03",
+            startTime: "10:00",
+            endTime: "17:30",
+            locationId: "18",
+            departmentId: 7,
+            status: "planned",
+            note: "Zweiter Schnuppertag",
+          },
+        ],
+        competencyRatings: [
+          { id: "professional", label: "Fachlich", rating: 1, note: "Basis" },
+          { id: "team-fit", label: "Menschlich", rating: 2 },
+          { id: "experience", label: "Erfahrung", rating: 3 },
+          { id: "education", label: "Bildung", rating: 4 },
+          { id: "languages", label: "Sprachen", rating: 5, note: "Mehrsprachig" },
+        ],
+        teamFeedback: [{
+          id: "client-controlled-feedback",
+          employeeNumber: "999",
+          rating: 5,
+          comment: "Darf nicht übernommen werden",
+          recordedByEmployeeNumber: "999",
+          recordedAt: "2020-01-01T00:00:00.000Z",
+        }],
+      },
+    }, "FL-252");
+
+    assert.equal(created.profile.email, "");
+    assert.equal(created.profile.phone, "+43 660 1234567");
+    assert.equal(created.profile.birthDate, "1998-02-28");
+    assert.deepEqual(created.profile.citizenships, ["Österreich", "Deutschland"]);
+    assert.deepEqual(created.profile.address, {
+      street: "Beispielweg 7",
+      supplement: "",
+      postalCode: "6020",
+      city: "Innsbruck",
+      state: "Tirol",
+      country: "Österreich",
+    });
+
+    const application = created.applications[0];
+    assert.equal(application.desiredLocationId, "18");
+    assert.equal(application.desiredDepartmentId, 7);
+    assert.deepEqual(application.targetAreas, [
+      { locationId: "05", departmentId: null, preferred: false },
+      { locationId: "18", departmentId: 7, preferred: true },
+    ]);
+    assert.deepEqual(
+      application.trialAppointments.map((appointment) => ({
+        id: appointment.id,
+        dateFrom: appointment.dateFrom,
+        dateTo: appointment.dateTo,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        locationId: appointment.locationId,
+        departmentId: appointment.departmentId,
+      })),
+      [
+        {
+          id: "trial-2026-09-01",
+          dateFrom: "2026-09-01",
+          dateTo: "2026-09-01",
+          startTime: "09:00",
+          endTime: "13:00",
+          locationId: "05",
+          departmentId: null,
+        },
+        {
+          id: "trial-2026-09-03",
+          dateFrom: "2026-09-03",
+          dateTo: "2026-09-03",
+          startTime: "10:00",
+          endTime: "17:30",
+          locationId: "18",
+          departmentId: 7,
+        },
+      ],
+    );
+    assert.deepEqual(
+      application.competencyRatings.map(({ id, rating }) => ({ id, rating })),
+      [
+        { id: "professional", rating: 1 },
+        { id: "team-fit", rating: 2 },
+        { id: "experience", rating: 3 },
+        { id: "education", rating: 4 },
+        { id: "languages", rating: 5 },
+      ],
+    );
+    assert.equal(Object.hasOwn(application, "teamFeedback"), false);
+
+    for (const invalidRating of [0, 6]) {
+      await assert.rejects(
+        fixture.service.updateApplication(created.id, application.id, {
+          revision: application.revision,
+          competencyRatings: [{
+            id: `invalid-${invalidRating}`,
+            label: "Ungültig",
+            rating: invalidRating,
+          }],
+        }, "FL-252"),
+        (error) => error?.code === "PERSONNEL_LIFECYCLE_INVALID",
+      );
+    }
+
+    const withFeedback = await fixture.service.addTeamFeedback(
+      created.id,
+      application.id,
+      {
+        revision: application.revision,
+        trialAppointmentId: "trial-2026-09-03",
+        employeeNumber: "430",
+        rating: 4,
+        comment: "Konstruktive Rückmeldung aus dem Team",
+        id: "client-must-not-control-id",
+        recordedByEmployeeNumber: "client-must-not-control-actor",
+        recordedAt: "2020-01-01T00:00:00.000Z",
+      },
+      "FL-252",
+    );
+    assert.equal(withFeedback.revision, 2);
+    assert.equal(withFeedback.teamFeedback.length, 1);
+    assert.match(withFeedback.teamFeedback[0].id, /^[0-9a-f-]{36}$/i);
+    assert.notEqual(withFeedback.teamFeedback[0].id, "client-must-not-control-id");
+    assert.equal(withFeedback.teamFeedback[0].trialAppointmentId, "trial-2026-09-03");
+    assert.equal(withFeedback.teamFeedback[0].employeeNumber, "430");
+    assert.equal(withFeedback.teamFeedback[0].rating, 4);
+    assert.equal(withFeedback.teamFeedback[0].recordedByEmployeeNumber, "FL-252");
+    assert.notEqual(withFeedback.teamFeedback[0].recordedAt, "2020-01-01T00:00:00.000Z");
+    assert.deepEqual(withFeedback.targetAreas, application.targetAreas);
+    assert.deepEqual(withFeedback.trialAppointments, application.trialAppointments);
+    assert.deepEqual(withFeedback.competencyRatings, application.competencyRatings);
+
+    const rawProtectedPayloads = [
+      fixture.database.prepare("SELECT protected_payload FROM candidates WHERE id = ?")
+        .get(created.id).protected_payload,
+      fixture.database.prepare("SELECT protected_payload FROM candidate_applications WHERE id = ?")
+        .get(application.id).protected_payload,
+    ].map(String);
+    assert.equal(rawProtectedPayloads.every((payload) => payload.startsWith("enc:v2:")), true);
+    for (const protectedValue of [
+      "1998-02-28",
+      "Innsbruck",
+      "Deutschland",
+      "Erster Schnuppertag",
+      "Mehrsprachig",
+      "Konstruktive Rückmeldung aus dem Team",
+    ]) {
+      assert.equal(rawProtectedPayloads.some((payload) => payload.includes(protectedValue)), false);
+    }
+
+    assert.deepEqual(
+      { ...await fixture.service.verifyIntegrity() },
+      { candidates: 1, applications: 1, documents: 0, events: 3 },
+    );
+
+    const applicationContext = {
+      namespace: "candidate-application",
+      recordId: application.id,
+      field: "payload",
+      employeeNumber: `candidate:${created.id}`,
+    };
+    const storedApplication = fixture.database.prepare(`
+      SELECT protected_payload FROM candidate_applications WHERE id = ?
+    `).get(application.id);
+    const tamperedPayload = JSON.parse(fixture.storage.unprotectRecord(
+      storedApplication.protected_payload,
+      applicationContext,
+    ));
+    tamperedPayload.competencyRatings[0].rating = 5;
+    fixture.database.prepare(`
+      UPDATE candidate_applications SET protected_payload = ? WHERE id = ?
+    `).run(
+      fixture.storage.protectRecord(JSON.stringify(tamperedPayload), applicationContext),
+      application.id,
+    );
+    await assert.rejects(
+      fixture.service.verifyIntegrity(),
+      (error) => error?.code === "PERSONNEL_LIFECYCLE_STATE_INTEGRITY_FAILED",
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Personalmodul-Datenfundament: zu großer Bewerbungszustand wird vor Persistenz und Audit abgewiesen", async () => {
+  const fixture = await serviceFixture();
+  try {
+    const created = await fixture.service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
+      profile: {
+        firstName: "Grenze",
+        lastName: "Bewerbung",
+        phone: "+43 660 1234567",
+      },
+      application: { desiredRoleTitle: "Fotowelt" },
+    }, "PL-1");
+    const application = created.applications[0];
+    const rowBefore = { ...fixture.database.prepare(`
+      SELECT revision, protected_payload
+      FROM candidate_applications
+      WHERE id = ?
+    `).get(application.id) };
+    const eventCountBefore = fixture.database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM candidate_events
+      WHERE candidate_id = ?
+    `).get(created.id).count;
+    const competencyRatings = Array.from({ length: 40 }, (_, index) => ({
+      id: `competency-${index}`,
+      label: `Kompetenz ${index}`,
+      rating: 3,
+      note: "K".repeat(1000),
+    }));
+    const trialAppointments = Array.from({ length: 30 }, (_, index) => ({
+      id: `trial-${index}`,
+      dateFrom: "2026-09-01",
+      dateTo: "2026-09-01",
+      startTime: "09:00",
+      endTime: "12:00",
+      locationId: "18",
+      departmentId: null,
+      status: "planned",
+      note: "T".repeat(1000),
+    }));
+
+    await assert.rejects(
+      fixture.service.updateApplication(
+        created.id,
+        application.id,
+        { revision: application.revision, competencyRatings, trialAppointments },
+        "PL-1",
+      ),
+      (error) => error?.code === "PERSONNEL_LIFECYCLE_APPLICATION_STATE_TOO_LARGE",
+    );
+    assert.deepEqual(
+      { ...fixture.database.prepare(`
+        SELECT revision, protected_payload
+        FROM candidate_applications
+        WHERE id = ?
+      `).get(application.id) },
+      rowBefore,
+    );
+    assert.equal(
+      fixture.database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM candidate_events
+        WHERE candidate_id = ?
+      `).get(created.id).count,
+      eventCountBefore,
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Personalmodul-Datenfundament: bevorzugter Zielbereich und primärer Bewerbungsbereich bleiben eindeutig", async () => {
+  const fixture = await serviceFixture();
+  try {
+    fixture.database.prepare("INSERT INTO locations (id, name) VALUES ('05', 'Filiale 05'), ('18', 'Filiale 18')").run();
+    fixture.database.prepare(`
+      INSERT INTO departments (id, location_id, name)
+      VALUES (3, '05', 'Verkauf'), (7, '18', 'Fotowelt')
+    `).run();
+    for (const [index, targetAreas] of [
+      [{ locationId: "05", departmentId: 3, preferred: false }],
+      [
+        { locationId: "05", departmentId: 3, preferred: true },
+        { locationId: "18", departmentId: 7, preferred: true },
+      ],
+    ].entries()) {
+      await assert.rejects(
+        fixture.service.createCandidate({
+          dataProcessingAuthorizationConfirmed: true,
+          profile: {
+            firstName: "Ungültig",
+            lastName: `Zielbereich ${index + 1}`,
+            phone: "+43 660 1234567",
+          },
+          application: { targetAreas },
+        }, "PL-1"),
+        (error) => error?.code === "PERSONNEL_LIFECYCLE_TARGET_AREA_PREFERRED_INVALID",
+      );
+    }
+    assert.equal(fixture.database.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 0);
+
+    const created = await fixture.service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
+      profile: {
+        firstName: "Ziel",
+        lastName: "Bereich",
+        phone: "+43 660 1234567",
+      },
+      application: {
+        desiredLocationId: "05",
+        desiredDepartmentId: 3,
+      },
+    }, "PL-1");
+    let application = created.applications[0];
+    assert.deepEqual(application.targetAreas, [{
+      locationId: "05",
+      departmentId: 3,
+      preferred: true,
+    }]);
+
+    application = await fixture.service.updateApplication(
+      created.id,
+      application.id,
+      {
+        revision: application.revision,
+        targetAreas: [
+          { locationId: "05", departmentId: 3, preferred: false },
+          { locationId: "18", departmentId: 7, preferred: true },
+        ],
+      },
+      "PL-1",
+    );
+    assert.equal(application.desiredLocationId, "18");
+    assert.equal(application.desiredDepartmentId, 7);
+    assert.equal(application.targetAreas.filter((area) => area.preferred).length, 1);
+
+    application = await fixture.service.updateApplication(
+      created.id,
+      application.id,
+      {
+        revision: application.revision,
+        desiredLocationId: "05",
+        desiredDepartmentId: 3,
+      },
+      "PL-1",
+    );
+    assert.equal(application.desiredLocationId, "05");
+    assert.equal(application.desiredDepartmentId, 3);
+    assert.deepEqual(application.targetAreas, [
+      { locationId: "05", departmentId: 3, preferred: true },
+      { locationId: "18", departmentId: 7, preferred: false },
+    ]);
+
+    for (const targetAreas of [
+      [{ locationId: "05", departmentId: 3, preferred: false }],
+      [
+        { locationId: "05", departmentId: 3, preferred: true },
+        { locationId: "18", departmentId: 7, preferred: true },
+      ],
+    ]) {
+      await assert.rejects(
+        fixture.service.updateApplication(
+          created.id,
+          application.id,
+          { revision: application.revision, targetAreas },
+          "PL-1",
+        ),
+        (error) => error?.code === "PERSONNEL_LIFECYCLE_TARGET_AREA_PREFERRED_INVALID",
+      );
+    }
+  } finally {
+    await fixture.close();
   }
 });
 

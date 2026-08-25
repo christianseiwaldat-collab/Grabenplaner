@@ -127,13 +127,15 @@ test("standalone Windows backup uses the same commit marker and committed-only r
   assert.match(source, /marker: markerTarget/);
 });
 
-test("standalone backup paths include protected loan files through direct or canonical references", () => {
+test("standalone backup paths include protected candidate and loan files through direct or canonical references", () => {
   for (const relativePath of [
     "backup.js",
     "server-tools/windows/Backup-Grabenplaner.ps1",
     "server-tools/windows/Restore-Grabenplaner.ps1",
+    "server-tools/windows/Test-GrabenplanerServer.ps1",
   ]) {
     const source = fs.readFileSync(path.join(__dirname, "..", ...relativePath.split("/")), "utf8");
+    assert.match(source, /candidate_document_versions/, relativePath);
     assert.match(source, /loan_documents/, relativePath);
     assert.match(source, /loan_photos/, relativePath);
     assert.match(source, /loan_photo_attachments/, relativePath);

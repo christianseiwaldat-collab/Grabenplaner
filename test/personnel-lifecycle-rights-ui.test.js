@@ -106,6 +106,134 @@ test("Bewerberanlage ist capability-gebunden und verlangt die hervorgehobene EDV
   assert.match(creation, /method: "POST"/);
 });
 
+test("Bewerberkontakte bleiben einzeln optional und werden gemeinsam validiert", () => {
+  const modal = between(
+    html,
+    '<dialog class="modal wide-modal personnel-candidate-create-modal"',
+    "</dialog>",
+  );
+  const emailInput = modal.match(/<input name="email"[^>]*>/)?.[0] || "";
+  const phoneInput = modal.match(/<input name="phone"[^>]*>/)?.[0] || "";
+  assert.match(emailInput, /type="email"/);
+  assert.match(phoneInput, /type="tel"/);
+  assert.doesNotMatch(emailInput, /\brequired\b/);
+  assert.doesNotMatch(phoneInput, /\brequired\b/);
+  assert.match(modal, /E-Mail <small class="personnel-candidate-optional-marker">\* optional<\/small>/);
+  assert.match(modal, /Telefon <small class="personnel-candidate-optional-marker">\* optional<\/small>/);
+  for (const name of ["birthDate", "postalCode", "city", "citizenships"]) {
+    assert.match(modal, new RegExp(`name="${name}"`));
+  }
+
+  const creation = between(
+    app,
+    "async function savePersonnelCandidate(event)",
+    "async function loadPersonnelCandidates(",
+  );
+  assert.match(creation, /const email = String\(form\.elements\.email/);
+  assert.match(creation, /const phone = String\(form\.elements\.phone/);
+  assert.match(creation, /setCustomValidity\(email \|\| phone/);
+  assert.match(creation, /Bitte E-Mail-Adresse oder Telefonnummer angeben/);
+  assert.match(creation, /birthDate:[\s\S]*?address:[\s\S]*?postalCode:[\s\S]*?city:[\s\S]*?citizenships:/);
+  assert.match(app, /profile\.address && typeof profile\.address === "object"[\s\S]*?profile\.residence/);
+});
+
+test("Zielbereiche, Schnuppertermine und Kompetenzratings sind dynamisch und barrierearm editierbar", () => {
+  const modal = between(
+    html,
+    '<dialog class="modal wide-modal personnel-candidate-create-modal"',
+    "</dialog>",
+  );
+  for (const id of [
+    "personnelCandidateCreateTargetAreas",
+    "personnelCandidateCreateAddTargetArea",
+    "personnelCandidateCreateTrialAppointments",
+    "personnelCandidateCreateAddTrialAppointment",
+    "personnelCandidateCreateCompetencyRatings",
+    "personnelCandidateCreateAddCompetencyRating",
+  ]) assert.match(modal, new RegExp(`id="${id}"`));
+  for (const id of [
+    "personnelCandidateTrialDateRangeDialog",
+    "personnelCandidateTrialDateRangeGrid",
+    "personnelCandidateTrialDateRangeApply",
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(modal, /<details class="personnel-candidate-create-details/);
+  assert.match(app, /PERSONNEL_CANDIDATE_DEFAULT_COMPETENCIES/);
+  for (const label of [
+    "Fachliche Eignung",
+    "Zusammenarbeit / Auftreten",
+    "Branchenerfahrung",
+    "Ausbildung / Qualifikation",
+    "Berufserfahrung",
+    "Sprachkenntnisse",
+  ]) assert.ok(app.includes(label), `Standardkompetenz fehlt: ${label}`);
+  assert.match(app, /role="radiogroup" aria-label="Bewertung von 1 bis 5"/);
+  assert.match(app, /Object\.entries\(PERSONNEL_CANDIDATE_RATING_LABELS\)/);
+  assert.match(app, /personnelCandidateCreateAddTargetArea\?\.addEventListener\("click"/);
+  assert.match(app, /personnelCandidateCreateAddTrialAppointment\?\.addEventListener\("click"/);
+  assert.match(app, /personnelCandidateCreateAddCompetencyRating\?\.addEventListener\("click"/);
+  assert.match(app, /data-candidate-trial-range-button/);
+  assert.match(app, /function initializePersonnelCandidateTrialDateRangeCalendar\(\)/);
+  assert.match(app, /personnelCandidateTrialDateRangeCalendar\.open\(\{/);
+  assert.match(app, /Bitte für jeden Schnuppertermin einen gültigen Zeitraum auswählen/);
+  assert.doesNotMatch(app, /data-candidate-trial-from type="date"/);
+  assert.match(app, /targetAreas,[\s\S]*?trialAppointments,[\s\S]*?competencyRatings,/);
+  assert.match(app, /String\(scope\?\.type \|\| ""\)\.toLowerCase\(\) === "department"/);
+  assert.match(app, /scope\?\.departmentIds/);
+  assert.match(app, /departmentScope\.has\(String\(department\.id\)\)[\s\S]*?String\(department\.id\) === selectedId/);
+  assert.match(app, /function canWritePersonnelCandidateStructuredScope\(entry\)/);
+  assert.match(app, /data-candidate-readonly-scope="true"/);
+  assert.match(app, /data-candidate-readonly-payload=/);
+  assert.match(app, /function personnelCandidateReadOnlyStructuredPayload\(row\)/);
+  assert.match(app, /const readOnly = personnelCandidateReadOnlyStructuredPayload\(row\);[\s\S]*?if \(readOnly\) return readOnly/);
+  assert.match(app, /readOnly: !canWritePersonnelCandidateStructuredScope\(area\)/);
+  assert.match(app, /readOnly: !canWritePersonnelCandidateStructuredScope\(appointment\)/);
+  assert.match(app, /Bereiche außerhalb der eigenen Freigabe bleiben sichtbar und unverändert erhalten/);
+  assert.match(styles, /\.personnel-candidate-readonly-scope/);
+  assert.match(styles, /\.personnel-candidate-rating-score\.score-1[^}]*background:#f4d6d1/);
+  assert.match(styles, /\.personnel-candidate-rating-score\.score-5[^}]*background:#c9e8dc/);
+  assert.match(styles, /\.personnel-candidate-rating-score:focus-within/);
+});
+
+test("Foto, Teamfeedback und Bearbeitung bleiben capability- und revisionsgebunden", () => {
+  const photoUpload = between(
+    app,
+    "async function uploadPersonnelCandidatePhoto(",
+    "function syncPersonnelCandidateAuthorizationState(",
+  );
+  assert.match(photoUpload, /new FormData\(\)/);
+  assert.match(photoUpload, /formData\.append\("document", file/);
+  assert.match(photoUpload, /\/personnel-lifecycle\/candidates\/\$\{encodeURIComponent\(candidateId\)\}\/photo/);
+  assert.match(photoUpload, /rawApi\(/);
+
+  const profileEditor = between(
+    app,
+    "function renderPersonnelCandidateProfileEditor(",
+    "function renderPersonnelCandidateStatusForm(",
+  );
+  assert.match(profileEditor, /!state\.personnelCandidateCapabilities\.canWriteCandidates/);
+  assert.match(profileEditor, /!canWritePersonnelCandidatePhoto\(candidate\)/);
+  assert.match(profileEditor, /data-personnel-candidate-photo-form/);
+  const feedback = between(
+    app,
+    "async function savePersonnelCandidateTeamFeedback(",
+    "function handlePersonnelCandidateDetailSubmit(",
+  );
+  assert.match(feedback, /!canWritePersonnelCandidateApplication\(application\)/);
+  assert.match(feedback, /\/applications\/\$\{encodeURIComponent\(application\.id\)\}\/team-feedback/);
+  assert.match(feedback, /method: "POST"/);
+  for (const field of ["employeeNumber", "trialAppointmentId", "rating", "comment", "revision: application.revision"]) {
+    assert.match(feedback, new RegExp(field.replaceAll(".", "\\.")));
+  }
+  const applicationEditor = between(
+    app,
+    "function renderPersonnelCandidateApplication(",
+    "function renderPersonnelCandidateDetail(",
+  );
+  assert.match(applicationEditor, /const canWrite = canWritePersonnelCandidateApplication\(application\)/);
+  assert.match(applicationEditor, /\$\{canWrite \? `<details/);
+  assert.match(app, /function canWritePersonnelCandidateApplication\(application\)[\s\S]*?application\?\.canWrite === true/);
+});
+
 test("Bewerberdialog bleibt auch im Darkmode kontrastreich", () => {
   const darkModal = between(
     styles,
@@ -141,6 +269,7 @@ test("Serverfähigkeiten werden vollständig und fail-closed ausgewertet", () =>
   );
   for (const key of [
     "scope",
+    "applicationWriteScope",
     "canReadCandidates",
     "canCreateCandidates",
     "createScope",
@@ -152,7 +281,38 @@ test("Serverfähigkeiten werden vollständig und fail-closed ausgewertet", () =>
     "canConvert",
   ]) assert.match(capabilities, new RegExp(key));
   assert.match(capabilities, /canReadCandidates: submitted\.canReadCandidates === true/);
+  assert.match(capabilities, /applicationWriteScope: submitted\.applicationWriteScope/);
   assert.match(app, /if \(!capabilities\.canReadCandidates\) \{[\s\S]*?clearPersonnelLifecycleCandidateState/);
+});
+
+test("schreibende Bewerberauswahlen verwenden ausschließlich den serverprojizierten Schreibbereich", () => {
+  const locationOptions = between(
+    app,
+    "function personnelCandidateLocationOptions(",
+    "function personnelCandidateDepartmentOptions(",
+  );
+  const departmentOptions = between(
+    app,
+    "function personnelCandidateDepartmentOptions(",
+    "function renderPersonnelCandidateTargetAreaEditorRow(",
+  );
+  const teamOptions = between(
+    app,
+    "function personnelCandidateTeamEmployeeOptions(",
+    "function renderPersonnelCandidateTeamFeedback(",
+  );
+  const createLocations = between(
+    app,
+    "function populatePersonnelCandidateCreateLocations()",
+    "function updatePersonnelCandidateCreateDepartments()",
+  );
+  assert.match(locationOptions, /scopeMode === "create"[\s\S]*?createScope[\s\S]*?applicationWriteScope/);
+  assert.match(departmentOptions, /scopeMode === "create"[\s\S]*?createScope[\s\S]*?applicationWriteScope/);
+  assert.match(teamOptions, /const applicationWriteScope = state\.personnelCandidateCapabilities\.applicationWriteScope/);
+  assert.match(teamOptions, /writableLocationIds\.has\(employee\.locationId\)/);
+  assert.doesNotMatch(teamOptions, /personnelCandidateCapabilities\.scope/);
+  assert.match(createLocations, /capabilities\.createScope\?\.locationIds/);
+  assert.doesNotMatch(createLocations, /applicationWriteScope/);
 });
 
 test("Statuswechsel bleibt capability- und revisionsgebunden", () => {
@@ -161,7 +321,7 @@ test("Statuswechsel bleibt capability- und revisionsgebunden", () => {
     "function renderPersonnelCandidateStatusForm(",
     "function renderPersonnelCandidateApplication(",
   );
-  assert.match(form, /!state\.personnelCandidateCapabilities\.canWriteApplications/);
+  assert.match(form, /!canWritePersonnelCandidateApplication\(application\)/);
   const mutation = between(
     app,
     "async function savePersonnelCandidateApplicationStatus(",
