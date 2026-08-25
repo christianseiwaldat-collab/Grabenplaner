@@ -4780,6 +4780,28 @@ function staffAssignmentsForDate(employeeNumber, date) {
       && date <= String(assignment.date_to || assignment.dateTo));
 }
 
+function scheduleEmployeeVisibleOnDate(employee, date) {
+  const employeeNumber = String(employee?.personnel_number || employee?.personnelNumber || "");
+  const locationId = String(state.data?.context?.locationId || state.locationId || "");
+  const homeLocationId = String(employee?.home_location_id || employee?.homeLocationId || "");
+  if (!employeeNumber || !locationId || !homeLocationId || homeLocationId === locationId) return true;
+
+  const incomingAssignment = staffAssignmentsForDate(employeeNumber, date)
+    .some((assignment) => String(assignment.destination_location_id || assignment.destinationLocationId) === locationId);
+  if (incomingAssignment) return true;
+
+  // Bestehende Fremdfilial-Dienste bleiben auch bei historischen Datensätzen ohne
+  // verknüpften Filialeinsatz am konkreten Diensttag sichtbar.
+  return (state.data?.shifts || []).some((shift) => (
+    String(shift.employee_number || shift.employeeNumber) === employeeNumber
+    && String(shift.shift_date || shift.shiftDate) === String(date)
+  ));
+}
+
+function scheduleEmployeesForDate(date) {
+  return (state.data?.employees || []).filter((employee) => scheduleEmployeeVisibleOnDate(employee, date));
+}
+
 function renderTimeline() {
   const employees = state.data.employees;
   const settings = state.data.settings;
@@ -4807,6 +4829,7 @@ function renderTimeline() {
 
   const dayColumns = weekdayNames.slice(0, dayCount).map((weekday, dayIndex) => {
     const date = addDays(state.weekStart, dayIndex);
+    const dayEmployees = scheduleEmployeesForDate(date);
     const locked = isWeekLocked();
     const globalBlock = globalBlockForDate(date);
     const holiday = publicHolidayForDate(date);
@@ -4830,15 +4853,15 @@ function renderTimeline() {
         const title = `TS · Teamsitzung · ${formatOptionTime(option)}${option.note ? ` – ${option.note}` : ""}`;
         return `<span class="team-meeting-band" style="top:${top}%;height:${height}%" title="${escapeHtmlAttribute(title)}">${escapeHtml(title)}</span>`;
       }).join("");
-    const headers = employees.length
-      ? employees.map((employee) => `
+    const headers = dayEmployees.length
+      ? dayEmployees.map((employee) => `
           <div class="employee-strip" style="background:${employee.color};color:${contrastColor(employee.color)}" title="${escapeHtml(employee.full_name)} · ${employee.personnel_number}">
             <strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.personnel_number)}</small>
           </div>`).join("")
       : '<div class="employee-strip" style="background:#d7ddda;color:#65716c"><strong>Kein Team</strong></div>';
 
-    const lanes = employees.length
-      ? employees.map((employee) => {
+    const lanes = dayEmployees.length
+      ? dayEmployees.map((employee) => {
           const dayOptions = specialCasesFor(employee.personnel_number, date);
           const specialCase = dayOptions.find((option) => optionIsAllDay(option) && !option.soft_pending);
           const softPending = dayOptions.find((option) => optionIsAllDay(option) && option.soft_pending);
@@ -4906,7 +4929,7 @@ function renderTimeline() {
         }).join("")
       : '<div class="employee-lane"></div>';
 
-    return `<section class="day-column ${dayIndex === 6 ? "sunday" : ""}" style="grid-column:${dayIndex + 2}">
+    return `<section class="day-column ${dayIndex === 6 ? "sunday" : ""}" style="grid-column:${dayIndex + 2};--employee-count:${Math.max(1, dayEmployees.length)}">
       <div class="day-title">${weekday} ${formatDate(date, { day: "2-digit", month: "2-digit" })}${holiday ? ` · ${escapeHtml(holiday.name)}` : ""}</div>
       <div class="employee-strips">${headers}</div>
       <div class="day-body ${hours ? "" : "closed-day"}" style="--open-start:${openStart}%;--open-end:${openEnd}%">${lunchBand}<div class="lane-grid">${lanes}</div>${teamMeetingBands}</div>
