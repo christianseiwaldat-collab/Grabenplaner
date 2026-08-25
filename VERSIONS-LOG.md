@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.19 Beta · Strukturierte Bewerberprofile und Schnuppertage
+
+- Bewerberprofile unterstützen optionale E-Mail- und Telefondaten mit mindestens einem erreichbaren Kontaktweg sowie Geburtsdatum, berechnetem Alter, Wohnort und Nationalität.
+- Zielbereiche und Schnuppertermine können mehreren Filialen und Abteilungen zugeordnet werden; Schnuppertage nutzen Zeitraumkalender und bewahren genau einen bevorzugten Zielbereich.
+- Fachliche und frei ergänzbare Kompetenzen lassen sich einheitlich von 1 bis 5 bewerten. Teamrückmeldungen sind mit dem bestehenden Mitarbeitendenkonto und dem jeweiligen Schnuppertermin verknüpft, transparent einsehbar und revisionssicher protokolliert.
+- Bewerberfotos werden geschützt, metadatenfrei und größenbegrenzt verarbeitet. Listen bleiben datensparsam, Detailzugriffe und lokale Bearbeitungen werden serverseitig bereichsgebunden geprüft.
+- Die neue Dokumentkategorie, Backup-/Restore-Pfade, Rechte-, Scope-, Audit-, Datenschutz-, Mobil-, Persistenz- und Integrationspfade sind versioniert migriert und regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.18 Beta · Filialbestellungen und bereichsgebundene Bewerberanlage
 
 - Anzeigegruppen können ihre Positionen alphanumerisch sortieren; die Zuordnungsauswahl ist ebenfalls alphanumerisch geordnet. Maßeinheiten werden in einer kompakten, sortierbaren Liste statt großflächiger Karten gepflegt.
