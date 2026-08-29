@@ -29,7 +29,7 @@ test("UI Block 1: Personalverwaltung trennt Dashboard-Ziel und Disclosure semant
   assert.match(navigation, /<button(?=[^>]*id="personnelDashboardNavButton")(?=[^>]*data-view="personnelAdministration")(?=[^>]*data-personnel-administration-route="dashboard")[^>]*>/);
   assert.ok(navigation.indexOf("</button>") < navigation.indexOf("personnelDashboardNavButton"), "Disclosure und Navigationsziel dürfen nicht ineinander verschachtelt sein");
   assert.match(app, /personnelAdministrationTab:\s*"dashboard"/);
-  assert.match(app, /\["dashboard", "employees", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
+  assert.match(app, /\["dashboard", "employees", "positions", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
 });
 
 test("UI Block 1: Dashboard ist persönlich anpassbar und zeigt nur erlaubte Arbeitsbereiche", () => {
@@ -49,7 +49,7 @@ test("UI Block 1: Dashboard ist persönlich anpassbar und zeigt nur erlaubte Arb
   assert.doesNotMatch(section, /Onboarding|Offboarding|Eintritt|Austritt/i);
 
   const catalog = between(app, "function personnelDashboardCatalog()", "function orderedPersonnelDashboardItems");
-  for (const id of ["employees", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"]) {
+  for (const id of ["employees", "positions", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"]) {
     assert.match(catalog, new RegExp(`id:\\s*"${id}"`));
   }
   for (const helper of [

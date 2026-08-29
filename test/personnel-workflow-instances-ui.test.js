@@ -25,12 +25,12 @@ test("M5-UI zeigt Workflow-Instanzen und Aufgaben ausschließlich read-only", ()
   const workflow = between(
     html,
     '<section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-instances"',
-    '<section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks"',
+    '<section class="personnel-administration-section personnel-learning-catalog"',
   );
   const tasks = between(
     html,
     '<section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks"',
-    '<section class="personnel-administration-section" id="costCenterSection"',
+    '<section class="personnel-administration-section position-management-section"',
   );
   for (const id of [
     "personnelWorkflowInstanceStatusFilter",
@@ -179,10 +179,10 @@ test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten
     /"lib\/persistence\/sqlite\/operations\/personnel-workflow-instance-schema\.js"/,
   );
   for (const expected of [
-    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1117",
-    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1084",
-    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1011",
-    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1006",
+    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1119",
+    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1086",
+    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1013",
+    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1008",
     "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 111",
   ]) assert.match(persistenceAudit, new RegExp(expected));
 });

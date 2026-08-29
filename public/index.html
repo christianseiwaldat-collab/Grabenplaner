@@ -19,8 +19,8 @@
         <span class="eyebrow" id="adminAccessModeLabel">Geschützter Zugang</span>
         <h1>Beim Grabenplaner anmelden</h1>
         <p>Filialleitung und Administration verwenden hier ihre Personalnummer.</p>
-        <label class="field"><span>Personalnummer</span><input id="adminLoginPersonnelNumber" autocomplete="username" required /></label>
-        <label class="field"><span>Passwort</span><span class="password-field"><input id="adminLoginPassword" type="password" autocomplete="current-password" required /><button class="password-toggle" type="button" data-password-toggle="adminLoginPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label class="field"><span>Personalnummer</span><input id="adminLoginPersonnelNumber" name="username" autocomplete="username" required disabled /></label>
+        <label class="field"><span>Passwort</span><span class="password-field"><input id="adminLoginPassword" name="password" type="password" autocomplete="current-password" required disabled /><button class="password-toggle" type="button" data-password-toggle="adminLoginPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="login-error hidden" id="adminLoginError"></p>
         <button class="primary-button" type="submit">Anmelden</button>
         <a href="/portal.html">Zum Mitarbeiterportal</a>
@@ -34,7 +34,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.19 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.20 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -133,6 +133,9 @@
             <div class="nav-module-children" id="personnelAdministrationNavChildren">
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="employees" id="personnelDirectoryNavButton">
                 <span class="nav-symbol">◉</span><span>Mitarbeitende</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="positions" id="positionManagementNavButton">
+                <span class="nav-symbol">Pos</span><span>Positionsverwaltung</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="applications" id="candidatePreboardingNavButton">
                 <span class="nav-symbol">✦</span><span>Bewerbungen &amp; Preboarding</span>
@@ -378,6 +381,23 @@
             </div>
           </header>
 
+          <section class="manual-schedule-lock-control" id="manualScheduleLockControl" data-locked="false" aria-label="Manuelle Dienstplansperre">
+            <button id="manualScheduleLockToggle" type="button" role="switch" aria-checked="false" aria-describedby="manualScheduleLockDetail">
+              <span class="manual-schedule-lock-device" aria-hidden="true">
+                <span class="manual-schedule-lock-speaker"></span>
+                <span class="manual-schedule-lock-glyph"><i></i><b></b></span>
+                <span class="manual-schedule-lock-home"></span>
+              </span>
+              <span class="manual-schedule-lock-copy">
+                <small>Manuelle Dienstplansperre</small>
+                <strong id="manualScheduleLockStatus">Dienstplan manuell entsperrt</strong>
+                <em id="manualScheduleLockDetail">Einträge und Änderungen sind möglich. Automatische Sperren wirken unabhängig.</em>
+              </span>
+              <span class="manual-schedule-lock-action" id="manualScheduleLockAction" aria-hidden="true">Jetzt sperren</span>
+              <span class="manual-schedule-lock-switch" aria-hidden="true"><span></span></span>
+            </button>
+          </section>
+
           <section class="cross-location-schedule-panel hidden" id="crossLocationSchedulePanel" aria-labelledby="crossLocationScheduleTitle">
             <div class="cross-location-schedule-heading">
               <div>
@@ -463,6 +483,22 @@
             <article class="summary-card"><span>Team</span><strong id="employeeCount">0</strong><small>aktive Teammitglieder</small></article>
           </section>
 
+          <details class="work-rule-assessment branch-supervision-assessment hidden" id="branchSupervisionAssessmentPanel">
+            <summary>
+              <span class="work-rule-assessment-icon" aria-hidden="true">FL</span>
+              <span class="work-rule-assessment-heading">
+                <strong>Filialaufsicht</strong>
+                <small id="branchSupervisionAssessmentSummary">Prüfung wird geladen.</small>
+              </span>
+              <span class="work-rule-mode-badge" id="branchSupervisionModeBadge">Prüfung aus</span>
+              <span class="work-rule-assessment-counts" id="branchSupervisionAssessmentCounts" aria-label="Prüfergebnis Filialaufsicht"></span>
+              <span class="work-rule-assessment-chevron" aria-hidden="true">›</span>
+            </summary>
+            <div class="work-rule-assessment-body branch-supervision-assessment-body" id="branchSupervisionAssessmentBody" aria-live="polite">
+              <p class="work-rule-assessment-empty">Für diese Woche liegt noch keine Prüfung der Filialaufsicht vor.</p>
+            </div>
+          </details>
+
           <details class="work-rule-assessment" id="workRuleAssessmentPanel">
             <summary>
               <span class="work-rule-assessment-icon" aria-hidden="true">✓</span>
@@ -491,7 +527,7 @@
                 <span id="saturdayRuleHint">Sa-Faktor aktiv</span>
               </div>
             </div>
-            <div class="week-lock-notice hidden" id="weekLockNotice">Diese Kalenderwoche ist für Änderungen gesperrt. Die Bearbeitungssperre kann in den Grundeinstellungen verwaltet werden.</div>
+            <div class="week-lock-notice hidden" id="weekLockNotice">Diese Kalenderwoche ist automatisch für Änderungen gesperrt. Diese Regel wird getrennt von der manuellen Dienstplansperre verwaltet.</div>
             <div class="timeline-scroll">
               <div class="timeline" id="timeline"></div>
             </div>
@@ -702,6 +738,7 @@
 
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
             <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
+            <button class="settings-tab hidden" id="positionManagementTab" type="button" role="tab" aria-controls="positionManagementSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="positions">Positionsverwaltung</button>
             <button class="settings-tab hidden" id="candidatePreboardingTab" type="button" role="tab" aria-controls="candidatePreboardingSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="applications">Bewerbungen &amp; Preboarding</button>
             <button class="settings-tab hidden" id="workflowCenterTab" type="button" role="tab" aria-controls="workflowCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="workflows">Workflow-Center</button>
             <button class="settings-tab hidden" id="personnelLearningTab" type="button" role="tab" aria-controls="personnelLearningSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="learning">Schulung &amp; Wissen</button>
@@ -964,6 +1001,39 @@
                 <li><strong>Keine automatische Vertretung/Eskalation.</strong> Klärungen bleiben bewusst bei der Personalstelle.</li>
               </ul>
             </section>
+          </section>
+
+          <section class="personnel-administration-section position-management-section" id="positionManagementSection" role="tabpanel" aria-labelledby="positionManagementTab">
+            <div class="employee-toolbar position-management-toolbar">
+              <div>
+                <span class="eyebrow">Unternehmensweiter Katalog</span>
+                <h2>Positionsverwaltung</h2>
+                <p>Positionen kompakt suchen, sortieren und revisionssicher verwalten. Eine Position vermittelt keine Benutzerrechte.</p>
+              </div>
+              <form id="positionForm" class="position-form" autocomplete="off" data-gp-noncredential-form="true">
+                <input id="positionId" type="hidden" />
+                <label class="field"><span>Position</span><input id="positionName" name="position" maxlength="60" autocomplete="off" data-1p-ignore="true" data-lpignore="true" placeholder="z. B. Kassa-Verantwortung" required /></label>
+                <div class="position-management-form-actions"><button type="button" class="secondary-button hidden" id="cancelPositionEditButton">Abbrechen</button><button type="submit" class="primary-button" id="positionSubmitButton">Position hinzufügen</button></div>
+              </form>
+            </div>
+            <div class="position-management-filters">
+              <label class="field"><span>Position suchen</span><input id="positionSearch" type="search" inputmode="search" autocomplete="off" placeholder="Name oder Kennung" /></label>
+              <p class="settings-note" id="positionListStatus" role="status" aria-live="polite">Positionen werden geladen.</p>
+            </div>
+            <div class="position-management-table-wrap">
+              <table class="position-management-table">
+                <thead id="positionTableHead">
+                  <tr>
+                    <th scope="col" aria-sort="ascending"><button type="button" data-position-sort="name">Position <span aria-hidden="true">↑</span></button></th>
+                    <th scope="col" aria-sort="none"><button type="button" data-position-sort="activeEmployeeCount">Aktive MA <span aria-hidden="true">↕</span></button></th>
+                    <th scope="col" aria-sort="none"><button type="button" data-position-sort="employeeCount">Zuordnungen <span aria-hidden="true">↕</span></button></th>
+                    <th scope="col">Revision</th>
+                    <th scope="col"><span class="visually-hidden">Aktionen</span></th>
+                  </tr>
+                </thead>
+                <tbody id="positionList"><tr><td colspan="5">Positionen werden geladen.</td></tr></tbody>
+              </table>
+            </div>
           </section>
 
           <section class="personnel-administration-section" id="costCenterSection" role="tabpanel" aria-labelledby="costCentersTab">
@@ -2057,6 +2127,17 @@
               <label class="field"><span>Stornierung bestätigter Einsätze</span><select id="staffAssignmentCancellationPolicy"><option value="source_review">Quellfiliale oder PL+</option><option value="pl_plus_only">Nur PL+</option><option value="disabled">Keine Stornierung über den Anfrageprozess</option></select><small>Der bereits gebundene temporäre Filialeinsatz bleibt bis zu einer revisionssicheren Stornierung geschützt.</small></label>
             </div>
 
+            <div class="settings-card branch-supervision-settings-card" id="branchSupervisionSettingsCard">
+              <div class="card-heading"><div class="card-icon">FL</div><div><h2>Filialaufsicht</h2><p>Prüft während der Öffnungszeit Teamleitung/FL, FL Stellvertretung und begrenzte Überbrückungen durch eine Abteilungsleitung.</p></div></div>
+              <label class="field"><span>Reaktion bei einer Aufsichtslücke</span><select id="branchSupervisionMode"><option value="off">Prüfung aus</option><option value="yellow">Gelber Hinweis</option><option value="red">Roter Hinweis</option><option value="block">Planung blockieren</option></select><small>Im Sperrmodus werden Änderungen verhindert, die eine bestehende Aufsichtslücke vergrößern oder neu erzeugen.</small></label>
+              <label class="field"><span>Prüfintensität</span><select id="branchSupervisionIntensity"><option value="relaxed">Kulant</option><option value="standard">Standard</option><option value="strict">Streng</option><option value="custom">Individuell</option></select><small>Die Intensität setzt die beiden Schwellen. „Individuell“ erlaubt eigene Werte.</small></label>
+              <div class="settings-grid branch-supervision-thresholds" id="branchSupervisionThresholds">
+                <label class="field"><span>Mindestabdeckung durch Teamleitung/FL oder Stellvertretung</span><div class="unit-input"><input id="branchSupervisionPrimaryCoveragePercent" type="number" min="10" max="100" step="5" /><em>%</em></div><small>Verhindert, dass eine Abteilungsleitung die Filialaufsicht ganztägig übernimmt.</small></label>
+                <label class="field"><span>Maximale einzelne Überbrückung durch Abteilungsleitung</span><div class="unit-input"><input id="branchSupervisionDepartmentGapMinutes" type="number" min="0" max="480" step="15" /><em>Min.</em></div><small>Gilt je zusammenhängender Lücke vor, zwischen oder nach FL-/Stellvertretungsdiensten.</small></label>
+              </div>
+              <p class="settings-note" id="branchSupervisionSettingsHint">Die gesamte Öffnungszeit muss durch Teamleitung/FL, Stellvertretung oder eine zulässige stundenweise Überbrückung abgedeckt sein.</p>
+            </div>
+
             <div class="settings-card past-week-card" id="scheduleLockSettingsCard">
               <div class="card-heading"><div class="card-icon">KW</div><div><h2>Bearbeitungssperre für Dienstpläne</h2><p>Legt fest, wann aktuelle und vergangene Dienstpläne nicht mehr verändert werden dürfen.</p></div></div>
               <label class="switch-row">
@@ -2246,15 +2327,6 @@
           </section>
 
           <section id="personnelSettings" class="settings-section settings-two-column">
-            <div class="settings-card" id="positionSettingsCard">
-              <div class="card-heading"><div class="card-icon">Pos</div><div><h2>Positionen</h2><p>Standardpositionen sind fix. Eigene Positionen können ergänzt, bearbeitet und gelöscht werden.</p></div></div>
-              <form id="positionForm" class="position-form">
-                <input id="positionId" type="hidden" />
-                <label class="field"><span>Position</span><input id="positionName" maxlength="60" placeholder="z. B. Kassa-Verantwortung" /></label>
-                <div class="form-actions-inline"><button type="button" class="secondary-button hidden" id="cancelPositionEditButton">Bearbeitung abbrechen</button><button type="submit" class="primary-button" id="positionSubmitButton">Position hinzufügen</button></div>
-              </form>
-              <div class="position-list" id="positionList"></div>
-            </div>
             <div class="settings-card" id="personnelViewSettingsCard">
               <div class="card-heading"><div class="card-icon">Team</div><div><h2>Filialteam-Ansicht</h2><p>Darstellung der Teamstammdaten in der Filialverwaltung.</p></div></div>
               <label class="switch-row"><span><strong>Inaktive Teammitglieder anzeigen</strong><small>Blendet inaktive Stammdaten in der Filialverwaltung ein.</small></span><input id="showInactivePersonnel" type="checkbox" /></label>
@@ -2559,7 +2631,7 @@
                 </section>
               </div>
 
-              <div class="usb-wizard-panel" data-usb-wizard-panel="team">
+              <div class="usb-wizard-panel" data-usb-wizard-panel="team" data-gp-credential-preserve-on-hide="true">
                 <section class="usb-panel-card">
                   <div class="usb-panel-heading"><span class="usb-panel-number">3</span><div><h3>Ersteller &amp; Standorte</h3><p>Der Ersteller wird zwingend als Admin mit seinem bestehenden Passwort übernommen.</p></div></div>
                   <article class="usb-creator-card" id="usbCreatorSummary">
@@ -2642,7 +2714,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.19 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.20 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -2922,6 +2994,23 @@
           <p class="calculation-note" id="costCenterTypePositionHint">Ohne Auswahl steht für diesen Typ später keine Position zur Verfügung.</p>
         </section>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deactivateCostCenterTypeButton">Deaktivieren</button><span></span><button type="button" class="secondary-button" data-close="costCenterTypeModal">Abbrechen</button><button type="submit" class="primary-button" id="costCenterTypeSubmitButton">Typ anlegen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal position-delete-modal" id="positionDeleteModal" aria-labelledby="positionDeleteModalTitle">
+      <form id="positionDeleteForm">
+        <div class="modal-header"><div><span class="eyebrow">Positionsverwaltung</span><h2 id="positionDeleteModalTitle">Position löschen</h2><p id="positionDeleteModalCopy">Die Position wird revisionssicher archiviert.</p></div><button type="button" class="close-button" data-close="positionDeleteModal" aria-label="Löschdialog schließen">×</button></div>
+        <div class="position-delete-warning" id="positionDeleteWarning" role="alert">
+          <span aria-hidden="true">!</span>
+          <div><strong id="positionDeleteWarningTitle">Achtung: endgültig aus dem aktiven Katalog entfernen</strong><p id="positionDeleteWarningText"></p></div>
+        </div>
+        <dl class="position-delete-facts">
+          <div><dt>Position</dt><dd id="positionDeleteName">–</dd></div>
+          <div><dt>Aktive Mitarbeitende</dt><dd id="positionDeleteActiveCount">0</dd></div>
+          <div><dt>Historische Zuordnungen</dt><dd id="positionDeleteHistoryCount">0</dd></div>
+        </dl>
+        <p class="settings-note" id="positionDeleteMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="positionDeleteModal">Abbrechen</button><button type="submit" class="danger-button" id="confirmPositionDeleteButton">Position löschen</button></div>
       </form>
     </dialog>
 
@@ -3304,9 +3393,9 @@
       <form method="dialog" id="adminSetupForm">
         <div class="modal-header"><div><span class="eyebrow">Geschützter Zugang</span><h2>Admin-Ersteinrichtung</h2><p>Der erste Admin wird direkt am Grabenplaner-PC eingerichtet.</p></div><button type="button" class="close-button" data-close="adminSetupModal">×</button></div>
         <div class="form-grid">
-          <label class="field full-width"><span>Teammitglied</span><select id="adminSetupEmployee" required></select></label>
-          <label class="field"><span>Passwort</span><span class="password-field"><input id="adminSetupPassword" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-          <label class="field"><span>Passwort wiederholen</span><span class="password-field"><input id="adminSetupPasswordRepeat" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+          <label class="field full-width"><span>Teammitglied</span><select id="adminSetupEmployee" name="username" autocomplete="username" required></select></label>
+          <label class="field"><span>Passwort</span><span class="password-field"><input id="adminSetupPassword" name="new-password" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+          <label class="field"><span>Passwort wiederholen</span><span class="password-field"><input id="adminSetupPasswordRepeat" name="new-password-repeat" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
           <p class="calculation-note full-width">Mindestens 6 Zeichen; auch nur Ziffern sind möglich. Ein starkes Passwort wird empfohlen. Dieses Konto darf Zugänge, Einstellungen und Dienstpläne verwalten.</p>
         </div>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="adminSetupModal">Abbrechen</button><button type="submit" class="primary-button">Admin einrichten</button></div>
@@ -3764,6 +3853,7 @@
     <script src="/function-search.js"></script>
     <script src="/function-search-ui.js"></script>
     <script src="/function-search-navigation.js"></script>
+    <script src="/credential-boundaries.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

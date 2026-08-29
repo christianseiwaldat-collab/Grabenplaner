@@ -16,8 +16,8 @@
         <span class="eyebrow" id="portalAccessModeLabel">Mitarbeiterportal</span>
         <h1>Anmelden</h1>
         <p>Mit Personalnummer oder Zugangskennung und Passwort.</p>
-        <label><span>Zugangskennung</span><input id="loginPersonnelNumber" autocomplete="username" placeholder="Personalnummer oder Kontokennung" required /></label>
-        <label><span>Passwort</span><span class="password-field"><input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Zugangskennung</span><input id="loginPersonnelNumber" name="username" autocomplete="username" placeholder="Personalnummer oder Kontokennung" required disabled /></label>
+        <label><span>Passwort</span><span class="password-field"><input id="loginPassword" name="password" type="password" autocomplete="current-password" minlength="6" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <button class="login-forgot-password" id="forgotPasswordButton" type="button">Passwort vergessen?</button>
         <p class="message error hidden" id="loginError"></p>
         <button class="primary" type="submit">Anmelden</button>
@@ -560,8 +560,8 @@
       <form id="passwordResetConfirmForm">
         <div class="dialog-heading"><div><span class="eyebrow">Zugang</span><h2 id="passwordResetConfirmTitle">Neues Passwort festlegen</h2></div><button type="button" data-close-password-reset-confirm aria-label="Dialog schließen">×</button></div>
         <input id="passwordResetToken" type="hidden" />
-        <label><span>Neues Passwort</span><span class="password-field"><input id="passwordResetNewPassword" type="password" minlength="6" autocomplete="new-password" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input id="passwordResetRepeatPassword" type="password" minlength="6" autocomplete="new-password" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort</span><span class="password-field"><input id="passwordResetNewPassword" name="new-password" type="password" minlength="6" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input id="passwordResetRepeatPassword" name="new-password-repeat" type="password" minlength="6" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="password-recommendation">Verwende ein langes, nur hier eingesetztes Passwort. Nach dem Speichern werden alle bestehenden Portal- und App-Sitzungen dieses Zugangs beendet.</p>
         <p class="message hidden" id="passwordResetConfirmMessage" role="status" aria-live="polite"></p>
         <div class="dialog-actions"><button type="button" data-close-password-reset-confirm>Abbrechen</button><button class="primary" id="passwordResetConfirmSubmit" type="submit">Passwort speichern</button></div>
@@ -571,9 +571,10 @@
     <dialog id="passwordDialog">
       <form id="passwordForm">
         <div class="dialog-heading"><div><span class="eyebrow">Sicherheit</span><h2>Passwort ändern</h2></div><button type="button" data-close-dialog>×</button></div>
-        <label><span>Bisheriges Passwort</span><span class="password-field"><input id="currentPassword" type="password" autocomplete="current-password" minlength="6" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-        <label><span>Neues Passwort</span><span class="password-field"><input id="newPassword" type="password" minlength="6" autocomplete="new-password" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input id="repeatPassword" type="password" minlength="6" autocomplete="new-password" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label class="visually-hidden"><span>Zugangskennung</span><input id="passwordChangeUsername" name="username" autocomplete="username" readonly disabled tabindex="-1" /></label>
+        <label><span>Bisheriges Passwort</span><span class="password-field"><input id="currentPassword" name="current-password" type="password" autocomplete="current-password" minlength="6" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort</span><span class="password-field"><input id="newPassword" name="new-password" type="password" minlength="6" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input id="repeatPassword" name="new-password-repeat" type="password" minlength="6" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="password-recommendation">Mindestens 6 Zeichen; Ziffern sind erlaubt. Ein längeres, schwer zu erratendes Passwort wird empfohlen.</p>
         <p class="message hidden" id="passwordMessage"></p>
         <div class="dialog-actions"><button type="button" data-close-dialog>Abbrechen</button><button class="primary" type="submit">Passwort speichern</button></div>
@@ -773,6 +774,7 @@
     <script src="/amu-ocr-client.js"></script>
     <script src="/amu-pdf-client.js"></script>
     <script src="/date-range-calendar.js"></script>
+    <script src="/credential-boundaries.js"></script>
     <script src="/portal.js"></script>
   </body>
 </html>

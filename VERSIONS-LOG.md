@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.20 Beta · Positionsverwaltung, Filialaufsicht und Dienstplansperre
+
+- Der Positionskatalog verwendet stabile Kennungen und erlaubt die revisionssichere Bearbeitung aller Positionen. Entfernen archiviert ausschließlich ungenutzte Positionen; aktive Zuordnungen sperren den Vorgang, historische Bezüge bleiben erhalten und die Lehrlingssemantik folgt der Beschäftigungsklassifikation statt einem festen Positionsnamen.
+- Die eigene Positionsverwaltung bietet Suche, sortierbare kompakte Listen und kleine Textaktionen. Vor der Archivierung erscheint eine deutliche rote Warnung; Katalogänderungen und die versionierte Zuordnung zur neuen Position „FL Stellvertretung“ werden auditiert.
+- Die konfigurierbare Filialaufsicht prüft Teamleitung/FL und FL Stellvertretung während der Öffnungszeit. Abteilungsleitungen dürfen nur begrenzte stundenweise Rand- oder Zwischenlücken abdecken; Reaktion und Schwellen sind als aus, gelber Hinweis, roter Hinweis oder Planungssperre einstellbar.
+- Eine filialweite manuelle Dienstplansperre schützt genau eine Kalenderwoche, ist revisionsgebunden und bleibt von automatischen Bearbeitungssperren getrennt. Der deutlich ausgeschriebene Lock/Unlock-Status verändert die Planansicht nicht; Schreibversuche werden serverseitig verhindert und sachlich erklärt.
+- Browser-Credential-Grenzen trennen operative Formulare von echten Kontoformularen und bewahren die korrekte Login-, Passwortwechsel- und Reset-Semantik. Bewerberbewertungen bleiben kompakt, mobil nutzbar, kontrastreich und barrierearm bedienbar.
+- Rechte-, Scope-, Migrations-, Audit-, Persistenz-, Architektur-, Browser- und Integrationspfade sind gemeinsam regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.19 Beta · Strukturierte Bewerberprofile und Schnuppertage
 
 - Bewerberprofile unterstützen optionale E-Mail- und Telefondaten mit mindestens einem erreichbaren Kontaktweg sowie Geburtsdatum, berechnetem Alter, Wohnort und Nationalität.
