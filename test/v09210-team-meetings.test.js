@@ -30,6 +30,7 @@ const MEETING_DATE = "2035-03-15";
 let httpServer;
 let baseUrl;
 let departmentId;
+const matrixPositionName = "Matrix-PDF-Testposition";
 
 function ensureEmployee(personnelNumber, positionId) {
   db.prepare(`
@@ -121,6 +122,7 @@ async function pdfTextDetails(buffer) {
 
 test.before(async () => {
   const positionId = db.prepare("SELECT id FROM positions ORDER BY sort_order, id LIMIT 1").get().id;
+  db.prepare("UPDATE positions SET name = ? WHERE id = ?").run(matrixPositionName, positionId);
   const daySettings = db.prepare("SELECT day_settings_json FROM locations ORDER BY id LIMIT 1").get()?.day_settings_json || "{}";
   db.prepare(`
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
@@ -352,6 +354,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
       scheduleMatrixDetailFontSize: "9.5",
       scheduleMatrixTimeFontBold: true,
       scheduleMatrixTimeEmployeeColor: true,
+      scheduleMatrixShowPosition: false,
       scheduleMatrixHeaderText: maximumHeaderText,
     },
   });
@@ -360,6 +363,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_detail_font_size, "9.5");
   assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_time_font_bold, "1");
   assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_time_employee_color, "1");
+  assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_show_position, "0");
   assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_header_text, maximumHeaderText);
 
   const persistedMatrixSettings = await request(`/api/portal/v1/schedule-pdf-settings?locationId=${LOCATION}`, { auth });
@@ -367,6 +371,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.equal(persistedMatrixSettings.payload.context.locationId, LOCATION);
   assert.equal(persistedMatrixSettings.payload.context.departmentId, null);
   assert.equal(persistedMatrixSettings.payload.settings.pdf_schedule_matrix_header_text.length, 200);
+  assert.equal(persistedMatrixSettings.payload.settings.pdf_schedule_matrix_show_position, "0");
 
   const oversizedHeader = await request("/api/portal/v1/schedule-pdf-settings", {
     method: "PUT",
@@ -439,6 +444,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.match(matrixPdfDetails.text, /09:00-12:00/);
   assert.match(matrixPdfDetails.text, /09:00-18:00/);
   assert.match(matrixPdfDetails.text, /Testteam/);
+  assert.doesNotMatch(matrixPdfDetails.text, /Matrix-PDF-Testposition/);
   assert.match(matrixPdfDetails.text, /\d+MA/);
   assert.match(matrixPdfDetails.text, /1U/);
   assert.match(matrixPdfDetails.text, /1ZA/);
@@ -474,6 +480,20 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
     /\+2 weitere/,
     "Der Überfüllungsfall muss weitere Einträge kompakt zusammenfassen, ohne Dienst oder TS zu verdrängen.",
   );
+
+  const positionVisibleSettings = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT",
+    auth,
+    body: { locationId: LOCATION, scheduleMatrixShowPosition: true },
+  });
+  assert.equal(positionVisibleSettings.response.status, 200, positionVisibleSettings.text);
+  assert.equal(positionVisibleSettings.payload.settings.pdf_schedule_matrix_show_position, "1");
+  const positionVisiblePdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&design=matrix`, {
+    auth,
+    binary: true,
+  });
+  const positionVisiblePdfDetails = await pdfTextDetails(positionVisiblePdf.payload);
+  assert.match(positionVisiblePdfDetails.text, /Matrix-PDF-Testposition/);
 
   const unavailablePdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=unbekannt`, {
     auth,

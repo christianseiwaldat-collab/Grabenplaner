@@ -1768,6 +1768,10 @@ addBuiltinRolePermissions("developer", [
 for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
 }
+// Filialleitungen duerfen Grundrechte aktiver Abteilungsleitungen im eigenen
+// Standort persoenlich einschraenken. Die Route begrenzt diese Katalogrechte
+// auf Entzug und Wiederherstellung; Zusatz- und Technikrechte bleiben gesperrt.
+addBuiltinRolePermissions("manager", ["rights:read", "rights:write"]);
 
 function cascadeCrossLocationScheduleRolePermissionDenials(
   rolePermissionSet,
@@ -1852,6 +1856,7 @@ addBuiltinRolePermissions("developer", [
 
 const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
 const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
+const RIGHTS_EDITOR_PORTAL_ROLES = new Set([...RIGHTS_ADMIN_PORTAL_ROLES, "manager"]);
 const HR_DECISION_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
 const PROTECTED_PORTAL_ROLES = new Set(["developer"]);
 const USB_PROVISIONING_ROLES = new Set(["developer", "it_admin", "admin"]);
@@ -3106,6 +3111,7 @@ const defaultSettings = {
   pdf_schedule_matrix_time_font_size: "6",
   pdf_schedule_matrix_time_font_bold: "0",
   pdf_schedule_matrix_time_employee_color: "0",
+  pdf_schedule_matrix_show_position: "1",
   pdf_schedule_matrix_detail_font_size: "6",
   pdf_schedule_matrix_header_text: "Design 2",
   vacation_pdf_title: "Urlaubsplanung",
@@ -9401,17 +9407,32 @@ function manageablePortalPermissionsForActor(actor) {
     }
     return manageable;
   }
+  if (actor.role === "manager") {
+    const departmentManagerBasePermissions = builtinPortalRoles
+      .find((role) => role.id === "department_manager")?.permissions || [];
+    return new Set(departmentManagerBasePermissions.filter((permission) => (
+      actor.permissions?.includes(permission)
+      && delegablePortalPermissions.has(permission)
+      && !portalGlobalPermissionIds.has(permission)
+      && !PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission)
+      && !CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission)
+      && !PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
+    )));
+  }
   return new Set();
 }
 
 function portalPermissionCatalogForActor(actor) {
   const manageable = manageablePortalPermissionsForActor(actor);
-  return delegablePortalPermissionCatalog
+  const catalog = delegablePortalPermissionCatalog
     .filter((permission) => portalPermissionVisibleToActor(permission.id, actor))
     .map(({ hrDelegable: _hrDelegable, ...permission }) => ({
       ...permission,
       editable: manageable.has(permission.id),
     }));
+  return actor?.role === "manager"
+    ? catalog.filter((permission) => permission.editable)
+    : catalog;
 }
 
 function actorCanManagePermissionGrants(actor, target) {
@@ -9419,7 +9440,10 @@ function actorCanManagePermissionGrants(actor, target) {
   if (isLocalSystemSession(actor) || actor.role === "developer") return true;
   if (actor.role === "it_admin") return target.role !== "hr";
   if (actor.role === "admin") return target.role !== "it_admin";
-  return actor.role === "hr" && ["employee", "location_planner", "department_manager", "manager"].includes(target.role);
+  if (actor.role === "hr") return ["employee", "location_planner", "department_manager", "manager"].includes(target.role);
+  if (actor.role !== "manager" || target.role !== "department_manager") return false;
+  const managedLocations = new Set((actor.scopes || []).map((scope) => String(scope.locationId || "")));
+  return managedLocations.has(String(target.homeLocationId || ""));
 }
 
 async function getPortalRoles() {
@@ -10294,6 +10318,18 @@ function requireAdminHrOrLocal(request, permission) {
   const session = requirePortalAdminOrLocal(request, permission);
   if (!isLocalSystemSession(session) && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
     throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin, Admin oder Personalleitung verfügbar.", "PORTAL_PERMISSION_DENIED");
+  }
+  return session;
+}
+
+function requireRightsEditorOrLocal(request, permission) {
+  const session = requirePortalAdminOrLocal(request, permission);
+  if (!isLocalSystemSession(session) && !RIGHTS_EDITOR_PORTAL_ROLES.has(session.role)) {
+    throw httpError(
+      403,
+      "Diese Aktion ist nur für Developer, IT-Admin, Admin, Personalleitung oder die eingeschränkte FL-zu-AL-Rechteverwaltung verfügbar.",
+      "PORTAL_PERMISSION_DENIED",
+    );
   }
   return session;
 }
@@ -17645,6 +17681,7 @@ function defaultSchedulePdfSettings(context = {}) {
     pdf_schedule_matrix_time_font_size: "6",
     pdf_schedule_matrix_time_font_bold: "0",
     pdf_schedule_matrix_time_employee_color: "0",
+    pdf_schedule_matrix_show_position: "1",
     pdf_schedule_matrix_detail_font_size: "6",
     pdf_schedule_matrix_header_text: "Design 2",
   };
@@ -17698,6 +17735,7 @@ function applyScopedPdfSettings(settings, context, scopeType) {
     ),
     pdf_schedule_matrix_time_font_bold: scopedSettings.pdf_schedule_matrix_time_font_bold === "1" ? "1" : "0",
     pdf_schedule_matrix_time_employee_color: scopedSettings.pdf_schedule_matrix_time_employee_color === "1" ? "1" : "0",
+    pdf_schedule_matrix_show_position: scopedSettings.pdf_schedule_matrix_show_position === "0" ? "0" : "1",
     pdf_schedule_matrix_detail_font_size: normalizeScheduleMatrixFontSize(
       scopedSettings.pdf_schedule_matrix_detail_font_size,
       SCHEDULE_MATRIX_DETAIL_FONT_SIZES,
@@ -17747,6 +17785,7 @@ const SCHEDULE_PDF_SCOPED_SETTING_KEYS = Object.freeze([
   "pdf_schedule_matrix_time_font_size",
   "pdf_schedule_matrix_time_font_bold",
   "pdf_schedule_matrix_time_employee_color",
+  "pdf_schedule_matrix_show_position",
   "pdf_schedule_matrix_detail_font_size",
   "pdf_schedule_matrix_header_text",
 ]);
@@ -27505,6 +27544,7 @@ const brandingPreserveSettingKeys = [
   "pdf_schedule_matrix_time_font_size",
   "pdf_schedule_matrix_time_font_bold",
   "pdf_schedule_matrix_time_employee_color",
+  "pdf_schedule_matrix_show_position",
   "pdf_schedule_matrix_detail_font_size",
   "pdf_schedule_matrix_header_text",
   "vacation_pdf_title",
@@ -34883,9 +34923,11 @@ async function rightsDashboardPayload(actor) {
 }
 
 async function rightsManagementPayload(actor) {
-  const [roleRows, adminUsers] = await Promise.all([getPortalRoles(), portalUsersForAdmin()]);
+  const [roleRows, adminUsers] = await Promise.all([getPortalRoles(), portalUsersForActor(actor)]);
   const roles = new Map(roleRows.map((role) => [role.id, role]));
   const visiblePermission = (permission) => portalPermissionVisibleToActor(permission, actor);
+  const managerDenialOnly = actor?.role === "manager";
+  const managerPermissions = managerDenialOnly ? manageablePortalPermissionsForActor(actor) : null;
   const users = adminUsers
     .filter((user) => user.employeeActive)
     .map((user) => {
@@ -34894,9 +34936,14 @@ async function rightsManagementPayload(actor) {
         ...publicUser
       } = user;
       const rolePermissions = (roles.get(user.role)?.permissions || [])
-        .filter(visiblePermission);
-      const grantedPermissions = (user.grantedPermissions || []).filter(visiblePermission);
-      const denied = new Set((user.deniedPermissions || []).filter(visiblePermission));
+        .filter(visiblePermission)
+        .filter((permission) => !managerDenialOnly || managerPermissions.has(permission));
+      const grantedPermissions = managerDenialOnly
+        ? []
+        : (user.grantedPermissions || []).filter(visiblePermission);
+      const denied = new Set((user.deniedPermissions || [])
+        .filter(visiblePermission)
+        .filter((permission) => !managerDenialOnly || managerPermissions.has(permission)));
       const effectivePermissions = [...new Set([...rolePermissions, ...grantedPermissions])]
         .filter((permission) => !denied.has(permission))
         .filter((permission) => permission !== "amu:local:manage"
@@ -34905,13 +34952,27 @@ async function rightsManagementPayload(actor) {
             user.role,
             user.amuLocalAccessMode,
           ));
+      const projectedUser = managerDenialOnly ? {
+        employeeNumber: publicUser.employeeNumber,
+        fullName: publicUser.fullName,
+        nickname: publicUser.nickname,
+        employeeActive: publicUser.employeeActive,
+        configured: publicUser.configured,
+        role: publicUser.role,
+        roleName: publicUser.roleName,
+        roleLocked: publicUser.roleLocked,
+        active: publicUser.active,
+        homeLocationId: publicUser.homeLocationId,
+        preferredDepartmentId: publicUser.preferredDepartmentId,
+        scopes: publicUser.scopes,
+      } : publicUser;
       return {
-        ...publicUser,
+        ...projectedUser,
         rolePermissions,
         grantedPermissions,
         deniedPermissions: [...denied].sort(),
         effectivePermissions,
-        personnelFieldAccess: personnelFieldEffectiveAccess({
+        personnelFieldAccess: managerDenialOnly ? {} : personnelFieldEffectiveAccess({
           employeeNumber: user.employeeNumber,
           role: user.role,
           permissions: effectivePermissions,
@@ -35022,7 +35083,7 @@ function drawRightsDashboardProcessPdf(processDashboard, process, location, vali
 }
 
 app.get("/api/portal/v1/rights", async (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "rights:read");
+  const actor = requireRightsEditorOrLocal(request, "rights:read");
   response.json(await rightsManagementPayload(actor));
 });
 
@@ -36174,7 +36235,7 @@ async function rightsMutationSnapshot(
 }
 
 app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "rights:write");
+  const actor = requireRightsEditorOrLocal(request, "rights:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   const target = (await portalUsersForAdmin()).find((user) => user.employeeNumber === employeeNumber);
   if (!target?.configured || !target.active) throw httpError(404, "Der aktive Portal-Zugang wurde nicht gefunden.");
@@ -36186,6 +36247,13 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     : request.body.permissions;
   if (!Array.isArray(grantsInput)) throw httpError(400, "Bitte eine gültige Rechteauswahl übermitteln.");
   const submitted = [...new Set(grantsInput.map((value) => String(value || "").trim()).filter(Boolean))];
+  if (actor.role === "manager" && submitted.length) {
+    throw httpError(
+      403,
+      "Filialleitungen können hier ausschließlich Grundrechte einer Abteilungsleitung entziehen oder wiederherstellen.",
+      "MANAGER_DEPARTMENT_RIGHTS_DENIAL_ONLY",
+    );
+  }
   const denialInputProvided = Object.prototype.hasOwnProperty.call(request.body || {}, "deniedPermissions");
   if (denialInputProvided && !Array.isArray(request.body.deniedPermissions)) {
     throw httpError(400, "Bitte eine gültige Auswahl entzogener Grundrechte übermitteln.");
@@ -36363,7 +36431,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   let rightsChanged = false;
   let responseProjectionActor = actor;
   await personnelLifecycleSerializableTransaction(async (organization) => {
-    const [liveTarget, liveRoleProjection, liveBefore, liveLearningActor] = await Promise.all([
+    const [liveTarget, liveRoleProjection, liveBefore, liveLearningActor, liveTargetScope] = await Promise.all([
       organization.getPortalUserAccountProjection(employeeNumber),
       organization.getPortalRoleProjection(target.role),
       rightsMutationSnapshot(
@@ -36374,10 +36442,11 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         organization,
       ),
       livePersonnelLearningRoleAdministrationActor(actor, organization),
+      organization.getEmployeeScopeProjection(employeeNumber),
     ]);
     responseProjectionActor = liveLearningActor;
     assertLivePortalRoutePermission(liveLearningActor, "rights:write", {
-      allowedRoles: RIGHTS_ADMIN_PORTAL_ROLES,
+      allowedRoles: RIGHTS_EDITOR_PORTAL_ROLES,
     });
     const liveTargetAccess = {
       employeeNumber,
@@ -36385,6 +36454,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
       roleLocked: Boolean(liveTarget?.role_locked),
       configured: Boolean(liveTarget),
       active: Boolean(liveTarget?.active),
+      homeLocationId: String(liveTargetScope?.home_location_id || ""),
     };
     const liveRolePermissions = parsePortalPermissions(liveRoleProjection?.permissions)
       .filter((permission) => portalPermissionAllowedForRole(permission, target.role));
@@ -54650,6 +54720,7 @@ app.put("/api/portal/v1/schedule-pdf-settings", async (request, response) => {
     "pdfFilenameIncludeTimestamp",
     "scheduleMatrixTimeFontBold",
     "scheduleMatrixTimeEmployeeColor",
+    "scheduleMatrixShowPosition",
   ]) {
     if (Object.hasOwn(body, booleanKey) && typeof body[booleanKey] !== "boolean") {
       throw httpError(400, "Die Dienstplan-PDF-Einstellungen enthalten einen ungültigen Schalter.", "SCHEDULE_PDF_BOOLEAN_INVALID");
@@ -54684,6 +54755,9 @@ app.put("/api/portal/v1/schedule-pdf-settings", async (request, response) => {
     pdf_schedule_matrix_time_employee_color: Object.hasOwn(body, "scheduleMatrixTimeEmployeeColor")
       ? (body.scheduleMatrixTimeEmployeeColor ? "1" : "0")
       : currentSettings.pdf_schedule_matrix_time_employee_color,
+    pdf_schedule_matrix_show_position: Object.hasOwn(body, "scheduleMatrixShowPosition")
+      ? (body.scheduleMatrixShowPosition ? "1" : "0")
+      : currentSettings.pdf_schedule_matrix_show_position,
     pdf_schedule_matrix_detail_font_size: normalizeScheduleMatrixFontSize(
       Object.hasOwn(body, "scheduleMatrixDetailFontSize")
         ? body.scheduleMatrixDetailFontSize
@@ -55004,7 +55078,7 @@ app.put("/api/settings", async (request, response) => {
       : currentScheduleSettings.pdf_schedule_matrix_header_text,
     { strict: true },
   );
-  for (const booleanKey of ["scheduleMatrixTimeFontBold", "scheduleMatrixTimeEmployeeColor"]) {
+  for (const booleanKey of ["scheduleMatrixTimeFontBold", "scheduleMatrixTimeEmployeeColor", "scheduleMatrixShowPosition"]) {
     if (Object.hasOwn(body, booleanKey) && typeof body[booleanKey] !== "boolean") {
       throw httpError(400, "Die Dienstplan-PDF-Einstellungen enthalten einen ungültigen Schalter.", "SCHEDULE_PDF_BOOLEAN_INVALID");
     }
@@ -55015,6 +55089,9 @@ app.put("/api/settings", async (request, response) => {
   const scheduleMatrixTimeEmployeeColor = Object.hasOwn(body, "scheduleMatrixTimeEmployeeColor")
     ? body.scheduleMatrixTimeEmployeeColor === true
     : currentScheduleSettings.pdf_schedule_matrix_time_employee_color === "1";
+  const scheduleMatrixShowPosition = Object.hasOwn(body, "scheduleMatrixShowPosition")
+    ? body.scheduleMatrixShowPosition === true
+    : currentScheduleSettings.pdf_schedule_matrix_show_position !== "0";
   const pdfTitle = validatePdfText(body.pdfTitle || scheduleDefaults.pdf_title, "den Dienstplan-PDF-Titel");
   const pdfFilenamePrefix = validatePdfText(body.pdfFilenamePrefix || scheduleDefaults.pdf_filename_prefix, "der Dienstplan-PDF-Dateiname", { min: 5, max: 80 });
   const vacationPdfTitle = validatePdfText(body.vacationPdfTitle || vacationDefaults.vacation_pdf_title, "den Urlaubsplaner-PDF-Titel");
@@ -55180,6 +55257,7 @@ app.put("/api/settings", async (request, response) => {
       pdf_schedule_matrix_time_font_size: scheduleMatrixTimeFontSize,
       pdf_schedule_matrix_time_font_bold: scheduleMatrixTimeFontBold ? "1" : "0",
       pdf_schedule_matrix_time_employee_color: scheduleMatrixTimeEmployeeColor ? "1" : "0",
+      pdf_schedule_matrix_show_position: scheduleMatrixShowPosition ? "1" : "0",
       pdf_schedule_matrix_detail_font_size: scheduleMatrixDetailFontSize,
       pdf_schedule_matrix_header_text: scheduleMatrixHeaderText,
     }, repository);
@@ -58018,6 +58096,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   ));
   const timeFontBold = settingEnabled(schedule.settings, "pdf_schedule_matrix_time_font_bold");
   const timeEmployeeColor = settingEnabled(schedule.settings, "pdf_schedule_matrix_time_employee_color");
+  const showEmployeePosition = settingEnabled(schedule.settings, "pdf_schedule_matrix_show_position");
   const matrixHeaderText = normalizeScheduleMatrixHeaderText(schedule.settings.pdf_schedule_matrix_header_text);
   const tableTop = 62;
   const postTableHeight = 18 + (meetings.length ? 33 : 0) + (hasScheduleNote ? 36 : 0);
@@ -58139,16 +58218,18 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       doc.fillColor("#142033").font("Helvetica-Bold").fontSize(7.4).text(
         employee.nickname || employee.full_name || employee.personnel_number,
         left + 52,
-        y + Math.max(8, rowHeight / 2 - 10),
+        y + Math.max(8, rowHeight / 2 - (showEmployeePosition ? 10 : 4)),
         { width: employeeColumnWidth - 60, height: 12, ellipsis: true },
       );
-      const employeeDetail = employee.position_name || employee.department_name || "Dienstplanung";
-      doc.fillColor("#75818a").font("Helvetica").fontSize(5.4).text(
-        employeeDetail || "Dienstplanung",
-        left + 52,
-        y + Math.max(19, rowHeight / 2 + 2),
-        { width: employeeColumnWidth - 60, height: 9, ellipsis: true },
-      );
+      if (showEmployeePosition) {
+        const employeeDetail = employee.position_name || employee.department_name || "Dienstplanung";
+        doc.fillColor("#75818a").font("Helvetica").fontSize(5.4).text(
+          employeeDetail || "Dienstplanung",
+          left + 52,
+          y + Math.max(19, rowHeight / 2 + 2),
+          { width: employeeColumnWidth - 60, height: 9, ellipsis: true },
+        );
+      }
 
       for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
         const date = addDays(schedule.weekStart, dayIndex);

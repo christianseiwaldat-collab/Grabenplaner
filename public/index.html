@@ -34,7 +34,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.20 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.21 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -2043,7 +2043,7 @@
                       <p class="settings-note" id="schedulePdfDesignSettingsHint">Standard: nur Design 1 · Zeitachse.</p>
                       <details class="schedule-matrix-pdf-settings">
                         <summary>
-                          <span><strong>Alternative Wochenmatrix formatieren</strong><small>Uhrzeiten, Zusatzzeile und Kopftext für Design 2 festlegen.</small></span>
+                          <span><strong>Alternative Wochenmatrix formatieren</strong><small>Uhrzeiten, Namensdetails, Zusatzzeile und Kopftext für Design 2 festlegen.</small></span>
                           <span class="settings-accordion-chevron" aria-hidden="true">›</span>
                         </summary>
                         <div class="schedule-matrix-pdf-settings-body">
@@ -2051,6 +2051,7 @@
                           <label class="field"><span>Schriftgröße der Zusatzzeile</span><select id="scheduleMatrixDetailFontSize"><option value="6">Klein · 6 pt</option><option value="8">Standard · 8 pt</option><option value="9.5">Groß · 9,5 pt</option></select><small>Abteilung oder Arbeitsbereich steht direkt unter der Uhrzeit.</small></label>
                           <label class="switch-row"><span><strong>Uhrzeiten fett darstellen</strong><small>Hebt Beginn und Ende des Dienstes stärker hervor.</small></span><input id="scheduleMatrixTimeFontBold" type="checkbox" /></label>
                           <label class="switch-row"><span><strong>Uhrzeiten in der MA-Farbe darstellen</strong><small>Verwendet die im Dienstplan hinterlegte Farbe des Teammitglieds.</small></span><input id="scheduleMatrixTimeEmployeeColor" type="checkbox" /></label>
+                          <label class="switch-row"><span><strong>Position unter dem Namen anzeigen</strong><small>Blendet die Position des Teammitglieds in der linken Namensspalte ein oder aus.</small></span><input id="scheduleMatrixShowPosition" type="checkbox" checked /></label>
                           <label class="field schedule-matrix-header-text"><span>Kopftext rechts oben</span><input id="scheduleMatrixHeaderText" maxlength="200" value="Design 2" /><small>Für berechtigte FL/AL im eigenen Bereich bearbeitbar · maximal 200 Zeichen.</small></label>
                         </div>
                       </details>
@@ -2306,7 +2307,7 @@
           <section id="rightsSettings" class="settings-section settings-two-column">
             <div class="settings-card">
               <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Grundrechte persönlich einschränken und zusätzliche Rechte gezielt vergeben.</p></div></div>
-              <p class="settings-note security-note">Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. IT-Admin verwaltet den vollständigen Rechtekatalog; die Personalleitung ausschließlich freigegebene fachliche Rechte. Der Developer-Zugang bleibt geschützt.</p>
+              <p class="settings-note security-note">Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. Filialleitungen dürfen ausschließlich Grundrechte aktiver Abteilungsleitungen im eigenen Standort einschränken; IT-Admin und Personalleitung behalten ihre getrennten Verwaltungsgrenzen. Der Developer-Zugang bleibt geschützt.</p>
               <label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
               <p class="settings-note" id="rightsManagementHint">Rechte werden geladen.</p>
               <div class="rights-user-list" id="rightsUserList"></div>
@@ -2714,7 +2715,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.20 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.21 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
