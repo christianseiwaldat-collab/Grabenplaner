@@ -225,7 +225,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(defaults.payload.vacationCalendarView.view, "year");
   assert.deepEqual(defaults.payload.personnelDashboardLayout, {
     version: 1,
-    order: ["employees", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
+    order: ["employees", "positions", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
     hidden: [],
   });
   assert.deepEqual(defaults.payload.startDashboardPreferences, {
@@ -241,7 +241,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
 
   const personnelDashboardLayout = {
     version: 1,
-    order: ["requests", "employees", "applications", "workflows", "tasks", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements", "dataRequests"],
+    order: ["requests", "employees", "positions", "applications", "workflows", "tasks", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements", "dataRequests"],
     hidden: ["collectiveAgreements"],
   };
   const vacationCalendarView = {

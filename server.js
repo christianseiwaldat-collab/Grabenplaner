@@ -103,6 +103,10 @@ const {
   systemCenterRecoveryAlert,
 } = require("./lib/system-center-metrics");
 const {
+  assessBranchSupervision,
+  branchSupervisionSettingsValuesFromInput,
+} = require("./lib/branch-supervision");
+const {
   DEFAULT_SOCKET_PATH: DEFAULT_ASSURANCE_CONTROL_SOCKET_PATH,
   recoveryAssuranceControlStatus,
   requestRecoveryAssuranceRun,
@@ -788,7 +792,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", description: "Wirtschaftlich sensible Kosten- und Rohertragswerte nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", description: "TradeFoto-Statistikberichte prüfen, einer freigegebenen Filiale zuordnen und nach ausdrücklicher Bestätigung unveränderlich übernehmen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
-  { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true },
+  { id: "positions:write", label: "Positionskatalog verwalten", description: "Unternehmensweite Positionen anlegen, bearbeiten und revisionssicher archivieren; Positionen selbst vergeben keine Benutzerrechte.", group: "Personalverwaltung", warningLevel: "high", hrDelegable: true },
   { id: "locations:operational:write", label: "Eigenen Standort betrieblich pflegen", description: "Öffnungszeiten und Mindestbesetzung ausschließlich in zugewiesenen Standorten bearbeiten; keine Neuanlage, Deaktivierung, Kostenstellen- oder Zeiterfassungseinstellungen.", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "locations:write", label: "Standorte vollständig bearbeiten", group: "Filialverwaltung", warningLevel: "critical" },
   { id: "time:read", label: "Zeiterfassung des Bereichs lesen", group: "Zeit & Abwesenheit", warningLevel: "normal", hrDelegable: true },
@@ -3138,6 +3142,10 @@ const defaultSettings = {
   show_sunday: "0",
   remember_last_schedule_overall_plan: "1",
   remember_last_vacation_overall_plan: "1",
+  branch_supervision_mode: "off",
+  branch_supervision_intensity: "standard",
+  branch_supervision_min_primary_coverage_percent: "60",
+  branch_supervision_max_department_gap_minutes: "180",
   ...CROSS_LOCATION_SCHEDULE_DEFAULT_SETTINGS,
 };
 
@@ -5812,7 +5820,73 @@ async function pastWeekEditingAllowedForActor(actor, settings = getSettings()) {
   return stored?.value === "1";
 }
 
-async function assertWeekEditable(weekStart, settings = getSettings(), actor = null) {
+function canManageScheduleManualLock(actor, locationId) {
+  if (!actor || isLocalSystemSession(actor)) return true;
+  if (!actor.permissions?.includes("schedule:write")) return false;
+  try {
+    assertSessionContextScope(actor, { locationId });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function scheduleManualLockForApi(row, { actor = null, locationId, weekStart } = {}) {
+  return {
+    locationId: String(row?.location_id || locationId || ""),
+    weekStart: String(row?.week_start || weekStart || ""),
+    locked: Boolean(row?.locked),
+    revision: Number(row?.revision || 0),
+    updatedBy: String(row?.updated_by || ""),
+    updatedAt: String(row?.updated_at || ""),
+    canManage: canManageScheduleManualLock(actor, locationId || row?.location_id),
+  };
+}
+
+async function getScheduleManualLock(locationId, weekStart, actor = null) {
+  const row = await organizationPersonnelRepository.getScheduleManualLock(
+    locationId,
+    weekStart,
+  );
+  return scheduleManualLockForApi(row, { actor, locationId, weekStart });
+}
+
+function scheduleManualLockConflictError(row, { actor, locationId, weekStart } = {}) {
+  const error = httpError(
+    409,
+    "Die manuelle Dienstplansperre wurde zwischenzeitlich geändert. Bitte den aktuellen Stand neu laden.",
+    "SCHEDULE_MANUAL_LOCK_CONFLICT",
+  );
+  error.details = {
+    manualScheduleLock: scheduleManualLockForApi(row, {
+      actor,
+      locationId,
+      weekStart,
+    }),
+  };
+  return error;
+}
+
+async function assertScheduleManualLockOpen(weekStart, locationId, actor = null) {
+  if (!locationId) return;
+  const lock = await getScheduleManualLock(locationId, weekStart, actor);
+  if (!lock.locked) return;
+  const error = httpError(
+    423,
+    "Dieser Dienstplan wurde manuell gesperrt. Einträge und Änderungen sind bis zur manuellen Freigabe nicht möglich.",
+    "SCHEDULE_MANUAL_LOCKED",
+  );
+  error.details = { manualScheduleLock: lock };
+  throw error;
+}
+
+async function assertWeekEditable(
+  weekStart,
+  settings = getSettings(),
+  actor = null,
+  locationId = "",
+) {
+  await assertScheduleManualLockOpen(weekStart, locationId, actor);
   if (isPastWeekStart(weekStart) && !await pastWeekEditingAllowedForActor(actor, settings)) {
     throw httpError(423, "Vergangene Kalenderwochen sind für deinen Benutzer gesperrt. Du kannst die persönliche Freigabe bei Bedarf in den Einstellungen aktivieren.");
   }
@@ -5821,8 +5895,13 @@ async function assertWeekEditable(weekStart, settings = getSettings(), actor = n
   }
 }
 
-async function assertDateEditable(isoDate, settings = getSettings(), actor = null) {
-  await assertWeekEditable(getMonday(isoDate), settings, actor);
+async function assertDateEditable(
+  isoDate,
+  settings = getSettings(),
+  actor = null,
+  locationId = "",
+) {
+  await assertWeekEditable(getMonday(isoDate), settings, actor, locationId);
 }
 
 function getSettings() {
@@ -15148,8 +15227,11 @@ async function prepareApprovedTimeOffMutation(
     deletedShiftIds: shifts.map((shift) => shift.id),
     addedShifts,
   };
-  const evaluations = await evaluateWorkRuleChanges(shifts, planningChange);
-  return { shifts, addedShifts, options, evaluations };
+  const [evaluations, branchSupervisionEvaluations] = await Promise.all([
+    evaluateWorkRuleChanges(shifts, planningChange),
+    evaluateBranchSupervisionChanges(shifts, planningChange),
+  ]);
+  return { shifts, addedShifts, options, evaluations, branchSupervisionEvaluations };
 }
 
 async function insertApprovedTimeOff(
@@ -15226,11 +15308,16 @@ async function prepareRestoreApprovedTimeOffMutation(
     [...originals, ...uniqueReplacedShifts],
     planningChange,
   );
+  const branchSupervisionEvaluations = await evaluateBranchSupervisionChanges(
+    [...originals, ...uniqueReplacedShifts],
+    planningChange,
+  );
   return {
     originals,
     uniqueReplacedShifts,
     addedShifts,
     evaluations,
+    branchSupervisionEvaluations,
   };
 }
 
@@ -17173,10 +17260,28 @@ async function employeeAssignmentForCostCenter(value, options = {}) {
   };
 }
 
-async function validateEmployeePositionForAssignment(positionId, assignment, repository = organizationPersonnelRepository) {
-  const position = (await getPositions(repository)).find((entry) => String(entry.id) === String(positionId));
+async function validateEmployeePositionForAssignment(
+  positionId,
+  assignment,
+  repository = organizationPersonnelRepository,
+  options = {},
+) {
+  const positions = await getPositions(repository, true);
+  const requestedPositionId = String(positionId || "").trim();
+  const position = requestedPositionId
+    ? positions.find((entry) => String(entry.id) === requestedPositionId)
+    : positions.find((entry) => entry.active && entry.isDefault)
+      || positions.find((entry) => entry.active);
   if (!position) {
     throw httpError(400, "Bitte eine gültige Position auswählen.", "EMPLOYEE_POSITION_INVALID");
+  }
+  if (!position.active) {
+    if (options.allowInactive === true) return position;
+    throw httpError(
+      409,
+      `Die Position „${position.name}“ ist archiviert und kann nicht neu zugeordnet werden.`,
+      "EMPLOYEE_POSITION_INACTIVE",
+    );
   }
   const allowed = position.costCenterTypeIds.includes(String(assignment.typeId));
   if (!allowed) {
@@ -17233,14 +17338,21 @@ function serializePosition(row) {
   return {
     ...row,
     builtin: Boolean(row.builtin),
+    active: Boolean(row.active),
+    is_default: Boolean(row.is_default),
+    isDefault: Boolean(row.is_default),
     sort_order: Number(row.sort_order || 0),
+    revision: Number(row.revision || 1),
+    employee_count: Number(row.employee_count || 0),
+    active_employee_count: Number(row.active_employee_count || 0),
     cost_center_type_ids: costCenterTypeIds,
     costCenterTypeIds,
   };
 }
 
-async function getPositions(repository = organizationPersonnelRepository) {
-  return (await repository.listPositions()).map(serializePosition);
+async function getPositions(repository = organizationPersonnelRepository, includeInactive = false) {
+  const positions = (await repository.listPositions()).map(serializePosition);
+  return includeInactive ? positions : positions.filter((position) => position.active);
 }
 
 async function getLocations(includeInactive = true) {
@@ -18414,6 +18526,219 @@ async function operatingHours(isoDate, settings) {
   return config?.open ? { start: config.start, end: config.end } : null;
 }
 
+function projectBranchSupervisionShifts(storedShifts, planningChange, {
+  locationId,
+  weekStart,
+  weekEnd,
+}) {
+  let shifts = (storedShifts || []).map((shift) => ({ ...shift }));
+  const deletedShiftIds = new Set(
+    Array.isArray(planningChange?.deletedShiftIds)
+      ? planningChange.deletedShiftIds.map((id) => String(id))
+      : [],
+  );
+  if (planningChange?.deleted === true && planningChange.id) {
+    deletedShiftIds.add(String(planningChange.id));
+  }
+  if (deletedShiftIds.size) {
+    shifts = shifts.filter((shift) => !deletedShiftIds.has(String(shift.id)));
+  }
+  const replaceRange = planningChange?.replaceRange;
+  if (replaceRange) {
+    shifts = shifts.filter((shift) => !(
+      String(shift.location_id || "") === String(replaceRange.locationId || locationId)
+      && shift.shift_date >= String(replaceRange.dateFrom || weekStart)
+      && shift.shift_date <= String(replaceRange.dateTo || weekEnd)
+      && (!replaceRange.departmentId
+        || Number(shift.department_id || 0) === Number(replaceRange.departmentId))
+    ));
+  }
+  const submittedShifts = Array.isArray(planningChange?.addedShifts)
+    ? planningChange.addedShifts
+    : (planningChange && planningChange.deleted !== true && !replaceRange ? [planningChange] : []);
+  for (const [index, submitted] of submittedShifts.entries()) {
+    if (!submitted || typeof submitted !== "object") continue;
+    const shiftDate = String(submitted.shiftDate ?? submitted.shift_date ?? "");
+    const submittedLocationId = String(submitted.locationId ?? submitted.location_id ?? locationId);
+    if (submittedLocationId !== String(locationId) || shiftDate < weekStart || shiftDate > weekEnd) continue;
+    const candidateId = Number(submitted.id || 0);
+    if (candidateId) shifts = shifts.filter((shift) => Number(shift.id) !== candidateId);
+    shifts.push({
+      id: candidateId ? `candidate-${candidateId}` : `candidate-new-${index}`,
+      employee_number: String(submitted.employeeNumber ?? submitted.employee_number ?? ""),
+      location_id: submittedLocationId,
+      department_id: submitted.departmentId ?? submitted.department_id ?? null,
+      shift_date: shiftDate,
+      start_time: String(submitted.startTime ?? submitted.start_time ?? ""),
+      end_time: String(submitted.endTime ?? submitted.end_time ?? ""),
+    });
+  }
+  return shifts;
+}
+
+async function branchSupervisionAssessmentForSchedule(
+  weekStart,
+  locationId,
+  planningChange = null,
+  { dates = null } = {},
+) {
+  const weekEnd = addDays(weekStart, 6);
+  const planningQuery = {
+    locationId: String(locationId),
+    departmentId: null,
+    weekStart,
+    weekEnd,
+  };
+  const [settings, employees, storedShifts] = await Promise.all([
+    settingsForLocation(locationId),
+    planningSettingsRepository.listScheduleEmployees(planningQuery),
+    planningSettingsRepository.listScheduleShifts(planningQuery),
+  ]);
+  const shifts = projectBranchSupervisionShifts(storedShifts, planningChange, {
+    locationId: String(locationId),
+    weekStart,
+    weekEnd,
+  });
+  const knownEmployeeNumbers = new Set(employees.map((employee) => String(employee.personnel_number)));
+  const submittedShifts = Array.isArray(planningChange?.addedShifts)
+    ? planningChange.addedShifts
+    : (planningChange && planningChange.deleted !== true ? [planningChange] : []);
+  for (const submitted of submittedShifts) {
+    const employeeNumber = String(submitted?.employeeNumber ?? submitted?.employee_number ?? "");
+    if (!employeeNumber || knownEmployeeNumbers.has(employeeNumber)) continue;
+    const employee = await planningSettingsRepository.getActivePlanningEmployee({ employeeNumber });
+    if (!employee) continue;
+    employees.push(employee);
+    knownEmployeeNumbers.add(employeeNumber);
+  }
+  const blockedDates = new Set([
+    ...getGlobalDayBlocksForRange(weekStart, weekEnd, locationId).map((block) => block.block_date),
+    ...publicHolidaysForRange(weekStart, weekEnd).map((holiday) => holiday.date),
+  ]);
+  return assessBranchSupervision({
+    weekStart,
+    weekEnd,
+    locationId,
+    settings,
+    employees,
+    shifts,
+    blockedDates: [...blockedDates],
+    dates,
+  });
+}
+
+async function evaluateBranchSupervisionMutation(
+  weekStart,
+  locationId,
+  planningChange,
+  dates,
+) {
+  const before = await branchSupervisionAssessmentForSchedule(
+    weekStart,
+    locationId,
+    null,
+    { dates },
+  );
+  const after = await branchSupervisionAssessmentForSchedule(
+    weekStart,
+    locationId,
+    planningChange,
+    { dates },
+  );
+  return { before, after };
+}
+
+function branchSupervisionBlockingError(after, messagePrefix = "Die Änderung würde die Filialaufsicht") {
+  const issue = after.issues?.[0];
+  const period = issue
+    ? `${issue.dayLabel}, ${issue.date} (${issue.openingTime}–${issue.closingTime} Uhr)`
+    : "im betroffenen Planungszeitraum";
+  const error = httpError(
+    409,
+    `${messagePrefix} ${period} verletzen. Bitte zuerst einen Dienst für Teamleitung/FL oder FL Stellvertretung ergänzen; eine Abteilungsleitung darf nur die konfigurierte Lücke überbrücken.`,
+    "BRANCH_SUPERVISION_BLOCKED",
+  );
+  error.details = { branchSupervisionAssessment: after };
+  return error;
+}
+
+function assertBranchSupervisionAllowsMutation(evaluation) {
+  const before = evaluation?.before;
+  const after = evaluation?.after;
+  if (!after?.blocking || Number(after.deficitScore || 0) <= Number(before?.deficitScore || 0)) return;
+  throw branchSupervisionBlockingError(after);
+}
+
+function assertBranchSupervisionComplete(evaluation) {
+  const after = evaluation?.after;
+  if (!after?.blocking) return;
+  throw branchSupervisionBlockingError(
+    after,
+    "Der automatisch erzeugte Dienstplan würde die Filialaufsicht",
+  );
+}
+
+async function evaluateBranchSupervisionChanges(shiftRows, planningChange = null) {
+  const targets = new Map();
+  const candidateRows = [
+    ...(Array.isArray(shiftRows) ? shiftRows : []),
+    ...(Array.isArray(planningChange?.addedShifts) ? planningChange.addedShifts : []),
+  ];
+  for (const shift of candidateRows) {
+    const locationId = String(shift?.location_id ?? shift?.locationId ?? "").trim();
+    const shiftDate = String(shift?.shift_date ?? shift?.shiftDate ?? "");
+    if (!locationId || !isIsoDate(shiftDate)) continue;
+    const weekStart = getMonday(shiftDate);
+    const key = `${locationId}|${weekStart}`;
+    if (!targets.has(key)) targets.set(key, { locationId, weekStart, dates: new Set() });
+    targets.get(key).dates.add(shiftDate);
+  }
+  const evaluations = [];
+  for (const target of targets.values()) {
+    const evaluation = await evaluateBranchSupervisionMutation(
+      target.weekStart,
+      target.locationId,
+      planningChange,
+      [...target.dates],
+    );
+    assertBranchSupervisionAllowsMutation(evaluation);
+    evaluations.push(evaluation);
+  }
+  return evaluations;
+}
+
+async function evaluateBranchSupervisionShiftUpdate(existing, shift, id) {
+  const existingWeekStart = getMonday(existing.shift_date);
+  const nextWeekStart = getMonday(shift.shiftDate);
+  const sameLocationWeek = String(existing.location_id) === String(shift.locationId)
+    && existingWeekStart === nextWeekStart;
+  if (sameLocationWeek) {
+    const evaluation = await evaluateBranchSupervisionMutation(
+      nextWeekStart,
+      shift.locationId,
+      { id, ...shift },
+      [...new Set([existing.shift_date, shift.shiftDate])],
+    );
+    assertBranchSupervisionAllowsMutation(evaluation);
+    return evaluation.after;
+  }
+  const previousEvaluation = await evaluateBranchSupervisionMutation(
+    existingWeekStart,
+    existing.location_id,
+    { id, deleted: true },
+    [existing.shift_date],
+  );
+  const nextEvaluation = await evaluateBranchSupervisionMutation(
+    nextWeekStart,
+    shift.locationId,
+    { id, ...shift },
+    [shift.shiftDate],
+  );
+  assertBranchSupervisionAllowsMutation(previousEvaluation);
+  assertBranchSupervisionAllowsMutation(nextEvaluation);
+  return nextEvaluation.after;
+}
+
 function serializeGlobalDayBlock(row) {
   const holidayName = publicHolidayName(row.block_date);
   return {
@@ -18643,7 +18968,9 @@ async function validateEmployee(body, isNew, options = {}) {
   const targetWorkdaysPerWeek = normalizeTargetWorkdays(submittedTargetWorkdays);
   const preferredDayOff = String(body.preferredDayOff || "").trim();
   const fixedWorkdays = normalizeFixedWorkdays(body.fixedWorkdays ?? body.fixed_workdays);
-  const positionId = String(body.positionId || body.position_id || "verkaufsmitarbeiter").trim() || "verkaufsmitarbeiter";
+  const requestedPositionId = String(body.positionId || body.position_id || "").trim();
+  let positionId = requestedPositionId;
+  const employeeActive = body.active === false || body.active === 0 ? 0 : 1;
   const submittedTimeConfirmationLevel = body.timeConfirmationLevel ?? body.time_confirmation_level
     ?? options.defaultTimeConfirmationLevel ?? "C";
   const timeConfirmationLevel = String(submittedTimeConfirmationLevel).trim().toUpperCase();
@@ -18698,11 +19025,13 @@ async function validateEmployee(body, isNew, options = {}) {
       );
     }
   }
-  await validateEmployeePositionForAssignment(
+  const position = await validateEmployeePositionForAssignment(
     positionId,
     assignment,
     options.repository || organizationPersonnelRepository,
+    { allowInactive: employeeActive === 0 },
   );
+  positionId = String(position.id);
 
   if (isNew) {
     await assertEmployeePrincipalLoginAvailable(
@@ -18743,7 +19072,7 @@ async function validateEmployee(body, isNew, options = {}) {
     homeLocationId,
       preferredDepartmentId,
       costCenterId,
-      active: body.active === false || body.active === 0 ? 0 : 1,
+      active: employeeActive,
     };
 }
 
@@ -18825,7 +19154,7 @@ async function validateShift(body, contextInput = {}, actor = null) {
     throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
   }
   const settings = await settingsForLocation(locationId);
-  await assertDateEditable(shiftDate, settings, actor);
+  await assertDateEditable(shiftDate, settings, actor, locationId);
   const globalBlock = getGlobalDayBlockForDate(shiftDate, locationId);
   if (globalBlock) {
     throw httpError(409, `Dieser Tag ist für alle gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.`);
@@ -19049,7 +19378,12 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
   if (dateFrom < weekStart || dateTo > addDays(weekStart, 6)) {
     throw httpError(400, "Der Zeitraum muss innerhalb der ausgewählten Woche liegen.");
   }
-  await assertWeekEditable(weekStart, await settingsForLocation(employee.home_location_id), actor);
+  await assertWeekEditable(
+    weekStart,
+    await settingsForLocation(employee.home_location_id),
+    actor,
+    employee.home_location_id,
+  );
   if (!allowedWeekOptionTypes.includes(optionType)) throw httpError(400, "Bitte eine gültige Option auswählen.");
   if (!alwaysFullDayOptionTypes.has(optionType) && !timedOptionTypes.has(optionType)) {
     throw httpError(400, "Bitte eine gültige Option auswählen.");
@@ -19728,7 +20062,7 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
             id: employeeNumber,
             birthDate: sensitive.identity.birthDate || undefined,
             positionId: employee.position_id || undefined,
-            isApprentice: employee.position_id === "lehrling",
+            isApprentice: employee.position_employment_classification === "apprentice",
           },
           employeeNumber,
           locationId: context.locationId,
@@ -19746,7 +20080,7 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
             id: employeeNumber,
             birthDate: sensitive.identity.birthDate || undefined,
             positionId: employee.position_id || undefined,
-            isApprentice: employee.position_id === "lehrling",
+            isApprentice: employee.position_employment_classification === "apprentice",
           },
           rangeStart,
           rangeEnd,
@@ -21428,9 +21762,13 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       totals[employee.personnel_number] = addScheduleMinutes(totals[employee.personnel_number], credit);
     }
   }
-  const workRuleAssessment = sessionCanReadWorkRules(session)
-    ? (await evaluateScheduleWorkRules(weekStart, context, employees)).assessment
-    : null;
+  const [workRuleAssessment, branchSupervisionAssessment, manualScheduleLock] = await Promise.all([
+    sessionCanReadWorkRules(session)
+      ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
+      : Promise.resolve(null),
+    branchSupervisionAssessmentForSchedule(weekStart, context.locationId),
+    getScheduleManualLock(context.locationId, weekStart, session),
+  ]);
   const xoffiWeekByEmployee = {};
   const selectedXoffiImports = new Set();
   for (const row of xoffiWeekRows) {
@@ -21483,6 +21821,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     isPastWeekLocked: (isPastWeekStart(weekStart) && !allowPastWeekEditing)
       || (weekStart === currentWeekStart() && settingEnabled(settings, "current_week_auto_lock") && viennaNowLocal() >= currentWeekLockPoint(settings)),
     currentWeekLockPoint: currentWeekLockPoint(settings),
+    manualScheduleLock,
     employees,
     shifts,
     weekOptions,
@@ -21504,6 +21843,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       balanceByEmployee: xoffiBalanceByEmployee,
     },
     workRuleAssessment,
+    branchSupervisionAssessment,
   };
 }
 
@@ -21838,7 +22178,12 @@ async function validateGlobalDayBlock(body, existingId = 0, actor = null) {
     throw httpError(400, "Der Sperrtag muss innerhalb der ausgewählten Kalenderwoche liegen.");
   }
   if (!reason) throw httpError(400, "Bitte einen Grund für den Sperrtag eintragen.");
-  await assertWeekEditable(weekStart, await settingsForLocation(context.locationId), actor);
+  await assertWeekEditable(
+    weekStart,
+    await settingsForLocation(context.locationId),
+    actor,
+    context.locationId,
+  );
 
   const existingBlock = planningSettingsReadModel.globalDayBlocks.find((entry) => (
     String(entry.location_id) === String(context.locationId)
@@ -21942,7 +22287,12 @@ async function getScheduleNote(weekStart, context) {
 async function validateScheduleNote(body, actor = null) {
   const weekStart = getMonday(isIsoDate(body.weekStart) ? body.weekStart : undefined);
   const context = await resolvePlanningContext(body);
-  await assertWeekEditable(weekStart, await settingsForLocation(context.locationId), actor);
+  await assertWeekEditable(
+    weekStart,
+    await settingsForLocation(context.locationId),
+    actor,
+    context.locationId,
+  );
   const noteHtml = sanitizeScheduleNoteHtml(body.noteHtml || "");
   const noteText = stripEmoji(
     textFromScheduleNoteHtml(noteHtml) || String(body.noteText || body.text || ""),
@@ -29762,6 +30112,90 @@ app.get("/api/schedule", async (request, response) => {
   response.json(await getSchedule(request.query.week, request.query, request.portalSession));
 });
 
+app.put("/api/schedule/manual-lock", async (request, response) => {
+  const requestedLocationId = String(
+    request.body?.locationId || request.body?.location || "",
+  ).trim();
+  const submittedWeekStart = String(request.body?.weekStart || "").trim();
+  const expectedRevision = Number(request.body?.expectedRevision);
+  if (!requestedLocationId) {
+    throw httpError(400, "Bitte eine Filiale für die manuelle Dienstplansperre auswählen.");
+  }
+  if (!isIsoDate(submittedWeekStart) || getMonday(submittedWeekStart) !== submittedWeekStart) {
+    throw httpError(400, "Bitte den Montag einer gültigen Kalenderwoche angeben.");
+  }
+  if (typeof request.body?.locked !== "boolean") {
+    throw httpError(400, "Bitte den gewünschten Sperrstatus eindeutig angeben.");
+  }
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw httpError(400, "Die Revision der manuellen Dienstplansperre ist ungültig.");
+  }
+  const context = await resolvePlanningContext({ locationId: requestedLocationId });
+  assertSessionContextScope(request.portalSession, { locationId: context.locationId });
+  if (!canManageScheduleManualLock(request.portalSession, context.locationId)) {
+    throw httpError(
+      403,
+      "Die manuelle Dienstplansperre darf nur für den vollständigen Filialbereich geändert werden.",
+      "SCHEDULE_MANUAL_LOCK_SCOPE_DENIED",
+    );
+  }
+  const locked = request.body.locked;
+  const actor = request.portalSession?.employeeNumber || "local";
+  const row = await organizationPersonnelRepository.transaction(async (organization) => {
+    const before = await organization.getScheduleManualLock(
+      context.locationId,
+      submittedWeekStart,
+    );
+    if (Number(before?.revision || 0) !== expectedRevision) {
+      throw scheduleManualLockConflictError(before, {
+        actor: request.portalSession,
+        locationId: context.locationId,
+        weekStart: submittedWeekStart,
+      });
+    }
+    if (Boolean(before?.locked) === locked) return before;
+    const updated = await organization.upsertScheduleManualLock({
+      locationId: context.locationId,
+      weekStart: submittedWeekStart,
+      locked,
+      expectedRevision,
+      actor,
+    });
+    if (!updated) {
+      throw scheduleManualLockConflictError(
+        await organization.getScheduleManualLock(context.locationId, submittedWeekStart),
+        {
+          actor: request.portalSession,
+          locationId: context.locationId,
+          weekStart: submittedWeekStart,
+        },
+      );
+    }
+    await organization.insertAudit(
+      actor,
+      locked ? "schedule.manual-lock.lock" : "schedule.manual-lock.unlock",
+      "schedule_manual_lock",
+      `${context.locationId}:${submittedWeekStart}`,
+      JSON.stringify({
+        locationId: context.locationId,
+        weekStart: submittedWeekStart,
+        before: Boolean(before?.locked),
+        after: locked,
+        revisionBefore: Number(before?.revision || 0),
+        revisionAfter: Number(updated.revision),
+      }),
+    );
+    return updated;
+  }, { isolation: "serializable" });
+  response.json({
+    manualScheduleLock: scheduleManualLockForApi(row, {
+      actor: request.portalSession,
+      locationId: context.locationId,
+      weekStart: submittedWeekStart,
+    }),
+  });
+});
+
 app.get("/api/schedule/search", async (request, response) => {
   const session = requirePortalReadOrLocal(request, "schedule:read");
   response.set("Cache-Control", "private, no-store");
@@ -29862,7 +30296,12 @@ app.delete("/api/schedule-note", async (request, response) => {
   const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : undefined);
   const context = await resolvePlanningContext(request.query);
   assertSessionContextScope(request.portalSession, context);
-  await assertWeekEditable(weekStart, await settingsForLocation(context.locationId), request.portalSession);
+  await assertWeekEditable(
+    weekStart,
+    await settingsForLocation(context.locationId),
+    request.portalSession,
+    context.locationId,
+  );
   await organizationPersonnelRepository.deleteScheduleNote(
     context.locationId,
     pdfDepartmentKey(context),
@@ -30461,16 +30900,29 @@ function validatePositionPayload(body, existingId = null) {
   return { id, name };
 }
 
-app.get("/api/positions", async (_request, response) => {
-  response.json(await getPositions());
+app.get("/api/positions", async (request, response) => {
+  const includeInactive = ["1", "true"].includes(String(request.query.includeInactive || "").toLowerCase());
+  response.json(await getPositions(organizationPersonnelRepository, includeInactive));
 });
 
 app.post("/api/positions", async (request, response) => {
   const position = validatePositionPayload(request.body);
+  const actor = String(request.portalSession?.employeeNumber || "local");
   try {
     await organizationPersonnelRepository.transaction(async (organization) => {
+      const duplicate = (await organization.listPositions(true)).find((entry) => (
+        String(entry.name || "").localeCompare(position.name, "de", { sensitivity: "accent" }) === 0
+      ));
+      if (duplicate) throw httpError(409, "Diese Position gibt es bereits.", "POSITION_NAME_DUPLICATE");
       const sortOrder = await organization.nextPositionSortOrder();
-      await organization.insertPosition(position, sortOrder);
+      await organization.insertPosition(position, sortOrder, actor);
+      await organization.insertAudit(
+        actor,
+        "position.create",
+        "position",
+        position.id,
+        JSON.stringify({ name: position.name, sortOrder }),
+      );
     });
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Position gibt es bereits.");
@@ -30481,12 +30933,29 @@ app.post("/api/positions", async (request, response) => {
 
 app.put("/api/positions/:id", async (request, response) => {
   const id = String(request.params.id || "").trim();
-  const existing = await organizationPersonnelRepository.getPosition(id);
-  if (!existing) throw httpError(404, "Die Position wurde nicht gefunden.");
-  if (existing.builtin) throw httpError(403, "Diese Standardposition kann nicht bearbeitet werden.");
   const position = validatePositionPayload(request.body, id);
+  const actor = String(request.portalSession?.employeeNumber || "local");
   try {
-    await organizationPersonnelRepository.updatePosition(id, position.name);
+    await organizationPersonnelRepository.transaction(async (organization) => {
+      const existing = await organization.getPosition(id);
+      if (!existing) throw httpError(404, "Die Position wurde nicht gefunden.", "POSITION_NOT_FOUND");
+      const duplicate = (await organization.listPositions(true)).find((entry) => (
+        String(entry.id) !== id
+          && String(entry.name || "").localeCompare(position.name, "de", { sensitivity: "accent" }) === 0
+      ));
+      if (duplicate) throw httpError(409, "Diese Position gibt es bereits.", "POSITION_NAME_DUPLICATE");
+      await organization.updatePosition(id, position.name, actor);
+      await organization.insertAudit(
+        actor,
+        "position.update",
+        "position",
+        id,
+        JSON.stringify({
+          before: { name: existing.name, revision: Number(existing.revision || 1) },
+          after: { name: position.name, revision: Number(existing.revision || 1) + 1 },
+        }),
+      );
+    });
   } catch (error) {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Position gibt es bereits.");
     throw error;
@@ -30496,20 +30965,34 @@ app.put("/api/positions/:id", async (request, response) => {
 
 app.delete("/api/positions/:id", async (request, response) => {
   const id = String(request.params.id || "").trim();
-  const existing = await organizationPersonnelRepository.getPosition(id);
-  if (!existing) throw httpError(404, "Die Position wurde nicht gefunden.");
-  if (existing.builtin) throw httpError(403, "Diese Standardposition kann nicht gelöscht werden.");
-  const typeAssignments = Number(await organizationPersonnelRepository.countPositionTypeAssignments(id) || 0);
-  if (typeAssignments) {
-    throw httpError(
-      409,
-      "Diese Position ist noch mindestens einem Kostenstellentyp zugeordnet. Bitte dort zuerst die Zuordnung entfernen.",
-      "POSITION_COST_CENTER_TYPE_IN_USE",
-    );
-  }
+  const actor = String(request.portalSession?.employeeNumber || "local");
   await organizationPersonnelRepository.transaction(async (organization) => {
-    await organization.reassignEmployeesFromPosition(id);
-    await organization.deletePosition(id);
+    const existing = await organization.getPosition(id);
+    if (!existing) throw httpError(404, "Die Position wurde nicht gefunden.", "POSITION_NOT_FOUND");
+    if (!existing.active) return;
+    const activeEmployeeCount = Number(existing.active_employee_count || 0);
+    if (activeEmployeeCount > 0) {
+      throw httpError(
+        409,
+        `Die Position „${existing.name}“ kann nicht gelöscht werden, solange ihr ${activeEmployeeCount} aktive Mitarbeitende zugeordnet sind.`,
+        "POSITION_ACTIVE_EMPLOYEES_IN_USE",
+      );
+    }
+    const typeAssignments = Number(await organization.countPositionTypeAssignments(id) || 0);
+    await organization.deletePositionTypeAssignments(id);
+    await organization.archivePosition(id, actor);
+    await organization.insertAudit(
+      actor,
+      "position.archive",
+      "position",
+      id,
+      JSON.stringify({
+        name: existing.name,
+        revision: Number(existing.revision || 1) + 1,
+        retainedInactiveEmployeeReferences: Number(existing.employee_count || 0),
+        removedCostCenterTypeAssignments: typeAssignments,
+      }),
+    );
   });
   response.status(204).end();
 });
@@ -31769,6 +32252,7 @@ const UI_DEFAULT_EMPLOYEE_DISPLAY_COLUMNS = Object.freeze([
 ]);
 const UI_PERSONNEL_DASHBOARD_ITEMS = Object.freeze([
   "employees",
+  "positions",
   "applications",
   "workflows",
   "tasks",
@@ -54431,6 +54915,19 @@ function assertRequestPermission(request, permission) {
 app.put("/api/settings", async (request, response) => {
   const body = request.body;
   const currentSettings = getSettings();
+  const branchSupervisionSettingsSubmitted = body.branchSupervision !== undefined;
+  let branchSupervisionValues = null;
+  if (branchSupervisionSettingsSubmitted) {
+    try {
+      branchSupervisionValues = branchSupervisionSettingsValuesFromInput(body.branchSupervision);
+    } catch (error) {
+      throw httpError(
+        400,
+        String(error?.message || "Die Einstellungen zur Filialaufsicht sind ungültig."),
+        "BRANCH_SUPERVISION_SETTINGS_INVALID",
+      );
+    }
+  }
   const crossLocationScheduleSettingsSubmitted = body.crossLocationSchedule !== undefined;
   let crossLocationScheduleValues = null;
   if (crossLocationScheduleSettingsSubmitted) {
@@ -54606,6 +55103,7 @@ app.put("/api/settings", async (request, response) => {
     show_sunday: body.showSunday === true ? "1" : "0",
     remember_last_schedule_overall_plan: rememberLastScheduleOverallPlan ? "1" : "0",
     remember_last_vacation_overall_plan: rememberLastVacationOverallPlan ? "1" : "0",
+    ...(branchSupervisionValues || {}),
     ...(crossLocationScheduleValues || {}),
   };
   if (!getPortalStatus().portalEnabled) {
@@ -54644,6 +55142,24 @@ app.put("/api/settings", async (request, response) => {
       : [];
     for (const [key, value] of Object.entries(values)) {
       await repository.upsertSetting({ key, value });
+    }
+    if (branchSupervisionValues) {
+      const changedKeys = Object.keys(branchSupervisionValues).filter((key) => (
+        String(currentSettings[key] ?? "") !== String(branchSupervisionValues[key])
+      ));
+      if (changedKeys.length) {
+        await repositories.organizationPersonnel.insertAudit(
+          request.portalSession?.employeeNumber || "local",
+          "schedule.branch-supervision.settings.update",
+          "schedule_settings",
+          "branch_supervision",
+          JSON.stringify({
+            changedKeys: changedKeys.sort(),
+            before: Object.fromEntries(changedKeys.map((key) => [key, currentSettings[key] ?? null])),
+            after: Object.fromEntries(changedKeys.map((key) => [key, branchSupervisionValues[key]])),
+          }),
+        );
+      }
     }
     if (brandingSubmitted) {
       await saveLocationBrandingSnapshot(
@@ -54715,13 +55231,22 @@ app.post("/api/shifts", async (request, response) => {
   await assertShiftEmployeeAssignmentScope(request.portalSession, shift);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
-  const evaluated = await evaluateScheduleWorkRules(
-    weekStart,
-    context,
-    evaluationEmployees,
-    shift,
-  );
+  const [evaluated, branchSupervision] = await Promise.all([
+    evaluateScheduleWorkRules(
+      weekStart,
+      context,
+      evaluationEmployees,
+      shift,
+    ),
+    evaluateBranchSupervisionMutation(
+      weekStart,
+      shift.locationId,
+      shift,
+      [shift.shiftDate],
+    ),
+  ]);
   assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
+  assertBranchSupervisionAllowsMutation(branchSupervision);
   let saved;
   try {
     saved = await runWorkRuleMutationTransaction(async (repository) => {
@@ -54755,6 +55280,7 @@ app.post("/api/shifts", async (request, response) => {
     id: saved.id,
     ...shift,
     workRuleAssessment: sessionCanReadWorkRules(request.portalSession) ? saved.workRuleAssessment : null,
+    branchSupervisionAssessment: branchSupervision.after,
   });
 });
 
@@ -54763,7 +55289,12 @@ app.put("/api/shifts/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getShiftById({ id });
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
-  await assertDateEditable(existing.shift_date, await settingsForLocation(existing.location_id), request.portalSession);
+  await assertDateEditable(
+    existing.shift_date,
+    await settingsForLocation(existing.location_id),
+    request.portalSession,
+    existing.location_id,
+  );
   const shift = await validateShift(request.body, {
     locationId: request.body.locationId ?? request.body.location_id ?? existing.location_id,
     existingId: id,
@@ -54782,6 +55313,7 @@ app.put("/api/shifts/:id", async (request, response) => {
     planningChange,
   );
   assertWorkRuleAssessmentAllowsMutation(preview.assessment);
+  const branchSupervisionAssessment = await evaluateBranchSupervisionShiftUpdate(existing, shift, id);
   const preparedEvaluations = await evaluateWorkRuleChanges(
     [existing, shift],
     planningChange,
@@ -54830,6 +55362,7 @@ app.put("/api/shifts/:id", async (request, response) => {
     id,
     ...shift,
     workRuleAssessment: sessionCanReadWorkRules(request.portalSession) ? workRuleAssessment : null,
+    branchSupervisionAssessment,
   });
 });
 
@@ -54838,17 +55371,31 @@ app.delete("/api/shifts/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getShiftById({ id });
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
-  await assertDateEditable(existing.shift_date, await settingsForLocation(existing.location_id), request.portalSession);
+  await assertDateEditable(
+    existing.shift_date,
+    await settingsForLocation(existing.location_id),
+    request.portalSession,
+    existing.location_id,
+  );
   const context = await resolvePlanningContext({ locationId: existing.location_id, departmentId: existing.department_id });
   const weekStart = getMonday(existing.shift_date);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
-  const evaluated = await evaluateScheduleWorkRules(
-    weekStart,
-    context,
-    scheduleBefore.employees,
-    { id, deleted: true },
-  );
+  const [evaluated, branchSupervision] = await Promise.all([
+    evaluateScheduleWorkRules(
+      weekStart,
+      context,
+      scheduleBefore.employees,
+      { id, deleted: true },
+    ),
+    evaluateBranchSupervisionMutation(
+      weekStart,
+      existing.location_id,
+      { id, deleted: true },
+      [existing.shift_date],
+    ),
+  ]);
   assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
+  assertBranchSupervisionAllowsMutation(branchSupervision);
   await runWorkRuleMutationTransaction(async (repository) => {
     const result = await repository.deletePlanningShift(id);
     if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
@@ -54869,7 +55416,12 @@ app.delete("/api/schedule", async (request, response) => {
   const weekEnd = addDays(weekStart, 6);
   const context = await resolvePlanningContext(request.query);
   assertSessionContextScope(request.portalSession, context);
-  await assertWeekEditable(weekStart, await settingsForLocation(context.locationId), request.portalSession);
+  await assertWeekEditable(
+    weekStart,
+    await settingsForLocation(context.locationId),
+    request.portalSession,
+    context.locationId,
+  );
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const planningChange = {
     replaceRange: {
@@ -54887,6 +55439,13 @@ app.delete("/api/schedule", async (request, response) => {
     planningChange,
   );
   assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
+  const branchSupervision = await evaluateBranchSupervisionMutation(
+    weekStart,
+    context.locationId,
+    planningChange,
+    Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
+  );
+  assertBranchSupervisionAllowsMutation(branchSupervision);
   const saved = await runWorkRuleMutationTransaction(async (repository) => {
     const result = await repository.deletePlanningShiftsForRange({
       locationId: context.locationId,
@@ -54914,6 +55473,7 @@ app.delete("/api/schedule", async (request, response) => {
     weekStart,
     weekEnd,
     workRuleAssessment: sessionCanReadWorkRules(request.portalSession) ? saved.workRuleAssessment : null,
+    branchSupervisionAssessment: branchSupervision.after,
   });
 });
 
@@ -55114,7 +55674,12 @@ app.put("/api/week-options/:id", async (request, response) => {
   const existingLocation = (await planningSettingsRepository.getPlanningEmployee({
     employeeNumber: existing.employee_number,
   }))?.home_location_id;
-  await assertWeekEditable(existing.week_start, await settingsForLocation(existingLocation), request.portalSession);
+  await assertWeekEditable(
+    existing.week_start,
+    await settingsForLocation(existingLocation),
+    request.portalSession,
+    existingLocation,
+  );
   const requestedEmployeeNumber = String(request.body?.employeeNumber || existing.employee_number).trim();
   const requestedOptionType = String(request.body?.optionType || existing.option_type);
   assertApprovedAbsenceEntryAccess(request.portalSession, requestedOptionType);
@@ -55163,6 +55728,7 @@ app.delete("/api/week-options/:id", async (request, response) => {
         row.week_start,
         await settingsForLocation(scopedEmployees[index]?.home_location_id),
         request.portalSession,
+        scopedEmployees[index]?.home_location_id,
       );
     }
     await planningSettingsRepository.transaction(async (repository) => {
@@ -55183,7 +55749,12 @@ app.delete("/api/week-options/:id", async (request, response) => {
   const existingLocation = (await planningSettingsRepository.getPlanningEmployee({
     employeeNumber: existing.employee_number,
   }))?.home_location_id;
-  await assertWeekEditable(existing.week_start, await settingsForLocation(existingLocation), request.portalSession);
+  await assertWeekEditable(
+    existing.week_start,
+    await settingsForLocation(existingLocation),
+    request.portalSession,
+    existingLocation,
+  );
   const result = await planningSettingsRepository.deleteWeekOption({ id });
   if (!result.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
@@ -55206,7 +55777,12 @@ app.put("/api/global-day-blocks/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getGlobalDayBlockById({ id });
   if (!existing) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id });
-  await assertWeekEditable(existing.week_start, await settingsForLocation(existing.location_id), request.portalSession);
+  await assertWeekEditable(
+    existing.week_start,
+    await settingsForLocation(existing.location_id),
+    request.portalSession,
+    existing.location_id,
+  );
   const block = await validateGlobalDayBlock(request.body, id, request.portalSession);
   assertSessionContextScope(request.portalSession, { locationId: block.locationId });
   const updated = await planningSettingsRepository.updateGlobalDayBlock({ id, ...block });
@@ -55220,7 +55796,12 @@ app.delete("/api/global-day-blocks/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getGlobalDayBlockById({ id });
   if (!existing) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id });
-  await assertWeekEditable(existing.week_start, await settingsForLocation(existing.location_id), request.portalSession);
+  await assertWeekEditable(
+    existing.week_start,
+    await settingsForLocation(existing.location_id),
+    request.portalSession,
+    existing.location_id,
+  );
   const result = await planningSettingsRepository.deleteGlobalDayBlock({ id });
   if (!result.rowsAffected) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
   await refreshPlanningSettingsReadModel();
@@ -55506,7 +56087,12 @@ app.post("/api/schedule/auto", async (request, response) => {
   const context = await resolvePlanningContext(request.body);
   assertSessionContextScope(request.portalSession, context);
   const settings = await settingsForLocation(context.locationId);
-  await assertWeekEditable(weekStart, settings, request.portalSession);
+  await assertWeekEditable(
+    weekStart,
+    settings,
+    request.portalSession,
+    context.locationId,
+  );
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const globalDayBlocks = getGlobalDayBlocksForRange(weekStart, weekEnd, context.locationId);
   const globalBlockDates = new Set(globalDayBlocks.map((block) => block.block_date));
@@ -55795,6 +56381,18 @@ app.post("/api/schedule/auto", async (request, response) => {
       planningChange,
     );
     assertWorkRuleAssessmentAllowsMutation(evaluatedPreview.assessment);
+    const branchSupervision = await evaluateBranchSupervisionMutation(
+      weekStart,
+      context.locationId,
+      planningChange,
+      Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
+    );
+    assertBranchSupervisionComplete(branchSupervision);
+    if (branchSupervision.after.issueCount > 0) {
+      warnings.push(
+        `Filialaufsicht: ${branchSupervision.after.issueCount} Öffnungstag${branchSupervision.after.issueCount === 1 ? "" : "e"} benötigen Aufmerksamkeit.`,
+      );
+    }
     let workRuleAssessment;
     try {
       workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {

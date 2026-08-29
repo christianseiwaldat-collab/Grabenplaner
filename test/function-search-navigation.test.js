@@ -145,8 +145,8 @@ test("DOM-Gates bleiben bei fehlenden, getrennten oder berechtigt verborgenen El
   assert.equal(functionSearchDomGateIsAvailable("detachedGate", { document: documentRef }), false);
 });
 
-test("Alle 99 Katalogziele lassen sich ausschließlich anhand ihrer stabilen IDs präsentieren", () => {
-  assert.equal(FUNCTION_SEARCH_CATALOG.length, 99);
+test("Alle 101 Katalogziele lassen sich ausschließlich anhand ihrer stabilen IDs präsentieren", () => {
+  assert.equal(FUNCTION_SEARCH_CATALOG.length, 101);
   for (const entry of FUNCTION_SEARCH_CATALOG) {
     const elements = [];
     const byId = new Map();

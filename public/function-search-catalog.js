@@ -27,6 +27,7 @@
   const SUPPORTED_PERSONNEL_ADMINISTRATION_TABS = new Set([
     "dashboard",
     "employees",
+    "positions",
     "applications",
     "workflows",
     "learning",
@@ -141,6 +142,15 @@
       ["dienstplan", "wochenplan", "schichtplan", "einsatzplan", "kalenderwoche", "kw", "planung"],
       ["planningNavButton"],
       { view: "planning", focusId: "planningView" },
+    ),
+    entry(
+      "planning.manual-lock",
+      "Dienstplan manuell sperren oder freigeben",
+      ["Filialverwaltung", "Dienstplanung", "Manuelle Dienstplansperre"],
+      "Navigiert zum deutlich gekennzeichneten Sperrschalter der geöffneten Kalenderwoche, ohne den Status zu verändern.",
+      ["dienstplan sperren", "dienstplan freigeben", "manuelle sperre", "schloss", "lock", "unlock", "wochenplan schützen", "bearbeitung verhindern"],
+      ["planningNavButton", "manualScheduleLockControl"],
+      { view: "planning", focusId: "manualScheduleLockToggle" },
     ),
     entry(
       "planning.rule-assessment",
@@ -453,6 +463,15 @@
       { view: "personnelAdministration", personnelAdministrationTab: "tasks", focusId: "personnelTasksSection" },
     ),
     entry(
+      "personnel.positions",
+      "Positionen verwalten",
+      ["Personalverwaltung", "Positionsverwaltung"],
+      "Öffnet den unternehmensweiten Positionskatalog mit Suche, Sortierung und revisionssicherer Archivierung.",
+      ["position", "jobtitel", "stelle", "personalposition", "rollenbezeichnung", "tätigkeit", "positionskatalog"],
+      ["positionManagementNavButton"],
+      { view: "personnelAdministration", personnelAdministrationTab: "positions", focusId: "positionManagementSection" },
+    ),
+    entry(
       "personnel.cost-centers",
       "Kostenstellen verwalten",
       ["Personalverwaltung", "Kostenstellen"],
@@ -618,6 +637,15 @@
       { view: "settings", settingsTab: "schedule", focusId: "scheduleLockSettingsCard" },
     ),
     entry(
+      "settings.branch-supervision",
+      "Filialaufsicht prüfen und einstellen",
+      ["Einstellungen", "Dienstplan", "Filialaufsicht"],
+      "Öffnet Prüfmodus, Intensität und Schwellen für Teamleitung/FL, FL Stellvertretung und stundenweise AL-Überbrückungen.",
+      ["filialaufsicht", "aufsicht", "fl im dienst", "fl stellvertretung", "abteilungsleitung lücke", "gelber hinweis", "roter hinweis", "planung blockieren", "aufsichtsschwelle"],
+      ["settingsScheduleTab", "branchSupervisionSettingsCard"],
+      { view: "settings", settingsTab: "schedule", focusId: "branchSupervisionSettingsCard" },
+    ),
+    entry(
       "settings.cross-location-schedule",
       "Standortübergreifende Dienstplanung einstellen",
       ["Einstellungen", "Dienstplan", "Standortübergreifende Dienstplanung"],
@@ -670,15 +698,6 @@
       ["pdf einstellungen", "pdf titel", "dateiname", "druckausgabe", "pdf vorschau", "urlaubs pdf", "dienstplan pdf"],
       ["settingsGeneralTab", "pdfSettings"],
       { view: "settings", settingsTab: "general", revealIds: ["pdfSettings"], focusId: "pdfSettings" },
-    ),
-    entry(
-      "settings.positions",
-      "Positionen verwalten",
-      ["Einstellungen", "Personal", "Positionen"],
-      "Öffnet die berechtigte Verwaltung eigener Mitarbeiterpositionen.",
-      ["position", "jobtitel", "stelle", "personalposition", "rollenbezeichnung", "tätigkeit"],
-      ["settingsPersonnelTab", "positionSettingsCard"],
-      { view: "settings", settingsTab: "personnel", focusId: "positionSettingsCard" },
     ),
     entry(
       "settings.personnel-view",

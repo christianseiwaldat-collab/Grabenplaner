@@ -173,6 +173,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/historical-compatibility-migrations.js",
   "lib/persistence/sqlite/operations/maintenance.js",
   "lib/persistence/sqlite/operations/organization-schema-migrations.js",
+  "lib/persistence/sqlite/operations/position-catalog-governance.js",
   "lib/persistence/sqlite/operations/personnel-document-history-schema.js",
   "lib/persistence/sqlite/operations/personnel-lifecycle-case-schema.js",
   "lib/persistence/sqlite/operations/personnel-lifecycle-offboarding-schema.js",
@@ -250,6 +251,9 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/v087-loan-module-persistence.test.js",
   "test/v087-mobile-auth-persistence.test.js",
   "test/v087-organization-personnel-persistence.test.js",
+  "test/v09220-branch-supervision-api.test.js",
+  "test/v09220-manual-schedule-lock-api.test.js",
+  "test/v09220-position-catalog-governance.test.js",
   "test/v087-planning-settings-persistence.test.js",
   "test/v087-portal-access-persistence.test.js",
   "test/personnel-lifecycle-api.test.js",
@@ -365,10 +369,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1117;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1119;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 33;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1084;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1011;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1086;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1013;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -492,7 +496,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1006;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1008;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 111;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

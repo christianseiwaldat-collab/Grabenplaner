@@ -35,6 +35,7 @@ const state = {
   locationId: "",
   departmentId: "",
   data: null,
+  manualScheduleLockPending: false,
   schedulePdfDesignSelection: [],
   schedulePdfDesignNames: {},
   employeeLendings: [],
@@ -480,6 +481,10 @@ const state = {
   editingLocationId: null,
   editingDepartmentId: null,
   editingPositionId: null,
+  positionSearch: "",
+  positionSort: { key: "name", direction: "asc" },
+  deletingPositionId: null,
+  positionDeleteReturnFocus: null,
   editingVacationEntitlements: false,
   editingOptionId: null,
   editingOptionGroupId: null,
@@ -544,9 +549,9 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 
 const elements = Object.fromEntries(
   [
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
-    "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
+    "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
@@ -554,7 +559,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutDateRangeButton", "requestBlackoutDateRangeText", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList", "requestBlackoutDateRangeDialog", "requestBlackoutDateRangeForm", "requestBlackoutDateRangeStartText", "requestBlackoutDateRangeEndText", "requestBlackoutDateRangePreviousMonth", "requestBlackoutDateRangeMonthLabel", "requestBlackoutDateRangeNextMonth", "requestBlackoutDateRangeGrid", "requestBlackoutDateRangeOpenEnd", "requestBlackoutDateRangeClose", "requestBlackoutDateRangeCancel", "requestBlackoutDateRangeApply",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "positionManagementTab", "positionManagementSection", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "personnelCandidateCreatePhotoField", "personnelCandidateCreatePhoto", "personnelCandidateCreatePhotoPreview", "personnelCandidateCreateTargetAreas", "personnelCandidateCreateAddTargetArea", "personnelCandidateCreateTrialAppointments", "personnelCandidateCreateAddTrialAppointment", "personnelCandidateCreateCompetencyRatings", "personnelCandidateCreateAddCompetencyRating", "personnelCandidateTrialDateRangeDialog", "personnelCandidateTrialDateRangeForm", "personnelCandidateTrialDateRangeStartText", "personnelCandidateTrialDateRangeEndText", "personnelCandidateTrialDateRangePreviousMonth", "personnelCandidateTrialDateRangeMonthLabel", "personnelCandidateTrialDateRangeNextMonth", "personnelCandidateTrialDateRangeGrid", "personnelCandidateTrialDateRangeOpenEnd", "personnelCandidateTrialDateRangeClose", "personnelCandidateTrialDateRangeCancel", "personnelCandidateTrialDateRangeApply",
     "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelLearningTab", "personnelLearningSection", "personnelLearningDashboardPanel", "refreshPersonnelLearningDashboardButton", "personnelLearningDashboardStatus", "personnelLearningDashboardSummary", "personnelLearningDashboardScope", "personnelLearningDashboardAssignments", "personnelLearningDashboardEmployee", "personnelLearningSkillTree", "personnelLearningProcessesPanel", "personnelLearningSummary", "personnelLearningSearch", "personnelLearningTypeFilter", "personnelLearningStatusFilter", "refreshPersonnelLearningButton", "personnelLearningStatus", "personnelLearningList", "addPersonnelLearningModuleButton", "personnelLearningModal", "personnelLearningForm", "personnelLearningModalTitle", "personnelLearningModuleId", "personnelLearningExpectedReceipt", "personnelLearningModuleCode", "personnelLearningModuleType", "personnelLearningScope", "personnelLearningTitle", "personnelLearningSummaryInput", "personnelLearningObjective", "personnelLearningEstimatedMinutes", "personnelLearningVerificationMode", "personnelLearningTags", "personnelLearningVersionNote", "personnelLearningSteps", "addPersonnelLearningStepButton", "personnelLearningMessage", "savePersonnelLearningButton", "personnelLearningSkillsPanel", "personnelLearningSkillSummary", "personnelLearningSkillSearch", "personnelLearningSkillStatusFilter", "refreshPersonnelLearningSkillsButton", "personnelLearningSkillStatus", "personnelLearningSkillList", "addPersonnelLearningSkillButton", "personnelLearningSkillModal", "personnelLearningSkillForm", "personnelLearningSkillModalTitle", "personnelLearningSkillId", "personnelLearningSkillExpectedReceipt", "personnelLearningSkillCode", "personnelLearningSkillCategory", "personnelLearningSkillScope", "personnelLearningSkillTitle", "personnelLearningSkillSummaryInput", "personnelLearningSkillTags", "personnelLearningSkillVersionNote", "personnelLearningSkillLevels", "personnelLearningSkillMessage", "savePersonnelLearningSkillButton", "personnelLearningCompetenciesPanel", "personnelLearningCompetencySummary", "personnelLearningCompetencySearch", "personnelLearningCompetencyEmployee", "personnelLearningCompetencyStatusFilter", "refreshPersonnelLearningCompetenciesButton", "addPersonnelLearningCompetencyButton", "personnelLearningCompetencyStatus", "personnelLearningCompetencyEmployeeSummary", "personnelLearningCompetencyList", "personnelLearningCompetencyModal", "personnelLearningCompetencyForm", "personnelLearningCompetencyModalTitle", "personnelLearningCompetencyId", "personnelLearningCompetencyExpectedReceipt", "personnelLearningCompetencyEmployeeNumber", "personnelLearningCompetencyPerson", "personnelLearningCompetencySkill", "personnelLearningCompetencyLevel", "personnelLearningCompetencyTrainer", "personnelLearningCompetencyLevelPreview", "personnelLearningCompetencyMessage", "savePersonnelLearningCompetencyButton", "personnelLearningAssignmentsPanel", "personnelLearningAssignmentSummary", "personnelLearningAssignmentSearch", "personnelLearningAssignmentLearnerFilter", "personnelLearningAssignmentStatusFilter", "refreshPersonnelLearningAssignmentsButton", "addPersonnelLearningAssignmentButton", "personnelLearningAssignmentStatus", "personnelLearningAssignmentList", "personnelLearningAssignmentModal", "personnelLearningAssignmentForm", "personnelLearningAssignmentModalTitle", "personnelLearningAssignmentId", "personnelLearningAssignmentExpectedReceipt", "personnelLearningAssignmentProcess", "personnelLearningAssignmentLearner", "personnelLearningAssignmentTrainerSearch", "personnelLearningAssignmentTrainerCount", "personnelLearningAssignmentTrainerList", "personnelLearningAssignmentBindingPreview", "personnelLearningAssignmentMessage", "savePersonnelLearningAssignmentButton", "personnelLearningProgressModal", "personnelLearningProgressForm", "personnelLearningProgressModalTitle", "personnelLearningProgressAssignmentId", "personnelLearningProgressAssignmentReceipt", "personnelLearningProgressExpectedReceipt", "personnelLearningProgressSummary", "personnelLearningProgressCount", "personnelLearningProgressStepList", "personnelLearningProgressFinalized", "personnelLearningProgressResult", "personnelLearningProgressAssessmentNote", "personnelLearningProgressCorrectionReasonField", "personnelLearningProgressCorrectionReason", "personnelLearningProgressHistoryDetails", "personnelLearningProgressHistory", "personnelLearningProgressMessage", "savePersonnelLearningProgressButton", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList", "personnelLifecycleInterfacesSection", "personnelLifecycleInterfacesStatus", "personnelLifecycleInterfacesList", "personnelLifecycleAutomationSection", "personnelLifecycleAutomationStatus", "personnelLifecycleAutomationCatalog", "personnelLifecycleAutomationSummary", "personnelLifecycleAutomationList",
     "personnelWorkflowInstanceWorkspace", "personnelLifecycleEditorSection", "personnelLifecycleEditorEntryTitle", "openPersonnelLifecycleEditorButton", "personnelLifecycleEditorEntryStatus", "personnelLifecycleEditorDialog", "personnelLifecycleEditorTitle", "closePersonnelLifecycleEditorButton", "personnelLifecycleEditorStatus", "personnelLifecycleEditorWorkspace", "personnelLifecycleEditorWorkflowType", "personnelLifecycleEditorCatalogHint", "personnelLifecycleEditorWorkflowCode", "personnelLifecycleEditorDraftTitle", "personnelLifecycleEditorDraftDescription", "personnelLifecycleEditorScopeType", "personnelLifecycleEditorRequirementKind", "addPersonnelLifecycleEditorStepButton", "personnelLifecycleEditorFlow", "personnelLifecycleEditorInspectorForm", "personnelLifecycleEditorInspectorFields", "personnelLifecycleEditorStepType", "personnelLifecycleEditorStepTitle", "personnelLifecycleEditorStepDescription", "personnelLifecycleEditorResponsibilityClass", "personnelLifecycleEditorStepRequired", "movePersonnelLifecycleEditorStepUpButton", "movePersonnelLifecycleEditorStepDownButton", "removePersonnelLifecycleEditorStepButton", "personnelLifecycleEditorValidation", "personnelLifecycleEditorValidationTitle", "personnelLifecycleEditorValidationResult", "resetPersonnelLifecycleEditorButton", "validatePersonnelLifecycleEditorButton",
@@ -565,18 +570,18 @@ const elements = Object.fromEntries(
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftRulePreview", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionsScopeHint", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfDesignSettingsList", "schedulePdfDesignSettingsHint", "schedulePdfPreviewDesign", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
-    "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
+    "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionSearch", "positionListStatus", "positionTableHead", "positionList", "positionDeleteModal", "positionDeleteForm", "positionDeleteModalTitle", "positionDeleteModalCopy", "positionDeleteWarning", "positionDeleteWarningTitle", "positionDeleteWarningText", "positionDeleteName", "positionDeleteActiveCount", "positionDeleteHistoryCount", "positionDeleteMessage", "confirmPositionDeleteButton", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "adminAccessModeLabel", "accessSettings", "portalUserAccessCard", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
     "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
-    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
+    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "branchSupervisionSettingsCard", "branchSupervisionMode", "branchSupervisionIntensity", "branchSupervisionThresholds", "branchSupervisionPrimaryCoveragePercent", "branchSupervisionDepartmentGapMinutes", "branchSupervisionSettingsHint", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationCatalogSection", "birthdayPresentationCatalog", "birthdayPresentationDeveloperPreviewSection", "birthdayPresentationDeveloperPreviewEnabled", "birthdayPresentationDeveloperPreviewDesign", "birthdayPresentationDeveloperPreviewHint", "saveBirthdayPresentationDeveloperPreviewButton", "openBirthdayPresentationDeveloperPreviewButton", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
@@ -697,8 +702,90 @@ function dayConfig(date, settings = state.data.settings) {
   };
 }
 
-function isWeekLocked() {
+function isAutomaticallyWeekLocked() {
   return Boolean(state.data?.isPastWeekLocked);
+}
+
+function isManuallyWeekLocked() {
+  return state.data?.manualScheduleLock?.locked === true;
+}
+
+function isWeekLocked() {
+  return isAutomaticallyWeekLocked() || isManuallyWeekLocked();
+}
+
+function scheduleEditingLockExplanation() {
+  if (isManuallyWeekLocked()) {
+    return "Der Dienstplan wurde manuell gesperrt. Einträge und Änderungen sind bis zur manuellen Freigabe nicht möglich.";
+  }
+  return "Diese Kalenderwoche ist automatisch schreibgeschützt. Die manuelle Dienstplansperre ist davon unabhängig.";
+}
+
+function guardScheduleEditing() {
+  if (!isWeekLocked()) return false;
+  showToast(scheduleEditingLockExplanation(), true);
+  return true;
+}
+
+function renderManualScheduleLockControl() {
+  const lock = state.data?.manualScheduleLock || {};
+  const locked = lock.locked === true;
+  const canManage = lock.canManage === true;
+  const pending = state.manualScheduleLockPending === true;
+  elements.manualScheduleLockControl?.setAttribute("data-locked", String(locked));
+  elements.manualScheduleLockToggle?.setAttribute("aria-checked", String(locked));
+  if (elements.manualScheduleLockToggle) {
+    elements.manualScheduleLockToggle.disabled = pending || !canManage;
+    elements.manualScheduleLockToggle.title = canManage
+      ? (locked ? "Dienstplan manuell freigeben" : "Dienstplan manuell sperren")
+      : "Nur Zugänge mit vollständigem Filialbereich können die manuelle Dienstplansperre ändern.";
+  }
+  if (elements.manualScheduleLockStatus) {
+    elements.manualScheduleLockStatus.textContent = locked
+      ? "Dienstplan manuell gesperrt"
+      : "Dienstplan manuell entsperrt";
+  }
+  if (elements.manualScheduleLockDetail) {
+    elements.manualScheduleLockDetail.textContent = locked
+      ? "Einträge und Änderungen werden verhindert; der Dienstplan selbst bleibt unverändert sichtbar."
+      : canManage
+        ? "Einträge und Änderungen sind möglich. Automatische Sperren wirken unabhängig."
+        : "Nur vollständige Filialverantwortung darf sperren oder freigeben. Automatische Sperren wirken unabhängig.";
+  }
+  if (elements.manualScheduleLockAction) {
+    elements.manualScheduleLockAction.textContent = pending
+      ? (locked ? "Wird freigegeben …" : "Wird gesperrt …")
+      : (locked ? "Jetzt freigeben" : "Jetzt sperren");
+  }
+}
+
+async function toggleManualScheduleLock() {
+  const lock = state.data?.manualScheduleLock;
+  if (!lock || lock.canManage !== true || state.manualScheduleLockPending) return;
+  const locked = lock.locked !== true;
+  state.manualScheduleLockPending = true;
+  renderManualScheduleLockControl();
+  try {
+    const result = await api("/api/schedule/manual-lock", {
+      method: "PUT",
+      body: JSON.stringify({
+        locationId: state.locationId,
+        weekStart: state.weekStart,
+        locked,
+        expectedRevision: Number(lock.revision || 0),
+      }),
+    });
+    state.data.manualScheduleLock = result.manualScheduleLock;
+    showToast(locked
+      ? "Der Dienstplan wurde manuell gesperrt."
+      : "Der Dienstplan wurde manuell freigegeben.");
+  } catch (error) {
+    showToast(error.message, true);
+    if (error.code === "SCHEDULE_MANUAL_LOCK_CONFLICT") await loadAll();
+  } finally {
+    state.manualScheduleLockPending = false;
+    renderManualScheduleLockControl();
+  }
 }
 
 function globalBlockForDate(date) {
@@ -970,11 +1057,57 @@ function csrfHeader() {
   return value ? { "X-CSRF-Token": decodeURIComponent(value) } : {};
 }
 
+function resetAdminCredentialVisibility(input) {
+  if (!input) return;
+  if (window.GrabenplanerCredentialBoundaries?.resetPasswordVisibility) {
+    window.GrabenplanerCredentialBoundaries.resetPasswordVisibility(input);
+    return;
+  }
+  input.type = "password";
+  const button = input.id ? document.querySelector(`[data-password-toggle="${input.id}"]`) : null;
+  if (!button) return;
+  button.textContent = "Anzeigen";
+  button.setAttribute("aria-label", "Passwort anzeigen");
+}
+
+function setAdminCredentialDisabled(input, disabled) {
+  if (!input) return;
+  if (window.GrabenplanerCredentialBoundaries?.setApplicationDisabled) {
+    window.GrabenplanerCredentialBoundaries.setApplicationDisabled(input, disabled);
+    return;
+  }
+  input.disabled = disabled;
+}
+
+function closeAdminCredentialDialogsForLogin() {
+  document.querySelectorAll("dialog[open]").forEach((dialog) => {
+    const passwordInputs = [...dialog.querySelectorAll('input[type="password"], input[data-gp-credential-field="true"]')];
+    if (!passwordInputs.length) return;
+    passwordInputs.forEach((input) => {
+      input.value = "";
+      input.defaultValue = "";
+      input.removeAttribute("value");
+      resetAdminCredentialVisibility(input);
+    });
+    dialog.close();
+  });
+}
+
 function showLoginGate(message = "") {
+  clearUsbProvisioningPasswords();
   if (employeeProfileIsOpen()) closeEmployeeProfile({ restoreFocus: false });
   clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
   document.body.classList.add("portal-locked");
+  closeAdminCredentialDialogsForLogin();
+  window.GrabenplanerCredentialBoundaries?.reconcileAll();
   elements.loginGate?.classList.remove("hidden");
+  if (elements.adminLoginPersonnelNumber) elements.adminLoginPersonnelNumber.disabled = false;
+  if (elements.adminLoginPassword) {
+    elements.adminLoginPassword.value = "";
+    resetAdminCredentialVisibility(elements.adminLoginPassword);
+    elements.adminLoginPassword.readOnly = false;
+    elements.adminLoginPassword.disabled = false;
+  }
   if (elements.adminLoginError) {
     elements.adminLoginError.textContent = message;
     elements.adminLoginError.classList.toggle("hidden", !message);
@@ -984,6 +1117,12 @@ function showLoginGate(message = "") {
 }
 
 function hideLoginGate() {
+  if (elements.adminLoginPassword) {
+    elements.adminLoginPassword.value = "";
+    resetAdminCredentialVisibility(elements.adminLoginPassword);
+  }
+  if (elements.adminLoginPersonnelNumber) elements.adminLoginPersonnelNumber.disabled = true;
+  if (elements.adminLoginPassword) elements.adminLoginPassword.disabled = true;
   document.body.classList.remove("portal-locked");
   elements.loginGate?.classList.add("hidden");
 }
@@ -1188,6 +1327,11 @@ function canReadCostCenters() {
 function canWriteCostCenters() {
   return !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("cost_centers:write") === true;
+}
+
+function canManagePositions() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("positions:write") === true;
 }
 
 function canReadCentralVacations() {
@@ -1764,7 +1908,7 @@ function personnelLifecycleEditorActorAccessKey() {
 }
 
 function canOpenPersonnelAdministrationView() {
-  return canReadCentralPersonnel() || canReadCostCenters() || canAccessCustomWorkRuleGovernance() || canReadCollectiveAgreements()
+  return canReadCentralPersonnel() || canManagePositions() || canReadCostCenters() || canAccessCustomWorkRuleGovernance() || canReadCollectiveAgreements()
     || canReadCentralVacations() || canReadDataSubjectRequests() || canReadCandidatePreboarding()
     || canOpenWorkflowCenter() || canReadPersonnelLearningCatalog() || canReadPersonnelTasks();
 }
@@ -1779,6 +1923,7 @@ function canOpenPersonnelAdministrationModule() {
 function firstAccessiblePersonnelAdministrationTab() {
   if (canOpenPersonnelAdministrationModule()) return "dashboard";
   if (canReadCentralPersonnel()) return "employees";
+  if (canManagePositions()) return "positions";
   if (canReadCandidatePreboarding()) return "applications";
   if (canOpenWorkflowCenter()) return "workflows";
   if (canReadPersonnelLearningCatalog()) return "learning";
@@ -1794,6 +1939,7 @@ function firstAccessiblePersonnelAdministrationTab() {
 function canOpenPersonnelAdministrationTab(tab) {
   return (tab === "dashboard" && canOpenPersonnelAdministrationModule())
     || (tab === "employees" && canReadCentralPersonnel())
+    || (tab === "positions" && canManagePositions())
     || (tab === "applications" && canReadCandidatePreboarding())
     || (tab === "workflows" && canOpenWorkflowCenter())
     || (tab === "learning" && canReadPersonnelLearningCatalog())
@@ -1927,13 +2073,14 @@ function applyRoleVisibility() {
     && features.employeePortal !== false;
   const portalUserAdministrationAccess = scopeAccess || permissions.includes("users:write") || globalAdministration;
   const salesAnalyticsAccess = canAccessSalesAnalytics();
-  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
+  const personnelAdministrationViewAccess = centralPersonnelReadAccess || positionWriteAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelLearningAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
   elements.salesAdministrationNav?.classList.toggle("hidden", !salesAnalyticsAccess);
   elements.salesAnalyticsNavButton?.classList.toggle("hidden", !salesAnalyticsAccess);
   elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
+  elements.positionManagementNavButton?.classList.toggle("hidden", !positionWriteAccess);
   elements.candidatePreboardingNavButton?.classList.toggle("hidden", !candidatePreboardingAccess);
   elements.workflowCenterNavButton?.classList.toggle("hidden", !workflowCenterAccess);
   elements.personnelLearningNavButton?.classList.toggle("hidden", !personnelLearningAccess);
@@ -1986,7 +2133,7 @@ function applyRoleVisibility() {
       ? "Technischen Zustand, Sicherungen und Wiederherstellbarkeit prüfen."
       : "Berechtigte Filial-, Rechte-, Regel- und Prozessübersichten öffnen.";
   }
-  const anySettingsAccess = settingsAccess || pdfSettingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
+  const anySettingsAccess = settingsAccess || pdfSettingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess
     || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
     || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess
     || loanSettingsAccess || mobilePortalLocationDisplayAccess || birthdayPresentationSettingsAccess || updateAccess;
@@ -1994,7 +2141,7 @@ function applyRoleVisibility() {
   const settingsTabs = {
     general: settingsAccess || pdfSettingsAccess || brandingAccess || loanSettingsAccess,
     schedule: settingsAccess || scheduleSettingsAccess,
-    personnel: settingsAccess || positionWriteAccess || wifiSettingsAccess,
+    personnel: settingsAccess || wifiSettingsAccess,
     vacation: features.vacation !== false && (settingsAccess || globalAdministration),
     timeTracking: settingsAccess || (wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false),
     integrations: integrationAccess,
@@ -2009,6 +2156,7 @@ function applyRoleVisibility() {
   elements.staffAssignmentNotificationSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.staffAssignmentChangeSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.scheduleLockSettingsCard?.classList.toggle("hidden", !settingsAccess);
+  elements.branchSupervisionSettingsCard?.classList.toggle("hidden", !settingsAccess);
   document.querySelector("#legacyUsbProvisioning")?.classList.toggle("hidden", !usbProvisioningAccess);
   const timeTrackingTabActive = document.querySelector('[data-settings-tab="timeTracking"]')?.classList.contains("active");
   const scheduleTabActive = document.querySelector('[data-settings-tab="schedule"]')?.classList.contains("active");
@@ -2030,6 +2178,7 @@ function applyRoleVisibility() {
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
+  elements.positionManagementTab?.classList.toggle("hidden", !positionWriteAccess);
   elements.candidatePreboardingTab?.classList.toggle("hidden", !candidatePreboardingAccess);
   elements.workflowCenterTab?.classList.toggle("hidden", !workflowCenterAccess);
   elements.personnelLearningTab?.classList.toggle("hidden", !personnelLearningAccess);
@@ -2084,7 +2233,6 @@ function applyRoleVisibility() {
   elements.locationCostCenterField?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.locationCostCenterReadonly?.classList.toggle("hidden", costCenterWriteAccess);
   if (elements.locationCostCenter) elements.locationCostCenter.disabled = !costCenterWriteAccess;
-  elements.positionSettingsCard?.classList.toggle("hidden", !positionWriteAccess);
   elements.personnelViewSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.trustLevelSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || !globalAdministration);
   elements.viewBehaviorSettingsCard?.classList.toggle("hidden", !(settingsAccess && globalAdministration));
@@ -2133,7 +2281,10 @@ function applyRoleVisibility() {
   const createBackupButton = document.querySelector("#createBackupButton");
   if (createBackupButton) createBackupButton.disabled = serverActive || !backupWriteAccess;
   if (elements.databaseDownloadCurrentPassword) {
-    elements.databaseDownloadCurrentPassword.disabled = !serverBackupAdministrationAccess || state.databaseDownloadPending;
+    setAdminCredentialDisabled(
+      elements.databaseDownloadCurrentPassword,
+      !serverBackupAdministrationAccess || state.databaseDownloadPending,
+    );
   }
   if (elements.databaseDownloadButton) {
     elements.databaseDownloadButton.disabled = !serverBackupAdministrationAccess || state.databaseDownloadPending;
@@ -2390,7 +2541,10 @@ function openAdminSetup() {
   ).join("");
   elements.adminSetupPassword.value = "";
   elements.adminSetupPasswordRepeat.value = "";
+  resetAdminCredentialVisibility(elements.adminSetupPassword);
+  resetAdminCredentialVisibility(elements.adminSetupPasswordRepeat);
   elements.adminSetupModal.showModal();
+  window.GrabenplanerCredentialBoundaries?.reconcileAll();
 }
 
 async function setupPortalAdmin(event) {
@@ -2587,6 +2741,7 @@ function render() {
   renderCrossLocationSchedule();
   renderStaffAssignmentRequestReviewAccess();
   renderSummary();
+  renderBranchSupervisionAssessment();
   renderWorkRuleAssessment();
   renderTimeline();
   renderRemarks();
@@ -3698,6 +3853,7 @@ async function openBranchAccountPasswordDialog() {
   [elements.branchAccountPasswordNew, elements.branchAccountPasswordRepeat].forEach((input) => {
     if (input) {
       input.value = "";
+      resetAdminCredentialVisibility(input);
       input.minLength = Number(state.portalStatus?.passwordMinLength || 6);
     }
   });
@@ -3738,6 +3894,8 @@ async function saveBranchAccountPassword(event) {
     ));
     elements.branchAccountPasswordNew.value = "";
     elements.branchAccountPasswordRepeat.value = "";
+    resetAdminCredentialVisibility(elements.branchAccountPasswordNew);
+    resetAdminCredentialVisibility(elements.branchAccountPasswordRepeat);
     renderBranchAccountPasswordTargets();
     if (elements.branchAccountPasswordMessage) {
       elements.branchAccountPasswordMessage.textContent = "Passwort neu vergeben; bestehende Filialkonto-Sitzungen wurden beendet.";
@@ -3912,6 +4070,8 @@ function renderContextNavigation() {
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dashboard");
   setNavigationCurrent(elements.personnelDirectoryNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "employees");
+  setNavigationCurrent(elements.positionManagementNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "positions");
   setNavigationCurrent(elements.candidatePreboardingNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "applications");
   setNavigationCurrent(elements.workflowCenterNavButton,
@@ -4037,7 +4197,10 @@ function renderHeader() {
   elements.scheduleTitle.textContent = `${state.data.settings.pdf_title} · KW ${state.data.calendarWeek}`;
   renderSchedulePdfExportControl();
   document.querySelector("#weekJumpDate").value = state.weekStart;
-  elements.weekLockNotice.classList.toggle("hidden", !isWeekLocked());
+  const automaticallyLocked = isAutomaticallyWeekLocked();
+  const manuallyLocked = isManuallyWeekLocked();
+  elements.weekLockNotice.classList.toggle("hidden", !automaticallyLocked);
+  renderManualScheduleLockControl();
   const hasNote = Boolean(state.data.scheduleNote?.note_text);
   elements.scheduleNoteButton.classList.toggle("has-note", hasNote);
   elements.scheduleNoteButtonHint.textContent = hasNote ? "anzeigen/bearbeiten" : "hinzufügen";
@@ -4045,8 +4208,11 @@ function renderHeader() {
   ["autoPlanButton", "optionsButton", "resetWeekButton", "scheduleNoteButton"].forEach((id) => {
     const button = document.querySelector(`#${id}`);
     if (button) {
-      button.disabled = isWeekLocked();
-      button.title = isWeekLocked() ? "Vergangene Kalenderwochen sind schreibgeschützt." : "";
+      button.disabled = automaticallyLocked;
+      button.setAttribute("aria-disabled", String(automaticallyLocked || manuallyLocked));
+      button.title = automaticallyLocked || manuallyLocked
+        ? scheduleEditingLockExplanation()
+        : "";
     }
   });
 }
@@ -4695,6 +4861,63 @@ function workRuleFindingMarkup(finding, { compact = false } = {}) {
   </article>`;
 }
 
+const branchSupervisionModeLabels = Object.freeze({
+  off: "Prüfung aus",
+  yellow: "Gelber Hinweis",
+  red: "Roter Hinweis",
+  block: "Planung blockieren",
+});
+
+function branchSupervisionMinutesLabel(minutes) {
+  const value = Math.max(0, Number(minutes || 0));
+  if (value < 60) return `${value} Min.`;
+  const hours = Math.floor(value / 60);
+  const remainder = value % 60;
+  return remainder ? `${hours} Std. ${remainder} Min.` : `${hours} Std.`;
+}
+
+function renderBranchSupervisionAssessment() {
+  if (!elements.branchSupervisionAssessmentPanel) return;
+  const assessment = state.data?.branchSupervisionAssessment;
+  const mode = String(assessment?.mode || "off");
+  const hidden = !assessment || mode === "off";
+  const outcome = ["pass", "yellow", "red", "blocked"].includes(assessment?.outcome)
+    ? assessment.outcome
+    : "pass";
+  elements.branchSupervisionAssessmentPanel.className = `work-rule-assessment branch-supervision-assessment ${outcome}`;
+  elements.branchSupervisionAssessmentPanel.classList.toggle("hidden", hidden);
+  if (hidden) return;
+  const issues = Array.isArray(assessment.issues) ? assessment.issues : [];
+  elements.branchSupervisionModeBadge.textContent = branchSupervisionModeLabels[mode] || "Prüfhinweis";
+  elements.branchSupervisionAssessmentSummary.textContent = issues.length
+    ? `${issues.length} Öffnungstag${issues.length === 1 ? "" : "e"} mit Aufsichtslücke oder überschrittener Überbrückung.`
+    : `Filialaufsicht an ${Number(assessment.evaluatedDays || 0)} Öffnungstag${Number(assessment.evaluatedDays || 0) === 1 ? "" : "en"} abgedeckt.`;
+  elements.branchSupervisionAssessmentCounts.innerHTML = issues.length
+    ? `<span class="${outcome === "yellow" ? "attention" : "blocked"}"><strong>${issues.length}</strong> ${outcome === "blocked" ? "blockiert" : "Hinweise"}</span>`
+    : `<span class="pass"><strong>${Number(assessment.compliantDays || 0)}</strong> abgedeckt</span>`;
+  const issueMarkup = issues.map((issue) => {
+    const uncovered = (issue.uncoveredSegments || []).map((segment) => (
+      `${segment.startTime}–${segment.endTime} Uhr`
+    )).join(", ");
+    const fallback = (issue.departmentOnlySegments || []).map((segment) => (
+      `${segment.startTime}–${segment.endTime} Uhr (${branchSupervisionMinutesLabel(segment.minutes)})`
+    )).join(", ");
+    return `<article class="branch-supervision-issue">
+      <header><strong>${escapeHtml(issue.dayLabel || issue.date)} · ${escapeHtml(issue.date || "")}</strong><span>${escapeHtml(issue.openingTime || "")}–${escapeHtml(issue.closingTime || "")} Uhr</span></header>
+      <p>${escapeHtml((issue.reasons || []).join(" · "))}</p>
+      <dl>
+        <div><dt>FL / Stellvertretung</dt><dd>${escapeHtml(String(issue.primaryCoveragePercent ?? 0))} %</dd></div>
+        <div><dt>AL-Überbrückung</dt><dd>${escapeHtml(branchSupervisionMinutesLabel(issue.departmentCoverageMinutes))}</dd></div>
+        ${uncovered ? `<div><dt>Ohne Aufsicht</dt><dd>${escapeHtml(uncovered)}</dd></div>` : ""}
+        ${fallback ? `<div><dt>AL-Zeiträume</dt><dd>${escapeHtml(fallback)}</dd></div>` : ""}
+      </dl>
+    </article>`;
+  }).join("");
+  elements.branchSupervisionAssessmentBody.innerHTML = `
+    ${issueMarkup || '<p class="work-rule-assessment-empty">Für die geöffneten Tage ist eine Teamleitung/FL oder FL Stellvertretung im geforderten Umfang eingeplant. Abteilungsleitungen überbrücken nur zulässige stundenweise Lücken.</p>'}
+    <p class="branch-supervision-policy-note">Schwellen: mindestens ${Number(assessment.minimumPrimaryCoveragePercent || 0)} % FL-/Stellvertretungsabdeckung und höchstens ${Number(assessment.maximumDepartmentGapMinutes || 0)} Minuten Abteilungsleitung je zusammenhängender Lücke. Die Prüfung bezieht sich auf die hinterlegten Öffnungszeiten.</p>`;
+}
+
 function renderWorkRuleAssessment() {
   if (!elements.workRuleAssessmentPanel) return;
   const assessment = normalizeWorkRuleAssessment(state.data?.workRuleAssessment);
@@ -4835,7 +5058,7 @@ function renderTimeline() {
   const dayColumns = weekdayNames.slice(0, dayCount).map((weekday, dayIndex) => {
     const date = addDays(state.weekStart, dayIndex);
     const dayEmployees = scheduleEmployeesForDate(date);
-    const locked = isWeekLocked();
+    const locked = isAutomaticallyWeekLocked();
     const globalBlock = globalBlockForDate(date);
     const holiday = publicHolidayForDate(date);
     const hours = dayConfig(date, settings);
@@ -5971,7 +6194,7 @@ function applyVpsRebootDialogState() {
   elements.vpsRebootModal?.setAttribute("aria-busy", pending ? "true" : "false");
   if (elements.vpsRebootCloseButton) elements.vpsRebootCloseButton.disabled = pending;
   if (elements.vpsRebootCancelButton) elements.vpsRebootCancelButton.disabled = pending;
-  if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.disabled = pending;
+  setAdminCredentialDisabled(elements.vpsRebootCurrentPassword, pending);
   if (elements.vpsRebootConfirmButton) {
     elements.vpsRebootConfirmButton.disabled = pending
       || state.serverStatus?.monitorActions?.canVpsReboot !== true;
@@ -6119,7 +6342,10 @@ async function submitVpsReboot(event) {
     setVpsRebootMessage(errorMessage, "error");
     showToast(errorMessage, true);
   } finally {
-    if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.value = "";
+    if (elements.vpsRebootCurrentPassword) {
+      elements.vpsRebootCurrentPassword.value = "";
+      resetAdminCredentialVisibility(elements.vpsRebootCurrentPassword);
+    }
     if (state.serverMonitorActionPending === "vps-reboot") state.serverMonitorActionPending = "";
     applyVpsRebootDialogState();
     applyServerDiagnosticsLoadingState();
@@ -12358,8 +12584,8 @@ function renderPersonnelCandidateRatingDisplay(rating) {
   const value = Number(rating?.rating || 0);
   const label = PERSONNEL_CANDIDATE_RATING_LABELS[value] || "Nicht bewertet";
   return `<div class="personnel-candidate-rating-display" role="img" aria-label="${escapeHtmlAttribute(`${rating?.label || "Kompetenz"}: ${value} von 5, ${label}`)}">
-    ${Array.from({ length: 5 }, (_, index) => `<span class="score-${index + 1}${index + 1 === value ? " current" : ""}" aria-hidden="true">${index + 1}</span>`).join("")}
     <strong>${value}/5 · ${escapeHtml(label)}</strong>
+    ${Array.from({ length: 5 }, (_, index) => `<span class="score-${index + 1}${index + 1 === value ? " current" : ""}" aria-hidden="true">${index + 1}</span>`).join("")}
   </div>`;
 }
 
@@ -18191,6 +18417,7 @@ function renderPersonnelAdministration() {
     renderPersonnelAdministrationSummary();
     renderPersonnelDirectory();
   }
+  if (canManagePositions()) renderPositions();
   if (canReadCostCenters()) {
     renderCostCenterTypes();
     renderCostCenters();
@@ -18905,6 +19132,7 @@ async function navigateFromStartDashboardCard(button) {
 
 const PERSONNEL_DASHBOARD_ITEM_IDS = Object.freeze([
   "employees",
+  "positions",
   "applications",
   "workflows",
   "learning",
@@ -19261,6 +19489,16 @@ function personnelDashboardCatalog() {
       available: canReadCentralPersonnel(),
     },
     {
+      id: "positions",
+      symbol: "Pos",
+      eyebrow: "Organisation",
+      label: "Positionsverwaltung",
+      description: "Unternehmensweite Positionen suchen, sortieren und revisionssicher verwalten.",
+      view: "personnelAdministration",
+      route: "positions",
+      available: canManagePositions(),
+    },
+    {
       id: "applications",
       symbol: "✦",
       eyebrow: "Lebenszyklus",
@@ -19486,6 +19724,7 @@ function setPersonnelAdministrationTab(tab) {
   document.querySelector(".personnel-administration-tabs")?.classList.toggle("hidden", normalized === "dashboard");
   elements.personnelDashboardSection?.classList.toggle("active", normalized === "dashboard");
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
+  elements.positionManagementSection?.classList.toggle("active", normalized === "positions");
   elements.candidatePreboardingSection?.classList.toggle("active", normalized === "applications");
   elements.workflowCenterSection?.classList.toggle("active", normalized === "workflows");
   elements.personnelLearningSection?.classList.toggle("active", normalized === "learning");
@@ -19497,6 +19736,7 @@ function setPersonnelAdministrationTab(tab) {
   elements.dataSubjectRequestsSection?.classList.toggle("active", normalized === "dataRequests");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees" || employeeProfileIsOpen());
   if (normalized === "dashboard") renderPersonnelDashboard();
+  if (normalized === "positions") renderPositions();
   if (state.currentView === "personnelAdministration") renderContextNavigation();
   if (state.currentView === "personnelAdministration" && ["employees", "costCenters"].includes(normalized)) {
     loadPersonnelAdministration().catch((error) => showToast(error.message, true));
@@ -19784,20 +20024,54 @@ function renderLocations() {
 
 function renderPositions() {
   if (!elements.positionList) return;
-  const positions = state.positions || [];
-  const canEdit = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("positions:write");
-  elements.positionList.innerHTML = positions.length ? positions.map((position) => `
-    <div class="position-item">
-      <div><strong>${escapeHtml(position.name)}</strong><small>${position.builtin ? "Standardposition · fix" : "Eigene Position"}</small></div>
-      <div class="position-actions">${
-        position.builtin
-          ? '<span class="status-badge">Fix</span>'
-          : canEdit
-            ? `<button type="button" class="edit-button" data-edit-position="${escapeHtml(position.id)}">Bearbeiten</button><button type="button" class="delete-option" data-delete-position="${escapeHtml(position.id)}">Löschen</button>`
-            : ""
-      }</div>
-    </div>
-  `).join("") : '<div class="empty-options">Keine Positionen angelegt.</div>';
+  const positions = Array.isArray(state.positions) ? state.positions : [];
+  const canEdit = canManagePositions();
+  elements.positionForm?.classList.toggle("hidden", !canEdit);
+  const query = String(state.positionSearch || "").trim().toLocaleLowerCase("de-AT");
+  const countValue = (position, key) => Number(position?.[key] ?? position?.[
+    key === "activeEmployeeCount" ? "active_employee_count" : "employee_count"
+  ] ?? 0);
+  const filtered = positions.filter((position) => !query || [position.name, position.id]
+    .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(query)));
+  const { key, direction } = state.positionSort || { key: "name", direction: "asc" };
+  const sign = direction === "desc" ? -1 : 1;
+  filtered.sort((left, right) => {
+    const result = key === "name"
+      ? String(left.name || "").localeCompare(String(right.name || ""), "de-AT", { sensitivity: "base", numeric: true })
+      : countValue(left, key) - countValue(right, key);
+    return result * sign || String(left.name || "").localeCompare(String(right.name || ""), "de-AT", { sensitivity: "base" });
+  });
+
+  elements.positionTableHead?.querySelectorAll("[data-position-sort]").forEach((button) => {
+    const active = button.dataset.positionSort === key;
+    const cell = button.closest("th");
+    cell?.setAttribute("aria-sort", active ? (direction === "desc" ? "descending" : "ascending") : "none");
+    const indicator = button.querySelector("span[aria-hidden]");
+    if (indicator) indicator.textContent = active ? (direction === "desc" ? "↓" : "↑") : "↕";
+  });
+  if (elements.positionListStatus) {
+    elements.positionListStatus.textContent = query
+      ? `${filtered.length} von ${positions.length} Positionen`
+      : `${positions.length} Position${positions.length === 1 ? "" : "en"}`;
+  }
+
+  elements.positionList.innerHTML = filtered.length ? filtered.map((position) => {
+    const activeEmployeeCount = countValue(position, "activeEmployeeCount");
+    const employeeCount = countValue(position, "employeeCount");
+    return `
+      <tr>
+        <td><strong>${escapeHtml(position.name)}</strong><small>${escapeHtml(position.id)}${position.is_default || position.isDefault ? " · Standardposition" : ""}</small></td>
+        <td><span class="position-count${activeEmployeeCount > 0 ? " occupied" : ""}">${activeEmployeeCount}</span></td>
+        <td>${employeeCount}</td>
+        <td>R${Number(position.revision || 1)}</td>
+        <td>
+          ${canEdit ? `<div class="position-row-actions">
+            <button type="button" class="position-text-action" data-edit-position="${escapeHtmlAttribute(position.id)}" aria-label="Position ${escapeHtmlAttribute(position.name)} bearbeiten">Bearbeiten</button>
+            <button type="button" class="position-text-action danger" data-delete-position="${escapeHtmlAttribute(position.id)}" aria-label="Position ${escapeHtmlAttribute(position.name)} löschen">Löschen</button>
+          </div>` : ""}
+        </td>
+      </tr>`;
+  }).join("") : `<tr><td colspan="5" class="position-empty">${query ? "Keine Position entspricht der Suche." : "Keine Position angelegt."}</td></tr>`;
 }
 
 function renderSchedulePdfDesignSettings() {
@@ -19907,6 +20181,35 @@ function updateSchedulePdfDesignSelection(target) {
   renderSchedulePdfDesignSettings();
 }
 
+const branchSupervisionIntensityPresets = Object.freeze({
+  relaxed: Object.freeze({ primaryCoveragePercent: 50, departmentGapMinutes: 240 }),
+  standard: Object.freeze({ primaryCoveragePercent: 60, departmentGapMinutes: 180 }),
+  strict: Object.freeze({ primaryCoveragePercent: 75, departmentGapMinutes: 120 }),
+});
+
+function updateBranchSupervisionSettings({ applyPreset = false } = {}) {
+  if (!elements.branchSupervisionMode) return;
+  const active = elements.branchSupervisionMode.value !== "off";
+  const intensity = elements.branchSupervisionIntensity.value;
+  const preset = branchSupervisionIntensityPresets[intensity];
+  if (applyPreset && preset) {
+    elements.branchSupervisionPrimaryCoveragePercent.value = String(preset.primaryCoveragePercent);
+    elements.branchSupervisionDepartmentGapMinutes.value = String(preset.departmentGapMinutes);
+  }
+  const custom = intensity === "custom";
+  elements.branchSupervisionIntensity.disabled = !active;
+  elements.branchSupervisionThresholds.classList.toggle("disabled-setting", !active || !custom);
+  elements.branchSupervisionPrimaryCoveragePercent.disabled = !active || !custom;
+  elements.branchSupervisionDepartmentGapMinutes.disabled = !active || !custom;
+  const modeCopy = {
+    off: "Die automatische Prüfung der Filialaufsicht ist deaktiviert.",
+    yellow: "Aufsichtslücken erscheinen als gelber Hinweis; die Planung bleibt speicherbar.",
+    red: "Aufsichtslücken erscheinen als roter Hinweis; die Planung bleibt speicherbar.",
+    block: "Änderungen, die die Filialaufsicht verschlechtern, werden serverseitig verhindert.",
+  }[elements.branchSupervisionMode.value] || "";
+  elements.branchSupervisionSettingsHint.textContent = `${modeCopy} Die gesamte Öffnungszeit muss abgedeckt bleiben; Abteilungsleitungen zählen nur innerhalb der gewählten Überbrückungsgrenze.`;
+}
+
 function renderSettings() {
   const settings = state.data.settings;
   const vacationSettings = state.vacationData?.settings || settings;
@@ -19976,6 +20279,19 @@ function renderSettings() {
   elements.staffAssignmentCancellationPolicy.value = ["source_review", "pl_plus_only", "disabled"].includes(
     settings.staff_assignment_request_cancellation_policy,
   ) ? settings.staff_assignment_request_cancellation_policy : "source_review";
+  elements.branchSupervisionMode.value = ["off", "yellow", "red", "block"].includes(
+    settings.branch_supervision_mode,
+  ) ? settings.branch_supervision_mode : "off";
+  elements.branchSupervisionIntensity.value = ["relaxed", "standard", "strict", "custom"].includes(
+    settings.branch_supervision_intensity,
+  ) ? settings.branch_supervision_intensity : "standard";
+  elements.branchSupervisionPrimaryCoveragePercent.value = String(
+    Number(settings.branch_supervision_min_primary_coverage_percent || 60),
+  );
+  elements.branchSupervisionDepartmentGapMinutes.value = String(
+    Number(settings.branch_supervision_max_department_gap_minutes || 180),
+  );
+  updateBranchSupervisionSettings();
   if (elements.vacationHrApprovalRequired) {
     elements.vacationHrApprovalRequired.checked = Boolean(state.workflowSettings?.vacationHrApprovalRequired ?? state.portalStatus?.workflow?.vacationHrApprovalRequired);
     elements.workflowSettingsHint.textContent = "Die Einstellung kann von Personalleitung oder höher geändert werden.";
@@ -20746,6 +21062,7 @@ function resetOrganizationAccountForm() {
     state.locationId || state.locations[0]?.id || "",
   );
   elements.organizationAccountPassword.value = "";
+  resetAdminCredentialVisibility(elements.organizationAccountPassword);
   elements.organizationAccountPassword.minLength = Number(state.portalStatus?.passwordMinLength || 6);
   elements.organizationAccountLoanOverview.checked = true;
   elements.organizationAccountScheduleView.checked = true;
@@ -20822,6 +21139,7 @@ function editOrganizationAccount(accountId) {
     account.scopes?.[0]?.locationId || state.locations[0]?.id || "",
   );
   elements.organizationAccountPassword.value = "";
+  resetAdminCredentialVisibility(elements.organizationAccountPassword);
   elements.organizationAccountLoanOverview.checked = account.permissions?.includes("loans:overview:read") === true;
   elements.organizationAccountScheduleView.checked = account.permissions?.includes("schedule:location:view") === true;
   elements.organizationAccountLearningDashboard.checked = account.permissions?.includes("personnel_learning:location:dashboard") === true;
@@ -26294,6 +26612,9 @@ function clearIntegrationCredentialInputs() {
   [elements.integrationCredentialUsername, elements.integrationCredentialPassword, elements.integrationCredentialToken,
     elements.integrationCredentialApiKey, elements.integrationCredentialBasicUsername, elements.integrationCredentialBasicPassword]
     .forEach((input) => { if (input) input.value = ""; });
+  [elements.integrationCredentialPassword, elements.integrationCredentialToken,
+    elements.integrationCredentialApiKey, elements.integrationCredentialBasicPassword]
+    .forEach(resetAdminCredentialVisibility);
 }
 
 function updateIntegrationConnectionForm() {
@@ -29041,6 +29362,7 @@ function setView(view) {
     || state.personnelLifecycleAutomationLoading
     || state.personnelLifecycleAutomationError
   )) clearPersonnelLifecycleAutomationState();
+  if (state.currentView === "settings" && view !== "settings") clearUsbProvisioningPasswords();
   state.currentView = view;
   if (view === "requests") ensureAccessibleManagerRequestTab();
   if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
@@ -29101,7 +29423,7 @@ function applyRequestedView() {
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
-    const establishedSection = ["dashboard", "employees", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
+    const establishedSection = ["dashboard", "employees", "positions", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
     if (establishedSection || requestedSection === "dataRequests") {
       state.personnelAdministrationTab = requestedSection;
     }
@@ -29121,6 +29443,9 @@ function setSettingsTab(tab) {
   if (tab === "usbProvisioning") tab = "backup";
   const integratedTarget = ["branding", "pdf"].includes(tab) ? tab : "";
   const activeTab = integratedTarget ? "general" : tab;
+  if (elements.backupSettings.classList.contains("active") && activeTab !== "backup") {
+    clearUsbProvisioningPasswords();
+  }
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === activeTab));
   document.querySelector(`[data-settings-tab="${activeTab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   elements.generalSettings.classList.toggle("active", activeTab === "general");
@@ -30191,10 +30516,7 @@ async function updateEmployeeLendingDelegate(employeeNumber, enabled, control) {
 }
 
 function openShiftModal(employeeNumber, date, shift = null) {
-  if (isWeekLocked()) {
-    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
-    return;
-  }
+  if (guardScheduleEditing()) return;
   const hours = operatingHours(shift?.shift_date || date);
   if (!hours) {
     showToast("An Sonntagen ist kein Dienst vorgesehen.", true);
@@ -30236,10 +30558,7 @@ function openShiftModal(employeeNumber, date, shift = null) {
 }
 
 function openOptionsModal() {
-  if (isWeekLocked()) {
-    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
-    return;
-  }
+  if (guardScheduleEditing()) return;
   const employeeOptions = state.data.employees.map((employee) =>
     `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.nickname)} · ${escapeHtml(employee.personnel_number)}</option>`,
   ).join("");
@@ -30428,20 +30747,14 @@ function handleOptionTypeChange() {
 }
 
 function openAutoPlanModal() {
-  if (isWeekLocked()) {
-    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
-    return;
-  }
+  if (guardScheduleEditing()) return;
   elements.autoPlanWeek.textContent = `${formatDate(state.weekStart)} bis ${formatDate(addDays(state.weekStart, state.data.settings.show_sunday === "1" ? 6 : 5))} · KW ${state.data.calendarWeek}`;
   document.querySelector('input[name="autoMode"][value="fill"]').checked = true;
   elements.autoPlanModal.showModal();
 }
 
 function openResetWeekModal() {
-  if (isWeekLocked()) {
-    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
-    return;
-  }
+  if (guardScheduleEditing()) return;
   elements.resetWeekText.textContent = `${formatDate(state.weekStart)} bis ${formatDate(addDays(state.weekStart, state.data.settings.show_sunday === "1" ? 6 : 5))} · KW ${state.data.calendarWeek}`;
   elements.resetWeekModal.showModal();
 }
@@ -30764,10 +31077,10 @@ async function saveDepartment(event) {
 
 function resetPositionForm() {
   state.editingPositionId = null;
-  elements.positionForm.reset();
-  elements.positionId.value = "";
-  elements.positionSubmitButton.textContent = "Position hinzufügen";
-  elements.cancelPositionEditButton.classList.add("hidden");
+  elements.positionForm?.reset();
+  if (elements.positionId) elements.positionId.value = "";
+  if (elements.positionSubmitButton) elements.positionSubmitButton.textContent = "Position hinzufügen";
+  elements.cancelPositionEditButton?.classList.add("hidden");
 }
 
 function fillPositionForm(position) {
@@ -30776,10 +31089,12 @@ function fillPositionForm(position) {
   elements.positionName.value = position.name;
   elements.positionSubmitButton.textContent = "Position speichern";
   elements.cancelPositionEditButton.classList.remove("hidden");
+  elements.positionName.focus();
 }
 
 async function savePosition(event) {
   event.preventDefault();
+  if (!canManagePositions()) return;
   const isEdit = Boolean(state.editingPositionId);
   try {
     state.positions = await api(isEdit ? `/api/positions/${encodeURIComponent(state.editingPositionId)}` : "/api/positions", {
@@ -30787,24 +31102,94 @@ async function savePosition(event) {
       body: JSON.stringify({ name: elements.positionName.value }),
     });
     resetPositionForm();
+    state.personnelAdministrationLoaded = false;
     renderPositions();
     showToast(isEdit ? "Position wurde gespeichert." : "Position wurde hinzugefügt.");
   } catch (error) { showToast(error.message, true); }
 }
 
-async function deletePosition(id) {
-  if (!confirm("Diese eigene Position wirklich löschen? Bestehende Teammitglieder werden auf Verkaufsmitarbeiter gesetzt.")) return;
+function positionAssignmentCounts(position) {
+  const active = Number(position?.active_employee_count ?? position?.activeEmployeeCount ?? 0);
+  const total = Number(position?.employee_count ?? position?.employeeCount ?? 0);
+  return { active, total, historical: Math.max(0, total - active) };
+}
+
+function openPositionDeleteDialog(id, returnFocus = document.activeElement) {
+  const position = (state.positions || []).find((item) => String(item.id) === String(id));
+  if (!position || !canManagePositions()) return;
+  const counts = positionAssignmentCounts(position);
+  const blocked = counts.active > 0;
+  state.deletingPositionId = position.id;
+  state.positionDeleteReturnFocus = returnFocus;
+  elements.positionDeleteModalTitle.textContent = blocked ? "Position nicht löschbar" : "Position löschen";
+  elements.positionDeleteModalCopy.textContent = blocked
+    ? "Aktive Zuordnungen müssen zuerst geändert werden."
+    : "Die Position wird revisions- und auditsicher archiviert.";
+  elements.positionDeleteWarning.classList.toggle("blocked", blocked);
+  elements.positionDeleteWarningTitle.textContent = blocked
+    ? "Löschen ist gesperrt"
+    : "Achtung: aus dem aktiven Positionskatalog entfernen";
+  elements.positionDeleteWarningText.textContent = blocked
+    ? `${counts.active === 1 ? "Eine aktive Person ist" : `${counts.active} aktive Mitarbeitende sind`} dieser Position zugeordnet. Ordnen Sie ${counts.active === 1 ? "die Person" : "diese Personen"} zuerst einer anderen aktiven Position zu.`
+    : "Diese Aktion entfernt die Position aus allen künftigen Auswahllisten. Historische Zuordnungen bleiben unverändert erhalten; die Archivierung wird im Auditprotokoll dokumentiert.";
+  elements.positionDeleteName.textContent = position.name;
+  elements.positionDeleteActiveCount.textContent = String(counts.active);
+  elements.positionDeleteHistoryCount.textContent = String(counts.historical);
+  elements.positionDeleteMessage.textContent = blocked
+    ? "Die server- und datenbankseitige Sperre verhindert das Löschen ebenfalls."
+    : "Prüfen Sie die Angaben sorgfältig. Die Position kann über diese Oberfläche nicht reaktiviert werden.";
+  elements.confirmPositionDeleteButton.disabled = blocked;
+  elements.confirmPositionDeleteButton.textContent = blocked ? "Löschen gesperrt" : "Position löschen";
+  if (!elements.positionDeleteModal.open) elements.positionDeleteModal.showModal();
+}
+
+function resetPositionDeleteDialog() {
+  const returnFocus = state.positionDeleteReturnFocus;
+  state.deletingPositionId = null;
+  state.positionDeleteReturnFocus = null;
+  if (returnFocus instanceof HTMLElement && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+}
+
+async function confirmPositionDelete(event) {
+  event.preventDefault();
+  const id = state.deletingPositionId;
+  const position = (state.positions || []).find((item) => String(item.id) === String(id));
+  if (!id || !position || positionAssignmentCounts(position).active > 0 || !canManagePositions()) return;
+  elements.confirmPositionDeleteButton.disabled = true;
+  elements.positionDeleteMessage.textContent = "Position wird revisionssicher archiviert …";
   try {
     await api(`/api/positions/${encodeURIComponent(id)}`, { method: "DELETE" });
     state.positions = await api("/api/positions");
     resetPositionForm();
+    state.personnelAdministrationLoaded = false;
+    renderPositions();
+    state.positionDeleteReturnFocus = elements.positionSearch;
+    elements.positionDeleteModal.close();
     showToast("Position wurde gelöscht.");
-    await loadAll();
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) {
+    if (error.code === "POSITION_ACTIVE_EMPLOYEES_IN_USE") {
+      try {
+        state.positions = await api("/api/positions");
+        renderPositions();
+        const refreshed = state.positions.find((item) => String(item.id) === String(id));
+        const refreshedReturnFocus = elements.positionList?.querySelector(
+          `[data-delete-position="${CSS.escape(String(id))}"]`,
+        );
+        if (refreshed) openPositionDeleteDialog(id, refreshedReturnFocus || elements.positionSearch);
+        else elements.positionDeleteModal.close();
+      } catch {}
+      showToast(error.message, true);
+      return;
+    }
+    elements.positionDeleteMessage.textContent = error.message;
+    elements.confirmPositionDeleteButton.disabled = false;
+    showToast(error.message, true);
+  }
 }
 
 async function saveShift(event) {
   event.preventDefault();
+  if (guardScheduleEditing()) return;
   const id = document.querySelector("#shiftId").value;
   const body = {
     employeeNumber: document.querySelector("#shiftEmployee").value,
@@ -30827,6 +31212,7 @@ async function saveShift(event) {
 
 async function saveOption(event) {
   event.preventDefault();
+  if (guardScheduleEditing()) return;
   const isEdit = Boolean(state.editingOptionId);
   const selectedType = document.querySelector("#optionType").value;
   if (isLocationPlannerSession() && !["vacation", "time_off"].includes(selectedType)) {
@@ -30864,6 +31250,7 @@ async function saveOption(event) {
 }
 
 async function saveGlobalBlock() {
+  if (guardScheduleEditing()) return;
   const isEdit = Boolean(state.editingGlobalBlockId);
   try {
     await api(isEdit ? `/api/global-day-blocks/${state.editingGlobalBlockId}` : "/api/global-day-blocks", {
@@ -30886,6 +31273,7 @@ async function saveGlobalBlock() {
 }
 
 async function deleteGlobalBlock(id) {
+  if (guardScheduleEditing()) return;
   if (!id || !confirm("Diesen Sperrtag wirklich entfernen?")) return;
   try {
     await api(`/api/global-day-blocks/${id}`, { method: "DELETE" });
@@ -30897,6 +31285,7 @@ async function deleteGlobalBlock(id) {
 
 async function createAutomaticPlan(event) {
   event.preventDefault();
+  if (guardScheduleEditing()) return;
   const replaceExisting = document.querySelector('input[name="autoMode"]:checked').value === "replace";
   try {
     const result = await api("/api/schedule/auto", {
@@ -30912,6 +31301,7 @@ async function createAutomaticPlan(event) {
 
 async function resetCurrentWeek(event) {
   event.preventDefault();
+  if (guardScheduleEditing()) return;
   try {
     const result = await api(`/api/schedule?week=${state.weekStart}${contextQuery(true)}`, { method: "DELETE" });
     elements.resetWeekModal.close();
@@ -30988,10 +31378,7 @@ function updateScheduleNoteCounter() {
 }
 
 function openScheduleNoteModal() {
-  if (isWeekLocked()) {
-    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
-    return;
-  }
+  if (guardScheduleEditing()) return;
   const note = state.data.scheduleNote || {};
   elements.scheduleNoteForm.reset();
   setScheduleNoteHtml(note.note_html || escapeHtml(note.note_text || "").replace(/\n/g, "<br>"));
@@ -31020,6 +31407,7 @@ function initScheduleNoteEditor() {
 
 async function saveScheduleNote(event) {
   event.preventDefault();
+  if (guardScheduleEditing()) return;
   sanitizeScheduleNoteEditor();
   try {
     await api("/api/schedule-note", {
@@ -31039,6 +31427,7 @@ async function saveScheduleNote(event) {
 }
 
 async function deleteScheduleNote() {
+  if (guardScheduleEditing()) return;
   if (!state.data.scheduleNote?.note_text || !confirm("Diese besondere Bemerkung wirklich löschen?")) return;
   try {
     await api(`/api/schedule-note?week=${state.weekStart}${contextQuery(true)}`, { method: "DELETE" });
@@ -31105,7 +31494,10 @@ async function downloadCompleteDatabase(event) {
     setDatabaseDownloadStatus(error.message, "error");
     showToast(error.message, true);
   } finally {
-    if (elements.databaseDownloadCurrentPassword) elements.databaseDownloadCurrentPassword.value = "";
+    if (elements.databaseDownloadCurrentPassword) {
+      elements.databaseDownloadCurrentPassword.value = "";
+      resetAdminCredentialVisibility(elements.databaseDownloadCurrentPassword);
+    }
     state.databaseDownloadPending = false;
     elements.serverDatabaseDownloadPanel?.removeAttribute("aria-busy");
     if (elements.databaseDownloadButton) elements.databaseDownloadButton.textContent = "Datenbank herunterladen";
@@ -31121,8 +31513,14 @@ function setOffsiteFolderDialogStatus(message = "", kind = "info") {
 }
 
 function clearOffsiteFolderPasswords() {
-  if (elements.offsiteCreateCurrentPassword) elements.offsiteCreateCurrentPassword.value = "";
-  if (elements.offsiteActivateCurrentPassword) elements.offsiteActivateCurrentPassword.value = "";
+  if (elements.offsiteCreateCurrentPassword) {
+    elements.offsiteCreateCurrentPassword.value = "";
+    resetAdminCredentialVisibility(elements.offsiteCreateCurrentPassword);
+  }
+  if (elements.offsiteActivateCurrentPassword) {
+    elements.offsiteActivateCurrentPassword.value = "";
+    resetAdminCredentialVisibility(elements.offsiteActivateCurrentPassword);
+  }
 }
 
 function renderManagedOffsiteFoldersDialog() {
@@ -31156,7 +31554,7 @@ function renderManagedOffsiteFoldersDialog() {
   const createUnavailable = pending || state.offsiteFoldersLoadState !== "ready";
   const activationUnavailable = createUnavailable || activationCandidates.length === 0;
   if (elements.offsiteNewFolderLabel) elements.offsiteNewFolderLabel.disabled = createUnavailable;
-  if (elements.offsiteCreateCurrentPassword) elements.offsiteCreateCurrentPassword.disabled = createUnavailable;
+  setAdminCredentialDisabled(elements.offsiteCreateCurrentPassword, createUnavailable);
   if (elements.createManagedOffsiteFolderButton) {
     elements.createManagedOffsiteFolderButton.disabled = createUnavailable;
     elements.createManagedOffsiteFolderButton.textContent = state.offsiteFolderMutationPending === "create"
@@ -31165,7 +31563,7 @@ function renderManagedOffsiteFoldersDialog() {
   }
   if (elements.offsiteActiveFolderSelection) elements.offsiteActiveFolderSelection.disabled = activationUnavailable;
   if (elements.offsiteFolderActivationConfirmation) elements.offsiteFolderActivationConfirmation.disabled = activationUnavailable;
-  if (elements.offsiteActivateCurrentPassword) elements.offsiteActivateCurrentPassword.disabled = activationUnavailable;
+  setAdminCredentialDisabled(elements.offsiteActivateCurrentPassword, activationUnavailable);
   if (elements.activateManagedOffsiteFolderButton) {
     elements.activateManagedOffsiteFolderButton.disabled = activationUnavailable;
     elements.activateManagedOffsiteFolderButton.textContent = state.offsiteFolderMutationPending === "activate"
@@ -31594,6 +31992,7 @@ function setUsbWizardStep(step) {
     button.setAttribute("aria-current", active ? "step" : "false");
   });
   document.querySelectorAll("[data-usb-wizard-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.usbWizardPanel === step));
+  window.GrabenplanerCredentialBoundaries?.reconcileAll();
   elements.usbWizardPreviousButton.disabled = index === 0;
   elements.usbWizardNextButton.classList.toggle("hidden", index === usbWizardSteps.length - 1);
   elements.usbWizardStepHint.textContent = `Schritt ${index + 1} von ${usbWizardSteps.length} · ${document.querySelector(`[data-usb-wizard-step="${step}"] strong`)?.textContent || ""}`;
@@ -31764,6 +32163,25 @@ function captureUsbEmployeeRows() {
   }
 }
 
+function clearUsbProvisioningPasswords() {
+  const inputs = [
+    elements.usbCreatorPassword,
+    elements.usbDraftPassword,
+    ...Array.from(elements.usbEmployeeSelection?.querySelectorAll("[data-usb-start-password]") || []),
+  ].filter(Boolean);
+  inputs.forEach((input) => {
+    input.value = "";
+    input.defaultValue = "";
+    input.removeAttribute("value");
+    resetAdminCredentialVisibility(input);
+  });
+  for (const override of state.usbProvisioning.employeeOverrides.values()) {
+    if (override && typeof override === "object") override.startPassword = "";
+  }
+  for (const draft of state.usbProvisioning.employeeDrafts) draft.startPassword = "";
+  if (elements.usbProvisioningStartButton) elements.usbProvisioningStartButton.disabled = true;
+}
+
 function renderUsbEmployees() {
   const creatorNumber = elements.usbCreatorEmployee.value;
   const selectedLocations = new Set(selectedUsbLocationIds());
@@ -31782,7 +32200,7 @@ function renderUsbEmployees() {
     return `<article class="usb-team-row" data-usb-employee="${escapeHtml(number)}" data-usb-source="${escapeHtml(number)}" data-usb-home-location="${escapeHtml(employee.home_location_id || "")}" data-usb-preferred-department="${escapeHtml(String(employee.preferred_department_id || ""))}">
       <label class="usb-team-identity"><input data-usb-employee-selected type="checkbox" ${selected ? "checked" : ""} ${creator ? "disabled" : ""} /><span><strong>${escapeHtml(number)} · ${escapeHtml(employee.full_name)}</strong><small>${escapeHtml(employee.nickname)} · ${escapeHtml(employee.home_location_name || employee.home_location_id || "")}</small></span></label>
       <select data-usb-role ${creator ? "disabled" : ""}>${creator ? '<option value="admin" selected>Admin</option>' : usbRoleOptions(role, { departmentId: employee.preferred_department_id })}</select>
-      <input data-usb-start-password type="password" minlength="6" autocomplete="new-password" value="${escapeHtml(override.startPassword || "")}" placeholder="Startpasswort optional" ${creator ? "disabled" : ""} />
+      <input data-usb-start-password type="password" minlength="6" autocomplete="new-password" placeholder="Startpasswort optional" ${creator ? 'disabled data-gp-credential-app-disabled="true"' : ""} />
       ${creator ? '<span class="status-badge">Admin · Pflicht</span>' : `<div class="usb-draft-actions"><select data-usb-scope-mode aria-label="Planungsbereich">${usbScopeOptions({ scopes, role, preferredDepartmentId: employee.preferred_department_id })}</select><details><summary>Grundrechte</summary><div class="usb-rights-grid">${usbRolePermissionOptions(role, deniedPermissions)}</div></details><details><summary>Zusatzrechte</summary><div class="usb-rights-grid">${usbPermissionOptions(override.additionalPermissions ?? employee.portal_access?.grantedPermissions ?? [], role)}</div></details></div>`}
     </article>`;
   });
@@ -31796,11 +32214,24 @@ function renderUsbEmployees() {
     return `<article class="usb-team-row" data-usb-employee="${escapeHtml(draft.personnelNumber)}" data-usb-draft="1" data-usb-home-location="${escapeHtml(draft.homeLocationId || "")}" data-usb-preferred-department="${escapeHtml(String(draft.preferredDepartmentId || ""))}">
     <label class="usb-team-identity"><input data-usb-employee-selected type="checkbox" ${selected ? "checked" : ""} /><span><strong>${escapeHtml(draft.personnelNumber)} · ${escapeHtml(draft.fullName)}</strong><small>${escapeHtml(draft.nickname)} · nur Zielstick</small></span></label>
     <select data-usb-role>${usbRoleOptions(role, { departmentId: draft.preferredDepartmentId })}</select>
-    <input data-usb-start-password type="password" minlength="6" autocomplete="new-password" value="${escapeHtml(override.startPassword ?? draft.startPassword ?? "")}" placeholder="Startpasswort optional" />
+    <input data-usb-start-password type="password" minlength="6" autocomplete="new-password" placeholder="Startpasswort optional" />
     <div class="usb-draft-actions"><select data-usb-scope-mode aria-label="Planungsbereich">${usbScopeOptions({ scopes, role, preferredDepartmentId: draft.preferredDepartmentId })}</select><details><summary>Grundrechte</summary><div class="usb-rights-grid">${usbRolePermissionOptions(role, deniedPermissions)}</div></details><details><summary>Zusatzrechte</summary><div class="usb-rights-grid">${usbPermissionOptions(override.additionalPermissions ?? draft.additionalPermissions ?? [], role)}</div></details><button type="button" class="text-action" data-usb-edit-draft="${escapeHtml(draft.personnelNumber)}">Bearbeiten</button><button type="button" class="text-action danger-text" data-usb-remove-draft="${escapeHtml(draft.personnelNumber)}">Entfernen</button></div>
   </article>`;
   });
   elements.usbEmployeeSelection.innerHTML = [...rows, ...draftRows].join("") || '<p class="settings-note">Keine Teammitglieder gefunden.</p>';
+  elements.usbEmployeeSelection.querySelectorAll("[data-usb-employee]").forEach((row) => {
+    const input = row.querySelector("[data-usb-start-password]");
+    if (!input) return;
+    const personnelNumber = row.dataset.usbEmployee || "";
+    const override = state.usbProvisioning.employeeOverrides.get(personnelNumber);
+    const draft = row.dataset.usbDraft === "1"
+      ? state.usbProvisioning.employeeDrafts.find((candidate) => candidate.personnelNumber === personnelNumber)
+      : null;
+    input.value = override?.startPassword ?? draft?.startPassword ?? "";
+    input.defaultValue = "";
+    input.removeAttribute("value");
+  });
+  window.GrabenplanerCredentialBoundaries?.hardenRoot(elements.usbEmployeeSelection);
 }
 
 function renderUsbDrives() {
@@ -31960,7 +32391,19 @@ function setUsbProgress(percent, title, text) {
 
 async function createUsbStick() {
   const drive = currentUsbDrive();
-  if (!drive) return;
+  const expectedConfirmation = drive?.expectedConfirmation || "FORMATIEREN X:";
+  const ready = Boolean(
+    drive
+    && elements.usbCreatorEmployee.value
+    && elements.usbCreatorPassword.value
+    && selectedUsbLocationIds().length > 0
+    && elements.usbFormatConfirmation.value.trim() === expectedConfirmation
+  );
+  if (!ready) {
+    updateUsbSummary();
+    showToast("Erstellerpasswort, Standort, Zielstick und Formatierungsbestätigung müssen vollständig vorliegen.", true);
+    return;
+  }
   if (!confirm(`${drive.driveLetter} (${drive.model}, ${formatUsbSize(drive.sizeBytes)}) wird vollständig formatiert. Alle vorhandenen Daten werden unwiderruflich gelöscht. Fortfahren?`)) return;
   captureUsbEmployeeRows();
   elements.usbEmployeeSearch.value = "";
@@ -31992,7 +32435,7 @@ async function createUsbStick() {
     elements.usbProvisioningResultPanel.classList.remove("hidden");
     elements.usbProvisioningResultText.textContent = `${result.driveLetter} ist als Grabenplaner-Stick bereit. Das Erstellerkonto ${result.creator} wurde als Admin übernommen.`;
     elements.usbProvisioningResultDetails.innerHTML = `<span>${result.employeeCount} Teammitglieder</span><span>${result.locationCount} Standorte</span><span>${result.brandingCount} Brandings</span><span>Prüfsumme ${escapeHtml(String(result.manifestSha256 || "").slice(0, 12))}…</span>`;
-    elements.usbCreatorPassword.value = "";
+    clearUsbProvisioningPasswords();
     elements.usbFormatConfirmation.value = "";
     state.usbProvisioning.selectedDriveToken = "";
     showToast("Der USB-Stick wurde sicher erstellt und geprüft.");
@@ -32195,6 +32638,12 @@ async function saveSettings(silent = false) {
         showSunday: document.querySelector("#showSunday").checked,
         rememberLastScheduleOverallPlan: elements.rememberLastScheduleOverallPlan.checked,
         rememberLastVacationOverallPlan: elements.rememberLastVacationOverallPlan.checked,
+        branchSupervision: {
+          mode: elements.branchSupervisionMode.value,
+          intensity: elements.branchSupervisionIntensity.value,
+          minimumPrimaryCoveragePercent: Number(elements.branchSupervisionPrimaryCoveragePercent.value),
+          maximumDepartmentGapMinutes: Number(elements.branchSupervisionDepartmentGapMinutes.value),
+        },
         ...(activeSettingsTab === "schedule" && canSaveScheduleSettings ? {
           crossLocationSchedule: {
             enabled: elements.crossLocationScheduleEnabled.checked,
@@ -32273,6 +32722,7 @@ async function deleteEmployee() {
 }
 
 async function deleteShift() {
+  if (guardScheduleEditing()) return;
   const id = document.querySelector("#shiftId").value;
   if (!id || !confirm("Diesen Dienst wirklich löschen?")) return;
   try {
@@ -32716,7 +33166,10 @@ elements.vpsRebootModal?.addEventListener("cancel", (event) => {
   if (state.serverMonitorActionPending === "vps-reboot") event.preventDefault();
 });
 elements.vpsRebootModal?.addEventListener("close", () => {
-  if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.value = "";
+  if (elements.vpsRebootCurrentPassword) {
+    elements.vpsRebootCurrentPassword.value = "";
+    resetAdminCredentialVisibility(elements.vpsRebootCurrentPassword);
+  }
   const returnFocus = state.vpsRebootReturnFocus;
   state.vpsRebootReturnFocus = null;
   if (returnFocus?.isConnected) returnFocus.focus();
@@ -32729,6 +33182,16 @@ elements.serverAlertBanner?.addEventListener("click", () => {
 elements.currentWeekAutoLock?.addEventListener("change", updateWeekLockSettings);
 elements.currentWeekLockMode?.addEventListener("change", updateWeekLockSettings);
 elements.currentWeekLockDay?.addEventListener("change", updateWeekLockSettings);
+elements.branchSupervisionMode?.addEventListener("change", () => updateBranchSupervisionSettings());
+elements.branchSupervisionIntensity?.addEventListener("change", () => updateBranchSupervisionSettings({ applyPreset: true }));
+[elements.branchSupervisionPrimaryCoveragePercent, elements.branchSupervisionDepartmentGapMinutes].forEach((input) => {
+  input?.addEventListener("input", () => {
+    if (elements.branchSupervisionIntensity.value !== "custom") {
+      elements.branchSupervisionIntensity.value = "custom";
+    }
+    updateBranchSupervisionSettings();
+  });
+});
 elements.adminSetupButton?.addEventListener("click", openAdminSetup);
 elements.mobilePortalLocationDisplayLocation?.addEventListener("change", loadMobilePortalLocationDisplay);
 elements.saveMobilePortalLocationDisplayButton?.addEventListener("click", saveMobilePortalLocationDisplay);
@@ -33393,6 +33856,7 @@ elements.usbCreatorEmployee?.addEventListener("change", () => {
     state.usbProvisioning.employeeOverrides.delete(previousCreator);
   }
   elements.usbCreatorPassword.value = "";
+  resetAdminCredentialVisibility(elements.usbCreatorPassword);
   renderUsbCreators();
   renderUsbLocations();
   synchronizeUsbTeamWithLocations();
@@ -33717,6 +34181,7 @@ elements.editEntitlementsButton.addEventListener("click", () => {
   renderVacations();
 });
 document.querySelector("#optionsButton").addEventListener("click", openOptionsModal);
+elements.manualScheduleLockToggle?.addEventListener("click", toggleManualScheduleLock);
 elements.employeeLendingButton?.addEventListener("click", openEmployeeLendingModal);
 elements.employeeLendingForm?.addEventListener("submit", saveEmployeeLending);
 elements.employeeLendingDestination?.addEventListener("change", employeeLendingDestinationDepartments);
@@ -34616,10 +35081,27 @@ elements.addDepartmentButton?.addEventListener("click", () => {
   resetDepartmentForm();
   elements.departmentEditorModal?.showModal();
 });
-elements.positionForm.addEventListener("submit", savePosition);
+elements.positionForm?.addEventListener("submit", savePosition);
+elements.positionSearch?.addEventListener("input", (event) => {
+  state.positionSearch = event.target.value;
+  renderPositions();
+});
+elements.positionTableHead?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-position-sort]");
+  if (!button) return;
+  const key = button.dataset.positionSort;
+  if (state.positionSort.key === key) {
+    state.positionSort.direction = state.positionSort.direction === "asc" ? "desc" : "asc";
+  } else {
+    state.positionSort = { key, direction: key === "name" ? "asc" : "desc" };
+  }
+  renderPositions();
+});
+elements.positionDeleteForm?.addEventListener("submit", confirmPositionDelete);
+elements.positionDeleteModal?.addEventListener("close", resetPositionDeleteDialog);
 elements.cancelLocationEditButton.addEventListener("click", resetLocationForm);
 elements.cancelDepartmentEditButton.addEventListener("click", resetDepartmentForm);
-elements.cancelPositionEditButton.addEventListener("click", resetPositionForm);
+elements.cancelPositionEditButton?.addEventListener("click", resetPositionForm);
 elements.employeeCostCenter.addEventListener("change", () => updateEmployeeAssignmentOptions());
 elements.employeeForm.addEventListener("invalid", (event) => {
   event.target.closest("details")?.setAttribute("open", "");
@@ -34879,7 +35361,7 @@ elements.locationList.addEventListener("click", async (event) => {
   }
 });
 
-elements.positionList.addEventListener("click", (event) => {
+elements.positionList?.addEventListener("click", (event) => {
   const editButton = event.target.closest("[data-edit-position]");
   if (editButton) {
     const position = (state.positions || []).find((item) => item.id === editButton.dataset.editPosition);
@@ -34887,7 +35369,7 @@ elements.positionList.addEventListener("click", (event) => {
     return;
   }
   const deleteButton = event.target.closest("[data-delete-position]");
-  if (deleteButton) deletePosition(deleteButton.dataset.deletePosition);
+  if (deleteButton) openPositionDeleteDialog(deleteButton.dataset.deletePosition, deleteButton);
 });
 
 elements.timeline.addEventListener("click", (event) => {
@@ -34908,6 +35390,10 @@ elements.timeline.addEventListener("click", (event) => {
 });
 
 elements.optionList.addEventListener("click", async (event) => {
+  const scheduleAction = event.target.closest(
+    "[data-edit-global-block],[data-delete-global-block],[data-edit-option],[data-delete-option]",
+  );
+  if (scheduleAction && guardScheduleEditing()) return;
   const editGlobalButton = event.target.closest("[data-edit-global-block]");
   if (editGlobalButton) {
     const block = (state.data.globalDayBlocks || []).find((item) => item.id === Number(editGlobalButton.dataset.editGlobalBlock));

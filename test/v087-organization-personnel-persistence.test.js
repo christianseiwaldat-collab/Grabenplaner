@@ -35,6 +35,17 @@ async function fixture() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (location_id, department_key, week_start)
     );
+    CREATE TABLE schedule_manual_locks (
+      location_id TEXT NOT NULL,
+      week_start TEXT NOT NULL,
+      locked INTEGER NOT NULL DEFAULT 0,
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (location_id, week_start)
+    );
     CREATE TABLE cost_center_types (
       id TEXT PRIMARY KEY,
       code TEXT NOT NULL UNIQUE,
@@ -53,8 +64,17 @@ async function fixture() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       builtin INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      employment_classification TEXT NOT NULL DEFAULT 'standard',
       sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      archived_by TEXT,
+      archived_at TEXT
     );
     CREATE TABLE cost_center_type_positions (
       cost_center_type_id TEXT NOT NULL,
@@ -330,6 +350,46 @@ test("Block 3/7: Organisation und Kostenstellen bleiben in einer Providertransak
       underline: false,
     });
     assert.equal(context.database.prepare("SELECT note_text FROM schedule_notes").get().note_text, "Inventur");
+    const locked = await context.repository.transaction(async (organization) => {
+      const row = await organization.upsertScheduleManualLock({
+        locationId: "01",
+        weekStart: "2026-07-27",
+        locked: true,
+        expectedRevision: 0,
+        actor: "ADMIN",
+      });
+      await organization.insertAudit(
+        "ADMIN",
+        "schedule.manual-lock.lock",
+        "schedule_manual_lock",
+        "01:2026-07-27",
+        JSON.stringify({ revisionAfter: row.revision }),
+      );
+      return row;
+    });
+    assert.equal(locked.locked, true);
+    assert.equal(locked.revision, 1);
+    assert.equal((await context.repository.getScheduleManualLock("01", "2026-07-27")).updated_by, "ADMIN");
+    assert.equal(await context.repository.upsertScheduleManualLock({
+      locationId: "01",
+      weekStart: "2026-07-27",
+      locked: false,
+      expectedRevision: 0,
+      actor: "ADMIN",
+    }), null);
+    const unlocked = await context.repository.upsertScheduleManualLock({
+      locationId: "01",
+      weekStart: "2026-07-27",
+      locked: false,
+      expectedRevision: 1,
+      actor: "ADMIN",
+    });
+    assert.equal(unlocked.locked, false);
+    assert.equal(unlocked.revision, 2);
+    assert.equal(
+      context.database.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action = 'schedule.manual-lock.lock'").get().count,
+      1,
+    );
     assert.deepEqual(await context.repository.listCostCenterTypePositionIds("branch"), ["sales"]);
     assert.deepEqual(await context.repository.costCenterAssignments("cc-01"), {
       employees: 0,

@@ -135,6 +135,17 @@ test("v0.87 Kostenstellentypen: Katalog, Migration und Positionssets sind vollst
   assert.ok(listed.payload.types.find((type) => type.code === "branch")?.isBranch);
   assert.equal(listed.payload.positions.length, db.prepare("SELECT COUNT(*) AS count FROM positions").get().count);
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.87-cost-center-types'").get());
+  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.92.20-position-catalog-governance'").get());
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE action = 'position.catalog.migrate'
+      AND entity_id = 'v0.92.20-position-catalog-governance'
+  `).get().count, 1);
+  assert.deepEqual(
+    ["fl-stellvertretung", "logistik", "it", "personalleitung", "buchhaltung", "sekretariat"]
+      .filter((id) => !db.prepare("SELECT 1 FROM positions WHERE id = ? AND active = 1 AND builtin = 0").get(id)),
+    [],
+  );
   assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 });
 
@@ -303,7 +314,7 @@ test("v0.87 Kostenstellentypen: Archivierung ist weich und ungenutzte Typen blei
   assert.equal(historicalEdit.payload.costCenter.active, false);
 });
 
-test("v0.87 Kostenstellentypen: Positionszuordnungen verhindern versehentliches Löschen", async () => {
+test("v0.92.20 Positionskatalog: Löschen archiviert atomar und erhält historische Bezüge", async () => {
   const hr = session("103", "hr");
   const positionName = "Testposition Typbindung";
   const positionResult = await request("/api/positions", {
@@ -316,24 +327,57 @@ test("v0.87 Kostenstellentypen: Positionszuordnungen verhindern versehentliches 
   assert.ok(position?.id);
   const type = await createType(hr, "positionsschutz", { positionIds: [position.id] });
 
-  const blocked = await request(`/api/positions/${encodeURIComponent(position.id)}`, {
+  const archived = await request(`/api/positions/${encodeURIComponent(position.id)}`, {
+    method: "DELETE",
+    auth: hr,
+  });
+  assert.equal(archived.response.status, 204, archived.text);
+  const stored = db.prepare("SELECT active, archived_by, archived_at FROM positions WHERE id = ?").get(position.id);
+  assert.equal(stored.active, 0);
+  assert.equal(stored.archived_by, "103");
+  assert.ok(stored.archived_at);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM cost_center_type_positions WHERE position_id = ?").get(position.id).count, 0);
+  assert.equal((await request("/api/positions", { auth: hr })).payload.some((entry) => entry.id === position.id), false);
+  const historical = await request("/api/positions?includeInactive=1", { auth: hr });
+  assert.equal(historical.response.status, 200, historical.text);
+  assert.equal(historical.payload.find((entry) => entry.id === position.id)?.active, false);
+  const audit = db.prepare("SELECT detail FROM audit_log WHERE action = 'position.archive' AND entity_id = ?").get(position.id);
+  assert.equal(JSON.parse(audit.detail).removedCostCenterTypeAssignments, 1);
+  assert.throws(
+    () => db.prepare("DELETE FROM positions WHERE id = ?").run(position.id),
+    /POSITION_ARCHIVE_ONLY/,
+  );
+  assert.ok(type.id);
+});
+
+test("v0.92.20 Positionskatalog: aktive Zuordnungen sperren Archivierung und frühere Standardnamen sind bearbeitbar", async () => {
+  const hr = session("103", "hr");
+  const blocked = await request("/api/positions/verkaufsmitarbeiter", {
     method: "DELETE",
     auth: hr,
   });
   assert.equal(blocked.response.status, 409, blocked.text);
-  assert.equal(blocked.payload.code, "POSITION_COST_CENTER_TYPE_IN_USE");
+  assert.equal(blocked.payload.code, "POSITION_ACTIVE_EMPLOYEES_IN_USE");
+  assert.ok(db.prepare("SELECT 1 FROM positions WHERE id = 'verkaufsmitarbeiter' AND active = 1").get());
+  assert.throws(
+    () => db.prepare("UPDATE positions SET active = 0 WHERE id = 'verkaufsmitarbeiter'").run(),
+    /POSITION_ACTIVE_EMPLOYEES_IN_USE/,
+  );
 
-  const unlinked = await request(`/api/cost-center-types/${encodeURIComponent(type.id)}`, {
+  const renamed = await request("/api/positions/teamleitung", {
     method: "PUT",
     auth: hr,
-    body: { positionIds: [] },
+    body: { name: "Teamleitung Test" },
   });
-  assert.equal(unlinked.response.status, 200, unlinked.text);
-  const deleted = await request(`/api/positions/${encodeURIComponent(position.id)}`, {
-    method: "DELETE",
+  assert.equal(renamed.response.status, 200, renamed.text);
+  assert.equal(renamed.payload.find((entry) => entry.id === "teamleitung")?.name, "Teamleitung Test");
+  const restored = await request("/api/positions/teamleitung", {
+    method: "PUT",
     auth: hr,
+    body: { name: "Teamleitung" },
   });
-  assert.equal(deleted.response.status, 204, deleted.text);
+  assert.equal(restored.response.status, 200, restored.text);
+  assert.equal(db.prepare("SELECT builtin FROM positions WHERE id = 'teamleitung'").get().builtin, 0);
 });
 
 test("v0.87 Kostenstellentypen: Filialleitung erhält keinen globalen Schreibzugriff", async () => {

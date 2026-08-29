@@ -192,6 +192,19 @@ test("Zielbereiche, Schnuppertermine und Kompetenzratings sind dynamisch und bar
   assert.match(styles, /\.personnel-candidate-rating-score\.score-1[^}]*background:#f4d6d1/);
   assert.match(styles, /\.personnel-candidate-rating-score\.score-5[^}]*background:#c9e8dc/);
   assert.match(styles, /\.personnel-candidate-rating-score:focus-within/);
+  const ratingDisplay = between(
+    app,
+    "function renderPersonnelCandidateRatingDisplay(",
+    "function personnelCandidateTargetAreas(",
+  );
+  assert.ok(
+    ratingDisplay.indexOf("<strong>${value}/5 · ${escapeHtml(label)}</strong>")
+      < ratingDisplay.indexOf("Array.from({ length: 5 }"),
+    "Ergebnistext muss vor der rechtsbündigen 1-bis-5-Skala stehen",
+  );
+  assert.match(styles, /\.personnel-candidate-rating-summary article > header \{ display:grid; grid-template-columns:minmax\(0,1fr\) auto;/);
+  assert.match(styles, /\.personnel-candidate-rating-display \{ display:grid; grid-template-columns:max-content repeat\(5,20px\);[^}]*justify-content:end/);
+  assert.match(styles, /\.personnel-candidate-rating-display > strong \{[^}]*white-space:nowrap/);
 });
 
 test("Foto, Teamfeedback und Bearbeitung bleiben capability- und revisionsgebunden", () => {
@@ -474,4 +487,6 @@ test("Bewerberansicht bleibt bis 320 Pixel ohne horizontale Tabellenachse", () =
   assert.match(styles, /@media \(max-width:420px\) \{[\s\S]*?\.personnel-candidate-facts \{ grid-template-columns:1fr; \}/);
   assert.match(candidateStyles, /\.personnel-candidate-authorization-check \{[^}]*grid-template-columns:26px minmax\(0,1fr\) auto/);
   assert.match(styles, /@media \(max-width:420px\) \{[\s\S]*?\.personnel-candidate-authorization-check \{ grid-template-columns:24px minmax\(0,1fr\);/);
+  assert.match(styles, /@media \(max-width:420px\) \{[\s\S]*?\.personnel-candidate-rating-summary article > header \{ grid-template-columns:minmax\(0,1fr\); \}/);
+  assert.match(styles, /@media \(max-width:420px\) \{[\s\S]*?\.personnel-candidate-rating-summary \.personnel-candidate-rating-display \{ justify-self:end; max-width:100%; \}/);
 });

@@ -24,6 +24,7 @@ test("v0.75.2 Navigation: Personalverwaltung bündelt ausschließlich berechtigt
   assert.match(navigation, /id="personnelAdministrationToggle"[^>]*aria-label="Unterpunkte der Personalverwaltung ein- oder ausklappen"/);
   assert.match(navigation, /<button(?=[^>]*id="personnelDashboardNavButton")(?=[^>]*data-view="personnelAdministration")(?=[^>]*data-personnel-administration-route="dashboard")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="personnelDirectoryNavButton")(?=[^>]*data-personnel-administration-route="employees")[^>]*>/);
+  assert.match(navigation, /<button(?=[^>]*id="positionManagementNavButton")(?=[^>]*data-personnel-administration-route="positions")[^>]*>/);
   assert.match(navigation, /id="requestsNavButton"/);
   assert.match(navigation, /id="timeTrackingNavButton"/);
   assert.match(navigation, /<button(?=[^>]*id="costCentersNavButton")(?=[^>]*data-personnel-administration-route="costCenters")[^>]*>/);
@@ -50,6 +51,7 @@ test("v0.75.2 Navigation: zentrale Punkte folgen ihren eigenen Leserechten", () 
 
   const visibility = between(app, "function applyRoleVisibility()", "async function bootstrapApplication()");
   assert.match(visibility, /personnelDirectoryNavButton\?\.classList\.toggle\("hidden", !centralPersonnelReadAccess\)/);
+  assert.match(visibility, /positionManagementNavButton\?\.classList\.toggle\("hidden", !positionWriteAccess\)/);
   assert.match(visibility, /costCentersNavButton\?\.classList\.toggle\("hidden", !costCenterReadAccess\)/);
   assert.match(visibility, /centralVacationsNavButton\?\.classList\.toggle\("hidden", !centralVacationReadAccess\)/);
   assert.match(visibility, /requestsNavButton\?\.classList\.toggle\("hidden", !requestReadAccess\)/);
@@ -64,13 +66,14 @@ test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
   assert.match(contextualNavigation, /\["personnelAdministration", "requests", "timeTracking"\]\.includes\(state\.currentView\)/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "dashboard"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "employees"/);
+  assert.match(contextualNavigation, /state\.personnelAdministrationTab === "positions"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "costCenters"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "ruleDrafts"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "collectiveAgreements"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "vacations"/);
   const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
   assert.match(requestedView, /parameters\.get\("section"\)/);
-  assert.match(requestedView, /\["dashboard", "employees", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
+  assert.match(requestedView, /\["dashboard", "employees", "positions", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
 });
 
 test("v0.75.2 Navigation: Teamstatus entfällt und Einstellungen bleiben außerhalb des Scrollmenüs erreichbar", () => {

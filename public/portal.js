@@ -231,7 +231,7 @@ const el = Object.fromEntries([
   "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
   "timeOffSubmitButton", "cancelTimeOffEdit", "timeOffArchiveToggle", "timeOffRequestList", "vacationRequestForm", "vacationFormTitle", "vacationDateFrom", "vacationDateTo", "vacationNote",
   "vacationCheck", "vacationMessage", "vacationSubmitButton", "cancelVacationEdit", "vacationRequestList", "approvedVacationList", "passwordDialog",
-  "passwordForm", "currentPassword", "newPassword", "repeatPassword", "passwordMessage", "vacationChangeDialog", "timeOffChangeDialog",
+  "passwordForm", "passwordChangeUsername", "currentPassword", "newPassword", "repeatPassword", "passwordMessage", "vacationChangeDialog", "timeOffChangeDialog",
   "vacationChangeForm", "vacationChangeTitle", "vacationChangeOriginal", "vacationChangeDates", "vacationChangeFrom",
   "vacationChangeTo", "vacationChangeNote", "vacationChangeMessage", "historyTypeFilter", "historyStatusFilter", "absenceHistoryList",
   "timeOffChangeForm", "timeOffChangeTitle", "timeOffChangeOriginal", "timeOffChangeFields", "timeOffChangeFrom", "timeOffChangeTo",
@@ -2009,6 +2009,94 @@ async function withdrawPrivacyRequest(id) {
   }
 }
 
+function resetCredentialVisibility(input) {
+  if (!input) return;
+  if (window.GrabenplanerCredentialBoundaries?.resetPasswordVisibility) {
+    window.GrabenplanerCredentialBoundaries.resetPasswordVisibility(input);
+    return;
+  }
+  input.type = "password";
+  const button = input.closest(".password-field")?.querySelector("[data-password-toggle]");
+  if (!button) return;
+  button.textContent = "Anzeigen";
+  button.setAttribute("aria-label", "Passwort anzeigen");
+}
+
+function setPortalLoginControlsEnabled(enabled) {
+  if (el.loginPersonnelNumber) el.loginPersonnelNumber.disabled = !enabled;
+  if (el.loginPassword) {
+    if (!enabled) {
+      el.loginPassword.value = "";
+      resetCredentialVisibility(el.loginPassword);
+    }
+    if (enabled) el.loginPassword.readOnly = false;
+    el.loginPassword.disabled = !enabled;
+  }
+}
+
+function portalCredentialUsername() {
+  const user = portalUser();
+  return String(user?.loginName || user?.employeeNumber || "");
+}
+
+function setPasswordResetConfirmControlsEnabled(enabled) {
+  [el.passwordResetNewPassword, el.passwordResetRepeatPassword].forEach((input) => {
+    if (!input) return;
+    if (!enabled) {
+      input.value = "";
+      resetCredentialVisibility(input);
+    }
+    if (enabled) input.readOnly = false;
+    input.disabled = !enabled;
+  });
+}
+
+function setPasswordChangeControlsEnabled(enabled) {
+  if (el.passwordChangeUsername) {
+    el.passwordChangeUsername.value = enabled ? portalCredentialUsername() : "";
+    el.passwordChangeUsername.disabled = !enabled;
+  }
+  [el.currentPassword, el.newPassword, el.repeatPassword].forEach((input) => {
+    if (!input) return;
+    if (!enabled) {
+      input.value = "";
+      resetCredentialVisibility(input);
+    }
+    if (enabled) input.readOnly = false;
+    input.disabled = !enabled;
+  });
+}
+
+function openPasswordChangeDialog() {
+  el.passwordForm?.reset();
+  el.passwordDialog?.showModal();
+  setPasswordChangeControlsEnabled(true);
+  window.setTimeout(() => el.currentPassword?.focus(), 0);
+}
+
+function closePasswordChangeDialog({ force = false } = {}) {
+  if (!force && el.passwordDialog?.dataset.required === "true") return false;
+  el.passwordForm?.reset();
+  setPasswordChangeControlsEnabled(false);
+  if (el.passwordDialog?.open) el.passwordDialog.close();
+  return true;
+}
+
+function neutralizeCredentialDialogsForLogin() {
+  closePasswordChangeDialog({ force: true });
+  if (el.passwordDialog) el.passwordDialog.dataset.required = "false";
+  if (el.passwordResetConfirmDialog?.open) {
+    closePasswordResetConfirm();
+  } else {
+    if (el.passwordResetToken) el.passwordResetToken.value = "";
+    setPasswordResetConfirmControlsEnabled(false);
+    message(el.passwordResetConfirmMessage, "");
+  }
+  el.passwordResetRequestForm?.reset();
+  message(el.passwordResetRequestMessage, "");
+  if (el.passwordResetRequestDialog?.open) el.passwordResetRequestDialog.close();
+}
+
 function showLogin(error = "") {
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
@@ -2019,10 +2107,13 @@ function showLogin(error = "") {
   portalState.personnelLearningDashboard = null;
   portalState.personnelLearningDashboardAvailable = false;
   portalState.personnelLearningProgressAssignment = null;
+  neutralizeCredentialDialogsForLogin();
   document.body.classList.remove("branch-organization-account", "branch-mobile-account");
   stopBranchOrderAutosave();
   clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
   portalState.processTasksOwnerFingerprint = "";
+  setPortalLoginControlsEnabled(false);
+  setPortalLoginControlsEnabled(true);
   el.portalLogin.classList.remove("hidden");
   el.portalApp.classList.add("hidden");
   message(el.loginError, error, Boolean(error));
@@ -2128,6 +2219,7 @@ function showPortal(session) {
   if (session.status) portalState.status = session.status;
   applyPortalBranding(session.status?.branding || session.branding || portalState.status?.branding || {});
   applyPortalCapabilities();
+  setPortalLoginControlsEnabled(false);
   el.portalLogin.classList.add("hidden");
   el.portalApp.classList.remove("hidden");
   const identity = isOrganizationAccount(session.user)
@@ -2162,7 +2254,7 @@ function showPortal(session) {
   populateVacationAccountYears();
   applySelfServiceVisibility();
   applyMobileLeadershipLayout();
-  if (session.user.mustChangePassword) setTimeout(() => el.passwordDialog.showModal(), 100);
+  if (session.user.mustChangePassword) setTimeout(openPasswordChangeDialog, 100);
 }
 
 async function login(event) {
@@ -2210,6 +2302,7 @@ function openPasswordResetConfirm(token = passwordResetTokenFromHash()) {
   el.passwordResetRepeatPassword.value = "";
   message(el.passwordResetConfirmMessage, "");
   el.passwordResetConfirmDialog.showModal();
+  setPasswordResetConfirmControlsEnabled(true);
   el.passwordResetNewPassword.focus();
   return true;
 }
@@ -2219,6 +2312,7 @@ function closePasswordResetConfirm() {
   el.passwordResetToken.value = "";
   el.passwordResetNewPassword.value = "";
   el.passwordResetRepeatPassword.value = "";
+  setPasswordResetConfirmControlsEnabled(false);
   message(el.passwordResetConfirmMessage, "");
   if (el.passwordResetConfirmDialog.open) el.passwordResetConfirmDialog.close();
 }
@@ -2267,6 +2361,7 @@ async function confirmPasswordReset(event) {
       }),
     });
     clearPasswordResetHash();
+    setPasswordResetConfirmControlsEnabled(false);
     el.passwordResetConfirmDialog.close();
     showLogin();
     el.loginPassword.value = "";
@@ -6023,7 +6118,7 @@ async function changePassword(event) {
     el.passwordForm.reset();
     message(el.passwordMessage, "Passwort wurde geändert.");
     setTimeout(async () => {
-      el.passwordDialog.close();
+      closePasswordChangeDialog({ force: true });
       await loadMobileLayout();
       chooseInitialPortalTab();
       await loadPortalData();
@@ -6822,7 +6917,7 @@ el.passwordResetConfirmDialog?.addEventListener("cancel", (event) => {
   closePasswordResetConfirm();
 });
 el.logoutButton.addEventListener("click", logout);
-el.settingsPasswordButton?.addEventListener("click", () => el.passwordDialog.showModal());
+el.settingsPasswordButton?.addEventListener("click", openPasswordChangeDialog);
 el.portalSettingsShortcut?.addEventListener("click", () => setTab(portalState.activeTab === "settings" ? "home" : "settings"));
 el.mobileSettingsHome?.addEventListener("click", () => setTab("home"));
 el.mobileHomeTiles?.addEventListener("click", (event) => {
@@ -6892,8 +6987,14 @@ document.addEventListener("click", (event) => {
   if (toggle) togglePassword(toggle);
 });
 document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => {
-  if (el.passwordDialog.dataset.required !== "true") el.passwordDialog.close();
+  closePasswordChangeDialog();
 }));
+el.passwordDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closePasswordChangeDialog();
+});
+el.passwordDialog?.addEventListener("close", () => setPasswordChangeControlsEnabled(false));
+el.passwordResetConfirmDialog?.addEventListener("close", () => setPasswordResetConfirmControlsEnabled(false));
 document.querySelectorAll("[data-settings-focus]").forEach((button) => button.addEventListener("click", () => {
   window.setTimeout(() => focusPortalSettingsSection(button.dataset.settingsFocus), 0);
 }));
