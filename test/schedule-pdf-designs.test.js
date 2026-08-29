@@ -129,6 +129,7 @@ test("Wochenmatrix verdrahtet Punktgrößen, Hervorhebung, Kopftext und bereichs
   assert.match(html, /id="scheduleMatrixDetailFontSize"[\s\S]*value="6">Klein · 6 pt<[\s\S]*value="8">Standard · 8 pt<[\s\S]*value="9\.5">Groß · 9,5 pt</);
   assert.match(html, /id="scheduleMatrixTimeFontBold" type="checkbox"/);
   assert.match(html, /id="scheduleMatrixTimeEmployeeColor" type="checkbox"/);
+  assert.match(html, /id="scheduleMatrixShowPosition" type="checkbox" checked/);
   assert.match(html, /id="scheduleMatrixHeaderText" maxlength="200"/);
   assert.match(html, /class="settings-card pdf-card" id="schedulePdfSettingsCard"/);
   assert.match(html, /class="settings-card pdf-card" id="vacationPdfSettingsCard"/);
@@ -136,6 +137,7 @@ test("Wochenmatrix verdrahtet Punktgrößen, Hervorhebung, Kopftext und bereichs
   assert.match(app, /scheduleMatrixTimeFontSize:\s*document\.querySelector\("#scheduleMatrixTimeFontSize"\)\.value/);
   assert.match(app, /scheduleMatrixTimeFontBold:\s*document\.querySelector\("#scheduleMatrixTimeFontBold"\)\.checked/);
   assert.match(app, /scheduleMatrixTimeEmployeeColor:\s*document\.querySelector\("#scheduleMatrixTimeEmployeeColor"\)\.checked/);
+  assert.match(app, /scheduleMatrixShowPosition:\s*document\.querySelector\("#scheduleMatrixShowPosition"\)\.checked/);
   assert.match(app, /api\("\/api\/portal\/v1\/schedule-pdf-settings"/);
   assert.match(app, /vacationPdfSettingsCard\?\.classList\.toggle\("hidden", !settingsAccess\)/);
 
@@ -146,6 +148,8 @@ test("Wochenmatrix verdrahtet Punktgrößen, Hervorhebung, Kopftext und bereichs
   assert.match(server, /SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION = "schedule:pdf:settings:write"/);
   assert.match(server, /const timeFont = timeFontBold \? "Helvetica-Bold" : "Helvetica"/);
   assert.match(server, /fillColor\(timeEmployeeColor \? scheduleMatrixEmployeeTextColor\(employeeColor\) : "#172433"\)/);
+  assert.match(server, /const showEmployeePosition = settingEnabled\(schedule\.settings, "pdf_schedule_matrix_show_position"\)/);
+  assert.match(server, /if \(showEmployeePosition\) \{[\s\S]*employee\.position_name/);
   assert.match(server, /contrastOnWhite\(candidate\) < 4\.5/);
   assert.match(server, /livePersonnelLearningRoleAdministrationActor\([\s\S]*assertSessionContextScope\(liveSession, context\)/);
   assert.match(server, /return `Teamsitzung \(TS\) · \$\{date\} · \$\{time\}/);

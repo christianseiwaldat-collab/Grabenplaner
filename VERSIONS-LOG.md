@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.21 Beta · Delegierbare AL-Grundrechte und optionale Positionszeile
+
+- Filialleitungen können Grundrechte aktiver Abteilungsleitungen des eigenen Standorts gezielt entziehen und wiederherstellen. Der Umfang bleibt auf Rechte begrenzt, die der Filialleitung selbst zustehen; Zusatzrechte, Rollen, Bereiche sowie geschützte technische und zentrale Rechte bleiben ausgeschlossen.
+- Die Rechteverwaltung liefert Filialleitungen ausschließlich die dafür notwendigen, datensparsamen AL- und Rechteangaben. Änderungen verwenden die bestehende transaktionale Auditierung und widerrufen betroffene Web- und Mobil-Sitzungen.
+- Die alternative Dienstplan-Wochenmatrix bietet einen eigenen Schalter für die Positionszeile unter dem Namen. Die bisherige Darstellung bleibt standardmäßig aktiv; bei ausgeschalteter Position wird der Name innerhalb der Mitarbeiterzeile neu ausgerichtet.
+- Rechte-, Scope-, Datenschutz-, Sitzungs-, Persistenz-, Architektur-, PDF-, Einstellungs- und Integrationstests sind gemeinsam regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.20 Beta · Positionsverwaltung, Filialaufsicht und Dienstplansperre
 
 - Der Positionskatalog verwendet stabile Kennungen und erlaubt die revisionssichere Bearbeitung aller Positionen. Entfernen archiviert ausschließlich ungenutzte Positionen; aktive Zuordnungen sperren den Vorgang, historische Bezüge bleiben erhalten und die Lehrlingssemantik folgt der Beschäftigungsklassifikation statt einem festen Positionsnamen.

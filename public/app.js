@@ -1991,7 +1991,8 @@ function applyRoleVisibility() {
   const pdfSettingsAccess = settingsAccess || permissions.includes(schedulePdfSettingsWritePermission);
   const scheduleSettingsAccess = !lanActive
     || permissions.includes("schedule:cross_location:settings:write");
-  const rightsAccess = globalAdministration && (!lanActive || permissions.includes("rights:read"));
+  const rightsAccess = (globalAdministration || role === "manager")
+    && (!lanActive || permissions.includes("rights:read"));
   const brandingAccess = !lanActive || permissions.includes("branding:write");
   const employeeWriteAccess = !lanActive || permissions.includes("employees:write");
   const employeeDisplayWriteAccess = !lanActive || permissions.includes("employees:display:write");
@@ -20236,6 +20237,7 @@ function renderSettings() {
   ) ? String(settings.pdf_schedule_matrix_detail_font_size) : "6";
   document.querySelector("#scheduleMatrixTimeFontBold").checked = settings.pdf_schedule_matrix_time_font_bold === "1";
   document.querySelector("#scheduleMatrixTimeEmployeeColor").checked = settings.pdf_schedule_matrix_time_employee_color === "1";
+  document.querySelector("#scheduleMatrixShowPosition").checked = settings.pdf_schedule_matrix_show_position !== "0";
   document.querySelector("#scheduleMatrixHeaderText").value = settings.pdf_schedule_matrix_header_text || "Design 2";
   document.querySelector("#vacationPdfTitleSetting").value = vacationSettings.vacation_pdf_title || "Urlaubsplanung";
   document.querySelector("#vacationPdfFilenamePrefix").value = vacationSettings.vacation_pdf_filename_prefix || vacationSettings.vacation_pdf_title || "Urlaubsplanung";
@@ -21212,8 +21214,11 @@ function renderRightsManagement() {
   const query = String(elements.rightsEmployeeSearch?.value || "").trim().toLocaleLowerCase("de-AT");
   const filtered = users.filter((user) => !query || [user.employeeNumber, user.fullName, user.nickname, user.roleName]
     .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(query)));
+  const managerDenialOnly = state.portalSession?.user?.role === "manager";
   elements.rightsManagementHint.textContent = users.length
-    ? `${filtered.length} von ${users.length} Teammitgliedern angezeigt. Grundrechte können persönlich eingeschränkt und zusätzliche Rechte gezielt vergeben werden.`
+    ? managerDenialOnly
+      ? `${filtered.length} von ${users.length} Abteilungsleitungen im eigenen Standort angezeigt. FL kann deren Grundrechte persönlich entziehen oder wiederherstellen.`
+      : `${filtered.length} von ${users.length} Teammitgliedern angezeigt. Grundrechte können persönlich eingeschränkt und zusätzliche Rechte gezielt vergeben werden.`
     : "Es sind noch keine aktiven Teammitglieder vorhanden.";
   elements.rightsUserList.innerHTML = filtered.length ? filtered.map((user) => {
     const additionalCount = (user.grantedPermissions || []).length;
@@ -21356,13 +21361,14 @@ function refreshRightsEditorScope() {
   if (!user || !elements.rightsEditorScope) return;
   const context = rightsEditorScopeContext(user);
   const hasOrganizationalPermissions = rightsEditorHasOrganizationalPermissions();
-  elements.rightsEditorScope.classList.toggle("hidden", !hasOrganizationalPermissions);
+  const managerDenialOnly = state.portalSession?.user?.role === "manager";
+  elements.rightsEditorScope.classList.toggle("hidden", managerDenialOnly || !hasOrganizationalPermissions);
   elements.rightsEditorDepartmentScopeLabel.textContent = `Nur eigene Abteilung · ${context.department?.name || "nicht zugeordnet"}`;
   elements.rightsEditorLocationScopeLabel.textContent = `Gesamte Filiale · ${context.location?.name || context.locationId || "nicht zugeordnet"}`;
   const departmentInput = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"][value="department"]');
   const locationInput = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"][value="location"]');
   const scopeInputs = [departmentInput, locationInput].filter(Boolean);
-  for (const input of scopeInputs) input.disabled = !user.manageable;
+  for (const input of scopeInputs) input.disabled = managerDenialOnly || !user.manageable;
   if (departmentInput) departmentInput.disabled ||= !context.departmentId;
   if (locationInput) locationInput.disabled ||= !context.locationId;
   if (hasOrganizationalPermissions && !scopeInputs.some((input) => input.checked)) {
@@ -21476,6 +21482,8 @@ function openRightsEditor(employeeNumber) {
     ? "Bitte zuerst unter Zugänge einen Portal-Zugang einrichten."
     : !user.manageable
       ? "Dieser Zugang ist für die aktuelle Rolle geschützt oder liegt außerhalb ihrer Verwaltungsebene."
+      : state.portalSession?.user?.role === "manager"
+        ? "Als Filialleitung können Sie Grundrechte dieser Abteilungsleitung entziehen oder wiederherstellen. Zusatzrechte, Rollen und Geltungsbereiche bleiben unverändert."
       : "Aktivierte Rollenrechte bleiben wirksam; abgewählte Rollenrechte werden persönlich entzogen. Änderungen gelten sofort.";
   refreshRightsEditorScope();
   elements.rightsEditorModal.showModal();
@@ -21556,11 +21564,17 @@ function renderPersonnelFieldRights() {
 async function loadRightsManagement() {
   if (!elements.rightsSettings) return;
   try {
-    const [rights, mobile, personnelFieldRights] = await Promise.all([
-      api("/api/portal/v1/rights"),
-      api("/api/portal/v1/mobile-layout"),
-      api("/api/portal/v1/personnel-field-rights"),
-    ]);
+    const managerDenialOnly = state.portalSession?.user?.role === "manager";
+    [...elements.rightsSettings.children].forEach((card, index) => {
+      card.classList.toggle("hidden", managerDenialOnly && index > 0);
+    });
+    const [rights, mobile, personnelFieldRights] = managerDenialOnly
+      ? [await api("/api/portal/v1/rights"), { availableModules: [], layouts: {}, canChange: false }, { roles: [], fields: [], canChange: false }]
+      : await Promise.all([
+        api("/api/portal/v1/rights"),
+        api("/api/portal/v1/mobile-layout"),
+        api("/api/portal/v1/personnel-field-rights"),
+      ]);
     state.rightsManagement = rights;
     state.mobileLeadershipSettings = mobile;
     state.personnelFieldRights = personnelFieldRights;
@@ -21570,7 +21584,7 @@ async function loadRightsManagement() {
     renderMobileLeadershipSettings();
     renderPersonnelFieldRights();
   } catch (error) {
-    elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist nur für Developer, IT-Admin, Admin und Personalleitung verfügbar." : error.message;
+    elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist für diesen Zugang nicht verfügbar." : error.message;
     elements.rightsUserList.innerHTML = "";
     elements.mobileLeadershipModuleSettings.innerHTML = "";
     elements.personnelFieldRightsMatrix.innerHTML = "";
@@ -21616,8 +21630,9 @@ async function saveUserRights(event) {
   const deniedPermissions = inputs
     .filter((input) => input.dataset.rolePermission === "true" && !input.checked)
     .map((input) => input.value);
-  const scopes = rightsEditorSelectedScope();
-  if (scopes === null) {
+  const managerDenialOnly = state.portalSession?.user?.role === "manager";
+  const scopes = managerDenialOnly ? undefined : rightsEditorSelectedScope();
+  if (!managerDenialOnly && scopes === null) {
     rightsEditorAnnounce("Bitte zuerst einen gültigen Verantwortungsbereich auswählen.");
     return;
   }
@@ -21625,7 +21640,9 @@ async function saveUserRights(event) {
   try {
     state.rightsManagement = await api(`/api/portal/v1/rights/${encodeURIComponent(employeeNumber)}`, {
       method: "PUT",
-      body: JSON.stringify({ grantedPermissions, deniedPermissions, scopes }),
+      body: managerDenialOnly
+        ? JSON.stringify({ grantedPermissions, deniedPermissions })
+        : JSON.stringify({ grantedPermissions, deniedPermissions, scopes }),
     });
     elements.rightsEditorModal.close();
     renderRightsManagement();
@@ -32605,6 +32622,7 @@ async function saveSettings(silent = false) {
       scheduleMatrixDetailFontSize: document.querySelector("#scheduleMatrixDetailFontSize").value,
       scheduleMatrixTimeFontBold: document.querySelector("#scheduleMatrixTimeFontBold").checked,
       scheduleMatrixTimeEmployeeColor: document.querySelector("#scheduleMatrixTimeEmployeeColor").checked,
+      scheduleMatrixShowPosition: document.querySelector("#scheduleMatrixShowPosition").checked,
       scheduleMatrixHeaderText: document.querySelector("#scheduleMatrixHeaderText").value,
     };
     const payload = {

@@ -1211,8 +1211,17 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const itAdmin = await login("106", "667788");
     await changePassword(itAdmin, "667788", "998877");
 
-    const managerRightsDenied = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: manager.cookie } });
-    assert.equal(managerRightsDenied.status, 403, await managerRightsDenied.clone().text());
+    const managerRightsResponse = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerRightsResponse.status, 200, await managerRightsResponse.clone().text());
+    const managerRightsPayload = await managerRightsResponse.json();
+    assert.ok(managerRightsPayload.users.some((user) => user.employeeNumber === "105" && user.manageable));
+    assert.ok(managerRightsPayload.users.every((user) => (
+      user.role === "department_manager" && user.homeLocationId === "01"
+    )));
+    assert.ok(managerRightsPayload.catalog.length > 0);
+    assert.ok(managerRightsPayload.catalog.every((permission) => permission.editable));
+    assert.equal(managerRightsPayload.catalog.some((permission) => permission.scopeBehavior === "global"), false);
+    assert.equal(managerRightsPayload.catalog.some((permission) => permission.id.startsWith("personnel:learning:")), false);
     const hrRightsResponse = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: hr.cookie } });
     assert.equal(hrRightsResponse.status, 200, await hrRightsResponse.clone().text());
     const rightsPayload = await hrRightsResponse.json();
