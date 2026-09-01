@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.92.22 Beta · Team-Bewerbungsbewertungen und Dienstplan-Einstellungen
+
+- Filialleitungen können Mitarbeitende des eigenen Teams und weitere Filialleitungen einer Bewerbungsbewertung zuordnen. Zugeordnete Personen erhalten nach der Anmeldung eine eigenständige, auf die Bewertung reduzierte Vollbildansicht mit einem bis fünf Sternen und einem optionalen Kommentar je Kriterium.
+- Die Bewertung zeigt die Einschätzung der Filialleitung, den Durchschnitt der Mitarbeitenden sowie den gemeinsamen Durchschnitt getrennt und ausklappbar im Detail. Die ursprüngliche FL-Bewertung bleibt eigenständig erhalten; ein gemeinsamer Wert entsteht erst nach einer abgegebenen Mitarbeitendenbewertung.
+- Bewerber stehen in einer kompakten sortierbaren Liste. Der vollständige Bewerberbereich nutzt die verfügbare Breite; die zusammengefasste Bewertung kann als einseitige A4-Querformat-PDF exportiert werden.
+- Zuweisungen, Bewertungszugriffe und Abgaben bleiben bereichsgebunden, datensparsam und auditiert. Abgaben sind an das jeweils zugewiesene Konto gebunden und serverseitig gegen unberechtigte Zugriffe geschützt.
+- Die Dienstplan-PDF-Einstellungen liegen nun unter „Dienstplanung“, nutzen ein kompakteres vollbreites Raster und führen die betreffende Einstellungsregisterkarte einheitlich als „Dienstplanung“.
+- Urlaubstage zählen weiterhin ausschließlich Montag bis Freitag. Gesetzliche Feiertage verbrauchen auch an einem Werktag keinen Urlaubstag; Feiertage am Wochenende erzeugen keine zusätzliche Anrechnung oder Kürzung.
+- Rechte-, Scope-, Audit-, Datenschutz-, PDF-, Urlaubs-, Einstellungs-, Mobil- und Integrationstests sind gemeinsam regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.21 Beta · Delegierbare AL-Grundrechte und optionale Positionszeile
 
 - Filialleitungen können Grundrechte aktiver Abteilungsleitungen des eigenen Standorts gezielt entziehen und wiederherstellen. Der Umfang bleibt auf Rechte begrenzt, die der Filialleitung selbst zustehen; Zusatzrechte, Rollen, Bereiche sowie geschützte technische und zentrale Rechte bleiben ausgeschlossen.

@@ -1346,3 +1346,232 @@ test("Personalmodul Recruiting: strukturierte Profildaten, Teamfeedback und Bewe
   assert.equal(profileOnlyPhoto.response.status, 201, JSON.stringify(profileOnlyPhoto.payload));
   assert.equal(profileOnlyPhoto.payload.photo.currentVersion, 1);
 });
+
+test("Preboarding-Bewertungen: Team und weitere FL bewerten nur selbst; Auswertung und PDF bleiben geschützt", async () => {
+  setPersonnelLifecycleEnabled(true);
+  const admin = createSession("101", "admin");
+  grantSensitivePersonnelAccess("101");
+  const teamReviewer = db.prepare(`
+    SELECT personnel_number, home_location_id
+    FROM employees
+    WHERE active = 1
+      AND personnel_number <> '101'
+      AND COALESCE(home_location_id, '') <> ''
+    ORDER BY personnel_number
+    LIMIT 1
+  `).get();
+  assert.ok(teamReviewer?.personnel_number);
+  const managerCostCenterId = "cc-preboarding-manager-test";
+  const managerLocationId = "preboarding-manager-test";
+  const managerEmployeeNumber = "PREBOARD-FL-2";
+  const managerPosition = db.prepare(`
+    SELECT mapping.position_id
+    FROM cost_center_type_positions mapping
+    JOIN positions position ON position.id = mapping.position_id
+    WHERE mapping.cost_center_type_id = 'branch' AND position.active = 1
+    ORDER BY mapping.sort_order, position.sort_order, position.id
+    LIMIT 1
+  `).get();
+  assert.ok(managerPosition?.position_id);
+  db.prepare(`
+    INSERT INTO cost_centers
+      (id, code, name, type, cost_center_type_id, active, sort_order, created_by, updated_by)
+    VALUES (?, 'TEST-FL', 'Testfiliale FL', 'branch', 'branch', 1, 999, 'test', 'test')
+  `).run(managerCostCenterId);
+  db.prepare(`
+    INSERT INTO locations
+      (id, name, cost_center_id, min_staff, day_settings_json, active)
+    VALUES (?, 'Testfiliale FL', ?, 0, '', 1)
+  `).run(managerLocationId, managerCostCenterId);
+  db.prepare(`
+    INSERT INTO employees
+      (personnel_number, full_name, nickname, color, contracted_hours, position_id,
+       home_location_id, cost_center_id, active)
+    VALUES (?, 'Andere Filialleitung', 'Andere FL', '#245c4f', 38.5, ?, ?, ?, 1)
+  `).run(
+    managerEmployeeNumber,
+    managerPosition.position_id,
+    managerLocationId,
+    managerCostCenterId,
+  );
+  const teamLocationId = String(teamReviewer.home_location_id);
+  const teamEmployeeNumber = String(teamReviewer.personnel_number);
+  const otherManagerNumber = managerEmployeeNumber;
+  const teamEmployee = createSession(teamEmployeeNumber, "employee");
+  const otherManager = createSession(otherManagerNumber, "manager");
+
+  const created = await request(
+    "/api/portal/v1/personnel-lifecycle/candidates",
+    {
+      method: "POST",
+      auth: admin,
+      body: {
+        dataProcessingAuthorizationConfirmed: true,
+        profile: {
+          firstName: "Bewertung",
+          lastName: "Kandidatin",
+          email: "protected-candidate@example.invalid",
+          phone: "+43 660 1234567",
+        },
+        application: {
+          desiredRoleTitle: "Verkauf",
+          desiredLocationId: teamLocationId,
+          targetAreas: [{ locationId: teamLocationId, preferred: true }],
+          competencyRatings: [
+            { id: "professional", label: "Fachliche Eignung", rating: 4, note: "Nur FL" },
+            { id: "team", label: "Zusammenarbeit", rating: 2, note: "Nur FL zwei" },
+          ],
+        },
+      },
+    },
+  );
+  assert.equal(created.response.status, 201, JSON.stringify(created.payload));
+  const candidate = created.payload.candidate;
+  let application = candidate.applications[0];
+
+  const options = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/evaluators`,
+    { auth: admin },
+  );
+  assert.equal(options.response.status, 200, JSON.stringify(options.payload));
+  const byNumber = new Map(options.payload.evaluators.map((entry) => [entry.employeeNumber, entry]));
+  assert.equal(byNumber.get(teamEmployeeNumber)?.group, "team");
+  assert.equal(byNumber.get(otherManagerNumber)?.group, "manager");
+  assert.equal(byNumber.has("101"), false);
+
+  const rejectedAssignment = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/team-evaluations`,
+    {
+      method: "POST",
+      auth: admin,
+      body: { revision: application.revision, employeeNumbers: ["nicht-geeignet"] },
+    },
+  );
+  assert.equal(rejectedAssignment.response.status, 403, JSON.stringify(rejectedAssignment.payload));
+
+  const assigned = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/team-evaluations`,
+    {
+      method: "POST",
+      auth: admin,
+      body: {
+        revision: application.revision,
+        employeeNumbers: [teamEmployeeNumber, otherManagerNumber],
+      },
+    },
+  );
+  assert.equal(assigned.response.status, 201, JSON.stringify(assigned.payload));
+  application = assigned.payload.application;
+  assert.equal(application.evaluationSummary.assignedCount, 2);
+  assert.equal(application.evaluationSummary.completedCount, 0);
+
+  const teamAssignments = await request(
+    "/api/portal/v1/me/candidate-evaluations",
+    { auth: teamEmployee },
+  );
+  assert.equal(teamAssignments.response.status, 200, JSON.stringify(teamAssignments.payload));
+  assert.equal(teamAssignments.payload.evaluations.length, 1);
+  const teamAssignment = teamAssignments.payload.evaluations[0];
+  assert.deepEqual(teamAssignment.criteria, [
+    { id: "professional", label: "Fachliche Eignung" },
+    { id: "team", label: "Zusammenarbeit" },
+  ]);
+  const minimalProjection = JSON.stringify(teamAssignment);
+  assert.doesNotMatch(minimalProjection, /protected-candidate|1234567|Nur FL|flRating|teamEvaluations/);
+
+  const managerAssignments = await request(
+    "/api/portal/v1/me/candidate-evaluations",
+    { auth: otherManager },
+  );
+  assert.equal(managerAssignments.response.status, 200, JSON.stringify(managerAssignments.payload));
+  assert.equal(managerAssignments.payload.evaluations.length, 1);
+  assert.notEqual(managerAssignments.payload.evaluations[0].id, teamAssignment.id);
+
+  const foreignSubmission = await request(
+    `/api/portal/v1/me/candidate-evaluations/${teamAssignment.id}`,
+    {
+      method: "POST",
+      auth: otherManager,
+      body: {
+        revision: teamAssignment.applicationRevision,
+        criteria: [
+          { id: "professional", rating: 5, comment: "Fremde Abgabe" },
+          { id: "team", rating: 5, comment: "Fremde Abgabe" },
+        ],
+      },
+    },
+  );
+  assert.equal(foreignSubmission.response.status, 404, JSON.stringify(foreignSubmission.payload));
+
+  const submitted = await request(
+    `/api/portal/v1/me/candidate-evaluations/${teamAssignment.id}`,
+    {
+      method: "POST",
+      auth: teamEmployee,
+      body: {
+        revision: teamAssignment.applicationRevision,
+        criteria: [
+          { id: "professional", rating: 2, comment: "Sachliche Beobachtung" },
+          { id: "team", rating: 4, comment: "Gute Zusammenarbeit" },
+        ],
+      },
+    },
+  );
+  assert.equal(submitted.response.status, 200, JSON.stringify(submitted.payload));
+  assert.match(submitted.payload.evaluation.submittedAt, /^\d{4}-\d{2}-\d{2}T/);
+  const afterSubmission = await request(
+    "/api/portal/v1/me/candidate-evaluations",
+    { auth: teamEmployee },
+  );
+  assert.deepEqual(afterSubmission.payload.evaluations, []);
+
+  const detail = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}`,
+    { auth: admin },
+  );
+  assert.equal(detail.response.status, 200, JSON.stringify(detail.payload));
+  application = detail.payload.candidate.applications[0];
+  assert.equal(application.evaluationSummary.assignedCount, 2);
+  assert.equal(application.evaluationSummary.completedCount, 1);
+  assert.equal(application.evaluationSummary.pendingCount, 1);
+  assert.equal(application.evaluationSummary.flOverall, 3);
+  assert.equal(application.evaluationSummary.employeeOverall, 3);
+  assert.equal(application.evaluationSummary.combinedOverall, 3);
+  assert.equal(
+    application.evaluationSummary.criteria[0].reviewerRatings[0].comment,
+    "Sachliche Beobachtung",
+  );
+
+  const pdfResponse = await fetch(
+    `${baseUrl}/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/evaluation.pdf`,
+    { headers: { Cookie: admin.cookie, Accept: "application/pdf" } },
+  );
+  assert.equal(pdfResponse.status, 200);
+  assert.match(pdfResponse.headers.get("content-type") || "", /^application\/pdf/);
+  assert.match(pdfResponse.headers.get("content-disposition") || "", /^attachment;/);
+  const pdf = Buffer.from(await pdfResponse.arrayBuffer());
+  assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfLoadingTask = pdfjs.getDocument({
+    data: Uint8Array.from(pdf),
+    disableWorker: true,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+  const pdfDocument = await pdfLoadingTask.promise;
+  try {
+    assert.equal(pdfDocument.numPages, 1);
+  } finally {
+    await pdfLoadingTask.destroy();
+  }
+
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM audit_log
+    WHERE action IN (
+      'personnel-lifecycle.team-evaluation.assign',
+      'personnel-lifecycle.team-evaluation.submit',
+      'personnel-lifecycle.team-evaluation.pdf'
+    )
+  `).get().count, 3);
+});

@@ -378,6 +378,9 @@ const {
   createPersonnelLifecycleService,
 } = require("./lib/personnel-lifecycle");
 const {
+  createCandidateEvaluationPdf,
+} = require("./lib/candidate-evaluation-pdf");
+const {
   PERSONNEL_LIFECYCLE_PERMISSIONS,
   isLocalSystemSession,
   personnelLifecycleAccessForSession,
@@ -5927,6 +5930,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
   if (/^\/portal\/v1\/personnel-lifecycle(?:\/|$)/.test(requestPath)) required.add("personnelLifecycle");
+  if (/^\/portal\/v1\/me\/candidate-evaluations(?:\/|$)/.test(requestPath)) required.add("personnelLifecycle");
   if (/^\/integrations\/(?:personnel-import|payroll-export|payroll-handoffs|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
   if (/^\/(?:portal|mobile)\/v1\/loans(?:\/|$)/.test(requestPath)) {
     required.add("loans");
@@ -19536,14 +19540,16 @@ function optionMinutesPerDay(option, contractedHours) {
 }
 
 function vacationDayCount(dateFrom, dateTo, locationId = null) {
-  let days = 0;
+  // Product rule: every holiday in the booked range reduces the vacation balance,
+  // including holidays that fall on a weekend.
+  let weekdays = 0;
+  let holidays = 0;
   for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
     const day = new Date(`${date}T12:00:00Z`).getUTCDay();
-    if (day === 0 || day === 6) continue;
-    if (isVacationHoliday(date, locationId)) continue;
-    days += 1;
+    if (day !== 0 && day !== 6) weekdays += 1;
+    if (isVacationHoliday(date, locationId)) holidays += 1;
   }
-  return days;
+  return Math.max(0, weekdays - holidays);
 }
 
 function countCreditedOptionDaysInRange(
@@ -44139,6 +44145,62 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", as
   });
 });
 
+function requireCandidateEvaluationPortalSession(request, { csrf = false } = {}) {
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(
+      428,
+      "Bitte zuerst das persönliche Startpasswort ändern.",
+      "PORTAL_PASSWORD_CHANGE_REQUIRED",
+    );
+  }
+  if (csrf) assertPortalCsrf(request);
+  return session;
+}
+
+app.get("/api/portal/v1/me/candidate-evaluations", async (request, response) => {
+  const session = requireCandidateEvaluationPortalSession(request);
+  response.set({
+    "Cache-Control": "private, no-store, max-age=0",
+    Pragma: "no-cache",
+  });
+  try {
+    const evaluations = await requirePersonnelLifecycleService()
+      .listTeamEvaluationAssignments(session.employeeNumber);
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.team-evaluation.list",
+      "candidate_evaluation",
+      "pending",
+      JSON.stringify({ count: evaluations.length }),
+    );
+    response.json({ evaluations });
+  } catch (error) {
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/me/candidate-evaluations/:evaluationId", async (request, response) => {
+  const session = requireCandidateEvaluationPortalSession(request, { csrf: true });
+  try {
+    const evaluation = await requirePersonnelLifecycleService().submitTeamEvaluation(
+      request.params.evaluationId,
+      request.body || {},
+      session.employeeNumber,
+    );
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.team-evaluation.submit",
+      "candidate_evaluation",
+      evaluation.id,
+      JSON.stringify({ criteriaCount: evaluation.criteria.length }),
+    );
+    response.json({ evaluation });
+  } catch (error) {
+    personnelLifecycleRouteError(error);
+  }
+});
+
 app.get("/api/portal/v1/me", (request, response) => {
   const session = requirePortalSession(request);
   response.json({ user: publicPortalUser(session), branding: brandingForPortalSession(session) });
@@ -47544,6 +47606,59 @@ function personnelLifecycleRouteError(error) {
   throw error;
 }
 
+function personnelCandidateEvaluationLocationIds(application) {
+  return new Set([
+    application?.desiredLocationId,
+    ...(Array.isArray(application?.targetAreas)
+      ? application.targetAreas.map((area) => area?.locationId)
+      : []),
+    ...(Array.isArray(application?.trialAppointments)
+      ? application.trialAppointments.map((appointment) => appointment?.locationId)
+      : []),
+  ].map((value) => String(value || "").trim()).filter(Boolean));
+}
+
+async function personnelCandidateEligibleEvaluators(application, access, actorEmployeeNumber) {
+  const users = await portalUsersForAdmin();
+  const locations = personnelCandidateEvaluationLocationIds(application);
+  const writeScopes = access?.allowedScopesByPermission?.[
+    PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE
+  ] || [];
+  const actor = String(actorEmployeeNumber || "").trim();
+  return users
+    .filter((user) => {
+      if (!user || user.employeeNumber === actor
+        || !user.employeeActive || !user.configured || !user.active || !user.passwordConfigured) {
+        return false;
+      }
+      const locationId = String(user.homeLocationId || "").trim();
+      const departmentId = Number(user.preferredDepartmentId || 0) || null;
+      const inApplicationTeam = Boolean(locationId && locations.has(locationId));
+      const inWritableScope = access?.global === true || writeScopes.some((scope) => (
+        String(scope.locationId || "") === locationId
+          && (!scope.departmentId || Number(scope.departmentId) === departmentId)
+      ));
+      const otherBranchManager = user.role === "manager";
+      return otherBranchManager || (inApplicationTeam && inWritableScope);
+    })
+    .map((user) => ({
+      employeeNumber: user.employeeNumber,
+      fullName: user.fullName || user.nickname || user.employeeNumber,
+      role: user.role,
+      roleName: user.roleName || (user.role === "manager" ? "Filialleitung" : "Mitarbeiter"),
+      homeLocationId: user.homeLocationId || "",
+      preferredDepartmentId: user.preferredDepartmentId || null,
+      group: locations.has(String(user.homeLocationId || "")) ? "team" : "manager",
+    }))
+    .sort((left, right) => (
+      String(left.group).localeCompare(String(right.group))
+        || String(left.fullName).localeCompare(String(right.fullName), "de-AT", {
+          numeric: true,
+          sensitivity: "base",
+        })
+    ));
+}
+
 const PERSONNEL_LIFECYCLE_APPLICATION_UPDATE_FIELDS = new Set([
   "revision",
   "desiredPositionId",
@@ -49665,6 +49780,149 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
         PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
       );
     }
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/evaluators", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    const detail = await requirePersonnelLifecycleService().getCandidate(
+      request.params.candidateId,
+      { access },
+    );
+    const application = detail?.applications?.find((entry) => (
+      entry.id === String(request.params.applicationId || "")
+        && access.canWriteApplication(entry)
+    ));
+    if (!application) {
+      throw new PersonnelLifecycleError(
+        "Die Bewerbung wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_APPLICATION_NOT_FOUND",
+        PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
+      );
+    }
+    const evaluators = await personnelCandidateEligibleEvaluators(
+      application,
+      access,
+      session.employeeNumber,
+    );
+    response.set({ "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache" });
+    response.json({ evaluators, revision: application.revision, capabilities });
+  } catch (error) {
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/team-evaluations", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    const detail = await requirePersonnelLifecycleService().getCandidate(
+      request.params.candidateId,
+      { access },
+    );
+    const application = detail?.applications?.find((entry) => (
+      entry.id === String(request.params.applicationId || "")
+        && access.canWriteApplication(entry)
+    ));
+    if (!application) {
+      throw new PersonnelLifecycleError(
+        "Die Bewerbung wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_APPLICATION_NOT_FOUND",
+        PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
+      );
+    }
+    const evaluators = await personnelCandidateEligibleEvaluators(
+      application,
+      access,
+      session.employeeNumber,
+    );
+    const updated = await requirePersonnelLifecycleService().assignTeamEvaluators(
+      detail.id,
+      application.id,
+      request.body || {},
+      session.employeeNumber,
+      {
+        access,
+        eligibleEmployeeNumbers: evaluators.map((entry) => entry.employeeNumber),
+      },
+    );
+    const projected = projectPersonnelLifecycleApplication(updated, access);
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.team-evaluation.assign",
+      "candidate_application",
+      application.id,
+      JSON.stringify({
+        candidateId: detail.id,
+        assignedCount: Array.isArray(request.body?.employeeNumbers)
+          ? request.body.employeeNumbers.length
+          : 0,
+        trialAppointmentLinked: Boolean(request.body?.trialAppointmentId),
+      }),
+    );
+    response.status(201).json({ application: projected, capabilities });
+  } catch (error) {
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/evaluation.pdf", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "read" });
+  const { session, access } = accessContext;
+  try {
+    const detail = await requirePersonnelLifecycleService().getCandidate(
+      request.params.candidateId,
+      { access },
+    );
+    const application = detail?.applications?.find((entry) => (
+      entry.id === String(request.params.applicationId || "")
+        && access.canReadApplication(entry)
+    ));
+    if (!detail || !application) {
+      throw new PersonnelLifecycleError(
+        "Die Bewerbung wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_APPLICATION_NOT_FOUND",
+        PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
+      );
+    }
+    const candidateName = [detail.profile?.firstName, detail.profile?.lastName]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join(" ") || "Bewerbung";
+    const reviewerNames = Object.fromEntries((await portalUsersForAdmin()).map((user) => ([
+      user.employeeNumber,
+      user.fullName || user.nickname || user.employeeNumber,
+    ])));
+    const pdf = await createCandidateEvaluationPdf({
+      candidateName,
+      desiredRoleTitle: application.desiredRoleTitle,
+      evaluationSummary: application.evaluationSummary,
+      reviewerNames,
+      generatedAt: new Date(),
+    });
+    const filename = `Bewerbungsbewertung ${sanitizeFilenamePart(candidateName)}.pdf`;
+    response.set({
+      "Cache-Control": "private, no-store, max-age=0",
+      Pragma: "no-cache",
+      "Content-Type": "application/pdf",
+      "Content-Length": String(pdf.length),
+      "Content-Disposition": contentDispositionHeader(filename),
+    });
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.team-evaluation.pdf",
+      "candidate_application",
+      application.id,
+      JSON.stringify({ candidateId: detail.id, pageCount: 1 }),
+    );
+    response.send(pdf);
+  } catch (error) {
     auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
     personnelLifecycleRouteError(error);
   }
@@ -58743,6 +59001,7 @@ module.exports = {
   actualDayMetrics,
   shiftMetrics,
   scheduleShiftMinuteBasis,
+  vacationDayCount,
   countCreditedOptionDaysInRange,
   claimCreditedOptionDaysInRange,
   claimEmployeeDate,

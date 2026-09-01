@@ -34,7 +34,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.21 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.22 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -823,13 +823,19 @@
                 <option value="talent_pool">Talentpool</option>
                 <option value="archived">Archiviert</option>
               </select></label>
+              <label class="field"><span>Sortierung</span><select id="personnelCandidateSort">
+                <option value="updated_desc">Zuletzt aktualisiert</option>
+                <option value="name_asc">Name A–Z</option>
+                <option value="role_asc">Tätigkeit A–Z</option>
+                <option value="status_asc">Status</option>
+              </select></label>
               <div class="personnel-candidate-toolbar-actions">
                 <button class="primary-button hidden" id="addPersonnelCandidateButton" type="button">+ Bewerber anlegen</button>
                 <button class="secondary-button" id="refreshPersonnelCandidatesButton" type="button">Aktualisieren</button>
               </div>
             </div>
             <p class="personnel-candidate-status" id="personnelCandidateStatus" role="status" aria-live="polite">Bewerbungen werden beim Öffnen geladen.</p>
-            <div class="personnel-candidate-workspace">
+            <div class="personnel-candidate-workspace personnel-candidate-workspace-full">
               <section class="personnel-candidate-list-panel" aria-labelledby="personnelCandidateCount">
                 <div class="personnel-candidate-panel-heading"><span class="eyebrow">Treffer</span><strong id="personnelCandidateCount">0 Bewerbungen</strong></div>
                 <div class="personnel-candidate-list" id="personnelCandidateList">
@@ -837,7 +843,7 @@
                 </div>
               </section>
               <section class="personnel-candidate-detail-panel" id="personnelCandidateDetail" aria-label="Bewerbungsdetails">
-                <div class="personnel-candidate-empty"><strong>Details auswählen</strong><p>Wähle links eine Bewerbung. Vertrauliche Felder werden in dieser kompakten Ansicht nicht dargestellt.</p></div>
+                <div class="personnel-candidate-empty"><strong>Details auswählen</strong><p>Wähle oben eine Bewerbung. Die Kandidatenseite öffnet sich anschließend über die volle verfügbare Breite.</p></div>
               </section>
             </div>
           </section>
@@ -1938,7 +1944,7 @@
 
           <div class="settings-tabs" role="tablist">
             <button class="settings-tab active" id="settingsGeneralTab" data-settings-tab="general">Grundeinstellungen</button>
-            <button class="settings-tab" id="settingsScheduleTab" data-settings-tab="schedule">Dienstplan</button>
+            <button class="settings-tab" id="settingsScheduleTab" data-settings-tab="schedule">Dienstplanung</button>
             <button class="settings-tab" id="settingsPersonnelTab" data-settings-tab="personnel">Personal</button>
             <button class="settings-tab" id="settingsVacationTab" data-settings-tab="vacation">Urlaub</button>
             <button class="settings-tab" id="settingsTimeTrackingTab" data-settings-tab="timeTracking">Zeiterfassung</button>
@@ -2106,7 +2112,7 @@
 
           </section>
 
-          <section id="scheduleSettings" class="settings-section settings-two-column">
+          <section id="scheduleSettings" class="settings-section settings-two-column schedule-settings-section">
             <div class="settings-card" id="crossLocationScheduleSettingsCard">
               <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Standortübergreifende Dienstplanung</h2><p>Steuert die datensparsame Fremdansicht und wer Einsatzanfragen für die eigene Filiale stellen oder prüfen darf.</p></div></div>
               <label class="switch-row"><span><strong>Fremde Dienstpläne lesend anzeigen</strong><small>Zeigt nur Planzeiten und neutrale Nichtverfügbarkeit; Wochenstunden, Zeitkonten und Regelprüfungen bleiben ausgeblendet.</small></span><input id="crossLocationScheduleEnabled" type="checkbox" /></label>
@@ -2715,7 +2721,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.21 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.22 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
