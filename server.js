@@ -378,7 +378,8 @@ const {
   createPersonnelLifecycleService,
 } = require("./lib/personnel-lifecycle");
 const {
-  createCandidateEvaluationPdf,
+  CandidateEvaluationPdfError,
+  createCandidateEvaluationPdfArtifact,
 } = require("./lib/candidate-evaluation-pdf");
 const {
   PERSONNEL_LIFECYCLE_PERMISSIONS,
@@ -32564,6 +32565,170 @@ function validateMobilePortalAppearance(value) {
   return normalizeMobilePortalAppearance(value);
 }
 
+const CANDIDATE_EVALUATION_PDF_PREFERENCE_KEY = "candidate_evaluation_pdf_v1";
+const CANDIDATE_EVALUATION_PDF_PAGE_MODES = new Set(["single", "two"]);
+const CANDIDATE_EVALUATION_PDF_ORIENTATIONS = new Set(["portrait", "landscape"]);
+const CANDIDATE_EVALUATION_PDF_DEFAULT_RGB = Object.freeze([35, 95, 77]);
+const CANDIDATE_EVALUATION_PDF_PREFERENCE_KEYS = new Set([
+  "version",
+  "pageMode",
+  "orientation",
+  "colorRgb",
+  "applyBranding",
+  "includeLogo",
+  "showOverallSummary",
+  "showCriteriaRatings",
+  "showFlComments",
+  "showEmployeeComments",
+  "showReviewerNames",
+  "showRoleTitle",
+  "showGeneratedAt",
+  "includeDatePrefix",
+  "filenameTemplate",
+]);
+
+function defaultCandidateEvaluationPdfPreferences() {
+  return {
+    version: 1,
+    pageMode: "two",
+    orientation: "landscape",
+    colorRgb: [...CANDIDATE_EVALUATION_PDF_DEFAULT_RGB],
+    applyBranding: false,
+    includeLogo: false,
+    showOverallSummary: true,
+    showCriteriaRatings: true,
+    showFlComments: true,
+    showEmployeeComments: true,
+    showReviewerNames: true,
+    showRoleTitle: true,
+    showGeneratedAt: true,
+    includeDatePrefix: true,
+    filenameTemplate: "Bewerbungsbewertung {Name}",
+  };
+}
+
+function normalizedCandidateEvaluationPdfFilenameTemplate(value, fallback) {
+  const normalized = String(value ?? "")
+    .replace(/[\x00-\x1F\x7F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return normalized || fallback;
+}
+
+function normalizeCandidateEvaluationPdfPreferences(value) {
+  const fallback = defaultCandidateEvaluationPdfPreferences();
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return fallback;
+  }
+  const colorRgb = Array.isArray(value.colorRgb) && value.colorRgb.length === 3
+    && value.colorRgb.every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255)
+    ? value.colorRgb.map(Number)
+    : [...fallback.colorRgb];
+  const boolean = (key) => typeof value[key] === "boolean" ? value[key] : fallback[key];
+  return {
+    version: 1,
+    pageMode: CANDIDATE_EVALUATION_PDF_PAGE_MODES.has(String(value.pageMode))
+      ? String(value.pageMode)
+      : fallback.pageMode,
+    orientation: CANDIDATE_EVALUATION_PDF_ORIENTATIONS.has(String(value.orientation))
+      ? String(value.orientation)
+      : fallback.orientation,
+    colorRgb,
+    applyBranding: boolean("applyBranding"),
+    includeLogo: boolean("includeLogo"),
+    showOverallSummary: boolean("showOverallSummary"),
+    showCriteriaRatings: boolean("showCriteriaRatings"),
+    showFlComments: boolean("showFlComments"),
+    showEmployeeComments: boolean("showEmployeeComments"),
+    showReviewerNames: boolean("showReviewerNames"),
+    showRoleTitle: boolean("showRoleTitle"),
+    showGeneratedAt: boolean("showGeneratedAt"),
+    includeDatePrefix: boolean("includeDatePrefix"),
+    filenameTemplate: normalizedCandidateEvaluationPdfFilenameTemplate(
+      value.filenameTemplate,
+      fallback.filenameTemplate,
+    ),
+  };
+}
+
+function validateCandidateEvaluationPdfPreferences(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !CANDIDATE_EVALUATION_PDF_PREFERENCE_KEYS.has(key))
+    || value.version !== 1
+    || !CANDIDATE_EVALUATION_PDF_PAGE_MODES.has(String(value.pageMode || ""))
+    || !CANDIDATE_EVALUATION_PDF_ORIENTATIONS.has(String(value.orientation || ""))
+    || !Array.isArray(value.colorRgb) || value.colorRgb.length !== 3
+    || value.colorRgb.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+    throw httpError(400, "Bitte gültige persönliche PDF-Exportoptionen übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  for (const key of [...CANDIDATE_EVALUATION_PDF_PREFERENCE_KEYS].filter((entry) => (
+    !["version", "pageMode", "orientation", "colorRgb", "filenameTemplate"].includes(entry)
+  ))) {
+    if (typeof value[key] !== "boolean") {
+      throw httpError(400, "Bitte gültige persönliche PDF-Exportoptionen übermitteln.", "UI_PREFERENCES_INVALID");
+    }
+  }
+  const filenameTemplate = normalizedCandidateEvaluationPdfFilenameTemplate(value.filenameTemplate, "");
+  const unsupportedPlaceholder = /[{}]/.test(
+    filenameTemplate.replace(/\{(?:Name|Position)\}/g, ""),
+  );
+  if (filenameTemplate.length < 3 || filenameTemplate.length > 80
+    || unsupportedPlaceholder) {
+    throw httpError(400, "Der PDF-Dateiname darf nur die Platzhalter {Name} und {Position} enthalten.", "UI_PREFERENCES_INVALID");
+  }
+  if (![value.showOverallSummary, value.showCriteriaRatings, value.showFlComments, value.showEmployeeComments]
+    .some(Boolean)) {
+    throw httpError(400, "Bitte mindestens einen Bewertungsinhalt für die PDF auswählen.", "UI_PREFERENCES_INVALID");
+  }
+  return normalizeCandidateEvaluationPdfPreferences({ ...value, filenameTemplate });
+}
+
+async function candidateEvaluationPdfPreferencesForActor(actor) {
+  if (!actor?.employeeNumber || isLocalSystemSession(actor)) {
+    return defaultCandidateEvaluationPdfPreferences();
+  }
+  const stored = await uiPreferencesRepository.get(
+    actor.employeeNumber,
+    CANDIDATE_EVALUATION_PDF_PREFERENCE_KEY,
+  );
+  try {
+    return normalizeCandidateEvaluationPdfPreferences(JSON.parse(stored?.value || "null"));
+  } catch {
+    return defaultCandidateEvaluationPdfPreferences();
+  }
+}
+
+function candidateEvaluationPdfBrandingForActor(actor, application) {
+  const desiredLocationId = String(
+    application?.desiredLocationId || actor?.homeLocationId || "",
+  ).trim();
+  if (desiredLocationId) return loanPdfBranding(desiredLocationId);
+  const branding = brandingForPortalSession(actor);
+  const source = mobileBrandingSourceForSession(actor);
+  return {
+    companyName: branding.companyName,
+    logo: localAssetPathFromUrl(branding.logoUrl),
+    colors: mobileBrandingTheme(source.raw),
+  };
+}
+
+function candidateEvaluationPdfFilename(preferences, candidateName, desiredRoleTitle, generatedAt) {
+  const template = String(
+    preferences?.filenameTemplate || defaultCandidateEvaluationPdfPreferences().filenameTemplate,
+  );
+  const substituted = template
+    .replaceAll("{Name}", String(candidateName || "Bewerbung"))
+    .replaceAll("{Position}", String(desiredRoleTitle || ""))
+    .replace(/\.pdf$/i, "");
+  const base = sanitizeFilenamePart(substituted) || `Bewerbungsbewertung ${sanitizeFilenamePart(candidateName)}`;
+  const isoDate = viennaTodayIso(generatedAt);
+  const datePrefix = preferences?.includeDatePrefix
+    ? `${isoDate.slice(2).replaceAll("-", "")}_`
+    : "";
+  return `${datePrefix}${base}.pdf`;
+}
+
 function uiPreferenceActor(request, { write = false } = {}) {
   if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
     return {
@@ -32594,6 +32759,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
   let mobilePortalHome = defaultMobilePortalHome();
+  let candidateEvaluationPdfPreferences = defaultCandidateEvaluationPdfPreferences();
   let mobilePortalNavigationCustomized = false;
   let mobilePortalAppearanceCustomized = false;
   let mobilePortalHomeCustomized = false;
@@ -32657,6 +32823,11 @@ async function uiPreferencesForActor(actor, overrides = {}) {
       );
       mobilePortalHomeCustomized = lookup.has("mobile_portal_home_v1");
     } catch {}
+    try {
+      candidateEvaluationPdfPreferences = normalizeCandidateEvaluationPdfPreferences(
+        JSON.parse(lookup.get(CANDIDATE_EVALUATION_PDF_PREFERENCE_KEY) || "null"),
+      );
+    } catch {}
   }
   for (const [view, theme] of Object.entries(overrides.pageThemes || {})) {
     if (UI_PREFERENCE_VIEWS.includes(view) && UI_PAGE_THEMES.has(theme)) pageThemes[view] = theme;
@@ -32692,6 +32863,11 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     mobilePortalHome = normalizeMobilePortalHome(overrides.mobilePortalHome);
     mobilePortalHomeCustomized = true;
   }
+  if (overrides.candidateEvaluationPdfPreferences) {
+    candidateEvaluationPdfPreferences = normalizeCandidateEvaluationPdfPreferences(
+      overrides.candidateEvaluationPdfPreferences,
+    );
+  }
   return {
     actor: actor?.employeeNumber || "local",
     pageThemes,
@@ -32706,6 +32882,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
+    candidateEvaluationPdfPreferences,
     mobilePortalLocationDisplay: mobilePortalLocationDisplayForSession(actor),
     mobilePortalNavigationCustomized,
     mobilePortalAppearanceCustomized,
@@ -32788,13 +32965,21 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   const mobilePortalHome = input.mobilePortalHome === undefined
     ? undefined
     : validateMobilePortalHome(input.mobilePortalHome);
+  const candidateEvaluationPdfPreferences = input.candidateEvaluationPdfPreferences === undefined
+    ? undefined
+    : validateCandidateEvaluationPdfPreferences(input.candidateEvaluationPdfPreferences);
+  if (candidateEvaluationPdfPreferences !== undefined && !isLocalSystemSession(actor)
+    && !personnelLifecycleAccessForSession(actor).canReadCandidates) {
+    throw httpError(403, "Für persönliche Bewerbungs-PDF-Optionen fehlt das Bewerber-Leserecht.", "PORTAL_PERMISSION_DENIED");
+  }
   if (!Object.keys(pageThemes).length && appFontScalePercent === undefined && employeeDisplayColumns === undefined
     && employeeDisplaySort === undefined && workRuleAssessmentExpanded === undefined
     && allowPastWeekEditing === undefined
     && vacationCalendarView === undefined
     && personnelDashboardLayout === undefined && startDashboardPreferences === undefined
     && mobilePortalNavigation === undefined
-    && mobilePortalAppearance === undefined && mobilePortalHome === undefined) {
+    && mobilePortalAppearance === undefined && mobilePortalHome === undefined
+    && candidateEvaluationPdfPreferences === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
   }
   if (!isLocalSystemSession(actor)) {
@@ -32871,6 +33056,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
         value: JSON.stringify(mobilePortalHome),
       });
     }
+    if (candidateEvaluationPdfPreferences !== undefined) {
+      upserts.push({
+        preferenceKey: CANDIDATE_EVALUATION_PDF_PREFERENCE_KEY,
+        value: JSON.stringify(candidateEvaluationPdfPreferences),
+      });
+    }
     await uiPreferencesRepository.saveChanges(actor.employeeNumber, {
       upserts,
       deleteKeys: [
@@ -32888,6 +33079,21 @@ async function saveUiPreferencesForActor(actor, input = {}) {
       JSON.stringify({ previousEnabled: previousAllowPastWeekEditing, enabled: allowPastWeekEditing }),
     );
   }
+  if (candidateEvaluationPdfPreferences !== undefined) {
+    auditPortal(
+      actor.employeeNumber,
+      "personnel-lifecycle.evaluation-pdf-preferences.update",
+      "portal_user",
+      actor.employeeNumber,
+      JSON.stringify({
+        pageMode: candidateEvaluationPdfPreferences.pageMode,
+        orientation: candidateEvaluationPdfPreferences.orientation,
+        applyBranding: candidateEvaluationPdfPreferences.applyBranding,
+        includeLogo: candidateEvaluationPdfPreferences.includeLogo,
+        includeDatePrefix: candidateEvaluationPdfPreferences.includeDatePrefix,
+      }),
+    );
+  }
   return uiPreferencesForActor(actor, {
     pageThemes,
     appFontScalePercent,
@@ -32901,6 +33107,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
+    candidateEvaluationPdfPreferences,
   });
 }
 
@@ -49899,14 +50106,24 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
       user.employeeNumber,
       user.fullName || user.nickname || user.employeeNumber,
     ])));
-    const pdf = await createCandidateEvaluationPdf({
+    const generatedAt = new Date();
+    const exportOptions = await candidateEvaluationPdfPreferencesForActor(session);
+    const branding = candidateEvaluationPdfBrandingForActor(session, application);
+    const { buffer: pdf, pageCount } = await createCandidateEvaluationPdfArtifact({
       candidateName,
       desiredRoleTitle: application.desiredRoleTitle,
       evaluationSummary: application.evaluationSummary,
       reviewerNames,
-      generatedAt: new Date(),
+      generatedAt,
+      exportOptions,
+      branding,
     });
-    const filename = `Bewerbungsbewertung ${sanitizeFilenamePart(candidateName)}.pdf`;
+    const filename = candidateEvaluationPdfFilename(
+      exportOptions,
+      candidateName,
+      application.desiredRoleTitle,
+      generatedAt,
+    );
     response.set({
       "Cache-Control": "private, no-store, max-age=0",
       Pragma: "no-cache",
@@ -49919,11 +50136,22 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
       "personnel-lifecycle.team-evaluation.pdf",
       "candidate_application",
       application.id,
-      JSON.stringify({ candidateId: detail.id, pageCount: 1 }),
+      JSON.stringify({
+        candidateId: detail.id,
+        pageCount,
+        pageMode: exportOptions.pageMode,
+        orientation: exportOptions.orientation,
+        applyBranding: exportOptions.applyBranding,
+        includeLogo: exportOptions.includeLogo,
+      }),
     );
     response.send(pdf);
   } catch (error) {
     auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    if (error instanceof CandidateEvaluationPdfError) {
+      const status = error.code === "CANDIDATE_EVALUATION_PDF_LOGO_INVALID" ? 422 : 409;
+      throw httpError(status, error.message, error.code);
+    }
     personnelLifecycleRouteError(error);
   }
 });

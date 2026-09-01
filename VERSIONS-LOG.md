@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.23 Beta · Persönliche Bewerbungsbewertungs-PDFs
+
+- Filialleitungen können die Bewerbungsbewertung wahlweise ein- oder zweiseitig sowie im Hoch- oder Querformat exportieren. Kriterien verwenden dieselbe farblich unterstützte Skala von eins bis fünf wie die Anwendung; Detailseiten führen die gewählten Bewertungen und Kommentare vollständig aus.
+- Farbe, bestehendes Bereichsbranding und Logo sind getrennt steuerbar. Die Oberfläche weist ausdrücklich darauf hin, dass ein eingebettetes Logo keine vollständig speicherplatzsparende Vektor-PDF mehr erlaubt; lokale Bildquellen werden vor der Ausgabe sicher geprüft und gerastert.
+- Zusammenfassung, Kriterien, FL- und Mitarbeitendenkommentare, Namen, Zielposition und Erstellzeit lassen sich einzeln ein- oder ausblenden. Einseitige Exporte brechen bei zu umfangreichem Inhalt nachvollziehbar ab, statt Kommentare still zu kürzen.
+- Dateinamenvorlage und optionaler Datumspräfix im Format `JJMMTT` sind konfigurierbar. Sämtliche Exportoptionen bleiben ausschließlich im jeweiligen Benutzerkonto gespeichert; die bestehenden Dienstplan- und Urlaubsplan-PDF-Einstellungen bleiben unverändert.
+- Kontoisolation, Rechte, Bereichsbranding, Logo-Verarbeitung, Dateinamen, Seiten- und Formatkombinationen, Inhaltsfilter, Überlaufbehandlung, PDF-Struktur sowie API- und UI-Pfade sind gemeinsam regressionsgeprüft. PostgreSQL bleibt weiterhin nicht produktiv aktiviert.
+
 ## v0.92.22 Beta · Team-Bewerbungsbewertungen und Dienstplan-Einstellungen
 
 - Filialleitungen können Mitarbeitende des eigenen Teams und weitere Filialleitungen einer Bewerbungsbewertung zuordnen. Zugeordnete Personen erhalten nach der Anmeldung eine eigenständige, auf die Bewertung reduzierte Vollbildansicht mit einem bis fünf Sternen und einem optionalen Kommentar je Kriterium.
