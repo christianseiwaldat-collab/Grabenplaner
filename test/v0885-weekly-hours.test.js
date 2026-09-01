@@ -23,6 +23,7 @@ const {
   releaseInstanceLockForTests,
   scheduleShiftMinuteBasis,
   shiftMetrics,
+  vacationDayCount,
   countCreditedOptionDaysInRange,
   claimCreditedOptionDaysInRange,
   claimEmployeeDate,
@@ -416,6 +417,15 @@ test("v0.88.5: Urlaubstage werden nur Montag bis Freitag und pro Woche höchsten
     0,
     "Ein doppelter Altbestand darf dieselben Urlaubstage nicht erneut gutschreiben",
   );
+});
+
+test("Urlaubssaldo zieht Feiertage auch dann ab, wenn sie auf ein Wochenende fallen", () => {
+  assert.equal(
+    vacationDayCount("2026-08-10", "2026-08-23"),
+    9,
+    "Mariä Himmelfahrt am Samstag, 15.08.2026, darf keinen Urlaubstag verbrauchen",
+  );
+  assert.equal(vacationDayCount("2026-08-15", "2026-08-15"), 0);
 });
 
 test("v0.88.5: berechneter Krankenstand wird nicht neben Dienst, Urlaub oder erneut am selben Tag gewertet", () => {

@@ -295,6 +295,8 @@ const state = {
   personnelCandidatesLoading: false,
   personnelCandidateSearch: "",
   personnelCandidateStatusFilter: "",
+  personnelCandidateSort: "updated_desc",
+  personnelCandidateEvaluatorOptions: {},
   selectedPersonnelCandidateId: "",
   selectedPersonnelCandidate: null,
   personnelCandidateDetailLoading: false,
@@ -884,14 +886,16 @@ function dateRangesOverlap(startA, endA, startB, endB) {
 
 function vacationDayCount(dateFrom, dateTo) {
   if (!dateFrom || !dateTo || dateTo < dateFrom) return 0;
-  let days = 0;
+  // Product rule: every holiday in the booked range reduces the vacation balance,
+  // including holidays that fall on a weekend.
+  let weekdays = 0;
+  let holidays = 0;
   for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
     const day = new Date(`${date}T12:00:00`).getDay();
-    if (day === 0 || day === 6) continue;
-    if (vacationHolidayForDate(date)) continue;
-    days += 1;
+    if (day !== 0 && day !== 6) weekdays += 1;
+    if (vacationHolidayForDate(date)) holidays += 1;
   }
-  return days;
+  return Math.max(0, weekdays - holidays);
 }
 
 function selectedVacationRange() {
@@ -2140,8 +2144,8 @@ function applyRoleVisibility() {
     || loanSettingsAccess || mobilePortalLocationDisplayAccess || birthdayPresentationSettingsAccess || updateAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
-    general: settingsAccess || pdfSettingsAccess || brandingAccess || loanSettingsAccess,
-    schedule: settingsAccess || scheduleSettingsAccess,
+    general: settingsAccess || brandingAccess || loanSettingsAccess,
+    schedule: settingsAccess || scheduleSettingsAccess || pdfSettingsAccess,
     personnel: settingsAccess || wifiSettingsAccess,
     vacation: features.vacation !== false && (settingsAccess || globalAdministration),
     timeTracking: settingsAccess || (wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false),
@@ -2458,6 +2462,20 @@ function applyRoleVisibility() {
   refreshFunctionSearchAccess();
 }
 
+async function redirectAdministrationToCandidateEvaluation(user) {
+  if (!user || user.isEmployee === false || user.mustChangePassword === true) return false;
+  try {
+    const result = await api("/api/portal/v1/me/candidate-evaluations");
+    const evaluation = Array.isArray(result?.evaluations) ? result.evaluations[0] : null;
+    if (!evaluation?.id) return false;
+    window.location.replace(`/candidate-evaluation.html?id=${encodeURIComponent(evaluation.id)}`);
+    return true;
+  } catch (error) {
+    if (error?.status === 401) throw error;
+    return false;
+  }
+}
+
 async function bootstrapApplication() {
   try {
     const status = await api("/api/portal/v1/status");
@@ -2474,6 +2492,7 @@ async function bootstrapApplication() {
         showLoginGate();
         return;
       }
+      if (await redirectAdministrationToCandidateEvaluation(session.user)) return;
       if (session.user?.mustChangePassword
         || session.user?.role === "employee"
         || session.user?.isEmployee === false) {
@@ -2503,6 +2522,7 @@ async function loginToAdministration(event) {
         password: elements.adminLoginPassword.value,
       }),
     });
+    if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
     if (result.user?.role === "employee"
       || result.user?.mustChangePassword
       || result.user?.isEmployee === false) {
@@ -12472,7 +12492,7 @@ function personnelCandidateStatusClass(status) {
 function filteredPersonnelCandidates() {
   const query = state.personnelCandidateSearch.trim().toLocaleLowerCase("de-AT");
   const status = state.personnelCandidateStatusFilter;
-  return state.personnelCandidates.filter((candidate) => {
+  const candidates = state.personnelCandidates.filter((candidate) => {
     const applications = personnelCandidateApplications(candidate);
     if (status && !applications.some((entry) => entry.status === status)) return false;
     if (!query) return true;
@@ -12505,6 +12525,30 @@ function filteredPersonnelCandidates() {
     ].filter(Boolean).join(" ").toLocaleLowerCase("de-AT");
     return searchable.includes(query);
   });
+  const collator = new Intl.Collator("de-AT", { numeric: true, sensitivity: "base" });
+  const primary = (candidate) => personnelCandidatePrimaryApplication(candidate, status);
+  return [...candidates].sort((left, right) => {
+    const leftApplication = primary(left);
+    const rightApplication = primary(right);
+    if (state.personnelCandidateSort === "name_asc") {
+      return collator.compare(personnelCandidateName(left), personnelCandidateName(right));
+    }
+    if (state.personnelCandidateSort === "role_asc") {
+      return collator.compare(
+        String(leftApplication?.desiredRoleTitle || leftApplication?.positionName || ""),
+        String(rightApplication?.desiredRoleTitle || rightApplication?.positionName || ""),
+      ) || collator.compare(personnelCandidateName(left), personnelCandidateName(right));
+    }
+    if (state.personnelCandidateSort === "status_asc") {
+      return collator.compare(
+        personnelCandidateStatusLabel(leftApplication?.status),
+        personnelCandidateStatusLabel(rightApplication?.status),
+      ) || collator.compare(personnelCandidateName(left), personnelCandidateName(right));
+    }
+    return String(rightApplication?.updatedAt || right.updatedAt || "")
+      .localeCompare(String(leftApplication?.updatedAt || left.updatedAt || ""))
+      || collator.compare(personnelCandidateName(left), personnelCandidateName(right));
+  });
 }
 
 function clearPersonnelLifecycleCandidateState(message = "") {
@@ -12518,6 +12562,7 @@ function clearPersonnelLifecycleCandidateState(message = "") {
   state.personnelCandidateDetailLoading = false;
   state.personnelCandidateMutationPending = "";
   state.personnelCandidateCreatePending = false;
+  state.personnelCandidateEvaluatorOptions = {};
   state.personnelCandidateLoadError = message;
   state.personnelCandidateDetailError = "";
   resetPersonnelCandidateCreateEnhancements();
@@ -12549,17 +12594,17 @@ function renderPersonnelCandidateList() {
     elements.personnelCandidateList.innerHTML = `<div class="personnel-candidate-empty"><strong>${filtered ? "Keine passenden Bewerbungen" : "Keine Bewerbungen vorhanden"}</strong><p>${filtered ? "Bitte Suche oder Statusfilter anpassen." : "Im freigegebenen Bereich sind derzeit keine Bewerbungen sichtbar."}</p></div>`;
     return;
   }
-  elements.personnelCandidateList.innerHTML = candidates.map((candidate) => {
+  elements.personnelCandidateList.innerHTML = `<div class="personnel-candidate-list-header" aria-hidden="true"><span>Name</span><span>Tätigkeit und Bereich</span><span>Status</span><span>Aktualisiert</span></div>${candidates.map((candidate) => {
     const application = personnelCandidatePrimaryApplication(candidate, state.personnelCandidateStatusFilter);
     const status = application?.status || "";
     const selected = candidate.id === state.selectedPersonnelCandidateId;
     return `<button class="personnel-candidate-list-item${selected ? " active" : ""}" type="button" data-personnel-candidate-id="${escapeHtmlAttribute(candidate.id)}" aria-pressed="${String(selected)}">
-      ${personnelCandidatePhotoMarkup(candidate, "list")}
-      <span class="personnel-candidate-list-copy"><span class="personnel-candidate-list-title"><strong>${escapeHtml(personnelCandidateName(candidate))}</strong><span class="personnel-candidate-status-badge${personnelCandidateStatusClass(status)}">${escapeHtml(personnelCandidateStatusLabel(status))}</span></span>
-      <span>${escapeHtml(personnelCandidateOrganization(application))}</span>
-      <small>Aktualisiert: ${escapeHtml(formatPersonnelCandidateTimestamp(application?.updatedAt || candidate.updatedAt))}</small></span>
+      <span class="personnel-candidate-list-name">${personnelCandidatePhotoMarkup(candidate, "list")}<strong>${escapeHtml(personnelCandidateName(candidate))}</strong></span>
+      <span class="personnel-candidate-list-organization">${escapeHtml(personnelCandidateOrganization(application))}</span>
+      <span><span class="personnel-candidate-status-badge${personnelCandidateStatusClass(status)}">${escapeHtml(personnelCandidateStatusLabel(status))}</span></span>
+      <small>${escapeHtml(formatPersonnelCandidateTimestamp(application?.updatedAt || candidate.updatedAt))}</small>
     </button>`;
-  }).join("");
+  }).join("")}`;
 }
 
 function personnelCandidateFact(label, value) {
@@ -12610,6 +12655,28 @@ function personnelCandidateCompetencyRatings(application) {
 
 function personnelCandidateTeamFeedback(application) {
   return Array.isArray(application?.teamFeedback) ? application.teamFeedback.filter(Boolean) : [];
+}
+
+function personnelCandidateTeamEvaluations(application) {
+  return Array.isArray(application?.teamEvaluations)
+    ? application.teamEvaluations.filter(Boolean)
+    : [];
+}
+
+function personnelCandidateEvaluationAverage(value) {
+  const score = Number(value);
+  return Number.isFinite(score) && score >= 1 && score <= 5
+    ? `${score.toLocaleString("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / 5`
+    : "Noch offen";
+}
+
+function personnelCandidateEvaluatorName(employeeNumber, application) {
+  const normalized = String(employeeNumber || "");
+  const remote = state.personnelCandidateEvaluatorOptions?.[application?.id]?.evaluators
+    ?.find((entry) => String(entry.employeeNumber) === normalized);
+  const visible = personnelCandidateVisibleEmployees()
+    .find((entry) => entry.employeeNumber === normalized);
+  return remote?.fullName || visible?.fullName || normalized || "Teammitglied";
 }
 
 function renderPersonnelCandidateTargetAreas(application) {
@@ -12692,25 +12759,59 @@ function personnelCandidateTeamEmployeeOptions(selected = "", application = null
 }
 
 function renderPersonnelCandidateTeamFeedback(application) {
-  const entries = personnelCandidateTeamFeedback(application);
+  const legacyEntries = personnelCandidateTeamFeedback(application);
+  const evaluations = personnelCandidateTeamEvaluations(application);
   const appointments = personnelCandidateTrialAppointments(application);
   const canWrite = canWritePersonnelCandidateApplication(application);
-  const feedback = entries.length ? `<div class="personnel-candidate-feedback-list">${entries.map((entry) => {
-    const visibleEmployee = personnelCandidateVisibleEmployees()
-      .find((candidate) => candidate.employeeNumber === String(entry.employeeNumber || ""));
-    const employee = entry.employeeName || entry.fullName
-      || (visibleEmployee ? `${visibleEmployee.fullName} · ${visibleEmployee.employeeNumber}` : entry.employeeNumber)
-      || "Teammitglied";
-    return `<article><header><strong>${escapeHtml(employee)}</strong>${renderPersonnelCandidateRatingDisplay({ label: "Teamrückmeldung", rating: entry.rating })}</header>${entry.comment ? `<p>${escapeHtml(entry.comment)}</p>` : ""}<small>${escapeHtml(formatPersonnelCandidateTimestamp(entry.recordedAt || entry.createdAt || entry.updatedAt, "Zeitpunkt nicht angegeben"))}${entry.recordedByName || entry.recordedByEmployeeNumber ? ` · erfasst durch ${escapeHtml(entry.recordedByName || entry.recordedByEmployeeNumber)}` : ""}</small></article>`;
-  }).join("")}</div>` : '<p class="personnel-candidate-section-empty">Noch keine Teamrückmeldung hinterlegt.</p>';
-  const form = canWrite && appointments.length ? `<form class="personnel-candidate-feedback-form" data-personnel-candidate-team-feedback-form data-application-id="${escapeHtmlAttribute(application.id)}">
-    <label class="field"><span>Rückmeldung von</span><select name="employeeNumber" required>${personnelCandidateTeamEmployeeOptions("", application)}</select></label>
-    <label class="field"><span>Schnuppertermin</span><select name="trialAppointmentId" required><option value="">Termin auswählen</option>${appointments.map((appointment) => `<option value="${escapeHtmlAttribute(appointment.id)}">${escapeHtml(personnelCandidateDateRangeLabel(appointment))} · ${escapeHtml(personnelCandidateLocationName(appointment.locationId))}</option>`).join("")}</select></label>
-    <fieldset><legend>Gesamteindruck</legend>${renderPersonnelCandidateRatingInputs(`candidate-feedback-${application.id}`)}</fieldset>
-    <label class="field personnel-candidate-feedback-comment"><span>Sachlicher Kommentar <small class="personnel-candidate-optional-marker">* optional</small></span><textarea name="comment" rows="3" maxlength="2000" placeholder="Optional: konkrete, arbeitsbezogene Beobachtung"></textarea></label>
-    <div class="personnel-candidate-form-actions"><small>Die rückmeldende Person und die erfassende Person werden getrennt revisionssicher dokumentiert.</small><button class="secondary-button" type="submit">Rückmeldung speichern</button></div>
-  </form>` : "";
-  return `${feedback}${form}`;
+  const summary = application?.evaluationSummary && typeof application.evaluationSummary === "object"
+    ? application.evaluationSummary
+    : { assignedCount: evaluations.length, completedCount: 0, pendingCount: evaluations.length, criteria: [] };
+  const criteria = Array.isArray(summary.criteria) ? summary.criteria : [];
+  const scoreCards = `<div class="personnel-candidate-evaluation-scores">
+    <article><span>FL-Bewertung</span><strong>${escapeHtml(personnelCandidateEvaluationAverage(summary.flOverall))}</strong><small>Bleibt eigenständig erhalten</small></article>
+    <article><span>MA-Bewertung</span><strong>${escapeHtml(personnelCandidateEvaluationAverage(summary.employeeOverall))}</strong><small>${Number(summary.completedCount || 0)} von ${Number(summary.assignedCount || 0)} Rückmeldungen</small></article>
+    <article class="combined"><span>MA + FL</span><strong>${escapeHtml(personnelCandidateEvaluationAverage(summary.combinedOverall))}</strong><small>FL und MA-Gruppe je Kriterium gleich gewichtet</small></article>
+  </div>`;
+  const breakdown = `<details class="personnel-candidate-evaluation-breakdown">
+    <summary><span><strong>Durchschnitt im Detail</strong><small>FL, MA-Gruppe und kombinierter Wert nach Kriterium</small></span><i aria-hidden="true">›</i></summary>
+    <div class="personnel-candidate-evaluation-table" role="table" aria-label="Bewertungsdurchschnitt nach Kriterien">
+      <div class="head" role="row"><strong>Kriterium</strong><strong>FL</strong><strong>MA</strong><strong>MA + FL</strong></div>
+      ${criteria.length ? criteria.map((criterion) => `<div role="row"><span>${escapeHtml(criterion.label)}</span><span>${escapeHtml(personnelCandidateEvaluationAverage(criterion.flRating))}</span><span>${escapeHtml(personnelCandidateEvaluationAverage(criterion.employeeAverage))}</span><strong>${escapeHtml(personnelCandidateEvaluationAverage(criterion.combinedAverage))}</strong></div>`).join("") : '<p class="personnel-candidate-section-empty">Noch keine Kriterienauswertung verfügbar.</p>'}
+    </div>
+  </details>`;
+  const evaluationList = evaluations.length ? `<div class="personnel-candidate-evaluation-list">${evaluations.map((evaluation) => {
+    const completed = Boolean(evaluation.submittedAt);
+    return `<details class="personnel-candidate-evaluation-person${completed ? " completed" : " pending"}">
+      <summary><span><strong>${escapeHtml(personnelCandidateEvaluatorName(evaluation.employeeNumber, application))}</strong><small>${completed ? `Abgegeben: ${escapeHtml(formatPersonnelCandidateTimestamp(evaluation.submittedAt))}` : "Bewertung ausstehend"}</small></span><span class="personnel-candidate-evaluation-state">${completed ? "Abgegeben" : "Offen"}</span><i aria-hidden="true">›</i></summary>
+      ${completed ? `<div class="personnel-candidate-evaluation-person-body">${(evaluation.criteria || []).map((criterion) => `<div><span><strong>${escapeHtml(criterion.label)}</strong><b>${escapeHtml(personnelCandidateEvaluationAverage(criterion.rating))}</b></span>${criterion.comment ? `<p>${escapeHtml(criterion.comment)}</p>` : '<small>Kein Kommentar</small>'}</div>`).join("")}</div>` : '<div class="personnel-candidate-evaluation-person-body"><p>Die zugewiesene Person sieht beim nächsten Anmelden ausschließlich ihre persönliche Bewertungsfläche.</p></div>'}
+    </details>`;
+  }).join("")}</div>` : '<p class="personnel-candidate-section-empty">Noch niemand zur MA-Bewertung zugewiesen.</p>';
+  const optionState = state.personnelCandidateEvaluatorOptions?.[application.id] || null;
+  const assigned = new Set(evaluations.map((evaluation) => String(evaluation.employeeNumber || "")));
+  const available = (optionState?.evaluators || []).filter((entry) => !assigned.has(String(entry.employeeNumber || "")));
+  const optionGroups = [
+    ["team", "Mitarbeitende des Bewerbungsbereichs"],
+    ["manager", "Weitere Filialleitungen"],
+  ].map(([group, label]) => {
+    const options = available.filter((entry) => entry.group === group);
+    return options.length ? `<fieldset class="personnel-candidate-evaluator-group"><legend>${escapeHtml(label)}</legend>${options.map((entry) => `<label><input type="checkbox" name="employeeNumbers" value="${escapeHtmlAttribute(entry.employeeNumber)}" /><span><strong>${escapeHtml(entry.fullName)}</strong><small>${escapeHtml(entry.roleName || entry.role || "Mitarbeiter")} · ${escapeHtml(entry.employeeNumber)}${entry.homeLocationId ? ` · ${escapeHtml(personnelCandidateLocationName(entry.homeLocationId))}` : ""}</small></span></label>`).join("")}</fieldset>` : "";
+  }).join("");
+  const assignmentForm = !canWrite ? ""
+    : optionState?.loading
+      ? '<p class="personnel-candidate-section-empty">Auswählbare Mitarbeitende und Filialleitungen werden geladen.</p>'
+      : optionState?.error
+        ? `<p class="personnel-candidate-inline-error">${escapeHtml(optionState.error)}</p>`
+        : available.length
+          ? `<form class="personnel-candidate-evaluator-form" data-personnel-candidate-team-evaluation-form data-application-id="${escapeHtmlAttribute(application.id)}">
+            <p>Eine oder mehrere Personen auswählen. Sie erhalten beim nächsten Anmelden eine reduzierte Vollbild-Bewertung ohne Menü und weitere Funktionen.</p>
+            <div class="personnel-candidate-evaluator-options">${optionGroups}</div>
+            <label class="field"><span>Schnuppertermin <small class="personnel-candidate-optional-marker">* optional</small></span><select name="trialAppointmentId"><option value="">Keinem Termin zuordnen</option>${appointments.map((appointment) => `<option value="${escapeHtmlAttribute(appointment.id)}">${escapeHtml(personnelCandidateDateRangeLabel(appointment))} · ${escapeHtml(personnelCandidateLocationName(appointment.locationId))}</option>`).join("")}</select></label>
+            <div class="personnel-candidate-form-actions"><small>Die Kriterien werden bei der Zuweisung revisionsgebunden eingefroren.</small><button class="secondary-button" type="submit">Bewertung zuweisen</button></div>
+          </form>`
+          : '<p class="personnel-candidate-section-empty">Alle derzeit geeigneten Personen wurden bereits zugewiesen.</p>';
+  const legacy = legacyEntries.length ? `<details class="personnel-candidate-legacy-feedback"><summary><span><strong>Frühere pauschale Teamrückmeldungen</strong><small>${legacyEntries.length} historische Einträge</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-feedback-list">${legacyEntries.map((entry) => `<article><header><strong>${escapeHtml(personnelCandidateEvaluatorName(entry.employeeNumber, application))}</strong>${renderPersonnelCandidateRatingDisplay({ label: "Historische Teamrückmeldung", rating: entry.rating })}</header>${entry.comment ? `<p>${escapeHtml(entry.comment)}</p>` : ""}<small>${escapeHtml(formatPersonnelCandidateTimestamp(entry.recordedAt || entry.createdAt || entry.updatedAt, "Zeitpunkt nicht angegeben"))}</small></article>`).join("")}</div></details>` : "";
+  const pdfUrl = `/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(state.selectedPersonnelCandidateId)}/applications/${encodeURIComponent(application.id)}/evaluation.pdf`;
+  return `${scoreCards}${breakdown}<div class="personnel-candidate-evaluation-toolbar"><div><strong>Einzelrückmeldungen</strong><small>${Number(summary.pendingCount || 0)} offen</small></div><a class="secondary-button" href="${escapeHtmlAttribute(pdfUrl)}" download>Einseitiges PDF exportieren</a></div>${evaluationList}${assignmentForm}${legacy}`;
 }
 
 function renderPersonnelCandidateProfileEditor(candidate) {
@@ -12807,7 +12908,7 @@ function renderPersonnelCandidateApplication(candidateId, application) {
     <details class="personnel-candidate-detail-section" open><summary><span><strong>Zielbereiche</strong><small>${targetAreas.length} ${targetAreas.length === 1 ? "Filiale oder Abteilung" : "Filialen oder Abteilungen"}</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateTargetAreas(application)}</div></details>
     <details class="personnel-candidate-detail-section"><summary><span><strong>Schnuppertermine</strong><small>${appointments.length} ${appointments.length === 1 ? "Termin" : "Termine"}</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateTrialAppointments(application)}</div></details>
     <details class="personnel-candidate-detail-section"><summary><span><strong>Kompetenzbewertung</strong><small>${ratings.length} von ${PERSONNEL_CANDIDATE_DEFAULT_COMPETENCIES.length} Standardkompetenzen oder Ergänzungen bewertet</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateCompetencyRatings(application)}</div></details>
-    <details class="personnel-candidate-detail-section"><summary><span><strong>Teamrückmeldungen</strong><small>${personnelCandidateTeamFeedback(application).length} dokumentiert</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateTeamFeedback(application)}</div></details>
+    <details class="personnel-candidate-detail-section"><summary><span><strong>Bewertungsübersicht</strong><small>${personnelCandidateTeamEvaluations(application).length} MA-Bewertungen zugewiesen</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-detail-section-body">${renderPersonnelCandidateTeamFeedback(application)}</div></details>
     ${canWrite ? `<details class="personnel-candidate-detail-section personnel-candidate-editor-section"><summary><span><strong>Bewerbung bearbeiten</strong><small>Zielbereiche, Schnuppertermine und Bewertungen</small></span><i aria-hidden="true">›</i></summary>
       <form class="personnel-candidate-detail-form personnel-candidate-application-editor" data-personnel-candidate-application-form data-application-id="${escapeHtmlAttribute(application.id)}">
         <div class="form-grid"><label class="field"><span>Gewünschte Tätigkeit</span><input name="desiredRoleTitle" maxlength="180" value="${escapeHtmlAttribute(application.desiredRoleTitle || "")}" /></label><label class="field"><span>Verfügbar ab</span><input name="availableFrom" type="date" value="${escapeHtmlAttribute(String(application.availableFrom || "").slice(0, 10))}" /></label></div>
@@ -12837,7 +12938,7 @@ function renderPersonnelCandidateDetail() {
   }
   const candidate = state.selectedPersonnelCandidate;
   if (!candidate) {
-    elements.personnelCandidateDetail.innerHTML = '<div class="personnel-candidate-empty"><strong>Details auswählen</strong><p>Wähle links eine Bewerbung. Vertrauliche Felder werden in dieser kompakten Ansicht nicht dargestellt.</p></div>';
+    elements.personnelCandidateDetail.innerHTML = '<div class="personnel-candidate-empty"><strong>Details auswählen</strong><p>Wähle oben eine Bewerbung. Die Kandidatenseite öffnet sich über die volle verfügbare Breite.</p></div>';
     return;
   }
   const profile = personnelCandidateProfile(candidate);
@@ -12918,6 +13019,8 @@ function renderPersonnelCandidateOverview() {
   }
   if (elements.personnelCandidateSearch) elements.personnelCandidateSearch.value = state.personnelCandidateSearch;
   if (elements.personnelCandidateStatusFilter) elements.personnelCandidateStatusFilter.value = state.personnelCandidateStatusFilter;
+  const sortSelect = document.getElementById("personnelCandidateSort");
+  if (sortSelect) sortSelect.value = state.personnelCandidateSort;
   if (elements.personnelCandidateStatus) {
     const visibleCount = filteredPersonnelCandidates().length;
     elements.personnelCandidateStatus.textContent = state.personnelCandidatesLoading
@@ -13306,11 +13409,41 @@ async function loadPersonnelCandidates({ force = false } = {}) {
   }
 }
 
+async function loadPersonnelCandidateEvaluatorOptions(candidate) {
+  const writableApplications = personnelCandidateApplications(candidate)
+    .filter((application) => canWritePersonnelCandidateApplication(application));
+  state.personnelCandidateEvaluatorOptions = Object.fromEntries(writableApplications.map((application) => ([
+    application.id,
+    { loading: true, error: "", evaluators: [] },
+  ])));
+  renderPersonnelCandidateOverview();
+  const results = await Promise.all(writableApplications.map(async (application) => {
+    try {
+      const result = await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}/applications/${encodeURIComponent(application.id)}/evaluators`);
+      return [application.id, {
+        loading: false,
+        error: "",
+        evaluators: Array.isArray(result?.evaluators) ? result.evaluators : [],
+      }];
+    } catch (error) {
+      return [application.id, {
+        loading: false,
+        error: error.message || "Die Auswahl konnte nicht geladen werden.",
+        evaluators: [],
+      }];
+    }
+  }));
+  if (state.selectedPersonnelCandidateId !== candidate.id) return;
+  state.personnelCandidateEvaluatorOptions = Object.fromEntries(results);
+  renderPersonnelCandidateOverview();
+}
+
 async function loadPersonnelCandidateDetail(candidateId) {
   const id = String(candidateId || "").trim();
   if (!id || !canReadCandidatePreboarding() || !state.personnelCandidateCapabilities.canReadCandidates) return;
   state.selectedPersonnelCandidateId = id;
   state.selectedPersonnelCandidate = null;
+  state.personnelCandidateEvaluatorOptions = {};
   state.personnelCandidateDetailError = "";
   state.personnelCandidateDetailLoading = true;
   renderPersonnelCandidateOverview();
@@ -13329,6 +13462,9 @@ async function loadPersonnelCandidateDetail(candidateId) {
     const candidate = result?.candidate;
     if (!candidate || candidate.id !== id) throw new Error("Die Bewerbungsdetails sind unvollständig.");
     state.selectedPersonnelCandidate = candidate;
+    state.personnelCandidateDetailLoading = false;
+    renderPersonnelCandidateOverview();
+    await loadPersonnelCandidateEvaluatorOptions(candidate);
   } catch (error) {
     if ([401, 403].includes(error.status)) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
@@ -13602,17 +13738,60 @@ async function savePersonnelCandidateTeamFeedback(form) {
   }
 }
 
+async function assignPersonnelCandidateTeamEvaluations(form) {
+  const candidate = state.selectedPersonnelCandidate;
+  const applicationId = String(form?.dataset.applicationId || "");
+  const application = personnelCandidateApplications(candidate)
+    .find((entry) => entry.id === applicationId);
+  if (!form || !candidate || !application || !canWritePersonnelCandidateApplication(application)
+    || state.personnelCandidateMutationPending) return;
+  const checkboxes = [...form.querySelectorAll('input[name="employeeNumbers"]')];
+  const employeeNumbers = checkboxes.filter((input) => input.checked).map((input) => input.value);
+  checkboxes[0]?.setCustomValidity(employeeNumbers.length
+    ? ""
+    : "Bitte mindestens eine Person zur Bewertung auswählen.");
+  if (!form.reportValidity()) return;
+  state.personnelCandidateMutationPending = `evaluation:${applicationId}`;
+  state.personnelCandidateDetailError = "";
+  renderPersonnelCandidateDetail();
+  try {
+    await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}/applications/${encodeURIComponent(application.id)}/team-evaluations`, {
+      method: "POST",
+      body: JSON.stringify({
+        employeeNumbers,
+        trialAppointmentId: String(form.elements.trialAppointmentId?.value || "").trim() || null,
+        revision: application.revision,
+      }),
+    });
+    await loadPersonnelCandidates({ force: true });
+    await loadPersonnelCandidateDetail(candidate.id);
+    showToast(`${employeeNumbers.length} ${employeeNumbers.length === 1 ? "Bewertung wurde" : "Bewertungen wurden"} sicher zugewiesen.`);
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    state.personnelCandidateDetailError = error.message || "Die Bewertung konnte nicht zugewiesen werden.";
+    if (error.status === 409) await loadPersonnelCandidateDetail(candidate.id);
+  } finally {
+    state.personnelCandidateMutationPending = "";
+    renderPersonnelCandidateOverview();
+  }
+}
+
 function handlePersonnelCandidateDetailSubmit(event) {
   const profileForm = event.target.closest("[data-personnel-candidate-profile-form]");
   const photoForm = event.target.closest("[data-personnel-candidate-photo-form]");
   const applicationForm = event.target.closest("[data-personnel-candidate-application-form]");
   const feedbackForm = event.target.closest("[data-personnel-candidate-team-feedback-form]");
+  const evaluationForm = event.target.closest("[data-personnel-candidate-team-evaluation-form]");
   const statusForm = event.target.closest("[data-personnel-candidate-status-form]");
-  if (!profileForm && !photoForm && !applicationForm && !feedbackForm && !statusForm) return;
+  if (!profileForm && !photoForm && !applicationForm && !feedbackForm && !evaluationForm && !statusForm) return;
   event.preventDefault();
   if (profileForm) savePersonnelCandidateProfile(profileForm);
   else if (photoForm) savePersonnelCandidatePhoto(photoForm);
   else if (applicationForm) savePersonnelCandidateApplication(applicationForm);
+  else if (evaluationForm) assignPersonnelCandidateTeamEvaluations(evaluationForm);
   else if (feedbackForm) savePersonnelCandidateTeamFeedback(feedbackForm);
   else savePersonnelCandidateApplicationStatus(event);
 }
@@ -21996,6 +22175,13 @@ function integrateLegacyUsbProvisioning() {
   elements.backupSettings.append(details);
 }
 
+function integrateSchedulePdfSettings() {
+  if (!elements.pdfSettings || !elements.scheduleSettings
+    || elements.pdfSettings.parentElement === elements.scheduleSettings) return;
+  elements.pdfSettings.dataset.integratedIntoSchedule = "1";
+  elements.scheduleSettings.append(elements.pdfSettings);
+}
+
 function initializeSettingsCardDisclosures() {
   elements.settingsView?.querySelectorAll(".settings-card:not(.settings-field-disclosure)").forEach((card) => {
     if (card.closest("dialog")) return;
@@ -29459,7 +29645,7 @@ function applyRequestedView() {
 function setSettingsTab(tab) {
   if (tab === "usbProvisioning") tab = "backup";
   const integratedTarget = ["branding", "pdf"].includes(tab) ? tab : "";
-  const activeTab = integratedTarget ? "general" : tab;
+  const activeTab = integratedTarget === "pdf" ? "schedule" : integratedTarget ? "general" : tab;
   if (elements.backupSettings.classList.contains("active") && activeTab !== "backup") {
     clearUsbProvisioningPasswords();
   }
@@ -29494,7 +29680,7 @@ function setSettingsTab(tab) {
     || (activeTab === "backup"
       ? !canSaveBackupSettings
       : activeTab === "schedule"
-        ? !(canSaveScheduleSettings || canSaveGeneralSettings)
+        ? !(canSaveScheduleSettings || canSaveSchedulePdfSettings || canSaveGeneralSettings)
         : !(canSaveGeneralSettings || (activeTab === "general" && (canSaveBranding || canSaveSchedulePdfSettings)))));
   if (activeTab === "access") {
     if (!elements.portalUserAccessCard?.classList.contains("hidden")) loadPortalUsers();
@@ -33045,6 +33231,7 @@ document.addEventListener("keydown", (event) => {
 });
 syncMobileNavigationMode();
 integrateLegacyUsbProvisioning();
+integrateSchedulePdfSettings();
 initializeSettingsCardDisclosures();
 initializeFunctionSearchUi();
 elements.functionSearch?.addEventListener("grabenplaner:function-search-result-selected", handleFunctionSearchResultSelection);
@@ -34749,6 +34936,11 @@ elements.personnelCandidateSearch?.addEventListener("input", (event) => {
 });
 elements.personnelCandidateStatusFilter?.addEventListener("change", (event) => {
   state.personnelCandidateStatusFilter = event.target.value;
+  renderPersonnelCandidateOverview();
+});
+document.getElementById("personnelCandidateSort")?.addEventListener("change", (event) => {
+  state.personnelCandidateSort = ["updated_desc", "name_asc", "role_asc", "status_asc"]
+    .includes(event.target.value) ? event.target.value : "updated_desc";
   renderPersonnelCandidateOverview();
 });
 elements.addPersonnelCandidateButton?.addEventListener("click", openPersonnelCandidateCreateModal);

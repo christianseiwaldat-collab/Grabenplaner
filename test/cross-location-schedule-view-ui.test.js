@@ -132,7 +132,7 @@ test("Block 5 UI: Prüfkarten bleiben auf kleinen Bildschirmen bedienbar", () =>
   assert.match(css, /staff-assignment-review-actions[\s\S]*grid-template-columns:1fr/);
 });
 
-test("Block 7 UI: eigener Dienstplan-Reiter bündelt Rechte, E-Mail und Richtlinien", () => {
+test("Block 7 UI: eigener Dienstplanungs-Reiter bündelt Rechte, E-Mail und Richtlinien", () => {
   for (const id of [
     "settingsScheduleTab",
     "scheduleSettings",
@@ -149,7 +149,7 @@ test("Block 7 UI: eigener Dienstplan-Reiter bündelt Rechte, E-Mail und Richtlin
     "staffAssignmentChangePolicy",
     "staffAssignmentCancellationPolicy",
   ]) assert.equal(occurrenceCount(html, `id="${id}"`), 1, id);
-  assert.match(html, /data-settings-tab="schedule">Dienstplan</);
+  assert.match(html, /data-settings-tab="schedule">Dienstplanung</);
   assert.match(app, /permissions\.includes\("schedule:cross_location:settings:write"\)/);
   assert.match(app, /\/api\/portal\/v1\/cross-location-schedule-settings/);
   assert.match(app, /crossLocationSchedule:\s*\{/);
@@ -171,7 +171,7 @@ test("Block 7 UI: Bearbeitungssperre wurde ohne ID- oder Wertduplikat verschoben
   assert.ok(generalStart >= 0 && scheduleStart > generalStart);
   assert.ok(lockStart > scheduleStart && lockStart < vacationStart);
   assert.match(app, /elements\.scheduleSettings\?\.classList\.toggle\("active", activeTab === "schedule"\)/);
-  assert.match(app, /schedule:\s*settingsAccess \|\| scheduleSettingsAccess/);
+  assert.match(app, /schedule:\s*settingsAccess \|\| scheduleSettingsAccess \|\| pdfSettingsAccess/);
   assert.match(app, /scheduleLockSettingsCard\?\.classList\.toggle\("hidden", !settingsAccess\)/);
 });
 

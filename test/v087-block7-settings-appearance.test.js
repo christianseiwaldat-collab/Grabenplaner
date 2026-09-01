@@ -96,7 +96,8 @@ test("v0.87 Block 7: Grundeinstellungen verwenden Accordions und eine globale nu
     assert.doesNotMatch(html, new RegExp(`<details[^>]+id="${id}"[^>]*\\sopen(?:\\s|=|>)`));
   }
   assert.ok(html.indexOf('id="loanSettingsCard"') < html.indexOf('id="brandingSettings"'));
-  assert.ok(html.indexOf('id="brandingSettings"') < html.indexOf('id="pdfSettings"'));
+  assert.match(script, /function integrateSchedulePdfSettings\(\)[\s\S]*elements\.scheduleSettings\.append\(elements\.pdfSettings\)/);
+  assert.ok(script.indexOf("integrateSchedulePdfSettings();") < script.indexOf("initializeSettingsCardDisclosures();"));
   const viewSettingsMarkup = html.slice(
     html.indexOf('id="viewBehaviorSettingsCard"'),
     html.indexOf('id="loanSettingsCard"'),

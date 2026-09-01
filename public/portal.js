@@ -1542,6 +1542,21 @@ function defaultPortalTab(user = portalUser()) {
   return "settings";
 }
 
+async function redirectToPendingCandidateEvaluation(user = portalUser()) {
+  if (!user || user.isEmployee === false || isOrganizationAccount(user)
+    || user.mustChangePassword === true) return false;
+  try {
+    const result = await api("/api/portal/v1/me/candidate-evaluations");
+    const evaluation = Array.isArray(result?.evaluations) ? result.evaluations[0] : null;
+    if (!evaluation?.id) return false;
+    window.location.replace(`/candidate-evaluation.html?id=${encodeURIComponent(evaluation.id)}`);
+    return true;
+  } catch (error) {
+    if (error?.status === 401) throw error;
+    return false;
+  }
+}
+
 async function initialize() {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -1571,6 +1586,7 @@ async function initialize() {
     }
     showPortal(session);
     if (!session.user.mustChangePassword) {
+      if (await redirectToPendingCandidateEvaluation(session.user)) return;
       await Promise.allSettled([loadMobileLayout(), loadPersonnelLearningDashboard()]);
       chooseInitialPortalTab();
       await loadPortalData();
@@ -2267,6 +2283,7 @@ async function login(event) {
     el.loginPassword.value = "";
     showPortal(result);
     if (!result.user.mustChangePassword) {
+      if (await redirectToPendingCandidateEvaluation(result.user)) return;
       await loadMobileLayout();
       chooseInitialPortalTab();
       await loadPortalData();
@@ -6119,6 +6136,7 @@ async function changePassword(event) {
     message(el.passwordMessage, "Passwort wurde geändert.");
     setTimeout(async () => {
       closePasswordChangeDialog({ force: true });
+      if (await redirectToPendingCandidateEvaluation(portalState.session?.user)) return;
       await loadMobileLayout();
       chooseInitialPortalTab();
       await loadPortalData();
