@@ -1560,10 +1560,103 @@ test("Preboarding-Bewertungen: Team und weitere FL bewerten nur selbst; Auswertu
   });
   const pdfDocument = await pdfLoadingTask.promise;
   try {
-    assert.equal(pdfDocument.numPages, 1);
+    assert.equal(pdfDocument.numPages, 2);
   } finally {
     await pdfLoadingTask.destroy();
   }
+
+  const adminPreferencesBefore = await request(
+    "/api/portal/v1/ui-preferences",
+    { auth: admin },
+  );
+  const managerPreferencesBefore = await request(
+    "/api/portal/v1/ui-preferences",
+    { auth: otherManager },
+  );
+  assert.equal(adminPreferencesBefore.response.status, 200, JSON.stringify(adminPreferencesBefore.payload));
+  assert.equal(managerPreferencesBefore.response.status, 200, JSON.stringify(managerPreferencesBefore.payload));
+  assert.equal(adminPreferencesBefore.payload.candidateEvaluationPdfPreferences.pageMode, "two");
+  assert.equal(managerPreferencesBefore.payload.candidateEvaluationPdfPreferences.pageMode, "two");
+  const personalPdfPreferences = {
+    ...adminPreferencesBefore.payload.candidateEvaluationPdfPreferences,
+    pageMode: "single",
+    orientation: "portrait",
+    colorRgb: [104, 63, 132],
+    applyBranding: false,
+    includeLogo: false,
+    showGeneratedAt: false,
+    filenameTemplate: "Eigene Bewertung {Name}",
+    includeDatePrefix: true,
+  };
+  const savedPreferences = await request(
+    "/api/portal/v1/ui-preferences",
+    {
+      method: "PUT",
+      auth: admin,
+      body: { candidateEvaluationPdfPreferences: personalPdfPreferences },
+    },
+  );
+  assert.equal(savedPreferences.response.status, 200, JSON.stringify(savedPreferences.payload));
+  assert.deepEqual(
+    savedPreferences.payload.candidateEvaluationPdfPreferences,
+    personalPdfPreferences,
+  );
+  const invalidPreferences = await request(
+    "/api/portal/v1/ui-preferences",
+    {
+      method: "PUT",
+      auth: admin,
+      body: {
+        candidateEvaluationPdfPreferences: {
+          ...personalPdfPreferences,
+          filenameTemplate: "Ungültig {Personalnummer}",
+        },
+      },
+    },
+  );
+  assert.equal(invalidPreferences.response.status, 400, JSON.stringify(invalidPreferences.payload));
+  assert.equal(invalidPreferences.payload.code, "UI_PREFERENCES_INVALID");
+  const managerPreferencesAfter = await request(
+    "/api/portal/v1/ui-preferences",
+    { auth: otherManager },
+  );
+  assert.equal(managerPreferencesAfter.response.status, 200, JSON.stringify(managerPreferencesAfter.payload));
+  assert.equal(managerPreferencesAfter.payload.candidateEvaluationPdfPreferences.pageMode, "two");
+  assert.equal(managerPreferencesAfter.payload.candidateEvaluationPdfPreferences.orientation, "landscape");
+
+  const customizedPdfResponse = await fetch(
+    `${baseUrl}/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/evaluation.pdf`,
+    { headers: { Cookie: admin.cookie, Accept: "application/pdf" } },
+  );
+  assert.equal(customizedPdfResponse.status, 200);
+  assert.match(
+    customizedPdfResponse.headers.get("content-disposition") || "",
+    /filename\*=UTF-8''\d{6}_Eigene%20Bewertung%20Bewertung%20Kandidatin\.pdf/,
+  );
+  const customizedPdf = Buffer.from(await customizedPdfResponse.arrayBuffer());
+  const customizedLoadingTask = pdfjs.getDocument({
+    data: Uint8Array.from(customizedPdf),
+    disableWorker: true,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+  const customizedDocument = await customizedLoadingTask.promise;
+  try {
+    assert.equal(customizedDocument.numPages, 1);
+    const page = await customizedDocument.getPage(1);
+    const viewport = page.getViewport({ scale: 1 });
+    assert.ok(viewport.width < viewport.height);
+    const content = await page.getTextContent();
+    assert.doesNotMatch(content.items.map((item) => item.str).join(" "), /Erstellt:/);
+    page.cleanup();
+  } finally {
+    await customizedLoadingTask.destroy();
+  }
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM portal_user_preferences
+    WHERE employee_number = '101' AND preference_key = 'candidate_evaluation_pdf_v1'
+  `).get().count, 1);
 
   assert.equal(db.prepare(`
     SELECT COUNT(*) AS count
@@ -1573,5 +1666,11 @@ test("Preboarding-Bewertungen: Team und weitere FL bewerten nur selbst; Auswertu
       'personnel-lifecycle.team-evaluation.submit',
       'personnel-lifecycle.team-evaluation.pdf'
     )
-  `).get().count, 3);
+  `).get().count, 4);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM audit_log
+    WHERE action = 'personnel-lifecycle.evaluation-pdf-preferences.update'
+      AND actor = '101'
+  `).get().count, 1);
 });

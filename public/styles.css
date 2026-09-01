@@ -1423,12 +1423,55 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .personnel-candidate-evaluation-table > div > :not(:first-child) { text-align:center; }
 .personnel-candidate-evaluation-table > .head { color:var(--muted); background:var(--surface-soft); }
 .personnel-candidate-evaluation-table > .head strong { font-size:7px; letter-spacing:.045em; text-transform:uppercase; }
-.personnel-candidate-evaluation-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 8px; }
+.personnel-candidate-evaluation-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:14px 0 8px; }
 .personnel-candidate-evaluation-toolbar > div { min-width:0; }
 .personnel-candidate-evaluation-toolbar :is(strong,small) { display:block; overflow-wrap:anywhere; }
 .personnel-candidate-evaluation-toolbar strong { font-size:9px; }
 .personnel-candidate-evaluation-toolbar small { margin-top:2px; color:var(--muted); font-size:7px; }
 .personnel-candidate-evaluation-toolbar .secondary-button { flex:0 0 auto; min-height:34px; margin:0; text-decoration:none; }
+.personnel-candidate-evaluation-toolbar-actions { display:flex; flex:1 1 auto; align-items:flex-start; justify-content:flex-end; flex-wrap:wrap; gap:8px; max-width:100%; }
+.personnel-candidate-pdf-options { min-width:0; }
+.personnel-candidate-pdf-options[open] { flex:1 0 100%; order:3; }
+.personnel-candidate-pdf-options > summary { display:flex; align-items:center; justify-content:center; width:max-content; margin-left:auto !important; list-style:none; cursor:pointer; }
+.personnel-candidate-pdf-options > summary::-webkit-details-marker { display:none; }
+.personnel-candidate-pdf-options-panel { min-width:0; width:100%; margin-top:8px; padding:12px; border:1px solid color-mix(in srgb,var(--green) 35%,var(--line)); border-radius:12px; background:var(--surface-soft); box-shadow:0 10px 28px color-mix(in srgb,var(--ink) 9%,transparent); }
+.personnel-candidate-pdf-options-panel > header,.personnel-candidate-pdf-options-panel > footer { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+.personnel-candidate-pdf-options-panel > header { margin-bottom:10px; }
+.personnel-candidate-pdf-options-panel > header > div { min-width:0; }
+.personnel-candidate-pdf-options-panel > header strong { font-size:9px; }
+.personnel-candidate-pdf-options-panel > header small { font-size:7px; }
+.personnel-candidate-pdf-options-panel > header > span { display:grid; place-items:center; flex:0 0 32px; width:32px; height:32px; border-radius:9px; color:var(--green); background:color-mix(in srgb,var(--green) 11%,var(--surface)); font-size:7px; font-weight:900; }
+.personnel-candidate-pdf-options-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; min-width:0; }
+.personnel-candidate-pdf-options-grid fieldset { min-width:0; margin:0; padding:9px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.personnel-candidate-pdf-options-grid legend { padding:0 5px; color:var(--ink); font-size:7.5px; font-weight:850; }
+.personnel-candidate-pdf-options-grid .field { margin:0 0 7px; }
+.personnel-candidate-pdf-options-grid .field:last-child { margin-bottom:0; }
+.personnel-candidate-pdf-options-grid .field > span { margin-bottom:4px; font-size:7px; }
+.personnel-candidate-pdf-options-grid :is(input,select) { min-height:32px; font-size:8px; }
+.personnel-candidate-pdf-help,.personnel-candidate-pdf-warning { margin:6px 0 0; padding:7px 8px; border-radius:8px; font-size:6.8px; line-height:1.4; }
+.personnel-candidate-pdf-help { color:var(--muted); background:var(--surface-soft); }
+.personnel-candidate-pdf-warning { color:#7c4b2e; background:#fff0dc; }
+.personnel-candidate-pdf-rgb { display:grid; grid-template-columns:minmax(54px,.8fr) repeat(3,minmax(42px,.6fr)); gap:6px; margin-bottom:7px; transition:opacity .15s ease; }
+.personnel-candidate-pdf-rgb.inactive { opacity:.45; }
+.personnel-candidate-pdf-rgb label { min-width:0; }
+.personnel-candidate-pdf-rgb span { display:block; margin-bottom:3px; color:var(--muted); font-size:6.6px; font-weight:800; }
+.personnel-candidate-pdf-rgb input { width:100%; min-width:0; padding:4px 6px; }
+.personnel-candidate-pdf-rgb input[type="color"] { padding:3px; cursor:pointer; }
+.personnel-candidate-pdf-check { display:grid; grid-template-columns:17px minmax(0,1fr); align-items:start; gap:7px; min-width:0; padding:6px 5px; border-radius:8px; cursor:pointer; }
+.personnel-candidate-pdf-check:hover { background:color-mix(in srgb,var(--green) 6%,var(--surface)); }
+.personnel-candidate-pdf-check > input { width:16px; min-width:16px; height:16px; min-height:16px; margin:0; padding:0; accent-color:var(--green); }
+.personnel-candidate-pdf-check > span,.personnel-candidate-pdf-check :is(b,small) { min-width:0; }
+.personnel-candidate-pdf-check b { display:block; color:var(--ink); font-size:7.3px; line-height:1.35; }
+.personnel-candidate-pdf-check small { margin-top:1px; font-size:6.5px; line-height:1.35; }
+.personnel-candidate-pdf-content { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; }
+.personnel-candidate-pdf-content legend { grid-column:1 / -1; }
+.personnel-candidate-pdf-filename-preview { min-width:0; margin-top:7px; padding:7px 8px; border:1px dashed var(--line); border-radius:8px; background:var(--surface-soft); }
+.personnel-candidate-pdf-filename-preview small,.personnel-candidate-pdf-filename-preview output { display:block; min-width:0; overflow-wrap:anywhere; }
+.personnel-candidate-pdf-filename-preview small { margin:0 0 2px; font-size:6.2px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.personnel-candidate-pdf-filename-preview output { color:var(--ink); font-size:7px; font-weight:750; }
+.personnel-candidate-pdf-options-panel > footer { margin-top:10px; padding-top:9px; border-top:1px solid var(--line); }
+.personnel-candidate-pdf-options-panel > footer > small { max-width:65%; margin:0; font-size:6.7px; line-height:1.4; }
+.personnel-candidate-pdf-options-panel > footer .primary-button { min-height:34px; margin:0; white-space:normal; }
 .personnel-candidate-evaluation-list { display:grid; gap:7px; }
 .personnel-candidate-evaluation-state { min-width:64px; padding:4px 7px; border-radius:999px; color:#6e5149; background:#f1e9e6; font-size:7px; font-weight:850; text-align:center; }
 .personnel-candidate-evaluation-person.completed .personnel-candidate-evaluation-state { color:#1f654f; background:#dff1ea; }
@@ -1464,6 +1507,14 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .personnel-candidate-evaluation-table > div > * { padding:7px 4px; }
   .personnel-candidate-evaluation-toolbar { align-items:stretch; flex-direction:column; }
   .personnel-candidate-evaluation-toolbar .secondary-button { width:100%; }
+  .personnel-candidate-evaluation-toolbar-actions { display:grid; grid-template-columns:1fr; width:100%; }
+  .personnel-candidate-pdf-options,.personnel-candidate-pdf-options[open] { width:100%; }
+  .personnel-candidate-pdf-options > summary { width:100%; }
+  .personnel-candidate-pdf-options-grid,.personnel-candidate-pdf-content { grid-template-columns:1fr; }
+  .personnel-candidate-pdf-content legend { grid-column:auto; }
+  .personnel-candidate-pdf-options-panel > footer { align-items:stretch; flex-direction:column; }
+  .personnel-candidate-pdf-options-panel > footer > small { max-width:none; }
+  .personnel-candidate-pdf-options-panel > footer .primary-button { width:100%; }
 }
 .personnel-workflow-instances,.personnel-workflow-tasks { min-width:0; max-width:100%; }
 .personnel-workflow-toolbar { display:grid; grid-template-columns:minmax(190px,1fr) auto; align-items:end; gap:11px; min-width:0; margin-bottom:10px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:var(--shadow); }

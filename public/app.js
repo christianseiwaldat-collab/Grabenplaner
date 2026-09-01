@@ -26,6 +26,56 @@
   };
 })();
 
+const CANDIDATE_EVALUATION_PDF_DEFAULTS = Object.freeze({
+  version: 1,
+  pageMode: "two",
+  orientation: "landscape",
+  colorRgb: Object.freeze([35, 95, 77]),
+  applyBranding: false,
+  includeLogo: false,
+  showOverallSummary: true,
+  showCriteriaRatings: true,
+  showFlComments: true,
+  showEmployeeComments: true,
+  showReviewerNames: true,
+  showRoleTitle: true,
+  showGeneratedAt: true,
+  includeDatePrefix: true,
+  filenameTemplate: "Bewerbungsbewertung {Name}",
+});
+
+function normalizeCandidateEvaluationPdfPreferences(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const boolean = (key) => typeof source[key] === "boolean"
+    ? source[key]
+    : CANDIDATE_EVALUATION_PDF_DEFAULTS[key];
+  const colorRgb = Array.isArray(source.colorRgb) && source.colorRgb.length === 3
+    && source.colorRgb.every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255)
+    ? source.colorRgb.map(Number)
+    : [...CANDIDATE_EVALUATION_PDF_DEFAULTS.colorRgb];
+  return {
+    version: 1,
+    pageMode: source.pageMode === "single" ? "single" : "two",
+    orientation: source.orientation === "portrait" ? "portrait" : "landscape",
+    colorRgb,
+    applyBranding: boolean("applyBranding"),
+    includeLogo: boolean("includeLogo"),
+    showOverallSummary: boolean("showOverallSummary"),
+    showCriteriaRatings: boolean("showCriteriaRatings"),
+    showFlComments: boolean("showFlComments"),
+    showEmployeeComments: boolean("showEmployeeComments"),
+    showReviewerNames: boolean("showReviewerNames"),
+    showRoleTitle: boolean("showRoleTitle"),
+    showGeneratedAt: boolean("showGeneratedAt"),
+    includeDatePrefix: boolean("includeDatePrefix"),
+    filenameTemplate: String(source.filenameTemplate || CANDIDATE_EVALUATION_PDF_DEFAULTS.filenameTemplate)
+      .replace(/[\x00-\x1F\x7F]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80) || CANDIDATE_EVALUATION_PDF_DEFAULTS.filenameTemplate,
+  };
+}
+
 const state = {
   weekStart: getMonday(new Date()),
   vacationYear: new Date().getFullYear(),
@@ -301,6 +351,9 @@ const state = {
   selectedPersonnelCandidate: null,
   personnelCandidateDetailLoading: false,
   personnelCandidateMutationPending: "",
+  candidateEvaluationPdfPreferences: normalizeCandidateEvaluationPdfPreferences(),
+  candidateEvaluationPdfPreferencesSaving: false,
+  candidateEvaluationPdfDownloadPending: false,
   personnelCandidateCreatePending: false,
   personnelCandidatePhotoObjectUrl: "",
   personnelCandidateEditPhotoObjectUrl: "",
@@ -12758,6 +12811,90 @@ function personnelCandidateTeamEmployeeOptions(selected = "", application = null
   ].join("");
 }
 
+function candidateEvaluationPdfRgbHex(colorRgb) {
+  const normalized = normalizeCandidateEvaluationPdfPreferences({
+    ...CANDIDATE_EVALUATION_PDF_DEFAULTS,
+    colorRgb,
+  }).colorRgb;
+  return `#${normalized.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function candidateEvaluationPdfDatePrefix(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Vienna",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${value("year").slice(-2)}${value("month")}${value("day")}_`;
+}
+
+function candidateEvaluationPdfPreviewFilename(preferences, application) {
+  const profile = state.selectedPersonnelCandidate?.profile || {};
+  const candidateName = [profile.firstName, profile.lastName]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" ") || "Bewerbung";
+  const base = String(preferences.filenameTemplate || CANDIDATE_EVALUATION_PDF_DEFAULTS.filenameTemplate)
+    .replaceAll("{Name}", candidateName)
+    .replaceAll("{Position}", String(application?.desiredRoleTitle || ""))
+    .replace(/\.pdf$/i, "")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || `Bewerbungsbewertung ${candidateName}`;
+  return `${preferences.includeDatePrefix ? candidateEvaluationPdfDatePrefix() : ""}${base}.pdf`;
+}
+
+function renderCandidateEvaluationPdfOptions(application) {
+  const preferences = normalizeCandidateEvaluationPdfPreferences(
+    state.candidateEvaluationPdfPreferences,
+  );
+  const selected = (name, value) => preferences[name] === value ? " selected" : "";
+  const checked = (name) => preferences[name] ? " checked" : "";
+  const [red, green, blue] = preferences.colorRgb;
+  const preview = candidateEvaluationPdfPreviewFilename(preferences, application);
+  return `<details class="personnel-candidate-pdf-options">
+    <summary class="secondary-button">PDF-Exportoptionen</summary>
+    <form class="personnel-candidate-pdf-options-panel" data-personnel-candidate-pdf-options-form data-application-id="${escapeHtmlAttribute(application.id)}">
+      <header><div><strong>Persönliche Exportoptionen</strong><small>Diese Einstellungen gelten nur für das aktuell angemeldete Konto.</small></div><span>PDF</span></header>
+      <div class="personnel-candidate-pdf-options-grid">
+        <fieldset><legend>Seite &amp; Format</legend>
+          <label class="field"><span>Seitenumfang</span><select name="pageMode"><option value="single"${selected("pageMode", "single")}>Einseitig</option><option value="two"${selected("pageMode", "two")}>Zweiseitig</option></select></label>
+          <label class="field"><span>Ausrichtung</span><select name="orientation"><option value="portrait"${selected("orientation", "portrait")}>Hochformat</option><option value="landscape"${selected("orientation", "landscape")}>Querformat</option></select></label>
+          <p class="personnel-candidate-pdf-help">Wenn ausgewählte Inhalte auf einer Seite nicht vollständig Platz finden, wird der Export mit einem klaren Hinweis abgebrochen.</p>
+        </fieldset>
+        <fieldset><legend>Farbe &amp; Branding</legend>
+          <div class="personnel-candidate-pdf-rgb${preferences.applyBranding ? " inactive" : ""}" data-candidate-pdf-rgb-controls>
+            <label><span>Farbe</span><input type="color" value="${candidateEvaluationPdfRgbHex(preferences.colorRgb)}" data-candidate-pdf-color aria-label="PDF-Farbe auswählen"${preferences.applyBranding ? " disabled" : ""}></label>
+            <label><span>R</span><input type="number" name="colorRed" min="0" max="255" step="1" value="${red}" data-candidate-pdf-rgb aria-label="Rotwert"${preferences.applyBranding ? " disabled" : ""}></label>
+            <label><span>G</span><input type="number" name="colorGreen" min="0" max="255" step="1" value="${green}" data-candidate-pdf-rgb aria-label="Grünwert"${preferences.applyBranding ? " disabled" : ""}></label>
+            <label><span>B</span><input type="number" name="colorBlue" min="0" max="255" step="1" value="${blue}" data-candidate-pdf-rgb aria-label="Blauwert"${preferences.applyBranding ? " disabled" : ""}></label>
+          </div>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="applyBranding"${checked("applyBranding")}><span><b>Bereichs-Branding anwenden</b><small>Verwendet die bestehende Primärfarbe des eigenen Bewerbungsbereichs.</small></span></label>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="includeLogo"${checked("includeLogo")}><span><b>Logo verwenden</b><small>Das hinterlegte Bereichslogo wird eigens eingebettet.</small></span></label>
+          <p class="personnel-candidate-pdf-warning">Mit Logo ist keine vollständig speicherplatzsparende Vektor-PDF möglich; das Logo wird sicher als Bild eingebettet.</p>
+        </fieldset>
+        <fieldset class="personnel-candidate-pdf-content"><legend>Inhalte</legend>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="showOverallSummary"${checked("showOverallSummary")}><span><b>Gesamtbewertungen</b></span></label>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="showCriteriaRatings"${checked("showCriteriaRatings")}><span><b>Kriterienbewertungen</b></span></label>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="showFlComments"${checked("showFlComments")}><span><b>FL-Kommentare</b></span></label>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="showEmployeeComments"${checked("showEmployeeComments")}><span><b>MA-Kommentare</b></span></label>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="showReviewerNames"${checked("showReviewerNames")}><span><b>Namen der Bewertenden</b></span></label>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="showRoleTitle"${checked("showRoleTitle")}><span><b>Beworbene Position</b></span></label>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="showGeneratedAt"${checked("showGeneratedAt")}><span><b>Erstellzeitpunkt</b></span></label>
+        </fieldset>
+        <fieldset class="personnel-candidate-pdf-filename"><legend>Dateiname</legend>
+          <label class="field"><span>Vorlage <small>{Name} und {Position} sind möglich</small></span><input name="filenameTemplate" maxlength="80" value="${escapeHtmlAttribute(preferences.filenameTemplate)}" autocomplete="off"></label>
+          <label class="personnel-candidate-pdf-check"><input type="checkbox" name="includeDatePrefix"${checked("includeDatePrefix")}><span><b>Mit Datum beginnen (JJMMTT_)</b></span></label>
+          <div class="personnel-candidate-pdf-filename-preview"><small>Dateivorschau</small><output data-candidate-pdf-filename-preview>${escapeHtml(preview)}</output></div>
+        </fieldset>
+      </div>
+      <footer><small>Die Dienstplan- und Urlaubsplan-PDF-Einstellungen werden dadurch nicht verändert.</small><button class="primary-button" type="submit"${state.candidateEvaluationPdfPreferencesSaving ? " disabled" : ""}>${state.candidateEvaluationPdfPreferencesSaving ? "Speichert …" : "Exportoptionen speichern"}</button></footer>
+    </form>
+  </details>`;
+}
+
 function renderPersonnelCandidateTeamFeedback(application) {
   const legacyEntries = personnelCandidateTeamFeedback(application);
   const evaluations = personnelCandidateTeamEvaluations(application);
@@ -12811,7 +12948,7 @@ function renderPersonnelCandidateTeamFeedback(application) {
           : '<p class="personnel-candidate-section-empty">Alle derzeit geeigneten Personen wurden bereits zugewiesen.</p>';
   const legacy = legacyEntries.length ? `<details class="personnel-candidate-legacy-feedback"><summary><span><strong>Frühere pauschale Teamrückmeldungen</strong><small>${legacyEntries.length} historische Einträge</small></span><i aria-hidden="true">›</i></summary><div class="personnel-candidate-feedback-list">${legacyEntries.map((entry) => `<article><header><strong>${escapeHtml(personnelCandidateEvaluatorName(entry.employeeNumber, application))}</strong>${renderPersonnelCandidateRatingDisplay({ label: "Historische Teamrückmeldung", rating: entry.rating })}</header>${entry.comment ? `<p>${escapeHtml(entry.comment)}</p>` : ""}<small>${escapeHtml(formatPersonnelCandidateTimestamp(entry.recordedAt || entry.createdAt || entry.updatedAt, "Zeitpunkt nicht angegeben"))}</small></article>`).join("")}</div></details>` : "";
   const pdfUrl = `/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(state.selectedPersonnelCandidateId)}/applications/${encodeURIComponent(application.id)}/evaluation.pdf`;
-  return `${scoreCards}${breakdown}<div class="personnel-candidate-evaluation-toolbar"><div><strong>Einzelrückmeldungen</strong><small>${Number(summary.pendingCount || 0)} offen</small></div><a class="secondary-button" href="${escapeHtmlAttribute(pdfUrl)}" download>Einseitiges PDF exportieren</a></div>${evaluationList}${assignmentForm}${legacy}`;
+  return `${scoreCards}${breakdown}<div class="personnel-candidate-evaluation-toolbar"><div><strong>Einzelrückmeldungen</strong><small>${Number(summary.pendingCount || 0)} offen</small></div><div class="personnel-candidate-evaluation-toolbar-actions"><a class="secondary-button${state.candidateEvaluationPdfDownloadPending ? " disabled" : ""}" href="${escapeHtmlAttribute(pdfUrl)}" download data-personnel-candidate-pdf-download aria-disabled="${String(state.candidateEvaluationPdfDownloadPending)}">${state.candidateEvaluationPdfDownloadPending ? "PDF wird erstellt …" : "Bewertungs-PDF exportieren"}</a>${renderCandidateEvaluationPdfOptions(application)}</div></div>${evaluationList}${assignmentForm}${legacy}`;
 }
 
 function renderPersonnelCandidateProfileEditor(candidate) {
@@ -13779,20 +13916,177 @@ async function assignPersonnelCandidateTeamEvaluations(form) {
   }
 }
 
+function candidateEvaluationPdfPreferencesFromForm(form) {
+  const numberValue = (name) => Number(form.elements.namedItem(name)?.value);
+  const colorRgb = [numberValue("colorRed"), numberValue("colorGreen"), numberValue("colorBlue")];
+  if (colorRgb.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) {
+    throw new Error("Bitte für Rot, Grün und Blau jeweils eine ganze Zahl von 0 bis 255 eingeben.");
+  }
+  const filenameTemplate = String(form.elements.namedItem("filenameTemplate")?.value || "")
+    .replace(/[\x00-\x1F\x7F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const unsupportedPlaceholder = /[{}]/.test(
+    filenameTemplate.replace(/\{(?:Name|Position)\}/g, ""),
+  );
+  if (filenameTemplate.length < 3 || filenameTemplate.length > 80 || unsupportedPlaceholder) {
+    throw new Error("Bitte eine Dateinamenvorlage mit höchstens 80 Zeichen und nur {Name} oder {Position} als Platzhalter eingeben.");
+  }
+  const checked = (name) => form.elements.namedItem(name)?.checked === true;
+  const preferences = normalizeCandidateEvaluationPdfPreferences({
+    version: 1,
+    pageMode: form.elements.namedItem("pageMode")?.value,
+    orientation: form.elements.namedItem("orientation")?.value,
+    colorRgb,
+    applyBranding: checked("applyBranding"),
+    includeLogo: checked("includeLogo"),
+    showOverallSummary: checked("showOverallSummary"),
+    showCriteriaRatings: checked("showCriteriaRatings"),
+    showFlComments: checked("showFlComments"),
+    showEmployeeComments: checked("showEmployeeComments"),
+    showReviewerNames: checked("showReviewerNames"),
+    showRoleTitle: checked("showRoleTitle"),
+    showGeneratedAt: checked("showGeneratedAt"),
+    includeDatePrefix: checked("includeDatePrefix"),
+    filenameTemplate,
+  });
+  if (![preferences.showOverallSummary, preferences.showCriteriaRatings,
+    preferences.showFlComments, preferences.showEmployeeComments].some(Boolean)) {
+    throw new Error("Bitte mindestens einen Bewertungsinhalt für die PDF auswählen.");
+  }
+  return preferences;
+}
+
+function syncCandidateEvaluationPdfOptionPanel(form, changedControl = null) {
+  if (!form) return;
+  const color = form.querySelector("[data-candidate-pdf-color]");
+  const rgbInputs = [...form.querySelectorAll("[data-candidate-pdf-rgb]")];
+  if (changedControl === color && /^#[0-9a-f]{6}$/i.test(color.value)) {
+    const channels = color.value.slice(1).match(/.{2}/g).map((part) => Number.parseInt(part, 16));
+    rgbInputs.forEach((input, index) => { input.value = String(channels[index]); });
+  } else if (rgbInputs.includes(changedControl)) {
+    const channels = rgbInputs.map((input) => Number(input.value));
+    if (channels.every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255)) {
+      color.value = candidateEvaluationPdfRgbHex(channels);
+    }
+  }
+  const brandingApplied = form.elements.namedItem("applyBranding")?.checked === true;
+  form.querySelector("[data-candidate-pdf-rgb-controls]")?.classList.toggle("inactive", brandingApplied);
+  if (color) color.disabled = brandingApplied;
+  rgbInputs.forEach((input) => { input.disabled = brandingApplied; });
+  const applicationId = String(form.dataset.applicationId || "");
+  const application = state.selectedPersonnelCandidate?.applications
+    ?.find((entry) => String(entry.id) === applicationId) || {};
+  const preview = form.querySelector("[data-candidate-pdf-filename-preview]");
+  try {
+    if (preview) preview.textContent = candidateEvaluationPdfPreviewFilename(
+      candidateEvaluationPdfPreferencesFromForm(form),
+      application,
+    );
+  } catch {
+    if (preview) preview.textContent = "Dateivorschau nach gültiger Eingabe";
+  }
+}
+
+async function saveCandidateEvaluationPdfPreferences(form) {
+  if (state.candidateEvaluationPdfPreferencesSaving) return;
+  let preferences;
+  try {
+    preferences = candidateEvaluationPdfPreferencesFromForm(form);
+  } catch (error) {
+    showToast(error.message, true);
+    return;
+  }
+  state.candidateEvaluationPdfPreferencesSaving = true;
+  const button = form.querySelector('button[type="submit"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Speichert …";
+  }
+  try {
+    const result = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ candidateEvaluationPdfPreferences: preferences }),
+    });
+    state.candidateEvaluationPdfPreferences = normalizeCandidateEvaluationPdfPreferences(
+      result.candidateEvaluationPdfPreferences || preferences,
+    );
+    showToast("Die persönlichen PDF-Exportoptionen wurden gespeichert.");
+  } catch (error) {
+    showToast(error.message || "Die PDF-Exportoptionen konnten nicht gespeichert werden.", true);
+  } finally {
+    state.candidateEvaluationPdfPreferencesSaving = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Exportoptionen speichern";
+    }
+  }
+}
+
+function candidateEvaluationPdfDownloadFilename(disposition, fallback = "Bewerbungsbewertung.pdf") {
+  const encoded = String(disposition || "").match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try { return decodeURIComponent(encoded); } catch {}
+  }
+  return String(disposition || "").match(/filename="([^"]+)"/i)?.[1] || fallback;
+}
+
+async function downloadCandidateEvaluationPdf(anchor) {
+  if (state.candidateEvaluationPdfDownloadPending) return;
+  state.candidateEvaluationPdfDownloadPending = true;
+  anchor.classList.add("disabled");
+  anchor.setAttribute("aria-disabled", "true");
+  const previousText = anchor.textContent;
+  anchor.textContent = "PDF wird erstellt …";
+  try {
+    const response = await fetch(anchor.href, { headers: { Accept: "application/pdf" } });
+    if (!response.ok) {
+      let message = "Die Bewertungs-PDF konnte nicht erstellt werden.";
+      try {
+        const payload = await response.json();
+        message = payload.error || payload.message || message;
+      } catch {}
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const download = document.createElement("a");
+    download.href = downloadUrl;
+    download.download = candidateEvaluationPdfDownloadFilename(
+      response.headers.get("Content-Disposition"),
+    );
+    document.body.append(download);
+    download.click();
+    download.remove();
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    showToast("Die Bewertungs-PDF wurde erstellt.");
+  } catch (error) {
+    showToast(error.message || "Die Bewertungs-PDF konnte nicht erstellt werden.", true);
+  } finally {
+    state.candidateEvaluationPdfDownloadPending = false;
+    anchor.classList.remove("disabled");
+    anchor.setAttribute("aria-disabled", "false");
+    anchor.textContent = previousText;
+  }
+}
+
 function handlePersonnelCandidateDetailSubmit(event) {
   const profileForm = event.target.closest("[data-personnel-candidate-profile-form]");
   const photoForm = event.target.closest("[data-personnel-candidate-photo-form]");
   const applicationForm = event.target.closest("[data-personnel-candidate-application-form]");
   const feedbackForm = event.target.closest("[data-personnel-candidate-team-feedback-form]");
   const evaluationForm = event.target.closest("[data-personnel-candidate-team-evaluation-form]");
+  const pdfOptionsForm = event.target.closest("[data-personnel-candidate-pdf-options-form]");
   const statusForm = event.target.closest("[data-personnel-candidate-status-form]");
-  if (!profileForm && !photoForm && !applicationForm && !feedbackForm && !evaluationForm && !statusForm) return;
+  if (!profileForm && !photoForm && !applicationForm && !feedbackForm && !evaluationForm
+    && !pdfOptionsForm && !statusForm) return;
   event.preventDefault();
   if (profileForm) savePersonnelCandidateProfile(profileForm);
   else if (photoForm) savePersonnelCandidatePhoto(photoForm);
   else if (applicationForm) savePersonnelCandidateApplication(applicationForm);
   else if (evaluationForm) assignPersonnelCandidateTeamEvaluations(evaluationForm);
   else if (feedbackForm) savePersonnelCandidateTeamFeedback(feedbackForm);
+  else if (pdfOptionsForm) saveCandidateEvaluationPdfPreferences(pdfOptionsForm);
   else savePersonnelCandidateApplicationStatus(event);
 }
 
@@ -22248,6 +22542,9 @@ async function loadUiPreferences() {
   }
   const localOnly = preferences?.actor === "local"
     || state.portalStatus?.portalEnabled !== true;
+  state.candidateEvaluationPdfPreferences = normalizeCandidateEvaluationPdfPreferences(
+    preferences?.candidateEvaluationPdfPreferences,
+  );
   let storedVacationCalendarView = preferences?.vacationCalendarView;
   if (localOnly) {
     try {
@@ -35020,9 +35317,17 @@ elements.personnelCandidateList?.addEventListener("click", (event) => {
   if (button) loadPersonnelCandidateDetail(button.dataset.personnelCandidateId);
 });
 elements.personnelCandidateDetail?.addEventListener("click", (event) => {
+  const pdfDownload = event.target.closest("[data-personnel-candidate-pdf-download]");
+  if (pdfDownload) {
+    event.preventDefault();
+    downloadCandidateEvaluationPdf(pdfDownload);
+    return;
+  }
   handlePersonnelCandidateDynamicClick(event);
 });
 elements.personnelCandidateDetail?.addEventListener("change", (event) => {
+  const pdfOptionsForm = event.target.closest("[data-personnel-candidate-pdf-options-form]");
+  if (pdfOptionsForm) syncCandidateEvaluationPdfOptionPanel(pdfOptionsForm, event.target);
   const form = event.target.closest("[data-personnel-candidate-status-form]");
   if (form && event.target.name === "status") updatePersonnelCandidateReasonField(form);
   if (event.target.matches("[data-candidate-target-location],[data-candidate-trial-location]")) {
@@ -35035,6 +35340,10 @@ elements.personnelCandidateDetail?.addEventListener("change", (event) => {
   if (event.target.matches("[data-personnel-candidate-photo-form] input[name='photo']")) {
     updatePersonnelCandidateDetailPhotoPreview(event.target);
   }
+});
+elements.personnelCandidateDetail?.addEventListener("input", (event) => {
+  const pdfOptionsForm = event.target.closest("[data-personnel-candidate-pdf-options-form]");
+  if (pdfOptionsForm) syncCandidateEvaluationPdfOptionPanel(pdfOptionsForm, event.target);
 });
 elements.personnelCandidateDetail?.addEventListener("submit", handlePersonnelCandidateDetailSubmit);
 elements.personnelWorkflowInstanceStatusFilter?.addEventListener("change", (event) => {
