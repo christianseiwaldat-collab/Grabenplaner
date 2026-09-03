@@ -21,6 +21,7 @@
     "personnelAdministration",
     "salesAdministration",
     "salesAnalytics",
+    "articleCatalog",
     "crm",
     "rightsDashboard",
     "settings",
@@ -544,6 +545,15 @@
       ["verkaufsanalyse", "umsatzanalyse", "statistik", "kennzahlen", "tradefoto", "warengruppen", "sales analytics"],
       ["salesAnalyticsNavButton"],
       { view: "salesAnalytics", focusId: "salesAnalyticsView" },
+    ),
+    entry(
+      "sales.article-catalog",
+      "Artikelstamm öffnen",
+      ["Verkaufsverwaltung", "Artikelstamm"],
+      "Öffnet die berechtigungsgeschützte, serverseitige Suche im zentralen Artikelstamm.",
+      ["artikel", "artikelstamm", "artikelnummer", "ean", "gtin", "produkt", "warenwirtschaft", "sortiment"],
+      ["salesArticleCatalogNavButton"],
+      { view: "articleCatalog", focusId: "salesArticleSearchQuery" },
     ),
     entry(
       "sales.crm",

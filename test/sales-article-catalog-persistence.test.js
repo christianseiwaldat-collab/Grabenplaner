@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const test = require("node:test");
 
 const {
@@ -126,7 +127,7 @@ function persistenceCode(code) {
 
 test("Statementkatalog ist vollständig und PostgreSQL-portabel kompilierbar", () => {
   const statements = Object.values(SALES_ARTICLE_CATALOG_STATEMENTS);
-  assert.equal(statements.length, 16);
+  assert.equal(statements.length, 27);
   assert.equal(SQLITE_SALES_ARTICLE_CATALOG.length, statements.length);
   assert.equal(new Set(statements).size, statements.length);
   assert.deepEqual(
@@ -210,6 +211,106 @@ test("Inaktive Importrevision bleibt Staging und braucht eine explizit aktive Pr
     const promoted = await context.repository.getByArticleNumber("093757");
     assert.equal(promoted.currentRevision, 3);
     assert.equal(promoted.description, "Explizit freigegebene TradeFoto-Bezeichnung");
+    assert.equal(promoted.currentSourceSystem, "tradefoto.artikel_stamm");
+  } finally {
+    await context.close();
+  }
+});
+
+test("Aktiver Import reaktiviert einen governance-seitig archivierten Artikel nicht", async () => {
+  const context = await fixture();
+  try {
+    await context.repository.importSnapshot({
+      snapshot: snapshot({
+        sourceSystem: "shopware.storefront",
+        sourceFileSha256: "6".repeat(64),
+        articles: [article({ description: "Aktiver Shopware-Ausgangsstand" })],
+      }),
+      actor: "shopware-import",
+      timestamp: "2026-09-03T08:00:00.000Z",
+    });
+    const archived = await context.repository.archiveManual(manualMutation({
+      articleNumber: "093757",
+      expectedRevision: 1,
+    }, { timestamp: "2026-09-03T09:00:00.000Z" }));
+    assert.equal(archived.article.active, false);
+
+    await context.repository.importSnapshot({
+      snapshot: snapshot({
+        sourceSystem: "shopware.storefront",
+        sourceFileSha256: "7".repeat(64),
+        articles: [article({
+          description: "Shopware meldet den Artikel wieder aktiv",
+          active: true,
+        })],
+      }),
+      actor: "shopware-import",
+      timestamp: "2026-09-03T10:00:00.000Z",
+    });
+
+    const current = await context.repository.getByArticleNumber("093757");
+    assert.equal(current.currentRevision, 2);
+    assert.equal(current.active, false);
+    assert.equal(current.description, "Aktiver Shopware-Ausgangsstand");
+    assert.deepEqual(
+      (await context.repository.listRevisions(current.productId)).map((entry) => [
+        entry.revision,
+        entry.active,
+        entry.description,
+      ]),
+      [
+        [3, true, "Shopware meldet den Artikel wieder aktiv"],
+        [2, false, "Aktiver Shopware-Ausgangsstand"],
+        [1, true, "Aktiver Shopware-Ausgangsstand"],
+      ],
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("Manuelle Pflege nummeriert nach gestagten Importrevisionen mit MAX plus eins", async () => {
+  const context = await fixture();
+  try {
+    await context.repository.importSnapshot({
+      snapshot: snapshot({
+        sourceSystem: "manual.loan",
+        sourceFileSha256: "4".repeat(64),
+        articles: [article({ description: "Aktiver Ausgangsstand" })],
+      }),
+      actor: "419",
+      timestamp: "2026-09-03T08:00:00.000Z",
+    });
+    await context.repository.importSnapshot({
+      snapshot: snapshot({
+        sourceSystem: "tradefoto.artikel_stamm",
+        sourceFileSha256: "5".repeat(64),
+        articles: [article({ description: "Gestagte Revision", active: false })],
+      }),
+      actor: "importer",
+      timestamp: "2026-09-03T09:00:00.000Z",
+    });
+
+    const updated = await context.repository.updateManual(manualMutation({
+      currentArticleNumber: "093757",
+      expectedRevision: 1,
+      articleNumber: "093757",
+      description: "Manuell nach Staging bearbeitet",
+      identifiers: [],
+    }, { timestamp: "2026-09-03T10:00:00.000Z" }));
+    assert.equal(updated.outcome, "updated");
+    assert.equal(updated.revision, 3);
+    assert.equal(updated.article.currentRevision, 3);
+
+    const archived = await context.repository.archiveManual(manualMutation({
+      articleNumber: "093757",
+      expectedRevision: 3,
+    }, { timestamp: "2026-09-03T10:01:00.000Z" }));
+    assert.equal(archived.revision, 4);
+    assert.deepEqual(
+      (await context.repository.listRevisions(updated.article.productId)).map(({ revision }) => revision),
+      [4, 3, 2, 1],
+    );
   } finally {
     await context.close();
   }
@@ -468,6 +569,195 @@ test("Ungültige Number-Preise werden vor jeder Datenbankmutation abgewiesen", a
     assert.equal(count(context.database, "sales_article_import_snapshots"), 0);
     assert.equal(count(context.database, "sales_articles"), 0);
     assert.equal(count(context.database, "audit_log"), 0);
+  } finally {
+    await context.close();
+  }
+});
+
+function manualMutation(input, overrides = {}) {
+  return {
+    input,
+    actor: "article-manager",
+    timestamp: "2026-09-03T10:00:00.000Z",
+    mutationId: crypto.randomUUID(),
+    ...overrides,
+  };
+}
+
+test("Manuelle Artikelpflege hängt Revisionen additiv an und Undo stellt per Gegenrevision wieder her", async () => {
+  const context = await fixture();
+  try {
+    const created = await context.repository.createManual(manualMutation({
+      articleNumber: "A/100",
+      description: "Manuell angelegter Artikel",
+      identifiers: [{ identifierValue: "4006381333931", isPrimary: true }],
+      prices: {
+        sales: [{ priceType: "sales", amount: "19.90", currency: "EUR", priceBasis: "gross" }],
+        costs: [{ priceType: "average_purchase", amount: "10", currency: "EUR", priceBasis: "net" }],
+      },
+    }));
+    assert.equal(created.outcome, "created");
+    assert.equal(created.revision, 1);
+    assert.ok(Number.isSafeInteger(created.auditId));
+
+    const countsBeforeIdentifierConflict = Object.fromEntries([
+      "sales_article_import_snapshots",
+      "sales_articles",
+      "sales_article_revisions",
+      "sales_article_identifiers",
+      "audit_log",
+    ].map((table) => [table, count(context.database, table)]));
+    await assert.rejects(
+      context.repository.createManual(manualMutation({
+        articleNumber: "A/GTIN-KONFLIKT",
+        description: "Darf nicht teilweise angelegt werden",
+        identifiers: [{ identifierValue: "4006381333931", isPrimary: true }],
+      }, { timestamp: "2026-09-03T10:00:30.000Z" })),
+      persistenceCode(PERSISTENCE_ERROR_CODES.UNIQUE_VIOLATION),
+    );
+    for (const [table, before] of Object.entries(countsBeforeIdentifierConflict)) {
+      assert.equal(count(context.database, table), before, `${table} wurde nicht zurückgerollt`);
+    }
+
+    const updated = await context.repository.updateManual(manualMutation({
+      currentArticleNumber: "A/100",
+      expectedRevision: 1,
+      articleNumber: "A/101",
+      description: "Bearbeiteter Artikel",
+      identifiers: [{ identifierValue: "4006381333931", isPrimary: true }],
+      prices: {
+        sales: [{ priceType: "sales", amount: "21.50", currency: "EUR", priceBasis: "gross" }],
+      },
+    }, { timestamp: "2026-09-03T10:01:00.000Z" }));
+    assert.equal(updated.outcome, "updated");
+    assert.equal(updated.revision, 2);
+    assert.equal(updated.article.articleNumber, "A/101");
+    assert.equal(updated.article.prices.find(({ priceType }) => priceType === "sales").amount, "21.500000000000");
+    assert.equal(updated.article.prices.find(({ priceType }) => priceType === "average_purchase").amount, "10.000000000000");
+
+    const stale = await context.repository.updateManual(manualMutation({
+      currentArticleNumber: "A/101",
+      expectedRevision: 1,
+      articleNumber: "A/101",
+      description: "Veralteter Stand",
+      identifiers: [],
+    }, { timestamp: "2026-09-03T10:02:00.000Z" }));
+    assert.equal(stale.outcome, "conflict");
+    assert.equal(stale.currentRevision, 2);
+
+    const archived = await context.repository.archiveManual(manualMutation({
+      articleNumber: "A/101",
+      expectedRevision: 2,
+    }, { timestamp: "2026-09-03T10:03:00.000Z" }));
+    assert.equal(archived.revision, 3);
+    assert.equal(archived.article.active, false);
+
+    const auditCountBeforeArchivedEdit = count(context.database, "audit_log");
+    const archivedEdit = await context.repository.updateManual(manualMutation({
+      currentArticleNumber: "A/101",
+      expectedRevision: 3,
+      articleNumber: "A/101",
+      description: "Archivierte Artikel sind schreibgeschützt",
+      identifiers: [],
+    }, { timestamp: "2026-09-03T10:03:30.000Z" }));
+    assert.equal(archivedEdit.outcome, "already_archived");
+    assert.equal(count(context.database, "sales_article_revisions"), 3);
+    assert.equal(count(context.database, "audit_log"), auditCountBeforeArchivedEdit);
+
+    const restored = await context.repository.restoreManual({
+      productId: archived.article.productId,
+      expectedRevision: 3,
+      restoreRevision: 2,
+      actor: "article-manager",
+      timestamp: "2026-09-03T10:04:00.000Z",
+      mutationId: crypto.randomUUID(),
+    });
+    assert.equal(restored.revision, 4);
+    assert.equal(restored.article.active, true);
+    assert.equal(restored.article.description, "Bearbeiteter Artikel");
+    assert.deepEqual(
+      (await context.repository.listRevisions(restored.article.productId)).map(({ revision }) => revision),
+      [4, 3, 2, 1],
+    );
+
+    const copied = await context.repository.copyManual(manualMutation({
+      sourceArticleNumber: "A/101",
+      expectedRevision: 4,
+      articleNumber: "A/102",
+    }, { timestamp: "2026-09-03T10:05:00.000Z" }));
+    assert.equal(copied.outcome, "created");
+    assert.equal(copied.article.description, "Bearbeiteter Artikel");
+    assert.deepEqual(copied.article.identifiers, []);
+    assert.deepEqual(copied.article.prices, []);
+
+    const copyUndone = await context.repository.restoreManual({
+      productId: copied.article.productId,
+      expectedRevision: 1,
+      restoreRevision: null,
+      actor: "article-manager",
+      timestamp: "2026-09-03T10:06:00.000Z",
+      mutationId: crypto.randomUUID(),
+    });
+    assert.equal(copyUndone.article.active, false);
+    assert.equal(copyUndone.revision, 2);
+    assert.equal(count(context.database, "sales_article_revisions"), 6);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Preisgruppen-Patch bewahrt redigierte und nicht bearbeitbare Quellwerte", async () => {
+  const context = await fixture();
+  try {
+    await context.repository.importSnapshot({
+      snapshot: snapshot(),
+      actor: "tradefoto-import",
+      timestamp: IMPORTED_AT,
+    });
+    const updated = await context.repository.updateManual(manualMutation({
+      currentArticleNumber: "093757",
+      expectedRevision: 1,
+      articleNumber: "093757",
+      description: "Synthetischer Testartikel bearbeitet",
+      identifiers: [],
+      prices: {
+        sales: [{ priceType: "sales", amount: "15", currency: "EUR", priceBasis: "gross" }],
+      },
+    }));
+    assert.equal(updated.revision, 2);
+    assert.deepEqual(
+      updated.article.prices.map(({
+        priceType, amount, qualityStatus, sourceField, createdBy, createdAt,
+      }) => ({
+        priceType, amount, qualityStatus, sourceField, createdBy, createdAt,
+      })).sort((left, right) => left.sourceField.localeCompare(right.sourceField)),
+      [
+        {
+          priceType: "internet_5",
+          amount: "-1.250000000000",
+          qualityStatus: "quarantined",
+          sourceField: "InternetVK5",
+          createdBy: "tradefoto-import",
+          createdAt: IMPORTED_AT,
+        },
+        {
+          priceType: "internet_2",
+          amount: null,
+          qualityStatus: "unresolved",
+          sourceField: "InternetVKN2",
+          createdBy: "tradefoto-import",
+          createdAt: IMPORTED_AT,
+        },
+        {
+          priceType: "sales",
+          amount: "15.000000000000",
+          qualityStatus: "confirmed",
+          sourceField: "manual.sales",
+          createdBy: "article-manager",
+          createdAt: "2026-09-03T10:00:00.000Z",
+        },
+      ].sort((left, right) => left.sourceField.localeCompare(right.sourceField)),
+    );
   } finally {
     await context.close();
   }

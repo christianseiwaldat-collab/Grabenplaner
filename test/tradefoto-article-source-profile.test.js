@@ -18,6 +18,7 @@ function completeSourceRow(overrides = {}) {
   return {
     EAN: "0000000093757",
     Artikelbezeichnung: "Testobjektiv 50 mm",
+    MWST: 1,
     ...Object.fromEntries(TRADEFOTO_MONETARY_PRICE_FIELD_MAPPINGS.map(({ sourceField }) => (
       [sourceField, null]
     ))),
@@ -216,7 +217,7 @@ test("TradeFoto-Adapter verlangt explizite Währung, vollständige Felder und ex
 
 test("nicht-monetäre TradeFoto-Felder sind explizit dokumentiert und nie Preiszeilen", () => {
   assert.equal(TRADEFOTO_ARTICLE_SOURCE_PROFILE_VERSION, "tradefoto-article-v1");
-  assert.equal(TRADEFOTO_ARTICLE_ROW_FIELDS.length, 45);
+  assert.equal(TRADEFOTO_ARTICLE_ROW_FIELDS.length, 46);
   assert.equal(new Set(TRADEFOTO_ARTICLE_ROW_FIELDS).size, TRADEFOTO_ARTICLE_ROW_FIELDS.length);
   assert.deepEqual(
     TRADEFOTO_EXCLUDED_NON_MONETARY_FIELDS.map(({ sourceField }) => sourceField),

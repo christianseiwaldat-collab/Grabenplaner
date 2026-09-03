@@ -27,6 +27,9 @@ const {
 const {
   PERSONAL_ACTION_LOG_STATEMENTS,
 } = require("../lib/persistence/statements/personal-action-log");
+const {
+  normalizePersonalActionReceiptInput,
+} = require("../lib/personal-action-log");
 
 const root = path.resolve(__dirname, "..");
 
@@ -175,6 +178,154 @@ test("Bestehende Aktionsbelegtabellen erhalten die eindeutige Auditverknüpfung 
   } finally {
     database.close();
   }
+});
+
+test("Bestandsschema erweitert Artikel-Kompensatoren verlustfrei über die Legacy-Fassade", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  try {
+    database.exec("PRAGMA foreign_keys = ON");
+    ensureAuditLog(database);
+    database.exec(`
+      CREATE TABLE personal_action_receipts (
+        id TEXT PRIMARY KEY CHECK(length(id) = 36),
+        actor_kind TEXT NOT NULL CHECK(actor_kind = 'employee'),
+        actor_id TEXT NOT NULL CHECK(length(actor_id) BETWEEN 1 AND 120),
+        action_type TEXT NOT NULL CHECK(length(action_type) BETWEEN 3 AND 120),
+        entity_type TEXT NOT NULL CHECK(length(entity_type) BETWEEN 1 AND 120),
+        entity_id TEXT NOT NULL CHECK(length(entity_id) BETWEEN 1 AND 160),
+        scope TEXT NOT NULL CHECK(length(scope) BETWEEN 1 AND 160),
+        summary TEXT NOT NULL CHECK(length(summary) BETWEEN 1 AND 300),
+        compensator_key TEXT CHECK(
+          compensator_key IS NULL
+          OR compensator_key = 'schedule.manual-lock.restore.v1'
+        ),
+        undo_payload TEXT,
+        result_revision INTEGER CHECK(result_revision IS NULL OR result_revision > 0),
+        result_fingerprint TEXT,
+        source_audit_id INTEGER CHECK(source_audit_id IS NULL OR source_audit_id > 0),
+        undo_expires_at TEXT CHECK(undo_expires_at IS NULL OR length(undo_expires_at) = 24),
+        compensates_action_id TEXT UNIQUE,
+        created_at TEXT NOT NULL CHECK(length(created_at) = 24),
+        CHECK(
+          (compensator_key IS NULL AND undo_payload IS NULL AND undo_expires_at IS NULL)
+          OR (
+            compensator_key IS NOT NULL
+            AND undo_payload IS NOT NULL
+            AND undo_expires_at IS NOT NULL
+            AND undo_expires_at > created_at
+            AND (result_revision IS NOT NULL OR result_fingerprint IS NOT NULL)
+            AND compensates_action_id IS NULL
+          )
+        ),
+        FOREIGN KEY (compensates_action_id) REFERENCES personal_action_receipts(id)
+          ON UPDATE RESTRICT ON DELETE RESTRICT
+      )
+    `);
+    database.prepare(`
+      INSERT INTO personal_action_receipts (
+        id, actor_kind, actor_id, action_type, entity_type, entity_id, scope, summary,
+        compensator_key, undo_payload, result_revision, result_fingerprint,
+        source_audit_id, undo_expires_at, compensates_action_id, created_at
+      ) VALUES (?, 'employee', '419', ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+    `).run(
+      "11111111-1111-4111-8111-111111111111",
+      "schedule.manual-lock.lock",
+      "schedule_manual_lock",
+      "01:2026-08-31",
+      "Filiale 01 · KW 36",
+      "Dienstplan gesperrt",
+      "schedule.manual-lock.restore.v1",
+      JSON.stringify({ locationId: "01", weekStart: "2026-08-31", restoreLocked: false }),
+      3,
+      17,
+      "2026-09-03T09:30:00.000Z",
+      null,
+      "2026-09-03T09:00:00.000Z",
+    );
+    database.prepare(`
+      INSERT INTO personal_action_receipts (
+        id, actor_kind, actor_id, action_type, entity_type, entity_id, scope, summary,
+        compensator_key, undo_payload, result_revision, result_fingerprint,
+        source_audit_id, undo_expires_at, compensates_action_id, created_at
+      ) VALUES (?, 'employee', '419', 'personal-action.undo', 'personal_action', ?,
+        'Dienstplanung', 'Aktion rückgängig gemacht', NULL, NULL, NULL, NULL,
+        ?, NULL, ?, ?)
+    `).run(
+      "22222222-2222-4222-8222-222222222222",
+      "11111111-1111-4111-8111-111111111111",
+      18,
+      "11111111-1111-4111-8111-111111111111",
+      "2026-09-03T09:05:00.000Z",
+    );
+
+    ensureSqlitePersonalActionLogSchema(database);
+
+    assert.equal(database.prepare("PRAGMA foreign_keys").get().foreign_keys, 1);
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.deepEqual(
+      database.prepare("SELECT id, source_audit_id FROM personal_action_receipts ORDER BY id").all()
+        .map((row) => ({ ...row })),
+      [
+        { id: "11111111-1111-4111-8111-111111111111", source_audit_id: 17 },
+        { id: "22222222-2222-4222-8222-222222222222", source_audit_id: 18 },
+      ],
+    );
+    const foreignKey = database.prepare("PRAGMA foreign_key_list(personal_action_receipts)").get();
+    assert.equal(foreignKey.table, "personal_action_receipts");
+
+    const insert = database.prepare(`
+      INSERT INTO personal_action_receipts (
+        id, actor_kind, actor_id, action_type, entity_type, entity_id, scope, summary,
+        compensator_key, undo_payload, result_revision, result_fingerprint,
+        source_audit_id, undo_expires_at, compensates_action_id, created_at
+      ) VALUES (?, 'employee', '419', 'sales.article-catalog.update', 'sales_article',
+        'product-01', 'Artikelstamm', 'Artikel bearbeitet', ?, ?, 4, NULL,
+        19, ?, NULL, ?)
+    `);
+    insert.run(
+      "33333333-3333-4333-8333-333333333333",
+      "sales.article-catalog.restore.v1",
+      JSON.stringify({
+        productId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        restoreRevision: 3,
+      }),
+      "2026-09-03T09:40:00.000Z",
+      "2026-09-03T09:10:00.000Z",
+    );
+    assert.throws(
+      () => insert.run(
+        "44444444-4444-4444-8444-444444444444",
+        "sales.article-catalog.unknown.v1",
+        "{}",
+        "2026-09-03T09:41:00.000Z",
+        "2026-09-03T09:11:00.000Z",
+      ),
+      /CHECK constraint failed/,
+    );
+    assert.throws(
+      () => database.prepare("UPDATE personal_action_receipts SET summary = 'Geändert'").run(),
+      /personal action receipts are immutable/,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("Artikel-Undo-Belege verlangen eine explizite Zielrevision", () => {
+  assert.throws(
+    () => normalizePersonalActionReceiptInput(action({
+      actionType: "sales.article-catalog.update",
+      entityType: "sales_article",
+      entityId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      scope: "Artikelstamm",
+      summary: "Artikel bearbeitet",
+      compensatorKey: "sales.article-catalog.restore.v1",
+      undoPayload: {
+        productId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      },
+    })),
+    /persönliche Aktionslog/,
+  );
 });
 
 test("Öffentliche Listen sind keyset-paginiert und geben keine internen Undo-Daten aus", async () => {

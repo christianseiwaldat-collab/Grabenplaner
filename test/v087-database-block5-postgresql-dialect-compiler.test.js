@@ -128,6 +128,26 @@ test("Block 5/7: explizite NULL-Reihenfolge bleibt erhalten und verschachtelte O
   assert.doesNotMatch(result.compiledSql, /NULLS FIRST NULLS/);
 });
 
+test("Block 5/7: die deterministische SQLite-Unicode-Faltung wird PostgreSQL-portabel", () => {
+  const sourceStatement = statement({
+    id: "compiler.unicode-casefold",
+    parameters: { query: "text" },
+  });
+  const result = compile(sourceStatement, `
+    SELECT value
+    FROM compiler_records
+    WHERE gp_unicode_casefold(value) = LOWER($query)
+  `);
+
+  assert.equal(result.strategy, "portable-generated");
+  assert.match(result.compiledSql, /WHERE LOWER\(value\) = LOWER\(\$1\)/);
+  assert.doesNotMatch(result.compiledSql, /gp_unicode_casefold/i);
+  assert.deepEqual(result.coveredFeatures, [
+    "postgresql.named-parameter-binding",
+    "postgresql.sqlite-unicode-casefold",
+  ]);
+});
+
 test("Block 5/7: statische SQLite-JSON-Pfade werden zu gebundenen PostgreSQL-Parametern", () => {
   const sourceStatement = statement({
     id: "compiler.json-parameters",
@@ -263,15 +283,15 @@ test("Block 5/7: SQLite-Quoted-Identifier werden erkannt, ihre Inhalte aber nich
   assert.deepEqual(result.blockingFeatures, ["sqlite.quoted-identifier"]);
 });
 
-test("Block 5/7: der reale 1148er SQLite-Katalog wird vollständig und geschlossen klassifiziert", () => {
+test("Block 5/7: der reale 1159er SQLite-Katalog wird vollständig und geschlossen klassifiziert", () => {
   const compiled = SQLITE_APPLICATION_CATALOG.map((entry) => (
     compilePostgresqlDialectEntry(entry)
   ));
   const portable = compiled.filter((entry) => entry.strategy === "portable-generated");
   const blocked = compiled.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(compiled.length, 1148);
-  assert.equal(portable.length, 1034);
+  assert.equal(compiled.length, 1159);
+  assert.equal(portable.length, 1045);
   assert.equal(blocked.length, 114);
   assert.ok(portable.every((entry) => (
     typeof entry.compiledSql === "string"

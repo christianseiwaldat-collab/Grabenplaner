@@ -103,6 +103,9 @@ test("SQLite-Sales-Artikelstamm ist idempotent und trennt Katalog und GTIN-Besit
     ensureSqliteSalesArticleCatalogSchema(database);
     const expected = new Set([
       "sales_article_import_snapshots",
+      "sales_article_import_findings",
+      "sales_article_import_run_metadata",
+      "sales_article_import_impacts",
       "sales_articles",
       "sales_article_revisions",
       "sales_article_source_links",
@@ -125,6 +128,16 @@ test("SQLite-Sales-Artikelstamm ist idempotent und trennt Katalog und GTIN-Besit
       WHERE type = 'index' AND tbl_name = 'sales_article_source_links'
     `).all().map(({ name }) => name));
     assert.equal(sourceLinkIndexes.has("idx_sales_article_source_links_product"), true);
+    const findingIndexes = new Set(database.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'index' AND tbl_name = 'sales_article_import_findings'
+    `).all().map(({ name }) => name));
+    assert.equal(findingIndexes.has("idx_sales_article_import_findings_code"), true);
+    const impactIndexes = new Set(database.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'index' AND tbl_name = 'sales_article_import_impacts'
+    `).all().map(({ name }) => name));
+    assert.equal(impactIndexes.has("idx_sales_article_import_impacts_product"), true);
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
   } finally {
     database.close();
@@ -383,11 +396,33 @@ test("Revisions-, Identifier-, Preis- und Importzeilen sind unveränderlich", ()
       amount: "1.000000000000",
       sourceField: "Verkaufspreis",
     });
+    database.prepare(`
+      INSERT INTO sales_article_import_findings (
+        snapshot_id, ordinal, source_row, article_number, code, detail_sha256,
+        created_by, created_at
+      ) VALUES (?, 1, 1, '123456', 'negative_price', ?, 'tester', ?)
+    `).run(SNAPSHOT_ID, "f".repeat(64), TIMESTAMP);
+    database.prepare(`
+      INSERT INTO sales_article_import_run_metadata (
+        snapshot_id, total_count, create_count, update_count,
+        unchanged_count, quarantined_count, created_by, created_at
+      ) VALUES (?, 1, 1, 0, 0, 0, 'tester', ?)
+    `).run(SNAPSHOT_ID, TIMESTAMP);
+    database.prepare(`
+      INSERT INTO sales_article_import_impacts (
+        snapshot_id, ordinal, product_id, imported_revision,
+        previous_current_revision, created_by, created_at
+      ) VALUES (?, 1, ?, 1, NULL, 'tester', ?)
+    `).run(SNAPSHOT_ID, PRODUCT_ID, TIMESTAMP);
 
     for (const [sql, marker] of [
       ["UPDATE sales_article_import_snapshots SET imported_by = 'other'", "import-snapshot"],
+      ["UPDATE sales_article_import_findings SET code = 'other'", "import-finding"],
+      ["UPDATE sales_article_import_run_metadata SET total_count = 0", "import-run-metadata"],
+      ["UPDATE sales_article_import_impacts SET created_by = 'other'", "import-impact"],
       ["UPDATE sales_article_revisions SET description = 'other'", "revision"],
       ["UPDATE sales_article_source_links SET linked_by = 'other'", "source-link"],
+      ["UPDATE sales_article_identifier_owners SET created_by = 'other'", "identifier-owner"],
       ["UPDATE sales_article_identifiers SET source_field = 'other'", "identifier"],
       ["UPDATE sales_article_price_snapshots SET source_field = 'other'", "price-snapshot"],
     ]) {
@@ -395,8 +430,12 @@ test("Revisions-, Identifier-, Preis- und Importzeilen sind unveränderlich", ()
     }
     for (const [table, marker] of [
       ["sales_article_import_snapshots", "import-snapshot"],
+      ["sales_article_import_findings", "import-finding"],
+      ["sales_article_import_run_metadata", "import-run-metadata"],
+      ["sales_article_import_impacts", "import-impact"],
       ["sales_article_revisions", "revision"],
       ["sales_article_source_links", "source-link"],
+      ["sales_article_identifier_owners", "identifier-owner"],
       ["sales_article_identifiers", "identifier"],
       ["sales_article_price_snapshots", "price-snapshot"],
     ]) {

@@ -8,6 +8,15 @@ const path = require("node:path");
 const test = require("node:test");
 const sharp = require("sharp");
 
+const articleCatalog = require("../lib/article-catalog");
+const originalFetchShopwareArticle = articleCatalog.fetchShopwareArticle;
+let fetchShopwareArticleForTest = null;
+articleCatalog.fetchShopwareArticle = (...args) => (
+  fetchShopwareArticleForTest
+    ? fetchShopwareArticleForTest(...args)
+    : originalFetchShopwareArticle(...args)
+);
+
 const {
   hasValidGtinChecksum,
   normalizeArticleIdentifier,
@@ -15,7 +24,7 @@ const {
   parseShopwareProductBarcode,
   parseShopwareSuggestHtml,
   shopwareSuggestUrl,
-} = require("../lib/article-catalog");
+} = articleCatalog;
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v085-loans-"));
 process.env.DB_PATH = path.join(testRoot, "dienstplan.db");
@@ -103,12 +112,14 @@ function storeCentralSalesArticleRevision({
   sourceSystem = "manual.loan",
   sourceArticleKey = articleNumber,
   sourceUpdatedAt = null,
+  active = true,
+  existingArticleNumber = articleNumber,
 }) {
   const existing = db.prepare(`
     SELECT product_id, current_revision, source_system, source_article_key
     FROM sales_articles
     WHERE article_number = ?
-  `).get(articleNumber);
+  `).get(existingArticleNumber);
   const productId = existing?.product_id || crypto.randomUUID();
   const revision = existing ? existing.current_revision + 1 : 1;
   const timestamp = new Date().toISOString();
@@ -175,12 +186,13 @@ function storeCentralSalesArticleRevision({
       INSERT INTO sales_article_revisions (
         product_id, revision, article_number, description, active,
         source_snapshot_id, source_updated_at, created_by, created_at
-      ) VALUES (?, ?, ?, ?, 1, ?, ?, 'test', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'test', ?)
     `).run(
       productId,
       revision,
       articleNumber,
       description,
+      active ? 1 : 0,
       snapshotId,
       sourceUpdatedAt,
       timestamp,
@@ -188,9 +200,9 @@ function storeCentralSalesArticleRevision({
     if (existing) {
       db.prepare(`
         UPDATE sales_articles
-        SET current_revision = ?, updated_by = 'test', updated_at = ?
+        SET article_number = ?, current_revision = ?, updated_by = 'test', updated_at = ?
         WHERE product_id = ? AND current_revision = ?
-      `).run(revision, timestamp, productId, existing.current_revision);
+      `).run(articleNumber, revision, timestamp, productId, existing.current_revision);
     }
     db.exec("COMMIT");
   } catch (error) {
@@ -278,6 +290,8 @@ test.before(() => {
 });
 
 test.after(async () => {
+  fetchShopwareArticleForTest = null;
+  articleCatalog.fetchShopwareArticle = originalFetchShopwareArticle;
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
   try { db.close(); } catch {}
   releaseInstanceLockForTests();
@@ -570,6 +584,387 @@ test("v0.85 manuelle Rückfalleingabe speichert einen wiederverwendbaren Artikel
   assert.equal(cachedResolution.response.status, 200, JSON.stringify(cachedResolution.payload));
   assert.equal(cachedResolution.payload.cacheHit, true);
   assert.equal(cachedResolution.payload.lookupWarning, null);
+});
+
+test("v0.85 archivierte Shopware-Artikel bleiben bei Leihauflösung inaktiv", async () => {
+  const articleNumber = "771234";
+  db.prepare(`
+    UPDATE loan_location_settings
+    SET article_lookup_enabled = 1, article_lookup_provider = 'shopware_storefront',
+        article_lookup_base_url = 'https://shop.example.test', updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = ?
+  `).run(locationId);
+  const initial = storeCentralSalesArticleRevision({
+    articleNumber,
+    description: "Archivierter Shopware-Testartikel",
+    sourceSystem: "shopware.storefront",
+    sourceArticleKey: `0000000${articleNumber}`,
+    sourceUpdatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  storeCentralSalesArticleRevision({
+    articleNumber,
+    description: "Archivierter Shopware-Testartikel",
+    sourceSystem: "shopware.storefront",
+    sourceArticleKey: `0000000${articleNumber}`,
+    sourceUpdatedAt: "2026-01-01T00:00:00.000Z",
+    active: false,
+  });
+  const employeePermissions = new Set(JSON.parse(db.prepare(`
+    SELECT permissions FROM portal_roles WHERE id = 'employee'
+  `).get().permissions));
+  assert.equal(employeePermissions.has("sales:articles:write"), false);
+  assert.equal(employeePermissions.has("sales:articles:import"), false);
+
+  const countsBefore = {
+    revisions: db.prepare(`
+      SELECT COUNT(*) AS count FROM sales_article_revisions WHERE product_id = ?
+    `).get(initial.productId).count,
+    audits: db.prepare(`
+      SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?
+    `).get(initial.productId).count,
+    receipts: db.prepare(`
+      SELECT COUNT(*) AS count FROM personal_action_receipts WHERE entity_id = ?
+    `).get(initial.productId).count,
+    loans: db.prepare("SELECT COUNT(*) AS count FROM loans").get().count,
+  };
+
+  const nativeFetch = global.fetch;
+  let storefrontRequests = 0;
+  global.fetch = async (input, options) => {
+    const url = String(typeof input === "string" ? input : input?.url || input);
+    if (url.startsWith("https://shop.example.test/")) {
+      storefrontRequests += 1;
+      return new Response("unerwarteter externer Abruf", { status: 500 });
+    }
+    return nativeFetch(input, options);
+  };
+  let resolved;
+  try {
+    resolved = await request("/api/portal/v1/loans/articles/resolve", {
+      method: "POST",
+      session: employeeSession,
+      body: { locationId, articleNumber },
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+  assert.equal(resolved.response.status, 409, JSON.stringify(resolved.payload));
+  assert.equal(resolved.payload.code, "LOAN_ARTICLE_ARCHIVED");
+  assert.equal(storefrontRequests, 0);
+
+  const current = db.prepare(`
+    SELECT article.current_revision, revision.active
+    FROM sales_articles article
+    JOIN sales_article_revisions revision
+      ON revision.product_id = article.product_id
+     AND revision.revision = article.current_revision
+    WHERE article.product_id = ?
+  `).get(initial.productId);
+  assert.deepEqual({ ...current }, { current_revision: 2, active: 0 });
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM sales_article_revisions WHERE product_id = ?
+  `).get(initial.productId).count, countsBefore.revisions);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?
+  `).get(initial.productId).count, countsBefore.audits);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM personal_action_receipts WHERE entity_id = ?
+  `).get(initial.productId).count, countsBefore.receipts);
+
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    session: employeeSession,
+    body: {
+      locationId,
+      dueDate: "2027-02-01",
+      notes: "Darf nicht angelegt werden",
+      items: [{
+        articleNumber,
+        serialNumber: "ARCHIVED-TEST",
+        conditionOut: "good",
+        note: "",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 409, JSON.stringify(issued.payload));
+  assert.equal(issued.payload.code, "LOAN_ARTICLE_UNRESOLVED");
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS count FROM loans").get().count,
+    countsBefore.loans,
+  );
+});
+
+test("v0.85 alte Shopware-Quellidentität umgeht Umnummerierung und Archiv nicht", async () => {
+  const formerArticleNumber = "772341";
+  const currentArticleNumber = "772342";
+  const sourceArticleKey = `0000000${formerArticleNumber}`;
+  db.prepare(`
+    UPDATE loan_location_settings
+    SET article_lookup_enabled = 1, article_lookup_provider = 'shopware_storefront',
+        article_lookup_base_url = 'https://shop.example.test', updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = ?
+  `).run(locationId);
+  const initial = storeCentralSalesArticleRevision({
+    articleNumber: formerArticleNumber,
+    description: "Shopware-Artikel vor Umnummerierung",
+    sourceSystem: "shopware.storefront",
+    sourceArticleKey,
+    sourceUpdatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  storeCentralSalesArticleRevision({
+    articleNumber: currentArticleNumber,
+    existingArticleNumber: formerArticleNumber,
+    description: "Shopware-Artikel nach Umnummerierung",
+    sourceSystem: "shopware.storefront",
+    sourceArticleKey,
+    sourceUpdatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  storeCentralSalesArticleRevision({
+    articleNumber: currentArticleNumber,
+    description: "Shopware-Artikel nach Umnummerierung",
+    sourceSystem: "shopware.storefront",
+    sourceArticleKey,
+    sourceUpdatedAt: "2026-01-01T00:00:00.000Z",
+    active: false,
+  });
+
+  const countsBefore = {
+    snapshots: db.prepare(`
+      SELECT COUNT(*) AS count FROM sales_article_import_snapshots
+    `).get().count,
+    revisions: db.prepare(`
+      SELECT COUNT(*) AS count FROM sales_article_revisions WHERE product_id = ?
+    `).get(initial.productId).count,
+    audits: db.prepare(`
+      SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?
+    `).get(initial.productId).count,
+    receipts: db.prepare(`
+      SELECT COUNT(*) AS count FROM personal_action_receipts WHERE entity_id = ?
+    `).get(initial.productId).count,
+    loans: db.prepare("SELECT COUNT(*) AS count FROM loans").get().count,
+  };
+
+  let storefrontLookups = 0;
+  fetchShopwareArticleForTest = async (baseUrl, identifier) => {
+    storefrontLookups += 1;
+    assert.equal(baseUrl, "https://shop.example.test");
+    assert.equal(identifier, formerArticleNumber);
+    return {
+      articleNumber: formerArticleNumber,
+      description: "Darf nicht erneut importiert werden",
+      sourceProvider: "shopware_storefront",
+      sourceProductNumber: sourceArticleKey,
+      sourceUrl: `https://shop.example.test/test/${sourceArticleKey}`,
+    };
+  };
+  let resolved;
+  try {
+    resolved = await request("/api/portal/v1/loans/articles/resolve", {
+      method: "POST",
+      session: employeeSession,
+      body: { locationId, articleNumber: formerArticleNumber },
+    });
+  } finally {
+    fetchShopwareArticleForTest = null;
+  }
+  assert.equal(storefrontLookups, 1);
+  assert.equal(resolved.response.status, 409, JSON.stringify(resolved.payload));
+  assert.equal(resolved.payload.code, "LOAN_ARTICLE_ARCHIVED");
+
+  const current = db.prepare(`
+    SELECT article.article_number, article.current_revision, revision.active
+    FROM sales_articles article
+    JOIN sales_article_revisions revision
+      ON revision.product_id = article.product_id
+     AND revision.revision = article.current_revision
+    WHERE article.product_id = ?
+  `).get(initial.productId);
+  assert.deepEqual({ ...current }, {
+    article_number: currentArticleNumber,
+    current_revision: 3,
+    active: 0,
+  });
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS count FROM sales_article_import_snapshots").get().count,
+    countsBefore.snapshots,
+  );
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM sales_article_revisions WHERE product_id = ?
+  `).get(initial.productId).count, countsBefore.revisions);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?
+  `).get(initial.productId).count, countsBefore.audits);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM personal_action_receipts WHERE entity_id = ?
+  `).get(initial.productId).count, countsBefore.receipts);
+  assert.equal(db.prepare(`
+    SELECT product_id FROM sales_articles WHERE article_number = ?
+  `).get(formerArticleNumber), undefined);
+
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    session: employeeSession,
+    body: {
+      locationId,
+      dueDate: "2027-02-02",
+      notes: "Archivierter Alias darf keine Leihe erzeugen",
+      items: [{
+        articleNumber: currentArticleNumber,
+        serialNumber: "ARCHIVED-ALIAS",
+        conditionOut: "good",
+        note: "",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 409, JSON.stringify(issued.payload));
+  assert.equal(issued.payload.code, "LOAN_ARTICLE_UNRESOLVED");
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS count FROM loans").get().count,
+    countsBefore.loans,
+  );
+});
+
+test("v0.85 Loan-only-Resolve bewahrt einen aktiven manuellen Governance-Kopf", async () => {
+  const formerArticleNumber = "773451";
+  const currentArticleNumber = "773452";
+  const sourceArticleKey = `0000000${formerArticleNumber}`;
+  db.prepare(`
+    UPDATE loan_location_settings
+    SET article_lookup_enabled = 1, article_lookup_provider = 'shopware_storefront',
+        article_lookup_base_url = 'https://shop.example.test', updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = ?
+  `).run(locationId);
+  const initial = storeCentralSalesArticleRevision({
+    articleNumber: formerArticleNumber,
+    description: "Shopware-Bezeichnung vor Governance",
+    sourceSystem: "shopware.storefront",
+    sourceArticleKey,
+    sourceUpdatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const governancePermissions = [
+    "sales:articles:access",
+    "sales:articles:read",
+    "sales:articles:write",
+  ];
+  for (const permission of governancePermissions) {
+    db.prepare(`
+      INSERT OR IGNORE INTO portal_permission_grants
+        (employee_number, permission, granted_by)
+      VALUES (?, ?, ?)
+    `).run(ADMIN, permission, ADMIN);
+  }
+  let governed;
+  try {
+    governed = await request("/api/sales/articles", {
+      method: "PUT",
+      session: adminSession,
+      body: {
+        currentArticleNumber: formerArticleNumber,
+        expectedRevision: 1,
+        articleNumber: currentArticleNumber,
+        description: "Lokal freigegebene Governance-Bezeichnung",
+        identifiers: [],
+      },
+    });
+  } finally {
+    db.prepare(`
+      DELETE FROM portal_permission_grants
+      WHERE employee_number = ? AND permission IN (?, ?, ?)
+    `).run(ADMIN, ...governancePermissions);
+  }
+  assert.equal(governed.response.status, 200, JSON.stringify(governed.payload));
+  assert.equal(governed.payload.article.articleNumber, currentArticleNumber);
+  assert.equal(
+    governed.payload.article.provenance.currentSourceSystem,
+    "manual.article-catalog",
+  );
+  const employeePermissions = new Set(JSON.parse(db.prepare(`
+    SELECT permissions FROM portal_roles WHERE id = 'employee'
+  `).get().permissions));
+  assert.equal(employeePermissions.has("sales:articles:write"), false);
+  assert.equal(employeePermissions.has("sales:articles:import"), false);
+
+  const countsBefore = {
+    snapshots: db.prepare(`
+      SELECT COUNT(*) AS count FROM sales_article_import_snapshots
+    `).get().count,
+    revisions: db.prepare(`
+      SELECT COUNT(*) AS count FROM sales_article_revisions WHERE product_id = ?
+    `).get(initial.productId).count,
+    audits: db.prepare(`
+      SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?
+    `).get(initial.productId).count,
+    receipts: db.prepare(`
+      SELECT COUNT(*) AS count FROM personal_action_receipts WHERE entity_id = ?
+    `).get(initial.productId).count,
+  };
+
+  let storefrontLookups = 0;
+  fetchShopwareArticleForTest = async (baseUrl, identifier) => {
+    storefrontLookups += 1;
+    assert.equal(baseUrl, "https://shop.example.test");
+    assert.equal(identifier, formerArticleNumber);
+    return {
+      articleNumber: formerArticleNumber,
+      description: "Upstream darf Governance nicht überschreiben",
+      sourceProvider: "shopware_storefront",
+      sourceProductNumber: sourceArticleKey,
+      sourceUrl: `https://shop.example.test/test/${sourceArticleKey}`,
+    };
+  };
+  let resolved;
+  try {
+    resolved = await request("/api/portal/v1/loans/articles/resolve", {
+      method: "POST",
+      session: employeeSession,
+      body: { locationId, articleNumber: formerArticleNumber },
+    });
+  } finally {
+    fetchShopwareArticleForTest = null;
+  }
+  assert.equal(storefrontLookups, 1);
+  assert.equal(resolved.response.status, 200, JSON.stringify(resolved.payload));
+  assert.equal(resolved.payload.article.articleNumber, currentArticleNumber);
+  assert.equal(
+    resolved.payload.article.description,
+    "Lokal freigegebene Governance-Bezeichnung",
+  );
+  assert.equal(resolved.payload.article.active, true);
+
+  const current = db.prepare(`
+    SELECT article.article_number, article.current_revision, revision.description,
+           revision.active, snapshot.source_system
+    FROM sales_articles article
+    JOIN sales_article_revisions revision
+      ON revision.product_id = article.product_id
+     AND revision.revision = article.current_revision
+    JOIN sales_article_import_snapshots snapshot
+      ON snapshot.id = revision.source_snapshot_id
+    WHERE article.product_id = ?
+  `).get(initial.productId);
+  assert.deepEqual({ ...current }, {
+    article_number: currentArticleNumber,
+    current_revision: 2,
+    description: "Lokal freigegebene Governance-Bezeichnung",
+    active: 1,
+    source_system: "manual.article-catalog",
+  });
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS count FROM sales_article_import_snapshots").get().count,
+    countsBefore.snapshots,
+  );
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM sales_article_revisions WHERE product_id = ?
+  `).get(initial.productId).count, countsBefore.revisions);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?
+  `).get(initial.productId).count, countsBefore.audits);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM personal_action_receipts WHERE entity_id = ?
+  `).get(initial.productId).count, countsBefore.receipts);
+  assert.equal(db.prepare(`
+    SELECT product_id FROM sales_articles WHERE article_number = ?
+  `).get(formerArticleNumber), undefined);
 });
 
 test("v0.85 ein einmal bestätigter EAN-Abgleich wird lokal wiederverwendet", async () => {
