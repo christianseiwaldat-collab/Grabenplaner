@@ -50,7 +50,10 @@ function analysisFunctions(initialSalesAnalytics = {}) {
   vm.runInNewContext(`${source}\n;globalThis.result = {
     salesAnalyticsMetricDefinitions,
     salesMetricRelativeChange,
+    salesMetricAbsoluteChange,
     formatSalesMetricChange,
+    salesAnalyticsParetoEntries,
+    salesAnalyticsShareEntries,
     salesAnalyticsPeriods,
     salesReportDateRangeInvalid,
     filteredSalesAnalyticsReports,
@@ -58,6 +61,21 @@ function analysisFunctions(initialSalesAnalytics = {}) {
     sortSalesAnalyticsGroups,
   };`, context);
   return { context, functions: context.result };
+}
+
+function preferenceFunctions() {
+  const source = between(
+    app,
+    "const SALES_ANALYTICS_CHART_TYPE_IDS",
+    "const state =",
+  );
+  const context = {};
+  vm.runInNewContext(`${source}\n;globalThis.result = {
+    normalizeSalesAnalyticsFilenamePrefix,
+    normalizeSalesAnalyticsPdfOptions,
+    normalizeSalesAnalyticsPreferences,
+  };`, context);
+  return context.result;
 }
 
 test("Desktop-Arbeitsbereich enthält Bereichs-, Datums- und Horizontfilter", () => {
@@ -76,6 +94,12 @@ test("Desktop-Arbeitsbereich enthält Bereichs-, Datums- und Horizontfilter", ()
   assert.match(app, /Das Von-Datum muss vor oder am Bis-Datum liegen/);
   assert.match(styles, /\.sales-analytics-topbar,\.sales-analytics-desktop-workspace \{ min-width:1120px; \}/);
   assert.doesNotMatch(view, /sales.*mobile|mobile.*sales/i);
+  assert.match(view, /id="salesReportHorizon"><option value="year_to_date">Jahr bis Berichtsende<\/option><option value="period">Berichtszeitraum<\/option>/);
+  assert.match(app, /horizon: "year_to_date"/);
+  assert.match(app, /previewHorizon: "period"/);
+  assert.match(app, /const horizon = series \? "period" : state\.salesAnalytics\.horizon/);
+  const seriesAnalysis = between(app, "async function analyzeSalesReportSeries()", "async function downloadSalesAnalyticsChartsPdf");
+  assert.doesNotMatch(seriesAnalysis, /salesAnalytics\.horizon\s*=/);
 });
 
 test("KPI-Karten und Diagramm stellen aktuelle und verglichene Werte getrennt dar", () => {
@@ -87,7 +111,7 @@ test("KPI-Karten und Diagramm stellen aktuelle und verglichene Werte getrennt da
   assert.match(app, /metric\?\.\[metricId\]\?\.\[side\]/);
   assert.match(app, /formatSalesMetricChange\(current, comparison\)/);
   assert.match(app, /\["current", entry\.current\], \["comparison", entry\.comparison\]/);
-  assert.match(app, /comparison === 0\) return null/);
+  assert.match(app, /comparison <= 0\) return null/);
   assert.match(styles, /\.sales-chart-bar\.comparison/);
 });
 
@@ -106,11 +130,184 @@ test("Datumsfilter und Vergleichsrechnung verhalten sich an den Grenzfällen det
   assert.equal(functions.filteredSalesAnalyticsReports().map((report) => report.id).join(","), "b");
   assert.equal(functions.salesMetricRelativeChange(125, 100), 25);
   assert.equal(functions.salesMetricRelativeChange(25, 0), null);
+  assert.equal(functions.salesMetricRelativeChange(-50, -100), null);
   assert.equal(functions.formatSalesMetricChange(25, 0), "Kein Prozentvergleich");
+  assert.equal(functions.formatSalesMetricChange(-50, -100), "Kein Prozentvergleich");
   assert.equal(functions.formatSalesMetricChange(0, 0), "±0,0 %");
+  assert.equal(functions.salesMetricAbsoluteChange(125, 100), 25);
+  assert.equal(functions.salesMetricAbsoluteChange(-5, 10), -15);
+  assert.equal(functions.salesMetricAbsoluteChange(null, 10), null);
   context.state.salesAnalytics.dateFrom = "2026-08-01";
   assert.equal(functions.salesReportDateRangeInvalid(), true);
   assert.equal(functions.filteredSalesAnalyticsReports().length, 0);
+});
+
+test("Absolute Abweichung und Pareto-Auswertung bleiben bei Null- und Negativwerten fachlich stabil", () => {
+  const { functions } = analysisFunctions();
+  const rows = functions.salesAnalyticsParetoEntries([
+    { id: "a", current: 60 },
+    { id: "b", current: 30 },
+    { id: "c", current: 10 },
+    { id: "negative", current: -20 },
+    { id: "missing", current: null },
+  ], 2);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].id, "a");
+  assert.equal(rows[0].share, 60);
+  assert.equal(rows[0].cumulativeShare, 60);
+  assert.equal(rows[1].id, "b");
+  assert.equal(rows[1].share, 30);
+  assert.equal(rows[1].cumulativeShare, 90);
+  assert.equal(rows[1].total, 100);
+  assert.match(app, /chartType === "absolute_change"/);
+  assert.match(app, /chartType === "pareto"/);
+  assert.match(styles, /\.sales-chart-pareto-marker/);
+});
+
+test("Anteilsgrafik erklärt bei Top-N den vollständigen Rest", () => {
+  const { functions } = analysisFunctions();
+  const rows = functions.salesAnalyticsShareEntries([
+    { group: { externalProductGroupId: "A", label: "A" }, current: 60 },
+    { group: { externalProductGroupId: "B", label: "B" }, current: 30 },
+    { group: { externalProductGroupId: "C", label: "C" }, current: 10 },
+    { group: { externalProductGroupId: "D", label: "Negativ" }, current: -5 },
+  ], 2);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[2].group.externalProductGroupId, "REST");
+  assert.equal(rows[2].current, 10);
+  assert.equal(rows[2].share, 10);
+  assert.equal(rows.reduce((sum, row) => sum + row.share, 0), 100);
+});
+
+test("Persönliche PDF-Exportoptionen sind allowlisted, begrenzt und sicher normalisiert", () => {
+  const functions = preferenceFunctions();
+  const normalized = functions.normalizeSalesAnalyticsPdfOptions({
+    orientation: "diagonal",
+    charts: ["pareto", "unbekannt", "pareto", "absolute_change"],
+    topN: 99,
+    includeKpis: true,
+    includeTable: true,
+    filenamePrefix: " ../../Umsatz:<2026>?* ",
+  });
+  assert.equal(normalized.orientation, "landscape");
+  assert.equal(Array.from(normalized.charts).join(","), "pareto,absolute_change");
+  assert.equal(normalized.topN, 20);
+  assert.equal(normalized.includeKpis, true);
+  assert.equal(normalized.includeTable, true);
+  assert.doesNotMatch(normalized.filenamePrefix, /[<>:"/\\|?*]/);
+  assert.equal(
+    Object.keys(normalized).sort().join(","),
+    "charts,filenamePrefix,includeKpis,includeTable,orientation,topN",
+  );
+
+  const defaults = functions.normalizeSalesAnalyticsPreferences({});
+  assert.equal(defaults.horizon, "year_to_date");
+  assert.equal(defaults.chartMetric, "netRevenue");
+  assert.equal(Array.from(defaults.pdf.charts).join(","), "ranking,change,absolute_change,share,pareto");
+  assert.equal(defaults.pdf.includeKpis, true);
+});
+
+test("PDF-Dialog bietet nur den vereinbarten Analyseumfang und speichert kontobezogen", () => {
+  const modal = between(
+    html,
+    '<dialog class="modal wide-modal sales-pdf-options-modal"',
+    '<dialog class="modal wide-modal employee-modal"',
+  );
+  for (const id of [
+    "salesReportPdfOrientation",
+    "salesReportPdfTopN",
+    "salesReportPdfIncludeKpis",
+    "salesReportPdfIncludeTable",
+    "salesReportPdfFilenamePrefix",
+    "salesReportPdfExportButton",
+  ]) assert.match(modal, new RegExp(`id="${id}"`));
+  for (const chartId of ["ranking", "change", "absolute_change", "share", "pareto"]) {
+    assert.match(modal, new RegExp(`value="${chartId}" data-sales-pdf-chart`));
+  }
+  assert.doesNotMatch(modal, /Branding|Logo|RGB|Farbe/i);
+  assert.match(app, /api\("\/api\/sales-analytics\/preferences"\)/);
+  assert.match(app, /method: "PUT"/);
+  assert.match(app, /optionsVersion: 1/);
+  assert.match(app, /function syncSalesAnalyticsActorState\(\)/);
+  assert.match(app, /syncSalesAnalyticsActorState\(\);/);
+  assert.match(app, /actorKey !== currentSalesAnalyticsActorKey\(\)/);
+  assert.match(app, /preferencesRequestId/);
+  assert.match(app, /seriesRequestId: 0/);
+  assert.match(app, /horizon: "year_to_date"/);
+  assert.match(app, /pdfOptions: normalizeSalesAnalyticsPdfOptions\(\)/);
+  assert.match(app, /const horizon = series \? "period" : state\.salesAnalytics\.horizon/);
+  assert.match(app, /charts\.length \? charts : \[\.\.\.SALES_ANALYTICS_PDF_DEFAULTS\.charts\]/);
+  assert.match(styles, /\.sales-pdf-options-grid/);
+});
+
+test("Asynchrone Verkaufsanalyse-Antworten bleiben an den aktuellen Actor gebunden", () => {
+  const guardedFunctions = [
+    between(app, "async function loadSalesReportDetail", "function applySalesAnalyticsPreferences"),
+    between(app, "async function loadSalesAnalytics({", "async function inspectSalesReportPdf"),
+    between(app, "async function inspectSalesReportPdf", "async function discardSalesReportPreview"),
+    between(app, "async function applySalesReportPreview", "function clearSalesReportSeries"),
+    between(app, "async function analyzeSalesReportSeries", "async function downloadSalesAnalyticsChartsPdf"),
+    between(app, "async function downloadSalesAnalyticsChartsPdf", "async function submitSalesAnalyticsPdfOptions"),
+    between(app, "async function submitSalesAnalyticsPdfOptions", "function setView(view)"),
+  ];
+  for (const functionSource of guardedFunctions) {
+    assert.match(functionSource, /const actorKey = currentSalesAnalyticsActorKey\(\)/);
+    assert.match(functionSource, /salesAnalyticsActorIsCurrent\(actorKey\)/);
+    const firstAwait = functionSource.indexOf("await ");
+    assert.ok(
+      firstAwait >= 0
+        && /(?:salesAnalyticsActorIsCurrent\(actorKey\)|requestIsCurrent\(\))/.test(functionSource.slice(firstAwait)),
+      "Nach der asynchronen Grenze muss der Actor erneut geprüft werden.",
+    );
+  }
+  const actorGuard = between(app, "function salesAnalyticsActorIsCurrent", "function resetSalesAnalyticsActorState");
+  assert.match(actorGuard, /state\.salesAnalytics\.actorKey === actorKey[\s\S]*currentSalesAnalyticsActorKey\(\) === actorKey/);
+  const actorReset = between(app, "function resetSalesAnalyticsActorState", "function syncSalesAnalyticsActorState");
+  assert.match(actorReset, /preferencesRequestId \+= 1/);
+  assert.match(actorReset, /seriesRequestId \+= 1/);
+  assert.match(actorReset, /reports: \[\][\s\S]*selectedReport: null[\s\S]*pdfOptions: normalizeSalesAnalyticsPdfOptions\(\)/);
+  const download = between(app, "async function downloadSalesAnalyticsChartsPdf", "async function submitSalesAnalyticsPdfOptions");
+  assert.match(download, /beforeSave: requestIsCurrent/);
+});
+
+test("Session-Timeout neutralisiert Verkaufsanalysedaten vor dem Login-Gate", () => {
+  const gate = between(app, "function showLoginGate(message", "function hideLoginGate()");
+  const clearSessionAt = gate.indexOf("state.portalSession = null");
+  const resetAt = gate.indexOf('resetSalesAnalyticsActorState("")');
+  const revealAt = gate.indexOf('elements.loginGate?.classList.remove("hidden")');
+  assert.ok(clearSessionAt >= 0 && resetAt > clearSessionAt && resetAt < revealAt,
+    "Sitzung und Verkaufsdaten müssen vor Anzeige des Login-Gates neutralisiert werden.");
+});
+
+test("Gespeicherte Verkaufsanalyse-Präferenzen werden erst nach Actor- und Request-Guard angewendet", () => {
+  const loadPreferences = between(
+    app,
+    "async function loadSalesAnalyticsPreferences()",
+    "function salesAnalyticsPreferencePayload",
+  );
+  const loadGuard = loadPreferences.indexOf("actorKey !== currentSalesAnalyticsActorKey()");
+  const loadApply = loadPreferences.indexOf("applySalesAnalyticsPreferences(payload)");
+  assert.ok(loadGuard >= 0 && loadGuard < loadApply,
+    "Geladene Präferenzen dürfen erst nach Actor- und Request-ID-Prüfung angewendet werden.");
+  assert.match(loadPreferences, /requestId !== state\.salesAnalytics\.preferencesRequestId/);
+
+  const submitPreferences = between(
+    app,
+    "async function submitSalesAnalyticsPdfOptions",
+    "function setView(view)",
+  );
+  const saveAwait = submitPreferences.indexOf("await saveSalesAnalyticsPreferences(options)");
+  const submitGuard = submitPreferences.indexOf("!salesAnalyticsActorIsCurrent(actorKey)", saveAwait);
+  const submitApply = submitPreferences.indexOf("applySalesAnalyticsPreferences(saved)", saveAwait);
+  assert.ok(saveAwait >= 0 && submitGuard > saveAwait && submitGuard < submitApply,
+    "Gespeicherte Präferenzen dürfen nach dem PUT erst nach dem vollständigen Guard angewendet werden.");
+  assert.match(submitPreferences, /requestId !== state\.salesAnalytics\.preferencesRequestId/);
+  const applyPreferences = between(app, "function applySalesAnalyticsPreferences", "function currentSalesAnalyticsActorKey");
+  assert.doesNotMatch(applyPreferences, /state\.salesAnalytics\.(?:horizon|chartType|chartMetric)\s*=/);
+  const preferencePayload = between(app, "function salesAnalyticsPreferencePayload", "async function saveSalesAnalyticsPreferences");
+  assert.match(preferencePayload, /horizon: "year_to_date"/);
+  assert.match(preferencePayload, /chartType: "ranking"/);
+  assert.match(preferencePayload, /chartMetric: "netRevenue"/);
 });
 
 test("Berichtsarchiv erkennt Teilzeiträume, Lücken und unzulässige Überschneidungen", () => {

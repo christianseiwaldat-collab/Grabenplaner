@@ -32,6 +32,7 @@
           <a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a>
           <button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button>
           <button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Einstellungen öffnen"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2ZM19 12a7.2 7.2 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-2.1-1.2L14 3h-4l-.4 2.7a7.7 7.7 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5A7.2 7.2 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1a7.7 7.7 0 0 0 2.1 1.2L10 21h4l.4-2.7a7.7 7.7 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" /></svg><span class="portal-settings-shortcut-label">Einstellungen</span></button>
+          <button class="text-button header-action personal-actions-shortcut" id="personalActionsButton" type="button" aria-label="Meine letzten Aktionen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-2.64-6.36M18 3v4h-4" /></svg><span>Meine Aktionen</span></button>
           <button class="text-button header-action" id="logoutButton" type="button">Abmelden</button>
         </div>
       </header>
@@ -727,6 +728,15 @@
         <label><span>Bemerkung</span><textarea id="leadershipRequestNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
         <p class="message hidden" id="leadershipRequestMessage"></p>
         <div class="dialog-actions leadership-request-actions" id="leadershipRequestActions"></div>
+      </form>
+    </dialog>
+    <dialog class="personal-actions-dialog" id="personalActionsDialog" aria-labelledby="personalActionsTitle">
+      <form>
+        <div class="dialog-heading"><div><span class="eyebrow">Persönlich &amp; revisionssicher</span><h2 id="personalActionsTitle">Meine letzten Aktionen</h2></div><button type="button" data-close-personal-actions aria-label="Dialog schließen">×</button></div>
+        <p class="personal-actions-intro">Hier erscheinen ausschließlich deine eigenen protokollierten Aktionen. Rückgängig wird nur angeboten, wenn der aktuelle Stand unverändert ist und eine sichere Gegenaktion existiert.</p>
+        <p class="message hidden" id="personalActionsMessage" role="status" aria-live="polite"></p>
+        <div class="personal-actions-list" id="personalActionsList" role="list" aria-live="polite"><p class="empty-state">Aktionen werden geladen.</p></div>
+        <div class="dialog-actions personal-actions-dialog-actions"><button class="text-button hidden" id="personalActionsLoadMore" type="button">Ältere Aktionen laden</button><button type="button" data-close-personal-actions>Schließen</button></div>
       </form>
     </dialog>
     <dialog id="notificationsDialog">

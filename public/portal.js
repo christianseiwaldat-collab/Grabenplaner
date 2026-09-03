@@ -121,6 +121,12 @@ const portalState = {
   scheduleData: null,
   branchVacationWeekStart: mondayOf(new Date()),
   branchVacationLoading: false,
+  personalActions: [],
+  personalActionsCursor: "",
+  personalActionsLoading: false,
+  personalActionUndoPending: "",
+  personalActionsActorKey: "",
+  personalActionsRequestId: 0,
 };
 
 const optionNames = {
@@ -200,7 +206,7 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "forgotPasswordButton", "passwordResetRequestDialog", "passwordResetRequestForm", "passwordResetEmail", "passwordResetRequestMessage", "passwordResetRequestSubmit", "passwordResetConfirmDialog", "passwordResetConfirmForm", "passwordResetToken", "passwordResetNewPassword", "passwordResetRepeatPassword", "passwordResetConfirmMessage", "passwordResetConfirmSubmit", "portalApp", "portalLogo", "portalAccessModeLabel",
-  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "portalLogoutStatus", "notificationsButton", "notificationBadge", "mobileHomeTab", "mobileHomeView", "mobileHomeTiles", "mobileSettingsHome", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
+  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "personalActionsButton", "personalActionsDialog", "personalActionsTitle", "personalActionsMessage", "personalActionsList", "personalActionsLoadMore", "logoutButton", "portalLogoutStatus", "notificationsButton", "notificationBadge", "mobileHomeTab", "mobileHomeView", "mobileHomeTiles", "mobileSettingsHome", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
   "loanOpenOverview", "loanOverviewDescription", "loanOverviewSearchField", "loanOverviewSearch", "loanOverviewTableHeader", "loanOverviewTableBody", "loanPersonalOverview",
   "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoPolicy", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
@@ -2119,6 +2125,7 @@ function showLogin(error = "") {
   );
   neutralizeBirthdayPresentation();
   neutralizeBirthdayPresentationTheme();
+  resetPersonalActionsState("");
   portalState.session = null;
   portalState.personnelLearningDashboard = null;
   portalState.personnelLearningDashboardAvailable = false;
@@ -2213,6 +2220,10 @@ function populateVacationAccountYears() {
 function showPortal(session) {
   const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
     || processTaskActorFingerprint(portalUser());
+  const nextPersonalActionsActor = portalPersonalActionsActorKey(session?.user);
+  if (portalState.personalActionsActorKey !== nextPersonalActionsActor) {
+    resetPersonalActionsState(nextPersonalActionsActor);
+  }
   if (birthdayPresentationActor() !== birthdayPresentationActor(session?.user)) {
     neutralizeBirthdayPresentation();
     neutralizeBirthdayPresentationTheme();
@@ -2243,6 +2254,7 @@ function showPortal(session) {
     : session.user.employeeNumber;
   el.portalUserName.textContent = `${identity} · ${session.user.nickname || session.user.fullName}`;
   el.portalUserRole.textContent = session.user.roleName;
+  el.personalActionsButton?.classList.toggle("hidden", isOrganizationAccount(session.user));
   el.adminAppLink.classList.toggle(
     "hidden",
     isOrganizationAccount(session.user) || !session.user.permissions.includes("schedule:read"),
@@ -4840,6 +4852,180 @@ function openHistoryDetail(id, kind) {
   el.historyDetailDialog.showModal();
 }
 
+function personalActionTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Zeitpunkt nicht verfügbar";
+  return new Intl.DateTimeFormat("de-AT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function portalPersonalActionsActorKey(user = portalUser()) {
+  if (!user || isOrganizationAccount(user)) return "";
+  return String(user.employeeNumber || "").trim();
+}
+
+function resetPersonalActionsState(actorKey = "") {
+  portalState.personalActionsActorKey = String(actorKey || "");
+  portalState.personalActionsRequestId += 1;
+  portalState.personalActions = [];
+  portalState.personalActionsCursor = "";
+  portalState.personalActionsLoading = false;
+  portalState.personalActionUndoPending = "";
+  if (el.personalActionsDialog?.open) el.personalActionsDialog.close();
+  el.personalActionsButton?.setAttribute("aria-expanded", "false");
+  el.personalActionsList?.replaceChildren();
+  message(el.personalActionsMessage, "");
+}
+
+function personalActionsRequestIsCurrent(actorKey, requestId) {
+  return portalState.personalActionsActorKey === actorKey
+    && portalPersonalActionsActorKey() === actorKey
+    && portalState.personalActionsRequestId === requestId;
+}
+
+function renderPersonalActions() {
+  if (!el.personalActionsList) return;
+  if (portalState.personalActionsLoading && !portalState.personalActions.length) {
+    const loading = document.createElement("p");
+    loading.className = "empty-state";
+    loading.textContent = "Aktionen werden geladen.";
+    el.personalActionsList.replaceChildren(loading);
+  } else if (!portalState.personalActions.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = portalState.personalActionsCursor
+      ? "Weitere ältere Aktionen können geladen werden."
+      : "Noch keine persönlichen Aktionen protokolliert.";
+    el.personalActionsList.replaceChildren(empty);
+  } else {
+    const fragment = document.createDocumentFragment();
+    portalState.personalActions.forEach((action) => {
+      const row = document.createElement("article");
+      row.className = "personal-action-row";
+      row.dataset.personalActionId = String(action.id || "");
+      row.setAttribute("role", "listitem");
+
+      const copy = document.createElement("div");
+      copy.className = "personal-action-copy";
+      const title = document.createElement("strong");
+      title.textContent = String(action.title || action.label || "Aktion");
+      const summary = document.createElement("p");
+      summary.textContent = String(action.summary || action.description || "Sicher protokolliert.");
+      const meta = document.createElement("small");
+      meta.textContent = personalActionTimestamp(action.createdAt || action.created_at);
+      copy.append(title, summary, meta);
+
+      const controls = document.createElement("div");
+      controls.className = "personal-action-controls";
+      const undoAvailable = action.canUndo === true || action.undo?.available === true;
+      if (undoAvailable) {
+        const undo = document.createElement("button");
+        undo.type = "button";
+        undo.className = "text-button personal-action-undo";
+        undo.dataset.undoPersonalAction = String(action.id || "");
+        undo.textContent = String(action.undo?.label || action.undoLabel || "Rückgängig");
+        undo.disabled = portalState.personalActionsLoading
+          || portalState.personalActionUndoPending === String(action.id || "");
+        controls.append(undo);
+      } else {
+        const status = document.createElement("span");
+        status.className = "personal-action-final";
+        status.textContent = String(action.undo?.reason || action.undoBlockedReason || "Nicht rückgängig");
+        controls.append(status);
+      }
+      row.append(copy, controls);
+      fragment.append(row);
+    });
+    el.personalActionsList.replaceChildren(fragment);
+  }
+  if (el.personalActionsLoadMore) {
+    el.personalActionsLoadMore.classList.toggle("hidden", !portalState.personalActionsCursor);
+    el.personalActionsLoadMore.disabled = portalState.personalActionsLoading;
+  }
+}
+
+async function loadPersonalActions({ append = false } = {}) {
+  if (portalState.personalActionsLoading) return;
+  const actorKey = portalPersonalActionsActorKey();
+  if (!actorKey || portalState.personalActionsActorKey !== actorKey) return;
+  const requestId = ++portalState.personalActionsRequestId;
+  portalState.personalActionsLoading = true;
+  if (!append) {
+    portalState.personalActions = [];
+    portalState.personalActionsCursor = "";
+  }
+  message(el.personalActionsMessage, "");
+  renderPersonalActions();
+  try {
+    const cursor = append ? portalState.personalActionsCursor : "";
+    const query = new URLSearchParams({ limit: "25" });
+    if (cursor) query.set("cursor", cursor);
+    const result = await api(`/api/portal/v1/me/actions?${query}`);
+    if (!personalActionsRequestIsCurrent(actorKey, requestId)) return;
+    const actions = Array.isArray(result?.actions) ? result.actions : [];
+    portalState.personalActions = append ? [...portalState.personalActions, ...actions] : actions;
+    portalState.personalActionsCursor = String(result?.nextCursor || "");
+  } catch (error) {
+    if (personalActionsRequestIsCurrent(actorKey, requestId)) {
+      message(el.personalActionsMessage, error.message, true);
+    }
+  } finally {
+    if (personalActionsRequestIsCurrent(actorKey, requestId)) {
+      portalState.personalActionsLoading = false;
+      renderPersonalActions();
+    }
+  }
+}
+
+async function openPersonalActions() {
+  if (!el.personalActionsDialog) return;
+  el.personalActionsButton?.setAttribute("aria-expanded", "true");
+  el.personalActionsDialog.showModal();
+  await loadPersonalActions();
+}
+
+function closePersonalActions() {
+  if (el.personalActionsDialog?.open) el.personalActionsDialog.close();
+}
+
+async function undoPersonalAction(actionId) {
+  const action = portalState.personalActions.find((entry) => String(entry.id) === String(actionId));
+  if (!action || portalState.personalActionsLoading || portalState.personalActionUndoPending) return;
+  const actorKey = portalPersonalActionsActorKey();
+  if (!actorKey || portalState.personalActionsActorKey !== actorKey) return;
+  const label = String(action.title || action.label || "diese Aktion");
+  if (!window.confirm(`„${label}“ wirklich rückgängig machen? Die ursprüngliche Historie bleibt erhalten.`)) return;
+  const requestId = ++portalState.personalActionsRequestId;
+  portalState.personalActionUndoPending = String(actionId);
+  message(el.personalActionsMessage, "");
+  renderPersonalActions();
+  try {
+    await api(`/api/portal/v1/me/actions/${encodeURIComponent(actionId)}/undo`, {
+      method: "POST",
+      body: "{}",
+    });
+    if (!personalActionsRequestIsCurrent(actorKey, requestId)) return;
+    await loadPersonalActions();
+    if (portalPersonalActionsActorKey() === actorKey) {
+      message(el.personalActionsMessage, "Die Gegenaktion wurde sicher protokolliert.");
+    }
+  } catch (error) {
+    if (personalActionsRequestIsCurrent(actorKey, requestId)) {
+      message(el.personalActionsMessage, error.message, true);
+    }
+  } finally {
+    if (portalPersonalActionsActorKey() === actorKey) {
+      portalState.personalActionUndoPending = "";
+      renderPersonalActions();
+    }
+  }
+}
+
 function notificationIsRead(item) {
   return Boolean(item.read_at || item.readAt);
 }
@@ -6937,6 +7123,14 @@ el.passwordResetConfirmDialog?.addEventListener("cancel", (event) => {
 el.logoutButton.addEventListener("click", logout);
 el.settingsPasswordButton?.addEventListener("click", openPasswordChangeDialog);
 el.portalSettingsShortcut?.addEventListener("click", () => setTab(portalState.activeTab === "settings" ? "home" : "settings"));
+el.personalActionsButton?.addEventListener("click", openPersonalActions);
+el.personalActionsLoadMore?.addEventListener("click", () => loadPersonalActions({ append: true }));
+el.personalActionsList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-undo-personal-action]");
+  if (button) undoPersonalAction(button.dataset.undoPersonalAction);
+});
+document.querySelectorAll("[data-close-personal-actions]").forEach((button) => button.addEventListener("click", closePersonalActions));
+el.personalActionsDialog?.addEventListener("close", () => el.personalActionsButton?.setAttribute("aria-expanded", "false"));
 el.mobileSettingsHome?.addEventListener("click", () => setTab("home"));
 el.mobileHomeTiles?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-mobile-home-tab]");

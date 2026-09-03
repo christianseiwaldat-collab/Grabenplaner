@@ -305,7 +305,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // Geburtstagseinblendungs-Claims, Filialbestellungs-, Teamsitzungs-, Positionskatalog- und
   // Verkaufsanalyse-Schemaoperationen sowie die persistenzfreie Funktionssuche sind
   // explizit klassifiziert.
-  assert.equal(report.summary.productionDirectFiles, 68);
+  assert.equal(report.summary.productionDirectFiles, 69);
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 5);
   assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 4);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
@@ -419,7 +419,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1119);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1135);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -436,7 +436,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1119,
+    requiredReceiptCount: 1135,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -605,18 +605,18 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   assert.match(phase3, /direkte `db\.exec`-Aufrufe in `server\.js` \| 0/);
   assert.match(phase3, /lokal mit Node 22\.13\.0/);
   assert.match(phase4, /Status:\*\* Block 4\/7 abgeschlossen/);
-  assert.match(phase4, /1119 Statementvertr/);
+  assert.match(phase4, /1135 Statementvertr/);
   assert.match(phase4, /SQLite-Baseline \| 33/);
-  assert.match(phase4, /SQLite-Dialektvariante \| 1086/);
-  assert.match(phase4, /1013[\s\S]{0,100}Dollar-Parameter/i);
+  assert.match(phase4, /SQLite-Dialektvariante \| 1102/);
+  assert.match(phase4, /1029[\s\S]{0,100}Dollar-Parameter/i);
   assert.match(phase4, /`contract-only`/);
   assert.match(phase4, /Implementierungs-Fingerprint/);
   assert.match(phase4, /`mapped-not-ledger-activated`/);
   assert.match(phase4, /`genericAdapterCompatible: false`/);
   assert.match(phase4, /Phase-5-Zwischenstand/);
   assert.match(phase4, /Phase 5[\s\S]{0,80}begonnen[\s\S]{0,80}in Bearbeitung/i);
-  assert.match(phase4, /1008 Syntaxkandidaten \(`portable-generated`\)/);
-  assert.match(phase4, /111[^\r\n]*`requires-override`/);
+  assert.match(phase4, /1021 Syntaxkandidaten \(`portable-generated`\)/);
+  assert.match(phase4, /114[^\r\n]*`requires-override`/);
   assert.match(
     phase4,
     /PostgreSQL-Anwendungsmigrationsstand bleibt 0\/10[\s\S]{0,80}keine der zehn[\s\S]{0,40}Anwendungsmigrationen ist implementiert/i,
@@ -624,7 +624,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   assert.match(phase5, /nicht produktiven Status/i);
   assert.match(phase5, /`development-contract`/);
   assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1119/);
+  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1135/);
   assert.match(phase5, /`applicationExecutable: false`/);
   assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
   assert.match(strategy, /Block 3[\s\S]{0,100}abgeschlossen/i);
@@ -636,7 +636,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   );
   assert.match(
     strategy,
-    /1119 Anwendungsstatements:[\s\S]{0,60}1008[\s\S]{0,100}`portable-generated`[\s\S]{0,60}111[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1119[\s\S]{0,100}Vollanwendungskatalog/i,
+    /1135 Anwendungsstatements:[\s\S]{0,60}1021[\s\S]{0,100}`portable-generated`[\s\S]{0,60}114[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1135[\s\S]{0,100}Vollanwendungskatalog/i,
   );
   assert.match(
     strategy,

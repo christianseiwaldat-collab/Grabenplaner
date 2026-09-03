@@ -43,6 +43,7 @@
             <strong id="sidebarSessionRole"></strong>
             <span id="sidebarSessionIdentity"></span>
             <span id="sidebarSessionPosition"></span>
+            <button class="sidebar-personal-actions-button" id="personalActionsAdminButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog" aria-expanded="false">Meine Aktionen</button>
             <button id="portalLogoutButton" type="button">(Logout)</button>
           </div>
           <button class="sidebar-darkmode-toggle" id="sidebarDarkmodeToggle" type="button" role="switch" aria-checked="false" aria-label="Darkmode einschalten">
@@ -127,7 +128,7 @@
             <div class="nav-branch nav-module-heading">
               <button type="button" class="nav-disclosure expanded" id="personnelAdministrationToggle" data-nav-toggle="personnelAdministration" aria-controls="personnelAdministrationNavChildren" aria-label="Unterpunkte der Personalverwaltung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
               <button class="nav-item nav-module-main" data-view="personnelAdministration" data-personnel-administration-route="dashboard" id="personnelDashboardNavButton">
-                <span class="nav-symbol" aria-hidden="true">◎</span><span>Personalverwaltung</span>
+                <span class="nav-symbol" aria-hidden="true">◎</span><span>Personal</span>
               </button>
             </div>
             <div class="nav-module-children" id="personnelAdministrationNavChildren">
@@ -175,11 +176,14 @@
           <section class="nav-module hidden" id="salesAdministrationNav" aria-label="Verkaufsverwaltung">
             <div class="nav-branch nav-module-heading">
               <button type="button" class="nav-disclosure expanded" id="salesAdministrationToggle" data-nav-toggle="salesAdministration" aria-controls="salesAdministrationNavChildren" aria-label="Unterpunkte der Verkaufsverwaltung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
-              <button class="nav-item nav-module-main" data-view="salesAdministration" id="salesDashboardNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>Verkaufsverwaltung</span></button>
+              <button class="nav-item nav-module-main" data-view="salesAdministration" id="salesDashboardNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>Verkauf</span></button>
             </div>
             <div class="nav-module-children" id="salesAdministrationNavChildren">
               <button class="nav-item nav-module-route hidden" data-view="salesAnalytics" id="salesAnalyticsNavButton">
                 <span class="nav-symbol" aria-hidden="true">⌁</span><span>Verkaufsanalysen</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="crm" id="crmNavButton">
+                <span class="nav-symbol crm-nav-symbol" aria-hidden="true">CRM</span><span>CRM</span>
               </button>
             </div>
           </section>
@@ -1491,12 +1495,60 @@
               <div><span class="eyebrow">Arbeitsbereiche</span><h2>Verkaufsverwaltung im Überblick</h2><p>Öffne die aktuell verfügbaren Bereiche der Verkaufsverwaltung.</p></div>
             </div>
             <div class="personnel-dashboard-grid sales-dashboard-grid" id="salesDashboardGrid">
-              <button class="personnel-dashboard-card" type="button" data-sales-dashboard-view="salesAnalytics">
+              <button class="personnel-dashboard-card" id="salesAnalyticsDashboardCard" type="button" data-sales-dashboard-view="salesAnalytics">
                 <span class="personnel-dashboard-card-symbol" aria-hidden="true">⌁</span>
                 <span class="personnel-dashboard-card-copy"><small>Berichte &amp; Kennzahlen</small><strong>Verkaufsanalysen</strong><span>TradeFoto-Berichte sicher importieren, vergleichen und auswerten.</span></span>
                 <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
               </button>
+              <button class="personnel-dashboard-card hidden" id="crmDashboardCard" type="button" data-sales-dashboard-view="crm">
+                <span class="personnel-dashboard-card-symbol" aria-hidden="true">CRM</span>
+                <span class="personnel-dashboard-card-copy"><small>Kunden &amp; Kontakte</small><strong>CRM</strong><span>Kunden gezielt suchen und die freigegebene Kundenkartei öffnen.</span></span>
+                <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
+              </button>
             </div>
+          </section>
+        </section>
+
+        <section id="crmView" class="view crm-view" aria-labelledby="crmTitle">
+          <header class="topbar crm-topbar">
+            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="crmTitle">CRM</h1><p class="subtitle">Kunden gezielt finden und freigegebene Kontaktdaten in einer übersichtlichen Kundenkartei pflegen.</p></div>
+            <div class="topbar-actions crm-topbar-actions">
+              <button class="secondary-button" id="crmColumnsButton" type="button" aria-haspopup="dialog" aria-controls="crmColumnsDialog">Anzeigespalten</button>
+              <button class="primary-button hidden" id="crmCreateButton" type="button">+ Kunde anlegen</button>
+            </div>
+          </header>
+
+          <section class="crm-directory-workspace" id="crmDirectoryWorkspace" aria-labelledby="crmSearchTitle">
+            <div class="crm-search-shell">
+              <div class="crm-search-heading"><div><span class="eyebrow">Kundensuche</span><h2 id="crmSearchTitle">Kundenkartei finden</h2><p>Ergebnisse werden erst nach einer ausdrücklichen Suche geladen. Damit bleibt die Ansicht auch bei mehreren tausend Kunden schnell und übersichtlich.</p></div></div>
+              <form class="crm-search-form" id="crmSearchForm">
+                <label class="field crm-search-query"><span>Suchbegriff</span><input id="crmSearchQuery" type="search" minlength="2" maxlength="120" autocomplete="off" aria-describedby="crmSearchStatus" placeholder="Kundennummer, Name, Adresse, Telefon, E-Mail oder Website" required /></label>
+                <label class="field"><span>Kundentyp</span><select id="crmSearchCustomerType"><option value="">Privat und gewerblich</option><option value="private">Privat</option><option value="business">Gewerblich</option></select></label>
+                <div class="crm-search-actions"><button class="secondary-button" id="crmSearchReset" type="button">Zurücksetzen</button><button class="primary-button" id="crmSearchSubmit" type="submit">Kunden suchen</button></div>
+              </form>
+              <p class="crm-search-status" id="crmSearchStatus" role="status" aria-live="polite">Suchbegriff eingeben und „Kunden suchen“ wählen. Der Kundentyp ist ein zusätzlicher Filter.</p>
+            </div>
+
+            <section class="crm-results hidden" id="crmResults" aria-labelledby="crmResultCount">
+              <div class="crm-result-heading"><strong id="crmResultCount">0 Treffer</strong><span id="crmResultRange"></span></div>
+              <div class="crm-table-scroll" tabindex="0" role="region" aria-label="CRM-Suchergebnisse; horizontal scrollbar auf schmalen Bildschirmen">
+                <table class="crm-table" id="crmTable">
+                  <caption class="visually-hidden">Ergebnisse der CRM-Kundensuche</caption>
+                  <thead id="crmTableHead"></thead>
+                  <tbody id="crmTableBody"></tbody>
+                </table>
+              </div>
+              <div class="crm-pagination"><button class="secondary-button" id="crmPreviousPage" type="button">← Vorherige</button><span id="crmPageStatus">Seite 1</span><button class="secondary-button" id="crmNextPage" type="button">Nächste →</button></div>
+            </section>
+          </section>
+
+          <section class="crm-customer-workspace hidden" id="crmCustomerWorkspace" aria-label="Kundenkartei">
+            <button class="crm-customer-back" id="crmCustomerBackButton" type="button">← Zurück zur Kundensuche</button>
+            <article class="crm-customer-shell" id="crmCustomerShell" aria-busy="false">
+              <div class="crm-customer-detail" id="crmCustomerDetail" aria-live="polite">
+                <div class="crm-empty"><strong>Keine Kundenkartei geöffnet</strong><p>Bitte zuerst einen Kunden suchen oder neu anlegen.</p></div>
+              </div>
+            </article>
           </section>
         </section>
 
@@ -1553,7 +1605,7 @@
               <label><span>Zeitraum schneidet ab</span><input id="salesReportDateFrom" type="date" /></label>
               <label><span>Zeitraum schneidet bis</span><input id="salesReportDateTo" type="date" /></label>
               <label><span>Statistikbericht</span><select id="salesReportSelect"><option value="">Noch kein Bericht importiert</option></select></label>
-              <label><span>Auswertung</span><select id="salesReportHorizon"><option value="period">Berichtszeitraum</option><option value="year_to_date">Jahr bis Berichtsende</option></select></label>
+              <label><span>Auswertung</span><select id="salesReportHorizon"><option value="year_to_date">Jahr bis Berichtsende</option><option value="period">Berichtszeitraum</option></select></label>
               <button class="secondary-button sales-analytics-filter-reset" id="salesReportResetFilters" type="button">Filter zurücksetzen</button>
               <p class="sales-analytics-filter-notice hidden" id="salesReportFilterNotice" role="status"></p>
             </section>
@@ -1567,9 +1619,9 @@
                 <div class="sales-analytics-surface-heading">
                   <div><span class="eyebrow" id="salesAnalyticsChartEyebrow">Aktuell und Vergleich</span><h2 id="salesAnalyticsChartTitle">Stärkste Warengruppen</h2><p id="salesReportSummary">Noch kein Statistikbericht ausgewählt.</p></div>
                   <div class="sales-analytics-chart-controls">
-                    <label class="sales-analytics-chart-metric"><span>Grafik</span><select id="salesReportChartType"><option value="ranking">Aktuell und Vergleich</option><option value="change">Abweichungen</option><option value="share">Anteile</option></select></label>
+                    <label class="sales-analytics-chart-metric"><span>Grafik</span><select id="salesReportChartType"><option value="ranking">Aktuell und Vergleich</option><option value="change">Relative Abweichung</option><option value="absolute_change">Absolute Abweichung</option><option value="share">Anteile</option><option value="pareto">Pareto-Analyse</option></select></label>
                     <label class="sales-analytics-chart-metric"><span>Kennzahl</span><select id="salesReportChartMetric"><option value="netRevenue">Umsatz netto</option></select></label>
-                    <button class="secondary-button" id="salesReportChartPdfButton" type="button" disabled>Grafiken als PDF</button>
+                    <button class="secondary-button" id="salesReportChartPdfButton" type="button" disabled>PDF exportieren</button>
                   </div>
                 </div>
                 <div class="sales-chart-legend" id="salesReportChartLegend" aria-hidden="true"><span class="current">Aktueller Zeitraum</span><span class="comparison">Vergleichszeitraum</span></div>
@@ -2756,6 +2808,46 @@
       </form>
     </dialog>
 
+    <dialog class="modal crm-columns-dialog" id="crmColumnsDialog" aria-labelledby="crmColumnsTitle">
+      <form id="crmColumnsForm">
+        <div class="modal-header"><div><span class="eyebrow">CRM-Ergebnisliste</span><h2 id="crmColumnsTitle">Anzeigespalten auswählen und ordnen</h2><p>Die Auswahl und Reihenfolge gelten nur für dein Benutzerkonto.</p></div><button type="button" class="close-button" data-close="crmColumnsDialog" aria-label="Spaltenauswahl schließen">×</button></div>
+        <div class="crm-column-options" id="crmColumnOptions"></div>
+        <p class="calculation-note" id="crmColumnsMessage" role="status" aria-live="polite">Mit den Pfeilen legst du die Position der eingeblendeten Spalten fest.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" id="crmColumnsReset">Standard wiederherstellen</button><span></span><button type="button" class="secondary-button" data-close="crmColumnsDialog">Abbrechen</button><button type="submit" class="primary-button" id="crmColumnsSave">Übernehmen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal sales-pdf-options-modal" id="salesReportPdfOptionsModal" aria-labelledby="salesReportPdfOptionsTitle" aria-describedby="salesReportPdfOptionsDescription">
+      <form id="salesReportPdfOptionsForm">
+        <div class="modal-header"><div><span class="eyebrow">Persönliche Exportvorgabe</span><h2 id="salesReportPdfOptionsTitle">Verkaufsanalyse als PDF</h2><p id="salesReportPdfOptionsDescription">Lege Umfang und Darstellung fest. Die Optionen gelten nur für dein Benutzerkonto.</p></div><button type="button" class="close-button" data-close="salesReportPdfOptionsModal" aria-label="PDF-Exportoptionen schließen">×</button></div>
+        <div class="sales-pdf-options-grid">
+          <section class="sales-pdf-options-section" aria-labelledby="salesReportPdfLayoutTitle">
+            <div class="sales-pdf-options-heading"><span aria-hidden="true">A4</span><div><h3 id="salesReportPdfLayoutTitle">Seiten &amp; Layout</h3><p>Nur ausgewählte Diagramme werden als eigene Seiten ausgegeben.</p></div></div>
+            <div class="form-grid sales-pdf-layout-fields">
+              <label class="field"><span>Ausrichtung</span><select id="salesReportPdfOrientation"><option value="landscape">Querformat</option><option value="portrait">Hochformat</option></select></label>
+              <label class="field"><span>Warengruppen je Diagramm</span><input id="salesReportPdfTopN" type="number" min="5" max="20" step="1" value="12" inputmode="numeric" /></label>
+            </div>
+            <fieldset class="sales-pdf-chart-options">
+              <legend>Diagrammseiten</legend>
+              <label><input type="checkbox" value="ranking" data-sales-pdf-chart /><span><strong>Aktuell &amp; Vergleich</strong><small>Stärkste Warengruppen gegenüberstellen</small></span></label>
+              <label><input type="checkbox" value="change" data-sales-pdf-chart /><span><strong>Relative Abweichung</strong><small>Prozentuale Entwicklung zum Vergleich</small></span></label>
+              <label><input type="checkbox" value="absolute_change" data-sales-pdf-chart /><span><strong>Absolute Abweichung</strong><small>Differenz in der gewählten Kennzahl</small></span></label>
+              <label><input type="checkbox" value="share" data-sales-pdf-chart /><span><strong>Anteile</strong><small>Anteil der Warengruppen am Gesamtwert</small></span></label>
+              <label><input type="checkbox" value="pareto" data-sales-pdf-chart /><span><strong>Pareto-Analyse</strong><small>Einzelanteil und kumulierter Anteil</small></span></label>
+            </fieldset>
+          </section>
+          <section class="sales-pdf-options-section" aria-labelledby="salesReportPdfContentTitle">
+            <div class="sales-pdf-options-heading"><span aria-hidden="true">Inhalt</span><div><h3 id="salesReportPdfContentTitle">Zusätzliche Inhalte</h3><p>Ergänze die Diagrammseiten um eine kompakte Übersicht.</p></div></div>
+            <label class="switch-row sales-pdf-switch"><span><strong>KPI-Übersicht</strong><small>Kennzahlen und Vergleichswerte voranstellen.</small></span><input id="salesReportPdfIncludeKpis" type="checkbox" /></label>
+            <label class="switch-row sales-pdf-switch"><span><strong>Detailtabelle</strong><small>Warengruppenwerte als zusätzliche Tabelle ausgeben.</small></span><input id="salesReportPdfIncludeTable" type="checkbox" /></label>
+            <label class="field sales-pdf-filename-field"><span>Dateiname-Präfix</span><input id="salesReportPdfFilenamePrefix" type="text" maxlength="64" value="Grabenplaner-Verkaufsanalyse" autocomplete="off" /><small>Unzulässige Dateizeichen werden entfernt; Datum und Dateiendung ergänzt der Export.</small></label>
+          </section>
+        </div>
+        <p class="calculation-note sales-pdf-options-message" id="salesReportPdfOptionsMessage" role="status" aria-live="polite">Mindestens eine Diagrammseite muss ausgewählt sein.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" id="salesReportPdfOptionsReset">Standard wiederherstellen</button><span></span><button type="button" class="secondary-button" data-close="salesReportPdfOptionsModal">Abbrechen</button><button type="submit" class="primary-button" id="salesReportPdfExportButton">Speichern &amp; PDF erstellen</button></div>
+      </form>
+    </dialog>
+
     <dialog class="modal wide-modal employee-modal" id="employeeModal">
       <form method="dialog" id="employeeForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
@@ -3850,6 +3942,24 @@
           <button type="submit" class="danger-button" id="vpsRebootConfirmButton">Sicherung erstellen und VPS neu starten</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog class="modal personal-actions-admin-dialog" id="personalActionsAdminDialog" aria-labelledby="personalActionsAdminTitle">
+      <div class="modal-header">
+        <div>
+          <span class="eyebrow">Persönliches Protokoll</span>
+          <h2 id="personalActionsAdminTitle">Meine letzten Aktionen</h2>
+          <p>Hier erscheinen ausschließlich deine eigenen protokollierten Aktionen. Rückgängig ist nur verfügbar, wenn eine sichere Gegenaktion möglich und der aktuelle Stand unverändert ist.</p>
+        </div>
+        <button class="close-button" type="button" data-close-personal-actions-admin aria-label="Persönliches Aktionslog schließen">×</button>
+      </div>
+      <p class="message hidden" id="personalActionsAdminMessage" role="status" aria-live="polite"></p>
+      <div class="admin-personal-actions-list" id="personalActionsAdminList" role="list" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button class="secondary-button hidden" id="personalActionsAdminLoadMore" type="button">Weitere laden</button>
+        <span></span>
+        <button class="secondary-button" type="button" data-close-personal-actions-admin>Schließen</button>
+      </div>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

@@ -137,6 +137,19 @@ dialog form { display:grid; gap:14px; min-width:0; max-width:100%; max-height:mi
 dialog form > *,dialog :is(input,select,textarea,button) { min-width:0; max-width:100%; }
 .dialog-heading { display:flex; justify-content:space-between; gap:12px; }.dialog-heading h2 { margin:0; }.dialog-heading button { width:32px; height:32px; font-size:22px; background:#edf1ee; }
 .dialog-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; min-width:0; max-width:100%; padding-top:8px; }.dialog-actions button { min-width:0; max-width:100%; padding:9px 12px; white-space:normal; }
+.personal-actions-shortcut svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.personal-actions-dialog { width:min(720px,calc(100% - 28px)); }
+.personal-actions-intro { margin:0; color:var(--muted); font-size:11px; line-height:1.55; }
+.personal-actions-list { display:grid; gap:8px; min-height:80px; }
+.personal-action-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; padding:13px 14px; border:1px solid var(--line); border-radius:12px; background:#f8faf8; }
+.personal-action-copy { min-width:0; }
+.personal-action-copy strong,.personal-action-copy p,.personal-action-copy small { display:block; }
+.personal-action-copy p { margin:4px 0; color:var(--ink); font-size:11px; line-height:1.45; }
+.personal-action-copy small { color:var(--muted); font-size:9px; }
+.personal-action-controls { display:grid; justify-items:end; gap:5px; }
+.personal-action-undo { min-height:38px; color:var(--green-dark); border:1px solid #b9d2c7; background:#eef6f2; }
+.personal-action-final { max-width:160px; color:var(--muted); font-size:9px; font-weight:750; line-height:1.35; text-align:right; }
+.personal-actions-dialog-actions { justify-content:space-between; }
 .birthday-presentation-dialog { width:min(560px,calc(100% - 24px)); color:#17231f; border:1px solid rgba(49,89,74,.24); background:#fffdfa; }
 .birthday-presentation-dialog::backdrop { background:rgba(13,28,23,.68); }
 .birthday-presentation-panel { position:relative; display:grid; gap:18px; max-height:min(90dvh,820px); padding:24px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; text-align:center; }
@@ -642,6 +655,7 @@ html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 @media (max-width:560px) { .wifi-suggestion-card { padding:16px; }.wifi-suggestion-heading { align-items:stretch; flex-direction:column; }.portal-switch { justify-content:space-between; }.wifi-suggestion-row { grid-template-columns:1fr 1fr; }.wifi-week-heading { align-items:stretch; flex-direction:column; }.wifi-week-confirm { width:100%; } }
 @media (max-width:560px) { .privacy-settings-heading,.vacation-account-heading { align-items:stretch; flex-direction:column; }.privacy-manual-badge { align-self:flex-start; }.privacy-request-item { grid-template-columns:1fr; }.privacy-request-actions { align-items:flex-start; }.vacation-account-heading label { width:100%; }.vacation-account-primary,.vacation-account-details { grid-template-columns:1fr; }.vacation-account-card { padding:17px; }.time-record-statement { grid-template-columns:1fr; }.time-record-statement .status { justify-self:start; }.time-record-actuals { grid-column:1; width:100%; } }
 @media (max-width:720px) { body { padding-bottom:calc(78px + env(safe-area-inset-bottom)); }.portal-settings-active { padding-bottom:24px; }.portal-header { min-height:58px; padding:8px 10px; }.portal-logout-status { top:68px; right:10px; width:min(360px,calc(100vw - 20px)); }.portal-tabs { position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:30; margin:0; padding:5px; flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; box-shadow:0 12px 35px rgba(25,53,43,.25); background:rgba(255,253,250,.97); backdrop-filter:blur(12px); }.portal-tabs button { flex:0 0 auto; min-width:94px; min-height:48px; padding:7px 10px; font-size:10px; scroll-snap-align:start; }.portal-card { border-radius:14px; }.request-form,.vacation-layout > section,.history-card { padding:17px; } main { width:min(100% - 20px,1180px); margin-top:18px; }.primary,.text-button,.approved-vacation-item button,.cancel-request,input,select { min-height:44px; }.request-item,.history-item { grid-template-columns:1fr; }.request-item button,.history-item button { width:100%; }.history-item-status { justify-items:start; }.dialog-actions { position:sticky; bottom:-24px; padding:10px 0 max(2px,env(safe-area-inset-bottom)); background:white; }.notification-button { flex-basis:44px; } }
+@media (max-width:720px) { .personal-actions-shortcut span { display:none; }.personal-actions-shortcut { width:44px; min-width:44px; padding:8px; }.personal-action-row { grid-template-columns:1fr; align-items:start; }.personal-action-controls { justify-items:start; }.personal-action-final { max-width:none; text-align:left; }.personal-actions-dialog-actions { justify-content:flex-end; } }
 @media (max-width:720px) {
   .portal-tabs.mobile-personal { display:flex; flex-wrap:nowrap; gap:3px; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x proximity; scrollbar-width:none; }
   .portal-tabs.mobile-personal::-webkit-scrollbar { display:none; }

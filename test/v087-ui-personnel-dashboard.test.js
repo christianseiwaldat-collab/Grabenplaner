@@ -174,13 +174,13 @@ test("Verkaufsanalyse: Archiv, Sortierung, Grafikvarianten und PDF-Export sind i
   assert.doesNotMatch(section, /Aufgearbeitete TradeFoto-Berichte/);
   assert.match(section, /Der Warengruppenvergleich wird als strukturierter/);
   assert.doesNotMatch(section, /id="salesReportTableSort"/);
-  assert.match(section, /id="salesReportChartType"[\s\S]*?value="ranking"[\s\S]*?value="change"[\s\S]*?value="share"/);
+  assert.match(section, /id="salesReportChartType"[\s\S]*?value="ranking"[\s\S]*?value="change"[\s\S]*?value="absolute_change"[\s\S]*?value="share"[\s\S]*?value="pareto"/);
   assert.match(section, /id="salesReportChartPdfButton"/);
   assert.match(section, /<details class="sales-analytics-archive" id="salesReportArchive"/);
   assert.ok(section.indexOf('id="salesReportArchive"') > section.indexOf('id="salesReportTableBody"'));
   assert.match(app, /function changeSalesAnalyticsTableSort\(key, hasGrossMargin\)/);
   assert.match(app, /data-sales-table-sort/);
-  assert.match(app, /function downloadSalesAnalyticsChartsPdf\(\)/);
+  assert.match(app, /function downloadSalesAnalyticsChartsPdf\(pdfOptions = state\.salesAnalytics\.pdfOptions\)/);
   assert.match(server, /app\.post\("\/api\/sales-analytics\/charts\.pdf"/);
   assert.match(server, /salesAnalyticsRequestContext\(request, \{ csrf: true \}\)/);
   assert.match(server, /projectedSalesAnalyticsChartsPdfData/);

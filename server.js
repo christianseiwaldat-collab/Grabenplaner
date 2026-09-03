@@ -13,6 +13,20 @@ const {
   buildSalesAnalyticsProjection,
 } = require("./lib/sales-analytics-access");
 const {
+  CRM_PERMISSIONS,
+  CRM_PERMISSION_IDS,
+  buildCrmProjection,
+  resolveCrmPermissionDependencies,
+} = require("./lib/crm-access");
+const {
+  CRM_DEFAULT_PREFERENCES,
+  CRM_PREFERENCE_KEYS,
+  CrmValidationError,
+  normalizeCrmCustomerInput,
+  normalizeCrmCustomerSearch,
+  normalizeCrmPreferences,
+} = require("./lib/crm-customers");
+const {
   TRADEFOTO_REPORT_EXTRACTIONS,
   TRADEFOTO_REPORT_MAX_BYTES,
   TRADEFOTO_REPORT_SOURCE_SYSTEM,
@@ -795,6 +809,9 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.INVENTORY_READ, label: "Bestandsdaten in Verkaufsanalysen lesen", description: "Bestand, bestellt und im Zulauf nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "high", eligibleRoles: ["manager", "admin", "developer"] },
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", description: "Wirtschaftlich sensible Kosten- und Rohertragswerte nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", description: "TradeFoto-Statistikberichte prüfen, einer freigegebenen Filiale zuordnen und nach ausdrücklicher Bestätigung unveränderlich übernehmen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", description: "Öffnet den geschützten CRM-Arbeitsbereich und gewährt allein noch keinen Zugriff auf Kundendaten.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", description: "Sucht und liest Kundendaten ausschließlich im CRM-Arbeitsbereich.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: CRM_PERMISSIONS.CUSTOMERS_WRITE, label: "Kundenkartei bearbeiten", description: "Legt Kundenkarten an und bearbeitet Stammdaten, eigene Textfelder sowie Kundenfotos.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
   { id: "positions:write", label: "Positionskatalog verwalten", description: "Unternehmensweite Positionen anlegen, bearbeiten und revisionssicher archivieren; Positionen selbst vergeben keine Benutzerrechte.", group: "Personalverwaltung", warningLevel: "high", hrDelegable: true },
   { id: "locations:operational:write", label: "Eigenen Standort betrieblich pflegen", description: "Öffnungszeiten und Mindestbesetzung ausschließlich in zugewiesenen Standorten bearbeiten; keine Neuanlage, Deaktivierung, Kostenstellen- oder Zeiterfassungseinstellungen.", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
@@ -1042,6 +1059,9 @@ function portalPermissionRoleRestrictionError(permissions) {
   if (restricted.length && restricted.every((permission) => SALES_ANALYTICS_PERMISSION_IDS.includes(permission))) {
     return httpError(403, "Verkaufsanalyse-Rechte dürfen nur dafür vorgesehenen kaufmännischen Rollen zugewiesen werden.", "SALES_ANALYTICS_PERMISSION_ROLE_RESTRICTED");
   }
+  if (restricted.length && restricted.every((permission) => CRM_PERMISSION_IDS.includes(permission))) {
+    return httpError(403, "CRM-Rechte dürfen nur dafür vorgesehenen kaufmännischen Rollen zugewiesen werden.", "CRM_PERMISSION_ROLE_RESTRICTED");
+  }
   if (restricted.length && restricted.every((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))) {
     return httpError(403, "Schulungs- und Wissensrechte dürfen nur den dafür vorgesehenen persönlichen Fachrollen zugewiesen werden.", "PERSONNEL_LEARNING_PERMISSION_ROLE_RESTRICTED");
   }
@@ -1092,6 +1112,14 @@ function assertPortalPermissionDependencies(permissions) {
     throw httpError(
       400,
       "Standortübergreifende Dienstplan- und Einsatzanfragerechte können nur zusammen mit ihren erforderlichen Leserechten vergeben werden.",
+      "PORTAL_PERMISSION_DEPENDENCY",
+    );
+  }
+  const crmDependencies = resolveCrmPermissionDependencies([...projected]);
+  if (!crmDependencies.valid) {
+    throw httpError(
+      400,
+      "CRM-Rechte können nur zusammen mit ihren erforderlichen Basisrechten vergeben werden.",
       "PORTAL_PERMISSION_DEPENDENCY",
     );
   }
@@ -1346,6 +1374,9 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.INVENTORY_READ, label: "Bestandsdaten in Verkaufsanalysen lesen", group: "Verkaufsverwaltung", warningLevel: "high", scopeBehavior: "organizational" },
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
+  { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
+  { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
+  { id: CRM_PERMISSIONS.CUSTOMERS_WRITE, label: "Kundenkartei bearbeiten", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: "wifi:settings", label: "WLAN-Zeitvorschläge verwalten", group: "Zeit & Abwesenheit", scopeBehavior: "global" },
   { id: "users:write", label: "Portal-Zugänge verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
   { id: "roles:read", label: "App-Rollen lesen", group: "Zugänge & Rechte", scopeBehavior: "global" },
@@ -1363,6 +1394,7 @@ const portalGlobalPermissionIds = new Set([
   PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.SETTINGS_WRITE,
   "positions:write", "hr:approve", "hr:settings", "sickness:settings",
   "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
+  ...CRM_PERMISSION_IDS,
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
   "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
@@ -2279,6 +2311,7 @@ const {
   absenceManagement: absenceManagementRepository,
   brandingSnapshot: brandingSnapshotRepository,
   collectiveAgreements: collectiveAgreementsRepository,
+  crmCustomers: crmCustomersRepository,
   customProcessManagement: customProcessRepository,
   customWorkRules: customWorkRulesRepository,
   governanceStore: governanceStoreRepository,
@@ -2286,6 +2319,7 @@ const {
   loanModule: loanModuleRepository,
   mobileAuth: mobileAuthRepository,
   organizationPersonnel: organizationPersonnelRepository,
+  personalActionLog: personalActionLogRepository,
   personalNotificationContacts: personalNotificationContactsRepository,
   personnelLifecycle: personnelLifecycleRepository,
   personnelLearning: personnelLearningRepository,
@@ -4556,6 +4590,86 @@ function parsePortalPermissionScopes(value) {
   }
 }
 
+function parseCrmPhotoMultipart(request, { maxFileBytes = MAX_CANDIDATE_PHOTO_INPUT_BYTES } = {}) {
+  return new Promise((resolve, reject) => {
+    const contentType = String(request.headers["content-type"] || "");
+    const boundaryMatch = contentType.match(/^multipart\/form-data\s*;[\s\S]*?boundary=(?:"([^"]+)"|([^;\s]+))/i);
+    const boundary = String(boundaryMatch?.[1] || boundaryMatch?.[2] || "");
+    if (!boundary || boundary.length > 70 || /[\r\n]/.test(boundary)) {
+      reject(httpError(415, "Bitte das Kundenfoto als Formular senden.", "CRM_PHOTO_MULTIPART_REQUIRED"));
+      return;
+    }
+    const chunks = [];
+    let totalBytes = 0;
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    request.on("data", (chunk) => {
+      if (settled) return;
+      totalBytes += chunk.length;
+      if (totalBytes > maxFileBytes + (128 * 1024)) {
+        fail(httpError(413, "Das Kundenfoto darf höchstens 10 MB groß sein.", "CRM_PHOTO_TOO_LARGE"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("error", () => fail(httpError(400, "Das Kundenfoto konnte nicht gelesen werden.", "CRM_PHOTO_MULTIPART_INVALID")));
+    request.on("end", () => {
+      if (settled) return;
+      try {
+        const body = Buffer.concat(chunks);
+        const delimiter = Buffer.from(`--${boundary}`, "utf8");
+        const nextDelimiter = Buffer.from(`\r\n--${boundary}`, "utf8");
+        let photo = null;
+        let position = body.indexOf(delimiter);
+        let partCount = 0;
+        if (position !== 0) throw httpError(400, "Das Fotoformular ist ungültig.", "CRM_PHOTO_MULTIPART_INVALID");
+        while (position >= 0) {
+          position += delimiter.length;
+          if (body.subarray(position, position + 2).toString("ascii") === "--") break;
+          if (body.subarray(position, position + 2).toString("ascii") !== "\r\n") {
+            throw httpError(400, "Das Fotoformular ist ungültig.", "CRM_PHOTO_MULTIPART_INVALID");
+          }
+          position += 2;
+          const headerEnd = body.indexOf(Buffer.from("\r\n\r\n"), position);
+          if (headerEnd < 0 || headerEnd - position > 8192) {
+            throw httpError(400, "Ein Fototeil hat ungültige Kopfzeilen.", "CRM_PHOTO_MULTIPART_INVALID");
+          }
+          const headers = body.subarray(position, headerEnd).toString("utf8");
+          const dataStart = headerEnd + 4;
+          const dataEnd = body.indexOf(nextDelimiter, dataStart);
+          if (dataEnd < 0) throw httpError(400, "Das Fotoformular ist unvollständig.", "CRM_PHOTO_MULTIPART_INVALID");
+          const data = body.subarray(dataStart, dataEnd);
+          const disposition = headers.split("\r\n").find((line) => /^content-disposition:/i.test(line)) || "";
+          const name = disposition.match(/(?:^|;)\s*name="([^"]*)"/i)?.[1] || "";
+          const encodedFilename = disposition.match(/(?:^|;)\s*filename\*=UTF-8''([^;]+)/i)?.[1];
+          const plainFilename = disposition.match(/(?:^|;)\s*filename="([^"]*)"/i)?.[1];
+          let filename = plainFilename || "";
+          if (encodedFilename) { try { filename = decodeURIComponent(encodedFilename); } catch {} }
+          partCount += 1;
+          if (partCount > 2) throw httpError(413, "Das Fotoformular enthält zu viele Teile.", "CRM_PHOTO_TOO_MANY_PARTS");
+          if (name !== "photo" || !filename) {
+            throw httpError(400, "Das Fotoformular enthält ein unbekanntes Feld.", "CRM_PHOTO_MULTIPART_INVALID");
+          }
+          if (photo) throw httpError(413, "Bitte genau ein Kundenfoto auswählen.", "CRM_PHOTO_TOO_MANY_FILES");
+          if (!data.length) throw httpError(400, "Das Kundenfoto ist leer.", "CRM_PHOTO_EMPTY");
+          if (data.length > maxFileBytes) throw httpError(413, "Das Kundenfoto darf höchstens 10 MB groß sein.", "CRM_PHOTO_TOO_LARGE");
+          photo = { originalName: filename, buffer: Buffer.from(data) };
+          position = dataEnd + 2;
+        }
+        if (!photo) throw httpError(400, "Bitte ein Kundenfoto auswählen.", "CRM_PHOTO_REQUIRED");
+        settled = true;
+        resolve(photo);
+      } catch (error) {
+        fail(error.status ? error : httpError(400, "Das Fotoformular ist ungültig.", "CRM_PHOTO_MULTIPART_INVALID"));
+      }
+    });
+  });
+}
+
 function sessionPortalAccessScopeProjection(row = {}) {
   const explicitScopes = portalAccessScopesForPrincipal({
     role: "employee",
@@ -4721,6 +4835,7 @@ function publicPortalUser(session) {
       deniedPermissions: [],
       scopes: session.scopes || [],
       salesAnalytics: buildSalesAnalyticsProjection(session),
+      crm: buildCrmProjection(session),
       mustChangePassword: session.mustChangePassword,
       personnelRecordAccess: {
         available: false,
@@ -4753,6 +4868,7 @@ function publicPortalUser(session) {
     deniedPermissions: session.deniedPermissions || [],
     scopes: session.scopes || [],
     salesAnalytics: buildSalesAnalyticsProjection(session),
+    crm: buildCrmProjection(session),
     mustChangePassword: session.mustChangePassword,
     personnelRecordAccess: {
       available: recordAccess.canReadSensitive || recordAccess.canReadPhone
@@ -25006,6 +25122,174 @@ function salesAnalyticsRequestContext(request, { importManagement = false, csrf 
   return { session, projection };
 }
 
+const SALES_ANALYTICS_PREFERENCES_KEY = "sales_analytics_preferences_v1";
+const SALES_ANALYTICS_CHART_TYPES = Object.freeze([
+  "ranking",
+  "change",
+  "absolute_change",
+  "share",
+  "pareto",
+]);
+const SALES_ANALYTICS_PDF_DEFAULTS = Object.freeze({
+  orientation: "landscape",
+  charts: Object.freeze([...SALES_ANALYTICS_CHART_TYPES]),
+  topN: 12,
+  includeKpis: true,
+  includeTable: false,
+  filenamePrefix: "Grabenplaner-Verkaufsanalyse",
+});
+const SALES_ANALYTICS_PDF_MAX_TABLE_PAGES = 24;
+const SALES_ANALYTICS_PREFERENCE_DEFAULTS = Object.freeze({
+  version: 1,
+  horizon: "year_to_date",
+  chartType: "ranking",
+  chartMetric: "netRevenue",
+  pdf: SALES_ANALYTICS_PDF_DEFAULTS,
+});
+
+function salesAnalyticsExactKeys(value, expectedKeys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const keys = Object.keys(value).sort();
+  const expected = [...expectedKeys].sort();
+  return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
+}
+
+function normalizeSalesAnalyticsFilenamePrefix(value) {
+  if (typeof value !== "string") {
+    throw httpError(400, "Der Dateiname für den PDF-Export ist ungültig.", "SALES_ANALYTICS_PREFERENCES_INVALID");
+  }
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized || normalized.length > 64 || /^[. ]+$/.test(normalized)
+    || /[\x00-\x1f\x7f\\/:*?"<>|]/.test(normalized)) {
+    throw httpError(400, "Der Dateiname für den PDF-Export ist ungültig.", "SALES_ANALYTICS_PREFERENCES_INVALID");
+  }
+  return normalized;
+}
+
+function normalizeSalesAnalyticsPdfOptions(value, { errorCode = "SALES_ANALYTICS_PREFERENCES_INVALID" } = {}) {
+  if (!salesAnalyticsExactKeys(value, [
+    "orientation",
+    "charts",
+    "topN",
+    "includeKpis",
+    "includeTable",
+    "filenamePrefix",
+  ])) {
+    throw httpError(400, "Die PDF-Exportoptionen sind unvollständig oder enthalten unbekannte Felder.", errorCode);
+  }
+  const orientation = String(value.orientation || "");
+  if (!["landscape", "portrait"].includes(orientation)) {
+    throw httpError(400, "Die PDF-Ausrichtung ist ungültig.", errorCode);
+  }
+  if (!Array.isArray(value.charts) || value.charts.length < 1
+    || value.charts.length > SALES_ANALYTICS_CHART_TYPES.length
+    || value.charts.some((chart) => !SALES_ANALYTICS_CHART_TYPES.includes(chart))
+    || new Set(value.charts).size !== value.charts.length) {
+    throw httpError(400, "Mindestens ein gültiges Diagramm muss ausgewählt sein.", errorCode);
+  }
+  if (!Number.isInteger(value.topN) || value.topN < 5 || value.topN > 20) {
+    throw httpError(400, "Die Anzahl der Warengruppen muss zwischen 5 und 20 liegen.", errorCode);
+  }
+  if (typeof value.includeKpis !== "boolean" || typeof value.includeTable !== "boolean") {
+    throw httpError(400, "Die PDF-Inhaltsoptionen sind ungültig.", errorCode);
+  }
+  let filenamePrefix;
+  try {
+    filenamePrefix = normalizeSalesAnalyticsFilenamePrefix(value.filenamePrefix);
+  } catch (error) {
+    if (errorCode !== "SALES_ANALYTICS_PREFERENCES_INVALID") error.code = errorCode;
+    throw error;
+  }
+  return Object.freeze({
+    orientation,
+    charts: Object.freeze([...value.charts]),
+    topN: value.topN,
+    includeKpis: value.includeKpis,
+    includeTable: value.includeTable,
+    filenamePrefix,
+  });
+}
+
+function normalizeSalesAnalyticsPreferences(value, projection) {
+  if (!salesAnalyticsExactKeys(value, ["version", "horizon", "chartType", "chartMetric", "pdf"])
+    || value.version !== 1) {
+    throw httpError(400, "Die persönlichen Verkaufsanalyse-Einstellungen sind ungültig.", "SALES_ANALYTICS_PREFERENCES_INVALID");
+  }
+  const horizon = String(value.horizon || "");
+  const chartType = String(value.chartType || "");
+  const chartMetric = String(value.chartMetric || "");
+  if (!["period", "year_to_date"].includes(horizon)
+    || !SALES_ANALYTICS_CHART_TYPES.includes(chartType)
+    || !SALES_ANALYTICS_CHART_PDF_METRICS[chartMetric]) {
+    throw httpError(400, "Die persönlichen Verkaufsanalyse-Einstellungen sind ungültig.", "SALES_ANALYTICS_PREFERENCES_INVALID");
+  }
+  if (SALES_ANALYTICS_CHART_PDF_METRICS[chartMetric].protected && !projection.grossMargin) {
+    throw httpError(403, "Der Rohertrag ist für diesen Zugang nicht freigegeben.", "SALES_ANALYTICS_GROSS_MARGIN_DENIED");
+  }
+  return Object.freeze({
+    version: 1,
+    horizon,
+    chartType,
+    chartMetric,
+    pdf: normalizeSalesAnalyticsPdfOptions(value.pdf),
+  });
+}
+
+function salesAnalyticsDefaultPreferences() {
+  return {
+    ...SALES_ANALYTICS_PREFERENCE_DEFAULTS,
+    pdf: {
+      ...SALES_ANALYTICS_PDF_DEFAULTS,
+      charts: [...SALES_ANALYTICS_PDF_DEFAULTS.charts],
+    },
+  };
+}
+
+async function salesAnalyticsPreferencesForSession(session, projection) {
+  const stored = await uiPreferencesRepository.get(session.employeeNumber, SALES_ANALYTICS_PREFERENCES_KEY);
+  if (!stored) return salesAnalyticsDefaultPreferences();
+  try {
+    return normalizeSalesAnalyticsPreferences(JSON.parse(stored.value), projection);
+  } catch {
+    return salesAnalyticsDefaultPreferences();
+  }
+}
+
+app.get("/api/sales-analytics/preferences", async (request, response) => {
+  const { session, projection } = salesAnalyticsRequestContext(request);
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json({ preferences: await salesAnalyticsPreferencesForSession(session, projection) });
+});
+
+app.put("/api/sales-analytics/preferences", async (request, response) => {
+  const { session, projection } = salesAnalyticsRequestContext(request, { csrf: true });
+  const preferences = normalizeSalesAnalyticsPreferences(request.body, projection);
+  await uiPreferencesRepository.upsert(
+    session.employeeNumber,
+    SALES_ANALYTICS_PREFERENCES_KEY,
+    JSON.stringify(preferences),
+  );
+  auditPortal(
+    session.employeeNumber,
+    "sales.analytics.preferences.update",
+    "ui_preference",
+    SALES_ANALYTICS_PREFERENCES_KEY,
+    JSON.stringify({
+      version: preferences.version,
+      horizon: preferences.horizon,
+      chartType: preferences.chartType,
+      chartMetric: preferences.chartMetric,
+      pdfOrientation: preferences.pdf.orientation,
+      pdfChartCount: preferences.pdf.charts.length,
+      pdfTopN: preferences.pdf.topN,
+      pdfIncludesKpis: preferences.pdf.includeKpis,
+      pdfIncludesTable: preferences.pdf.includeTable,
+    }),
+  );
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json({ preferences });
+});
+
 async function salesAnalyticsLocations(projection) {
   if (!projection.company && !projection.locationIds.length) return [];
   const allowedIds = new Set(projection.locationIds.map(String));
@@ -25797,9 +26081,16 @@ function normalizeSalesAnalyticsChartsPdfInput(input, projection) {
   }
   const keys = Object.keys(input).sort();
   const series = Object.hasOwn(input, "reportIds");
-  const expectedKeys = (series ? ["horizon", "metric", "reportIds"] : ["horizon", "metric", "reportId"]).sort();
-  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
+  const baseKeys = series ? ["horizon", "metric", "reportIds"] : ["horizon", "metric", "reportId"];
+  const legacyKeys = [...baseKeys].sort();
+  const versionedKeys = [...baseKeys, "optionsVersion", "options"].sort();
+  const legacy = keys.length === legacyKeys.length && keys.every((key, index) => key === legacyKeys[index]);
+  const versioned = keys.length === versionedKeys.length && keys.every((key, index) => key === versionedKeys[index]);
+  if (!legacy && !versioned) {
     throw httpError(400, "Die Auswahl für den Grafikexport ist unvollständig.", "SALES_ANALYTICS_CHART_PDF_INPUT_INVALID");
+  }
+  if (versioned && input.optionsVersion !== 1) {
+    throw httpError(400, "Die Version der PDF-Exportoptionen wird nicht unterstützt.", "SALES_ANALYTICS_CHART_PDF_OPTIONS_INVALID");
   }
   const metric = String(input.metric || "");
   const metricDefinition = SALES_ANALYTICS_CHART_PDF_METRICS[metric];
@@ -25813,6 +26104,16 @@ function normalizeSalesAnalyticsChartsPdfInput(input, projection) {
   if (!['period', 'year_to_date'].includes(horizon) || (series && horizon !== "period")) {
     throw httpError(400, "Der ausgewählte Auswertungszeitraum ist für den Grafikexport ungültig.", "SALES_ANALYTICS_CHART_PDF_HORIZON_INVALID");
   }
+  const pdfOptions = versioned
+    ? normalizeSalesAnalyticsPdfOptions(input.options, { errorCode: "SALES_ANALYTICS_CHART_PDF_OPTIONS_INVALID" })
+    : Object.freeze({
+      orientation: "landscape",
+      charts: Object.freeze(["ranking", "change", "share"]),
+      topN: 12,
+      includeKpis: false,
+      includeTable: false,
+      filenamePrefix: SALES_ANALYTICS_PDF_DEFAULTS.filenamePrefix,
+    });
   if (series) {
     let reportIds;
     try {
@@ -25820,13 +26121,13 @@ function normalizeSalesAnalyticsChartsPdfInput(input, projection) {
     } catch (error) {
       throw salesReportSeriesHttpError(error);
     }
-    return { series: true, reportIds, metric, metricDefinition, horizon };
+    return { series: true, reportIds, metric, metricDefinition, horizon, pdfOptions, legacy };
   }
   const reportId = String(input.reportId || "").trim();
   if (!reportId || reportId.length > 120 || !/^[A-Za-z0-9_-]+$/.test(reportId)) {
     throw httpError(400, "Der ausgewählte Statistikbericht ist ungültig.", "SALES_ANALYTICS_REPORT_SELECTION_INVALID");
   }
-  return { series: false, reportId, metric, metricDefinition, horizon };
+  return { series: false, reportId, metric, metricDefinition, horizon, pdfOptions, legacy };
 }
 
 async function projectedSalesAnalyticsChartsPdfData(input, projection) {
@@ -25860,7 +26161,7 @@ function salesAnalyticsChartsPdfMetricNumber(metric, metricId, side) {
 }
 
 function salesAnalyticsChartsPdfChange(current, comparison) {
-  if (!Number.isFinite(current) || !Number.isFinite(comparison) || comparison === 0) return null;
+  if (!Number.isFinite(current) || !Number.isFinite(comparison) || comparison <= 0) return null;
   return ((current / comparison) - 1) * 100;
 }
 
@@ -25905,15 +26206,26 @@ function salesAnalyticsChartsPdfTruncate(doc, value, width) {
 
 function drawSalesAnalyticsChartsPdfHeader(doc, title, context) {
   const width = doc.page.width;
+  const contentWidth = width - 72;
+  const columnWidth = contentWidth * .48;
   doc.save().rect(0, 0, width, 82).fill("#17382f").restore();
   doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(17)
-    .text("Grabenplaner Verkaufsanalyse", 36, 25, { width: 440 });
+    .text("Grabenplaner Verkaufsanalyse", 36, 25, { width: columnWidth, lineBreak: false });
   doc.font("Helvetica").fontSize(8.5).fillColor("#d6e5df")
-    .text(salesAnalyticsChartsPdfSafeText(context.locationName), 36, 50, { width: 440 });
+    .text(salesAnalyticsChartsPdfTruncate(doc, context.locationName, columnWidth), 36, 50, { width: columnWidth, lineBreak: false });
   doc.font("Helvetica-Bold").fontSize(12).fillColor("#ffffff")
-    .text(salesAnalyticsChartsPdfSafeText(title), width - 330, 25, { width: 294, align: "right" });
+    .text(salesAnalyticsChartsPdfTruncate(doc, title, columnWidth), width - 36 - columnWidth, 25, { width: columnWidth, align: "right", lineBreak: false });
   doc.font("Helvetica").fontSize(7.5).fillColor("#d6e5df")
-    .text(`${context.metricDefinition.label} - ${salesAnalyticsChartsPdfPeriodLabel(context.currentPeriod)}`, width - 430, 49, { width: 394, align: "right" });
+    .text(
+      salesAnalyticsChartsPdfTruncate(
+        doc,
+        `${context.metricDefinition.label} - ${salesAnalyticsChartsPdfPeriodLabel(context.currentPeriod)}`,
+        columnWidth,
+      ),
+      width - 36 - columnWidth,
+      49,
+      { width: columnWidth, align: "right", lineBreak: false },
+    );
 }
 
 function salesAnalyticsChartsPdfEntries(detail, horizon, metric) {
@@ -25925,20 +26237,40 @@ function salesAnalyticsChartsPdfEntries(detail, horizon, metric) {
   })).filter((entry) => entry.current !== null || entry.comparison !== null);
 }
 
+function salesAnalyticsChartsPdfLayout(doc, { valueWidth = 108 } = {}) {
+  const contentWidth = doc.page.width - 72;
+  const resolvedValueWidth = Math.min(valueWidth, contentWidth * .23);
+  const labelWidth = Math.max(135, contentWidth * .27);
+  const xLabel = 36;
+  const xTrack = xLabel + labelWidth + 12;
+  const xValue = doc.page.width - 36 - resolvedValueWidth;
+  return {
+    xLabel,
+    labelWidth,
+    xTrack,
+    trackWidth: Math.max(90, xValue - xTrack - 12),
+    xValue,
+    valueWidth: resolvedValueWidth,
+    bottom: doc.page.height - 59,
+  };
+}
+
+function salesAnalyticsChartsPdfRows(entries, topN, selector = (entry) => entry.current) {
+  return [...entries]
+    .filter((entry) => entry.current !== 0 || entry.comparison !== 0)
+    .sort((left, right) => (selector(right) ?? Number.NEGATIVE_INFINITY) - (selector(left) ?? Number.NEGATIVE_INFINITY))
+    .slice(0, topN);
+}
+
 function drawSalesAnalyticsChartsPdfRanking(doc, entries, context) {
   drawSalesAnalyticsChartsPdfHeader(doc, "Aktuell und Vergleich", context);
-  const rows = [...entries].filter((entry) => entry.current !== 0 || entry.comparison !== 0)
-    .sort((left, right) => (right.current ?? Number.NEGATIVE_INFINITY) - (left.current ?? Number.NEGATIVE_INFINITY))
-    .slice(0, 12);
-  const xLabel = 36;
-  const labelWidth = 202;
-  const xTrack = 250;
-  const trackWidth = 430;
-  const xValue = 692;
+  const rows = salesAnalyticsChartsPdfRows(entries, context.topN);
+  const { xLabel, labelWidth, xTrack, trackWidth, xValue, valueWidth, bottom } = salesAnalyticsChartsPdfLayout(doc);
   const maximum = Math.max(1, ...rows.flatMap((entry) => [Math.abs(entry.current || 0), Math.abs(entry.comparison || 0)]));
   doc.font("Helvetica").fontSize(7.5).fillColor("#66736e")
     .text("Aktuell", xTrack, 92).text("Vergleich", xTrack + 55, 92);
   let y = 111;
+  const rowStep = Math.min(34, Math.max(20, (bottom - y) / Math.max(1, rows.length)));
   if (!rows.length) doc.fillColor("#66736e").text("Keine auswertbaren Warengruppen vorhanden.", xLabel, y);
   rows.forEach((entry) => {
     doc.font("Helvetica-Bold").fontSize(7.4).fillColor("#172331")
@@ -25954,30 +26286,26 @@ function drawSalesAnalyticsChartsPdfRanking(doc, entries, context) {
         .fill("#aebfba");
     }
     doc.font("Helvetica-Bold").fontSize(7).fillColor("#172331")
-      .text(salesAnalyticsChartsPdfValue(entry.current, context.metricDefinition), xValue, y + 1, { width: 113, align: "right" });
+      .text(salesAnalyticsChartsPdfValue(entry.current, context.metricDefinition), xValue, y + 1, { width: valueWidth, align: "right" });
     doc.font("Helvetica").fontSize(6.8).fillColor("#66736e")
-      .text(salesAnalyticsChartsPdfValue(entry.comparison, context.metricDefinition), xValue, y + 12, { width: 113, align: "right" });
-    y += 34;
+      .text(salesAnalyticsChartsPdfValue(entry.comparison, context.metricDefinition), xValue, y + 12, { width: valueWidth, align: "right" });
+    y += rowStep;
   });
 }
 
 function drawSalesAnalyticsChartsPdfChanges(doc, entries, context) {
-  doc.addPage();
   drawSalesAnalyticsChartsPdfHeader(doc, "Größte relative Abweichungen", context);
   const rows = entries.map((entry) => ({ ...entry, change: salesAnalyticsChartsPdfChange(entry.current, entry.comparison) }))
     .filter((entry) => Number.isFinite(entry.change))
     .sort((left, right) => Math.abs(right.change) - Math.abs(left.change))
-    .slice(0, 12);
-  const xLabel = 36;
-  const labelWidth = 202;
-  const xTrack = 250;
-  const trackWidth = 430;
-  const xValue = 692;
+    .slice(0, context.topN);
+  const { xLabel, labelWidth, xTrack, trackWidth, xValue, valueWidth, bottom } = salesAnalyticsChartsPdfLayout(doc);
   const maximum = Math.max(1, ...rows.map((entry) => Math.abs(entry.change)));
   doc.font("Helvetica").fontSize(7.5).fillColor("#66736e")
     .text("unter Vergleich", xTrack, 92, { width: trackWidth / 2, align: "center" })
     .text("über Vergleich", xTrack + trackWidth / 2, 92, { width: trackWidth / 2, align: "center" });
   let y = 111;
+  const rowStep = Math.min(34, Math.max(20, (bottom - y) / Math.max(1, rows.length)));
   if (!rows.length) doc.fillColor("#66736e").text("Keine belastbaren Prozentvergleiche vorhanden.", xLabel, y);
   rows.forEach((entry) => {
     doc.font("Helvetica-Bold").fontSize(7.4).fillColor("#172331")
@@ -25989,48 +26317,236 @@ function drawSalesAnalyticsChartsPdfChanges(doc, entries, context) {
     const barX = entry.change < 0 ? xTrack + trackWidth / 2 - width : xTrack + trackWidth / 2;
     doc.roundedRect(barX, y + 5, width, 9, 4.5).fill(entry.change < 0 ? "#b14b44" : "#2f7764");
     doc.font("Helvetica-Bold").fontSize(7.2).fillColor(entry.change < 0 ? "#9a3831" : "#1f6d4d")
-      .text(salesAnalyticsChartsPdfPercent(entry.change), xValue, y + 5, { width: 113, align: "right" });
-    y += 34;
+      .text(salesAnalyticsChartsPdfPercent(entry.change), xValue, y + 5, { width: valueWidth, align: "right" });
+    y += rowStep;
   });
 }
 
 function drawSalesAnalyticsChartsPdfShares(doc, entries, context) {
-  doc.addPage();
   drawSalesAnalyticsChartsPdfHeader(doc, "Anteile nach Warengruppe", context);
   const positive = entries.filter((entry) => Number(entry.current) > 0)
     .sort((left, right) => right.current - left.current);
   const total = positive.reduce((sum, entry) => sum + entry.current, 0);
-  const rows = positive.slice(0, 12);
+  const selected = positive.slice(0, context.topN);
+  const omitted = positive.slice(context.topN);
+  const remainder = omitted.reduce((sum, entry) => sum + entry.current, 0);
+  const rows = remainder > 0
+    ? [...selected, {
+      id: "",
+      label: `Rest (${omitted.length} ${omitted.length === 1 ? "weitere Warengruppe" : "weitere Warengruppen"})`,
+      current: remainder,
+      remainder: true,
+    }]
+    : selected;
   const palette = ["#2f7764", "#4d927d", "#72aa98", "#9bc1b4", "#d08f54", "#bd6b61", "#7d8da3", "#8d79a6", "#87935f", "#5d7770", "#b39c69", "#8790a0"];
-  const xLabel = 36;
-  const labelWidth = 202;
-  const xTrack = 250;
-  const trackWidth = 430;
-  const xValue = 692;
+  const { xLabel, labelWidth, xTrack, trackWidth, xValue, valueWidth, bottom } = salesAnalyticsChartsPdfLayout(doc);
   let stackX = xTrack;
   rows.forEach((entry, index) => {
     const width = total > 0 ? (entry.current / total) * trackWidth : 0;
-    if (width > 0) doc.rect(stackX, 96, Math.max(1, width), 16).fill(palette[index % palette.length]);
+    if (width > 0) doc.rect(stackX, 96, Math.max(1, width), 16)
+      .fill(entry.remainder ? "#8b9893" : palette[index % palette.length]);
     stackX += width;
   });
   let y = 130;
+  const rowStep = Math.min(31, Math.max(19, (bottom - y) / Math.max(1, rows.length)));
   if (!rows.length) doc.fillColor("#66736e").text("Keine positiven aktuellen Werte für eine Anteilsdarstellung vorhanden.", xLabel, y);
   rows.forEach((entry, index) => {
     const share = total > 0 ? (entry.current / total) * 100 : 0;
-    doc.circle(xLabel + 4, y + 9, 3.5).fill(palette[index % palette.length]);
+    const color = entry.remainder ? "#8b9893" : palette[index % palette.length];
+    const label = entry.remainder ? entry.label : `${entry.id} - ${entry.label}`;
+    doc.circle(xLabel + 4, y + 9, 3.5).fill(color);
     doc.font("Helvetica-Bold").fontSize(7.4).fillColor("#172331")
-      .text(salesAnalyticsChartsPdfTruncate(doc, `${entry.id} - ${entry.label}`, labelWidth - 14), xLabel + 13, y + 5, { width: labelWidth - 14 });
+      .text(salesAnalyticsChartsPdfTruncate(doc, label, labelWidth - 14), xLabel + 13, y + 5, { width: labelWidth - 14 });
     doc.roundedRect(xTrack, y + 5, trackWidth, 9, 4.5).fill("#edf2f0");
-    doc.roundedRect(xTrack, y + 5, Math.max(1, (share / 100) * trackWidth), 9, 4.5).fill(palette[index % palette.length]);
+    doc.roundedRect(xTrack, y + 5, Math.max(1, (share / 100) * trackWidth), 9, 4.5).fill(color);
     doc.font("Helvetica-Bold").fontSize(7).fillColor("#172331")
-      .text(`${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(share)} %`, xValue, y + 1, { width: 113, align: "right" });
+      .text(`${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(share)} %`, xValue, y + 1, { width: valueWidth, align: "right" });
     doc.font("Helvetica").fontSize(6.7).fillColor("#66736e")
-      .text(salesAnalyticsChartsPdfValue(entry.current, context.metricDefinition), xValue, y + 11, { width: 113, align: "right" });
-    y += 31;
+      .text(salesAnalyticsChartsPdfValue(entry.current, context.metricDefinition), xValue, y + 11, { width: valueWidth, align: "right" });
+    y += rowStep;
   });
 }
 
-function drawSalesAnalyticsChartsPdf(detail, input, locationName, response, createdAt = new Date()) {
+function drawSalesAnalyticsChartsPdfAbsoluteChanges(doc, entries, context) {
+  drawSalesAnalyticsChartsPdfHeader(doc, "Absolute Abweichungen", context);
+  const rows = entries.map((entry) => ({
+    ...entry,
+    difference: Number.isFinite(entry.current) && Number.isFinite(entry.comparison)
+      ? entry.current - entry.comparison
+      : null,
+  }))
+    .filter((entry) => Number.isFinite(entry.difference))
+    .sort((left, right) => Math.abs(right.difference) - Math.abs(left.difference))
+    .slice(0, context.topN);
+  const { xLabel, labelWidth, xTrack, trackWidth, xValue, valueWidth, bottom } = salesAnalyticsChartsPdfLayout(doc);
+  const maximum = Math.max(1, ...rows.map((entry) => Math.abs(entry.difference)));
+  doc.font("Helvetica").fontSize(7.5).fillColor("#66736e")
+    .text("unter Vergleich", xTrack, 92, { width: trackWidth / 2, align: "center" })
+    .text("über Vergleich", xTrack + trackWidth / 2, 92, { width: trackWidth / 2, align: "center" });
+  let y = 111;
+  const rowStep = Math.min(34, Math.max(20, (bottom - y) / Math.max(1, rows.length)));
+  if (!rows.length) doc.fillColor("#66736e").text("Keine absoluten Vergleiche vorhanden.", xLabel, y);
+  rows.forEach((entry) => {
+    doc.font("Helvetica-Bold").fontSize(7.4).fillColor("#172331")
+      .text(salesAnalyticsChartsPdfTruncate(doc, `${entry.id} - ${entry.label}`, labelWidth), xLabel, y + 5, { width: labelWidth });
+    doc.roundedRect(xTrack, y + 4, trackWidth / 2, 11, 5.5).fill("#f6e5e3");
+    doc.roundedRect(xTrack + trackWidth / 2, y + 4, trackWidth / 2, 11, 5.5).fill("#e5f3ec");
+    doc.rect(xTrack + trackWidth / 2 - .5, y + 2, 1, 15).fill("#8b9893");
+    const width = Math.max(1, (Math.abs(entry.difference) / maximum) * (trackWidth / 2));
+    const barX = entry.difference < 0 ? xTrack + trackWidth / 2 - width : xTrack + trackWidth / 2;
+    doc.roundedRect(barX, y + 5, width, 9, 4.5).fill(entry.difference < 0 ? "#b14b44" : "#2f7764");
+    doc.font("Helvetica-Bold").fontSize(7).fillColor(entry.difference < 0 ? "#9a3831" : "#1f6d4d")
+      .text(salesAnalyticsChartsPdfValue(entry.difference, context.metricDefinition), xValue, y + 5, { width: valueWidth, align: "right" });
+    y += rowStep;
+  });
+}
+
+function drawSalesAnalyticsChartsPdfPareto(doc, entries, context) {
+  drawSalesAnalyticsChartsPdfHeader(doc, "Pareto und kumulierter Anteil", context);
+  const positive = entries.filter((entry) => Number(entry.current) > 0)
+    .sort((left, right) => right.current - left.current);
+  const total = positive.reduce((sum, entry) => sum + entry.current, 0);
+  const rows = positive.slice(0, context.topN);
+  const { xLabel, labelWidth, xTrack, trackWidth, xValue, valueWidth, bottom } = salesAnalyticsChartsPdfLayout(doc);
+  let cumulative = 0;
+  let y = 111;
+  const rowStep = Math.min(34, Math.max(20, (bottom - y) / Math.max(1, rows.length)));
+  if (!rows.length) doc.fillColor("#66736e").text("Keine positiven aktuellen Werte für eine Pareto-Darstellung vorhanden.", xLabel, y);
+  rows.forEach((entry) => {
+    const share = total > 0 ? (entry.current / total) * 100 : 0;
+    cumulative += share;
+    doc.font("Helvetica-Bold").fontSize(7.4).fillColor("#172331")
+      .text(salesAnalyticsChartsPdfTruncate(doc, `${entry.id} - ${entry.label}`, labelWidth), xLabel, y + 5, { width: labelWidth });
+    doc.roundedRect(xTrack, y + 3, trackWidth, 12, 6).fill("#edf2f0");
+    doc.roundedRect(xTrack, y + 3, Math.max(1, (share / 100) * trackWidth), 12, 6)
+      .fill("#2f7764");
+    const cumulativeX = xTrack + Math.min(1, cumulative / 100) * trackWidth;
+    doc.rect(cumulativeX - .7, y, 1.4, 18).fill(cumulative <= 80 ? "#d08f54" : "#a85e36");
+    const percent = new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 });
+    doc.font("Helvetica-Bold").fontSize(6.1).fillColor("#172331")
+      .text(`Anteil ${percent.format(share)} % · kum. ${percent.format(cumulative)} %`, xValue, y + 1, { width: valueWidth, align: "right" });
+    doc.font("Helvetica").fontSize(6.6).fillColor("#66736e")
+      .text(salesAnalyticsChartsPdfValue(entry.current, context.metricDefinition), xValue, y + 11, { width: valueWidth, align: "right" });
+    y += rowStep;
+  });
+}
+
+function salesAnalyticsChartsPdfTotals(detail, horizon) {
+  return detail.totals?.[horizon] || null;
+}
+
+function drawSalesAnalyticsChartsPdfKpis(doc, detail, context) {
+  drawSalesAnalyticsChartsPdfHeader(doc, "Kennzahlenübersicht", context);
+  const totals = salesAnalyticsChartsPdfTotals(detail, context.horizon);
+  const metrics = Object.entries(SALES_ANALYTICS_CHART_PDF_METRICS)
+    .filter(([metricId]) => totals?.[metricId])
+    .map(([metricId, definition]) => ({ metricId, definition, values: totals[metricId] }));
+  const contentWidth = doc.page.width - 72;
+  const columns = doc.page.layout === "portrait" ? 2 : 3;
+  const gap = 14;
+  const cardWidth = (contentWidth - gap * (columns - 1)) / columns;
+  const cardHeight = 112;
+  let y = 108;
+  if (!metrics.length) doc.fillColor("#66736e").fontSize(9).text("Keine Kennzahlensummen verfügbar.", 36, y);
+  metrics.forEach((metric, index) => {
+    const column = index % columns;
+    if (index > 0 && column === 0) y += cardHeight + gap;
+    const x = 36 + column * (cardWidth + gap);
+    const current = salesAnalyticsChartsPdfMetricNumber({ [metric.metricId]: metric.values }, metric.metricId, "current");
+    const comparison = salesAnalyticsChartsPdfMetricNumber({ [metric.metricId]: metric.values }, metric.metricId, "comparison");
+    const change = salesAnalyticsChartsPdfChange(current, comparison);
+    doc.roundedRect(x, y, cardWidth, cardHeight, 10).fillAndStroke("#f4f7f6", "#d7e0dd");
+    doc.font("Helvetica-Bold").fontSize(9).fillColor("#17382f")
+      .text(metric.definition.label, x + 13, y + 13, { width: cardWidth - 26 });
+    doc.font("Helvetica-Bold").fontSize(15).fillColor("#172331")
+      .text(salesAnalyticsChartsPdfValue(current, metric.definition), x + 13, y + 37, { width: cardWidth - 26 });
+    doc.font("Helvetica").fontSize(7.4).fillColor("#66736e")
+      .text(`Vergleich: ${salesAnalyticsChartsPdfValue(comparison, metric.definition)}`, x + 13, y + 66, { width: cardWidth - 26 });
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(change < 0 ? "#9a3831" : "#1f6d4d")
+      .text(`Abweichung: ${salesAnalyticsChartsPdfPercent(change)}`, x + 13, y + 85, { width: cardWidth - 26 });
+  });
+}
+
+function salesAnalyticsChartsPdfTableRows(entries) {
+  return [...entries].sort((left, right) => {
+    const difference = (right.current ?? Number.NEGATIVE_INFINITY)
+      - (left.current ?? Number.NEGATIVE_INFINITY);
+    return difference || `${left.id} ${left.label}`.localeCompare(`${right.id} ${right.label}`, "de");
+  });
+}
+
+function salesAnalyticsChartsPdfTablePageSize(orientation) {
+  return orientation === "portrait" ? 29 : 18;
+}
+
+function salesAnalyticsChartsPdfPlan(detail, input) {
+  const entries = salesAnalyticsChartsPdfEntries(detail, input.horizon, input.metric);
+  if (!input.pdfOptions.includeTable) return { entries, tablePages: [] };
+  const tableRows = salesAnalyticsChartsPdfTableRows(entries);
+  const rowsPerPage = salesAnalyticsChartsPdfTablePageSize(input.pdfOptions.orientation);
+  const pageCount = Math.max(1, Math.ceil(tableRows.length / rowsPerPage));
+  if (pageCount > SALES_ANALYTICS_PDF_MAX_TABLE_PAGES) {
+    throw httpError(
+      413,
+      `Die PDF-Detailtabelle würde mehr als ${SALES_ANALYTICS_PDF_MAX_TABLE_PAGES} Seiten umfassen. Bitte weniger Berichte wählen oder die Detailtabelle abwählen.`,
+      "SALES_ANALYTICS_CHART_PDF_TABLE_TOO_LARGE",
+    );
+  }
+  const tablePages = tableRows.length
+    ? Array.from({ length: pageCount }, (_, index) => (
+      tableRows.slice(index * rowsPerPage, (index + 1) * rowsPerPage)
+    ))
+    : [[]];
+  return { entries, tablePages };
+}
+
+function drawSalesAnalyticsChartsPdfTable(doc, rows, context, { pageIndex = 0, pageCount = 1 } = {}) {
+  const pageSuffix = pageCount > 1 ? ` (${pageIndex + 1}/${pageCount})` : "";
+  drawSalesAnalyticsChartsPdfHeader(doc, `Detailtabelle${pageSuffix}`, context);
+  const contentWidth = doc.page.width - 72;
+  const labelWidth = contentWidth * .36;
+  const valueWidth = (contentWidth - labelWidth) / 4;
+  const columns = [
+    { label: "Warengruppe", x: 36, width: labelWidth, align: "left" },
+    { label: "Aktuell", x: 36 + labelWidth, width: valueWidth, align: "right" },
+    { label: "Vergleich", x: 36 + labelWidth + valueWidth, width: valueWidth, align: "right" },
+    { label: "Absolut", x: 36 + labelWidth + valueWidth * 2, width: valueWidth, align: "right" },
+    { label: "Relativ", x: 36 + labelWidth + valueWidth * 3, width: valueWidth, align: "right" },
+  ];
+  const headerY = 105;
+  doc.roundedRect(36, headerY, contentWidth, 24, 4).fill("#e7efec");
+  columns.forEach((column) => doc.font("Helvetica-Bold").fontSize(7.2).fillColor("#17382f")
+    .text(column.label, column.x + 5, headerY + 8, { width: column.width - 10, align: column.align, lineBreak: false }));
+  const bottom = doc.page.height - 59;
+  const rowHeight = Math.min(22, Math.max(17, (bottom - headerY - 28) / Math.max(1, rows.length)));
+  let y = headerY + 28;
+  if (!rows.length) doc.font("Helvetica").fontSize(8).fillColor("#66736e").text("Keine auswertbaren Warengruppen vorhanden.", 41, y + 5);
+  rows.forEach((entry, index) => {
+    if (index % 2 === 1) doc.rect(36, y, contentWidth, rowHeight).fill("#f7f9f8");
+    const difference = Number.isFinite(entry.current) && Number.isFinite(entry.comparison)
+      ? entry.current - entry.comparison : null;
+    const values = [
+      salesAnalyticsChartsPdfTruncate(doc, `${entry.id} - ${entry.label}`, labelWidth - 10),
+      salesAnalyticsChartsPdfValue(entry.current, context.metricDefinition),
+      salesAnalyticsChartsPdfValue(entry.comparison, context.metricDefinition),
+      salesAnalyticsChartsPdfValue(difference, context.metricDefinition),
+      salesAnalyticsChartsPdfPercent(salesAnalyticsChartsPdfChange(entry.current, entry.comparison)),
+    ];
+    columns.forEach((column, columnIndex) => doc.font(columnIndex === 0 ? "Helvetica-Bold" : "Helvetica")
+      .fontSize(6.8).fillColor("#172331")
+      .text(values[columnIndex], column.x + 5, y + 5, { width: column.width - 10, align: column.align, lineBreak: false }));
+    y += rowHeight;
+  });
+}
+
+function drawSalesAnalyticsChartsPdf(
+  detail,
+  input,
+  locationName,
+  response,
+  createdAt = new Date(),
+  plan = salesAnalyticsChartsPdfPlan(detail, input),
+) {
   const currentPeriod = salesAnalyticsChartsPdfPeriod(detail, input.horizon, "current");
   const comparisonPeriod = salesAnalyticsChartsPdfPeriod(detail, input.horizon, "comparison");
   const context = {
@@ -26038,10 +26554,12 @@ function drawSalesAnalyticsChartsPdf(detail, input, locationName, response, crea
     currentPeriod,
     comparisonPeriod,
     metricDefinition: input.metricDefinition,
+    horizon: input.horizon,
+    topN: input.pdfOptions.topN,
   };
   const doc = new PDFDocument({
     size: "A4",
-    layout: "landscape",
+    layout: input.pdfOptions.orientation,
     margins: { top: 0, right: 36, bottom: 36, left: 36 },
     bufferPages: true,
     info: {
@@ -26052,10 +26570,29 @@ function drawSalesAnalyticsChartsPdf(detail, input, locationName, response, crea
     },
   });
   doc.pipe(response);
-  const entries = salesAnalyticsChartsPdfEntries(detail, input.horizon, input.metric);
-  drawSalesAnalyticsChartsPdfRanking(doc, entries, context);
-  drawSalesAnalyticsChartsPdfChanges(doc, entries, context);
-  drawSalesAnalyticsChartsPdfShares(doc, entries, context);
+  const { entries, tablePages } = plan;
+  const chartDrawers = Object.freeze({
+    ranking: () => drawSalesAnalyticsChartsPdfRanking(doc, entries, context),
+    change: () => drawSalesAnalyticsChartsPdfChanges(doc, entries, context),
+    absolute_change: () => drawSalesAnalyticsChartsPdfAbsoluteChanges(doc, entries, context),
+    share: () => drawSalesAnalyticsChartsPdfShares(doc, entries, context),
+    pareto: () => drawSalesAnalyticsChartsPdfPareto(doc, entries, context),
+  });
+  const pages = [];
+  if (input.pdfOptions.includeKpis) pages.push(() => drawSalesAnalyticsChartsPdfKpis(doc, detail, context));
+  for (const chart of input.pdfOptions.charts) pages.push(chartDrawers[chart]);
+  if (input.pdfOptions.includeTable) {
+    tablePages.forEach((rows, pageIndex) => pages.push(() => drawSalesAnalyticsChartsPdfTable(
+      doc,
+      rows,
+      context,
+      { pageIndex, pageCount: tablePages.length },
+    )));
+  }
+  pages.forEach((drawPage, index) => {
+    if (index > 0) doc.addPage();
+    drawPage();
+  });
   const range = doc.bufferedPageRange();
   for (let index = range.start; index < range.start + range.count; index += 1) {
     doc.switchToPage(index);
@@ -26079,6 +26616,7 @@ app.post("/api/sales-analytics/charts.pdf", async (request, response) => {
   const locations = await salesAnalyticsLocations(projection);
   const locationName = locations.find((location) => location.id === locationId)?.name || `Filiale ${locationId}`;
   const createdAt = new Date();
+  const pdfPlan = salesAnalyticsChartsPdfPlan(detail, input);
   const targetId = input.series ? detail.selection.fingerprint : detail.report.id;
   auditPortal(
     session.employeeNumber,
@@ -26090,14 +26628,20 @@ app.post("/api/sales-analytics/charts.pdf", async (request, response) => {
       reportCount: input.series ? input.reportIds.length : 1,
       metric: input.metric,
       horizon: input.horizon,
+      optionsVersion: input.legacy ? 0 : 1,
+      orientation: input.pdfOptions.orientation,
+      chartTypes: input.pdfOptions.charts,
+      topN: input.pdfOptions.topN,
+      includeKpis: input.pdfOptions.includeKpis,
+      includeTable: input.pdfOptions.includeTable,
     }),
   );
-  const filename = `Grabenplaner-Verkaufsanalyse-${locationId}-${formatFilenameTimestamp(createdAt)}.pdf`;
+  const filename = `${input.pdfOptions.filenamePrefix}-${locationId}-${formatFilenameTimestamp(createdAt)}.pdf`;
   response.status(200);
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", contentDispositionHeader(filename));
   response.setHeader("Cache-Control", "private, no-store");
-  drawSalesAnalyticsChartsPdf(detail, input, locationName, response, createdAt);
+  drawSalesAnalyticsChartsPdf(detail, input, locationName, response, createdAt, pdfPlan);
 });
 
 app.get("/api/sales-analytics/reports/:id", async (request, response) => {
@@ -30188,7 +30732,12 @@ app.put("/api/schedule/manual-lock", async (request, response) => {
   }
   const locked = request.body.locked;
   const actor = request.portalSession?.employeeNumber || "local";
-  const row = await organizationPersonnelRepository.transaction(async (organization) => {
+  const actionCreatedAt = new Date();
+  const actionCreatedAtIso = actionCreatedAt.toISOString();
+  const undoExpiresAtIso = new Date(actionCreatedAt.getTime() + PERSONAL_ACTION_UNDO_WINDOW_MS).toISOString();
+  const outcome = await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const organization = repositories.organizationPersonnel;
     const before = await organization.getScheduleManualLock(
       context.locationId,
       submittedWeekStart,
@@ -30200,7 +30749,7 @@ app.put("/api/schedule/manual-lock", async (request, response) => {
         weekStart: submittedWeekStart,
       });
     }
-    if (Boolean(before?.locked) === locked) return before;
+    if (Boolean(before?.locked) === locked) return { row: before, receipt: null };
     const updated = await organization.upsertScheduleManualLock({
       locationId: context.locationId,
       weekStart: submittedWeekStart,
@@ -30218,7 +30767,7 @@ app.put("/api/schedule/manual-lock", async (request, response) => {
         },
       );
     }
-    await organization.insertAudit(
+    const auditResult = await organization.insertAudit(
       actor,
       locked ? "schedule.manual-lock.lock" : "schedule.manual-lock.unlock",
       "schedule_manual_lock",
@@ -30232,10 +30781,36 @@ app.put("/api/schedule/manual-lock", async (request, response) => {
         revisionAfter: Number(updated.revision),
       }),
     );
-    return updated;
+    const sourceAuditId = personalActionAuditResultId(auditResult);
+    let receipt = null;
+    if (request.portalSession?.sessionKind === "employee"
+      && request.portalSession?.isEmployee === true
+      && actor) {
+      receipt = await repositories.personalActionLog.record({
+        actorId: actor,
+        actionType: locked ? "schedule.manual-lock.lock" : "schedule.manual-lock.unlock",
+        entityType: "schedule_manual_lock",
+        entityId: `${context.locationId}:${submittedWeekStart}`,
+        scope: `Filiale ${context.locationId} · Woche ab ${formatDateGerman(submittedWeekStart)}`,
+        summary: locked ? "Dienstplan gesperrt" : "Dienstplansperre aufgehoben",
+        compensatorKey: "schedule.manual-lock.restore.v1",
+        undoPayload: {
+          locationId: context.locationId,
+          weekStart: submittedWeekStart,
+          restoreLocked: Boolean(before?.locked),
+        },
+        resultRevision: Number(updated.revision),
+        resultFingerprint: null,
+        sourceAuditId,
+        undoExpiresAt: undoExpiresAtIso,
+        compensatesActionId: null,
+        createdAt: actionCreatedAtIso,
+      });
+    }
+    return { row: updated, receipt };
   }, { isolation: "serializable" });
   response.json({
-    manualScheduleLock: scheduleManualLockForApi(row, {
+    manualScheduleLock: scheduleManualLockForApi(outcome.row, {
       actor: request.portalSession,
       locationId: context.locationId,
       weekStart: submittedWeekStart,
@@ -35322,6 +35897,305 @@ app.get("/api/portal/v1/ui-preferences", async (request, response) => {
 app.put("/api/portal/v1/ui-preferences", async (request, response) => {
   const actor = uiPreferenceActor(request, { write: true });
   response.json(await saveUiPreferencesForActor(actor, request.body || {}));
+});
+
+function setCrmPrivateHeaders(response) {
+  response.set({
+    "Cache-Control": "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    "X-Content-Type-Options": "nosniff",
+  });
+}
+
+function crmEmployeeSession(request, permission, { write = false } = {}) {
+  const session = requireEmployeePortalSession(request, permission);
+  const projection = buildCrmProjection(session);
+  const allowed = permission === CRM_PERMISSIONS.ACCESS
+    ? projection.workspace
+    : permission === CRM_PERMISSIONS.CUSTOMERS_READ
+      ? projection.read
+      : permission === CRM_PERMISSIONS.CUSTOMERS_WRITE
+        ? projection.write
+        : false;
+  if (!allowed) {
+    throw httpError(403, "Für diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (write) assertPortalCsrf(request);
+  return session;
+}
+
+function crmCustomerId(value) {
+  const id = String(value || "").trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(id)) {
+    throw httpError(400, "Die Kundenkennung ist ungültig.", "CRM_CUSTOMER_ID_INVALID");
+  }
+  return id;
+}
+
+function crmRouteError(error) {
+  if (error instanceof CrmValidationError) {
+    throw httpError(error.status, error.message, error.code);
+  }
+  if (error instanceof CandidatePhotoError) {
+    throw httpError(
+      error.status,
+      String(error.message || "Das Kundenfoto ist ungültig.").replaceAll("Bewerberfoto", "Kundenfoto"),
+      String(error.code || "CRM_PHOTO_INVALID").replace(/^CANDIDATE_PHOTO_/, "CRM_PHOTO_"),
+    );
+  }
+  if (isUniquePersistenceViolation(error)) {
+    throw httpError(
+      409,
+      "Diese Kundennummer oder Fotozuordnung ist bereits vergeben.",
+      "CRM_CUSTOMER_CONFLICT",
+    );
+  }
+  if (error?.code === "PERSISTENCE_RETRYABLE_TRANSACTION") {
+    throw httpError(
+      409,
+      "Die Kundenkartei wurde inzwischen geändert. Bitte den aktuellen Stand neu laden.",
+      "CRM_CUSTOMER_REVISION_CONFLICT",
+    );
+  }
+  if (error?.code === "PERSISTENCE_FOREIGN_KEY_VIOLATION") {
+    throw httpError(404, "Die Kundenkartei wurde nicht gefunden.", "CRM_CUSTOMER_NOT_FOUND");
+  }
+  if (error?.code === "PERSISTENCE_STATEMENT_INVALID"
+    || error?.code === "PERSISTENCE_CHECK_VIOLATION") {
+    throw httpError(400, "Die Kundendaten sind ungültig.", "CRM_INPUT_INVALID");
+  }
+  if (String(error?.code || "").startsWith("AMU_")) {
+    const code = String(error.code).replace(/^AMU_/, "CRM_PHOTO_");
+    const status = code.includes("TOO_LARGE") || code.includes("LIMIT")
+      ? 413 : code.includes("TYPE") || code.includes("HEIC") ? 415 : 400;
+    throw httpError(status, "Das Kundenfoto konnte nicht sicher verarbeitet werden.", code);
+  }
+  throw error;
+}
+
+async function crmPreferencesForActor(actor) {
+  const [columnsRow, sortRow] = await Promise.all([
+    uiPreferencesRepository.get(actor.employeeNumber, CRM_PREFERENCE_KEYS.COLUMNS),
+    uiPreferencesRepository.get(actor.employeeNumber, CRM_PREFERENCE_KEYS.SORT),
+  ]);
+  try {
+    return normalizeCrmPreferences({
+      columns: columnsRow ? JSON.parse(columnsRow.value) : CRM_DEFAULT_PREFERENCES.columns,
+      sort: sortRow ? JSON.parse(sortRow.value) : CRM_DEFAULT_PREFERENCES.sort,
+    });
+  } catch {
+    return CRM_DEFAULT_PREFERENCES;
+  }
+}
+
+app.get("/api/crm/preferences", async (request, response) => {
+  const actor = crmEmployeeSession(request, CRM_PERMISSIONS.ACCESS);
+  setCrmPrivateHeaders(response);
+  response.json(await crmPreferencesForActor(actor));
+});
+
+app.put("/api/crm/preferences", async (request, response) => {
+  const actor = crmEmployeeSession(request, CRM_PERMISSIONS.ACCESS, { write: true });
+  setCrmPrivateHeaders(response);
+  try {
+    const preferences = normalizeCrmPreferences(request.body || {});
+    await uiPreferencesRepository.saveChanges(actor.employeeNumber, {
+      upserts: [
+        { preferenceKey: CRM_PREFERENCE_KEYS.COLUMNS, value: JSON.stringify(preferences.columns) },
+        { preferenceKey: CRM_PREFERENCE_KEYS.SORT, value: JSON.stringify(preferences.sort) },
+      ],
+      deleteKeys: [],
+    });
+    response.json(preferences);
+  } catch (error) {
+    crmRouteError(error);
+  }
+});
+
+app.get("/api/crm/customers", async (request, response) => {
+  crmEmployeeSession(request, CRM_PERMISSIONS.CUSTOMERS_READ);
+  setCrmPrivateHeaders(response);
+  try {
+    const allowedQueryKeys = new Set(["query", "customerType", "sort", "direction", "limit", "offset"]);
+    if (Object.keys(request.query || {}).some((key) => !allowedQueryKeys.has(key))) {
+      throw new CrmValidationError("Die Suchparameter enthalten unbekannte Felder.", "CRM_INPUT_INVALID");
+    }
+    const search = normalizeCrmCustomerSearch({
+      query: request.query?.query,
+      customerType: request.query?.customerType,
+      sort: request.query?.sort,
+      direction: request.query?.direction,
+      limit: request.query?.limit,
+      offset: request.query?.offset,
+    });
+    response.json(await crmCustomersRepository.search({
+      query: search.query,
+      customerType: search.customerType,
+      sort: search.sort,
+      direction: search.direction,
+      limit: search.limit,
+      offset: search.offset,
+    }));
+  } catch (error) {
+    crmRouteError(error);
+  }
+});
+
+app.get("/api/crm/customers/:id", async (request, response) => {
+  crmEmployeeSession(request, CRM_PERMISSIONS.CUSTOMERS_READ);
+  setCrmPrivateHeaders(response);
+  try {
+    const customer = await crmCustomersRepository.get(crmCustomerId(request.params.id));
+    if (!customer) throw httpError(404, "Die Kundenkartei wurde nicht gefunden.", "CRM_CUSTOMER_NOT_FOUND");
+    response.json({ customer });
+  } catch (error) {
+    crmRouteError(error);
+  }
+});
+
+app.post("/api/crm/customers", async (request, response) => {
+  const actor = crmEmployeeSession(request, CRM_PERMISSIONS.CUSTOMERS_WRITE, { write: true });
+  setCrmPrivateHeaders(response);
+  try {
+    const customerInput = normalizeCrmCustomerInput(request.body || {});
+    const customer = await crmCustomersRepository.create({
+      customer: customerInput,
+      actor: actor.employeeNumber,
+      timestamp: new Date().toISOString(),
+    });
+    response.status(201).json({ customer });
+  } catch (error) {
+    crmRouteError(error);
+  }
+});
+
+app.put("/api/crm/customers/:id", async (request, response) => {
+  const actor = crmEmployeeSession(request, CRM_PERMISSIONS.CUSTOMERS_WRITE, { write: true });
+  setCrmPrivateHeaders(response);
+  try {
+    const input = normalizeCrmCustomerInput(request.body || {}, { update: true });
+    const { expectedRevision, ...customer } = input;
+    const stored = await crmCustomersRepository.update({
+      id: crmCustomerId(request.params.id),
+      customer,
+      expectedRevision,
+      actor: actor.employeeNumber,
+      timestamp: new Date().toISOString(),
+    });
+    if (!stored) throw httpError(404, "Die Kundenkartei wurde nicht gefunden.", "CRM_CUSTOMER_NOT_FOUND");
+    response.json({ customer: stored });
+  } catch (error) {
+    crmRouteError(error);
+  }
+});
+
+app.get("/api/crm/customers/:id/photo", async (request, response) => {
+  crmEmployeeSession(request, CRM_PERMISSIONS.CUSTOMERS_READ);
+  setCrmPrivateHeaders(response);
+  try {
+    const photo = await crmCustomersRepository.getPhoto(crmCustomerId(request.params.id));
+    if (!photo) throw httpError(404, "Das Kundenfoto wurde nicht gefunden.", "CRM_PHOTO_NOT_FOUND");
+    let content;
+    try {
+      content = requireAmuStorage().readBuffer({
+        storageKey: photo.storageKey,
+        byteSize: photo.byteSize,
+        sha256: photo.contentSha256,
+        detectedMime: photo.mediaType,
+        originalFilename: photo.originalFilename,
+      });
+    } catch (error) {
+      if (String(error?.code || "").startsWith("AMU_")) {
+        throw httpError(503, "Das Kundenfoto konnte nicht integer gelesen werden.", "CRM_PHOTO_INTEGRITY_FAILED");
+      }
+      throw error;
+    }
+    response.set({
+      "Content-Type": "image/jpeg",
+      "Content-Disposition": "inline; filename=\"Kundenfoto.jpg\"",
+    });
+    response.send(content);
+  } catch (error) {
+    crmRouteError(error);
+  }
+});
+
+app.put("/api/crm/customers/:id/photo", async (request, response) => {
+  const actor = crmEmployeeSession(request, CRM_PERMISSIONS.CUSTOMERS_WRITE, { write: true });
+  setCrmPrivateHeaders(response);
+  let stored = null;
+  let committed = false;
+  amuMutationInProgress += 1;
+  try {
+    const customerId = crmCustomerId(request.params.id);
+    const upload = await parseCrmPhotoMultipart(request);
+    const storage = requireAmuStorage();
+    await storage.scanBuffer({
+      buffer: upload.buffer,
+      originalName: upload.originalName,
+      maxBytes: MAX_CANDIDATE_PHOTO_INPUT_BYTES,
+    });
+    const prepared = await prepareCandidatePhoto({
+      buffer: upload.buffer,
+      originalName: upload.originalName,
+    });
+    stored = await storage.saveBuffer({
+      buffer: prepared.buffer,
+      originalName: prepared.filename,
+      maxBytes: 1024 * 1024,
+    });
+    const result = await crmCustomersRepository.replacePhoto({
+      customerId,
+      photo: {
+        storageKey: stored.storageKey,
+        contentSha256: stored.sha256,
+        byteSize: stored.byteSize,
+        mediaType: stored.detectedMime,
+        originalFilename: stored.originalFilename,
+      },
+      actor: actor.employeeNumber,
+      timestamp: new Date().toISOString(),
+    });
+    if (!result) throw httpError(404, "Die Kundenkartei wurde nicht gefunden.", "CRM_CUSTOMER_NOT_FOUND");
+    committed = true;
+    if (result.previousStorageKey && result.previousStorageKey !== stored.storageKey) {
+      try { storage.deleteBlob(result.previousStorageKey); } catch (error) {
+        console.error("Altes CRM-Kundenfoto konnte nicht bereinigt werden:", String(error?.code || "CRM_PHOTO_CLEANUP_FAILED"));
+      }
+    }
+    const customer = await crmCustomersRepository.get(customerId);
+    response.status(result.photo.revision > 1 ? 200 : 201).json({ customer });
+  } catch (error) {
+    if (!committed && stored?.storageKey) {
+      try { requireAmuStorage().deleteBlob(stored.storageKey); } catch {}
+    }
+    crmRouteError(error);
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
+});
+
+app.delete("/api/crm/customers/:id/photo", async (request, response) => {
+  const actor = crmEmployeeSession(request, CRM_PERMISSIONS.CUSTOMERS_WRITE, { write: true });
+  setCrmPrivateHeaders(response);
+  amuMutationInProgress += 1;
+  try {
+    const result = await crmCustomersRepository.deletePhoto({
+      customerId: crmCustomerId(request.params.id),
+      actor: actor.employeeNumber,
+      timestamp: new Date().toISOString(),
+    });
+    if (!result) throw httpError(404, "Die Kundenkartei wurde nicht gefunden.", "CRM_CUSTOMER_NOT_FOUND");
+    if (!result.deleted) throw httpError(404, "Das Kundenfoto wurde nicht gefunden.", "CRM_PHOTO_NOT_FOUND");
+    try { requireAmuStorage().deleteBlob(result.storageKey); } catch (error) {
+      console.error("Gelöschtes CRM-Kundenfoto konnte nicht bereinigt werden:", String(error?.code || "CRM_PHOTO_CLEANUP_FAILED"));
+    }
+    response.status(204).end();
+  } catch (error) {
+    crmRouteError(error);
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
 });
 
 const SYSTEM_CENTER_UPDATE_CACHE_MS = 10 * 60 * 1000;
@@ -44349,6 +45223,516 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", as
       await loanReturnConfirmationRow(confirmation.id),
     ),
     loan: await publicLoan(returnedLoan),
+  });
+});
+
+const PERSONAL_ACTION_PUBLIC_RECEIPT_PREFIX = "receipt:";
+const PERSONAL_ACTION_CURSOR_VERSION = 1;
+const PERSONAL_ACTION_LIST_DEFAULT_LIMIT = 25;
+const PERSONAL_ACTION_LIST_MAX_LIMIT = 50;
+const PERSONAL_ACTION_LEGACY_FETCH_LIMIT = 100;
+const PERSONAL_ACTION_LEGACY_SCAN_MAX_ROWS = 1000;
+const PERSONAL_ACTION_UNDO_WINDOW_MS = 30 * 60 * 1000;
+
+const PERSONAL_ACTION_EXACT_LABELS = Object.freeze({
+  "branding.preference.update": "Branding-Einstellung geändert",
+  "crm.customer.create": "Kundenkartei angelegt",
+  "crm.customer.update": "Kundenkartei aktualisiert",
+  "crm.customer.photo.replace": "Kundenfoto aktualisiert",
+  "crm.customer.photo.delete": "Kundenfoto entfernt",
+  "personnel-lifecycle.team-evaluation.assign": "Bewerbungsbewertung zugewiesen",
+  "personnel-lifecycle.team-evaluation.submit": "Bewerbungsbewertung abgegeben",
+  "personnel-lifecycle.team-evaluation.pdf": "Bewerbungsbewertung als PDF exportiert",
+  "sales.analytics.preferences.update": "Verkaufsanalyse-Einstellungen geändert",
+  "sales.report.charts.export": "Verkaufsanalyse als PDF exportiert",
+  "schedule.manual-lock.lock": "Dienstplan gesperrt",
+  "schedule.manual-lock.unlock": "Dienstplansperre aufgehoben",
+  "schedule.past-week-preference.update": "Persönliche Dienstplanoption geändert",
+  "personal.action.undo": "Sperrstatus wiederhergestellt",
+});
+
+const PERSONAL_ACTION_VISIBLE_SUFFIXES = Object.freeze(new Set([
+  "apply", "applied", "approve", "archive", "assign", "cancel", "close", "confirm",
+  "correct", "create", "delete", "export", "import", "lock", "publish", "reject",
+  "remove", "reopen", "replace", "restore", "revoke", "save", "submit", "undo",
+  "unlock", "update", "upload", "withdraw",
+]));
+
+function personalActionIsoTimestamp(value) {
+  const source = String(value || "").trim();
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(source)
+    ? `${source.replace(" ", "T")}.000Z`
+    : source;
+  const timestamp = new Date(normalized);
+  return Number.isNaN(timestamp.getTime()) ? "" : timestamp.toISOString();
+}
+
+function personalActionDomainLabel(action) {
+  if (action.startsWith("sales.")) return "Verkaufsanalyse";
+  if (action.startsWith("crm.")) return "CRM";
+  if (action.startsWith("schedule.")) return "Dienstplanung";
+  if (action.startsWith("vacation.") || action.startsWith("absence.")) return "Abwesenheit";
+  if (action.startsWith("time.") || action.startsWith("time-tracking.")) return "Zeiterfassung";
+  if (action.startsWith("personnel-lifecycle.")) return "Pre-Boarding";
+  if (action.startsWith("personnel-learning.")) return "Schulung & Wissen";
+  if (action.startsWith("personnel.") || action.startsWith("employee.")) return "Personal";
+  if (action.startsWith("loan.")) return "Leihe";
+  if (action.startsWith("branch-order.")) return "Filialbestellung";
+  if (action.startsWith("work-rule.")) return "Regelwerk";
+  if (action.startsWith("privacy.")) return "Datenschutz";
+  if (action.startsWith("branding.")) return "Branding";
+  if (action.startsWith("position.")) return "Positionsverwaltung";
+  return "Grabenplaner";
+}
+
+function personalActionVerbLabel(suffix) {
+  return ({
+    apply: "Änderung angewendet",
+    applied: "Änderung angewendet",
+    approve: "Freigabe erteilt",
+    archive: "Eintrag archiviert",
+    assign: "Zuweisung gespeichert",
+    cancel: "Vorgang storniert",
+    close: "Vorgang abgeschlossen",
+    confirm: "Vorgang bestätigt",
+    correct: "Korrektur gespeichert",
+    create: "Eintrag angelegt",
+    delete: "Eintrag entfernt",
+    export: "Ausgabe exportiert",
+    import: "Daten importiert",
+    lock: "Sperre aktiviert",
+    publish: "Inhalt veröffentlicht",
+    reject: "Vorgang abgelehnt",
+    remove: "Eintrag entfernt",
+    reopen: "Vorgang wieder geöffnet",
+    replace: "Inhalt ersetzt",
+    restore: "Zustand wiederhergestellt",
+    revoke: "Freigabe widerrufen",
+    save: "Änderung gespeichert",
+    submit: "Vorgang eingereicht",
+    undo: "Gegenaktion ausgeführt",
+    unlock: "Sperre aufgehoben",
+    update: "Änderung gespeichert",
+    upload: "Datei hochgeladen",
+    withdraw: "Vorgang zurückgezogen",
+  })[suffix] || "Aktion protokolliert";
+}
+
+function personalLegacyAuditPresentation(row) {
+  const action = String(row?.action || "").trim();
+  const createdAt = personalActionIsoTimestamp(row?.createdAt);
+  const id = Number(row?.id);
+  const suffix = action.split(".").at(-1);
+  if (!Number.isSafeInteger(id) || id < 1 || !createdAt
+    || (!PERSONAL_ACTION_EXACT_LABELS[action] && !PERSONAL_ACTION_VISIBLE_SUFFIXES.has(suffix))) {
+    return null;
+  }
+  const title = PERSONAL_ACTION_EXACT_LABELS[action]
+    || `${personalActionDomainLabel(action)} · ${personalActionVerbLabel(suffix)}`;
+  const irreversibleOutput = ["export", "import", "upload"].includes(suffix)
+    || action.endsWith(".pdf");
+  return Object.freeze({
+    id: `audit:${id}`,
+    source: "audit",
+    sourceId: id,
+    actionType: action,
+    title,
+    summary: irreversibleOutput
+      ? "Die Ausgabe oder Außenwirkung bleibt als persönlicher Nachweis erhalten."
+      : "Die fachliche Aktion wurde in deinem persönlichen Verlauf protokolliert.",
+    createdAt,
+    canUndo: false,
+    undo: Object.freeze({
+      available: false,
+      reason: irreversibleOutput
+        ? "Ausgaben und Außenwirkungen sind nicht rückgängig machbar."
+        : "Für diese Aktion ist keine sichere Gegenaktion hinterlegt.",
+    }),
+  });
+}
+
+function personalActionCursorDecode(value) {
+  if (!value) return { receiptCreatedAt: null, receiptId: null, auditId: null };
+  const source = String(value);
+  if (source.length > 600 || !/^[A-Za-z0-9_-]+$/.test(source)) {
+    throw httpError(400, "Der Seitenzeiger des persönlichen Aktionslogs ist ungültig.", "PERSONAL_ACTION_CURSOR_INVALID");
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(source, "base64url").toString("utf8"));
+    const keys = Object.keys(parsed || {}).sort();
+    if (keys.join(",") !== "auditId,receiptCreatedAt,receiptId,version"
+      || parsed.version !== PERSONAL_ACTION_CURSOR_VERSION) throw new Error("invalid cursor");
+    const receiptCreatedAt = parsed.receiptCreatedAt === null
+      ? null : personalActionIsoTimestamp(parsed.receiptCreatedAt);
+    const receiptId = parsed.receiptId === null ? null : String(parsed.receiptId || "");
+    const auditId = parsed.auditId === null ? null : Number(parsed.auditId);
+    if ((receiptCreatedAt === null) !== (receiptId === null)
+      || (receiptId !== null && !/^[0-9a-f-]{36}$/i.test(receiptId))
+      || (auditId !== null && (!Number.isSafeInteger(auditId) || auditId < 1))) {
+      throw new Error("invalid cursor");
+    }
+    return { receiptCreatedAt, receiptId, auditId };
+  } catch {
+    throw httpError(400, "Der Seitenzeiger des persönlichen Aktionslogs ist ungültig.", "PERSONAL_ACTION_CURSOR_INVALID");
+  }
+}
+
+function personalActionCursorEncode(cursor) {
+  return Buffer.from(JSON.stringify({
+    version: PERSONAL_ACTION_CURSOR_VERSION,
+    receiptCreatedAt: cursor.receiptCreatedAt,
+    receiptId: cursor.receiptId,
+    auditId: cursor.auditId,
+  })).toString("base64url");
+}
+
+function personalActionRowsDescribeSameEvent(receipt, audit) {
+  if (!receipt || !audit) return false;
+  const sourceAuditId = Number(receipt.sourceAuditId);
+  if (Number.isSafeInteger(sourceAuditId) && sourceAuditId > 0) {
+    return sourceAuditId === Number(audit.id);
+  }
+  if (String(receipt.actionType || "") !== String(audit.action || "")
+    || String(receipt.entityType || "") !== String(audit.entityType || "")
+    || String(receipt.entityId || "") !== String(audit.entityId || "")) return false;
+  const receiptTime = Date.parse(personalActionIsoTimestamp(receipt.createdAt));
+  const auditTime = Date.parse(personalActionIsoTimestamp(audit.createdAt));
+  return Number.isFinite(receiptTime)
+    && Number.isFinite(auditTime)
+    && Math.abs(receiptTime - auditTime) <= 2_000;
+}
+
+function personalActionAuditResultId(result) {
+  const id = Number(result?.returnedRows?.[0]?.id);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    throw httpError(500, "Der persönliche Aktionsbeleg konnte nicht mit dem Auditnachweis verknüpft werden.", "PERSONAL_ACTION_AUDIT_LINK_FAILED");
+  }
+  return id;
+}
+
+async function personalActionReceiptPresentation(session, row, now = new Date()) {
+  let reason = "Für diese Aktion ist keine sichere Gegenaktion hinterlegt.";
+  let available = false;
+  let undoLabel = "Rückgängig";
+  if (row.compensatesActionId) {
+    reason = "Diese Gegenaktion bleibt als eigener Nachweis erhalten.";
+  } else if (row.compensatorKey) {
+    const compensation = await personalActionLogRepository.findCompensation(
+      session.employeeNumber,
+      row.id,
+    );
+    if (compensation) {
+      reason = "Bereits rückgängig gemacht.";
+    } else if (!row.undoExpiresAt || new Date(row.undoExpiresAt).getTime() <= now.getTime()) {
+      reason = "Die Rückgängig-Frist ist abgelaufen.";
+    } else if (row.compensatorKey === "schedule.manual-lock.restore.v1") {
+      const internal = await personalActionLogRepository.getOwn(session.employeeNumber, row.id);
+      const locationId = String(internal?.undoPayload?.locationId || "");
+      const weekStart = String(internal?.undoPayload?.weekStart || "");
+      let scopeAllowed = false;
+      try {
+        assertSessionContextScope(session, { locationId });
+        scopeAllowed = canManageScheduleManualLock(session, locationId);
+      } catch {}
+      if (!scopeAllowed) {
+        reason = "Das aktuell wirksame Recht oder der Bereich fehlt.";
+      } else {
+        const current = await organizationPersonnelRepository.getScheduleManualLock(locationId, weekStart);
+        if (Number(current?.revision || 0) !== Number(internal?.resultRevision || 0)) {
+          reason = "Der Sperrstatus wurde inzwischen erneut geändert.";
+        } else {
+          available = true;
+          undoLabel = "Sperrstatus wiederherstellen";
+          reason = "";
+        }
+      }
+    }
+  }
+  return Object.freeze({
+    id: `${PERSONAL_ACTION_PUBLIC_RECEIPT_PREFIX}${row.id}`,
+    source: "receipt",
+    sourceId: row.id,
+    actionType: row.actionType,
+    title: row.summary,
+    summary: row.scope,
+    createdAt: personalActionIsoTimestamp(row.createdAt),
+    canUndo: available,
+    undo: Object.freeze({ available, label: undoLabel, reason }),
+  });
+}
+
+function personalActionListLimit(value) {
+  const raw = value === undefined ? PERSONAL_ACTION_LIST_DEFAULT_LIMIT : Number(value);
+  if (!Number.isSafeInteger(raw) || raw < 1 || raw > PERSONAL_ACTION_LIST_MAX_LIMIT) {
+    throw httpError(400, "Bitte eine gültige Seitengröße für das persönliche Aktionslog wählen.", "PERSONAL_ACTION_LIMIT_INVALID");
+  }
+  return raw;
+}
+
+function createPersonalActionLegacyAuditStream(actorId, beforeId) {
+  let batch = [];
+  let batchIndex = 0;
+  let nextBeforeId = beforeId;
+  let scannedThroughId = beforeId;
+  let scannedRows = 0;
+  let exhausted = false;
+  let limited = false;
+  let pending = null;
+
+  async function peek() {
+    if (pending) return pending;
+    while (true) {
+      while (batchIndex < batch.length) {
+        const row = batch[batchIndex];
+        batchIndex += 1;
+        const presentation = personalLegacyAuditPresentation(row);
+        if (presentation) {
+          pending = { row, presentation };
+          return pending;
+        }
+      }
+      if (exhausted) return null;
+      const remainingScanRows = PERSONAL_ACTION_LEGACY_SCAN_MAX_ROWS - scannedRows;
+      if (remainingScanRows < 1) {
+        limited = true;
+        return null;
+      }
+      const fetchLimit = Math.min(PERSONAL_ACTION_LEGACY_FETCH_LIMIT, remainingScanRows);
+      batch = await personalActionLogRepository.listLegacyAuditForActor(actorId, {
+        beforeId: nextBeforeId,
+        limit: fetchLimit,
+      });
+      batchIndex = 0;
+      scannedRows += batch.length;
+      if (!batch.length) {
+        exhausted = true;
+        return null;
+      }
+      const lastId = Number(batch.at(-1)?.id);
+      if (!Number.isSafeInteger(lastId) || lastId < 1) {
+        throw httpError(500, "Das persönliche Aktionslog konnte nicht sicher gelesen werden.", "PERSONAL_ACTION_AUDIT_ORDER_INVALID");
+      }
+      scannedThroughId = lastId;
+      nextBeforeId = lastId;
+      if (batch.length < fetchLimit) exhausted = true;
+    }
+  }
+
+  return Object.freeze({
+    peek,
+    async take() {
+      const value = await peek();
+      pending = null;
+      return value;
+    },
+    scannedThroughId() {
+      return scannedThroughId;
+    },
+    scanLimited() {
+      return limited;
+    },
+  });
+}
+
+app.get("/api/portal/v1/me/actions", async (request, response) => {
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  const limit = personalActionListLimit(request.query.limit);
+  const start = personalActionCursorDecode(request.query.cursor);
+  const receiptFetchLimit = Math.min(50, limit + 1);
+  const auditStream = createPersonalActionLegacyAuditStream(session.employeeNumber, start.auditId);
+  const receiptRows = await personalActionLogRepository.listOwn(session.employeeNumber, {
+    beforeCreatedAt: start.receiptCreatedAt,
+    beforeId: start.receiptId,
+    limit: receiptFetchLimit,
+  });
+  const receiptPresentations = await Promise.all(receiptRows.map((row) => (
+    personalActionReceiptPresentation(session, row)
+  )));
+  const cursor = { ...start };
+  const actions = [];
+  const emittedReceiptRows = [];
+  let receiptIndex = 0;
+  while (actions.length < limit) {
+    const receipt = receiptRows[receiptIndex] || null;
+    const auditEntry = await auditStream.peek();
+    const audit = auditEntry?.row || null;
+    if (!audit && auditStream.scanLimited()) break;
+    if (!receipt && !audit) break;
+    const receiptTime = receipt ? Date.parse(personalActionIsoTimestamp(receipt.createdAt)) : Number.NEGATIVE_INFINITY;
+    const auditTime = audit ? Date.parse(personalActionIsoTimestamp(audit.createdAt)) : Number.NEGATIVE_INFINITY;
+    if (receipt && (!audit || receiptTime >= auditTime)) {
+      cursor.receiptCreatedAt = receipt.createdAt;
+      cursor.receiptId = receipt.id;
+      actions.push(receiptPresentations[receiptIndex]);
+      emittedReceiptRows.push(receipt);
+      receiptIndex += 1;
+      continue;
+    }
+    await auditStream.take();
+    cursor.auditId = audit.id;
+    const duplicate = receiptRows.some((candidate) => (
+      personalActionRowsDescribeSameEvent(candidate, audit)
+    ));
+    if (!duplicate) actions.push(auditEntry.presentation);
+  }
+  while (true) {
+    const auditEntry = await auditStream.peek();
+    if (!auditEntry) break;
+    const audit = auditEntry.row;
+    const duplicate = emittedReceiptRows.some((receipt) => (
+      personalActionRowsDescribeSameEvent(receipt, audit)
+    ));
+    if (!duplicate) break;
+    await auditStream.take();
+    cursor.auditId = audit.id;
+  }
+  const pendingAudit = await auditStream.peek();
+  if (pendingAudit) {
+    const resumeBeforeId = Number(pendingAudit.row.id) + 1;
+    if (Number.isSafeInteger(resumeBeforeId)) cursor.auditId = resumeBeforeId;
+  } else {
+    const scannedThroughId = auditStream.scannedThroughId();
+    if (Number.isSafeInteger(scannedThroughId) && scannedThroughId > 0) {
+      cursor.auditId = scannedThroughId;
+    }
+  }
+  const hasMore = receiptIndex < receiptRows.length
+    || receiptRows.length === receiptFetchLimit
+    || Boolean(pendingAudit)
+    || auditStream.scanLimited();
+  response.set({ "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache" });
+  response.json({
+    actions: actions.map(({ source: _source, sourceId: _sourceId, ...action }) => action),
+    nextCursor: hasMore ? personalActionCursorEncode(cursor) : null,
+  });
+});
+
+function personalActionReceiptId(value) {
+  const source = String(value || "");
+  if (!source.startsWith(PERSONAL_ACTION_PUBLIC_RECEIPT_PREFIX)) return "";
+  const id = source.slice(PERSONAL_ACTION_PUBLIC_RECEIPT_PREFIX.length);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    ? id : "";
+}
+
+async function undoPersonalScheduleLockAction(session, sourceId) {
+  try {
+    return await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const personalActions = repositories.personalActionLog;
+      const organization = repositories.organizationPersonnel;
+      const source = await personalActions.getOwn(session.employeeNumber, sourceId);
+      if (!source || source.compensatorKey !== "schedule.manual-lock.restore.v1") {
+        throw httpError(404, "Die persönliche Aktion wurde nicht gefunden.", "PERSONAL_ACTION_NOT_FOUND");
+      }
+      const liveSession = await livePersonnelLearningRoleAdministrationActor(session, organization);
+      if (liveSession?.mustChangePassword) {
+        throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+      }
+      const locationId = String(source.undoPayload?.locationId || "");
+      const weekStart = String(source.undoPayload?.weekStart || "");
+      try {
+        assertSessionContextScope(liveSession, { locationId });
+      } catch {
+        throw httpError(403, "Der aktuell wirksame Filialbereich reicht für die Gegenaktion nicht aus.", "PERSONAL_ACTION_UNDO_SCOPE_DENIED");
+      }
+      if (!canManageScheduleManualLock(liveSession, locationId)) {
+        throw httpError(403, "Für diese Gegenaktion fehlt das aktuell wirksame Dienstplanrecht.", "PERSONAL_ACTION_UNDO_PERMISSION_DENIED");
+      }
+      const existingCompensation = await personalActions.findCompensation(session.employeeNumber, source.id);
+      if (existingCompensation) return { alreadyUndone: true, row: null };
+      const now = new Date();
+      if (!source.undoExpiresAt || new Date(source.undoExpiresAt).getTime() <= now.getTime()) {
+        throw httpError(409, "Die Rückgängig-Frist für diese Aktion ist abgelaufen.", "PERSONAL_ACTION_UNDO_EXPIRED");
+      }
+      const current = await organization.getScheduleManualLock(locationId, weekStart);
+      const expectedRevision = Number(source.resultRevision || 0);
+      if (!expectedRevision || Number(current?.revision || 0) !== expectedRevision) {
+        throw httpError(409, "Der Sperrstatus wurde inzwischen erneut geändert und kann deshalb nicht sicher wiederhergestellt werden.", "PERSONAL_ACTION_UNDO_CONFLICT");
+      }
+      const restoreLocked = source.undoPayload?.restoreLocked === true;
+      const updated = await organization.upsertScheduleManualLock({
+        locationId,
+        weekStart,
+        locked: restoreLocked,
+        expectedRevision,
+        actor: session.employeeNumber,
+      });
+      if (!updated) {
+        throw httpError(409, "Der Sperrstatus wurde gleichzeitig geändert. Bitte das Aktionslog neu laden.", "PERSONAL_ACTION_UNDO_CONFLICT");
+      }
+      const createdAt = now.toISOString();
+      const auditResult = await organization.insertAudit(
+        session.employeeNumber,
+        "personal.action.undo",
+        "schedule_manual_lock",
+        source.entityId,
+        JSON.stringify({
+          compensator: source.compensatorKey,
+          locationId,
+          weekStart,
+          revisionBefore: expectedRevision,
+          revisionAfter: Number(updated.revision),
+        }),
+      );
+      const compensation = await personalActions.record({
+        actorId: session.employeeNumber,
+        actionType: "personal.action.undo",
+        entityType: "schedule_manual_lock",
+        entityId: source.entityId,
+        scope: source.scope,
+        summary: "Sperrstatus wiederhergestellt",
+        compensatorKey: null,
+        undoPayload: null,
+        resultRevision: null,
+        resultFingerprint: null,
+        sourceAuditId: personalActionAuditResultId(auditResult),
+        undoExpiresAt: null,
+        compensatesActionId: source.id,
+        createdAt,
+      });
+      return { alreadyUndone: false, row: updated, compensation };
+    }, { isolation: "serializable" });
+  } catch (error) {
+    if (isUniquePersistenceViolation(error)) {
+      const compensation = await personalActionLogRepository.findCompensation(
+        session.employeeNumber,
+        sourceId,
+      );
+      if (compensation) return { alreadyUndone: true, row: null, compensation };
+    }
+    throw error;
+  }
+}
+
+app.post("/api/portal/v1/me/actions/:actionId/undo", async (request, response) => {
+  const session = requireEmployeePortalSession(request, "schedule:write");
+  assertPortalCsrf(request);
+  const sourceId = personalActionReceiptId(request.params.actionId);
+  if (!sourceId) {
+    throw httpError(404, "Die persönliche Aktion wurde nicht gefunden.", "PERSONAL_ACTION_NOT_FOUND");
+  }
+  const source = await personalActionLogRepository.getOwn(session.employeeNumber, sourceId);
+  if (!source || source.compensatorKey !== "schedule.manual-lock.restore.v1") {
+    throw httpError(404, "Die persönliche Aktion wurde nicht gefunden.", "PERSONAL_ACTION_NOT_FOUND");
+  }
+  const outcome = await undoPersonalScheduleLockAction(session, sourceId);
+  const row = outcome.row || await organizationPersonnelRepository.getScheduleManualLock(
+    source.undoPayload.locationId,
+    source.undoPayload.weekStart,
+  );
+  response.set({ "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache" });
+  response.json({
+    undone: true,
+    alreadyUndone: outcome.alreadyUndone,
+    manualScheduleLock: scheduleManualLockForApi(row, {
+      actor: session,
+      locationId: source.undoPayload.locationId,
+      weekStart: source.undoPayload.weekStart,
+    }),
   });
 });
 

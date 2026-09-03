@@ -13,7 +13,7 @@ const {
 } = require("../lib/persistence/sqlite/application-catalog");
 
 test("Block 4/7: alle Anwendungsstatements besitzen genau eine SQLite-Dialektbindung", () => {
-  assert.equal(SQLITE_APPLICATION_CATALOG.length, 1119);
+  assert.equal(SQLITE_APPLICATION_CATALOG.length, 1135);
   assert.equal(
     SQLITE_APPLICATION_DIALECT_MANIFEST.entries.length,
     SQLITE_APPLICATION_CATALOG.length,
@@ -91,7 +91,7 @@ test("Block 4/7: PostgreSQL bleibt eine deckungsgleiche, nicht ausführbare Plan
   assert.equal(fixture.sourceDialectId, "sqlite");
   assert.equal(fixture.status, "contract-only");
   assert.equal(fixture.executable, false);
-  assert.equal(fixture.entries.length, 1119);
+  assert.equal(fixture.entries.length, 1135);
   assert.equal(fixture.sourceFingerprint, SQLITE_APPLICATION_DIALECT_MANIFEST.fingerprint);
 
   for (let index = 0; index < fixture.entries.length; index += 1) {

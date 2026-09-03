@@ -130,6 +130,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/absence-management.js",
   "lib/persistence/repositories/branding-snapshot.js",
   "lib/persistence/repositories/collective-agreements.js",
+  "lib/persistence/repositories/crm-customers.js",
   "lib/persistence/repositories/custom-process-management.js",
   "lib/persistence/repositories/custom-work-rules.js",
   "lib/persistence/repositories/governance-store.js",
@@ -137,6 +138,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/loan-module.js",
   "lib/persistence/repositories/mobile-auth.js",
   "lib/persistence/repositories/organization-personnel.js",
+  "lib/persistence/repositories/personal-action-log.js",
   "lib/persistence/repositories/personal-notification-contacts.js",
   "lib/persistence/repositories/personnel-lifecycle.js",
   "lib/persistence/repositories/personnel-learning.js",
@@ -156,6 +158,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/absence-management-catalog.js",
   "lib/persistence/sqlite/branding-snapshot-catalog.js",
   "lib/persistence/sqlite/collective-agreements-catalog.js",
+  "lib/persistence/sqlite/crm-customers-catalog.js",
   "lib/persistence/sqlite/custom-process-management-catalog.js",
   "lib/persistence/sqlite/custom-work-rules-catalog.js",
   "lib/persistence/sqlite/governance-store-catalog.js",
@@ -164,6 +167,8 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/mobile-auth-catalog.js",
   "lib/persistence/sqlite/operations/audit-log.js",
   "lib/persistence/sqlite/operations/collective-agreements-schema.js",
+  "lib/persistence/sqlite/operations/crm-schema.js",
+  "lib/persistence/sqlite/operations/personal-action-log-schema.js",
   "lib/persistence/sqlite/operations/application-seeding.js",
   "lib/persistence/sqlite/operations/branch-orders.js",
   "lib/persistence/sqlite/operations/application-schema.js",
@@ -194,6 +199,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/system-center-metrics-schema.js",
   "lib/persistence/sqlite/operations/work-rule-store-schema.js",
   "lib/persistence/sqlite/organization-personnel-catalog.js",
+  "lib/persistence/sqlite/personal-action-log-catalog.js",
   "lib/persistence/sqlite/personal-notification-contacts-catalog.js",
   "lib/persistence/sqlite/personnel-lifecycle-catalog.js",
   "lib/persistence/sqlite/personnel-learning-catalog.js",
@@ -213,6 +219,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/branding-snapshot.js",
   "lib/persistence/statements/absence-management.js",
   "lib/persistence/statements/collective-agreements.js",
+  "lib/persistence/statements/crm-customers.js",
   "lib/persistence/statements/custom-process-management.js",
   "lib/persistence/statements/custom-work-rules.js",
   "lib/persistence/statements/governance-store.js",
@@ -220,6 +227,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/loan-module.js",
   "lib/persistence/statements/mobile-auth.js",
   "lib/persistence/statements/organization-personnel.js",
+  "lib/persistence/statements/personal-action-log.js",
   "lib/persistence/statements/personal-notification-contacts.js",
   "lib/persistence/statements/personnel-lifecycle.js",
   "lib/persistence/statements/personnel-learning.js",
@@ -246,6 +254,9 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/v087-application-schema-operation.test.js",
   "test/v087-branding-persistence.test.js",
   "test/v087-collective-agreements-persistence.test.js",
+  "test/crm-api-contract.test.js",
+  "test/crm-persistence-contract.test.js",
+  "test/personal-action-log-persistence.test.js",
   "test/v087-custom-process-management-persistence.test.js",
   "test/v087-integration-runtime-persistence.test.js",
   "test/v087-loan-module-persistence.test.js",
@@ -370,10 +381,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1119;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1135;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 33;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1086;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1013;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1102;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1029;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -497,8 +508,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1008;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 111;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1021;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 114;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",

@@ -195,6 +195,8 @@ test("Block 10: Serienauswahl ist eindeutig, begrenzt und vollständig serversei
   assert.match(htmlSource, /id="salesReportCoverageChart"/);
   assert.match(htmlSource, /id="salesReportArchiveBody"/);
   assert.match(appSource, /function analyzeSalesReportSeries\(\)/);
-  assert.match(appSource, /body: JSON\.stringify\(\{ reportIds: reports\.map/);
+  assert.match(appSource, /const reportIds = reports\.map/);
+  assert.match(appSource, /body: JSON\.stringify\(\{ reportIds \}\)/);
+  assert.match(appSource, /requestId !== state\.salesAnalytics\.seriesRequestId/);
   assert.match(appSource, /Ø je Abdeckungstag:/);
 });
