@@ -299,6 +299,9 @@ const {
   storefrontBaseUrl,
 } = require("./lib/article-catalog");
 const {
+  salesArticleImportContentSha256,
+} = require("./lib/sales-article-catalog");
+const {
   LoanWorkflowError,
   MAX_LOAN_ITEMS,
   normalizeLoanCondition,
@@ -2327,6 +2330,7 @@ const {
   portalBirthdayPresentations: portalBirthdayPresentationsRepository,
   portalAccess: portalAccessRepository,
   runtimeRecovery: runtimeRecoveryRepository,
+  salesArticleCatalog: salesArticleCatalogRepository,
   salesAnalytics: salesAnalyticsRepository,
   sicknessAmuManagement: sicknessAmuManagementRepository,
   staffAssignmentRequests: staffAssignmentRequestRepository,
@@ -41633,34 +41637,103 @@ function normalizedArticleDescription(value, { required = false } = {}) {
   return description;
 }
 
-async function saveArticleRecord(article, actorEmployeeNumber) {
+async function saveArticleRecord(article, actorEmployeeNumber, {
+  catalogRepository = salesArticleCatalogRepository,
+  readRepository = loanModuleRepository,
+} = {}) {
   const sourceProvider = ["manual", "shopware_storefront", "import"].includes(article.sourceProvider)
     ? article.sourceProvider
     : "manual";
-  await loanModuleRepository.upsertArticle({
-    articleNumber: article.articleNumber,
-    description: normalizedArticleDescription(article.description, { required: true }),
-    sourceProvider,
-    sourceProductNumber: String(article.sourceProductNumber || "").slice(0, 40),
-    sourceUrl: String(article.sourceUrl || "").slice(0, 1000),
-    sourceFetchedAt: article.sourceFetchedAt || null,
-    actorEmployeeNumber,
+  const articleNumber = normalizeArticleNumber(article.articleNumber);
+  const current = await catalogRepository.getByArticleNumber(articleNumber);
+  const incomingIdentifier = article.identifier && article.identifier.type !== "internal"
+    ? article.identifier
+    : null;
+  const identifiers = (current?.identifiers || []).flatMap((identifier) => {
+    const observations = Array.isArray(identifier.equivalentIdentifiers)
+      && identifier.equivalentIdentifiers.length
+      ? identifier.equivalentIdentifiers
+      : [identifier];
+    return observations.map((observation) => ({
+      identifierType: observation.identifierType,
+      identifierValue: observation.identifierValue,
+      isPrimary: observation.isPrimary,
+      sourceField: observation.sourceField,
+      sourceRank: observation.sourceRank,
+      sourceProvider: observation.sourceProvider,
+      verifiedAt: observation.verifiedAt,
+      createdBy: observation.createdBy,
+      updatedBy: observation.updatedBy,
+      createdAt: observation.createdAt,
+      updatedAt: observation.updatedAt,
+    }));
   });
-  return articleRow(article.articleNumber);
-}
-
-async function saveArticleIdentifier(articleNumber, identifier, sourceProvider, actorEmployeeNumber) {
-  if (!identifier || identifier.type === "internal") return;
-  const provider = ["manual", "shopware_storefront", "import"].includes(sourceProvider)
-    ? sourceProvider
-    : "manual";
-  await loanModuleRepository.upsertArticleIdentifier({
+  if (incomingIdentifier && !identifiers.some((identifier) => (
+    identifier.identifierType === incomingIdentifier.type
+    && identifier.identifierValue === incomingIdentifier.value
+  ))) {
+    identifiers.push({
+      identifierType: incomingIdentifier.type,
+      identifierValue: incomingIdentifier.value,
+      isPrimary: identifiers.length === 0,
+      sourceField: `${sourceProvider}.identifier`,
+      sourceRank: null,
+    });
+  }
+  const prices = (current?.prices || []).map((price) => ({
+    priceType: price.priceType,
+    amount: price.amount,
+    currency: price.currency,
+    priceBasis: price.priceBasis,
+    qualityStatus: price.qualityStatus,
+    sourceField: price.sourceField,
+  }));
+  const sourceSystem = sourceProvider === "shopware_storefront"
+    ? "shopware.storefront"
+    : sourceProvider === "import" ? "f18.loan_catalog" : "manual.loan";
+  const sourceArticleKey = String(article.sourceProductNumber || articleNumber).trim();
+  const snapshotAt = article.sourceFetchedAt || new Date().toISOString();
+  const importedArticle = {
+    sourceArticleKey,
     articleNumber,
-    identifierType: identifier.type,
-    identifierValue: identifier.value,
-    sourceProvider: provider,
-    actorEmployeeNumber,
+    description: normalizedArticleDescription(article.description, { required: true }),
+    active: true,
+    sourceUpdatedAt: article.sourceFetchedAt || null,
+    identifiers,
+    prices,
+    sourceMetadata: {
+      provider: sourceProvider,
+      productNumber: String(article.sourceProductNumber || ""),
+      url: String(article.sourceUrl || ""),
+      fetchedAt: article.sourceFetchedAt || null,
+      createdBy: String(actorEmployeeNumber),
+      updatedBy: String(actorEmployeeNumber),
+      createdAt: snapshotAt,
+      updatedAt: snapshotAt,
+    },
+  };
+  const contentSha256 = salesArticleImportContentSha256([importedArticle]);
+  await catalogRepository.importSnapshot({
+    snapshot: {
+      sourceSystem,
+      sourceProfileVersion: "operational-article-v1",
+      sourceSchemaSha256: crypto.createHash("sha256")
+        .update("grabenplaner-operational-article-v1")
+        .digest("hex"),
+      sourceFileSha256: crypto.createHash("sha256").update(JSON.stringify({
+        sourceSystem,
+        sourceArticleKey,
+        sourceUrl: String(article.sourceUrl || "").slice(0, 1000),
+        sourceFetchedAt: article.sourceFetchedAt || null,
+      })).digest("hex"),
+      contentSha256,
+      snapshotAt,
+      articles: [importedArticle],
+    },
+    actor: actorEmployeeNumber,
+    timestamp: new Date().toISOString(),
   });
+  return readRepository.getArticle({ articleNumber });
 }
 
 function articleLookupHttpError(error) {
@@ -41677,7 +41750,9 @@ function articleLookupHttpError(error) {
 }
 
 function articleLookupIsFresh(row, now = Date.now()) {
-  if (row?.source_provider !== "shopware_storefront" || !row.source_fetched_at) return false;
+  const storefrontRevision = row?.source_provider === "shopware_storefront"
+    || row?.revision_source_system === "shopware.storefront";
+  if (!storefrontRevision || !row.source_fetched_at) return false;
   const fetchedAt = new Date(row.source_fetched_at).getTime();
   return Number.isFinite(fetchedAt) && now - fetchedAt < 24 * 60 * 60 * 1000;
 }
@@ -42211,7 +42286,8 @@ async function insertF18Migration(inspection, mappings, location, actor, artifac
   const now = new Date().toISOString();
   try {
     await persistenceProvider.transaction(async (executor) => {
-      const repository = createApplicationRepositories(executor).loanModule;
+      const repositories = createApplicationRepositories(executor);
+      const repository = repositories.loanModule;
       await repository.insertMigrationRun({
         id: runId,
         sourceFingerprint: inspection.fingerprint,
@@ -42251,17 +42327,22 @@ async function insertF18Migration(inspection, mappings, location, actor, artifac
           updatedAt,
         });
         for (const item of entry.items) {
-          await repository.upsertImportedArticle({
+          const storedArticle = await saveArticleRecord({
             articleNumber: item.articleNumber,
             description: f18MigrationText(item.description, 300),
-            actorEmployeeNumber: actor.employeeNumber,
-            createdAt: sourceLoan.issuedAt,
-            updatedAt,
+            sourceProvider: "import",
+            sourceProductNumber: item.articleNumber,
+            sourceFetchedAt: updatedAt,
+          }, actor.employeeNumber, {
+            catalogRepository: repositories.salesArticleCatalog,
+            readRepository: repository,
           });
           await repository.insertLoanItem({
             id: crypto.randomUUID(),
             loanId: entry.loanId,
             position: item.position,
+            productId: storedArticle.product_id,
+            productRevisionSnapshot: storedArticle.current_revision,
             articleNumber: item.articleNumber,
             descriptionSnapshot: f18MigrationText(item.description, 300),
             serialNumber: f18MigrationText(item.serialNumber, 200),
@@ -42411,41 +42492,46 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
     const articleNumber = identifier.type === "internal" ? identifier.value : manualArticleNumber;
     const canonicalExisting = await articleRow(articleNumber);
     if (canonicalExisting?.description) {
-      stored = canonicalExisting;
+      stored = await saveArticleRecord({
+        articleNumber,
+        description: canonicalExisting.description,
+        sourceProvider: "manual",
+        identifier,
+      }, actor.employeeNumber);
       preservedManualDescription = true;
     } else {
       stored = await saveArticleRecord({
         articleNumber,
         description: manualDescription,
         sourceProvider: "manual",
+        identifier,
       }, actor.employeeNumber);
     }
-    await saveArticleIdentifier(articleNumber, identifier, "manual", actor.employeeNumber);
-    stored = await articleRow(articleNumber);
     recordChanged = true;
   } else if (manualDescription && existing) {
     preservedManualDescription = true;
   } else if (suggestion) {
     const canonicalExisting = existing || await articleRow(suggestion.articleNumber);
     if (canonicalExisting?.source_provider === "manual" && canonicalExisting.description) {
-      stored = canonicalExisting;
+      stored = await saveArticleRecord({
+        ...suggestion,
+        description: canonicalExisting.description,
+        sourceFetchedAt: new Date().toISOString(),
+        identifier: suggestion.barcode
+          ? { type: suggestion.barcodeType, value: suggestion.barcode }
+          : identifier,
+      }, actor.employeeNumber);
       preservedManualDescription = true;
     } else {
       stored = await saveArticleRecord({
         ...suggestion,
         sourceFetchedAt: new Date().toISOString(),
+        identifier: suggestion.barcode
+          ? { type: suggestion.barcodeType, value: suggestion.barcode }
+          : identifier,
       }, actor.employeeNumber);
       recordChanged = true;
     }
-    await saveArticleIdentifier(
-      stored.article_number,
-      suggestion.barcode
-        ? { type: suggestion.barcodeType, value: suggestion.barcode }
-        : identifier,
-      "shopware_storefront",
-      actor.employeeNumber,
-    );
-    stored = await articleRow(stored.article_number);
     recordChanged = true;
     existing = stored;
   }
@@ -44315,6 +44401,8 @@ app.post("/api/portal/v1/loans", async (request, response) => {
           id: crypto.randomUUID(),
           loanId,
           position: item.position,
+          productId: articles[index].product_id,
+          productRevisionSnapshot: articles[index].current_revision,
           articleNumber: item.articleNumber,
           descriptionSnapshot: String(articles[index].description).slice(0, 300),
           serialNumber: item.serialNumber,
@@ -49361,7 +49449,10 @@ async function assertPersonnelLifecycleStructuredApplicationScopes(
   submitted,
   accessContext,
   request,
-  { deferUnwritableEntriesToDeltaCheck = false } = {},
+  {
+    deferUnwritableEntriesToDeltaCheck = false,
+    auditScopeDenial = true,
+  } = {},
 ) {
   const scopes = personnelLifecycleStructuredApplicationScopes(submitted);
   if (!scopes.length) return;
@@ -49376,12 +49467,14 @@ async function assertPersonnelLifecycleStructuredApplicationScopes(
     // Only the lifecycle service can compare the protected current payload transactionally.
     // Deferral does not authorize the entry; any non-identical foreign delta is rejected there.
     if (!writable && !deferUnwritableEntriesToDeltaCheck) {
-      auditPersonnelLifecycleAccessDenied(
-        session,
-        request,
-        "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED",
-        PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
-      );
+      if (auditScopeDenial) {
+        auditPersonnelLifecycleAccessDenied(
+          session,
+          request,
+          "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED",
+          PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+        );
+      }
       throw httpError(
         403,
         "Schnuppertermine und Zielfilialen dürfen nur im freigegebenen eigenen Bereich erfasst werden.",
@@ -51278,6 +51371,95 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
     );
     response.json({ application, capabilities });
   } catch (error) {
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/trial-appointments/:trialAppointmentId", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    const service = requirePersonnelLifecycleService();
+    const detail = await service.getCandidate(request.params.candidateId, { access });
+    const currentApplication = detail?.applications?.find((application) => (
+      application.id === String(request.params.applicationId || "")
+        && access.canWriteApplication(application)
+    ));
+    const currentAppointment = currentApplication?.trialAppointments?.find((appointment) => (
+      appointment.id === String(request.params.trialAppointmentId || "")
+    ));
+    const currentAppointmentScope = currentAppointment ? {
+      desiredLocationId: currentAppointment.locationId,
+      desiredDepartmentId: currentAppointment.departmentId ?? null,
+    } : null;
+    if (!currentApplication || !currentAppointment || (!access.global
+      && (!access.canReadApplication(currentAppointmentScope)
+        || !access.canWriteApplication(currentAppointmentScope)))) {
+      throw new PersonnelLifecycleError(
+        "Der Schnuppertermin wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_TRIAL_APPOINTMENT_NOT_FOUND",
+        PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
+      );
+    }
+    const submitted = personnelLifecyclePlainObject(request.body) ? request.body : {};
+    const replacement = personnelLifecyclePlainObject(submitted.replacement)
+      ? submitted.replacement
+      : null;
+    await assertPersonnelLifecycleStructuredApplicationScopes({
+      trialAppointments: [{
+        ...currentAppointment,
+        ...submitted,
+        locationId: submitted.locationId ?? currentAppointment.locationId,
+        departmentId: Object.prototype.hasOwnProperty.call(submitted, "departmentId")
+          ? submitted.departmentId
+          : currentAppointment.departmentId,
+      }, ...(replacement ? [{
+        ...replacement,
+        locationId: replacement.locationId
+          ?? submitted.locationId
+          ?? currentAppointment.locationId,
+        departmentId: Object.prototype.hasOwnProperty.call(replacement, "departmentId")
+          ? replacement.departmentId
+          : (Object.prototype.hasOwnProperty.call(submitted, "departmentId")
+            ? submitted.departmentId
+            : currentAppointment.departmentId),
+      }] : [])],
+    }, accessContext, request, { auditScopeDenial: false });
+    const updated = await service.updateTrialAppointment(
+      request.params.candidateId,
+      request.params.applicationId,
+      request.params.trialAppointmentId,
+      request.body || {},
+      session.employeeNumber,
+      { access },
+    );
+    const application = projectPersonnelLifecycleApplication(updated, access);
+    const appointment = application.trialAppointments?.find((entry) => (
+      entry.id === String(request.params.trialAppointmentId || "")
+    ));
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.trial-appointment.update",
+      "candidate_trial_appointment",
+      request.params.trialAppointmentId,
+      JSON.stringify({
+        revision: application.revision,
+        status: appointment?.status || null,
+        cancellationRecorded: Boolean(appointment?.cancelledAt),
+        replacementCreated: Boolean(submitted.replacement),
+      }),
+    );
+    response.json({ application, capabilities });
+  } catch (error) {
+    if (error?.code === "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED") {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code,
+        PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+      );
+    }
     auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
     personnelLifecycleRouteError(error);
   }
@@ -60641,6 +60823,8 @@ module.exports = {
   reconcileCustomProcessTriggers,
   installationFeatures,
   installationFeaturesForApiPath,
+  insertF18MigrationForTests: insertF18Migration,
+  prepareLoanDocumentForTests: prepareLoanDocument,
   minimizedPayrollApiPayload,
   reconcileInterruptedIntegrationDeliveries,
   integrationConnectionConfigurationFingerprint,

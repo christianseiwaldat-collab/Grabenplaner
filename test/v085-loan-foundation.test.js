@@ -30,6 +30,8 @@ const {
   app,
   db,
   installationFeaturesForApiPath,
+  insertF18MigrationForTests,
+  prepareLoanDocumentForTests,
   reconcileOrphanAmuBlobs,
   releaseInstanceLockForTests,
   validateUsbFeatures,
@@ -93,6 +95,109 @@ function createSession(employeeNumber) {
     cookie: `grabenplaner_session=${rawToken}; grabenplaner_csrf=${csrf}`,
     csrf,
   };
+}
+
+function storeCentralSalesArticleRevision({
+  articleNumber,
+  description,
+  sourceSystem = "manual.loan",
+  sourceArticleKey = articleNumber,
+  sourceUpdatedAt = null,
+}) {
+  const existing = db.prepare(`
+    SELECT product_id, current_revision, source_system, source_article_key
+    FROM sales_articles
+    WHERE article_number = ?
+  `).get(articleNumber);
+  const productId = existing?.product_id || crypto.randomUUID();
+  const revision = existing ? existing.current_revision + 1 : 1;
+  const timestamp = new Date().toISOString();
+  const nonce = crypto.randomUUID();
+  const digest = (label) => crypto.createHash("sha256")
+    .update(`${label}\0${articleNumber}\0${revision}\0${nonce}`)
+    .digest("hex");
+  const snapshotId = digest("snapshot");
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO sales_article_import_snapshots (
+        id, idempotency_key, source_system, source_profile_version,
+        source_schema_sha256, source_file_sha256, content_sha256,
+        snapshot_at, article_count, identifier_count, price_count,
+        imported_by, imported_at
+      ) VALUES (?, ?, ?, 'test-v1', ?, ?, ?, ?, 1, 0, 0, 'test', ?)
+    `).run(
+      snapshotId,
+      digest("idempotency"),
+      sourceSystem,
+      digest("schema"),
+      digest("file"),
+      digest("content"),
+      timestamp,
+      timestamp,
+    );
+    if (!existing) {
+      db.prepare(`
+        INSERT INTO sales_articles (
+          product_id, article_number, source_system, source_article_key,
+          current_revision, created_by, created_at, updated_by, updated_at
+        ) VALUES (?, ?, ?, ?, 1, 'test', ?, 'test', ?)
+      `).run(productId, articleNumber, sourceSystem, sourceArticleKey, timestamp, timestamp);
+    }
+    const sourceLink = db.prepare(`
+      SELECT product_id
+      FROM sales_article_source_links
+      WHERE source_system = ? AND source_article_key = ?
+    `).get(sourceSystem, sourceArticleKey);
+    if (!sourceLink) {
+      db.prepare(`
+        INSERT INTO sales_article_source_links (
+          product_id, source_system, source_article_key, source_snapshot_id,
+          match_method, match_confidence, matched_source_system,
+          matched_source_article_key, linked_by, linked_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'test', ?)
+      `).run(
+        productId,
+        sourceSystem,
+        sourceArticleKey,
+        snapshotId,
+        existing ? "article_number_exact" : "source_import",
+        existing ? "exact" : "authoritative",
+        existing?.source_system || null,
+        existing?.source_article_key || null,
+        timestamp,
+      );
+    } else {
+      assert.equal(sourceLink.product_id, productId);
+    }
+    db.prepare(`
+      INSERT INTO sales_article_revisions (
+        product_id, revision, article_number, description, active,
+        source_snapshot_id, source_updated_at, created_by, created_at
+      ) VALUES (?, ?, ?, ?, 1, ?, ?, 'test', ?)
+    `).run(
+      productId,
+      revision,
+      articleNumber,
+      description,
+      snapshotId,
+      sourceUpdatedAt,
+      timestamp,
+    );
+    if (existing) {
+      db.prepare(`
+        UPDATE sales_articles
+        SET current_revision = ?, updated_by = 'test', updated_at = ?
+        WHERE product_id = ? AND current_revision = ?
+      `).run(revision, timestamp, productId, existing.current_revision);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return { productId, revision, snapshotId };
 }
 
 async function request(
@@ -183,9 +288,13 @@ test("v0.85 Artikelnummern sind exakt sechsstellig und bleiben als Text erhalten
   assert.equal(normalizeArticleNumber("089319"), "089319");
   assert.throws(() => normalizeArticleNumber("89319"), { code: "ARTICLE_NUMBER_INVALID" });
   assert.throws(() => normalizeArticleNumber("08A319"), { code: "ARTICLE_NUMBER_INVALID" });
-  assert.throws(
-    () => db.prepare("INSERT INTO articles (article_number, description) VALUES ('12345', 'Ungültig')").run(),
-    /CHECK constraint failed/,
+  assert.equal(
+    db.prepare(`
+      SELECT type
+      FROM pragma_table_info('sales_articles')
+      WHERE name = 'article_number'
+    `).get()?.type,
+    "TEXT",
   );
 });
 
@@ -243,8 +352,13 @@ test("v0.85 EAN und GTIN werden per Prüfziffer erkannt und am Shopartikel best�
 
 test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leihhistorie", () => {
   for (const table of [
-    "articles",
-    "article_identifiers",
+    "sales_article_import_snapshots",
+    "sales_articles",
+    "sales_article_revisions",
+    "sales_article_source_links",
+    "sales_article_identifier_owners",
+    "sales_article_identifiers",
+    "sales_article_price_snapshots",
     "loan_location_settings",
     "loans",
     "loan_items",
@@ -258,8 +372,28 @@ test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leih
   ]) {
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
   }
+  for (const legacyTable of ["articles", "article_identifiers"]) {
+    assert.equal(
+      db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(legacyTable),
+      undefined,
+      legacyTable,
+    );
+  }
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.85-loan-module-foundation'").get());
-  db.prepare("INSERT INTO articles (article_number, description) VALUES ('654321', 'Testartikel')").run();
+  const centralArticle = storeCentralSalesArticleRevision({
+    articleNumber: "654321",
+    description: "Testartikel",
+  });
+  const storedCentralArticle = db.prepare(`
+    SELECT article.article_number, revision.description
+    FROM sales_articles article
+    JOIN sales_article_revisions revision
+      ON revision.product_id = article.product_id
+     AND revision.revision = article.current_revision
+    WHERE article.product_id = ?
+  `).get(centralArticle.productId);
+  assert.equal(storedCentralArticle.article_number, "654321");
+  assert.equal(storedCentralArticle.description, "Testartikel");
   const loanId = crypto.randomUUID();
   db.prepare(`
     INSERT INTO loans (id, location_id, borrower_employee_number, created_by_employee_number)
@@ -422,11 +556,13 @@ test("v0.85 manuelle Rückfalleingabe speichert einen wiederverwendbaren Artikel
         article_lookup_base_url = 'https://shop.example.test', updated_at = CURRENT_TIMESTAMP
     WHERE location_id = ?
   `).run(locationId);
-  db.prepare(`
-    UPDATE articles
-    SET source_provider = 'shopware_storefront', source_fetched_at = CURRENT_TIMESTAMP
-    WHERE article_number = '089319'
-  `).run();
+  storeCentralSalesArticleRevision({
+    articleNumber: "089319",
+    description: "DÖRR Mini Octagon Softbox für Blitzgeräte",
+    sourceSystem: "shopware.storefront",
+    sourceArticleKey: "0000000089319",
+    sourceUpdatedAt: new Date().toISOString(),
+  });
   const cachedResolution = await request("/api/portal/v1/loans/articles/resolve", {
     method: "POST",
     body: { locationId, articleNumber: "089319" },
@@ -469,6 +605,146 @@ test("v0.85 ein einmal bestätigter EAN-Abgleich wird lokal wiederverwendet", as
   const search = await request(`/api/portal/v1/loans/articles?locationId=${locationId}&query=5025232978748`);
   assert.equal(search.response.status, 200, JSON.stringify(search.payload));
   assert.equal(search.payload.articles[0].articleNumber, "104405");
+});
+
+test("v0.85 kanonischer Lookup findet aequivalente UPC- und EAN-Darstellungen", async () => {
+  db.prepare(`
+    UPDATE loan_location_settings
+    SET article_lookup_enabled = 0, article_lookup_provider = 'none',
+        article_lookup_base_url = '', updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = ?
+  `).run(locationId);
+  const first = await request("/api/portal/v1/loans/articles/resolve", {
+    method: "POST",
+    body: {
+      locationId,
+      identifier: "036000291452",
+      manualArticleNumber: "777770",
+      manualDescription: "Kanonischer Barcode-Testartikel",
+    },
+  });
+  assert.equal(first.response.status, 200, JSON.stringify(first.payload));
+  const equivalent = await request("/api/portal/v1/loans/articles/resolve", {
+    method: "POST",
+    body: { locationId, identifier: "0036000291452" },
+  });
+  assert.equal(equivalent.response.status, 200, JSON.stringify(equivalent.payload));
+  assert.equal(equivalent.payload.cacheHit, true);
+  assert.equal(equivalent.payload.article.articleNumber, "777770");
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM sales_article_revisions revision
+    JOIN sales_articles article ON article.product_id = revision.product_id
+    WHERE article.article_number = '777770'
+  `).get().count, 1);
+});
+
+test("F18-Direktfixture migriert zentral und rollt spaete Artikelfehler atomar zurueck", async () => {
+  const timestamp = "2026-09-03T12:00:00.000Z";
+  const mappings = new Map([[1, EMPLOYEE]]);
+  const inspection = {
+    fingerprint: "f".repeat(64),
+    source: { appVersion: "6.0.1", createdAt: timestamp },
+    summary: {
+      employees: 1,
+      loans: 1,
+      items: 2,
+      photos: 0,
+      openLoans: 1,
+      returnedLoans: 0,
+    },
+    warnings: [],
+  };
+  const artifactsFor = async (articleNumbers, sourceId) => {
+    const loanId = crypto.randomUUID();
+    const items = articleNumbers.map((articleNumber, index) => ({
+      position: index + 1,
+      articleNumber,
+      description: `F18 Artikel ${index + 1}`,
+      serialNumber: "",
+      conditionOut: "good",
+      conditionReturn: "",
+      note: "",
+    }));
+    const issueDocument = await prepareLoanDocumentForTests({
+      type: "issue",
+      loanId,
+      revision: 1,
+      createdAt: timestamp,
+      issuedAt: timestamp,
+      dueDate: null,
+      note: "",
+      location: { id: locationId, name: "Testfiliale" },
+      borrower: { employeeNumber: EMPLOYEE, name: "Testperson" },
+      recordedBy: { employeeNumber: EMPLOYEE, name: "Testperson" },
+      items,
+    }, ADMIN);
+    return {
+      loans: [{
+        sourceLoan: {
+          sourceId,
+          status: "issued",
+          dueDate: null,
+          notes: "",
+          issuedAt: timestamp,
+          borrowerReturnConfirmed: false,
+        },
+        loanId,
+        borrowerEmployeeNumber: mappings.get(1),
+        witnessEmployeeNumber: null,
+        items,
+        photos: [],
+        issueDocument,
+        returnDocument: null,
+      }],
+      preparedDocuments: [issueDocument],
+      preparedPhotos: [],
+    };
+  };
+  const countsBefore = {
+    runs: db.prepare("SELECT COUNT(*) AS count FROM loan_migration_runs").get().count,
+    loans: db.prepare("SELECT COUNT(*) AS count FROM loans").get().count,
+    articles: db.prepare("SELECT COUNT(*) AS count FROM sales_articles").get().count,
+  };
+  await assert.rejects(
+    insertF18MigrationForTests(
+      inspection,
+      mappings,
+      { id: locationId, name: "Testfiliale" },
+      { employeeNumber: ADMIN, sessionKind: "portal" },
+      await artifactsFor(["876543", "ungueltig"], 900001),
+    ),
+  );
+  assert.deepEqual({
+    runs: db.prepare("SELECT COUNT(*) AS count FROM loan_migration_runs").get().count,
+    loans: db.prepare("SELECT COUNT(*) AS count FROM loans").get().count,
+    articles: db.prepare("SELECT COUNT(*) AS count FROM sales_articles").get().count,
+  }, countsBefore);
+
+  const succeeded = await insertF18MigrationForTests(
+    { ...inspection, summary: { ...inspection.summary, items: 1 } },
+    mappings,
+    { id: locationId, name: "Testfiliale" },
+    { employeeNumber: ADMIN, sessionKind: "portal" },
+    await artifactsFor(["876543"], 900002),
+  );
+  assert.equal(succeeded.source_system, "f18-lagerware");
+  const migrated = db.prepare(`
+    SELECT item.product_id, item.article_number_snapshot, article.article_number,
+           source_link.source_provider
+    FROM loan_items item
+    JOIN sales_articles article ON article.product_id = item.product_id
+    JOIN sales_article_source_links source_link
+      ON source_link.product_id = article.product_id
+     AND source_link.source_system = 'f18.loan_catalog'
+    WHERE item.article_number_snapshot = '876543'
+  `).get();
+  assert.deepEqual({ ...migrated }, {
+    product_id: migrated.product_id,
+    article_number_snapshot: "876543",
+    article_number: "876543",
+    source_provider: "import",
+  });
 });
 
 test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen Revisionsverlauf", async () => {

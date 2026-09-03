@@ -456,6 +456,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     "lib/persistence/postgresql/policy.js",
     "lib/persistence/postgresql/pool.js",
     "lib/persistence/postgresql/provider.js",
+    "lib/persistence/postgresql/sales-article-catalog-schema.js",
     "lib/persistence/postgresql/system-center-metrics-catalog.js",
     "lib/persistence/postgresql/ui-preferences-catalog.js",
   ]);
@@ -469,6 +470,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     "test/v087-database-block5-postgresql-planning-settings.test.js",
     "test/v087-database-block5-postgresql-pool-policy.test.js",
     "test/v087-database-block5-postgresql-provider.test.js",
+    "test/sales-article-catalog-postgresql-contract.test.js",
     "test/v087-database-block5-postgresql-system-center-metrics.test.js",
     "test/v087-database-block5-postgresql-ui-preferences.test.js",
   ]);
@@ -505,7 +507,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     report.phase5Progress.compilerVersion,
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1135);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1148);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -523,7 +525,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1135,
+    requiredReceiptCount: 1148,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -652,10 +654,10 @@ test("v0.87 Datenbank Block 5: Vertragsdokument hält Historie und aktuellen Pro
   assert.match(strategy, /Phase 5 ist begonnen und weiterhin in[\s\S]{0,30}Bearbeitung/i);
   assert.match(phase5, /nicht produktiven Status/i);
   assert.match(phase5, /`development-contract`/);
-  assert.match(phase5, /1021[^\r\n]*Syntaxkandidaten/);
+  assert.match(phase5, /1034[^\r\n]*Syntaxkandidaten/);
   assert.match(phase5, /114[\s\S]{0,100}`requires-override`/);
   assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1135/);
+  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1148/);
   assert.match(phase5, /`applicationExecutable: false`/);
   assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
   assert.equal(packageJson.dependencies?.pg, "8.22.0");

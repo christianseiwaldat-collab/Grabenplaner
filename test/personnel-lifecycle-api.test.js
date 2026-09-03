@@ -1140,6 +1140,50 @@ test("Personalmodul Recruiting: strukturierte Profildaten, Teamfeedback und Bewe
   const departmentId = department?.id ? Number(department.id) : null;
   const trialAppointmentId = crypto.randomUUID();
 
+  const candidatesBeforeRejectedCreate = db.prepare("SELECT COUNT(*) AS count FROM candidates")
+    .get().count;
+  const rejectedInitialCancellation = await request(
+    "/api/portal/v1/personnel-lifecycle/candidates",
+    {
+      method: "POST",
+      auth: admin,
+      body: {
+        dataProcessingAuthorizationConfirmed: true,
+        profile: {
+          firstName: "Client",
+          lastName: "Absage",
+          email: "client-cancellation@example.invalid",
+        },
+        application: {
+          desiredLocationId: String(location.id),
+          desiredDepartmentId: departmentId,
+          trialAppointments: [{
+            id: crypto.randomUUID(),
+            dateFrom: "2026-09-09",
+            dateTo: "2026-09-09",
+            locationId: String(location.id),
+            departmentId,
+            status: "cancelled",
+            cancellationReason: "Untrusted initiale Absage",
+          }],
+        },
+      },
+    },
+  );
+  assert.equal(
+    rejectedInitialCancellation.response.status,
+    400,
+    JSON.stringify(rejectedInitialCancellation.payload),
+  );
+  assert.equal(
+    rejectedInitialCancellation.payload.code,
+    "PERSONNEL_LIFECYCLE_TRIAL_DIRECT_UPDATE_REQUIRED",
+  );
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS count FROM candidates").get().count,
+    candidatesBeforeRejectedCreate,
+  );
+
   const created = await request(
     "/api/portal/v1/personnel-lifecycle/candidates",
     {
@@ -1206,6 +1250,178 @@ test("Personalmodul Recruiting: strukturierte Profildaten, Teamfeedback und Bewe
     LIMIT 1
   `).get(String(location.id));
   assert.ok(alternateLocation?.id);
+
+  const forgedReplacementId = crypto.randomUUID();
+  const forgedGenericCancellation = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}`,
+    {
+      method: "PUT",
+      auth: admin,
+      body: {
+        revision: application.revision,
+        trialAppointments: [{
+          ...application.trialAppointments[0],
+          status: "cancelled",
+          cancellationReason: "Vom Gesamtformular konstruiert",
+          cancelledAt: "2026-09-01T08:00:00.000Z",
+          cancelledBy: "MANIPULIERT",
+          replacementAppointmentId: forgedReplacementId,
+        }, {
+          id: forgedReplacementId,
+          dateFrom: "2026-09-15",
+          dateTo: "2026-09-15",
+          startTime: "10:00",
+          locationId: String(alternateLocation.id),
+          departmentId: null,
+          status: "planned",
+          replacesAppointmentId: trialAppointmentId,
+        }],
+      },
+    },
+  );
+  assert.equal(
+    forgedGenericCancellation.response.status,
+    409,
+    JSON.stringify(forgedGenericCancellation.payload),
+  );
+  assert.equal(
+    forgedGenericCancellation.payload.code,
+    "PERSONNEL_LIFECYCLE_TRIAL_DIRECT_UPDATE_REQUIRED",
+  );
+  assert.equal(
+    db.prepare("SELECT revision FROM candidate_applications WHERE id = ?").get(application.id).revision,
+    application.revision,
+  );
+
+  const trialRoute = `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}/trial-appointments/${trialAppointmentId}`;
+  const cancellationReason = "Bewerber hat den Termin am 10. September abgesagt";
+  const withoutCsrf = await request(trialRoute, {
+    method: "PUT",
+    auth: admin,
+    includeCsrf: false,
+    body: { revision: application.revision, status: "cancelled" },
+  });
+  assert.equal(withoutCsrf.response.status, 403, JSON.stringify(withoutCsrf.payload));
+  assert.equal(
+    db.prepare("SELECT revision FROM candidate_applications WHERE id = ?").get(application.id).revision,
+    application.revision,
+  );
+
+  db.exec(`
+    CREATE TRIGGER test_trial_appointment_event_failure
+    BEFORE INSERT ON candidate_events
+    WHEN NEW.event_type = 'application_updated'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced trial appointment rollback');
+    END
+  `);
+  try {
+    const rolledBack = await request(trialRoute, {
+      method: "PUT",
+      auth: admin,
+      body: {
+        revision: application.revision,
+        status: "cancelled",
+        cancellationReason,
+        replacement: {
+          dateFrom: "2026-09-15",
+          dateTo: "2026-09-15",
+          startTime: "10:00",
+          locationId: String(location.id),
+          departmentId,
+        },
+      },
+    });
+    assert.equal(rolledBack.response.status, 400, JSON.stringify(rolledBack.payload));
+    assert.equal(rolledBack.payload.code, "PERSONNEL_LIFECYCLE_REFERENCE_INVALID");
+    assert.equal(
+      db.prepare("SELECT revision FROM candidate_applications WHERE id = ?").get(application.id).revision,
+      application.revision,
+    );
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS count FROM candidate_events WHERE candidate_id = ?")
+        .get(candidate.id).count,
+      2,
+    );
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS test_trial_appointment_event_failure");
+  }
+
+  const cancelledWithReplacement = await request(trialRoute, {
+    method: "PUT",
+    auth: admin,
+    body: {
+      revision: application.revision,
+      status: "cancelled",
+      cancellationReason,
+      replacement: {
+        dateFrom: "2026-09-15",
+        dateTo: "2026-09-15",
+        startTime: "10:00",
+        locationId: String(alternateLocation.id),
+        departmentId: null,
+        note: "Direkt vereinbarter Ersatztermin",
+      },
+    },
+  });
+  assert.equal(
+    cancelledWithReplacement.response.status,
+    200,
+    JSON.stringify(cancelledWithReplacement.payload),
+  );
+  application = cancelledWithReplacement.payload.application;
+  const cancelledAppointment = application.trialAppointments
+    .find(({ id }) => id === trialAppointmentId);
+  const replacementAppointment = application.trialAppointments
+    .find(({ replacesAppointmentId }) => replacesAppointmentId === trialAppointmentId);
+  assert.equal(application.revision, 2);
+  assert.equal(cancelledAppointment.status, "cancelled");
+  assert.equal(cancelledAppointment.cancellationReason, cancellationReason);
+  assert.equal(cancelledAppointment.cancelledBy, "101");
+  assert.match(cancelledAppointment.cancelledAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(cancelledAppointment.replacementAppointmentId, replacementAppointment.id);
+  assert.equal(replacementAppointment.dateFrom, "2026-09-15");
+  assert.equal(replacementAppointment.startTime, "10:00");
+  assert.equal(replacementAppointment.status, "planned");
+  assert.equal(replacementAppointment.locationId, String(alternateLocation.id));
+  assert.equal(replacementAppointment.departmentId, null);
+
+  const eventRows = db.prepare(`
+    SELECT protected_payload FROM candidate_events WHERE candidate_id = ?
+  `).all(candidate.id);
+  assert.ok(eventRows.length >= 3);
+  assert.equal(eventRows.some(({ protected_payload: payload }) => (
+    String(payload).includes(cancellationReason)
+  )), false);
+  const trialAudit = db.prepare(`
+    SELECT actor, entity_type, entity_id, detail
+    FROM audit_log
+    WHERE action = 'personnel-lifecycle.trial-appointment.update'
+    ORDER BY id DESC LIMIT 1
+  `).get();
+  assert.equal(trialAudit.actor, "101");
+  assert.equal(trialAudit.entity_type, "candidate_trial_appointment");
+  assert.equal(trialAudit.entity_id, trialAppointmentId);
+  assert.deepEqual(JSON.parse(trialAudit.detail), {
+    revision: 2,
+    status: "cancelled",
+    cancellationRecorded: true,
+    replacementCreated: true,
+  });
+  assert.equal(trialAudit.detail.includes(cancellationReason), false);
+
+  const staleCancellation = await request(trialRoute, {
+    method: "PUT",
+    auth: admin,
+    body: {
+      revision: 1,
+      status: "cancelled",
+      cancellationReason,
+    },
+  });
+  assert.equal(staleCancellation.response.status, 409, JSON.stringify(staleCancellation.payload));
+  assert.equal(staleCancellation.payload.code, "PERSONNEL_LIFECYCLE_REVISION_CONFLICT");
+
   const changedPreferredArea = await request(
     `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${application.id}`,
     {

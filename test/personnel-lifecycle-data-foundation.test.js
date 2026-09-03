@@ -47,6 +47,7 @@ const {
 } = require("../lib/persistence/statements/personnel-lifecycle");
 const {
   createPersonnelLifecycleService,
+  normalizeApplication,
 } = require("../lib/personnel-lifecycle");
 const { canonicalSha256 } = require("../lib/work-rules/receipt");
 
@@ -792,6 +793,373 @@ test("Personalmodul-Datenfundament: Backup- und Importprüfung erfassen Bewerber
     if (resolvedRoot.startsWith(path.resolve(os.tmpdir()) + path.sep)) {
       fs.rmSync(resolvedRoot, { recursive: true, force: true });
     }
+  }
+});
+
+test("Personalmodul-Datenfundament: Absage und Ersatztermin erhalten die revisionssichere Terminspur", async () => {
+  const fixture = await serviceFixture();
+  try {
+    fixture.database.prepare("INSERT INTO locations (id, name) VALUES ('05', 'Filiale 05')").run();
+    const created = await fixture.service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
+      profile: {
+        firstName: "Clemens",
+        lastName: "Hager",
+        email: "candidate@example.invalid",
+      },
+      application: {
+        desiredRoleTitle: "Verkauf",
+        desiredLocationId: "05",
+        trialAppointments: [{
+          id: "trial-original",
+          dateFrom: "2026-09-04",
+          dateTo: "2026-09-04",
+          startTime: "09:00",
+          endTime: "13:00",
+          locationId: "05",
+          status: "planned",
+          note: "Vereinbarter Schnuppertermin",
+        }],
+      },
+    }, "FL-252");
+    const originalApplication = created.applications[0];
+    const original = originalApplication.trialAppointments[0];
+
+    const updated = await fixture.service.updateTrialAppointment(
+      created.id,
+      originalApplication.id,
+      original.id,
+      {
+        revision: originalApplication.revision,
+        status: "cancelled",
+        cancellationReason: "Vom Bewerber wegen eines anderen Termins abgesagt",
+        replacement: {
+          dateFrom: "2026-09-08",
+          dateTo: "2026-09-08",
+          startTime: "10:00",
+          locationId: "05",
+        },
+      },
+      "FL-252",
+    );
+
+    assert.equal(updated.revision, 2);
+    const replacement = updated.trialAppointments.find((appointment) => (
+      appointment.replacesAppointmentId === "trial-original"
+    ));
+    assert.ok(replacement?.id);
+    assert.deepEqual(updated.trialAppointments.map((appointment) => ({
+      id: appointment.id,
+      dateFrom: appointment.dateFrom,
+      startTime: appointment.startTime,
+      endTime: appointment.endTime,
+      status: appointment.status,
+      cancellationReason: appointment.cancellationReason || null,
+      replacementAppointmentId: appointment.replacementAppointmentId || null,
+      replacesAppointmentId: appointment.replacesAppointmentId || null,
+    })), [{
+      id: "trial-original",
+      dateFrom: "2026-09-04",
+      startTime: "09:00",
+      endTime: "13:00",
+      status: "cancelled",
+      cancellationReason: "Vom Bewerber wegen eines anderen Termins abgesagt",
+      replacementAppointmentId: replacement.id,
+      replacesAppointmentId: null,
+    }, {
+      id: replacement.id,
+      dateFrom: "2026-09-08",
+      startTime: "10:00",
+      endTime: null,
+      status: "planned",
+      cancellationReason: null,
+      replacementAppointmentId: null,
+      replacesAppointmentId: "trial-original",
+    }]);
+
+    const detail = await fixture.service.getCandidate(created.id);
+    const updateEvent = detail.history.find(({ eventType }) => eventType === "application_updated");
+    const cancelled = updated.trialAppointments.find(({ id }) => id === "trial-original");
+    assert.deepEqual(updateEvent.detail.changedFields, ["revision", "trialAppointments"]);
+    assert.equal(cancelled.cancelledBy, "FL-252");
+    assert.match(cancelled.cancelledAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    assert.equal(updateEvent.detail.operation, "trial_appointment_cancelled");
+    assert.deepEqual(updateEvent.detail.trialAppointment.before, original);
+    assert.deepEqual(updateEvent.detail.trialAppointment.after, cancelled);
+    assert.deepEqual(updateEvent.detail.trialAppointment.replacement, replacement);
+    assert.equal(updateEvent.detail.trialAppointment.cancellationReason, cancelled.cancellationReason);
+    assert.equal(updateEvent.detail.trialAppointment.cancelledAt, cancelled.cancelledAt);
+    assert.equal(updateEvent.detail.trialAppointment.cancelledBy, "FL-252");
+
+    const rawProtectedPayloads = [
+      fixture.database.prepare(`
+        SELECT protected_payload FROM candidate_applications WHERE id = ?
+      `).get(originalApplication.id).protected_payload,
+      ...fixture.database.prepare(`
+        SELECT protected_payload FROM candidate_events WHERE candidate_id = ?
+      `).all(created.id).map(({ protected_payload: payload }) => payload),
+    ].map(String);
+    assert.equal(rawProtectedPayloads.every((payload) => payload.startsWith("enc:v2:")), true);
+    assert.equal(rawProtectedPayloads.some((payload) => payload.includes("anderen Termins")), false);
+    assert.throws(
+      () => fixture.database.prepare(`
+        UPDATE candidate_events SET actor_employee_number = 'MANIPULIERT'
+        WHERE candidate_id = ? AND event_type = 'application_updated'
+      `).run(created.id),
+      /candidate events are immutable/,
+    );
+    assert.deepEqual(
+      { ...await fixture.service.verifyIntegrity() },
+      { candidates: 1, applications: 1, documents: 0, events: 3 },
+    );
+
+    await assert.rejects(
+      fixture.service.updateTrialAppointment(created.id, originalApplication.id, original.id, {
+        revision: updated.revision,
+        dateFrom: "2026-09-05",
+        dateTo: "2026-09-05",
+        cancellationReason: "Nachträglich überschrieben",
+      }, "FL-252"),
+      (error) => error?.code === "PERSONNEL_LIFECYCLE_TRIAL_HISTORY_REQUIRED",
+    );
+    await assert.rejects(
+      fixture.service.updateTrialAppointment(created.id, originalApplication.id, original.id, {
+        revision: updated.revision,
+        cancelledAt: "2026-09-01T10:00:00.000Z",
+      }, "FL-252"),
+      (error) => error?.code === "PERSONNEL_LIFECYCLE_TRIAL_UPDATE_INVALID",
+    );
+
+    await assert.rejects(
+      fixture.service.updateApplication(created.id, originalApplication.id, {
+        revision: updated.revision,
+        trialAppointments: [],
+      }, "FL-252"),
+      (error) => error?.code === "PERSONNEL_LIFECYCLE_TRIAL_HISTORY_REQUIRED",
+    );
+    await assert.rejects(
+      fixture.service.updateApplication(created.id, originalApplication.id, {
+        revision: updated.revision,
+        trialAppointments: updated.trialAppointments.map((appointment) => ({
+          ...appointment,
+          replacementAppointmentId: undefined,
+          replacesAppointmentId: undefined,
+        })),
+      }, "FL-252"),
+      (error) => error?.code === "PERSONNEL_LIFECYCLE_TRIAL_DIRECT_UPDATE_REQUIRED",
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Personalmodul-Datenfundament: ein Ersatztermin kann später verknüpft werden, ohne die Absage zu verändern", async () => {
+  const fixture = await serviceFixture();
+  try {
+    fixture.database.prepare("INSERT INTO locations (id, name) VALUES ('05', 'Filiale 05')").run();
+    const created = await fixture.service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
+      profile: {
+        firstName: "Später",
+        lastName: "Ersatz",
+        email: "spaeter-ersatz@example.invalid",
+      },
+      application: {
+        desiredRoleTitle: "Verkauf",
+        desiredLocationId: "05",
+        trialAppointments: [{
+          id: "trial-later",
+          dateFrom: "2026-09-04",
+          dateTo: "2026-09-04",
+          startTime: "09:00",
+          endTime: "13:00",
+          locationId: "05",
+          status: "planned",
+          note: "Ursprünglicher Termin",
+        }],
+      },
+    }, "FL-252");
+    const application = created.applications[0];
+    const cancelledApplication = await fixture.service.updateTrialAppointment(
+      created.id,
+      application.id,
+      "trial-later",
+      {
+        revision: application.revision,
+        status: "cancelled",
+        cancellationReason: "Termin zunächst ohne Ersatz abgesagt",
+      },
+      "FL-252",
+    );
+    const cancelledBeforeReplacement = cancelledApplication.trialAppointments[0];
+    assert.equal(cancelledBeforeReplacement.replacementAppointmentId, undefined);
+
+    const linkedApplication = await fixture.service.updateTrialAppointment(
+      created.id,
+      application.id,
+      "trial-later",
+      {
+        revision: cancelledApplication.revision,
+        replacement: {
+          dateFrom: "2026-09-08",
+          dateTo: "2026-09-08",
+          startTime: "10:00",
+          locationId: "05",
+          note: "Später vereinbart",
+        },
+      },
+      "FL-252",
+    );
+    const cancelledAfterReplacement = linkedApplication.trialAppointments
+      .find(({ id }) => id === "trial-later");
+    const replacement = linkedApplication.trialAppointments
+      .find(({ replacesAppointmentId }) => replacesAppointmentId === "trial-later");
+    for (const field of [
+      "dateFrom",
+      "dateTo",
+      "startTime",
+      "endTime",
+      "locationId",
+      "departmentId",
+      "status",
+      "note",
+      "cancellationReason",
+      "cancelledAt",
+      "cancelledBy",
+    ]) {
+      assert.equal(cancelledAfterReplacement[field], cancelledBeforeReplacement[field], field);
+    }
+    assert.equal(cancelledAfterReplacement.replacementAppointmentId, replacement.id);
+    assert.equal(replacement.dateFrom, "2026-09-08");
+    assert.equal(replacement.startTime, "10:00");
+
+    const detail = await fixture.service.getCandidate(created.id);
+    const replacementEvent = detail.history.filter(({ eventType }) => (
+      eventType === "application_updated"
+    )).at(-1);
+    assert.equal(replacementEvent.detail.operation, "trial_appointment_updated");
+    assert.deepEqual(replacementEvent.detail.trialAppointment.before, cancelledBeforeReplacement);
+    assert.deepEqual(replacementEvent.detail.trialAppointment.after, cancelledAfterReplacement);
+    assert.deepEqual(replacementEvent.detail.trialAppointment.replacement, replacement);
+    assert.deepEqual(
+      { ...await fixture.service.verifyIntegrity() },
+      { candidates: 1, applications: 1, documents: 0, events: 4 },
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Personalmodul-Datenfundament: nur die direkte Terminmutation darf Absagen und Ersatzlinks erzeugen", async () => {
+  const legacyCancellation = [{
+    id: "legacy-cancelled",
+    dateFrom: "2026-08-20",
+    dateTo: "2026-08-20",
+    locationId: "05",
+    status: "cancelled",
+    cancellationReason: "Historische Absage ohne damalige Akteurfelder",
+  }];
+  assert.equal(
+    normalizeApplication({ trialAppointments: legacyCancellation }, null, { trustedStored: true })
+      .protected.trialAppointments[0].status,
+    "cancelled",
+  );
+  assert.throws(
+    () => normalizeApplication({ trialAppointments: legacyCancellation }),
+    (error) => error?.code === "PERSONNEL_LIFECYCLE_TRIAL_DIRECT_UPDATE_REQUIRED",
+  );
+
+  const fixture = await serviceFixture();
+  try {
+    fixture.database.prepare("INSERT INTO locations (id, name) VALUES ('05', 'Filiale 05')").run();
+    await assert.rejects(
+      fixture.service.createCandidate({
+        dataProcessingAuthorizationConfirmed: true,
+        profile: {
+          firstName: "Unzulässig",
+          lastName: "Abgesagt",
+          email: "untrusted-cancel@example.invalid",
+        },
+        application: {
+          desiredLocationId: "05",
+          trialAppointments: legacyCancellation,
+        },
+      }, "FL-252"),
+      (error) => error?.code === "PERSONNEL_LIFECYCLE_TRIAL_DIRECT_UPDATE_REQUIRED",
+    );
+    assert.equal(fixture.database.prepare("SELECT COUNT(*) AS count FROM candidates").get().count, 0);
+
+    const created = await fixture.service.createCandidate({
+      dataProcessingAuthorizationConfirmed: true,
+      profile: {
+        firstName: "Vertrauenswürdig",
+        lastName: "Geplant",
+        email: "trusted-planned@example.invalid",
+      },
+      application: {
+        desiredLocationId: "05",
+        trialAppointments: [{
+          id: "trial-authority",
+          dateFrom: "2026-09-04",
+          dateTo: "2026-09-04",
+          startTime: "09:00",
+          endTime: "12:00",
+          locationId: "05",
+          status: "planned",
+          note: "Geplant",
+        }],
+      },
+    }, "FL-252");
+    const application = created.applications[0];
+    const original = application.trialAppointments[0];
+    await assert.rejects(
+      fixture.service.updateApplication(created.id, application.id, {
+        revision: application.revision,
+        trialAppointments: [{
+          ...original,
+          status: "cancelled",
+          cancellationReason: "Vom Client konstruiert",
+          cancelledAt: "2026-09-03T08:00:00.000Z",
+          cancelledBy: "MANIPULIERT",
+          replacementAppointmentId: "forged-replacement",
+        }, {
+          id: "forged-replacement",
+          dateFrom: "2026-09-08",
+          dateTo: "2026-09-08",
+          startTime: "10:00",
+          locationId: "05",
+          status: "planned",
+          replacesAppointmentId: "trial-authority",
+        }],
+      }, "FL-252"),
+      (error) => error?.code === "PERSONNEL_LIFECYCLE_TRIAL_DIRECT_UPDATE_REQUIRED",
+    );
+    assert.equal(
+      fixture.database.prepare("SELECT revision FROM candidate_applications WHERE id = ?")
+        .get(application.id).revision,
+      application.revision,
+    );
+
+    const cancelled = await fixture.service.updateTrialAppointment(
+      created.id,
+      application.id,
+      original.id,
+      {
+        revision: application.revision,
+        status: "cancelled",
+        cancellationReason: "Serverseitig protokolliert",
+      },
+      "FL-252",
+    );
+    const roundTripped = await fixture.service.updateApplication(created.id, application.id, {
+      revision: cancelled.revision,
+      desiredRoleTitle: "Historische Absage bleibt lesbar",
+      trialAppointments: cancelled.trialAppointments,
+    }, "FL-252");
+    assert.equal(roundTripped.desiredRoleTitle, "Historische Absage bleibt lesbar");
+    assert.deepEqual(roundTripped.trialAppointments, cancelled.trialAppointments);
+  } finally {
+    await fixture.close();
   }
 });
 

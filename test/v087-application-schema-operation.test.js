@@ -37,6 +37,35 @@ test("Block 3/7: SQLite-Anwendungsschema wird neu aufgebaut und idempotent erhal
     assert.equal(objects.get("staff_assignment_requests"), "table");
     assert.equal(objects.get("staff_assignment_request_revisions"), "table");
     assert.equal(objects.get("staff_assignment_request_events"), "table");
+    assert.equal(objects.get("sales_articles"), "table");
+    assert.equal(objects.get("sales_article_price_snapshots"), "table");
+    assert.equal(objects.get("trg_sales_article_prices_immutable_update"), "trigger");
+    assert.equal(objects.has("articles"), false);
+    assert.equal(objects.has("article_identifiers"), false);
+    assert.deepEqual(
+      database.prepare("PRAGMA table_info(loan_items)").all()
+        .map((entry) => entry.name)
+        .filter((name) => [
+          "product_id",
+          "product_revision_snapshot",
+          "article_number_snapshot",
+          "description_snapshot",
+        ].includes(name)),
+      [
+        "product_id",
+        "product_revision_snapshot",
+        "article_number_snapshot",
+        "description_snapshot",
+      ],
+    );
+    const loanItemArticleForeignKey = database.prepare("PRAGMA foreign_key_list(loan_items)")
+      .all()
+      .filter((entry) => entry.table === "sales_article_revisions");
+    assert.equal(loanItemArticleForeignKey.length, 2);
+    assert.deepEqual(
+      new Set(loanItemArticleForeignKey.map((entry) => `${entry.from}:${entry.to}`)),
+      new Set(["product_id:product_id", "product_revision_snapshot:revision"]),
+    );
     assert.equal(
       objects.get("trg_staff_assignment_request_events_immutable_update"),
       "trigger",

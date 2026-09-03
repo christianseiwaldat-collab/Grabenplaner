@@ -7,8 +7,14 @@ const {
   createLoanModuleRepository,
 } = require("../lib/persistence/repositories/loan-module");
 const {
+  createSalesArticleCatalogRepository,
+} = require("../lib/persistence/repositories/sales-article-catalog");
+const {
   SQLITE_LOAN_MODULE_CATALOG,
 } = require("../lib/persistence/sqlite/loan-module-catalog");
+const {
+  SQLITE_SALES_ARTICLE_CATALOG,
+} = require("../lib/persistence/sqlite/sales-article-catalog-catalog");
 const {
   ensureSqliteApplicationSchema,
 } = require("../lib/persistence/sqlite/operations/application-schema");
@@ -18,11 +24,17 @@ const {
 const {
   LOAN_MODULE_STATEMENTS,
 } = require("../lib/persistence/statements/loan-module");
+const {
+  salesArticleImportContentSha256,
+} = require("../lib/sales-article-catalog");
 
 function fixture() {
   const application = openSqliteApplicationPersistence({
     databasePath: ":memory:",
-    catalog: SQLITE_LOAN_MODULE_CATALOG,
+    catalog: [
+      ...SQLITE_LOAN_MODULE_CATALOG,
+      ...SQLITE_SALES_ARTICLE_CATALOG,
+    ],
   });
   ensureSqliteApplicationSchema(application.database);
   application.database.exec(`
@@ -37,6 +49,7 @@ function fixture() {
   `);
   return {
     repository: createLoanModuleRepository(application.provider),
+    salesArticleCatalog: createSalesArticleCatalogRepository(application.provider),
     transaction(work) {
       return application.provider.transaction(
         (executor) => work(createLoanModuleRepository(executor)),
@@ -49,16 +62,37 @@ function fixture() {
   };
 }
 
-function articleInput(articleNumber, description) {
-  return {
+async function importCentralArticle(context, articleNumber, description, identifier = null) {
+  const article = {
+    sourceArticleKey: articleNumber,
     articleNumber,
     description,
-    sourceProvider: "manual",
-    sourceProductNumber: "",
-    sourceUrl: "",
-    sourceFetchedAt: null,
-    actorEmployeeNumber: "M18",
+    active: true,
+    sourceUpdatedAt: null,
+    identifiers: identifier ? [{
+      identifierType: "ean13",
+      identifierValue: identifier,
+      isPrimary: true,
+      sourceField: "manual-test",
+      sourceRank: 0,
+    }] : [],
+    prices: [],
   };
+  const snapshot = {
+    sourceSystem: "manual.loan",
+    sourceProfileVersion: "test-v1",
+    sourceSchemaSha256: "a".repeat(64),
+    sourceFileSha256: "b".repeat(64),
+    contentSha256: salesArticleImportContentSha256([article]),
+    snapshotAt: "2026-07-29T11:59:00.000Z",
+    articles: [article],
+  };
+  await context.salesArticleCatalog.importSnapshot({
+    snapshot,
+    actor: "M18",
+    timestamp: "2026-07-29T12:00:00.000Z",
+  });
+  return context.salesArticleCatalog.getByArticleNumber(articleNumber);
 }
 
 test("Block 3/7: Leihmodul-Katalog deckt jedes typisierte Statement genau einmal ab", () => {
@@ -79,14 +113,12 @@ test("Block 3/7: Leihmodul-Katalog deckt jedes typisierte Statement genau einmal
 test("Block 3/7: Artikel, Leihe, Position und Ereignis bleiben providerneutral lesbar", async () => {
   const context = fixture();
   try {
-    await context.repository.upsertArticle(articleInput("123456", "Bohrmaschine"));
-    await context.repository.upsertArticleIdentifier({
-      articleNumber: "123456",
-      identifierType: "ean13",
-      identifierValue: "4006381333931",
-      sourceProvider: "manual",
-      actorEmployeeNumber: "M18",
-    });
+    const centralArticle = await importCentralArticle(
+      context,
+      "123456",
+      "Bohrmaschine",
+      "4006381333931",
+    );
 
     const article = await context.repository.getArticle({ articleNumber: "123456" });
     assert.equal(article.description, "Bohrmaschine");
@@ -111,6 +143,8 @@ test("Block 3/7: Artikel, Leihe, Position und Ereignis bleiben providerneutral l
         id: "item-1",
         loanId: "loan-1",
         position: 1,
+        productId: centralArticle.productId,
+        productRevisionSnapshot: centralArticle.currentRevision,
         articleNumber: "123456",
         descriptionSnapshot: "Bohrmaschine",
         serialNumber: "SN-1",
@@ -142,11 +176,10 @@ test("Block 3/7: Artikel, Leihe, Position und Ereignis bleiben providerneutral l
 test("Block 3/7: Gebundene Leihmodul-Transaktion rollt alle Schreibvorgänge zurück", async () => {
   const context = fixture();
   try {
-    await context.repository.upsertArticle(articleInput("123456", "Bohrmaschine"));
+    const centralArticle = await importCentralArticle(context, "123456", "Bohrmaschine");
 
     await assert.rejects(
       context.transaction(async (repository) => {
-        await repository.upsertArticle(articleInput("654321", "Rollback-Artikel"));
         await repository.insertLoan({
           id: "loan-rollback",
           locationId: "18",
@@ -160,6 +193,8 @@ test("Block 3/7: Gebundene Leihmodul-Transaktion rollt alle Schreibvorgänge zur
           id: "item-rollback",
           loanId: "loan-rollback",
           position: 1,
+          productId: centralArticle.productId,
+          productRevisionSnapshot: centralArticle.currentRevision,
           articleNumber: "123456",
           descriptionSnapshot: "Bohrmaschine",
           serialNumber: "",
@@ -174,7 +209,6 @@ test("Block 3/7: Gebundene Leihmodul-Transaktion rollt alle Schreibvorgänge zur
       /rollback/,
     );
 
-    assert.equal(await context.repository.getArticle({ articleNumber: "654321" }), null);
     assert.equal(await context.repository.getLoan({ loanId: "loan-rollback" }), null);
     assert.deepEqual(
       await context.repository.listLoanItems({ loanId: "loan-rollback" }),

@@ -467,7 +467,7 @@ Abschlussartefakt:
 [Datenbank-Dialekte und providerfähige Migrationen](DATENBANK-DIALEKTE-UND-MIGRATIONEN.md)
 
 Aktueller Stand am 02.08.2026: Block 4 wurde separat freigegeben und
-abgeschlossen. Sämtliche 1135 Anwendungsstatements besitzen eine eindeutige
+abgeschlossen. Sämtliche 1148 Anwendungsstatements besitzen eine eindeutige
 SQLite-Bindung und eine deckungsgleiche, nicht ausführbare
 PostgreSQL-Plan-Fixture. Die zehn realen Anwendungsmigrationsstufen sind durch
 providerneutrale Operations-IDs, SQLite-Bindungen und einen ausdrücklich nur
@@ -512,14 +512,14 @@ weder in der Produkt- noch in der Serverkonfiguration aktiviert; beide bleiben
 ausschließlich auf SQLite festgelegt.
 
 Der aktuelle PostgreSQL-Dialektplan wird mit Compiler v2 erzeugt und bleibt
-absichtlich nicht ausführbar. Er umfasst alle 1135 Anwendungsstatements: 1021
+absichtlich nicht ausführbar. Er umfasst alle 1148 Anwendungsstatements: 1034
 Einträge sind generierte Syntaxkandidaten (`portable-generated`), 114
-benötigen eine ausdrückliche `requires-override`-Implementierung und 0 von 1135
+benötigen eine ausdrückliche `requires-override`-Implementierung und 0 von 1148
 bilden einen ausführbaren Vollanwendungskatalog.
 
-Der neue Katalogvertrag verhindert bei derzeit 0/1135 akzeptierten Live- und
-Paritätsnachweisen jeden für die Vollanwendung ausführbaren Katalog. Auch 1135
-strukturell vollständige Deklarationen reichen ohne diese 1135
+Der neue Katalogvertrag verhindert bei derzeit 0/1148 akzeptierten Live- und
+Paritätsnachweisen jeden für die Vollanwendung ausführbaren Katalog. Auch 1148
+strukturell vollständige Deklarationen reichen ohne diese 1148
 Acceptance-Nachweise nicht für `applicationExecutable: true`.
 
 Davon getrennt sind vier reale Teil-Slices auf SQLite und PostgreSQL
@@ -542,7 +542,7 @@ Parameter- oder Ergebnisdrift scheitert geschlossen. Cleanupfehler lassen die
 Dual-Provider-Tests fehlschlagen.
 
 Diese 4/4-, 2/2-, 2/2- und 1/1-Nachweise sind weder Vollkatalog noch
-Produktaktivierung und verändern den Stand 0/1135 nicht.
+Produktaktivierung und verändern den Stand 0/1148 nicht.
 
 Der generische PostgreSQL-Migrationsadapter ist als nicht aktivierter
 `development-contract` implementiert und real getestet. Ein
@@ -579,7 +579,7 @@ in
 dokumentiert.
 
 Der separat freigegebene Block 6 ergänzt Betriebs- und Recovery-Module, ändert
-aber keines dieser Phase-5-Gates: Der Vollanwendungsstand bleibt 0/1135 und der
+aber keines dieser Phase-5-Gates: Der Vollanwendungsstand bleibt 0/1148 und der
 Anwendungsmigrationsstand 0/10. Ein erfolgreicher technischer Backup- und
 Restore-Nachweis darf fehlende Anwendungsparität nicht ersetzen.
 
@@ -642,7 +642,7 @@ Abnahme:
   Dokumentkomponente sind technisch aneinander gebunden;
 - [x] der veröffentlichte Integrationscommit `25fab8e` besitzt mit Run
   `30508095599` einen grünen externen CI-E2E-Lauf;
-- [ ] die Phase-5-Gates 1135/1135 und 10/10 sind erfüllt;
+- [ ] die Phase-5-Gates 1148/1148 und 10/10 sind erfüllt;
 - [ ] ein Vollanwendungs-Restore auf realitätsnaher Datenmenge ist
   nachgewiesen;
 - [ ] RPO, RTO, Rollen, Secrets, Offsite, Retention, Betriebsverantwortung,
@@ -654,7 +654,7 @@ Abnahme:
 
 Die Startprüfung vom 30.07.2026 hat das Ergebnis **NO-GO**. Es ist noch keine
 konkrete Zielinstallation ausgewählt oder installationsbezogen freigegeben.
-PostgreSQL-Vollkatalog und Anwendungsmigrationen stehen weiterhin bei 0/1135
+PostgreSQL-Vollkatalog und Anwendungsmigrationen stehen weiterhin bei 0/1148
 beziehungsweise 0/10; `productActivation` bleibt `false`. Deshalb wurde keine
 Installation, kein VPS und keine Produktkonfiguration verändert.
 

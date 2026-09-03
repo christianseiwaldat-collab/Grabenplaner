@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.92.24 Beta · CRM, zentraler Artikelstamm und bearbeitbare Schnuppertermine
+
+- Die Verkaufsverwaltung erhält ein suchzentriertes CRM-Grundgerüst mit geschützter Kundenkartei, frei ergänzbaren Textfeldern und einer pro Benutzer konfigurierbaren, sortierbaren Ergebnisliste. Das persönliche Aktionslog dokumentiert die letzten eigenen Änderungen und bietet ausschließlich dafür vorgesehene, auditierte Rücknahmen an.
+- Die Verkaufsanalyse ergänzt weitere Diagramme, den Standardzeitraum „Jahr bis Berichtsende“ und kontogebundene PDF-Exportoptionen. Historische Produkt- und Bestandsdarstellungen bleiben unveränderliche Berichtssnapshots.
+- Ein revisionsfähiger zentraler Artikelstamm ist die alleinige Artikelquelle für die vorhandenen Leih-, F18-, Shopware- und manuellen Laufzeitpfade. SQLite ist produktiv umgesetzt; der strukturell gleichwertige PostgreSQL-Vertrag bleibt bewusst nicht aktiviert.
+- Bestehende Leihartikel und Leihpositionen werden nach einem verifizierten Backup transaktional auf stabile Produkt- und Revisionsbezüge migriert. Artikelnummer und Bezeichnung bleiben als historische Belegschnappschüsse erhalten; Legacy-Tabellen werden erst nach erfolgreicher Integritäts- und Fremdschlüsselprüfung entfernt.
+- Kanonische GTIN-Eigentümerschaft verhindert produktübergreifende Barcodekonflikte. Äquivalente UPC-A-, EAN-13- und GTIN-14-Darstellungen werden gemeinsam aufgelöst, während Rohwerte, Herkunft, Akteure und Zeitpunkte nachvollziehbar erhalten bleiben.
+- Schnuppertermine können direkt bearbeitet oder mit einem Freitextgrund abgesagt werden. Ein vereinbarter Ersatztermin lässt sich unmittelbar verknüpfen; Absagezeitpunkt, ausführende Person, Revision, Berechtigungsbereich und Auditspur werden serverseitig geschützt.
+- Der analysierte Bestand von 18.996 TradeFoto-Artikeln wird mit dieser Version noch nicht produktiv importiert oder aktiviert. Inaktive Prüfrevisionen bleiben im Staging, bis dauerhafte Quarantäne-, Preisvalidierungs- und Freigabegates erfüllt sind.
+
 ## v0.92.23 Beta · Persönliche Bewerbungsbewertungs-PDFs
 
 - Filialleitungen können die Bewerbungsbewertung wahlweise ein- oder zweiseitig sowie im Hoch- oder Querformat exportieren. Kriterien verwenden dieselbe farblich unterstützte Skala von eins bis fünf wie die Anwendung; Detailseiten führen die gewählten Bewertungen und Kommentare vollständig aus.

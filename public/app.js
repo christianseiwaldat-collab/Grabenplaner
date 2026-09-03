@@ -12497,6 +12497,7 @@ function renderPersonnelCandidateTargetAreaEditorRow(area = {}, {
 function renderPersonnelCandidateTrialEditorRow(appointment = {}, {
   scopeMode = "detail",
   readOnly = false,
+  persisted = false,
 } = {}) {
   const id = String(appointment.id || personnelCandidateClientId("trial"));
   const locationId = String(appointment.locationId || "");
@@ -12509,24 +12510,70 @@ function renderPersonnelCandidateTrialEditorRow(appointment = {}, {
   const dateTo = String(appointment.dateTo || appointment.dateFrom || "").slice(0, 10);
   const rangeLabel = window.GrabenplanerDateRangeCalendar?.rangeLabel(dateFrom, dateTo)
     || (dateFrom ? `${formatDate(dateFrom)} – ${formatDate(dateTo || dateFrom)}` : "Zeitraum auswählen");
-  return `<div class="personnel-candidate-repeater-row personnel-candidate-trial-row${locked ? " personnel-candidate-readonly-scope" : ""}" data-candidate-trial-row data-candidate-row-id="${escapeHtmlAttribute(id)}" data-candidate-scope-mode="${escapeHtmlAttribute(scopeMode)}"${locked ? ` data-candidate-readonly-scope="true" data-candidate-readonly-payload="${escapeHtmlAttribute(JSON.stringify(appointment))}"` : ""}>
+  const cancellationReason = String(appointment.cancellationReason || "");
+  const replacementAppointmentId = String(appointment.replacementAppointmentId || "");
+  const replacesAppointmentId = String(appointment.replacesAppointmentId || "");
+  const cancelledAt = String(appointment.cancelledAt || "");
+  const cancelledBy = String(appointment.cancelledBy || "");
+  const cancellationLocked = persisted && status === "cancelled";
+  const inputLocked = locked || cancellationLocked;
+  const relationLabel = replacementAppointmentId
+    ? "Ersatztermin ist verknüpft"
+    : (replacesAppointmentId ? "Ersatz für einen abgesagten Termin" : "");
+  return `<div class="personnel-candidate-repeater-row personnel-candidate-trial-row${locked ? " personnel-candidate-readonly-scope" : ""}" data-candidate-trial-row data-candidate-row-id="${escapeHtmlAttribute(id)}" data-candidate-scope-mode="${escapeHtmlAttribute(scopeMode)}" data-candidate-trial-persisted="${String(persisted)}" data-candidate-trial-original-status="${escapeHtmlAttribute(status)}" data-candidate-trial-current-status="${escapeHtmlAttribute(status)}"${locked ? ` data-candidate-readonly-scope="true" data-candidate-readonly-payload="${escapeHtmlAttribute(JSON.stringify(appointment))}"` : ""}>
+    <input data-candidate-trial-replacement-id type="hidden" value="${escapeHtmlAttribute(replacementAppointmentId)}" />
+    <input data-candidate-trial-replaces-id type="hidden" value="${escapeHtmlAttribute(replacesAppointmentId)}" />
+    <input data-candidate-trial-cancelled-at type="hidden" value="${escapeHtmlAttribute(cancelledAt)}" />
+    <input data-candidate-trial-cancelled-by type="hidden" value="${escapeHtmlAttribute(cancelledBy)}" />
     <div class="personnel-candidate-trial-range">
       <div class="field"><span>Zeitraum</span>
-        <input data-candidate-trial-from type="hidden" value="${escapeHtmlAttribute(dateFrom)}" ${locked ? "disabled" : ""} />
-        <input data-candidate-trial-to type="hidden" value="${escapeHtmlAttribute(dateTo)}" ${locked ? "disabled" : ""} />
-        <button class="date-range-trigger" data-candidate-trial-range-button type="button" aria-haspopup="dialog" aria-controls="personnelCandidateTrialDateRangeDialog" ${locked ? "disabled" : ""}><span><strong data-candidate-trial-range-text>${escapeHtml(rangeLabel)}</strong><small>Ein Tag oder mehrere Tage</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg></button>
+        <input data-candidate-trial-from type="hidden" value="${escapeHtmlAttribute(dateFrom)}" />
+        <input data-candidate-trial-to type="hidden" value="${escapeHtmlAttribute(dateTo)}" />
+        <button class="date-range-trigger" data-candidate-trial-range-button type="button" aria-haspopup="dialog" aria-controls="personnelCandidateTrialDateRangeDialog" ${inputLocked ? "disabled" : ""}><span><strong data-candidate-trial-range-text>${escapeHtml(rangeLabel)}</strong><small>Ein Tag oder mehrere Tage</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg></button>
       </div>
     </div>
     <div class="personnel-candidate-trial-times">
-      <label class="field"><span>Beginn</span><input data-candidate-trial-start type="time" value="${escapeHtmlAttribute(appointment.startTime || "")}" ${locked ? "disabled" : ""} /></label>
-      <label class="field"><span>Ende</span><input data-candidate-trial-end type="time" value="${escapeHtmlAttribute(appointment.endTime || "")}" ${locked ? "disabled" : ""} /></label>
+      <label class="field"><span>Beginn</span><input data-candidate-trial-start type="time" value="${escapeHtmlAttribute(appointment.startTime || "")}" ${inputLocked ? "disabled" : ""} /></label>
+      <label class="field"><span>Ende <small class="personnel-candidate-optional-marker">* optional</small></span><input data-candidate-trial-end type="time" value="${escapeHtmlAttribute(appointment.endTime || "")}" ${inputLocked ? "disabled" : ""} /></label>
     </div>
-    <label class="field"><span>Filiale</span><select data-candidate-trial-location required ${locked ? "disabled" : ""}>${personnelCandidateLocationOptions(locationId, { scopeMode })}</select></label>
-    <label class="field"><span>Abteilung</span><select data-candidate-trial-department ${locationId && !locked ? "" : "disabled"}>${personnelCandidateDepartmentOptions(locationId, departmentId, { scopeMode })}</select></label>
-    <label class="field"><span>Status</span><select data-candidate-trial-status ${locked ? "disabled" : ""}>${Object.entries(PERSONNEL_CANDIDATE_TRIAL_STATUS_LABELS).map(([value, label]) => `<option value="${value}"${value === status ? " selected" : ""}>${label}</option>`).join("")}</select></label>
-    <label class="field personnel-candidate-row-note"><span>Organisatorischer Hinweis</span><input data-candidate-trial-note maxlength="1000" value="${escapeHtmlAttribute(appointment.note || "")}" autocomplete="off" ${locked ? "disabled" : ""} /></label>
-    ${locked ? '<span class="personnel-candidate-readonly-scope-label">Nur lesbar</span>' : '<button class="personnel-candidate-row-remove" type="button" data-candidate-remove-row aria-label="Schnuppertermin entfernen">Entfernen</button>'}
+    <label class="field"><span>Filiale</span><select data-candidate-trial-location required ${inputLocked ? "disabled" : ""}>${personnelCandidateLocationOptions(locationId, { scopeMode })}</select></label>
+    <label class="field"><span>Abteilung</span><select data-candidate-trial-department ${locationId && !inputLocked ? "" : "disabled"}>${personnelCandidateDepartmentOptions(locationId, departmentId, { scopeMode })}</select></label>
+    <label class="field"><span>Status</span><select data-candidate-trial-status ${inputLocked ? "disabled" : ""}>${Object.entries(PERSONNEL_CANDIDATE_TRIAL_STATUS_LABELS).filter(([value]) => persisted || value !== "cancelled").map(([value, label]) => `<option value="${value}"${value === status ? " selected" : ""}>${label}</option>`).join("")}</select></label>
+    <label class="field personnel-candidate-row-note"><span>Organisatorischer Hinweis</span><input data-candidate-trial-note maxlength="1000" value="${escapeHtmlAttribute(appointment.note || "")}" autocomplete="off" ${inputLocked ? "disabled" : ""} /></label>
+    <label class="field personnel-candidate-trial-cancellation${status === "cancelled" ? "" : " hidden"}" data-candidate-trial-cancellation-field><span>Absagegrund <small class="personnel-candidate-optional-marker">* optional</small></span><textarea data-candidate-trial-cancellation-reason maxlength="1000" rows="2" autocomplete="off" placeholder="Zum Beispiel: Termin vom Bewerber abgesagt" ${inputLocked ? "disabled" : ""}>${escapeHtml(cancellationReason)}</textarea></label>
+    ${cancellationLocked ? `<p class="personnel-candidate-trial-cancelled-meta"><strong>Absage protokolliert</strong><span>${cancelledAt ? escapeHtml(formatPersonnelCandidateTimestamp(cancelledAt)) : "Historischer Zeitpunkt nicht verfügbar"}${cancelledBy ? ` · ${escapeHtml(cancelledBy)}` : ""}</span></p>` : ""}
+    ${relationLabel ? `<p class="personnel-candidate-trial-relation" data-candidate-trial-relation>${escapeHtml(relationLabel)}</p>` : '<p class="personnel-candidate-trial-relation hidden" data-candidate-trial-relation></p>'}
+    ${locked ? '<span class="personnel-candidate-readonly-scope-label">Nur lesbar</span>' : `<div class="personnel-candidate-trial-row-actions">
+      ${scopeMode === "detail" ? `<button class="secondary-button${status === "cancelled" && !replacementAppointmentId ? "" : " hidden"}" type="button" data-candidate-add-replacement-trial>+ Ersatztermin eintragen</button>` : ""}
+      ${persisted ? `<button class="primary-button${cancellationLocked ? " hidden" : ""}" type="submit" formnovalidate data-candidate-save-trial>${cancellationLocked ? "Ersatztermin speichern" : "Termin speichern"}</button>` : '<button class="personnel-candidate-row-remove" type="button" data-candidate-remove-row aria-label="Noch nicht gespeicherten Schnuppertermin entfernen">Entfernen</button>'}
+    </div>`}
   </div>`;
+}
+
+function syncPersonnelCandidateTrialStatusRow(row) {
+  if (!row) return;
+  const status = String(row.querySelector("[data-candidate-trial-status]")?.value || "planned");
+  const reasonField = row.querySelector("[data-candidate-trial-cancellation-field]");
+  const replacementId = String(row.querySelector("[data-candidate-trial-replacement-id]")?.value || "");
+  const replacementButton = row.querySelector("[data-candidate-add-replacement-trial]");
+  const saveButton = row.querySelector("[data-candidate-save-trial]");
+  const linkedRow = replacementId
+    ? [...(row.closest("[data-candidate-trial-list]")?.querySelectorAll("[data-candidate-trial-row]") || [])]
+        .find((entry) => entry.dataset.candidateRowId === replacementId)
+    : null;
+  const pendingReplacement = Boolean(linkedRow)
+    && linkedRow.dataset.candidateTrialPersisted !== "true";
+  const linkedWhileActive = status !== "cancelled" && Boolean(replacementId);
+  row.dataset.candidateTrialCurrentStatus = status;
+  reasonField?.classList.toggle("hidden", status !== "cancelled");
+  replacementButton?.classList.toggle("hidden", status !== "cancelled" || Boolean(replacementId));
+  if (saveButton && row.dataset.candidateTrialOriginalStatus === "cancelled") {
+    saveButton.classList.toggle("hidden", !pendingReplacement);
+  }
+  const statusSelect = row.querySelector("[data-candidate-trial-status]");
+  statusSelect?.setCustomValidity(linkedWhileActive
+    ? "Ein Termin mit verknüpftem Ersatztermin muss als abgesagt erhalten bleiben."
+    : "");
 }
 
 function updatePersonnelCandidateTrialRangeText(row) {
@@ -12660,26 +12707,50 @@ function personnelCandidateTargetAreasFrom(container, primary = null) {
   return values.map((entry, index) => ({ ...entry, preferred: index === preferredIndex }));
 }
 
+function personnelCandidateTrialAppointmentFromRow(row) {
+  const readOnly = personnelCandidateReadOnlyStructuredPayload(row);
+  if (readOnly) return readOnly;
+  const dateFrom = String(row?.querySelector("[data-candidate-trial-from]")?.value || "").trim();
+  const dateTo = String(row?.querySelector("[data-candidate-trial-to]")?.value || dateFrom).trim();
+  const locationId = String(row?.querySelector("[data-candidate-trial-location]")?.value || "").trim();
+  const departmentValue = String(row?.querySelector("[data-candidate-trial-department]")?.value || "").trim();
+  const cancellationReason = String(
+    row?.querySelector("[data-candidate-trial-cancellation-reason]")?.value || "",
+  ).trim();
+  const replacementAppointmentId = String(
+    row?.querySelector("[data-candidate-trial-replacement-id]")?.value || "",
+  ).trim();
+  const replacesAppointmentId = String(
+    row?.querySelector("[data-candidate-trial-replaces-id]")?.value || "",
+  ).trim();
+  const cancelledAt = String(
+    row?.querySelector("[data-candidate-trial-cancelled-at]")?.value || "",
+  ).trim();
+  const cancelledBy = String(
+    row?.querySelector("[data-candidate-trial-cancelled-by]")?.value || "",
+  ).trim();
+  const status = String(row?.querySelector("[data-candidate-trial-status]")?.value || "planned");
+  return dateFrom && dateTo && locationId ? {
+    id: String(row?.dataset.candidateRowId || personnelCandidateClientId("trial")),
+    dateFrom,
+    dateTo,
+    startTime: String(row?.querySelector("[data-candidate-trial-start]")?.value || ""),
+    endTime: String(row?.querySelector("[data-candidate-trial-end]")?.value || ""),
+    locationId,
+    departmentId: departmentValue ? Number(departmentValue) : null,
+    status,
+    note: String(row?.querySelector("[data-candidate-trial-note]")?.value || "").trim(),
+    ...(status === "cancelled" && cancellationReason ? { cancellationReason } : {}),
+    ...(replacementAppointmentId ? { replacementAppointmentId } : {}),
+    ...(replacesAppointmentId ? { replacesAppointmentId } : {}),
+    ...(cancelledAt && cancelledBy ? { cancelledAt, cancelledBy } : {}),
+  } : null;
+}
+
 function personnelCandidateTrialAppointmentsFrom(container) {
-  return [...(container?.querySelectorAll("[data-candidate-trial-row]") || [])].map((row) => {
-    const readOnly = personnelCandidateReadOnlyStructuredPayload(row);
-    if (readOnly) return readOnly;
-    const dateFrom = String(row.querySelector("[data-candidate-trial-from]")?.value || "").trim();
-    const dateTo = String(row.querySelector("[data-candidate-trial-to]")?.value || dateFrom).trim();
-    const locationId = String(row.querySelector("[data-candidate-trial-location]")?.value || "").trim();
-    const departmentValue = String(row.querySelector("[data-candidate-trial-department]")?.value || "").trim();
-    return dateFrom && dateTo && locationId ? {
-      id: String(row.dataset.candidateRowId || personnelCandidateClientId("trial")),
-      dateFrom,
-      dateTo,
-      startTime: String(row.querySelector("[data-candidate-trial-start]")?.value || ""),
-      endTime: String(row.querySelector("[data-candidate-trial-end]")?.value || ""),
-      locationId,
-      departmentId: departmentValue ? Number(departmentValue) : null,
-      status: String(row.querySelector("[data-candidate-trial-status]")?.value || "planned"),
-      note: String(row.querySelector("[data-candidate-trial-note]")?.value || "").trim(),
-    } : null;
-  }).filter(Boolean);
+  return [...(container?.querySelectorAll("[data-candidate-trial-row]") || [])]
+    .map(personnelCandidateTrialAppointmentFromRow)
+    .filter(Boolean);
 }
 
 function personnelCandidateRatingsFrom(container) {
@@ -13065,10 +13136,35 @@ function renderPersonnelCandidateTargetAreas(application) {
 
 function renderPersonnelCandidateTrialAppointments(application) {
   const appointments = personnelCandidateTrialAppointments(application);
+  const appointmentsById = new Map(appointments.map((appointment) => [
+    String(appointment.id || ""),
+    appointment,
+  ]));
   return appointments.length ? `<div class="personnel-candidate-trial-list">${appointments.map((appointment) => {
     const status = PERSONNEL_CANDIDATE_TRIAL_STATUS_LABELS[appointment.status] || "Geplant";
     const times = [appointment.startTime, appointment.endTime].filter(Boolean).join("–");
-    return `<article><header><strong>${escapeHtml(personnelCandidateDateRangeLabel(appointment))}</strong><span class="personnel-candidate-trial-status status-${escapeHtmlAttribute(appointment.status || "planned")}">${escapeHtml(status)}</span></header><p>${escapeHtml(personnelCandidateLocationName(appointment.locationId))} · ${escapeHtml(personnelCandidateDepartmentName(appointment.locationId, appointment.departmentId))}${times ? ` · ${escapeHtml(times)} Uhr` : ""}</p>${appointment.note ? `<small>${escapeHtml(appointment.note)}</small>` : ""}</article>`;
+    const replacement = appointmentsById.get(String(appointment.replacementAppointmentId || ""));
+    const replaced = appointmentsById.get(String(appointment.replacesAppointmentId || ""));
+    const replacementTimes = replacement
+      ? [replacement.startTime, replacement.endTime].filter(Boolean).join("–")
+      : "";
+    const relation = replacement
+      ? `<div class="personnel-candidate-trial-link"><strong>Ersatztermin</strong><span>${escapeHtml(personnelCandidateDateRangeLabel(replacement))}${replacementTimes ? ` · ${escapeHtml(replacementTimes)} Uhr` : ""}</span></div>`
+      : (replaced
+        ? `<div class="personnel-candidate-trial-link"><strong>Ersatz für</strong><span>${escapeHtml(personnelCandidateDateRangeLabel(replaced))}</span></div>`
+        : "");
+    const editable = canWritePersonnelCandidateApplication(application)
+      && canWritePersonnelCandidateStructuredScope(appointment);
+    const cancelled = appointment.status === "cancelled";
+    const cancellationMeta = cancelled && (appointment.cancelledAt || appointment.cancelledBy)
+      ? `<small class="personnel-candidate-trial-cancellation-meta">Absage protokolliert${appointment.cancelledAt ? ` am ${escapeHtml(formatPersonnelCandidateTimestamp(appointment.cancelledAt))}` : ""}${appointment.cancelledBy ? ` · ${escapeHtml(appointment.cancelledBy)}` : ""}</small>`
+      : "";
+    const action = editable && !cancelled
+      ? `<button class="personnel-candidate-trial-edit" type="button" data-candidate-edit-trial data-application-id="${escapeHtmlAttribute(application.id)}" data-trial-appointment-id="${escapeHtmlAttribute(appointment.id)}">Termin bearbeiten</button>`
+      : (editable && cancelled && !replacement
+        ? `<button class="personnel-candidate-trial-edit" type="button" data-candidate-edit-trial data-application-id="${escapeHtmlAttribute(application.id)}" data-trial-appointment-id="${escapeHtmlAttribute(appointment.id)}">Ersatztermin eintragen</button>`
+        : "");
+    return `<article data-candidate-trial-summary-id="${escapeHtmlAttribute(appointment.id)}"><header><strong>${escapeHtml(personnelCandidateDateRangeLabel(appointment))}</strong><span class="personnel-candidate-trial-status status-${escapeHtmlAttribute(appointment.status || "planned")}">${escapeHtml(status)}</span></header><p>${escapeHtml(personnelCandidateLocationName(appointment.locationId))} · ${escapeHtml(personnelCandidateDepartmentName(appointment.locationId, appointment.departmentId))}${times ? ` · ${escapeHtml(times)} Uhr` : ""}</p>${appointment.note ? `<small>${escapeHtml(appointment.note)}</small>` : ""}${appointment.cancellationReason ? `<div class="personnel-candidate-trial-cancellation-summary"><strong>Absagegrund</strong><span>${escapeHtml(appointment.cancellationReason)}</span></div>` : ""}${cancellationMeta}${relation}${action}</article>`;
   }).join("")}</div>` : '<p class="personnel-candidate-section-empty">Noch kein Schnuppertermin hinterlegt.</p>';
 }
 
@@ -13352,7 +13448,10 @@ function renderPersonnelCandidateApplication(candidateId, application) {
     })).join("");
   const trialRows = appointments.map((appointment) => renderPersonnelCandidateTrialEditorRow(
     appointment,
-    { readOnly: !canWritePersonnelCandidateStructuredScope(appointment) },
+    {
+      readOnly: !canWritePersonnelCandidateStructuredScope(appointment),
+      persisted: true,
+    },
   )).join("");
   const ratingRows = personnelCandidateRatingsForEditor(ratings)
     .map((rating) => renderPersonnelCandidateRatingEditorRow(rating, { standard: rating.standard }))
@@ -14081,37 +14180,146 @@ async function savePersonnelCandidatePhoto(form) {
   }
 }
 
-function validatePersonnelCandidateTrialRows(form) {
-  let valid = true;
-  let firstInvalidRangeButton = null;
-  for (const row of form?.querySelectorAll("[data-candidate-trial-row]") || []) {
-    if (row.dataset.candidateReadonlyScope === "true") continue;
-    const from = row.querySelector("[data-candidate-trial-from]");
-    const to = row.querySelector("[data-candidate-trial-to]");
-    const start = row.querySelector("[data-candidate-trial-start]");
-    const end = row.querySelector("[data-candidate-trial-end]");
-    const rangeButton = row.querySelector("[data-candidate-trial-range-button]");
-    const invalidRange = !from?.value || !to?.value || to.value < from.value;
-    row.classList.toggle("has-validation-error", invalidRange);
-    if (rangeButton) {
-      rangeButton.toggleAttribute("aria-invalid", invalidRange);
-      if (invalidRange && !firstInvalidRangeButton) firstInvalidRangeButton = rangeButton;
+function validatePersonnelCandidateTrialRow(row, { reportInvalid = false } = {}) {
+  if (!row || row.dataset.candidateReadonlyScope === "true") return true;
+  const from = row.querySelector("[data-candidate-trial-from]");
+  const to = row.querySelector("[data-candidate-trial-to]");
+  const start = row.querySelector("[data-candidate-trial-start]");
+  const end = row.querySelector("[data-candidate-trial-end]");
+  const rangeButton = row.querySelector("[data-candidate-trial-range-button]");
+  const invalidRange = !from?.value || !to?.value || to.value < from.value;
+  row.classList.toggle("has-validation-error", invalidRange);
+  rangeButton?.toggleAttribute("aria-invalid", invalidRange);
+  const endWithoutStart = !start?.value && Boolean(end?.value);
+  const invalidOrder = from?.value === to?.value && start?.value && end?.value <= start.value;
+  start?.setCustomValidity(endWithoutStart ? "Bitte zum Ende auch einen Beginn angeben." : "");
+  end?.setCustomValidity(endWithoutStart
+    ? "Bitte zum Ende auch einen Beginn angeben."
+    : (invalidOrder ? "Das Ende muss nach dem Beginn liegen." : ""));
+  const invalidControl = [...row.querySelectorAll("input,select,textarea")]
+    .find((control) => !control.disabled && !control.checkValidity());
+  const valid = !invalidRange && !endWithoutStart && !invalidOrder && !invalidControl;
+  if (!valid && reportInvalid) {
+    if (invalidRange) {
+      showToast("Bitte einen gültigen Zeitraum für den Schnuppertermin auswählen.", true);
+      rangeButton?.focus();
+    } else {
+      invalidControl?.reportValidity();
     }
-    const incompleteTime = Boolean(start?.value) !== Boolean(end?.value);
-    start?.setCustomValidity(incompleteTime ? "Bitte Beginn und Ende gemeinsam angeben." : "");
-    end?.setCustomValidity(incompleteTime
-      ? "Bitte Beginn und Ende gemeinsam angeben."
-      : (from?.value === to?.value && start?.value && end.value <= start.value
-        ? "Das Ende muss nach dem Beginn liegen."
-        : ""));
-    if (invalidRange || incompleteTime
-      || (from?.value === to?.value && start?.value && end?.value <= start.value)) valid = false;
-  }
-  if (firstInvalidRangeButton) {
-    showToast("Bitte für jeden Schnuppertermin einen gültigen Zeitraum auswählen.", true);
-    firstInvalidRangeButton.focus();
   }
   return valid;
+}
+
+function validatePersonnelCandidateTrialRows(form) {
+  let firstInvalid = null;
+  for (const row of form?.querySelectorAll("[data-candidate-trial-row]") || []) {
+    if (!validatePersonnelCandidateTrialRow(row) && !firstInvalid) firstInvalid = row;
+  }
+  if (firstInvalid) validatePersonnelCandidateTrialRow(firstInvalid, { reportInvalid: true });
+  return !firstInvalid;
+}
+
+function personnelCandidatePendingDirectTrialRow(form) {
+  const rows = [...(form?.querySelectorAll("[data-candidate-trial-row]") || [])];
+  return rows.find((row) => {
+    if (row.dataset.candidateTrialPersisted !== "true") return false;
+    const status = String(row.querySelector("[data-candidate-trial-status]")?.value || "planned");
+    const cancellationPending = row.dataset.candidateTrialOriginalStatus !== "cancelled"
+      && status === "cancelled";
+    const replacementId = String(
+      row.querySelector("[data-candidate-trial-replacement-id]")?.value || "",
+    );
+    const replacementPending = Boolean(replacementId) && rows.some((entry) => (
+      entry.dataset.candidateRowId === replacementId
+        && entry.dataset.candidateTrialPersisted !== "true"
+    ));
+    return cancellationPending || replacementPending;
+  }) || null;
+}
+
+async function savePersonnelCandidateTrialAppointment(form, submitter) {
+  const candidate = state.selectedPersonnelCandidate;
+  const applicationId = String(form?.dataset.applicationId || "");
+  const application = personnelCandidateApplications(candidate)
+    .find((entry) => entry.id === applicationId);
+  const row = submitter?.closest("[data-candidate-trial-row]");
+  if (!form || !candidate || !application || !row
+    || !canWritePersonnelCandidateApplication(application)
+    || row.dataset.candidateTrialPersisted !== "true"
+    || state.personnelCandidateMutationPending) return;
+
+  const list = row.closest("[data-candidate-trial-list]");
+  const replacementId = String(
+    row.querySelector("[data-candidate-trial-replacement-id]")?.value || "",
+  );
+  const replacementRow = replacementId
+    ? [...(list?.querySelectorAll("[data-candidate-trial-row]") || [])]
+        .find((entry) => entry.dataset.candidateRowId === replacementId
+          && entry.dataset.candidateTrialPersisted !== "true")
+    : null;
+  if (!validatePersonnelCandidateTrialRow(row, { reportInvalid: true })
+    || (replacementRow
+      && !validatePersonnelCandidateTrialRow(replacementRow, { reportInvalid: true }))) return;
+  const appointment = personnelCandidateTrialAppointmentFromRow(row);
+  const replacement = replacementRow
+    ? personnelCandidateTrialAppointmentFromRow(replacementRow)
+    : null;
+  if (!appointment || (replacementRow && !replacement)) return;
+  if (!canWritePersonnelCandidateStructuredScope(appointment)
+    || (replacement && !canWritePersonnelCandidateStructuredScope(replacement))) {
+    showToast(
+      "Schnuppertermine dürfen nur im freigegebenen eigenen Bereich gespeichert werden.",
+      true,
+    );
+    return;
+  }
+
+  state.personnelCandidateMutationPending = `trial:${applicationId}:${appointment.id}`;
+  state.personnelCandidateDetailError = "";
+  try {
+    await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}/applications/${encodeURIComponent(application.id)}/trial-appointments/${encodeURIComponent(appointment.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        revision: application.revision,
+        dateFrom: appointment.dateFrom,
+        dateTo: appointment.dateTo,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        locationId: appointment.locationId,
+        departmentId: appointment.departmentId,
+        status: appointment.status,
+        note: appointment.note,
+        cancellationReason: appointment.cancellationReason || "",
+        ...(replacement ? {
+          replacement: {
+            dateFrom: replacement.dateFrom,
+            dateTo: replacement.dateTo,
+            startTime: replacement.startTime,
+            endTime: replacement.endTime,
+            locationId: replacement.locationId,
+            departmentId: replacement.departmentId,
+            note: replacement.note,
+          },
+        } : {}),
+      }),
+    });
+    await loadPersonnelCandidates({ force: true });
+    await loadPersonnelCandidateDetail(candidate.id);
+    showToast(replacement
+      ? "Absage und Ersatztermin wurden revisionssicher gespeichert."
+      : "Der Schnuppertermin wurde revisionssicher gespeichert.");
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    state.personnelCandidateDetailError = error.message
+      || "Der Schnuppertermin konnte nicht gespeichert werden.";
+    if (error.status === 409) await loadPersonnelCandidateDetail(candidate.id);
+  } finally {
+    state.personnelCandidateMutationPending = "";
+    renderPersonnelCandidateOverview();
+  }
 }
 
 async function savePersonnelCandidateApplication(form) {
@@ -14120,6 +14328,16 @@ async function savePersonnelCandidateApplication(form) {
   const application = personnelCandidateApplications(candidate).find((entry) => entry.id === applicationId);
   if (!form || !candidate || !application || !canWritePersonnelCandidateApplication(application)
     || state.personnelCandidateMutationPending) return;
+  const pendingDirectTrial = personnelCandidatePendingDirectTrialRow(form);
+  if (pendingDirectTrial) {
+    showToast(
+      "Bitte die Absage und einen optionalen Ersatztermin direkt mit „Termin speichern“ sichern.",
+      true,
+    );
+    pendingDirectTrial.scrollIntoView({ behavior: "smooth", block: "center" });
+    pendingDirectTrial.querySelector("[data-candidate-save-trial]")?.focus({ preventScroll: true });
+    return;
+  }
   if (!validatePersonnelCandidateTrialRows(form)) return;
   validatePersonnelCandidateTargetRows(form.querySelector("[data-candidate-target-area-list]"));
   if (!form.reportValidity()) return;
@@ -14406,16 +14624,107 @@ function handlePersonnelCandidateDetailSubmit(event) {
   if (!profileForm && !photoForm && !applicationForm && !feedbackForm && !evaluationForm
     && !pdfOptionsForm && !statusForm) return;
   event.preventDefault();
+  const trialSubmit = applicationForm
+    ? event.submitter?.closest("[data-candidate-save-trial]")
+    : null;
   if (profileForm) savePersonnelCandidateProfile(profileForm);
   else if (photoForm) savePersonnelCandidatePhoto(photoForm);
-  else if (applicationForm) savePersonnelCandidateApplication(applicationForm);
+  else if (applicationForm && trialSubmit) {
+    savePersonnelCandidateTrialAppointment(applicationForm, trialSubmit);
+  } else if (applicationForm) savePersonnelCandidateApplication(applicationForm);
   else if (evaluationForm) assignPersonnelCandidateTeamEvaluations(evaluationForm);
   else if (feedbackForm) savePersonnelCandidateTeamFeedback(feedbackForm);
   else if (pdfOptionsForm) saveCandidateEvaluationPdfPreferences(pdfOptionsForm);
   else savePersonnelCandidateApplicationStatus(event);
 }
 
+function focusPersonnelCandidateTrialEditor(button) {
+  const applicationId = String(button?.dataset.applicationId || "");
+  const appointmentId = String(button?.dataset.trialAppointmentId || "");
+  const form = [...(elements.personnelCandidateDetail
+    ?.querySelectorAll("[data-personnel-candidate-application-form]") || [])]
+    .find((entry) => entry.dataset.applicationId === applicationId);
+  const row = [...(form?.querySelectorAll("[data-candidate-trial-row]") || [])]
+    .find((entry) => entry.dataset.candidateRowId === appointmentId);
+  if (!form || !row) {
+    showToast("Der Schnuppertermin ist nicht mehr aktuell. Bitte die Bewerbungsdetails neu laden.", true);
+    return;
+  }
+  const details = form.closest("details");
+  if (details) details.open = true;
+  row.classList.add("is-direct-edit");
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  const focusTarget = row.dataset.candidateTrialOriginalStatus === "cancelled"
+    ? row.querySelector("[data-candidate-add-replacement-trial]")
+    : row.querySelector("[data-candidate-trial-status]");
+  focusTarget?.focus({ preventScroll: true });
+  setTimeout(() => row.classList.remove("is-direct-edit"), 2200);
+}
+
+function removePersonnelCandidateStructuredRow(row) {
+  if (!row) return;
+  if (row.matches("[data-candidate-trial-row]")) {
+    if (row.dataset.candidateTrialPersisted === "true") return;
+    const appointmentId = String(row.dataset.candidateRowId || "");
+    const replacesId = String(row.querySelector("[data-candidate-trial-replaces-id]")?.value || "");
+    const list = row.closest("[data-candidate-trial-list]");
+    if (replacesId) {
+      const replaced = [...(list?.querySelectorAll("[data-candidate-trial-row]") || [])]
+        .find((entry) => entry.dataset.candidateRowId === replacesId);
+      const replacementInput = replaced?.querySelector("[data-candidate-trial-replacement-id]");
+      if (replacementInput?.value === appointmentId) replacementInput.value = "";
+      const relation = replaced?.querySelector("[data-candidate-trial-relation]");
+      if (relation) {
+        relation.textContent = "";
+        relation.classList.add("hidden");
+      }
+      syncPersonnelCandidateTrialStatusRow(replaced);
+    }
+  }
+  row.remove();
+}
+
+function addPersonnelCandidateReplacementTrial(button) {
+  const row = button?.closest("[data-candidate-trial-row]");
+  const list = row?.closest("[data-candidate-trial-list]");
+  const appointmentId = String(row?.dataset.candidateRowId || "");
+  const status = String(row?.querySelector("[data-candidate-trial-status]")?.value || "");
+  const replacementInput = row?.querySelector("[data-candidate-trial-replacement-id]");
+  if (!row || !list || !appointmentId || status !== "cancelled" || replacementInput?.value) return;
+  const locationId = String(row.querySelector("[data-candidate-trial-location]")?.value || "");
+  const departmentValue = String(row.querySelector("[data-candidate-trial-department]")?.value || "");
+  const replacementAppointmentId = personnelCandidateClientId("trial");
+  replacementInput.value = replacementAppointmentId;
+  list.insertAdjacentHTML("beforeend", renderPersonnelCandidateTrialEditorRow({
+    id: replacementAppointmentId,
+    locationId,
+    departmentId: departmentValue ? Number(departmentValue) : null,
+    status: "planned",
+    replacesAppointmentId: appointmentId,
+  }));
+  const relation = row.querySelector("[data-candidate-trial-relation]");
+  if (relation) {
+    relation.textContent = "Ersatztermin wird gemeinsam mit dieser Absage gespeichert";
+    relation.classList.remove("hidden");
+  }
+  syncPersonnelCandidateTrialStatusRow(row);
+  const replacementRow = [...list.querySelectorAll("[data-candidate-trial-row]")]
+    .find((entry) => entry.dataset.candidateRowId === replacementAppointmentId);
+  replacementRow?.scrollIntoView({ behavior: "smooth", block: "center" });
+  replacementRow?.querySelector("[data-candidate-trial-range-button]")?.focus({ preventScroll: true });
+}
+
 function handlePersonnelCandidateDynamicClick(event) {
+  const editTrial = event.target.closest("[data-candidate-edit-trial]");
+  if (editTrial) {
+    focusPersonnelCandidateTrialEditor(editTrial);
+    return true;
+  }
+  const replacementTrial = event.target.closest("[data-candidate-add-replacement-trial]");
+  if (replacementTrial) {
+    addPersonnelCandidateReplacementTrial(replacementTrial);
+    return true;
+  }
   const rangeButton = event.target.closest("[data-candidate-trial-range-button]");
   if (rangeButton) {
     openPersonnelCandidateTrialDateRangeCalendar(rangeButton);
@@ -14424,7 +14733,7 @@ function handlePersonnelCandidateDynamicClick(event) {
   const remove = event.target.closest("[data-candidate-remove-row]");
   if (remove) {
     const row = remove.closest("[data-candidate-target-area-row],[data-candidate-trial-row],[data-candidate-rating-row]");
-    row?.remove();
+    removePersonnelCandidateStructuredRow(row);
     return true;
   }
   const targetButton = event.target.closest("[data-candidate-add-target-area]");
@@ -36871,7 +37180,9 @@ elements.personnelCandidateCreateApplication?.addEventListener("click", (event) 
     return;
   }
   const remove = event.target.closest("[data-candidate-remove-row]");
-  remove?.closest("[data-candidate-target-area-row],[data-candidate-trial-row],[data-candidate-rating-row]")?.remove();
+  removePersonnelCandidateStructuredRow(
+    remove?.closest("[data-candidate-target-area-row],[data-candidate-trial-row],[data-candidate-rating-row]"),
+  );
 });
 elements.personnelCandidateCreateApplication?.addEventListener("change", (event) => {
   if (event.target.matches("[data-candidate-target-location],[data-candidate-trial-location]")) {
@@ -36880,6 +37191,9 @@ elements.personnelCandidateCreateApplication?.addEventListener("change", (event)
   if (event.target.matches("[data-candidate-trial-from]")) {
     const to = event.target.closest("[data-candidate-trial-row]")?.querySelector("[data-candidate-trial-to]");
     if (to && !to.value) to.value = event.target.value;
+  }
+  if (event.target.matches("[data-candidate-trial-status]")) {
+    syncPersonnelCandidateTrialStatusRow(event.target.closest("[data-candidate-trial-row]"));
   }
 });
 elements.personnelCandidateAuthorizationConfirmed?.addEventListener("change", () => {
@@ -36930,6 +37244,9 @@ elements.personnelCandidateDetail?.addEventListener("change", (event) => {
   if (event.target.matches("[data-candidate-trial-from]")) {
     const to = event.target.closest("[data-candidate-trial-row]")?.querySelector("[data-candidate-trial-to]");
     if (to && !to.value) to.value = event.target.value;
+  }
+  if (event.target.matches("[data-candidate-trial-status]")) {
+    syncPersonnelCandidateTrialStatusRow(event.target.closest("[data-candidate-trial-row]"));
   }
   if (event.target.matches("[data-personnel-candidate-photo-form] input[name='photo']")) {
     updatePersonnelCandidateDetailPhotoPreview(event.target);

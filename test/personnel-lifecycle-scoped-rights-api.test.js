@@ -1504,6 +1504,119 @@ test("Personalmodul R1 HTTP: unveränderte fremde Detailbereiche blockieren loka
       .find(({ id }) => id === "trial-foreign").note,
     "Fremder Bereich bleibt erhalten",
   );
+  current = ownAppointmentChanged.payload.application;
+
+  const scopeDenialsBefore = db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE actor = ? AND action = 'personnel-lifecycle.access.denied'
+  `).get(EMPLOYEES.al).count;
+  const crossScopeReplacement = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}/trial-appointments/trial-own`,
+    {
+      method: "PUT",
+      auth: al,
+      body: {
+        revision: current.revision,
+        status: "cancelled",
+        cancellationReason: "Darf nicht gespeichert werden",
+        replacement: {
+          dateFrom: "2026-09-08",
+          dateTo: "2026-09-08",
+          startTime: "10:00",
+          locationId: organization.locationB,
+          departmentId: organization.departmentC,
+        },
+      },
+    },
+  );
+  assert.equal(crossScopeReplacement.response.status, 403, JSON.stringify(crossScopeReplacement.payload));
+  assert.equal(
+    crossScopeReplacement.payload.code,
+    "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED",
+  );
+  assert.equal(
+    db.prepare("SELECT revision FROM candidate_applications WHERE id = ?").get(initial.id).revision,
+    current.revision,
+  );
+  assert.equal(
+    db.prepare(`
+      SELECT COUNT(*) AS count FROM audit_log
+      WHERE actor = ? AND action = 'personnel-lifecycle.access.denied'
+    `).get(EMPLOYEES.al).count,
+    scopeDenialsBefore + 1,
+  );
+
+  const foreignAppointment = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}/trial-appointments/trial-foreign`,
+    {
+      method: "PUT",
+      auth: al,
+      body: {
+        revision: current.revision,
+        status: "cancelled",
+        cancellationReason: "Unzulässiger Fremdzugriff",
+      },
+    },
+  );
+  assert.equal(foreignAppointment.response.status, 404, JSON.stringify(foreignAppointment.payload));
+  assert.equal(
+    foreignAppointment.payload.code,
+    "PERSONNEL_LIFECYCLE_TRIAL_APPOINTMENT_NOT_FOUND",
+  );
+  assert.equal(JSON.stringify(foreignAppointment.payload).includes("Fremder Bereich"), false);
+
+  const ownCancellation = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}/trial-appointments/trial-own`,
+    {
+      method: "PUT",
+      auth: al,
+      body: {
+        revision: current.revision,
+        status: "cancelled",
+        cancellationReason: "Bewerber hat den Termin abgesagt",
+        replacement: {
+          dateFrom: "2026-09-08",
+          dateTo: "2026-09-08",
+          startTime: "10:00",
+          locationId: organization.locationA,
+          departmentId: organization.departmentA,
+          note: "Vereinbarter Ersatztermin",
+        },
+      },
+    },
+  );
+  assert.equal(ownCancellation.response.status, 200, JSON.stringify(ownCancellation.payload));
+  const cancelled = ownCancellation.payload.application.trialAppointments
+    .find(({ id }) => id === "trial-own");
+  const replacement = ownCancellation.payload.application.trialAppointments
+    .find(({ replacesAppointmentId }) => replacesAppointmentId === "trial-own");
+  assert.equal(cancelled.status, "cancelled");
+  assert.equal(cancelled.cancelledBy, EMPLOYEES.al);
+  assert.match(cancelled.cancelledAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(cancelled.replacementAppointmentId, replacement.id);
+  assert.equal(replacement.dateFrom, "2026-09-08");
+  assert.equal(replacement.startTime, "10:00");
+  assert.equal(replacement.locationId, organization.locationA);
+  assert.equal(replacement.departmentId, organization.departmentA);
+
+  const cancellationOverwrite = await request(
+    `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${initial.id}/trial-appointments/trial-own`,
+    {
+      method: "PUT",
+      auth: al,
+      body: {
+        revision: ownCancellation.payload.application.revision,
+        dateFrom: "2026-09-09",
+        dateTo: "2026-09-09",
+        cancellationReason: "Nachträglich verändert",
+      },
+    },
+  );
+  assert.equal(cancellationOverwrite.response.status, 409, JSON.stringify(cancellationOverwrite.payload));
+  assert.equal(
+    cancellationOverwrite.payload.code,
+    "PERSONNEL_LIFECYCLE_TRIAL_HISTORY_REQUIRED",
+  );
 });
 
 test("Personalmodul R1 HTTP: Scope-Verwaltung respektiert Sperre, Aktivstatus und IT-Grenze", async () => {

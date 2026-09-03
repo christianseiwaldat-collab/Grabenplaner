@@ -1484,12 +1484,20 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .personnel-candidate-repeater-row { position:relative; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; align-items:end; gap:8px; min-width:0; padding:11px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
 .personnel-candidate-target-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto; }
 .personnel-candidate-trial-row { grid-template-columns:repeat(2,minmax(0,1fr)) minmax(120px,.65fr); }
+.personnel-candidate-trial-row.is-direct-edit { border-color:var(--green); box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 16%,transparent); }
 .personnel-candidate-readonly-scope { border-style:dashed; background:color-mix(in srgb,var(--surface-soft) 82%,var(--line)); }
-.personnel-candidate-readonly-scope :is(input,select) { cursor:not-allowed; }
+.personnel-candidate-readonly-scope :is(input,select,textarea) { cursor:not-allowed; }
 .personnel-candidate-readonly-scope-label { align-self:center; justify-self:end; padding:5px 8px; border:1px solid var(--line); border-radius:999px; color:var(--muted); background:var(--surface); font-size:7px; font-weight:800; white-space:nowrap; }
 .personnel-candidate-trial-range,.personnel-candidate-trial-times { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; min-width:0; }
 .personnel-candidate-trial-range > .field { grid-column:1 / -1; }
 .personnel-candidate-row-note { grid-column:span 2; }
+.personnel-candidate-trial-cancellation { grid-column:1 / -1; }
+.personnel-candidate-trial-cancellation textarea { min-height:54px; resize:vertical; }
+.personnel-candidate-trial-cancelled-meta { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:5px 10px; min-width:0; margin:0; padding:8px 10px; border:1px solid color-mix(in srgb,#a74432 22%,var(--line)); border-radius:9px; color:#6f4037; background:#f8e9e5; font-size:7.5px; line-height:1.4; }
+.personnel-candidate-trial-cancelled-meta :is(strong,span) { min-width:0; overflow-wrap:anywhere; }
+.personnel-candidate-trial-relation { grid-column:1 / -1; min-width:0; margin:0; padding:8px 10px; border-left:3px solid color-mix(in srgb,var(--green) 58%,var(--line)); border-radius:0 8px 8px 0; color:var(--muted); background:var(--surface); font-size:7.5px; line-height:1.4; overflow-wrap:anywhere; }
+.personnel-candidate-trial-row-actions { grid-column:1 / -1; display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:7px; min-width:0; }
+.personnel-candidate-trial-row-actions :is(.primary-button,.secondary-button) { min-height:34px; margin:0; }
 .personnel-candidate-preferred-choice { display:flex; align-items:center; gap:6px; min-height:36px; padding:7px 9px; border:1px solid var(--line); border-radius:9px; color:var(--ink); background:var(--surface); font-size:8px; font-weight:800; cursor:pointer; }
 .personnel-candidate-preferred-choice input { width:17px; min-width:17px; height:17px; min-height:17px; margin:0; padding:0; accent-color:var(--green); }
 .personnel-candidate-row-remove { min-height:34px; padding:6px 7px; border:0; color:#a74432; background:transparent; font:800 8px/1.25 inherit; text-decoration:underline; cursor:pointer; }
@@ -1538,6 +1546,13 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .personnel-candidate-trial-status { padding:4px 7px; border-radius:999px; color:#5e511d; background:#f4e9b7; font-size:7px; font-weight:850; }
 .personnel-candidate-trial-status.status-completed { color:#1f654f; background:#dff1ea; }
 .personnel-candidate-trial-status.status-cancelled { color:#85483c; background:#f4dfda; }
+.personnel-candidate-trial-cancellation-summary,.personnel-candidate-trial-link { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:8px; min-width:0; margin-top:7px; padding:8px 9px; border-radius:8px; font-size:7.5px; line-height:1.4; }
+.personnel-candidate-trial-cancellation-summary { color:#6f4037; background:#f8e9e5; }
+.personnel-candidate-trial-cancellation-meta { color:#6f4037 !important; }
+.personnel-candidate-trial-link { color:var(--ink); background:color-mix(in srgb,var(--green) 9%,var(--surface)); }
+.personnel-candidate-trial-cancellation-summary :is(strong,span),.personnel-candidate-trial-link :is(strong,span) { min-width:0; overflow-wrap:anywhere; }
+.personnel-candidate-trial-edit { display:inline-flex; min-height:30px; margin-top:8px; padding:5px 0; border:0; color:var(--green); background:transparent; font:850 8px/1.3 inherit; text-decoration:underline; cursor:pointer; }
+.personnel-candidate-trial-edit:focus-visible { outline:3px solid color-mix(in srgb,var(--green) 30%,transparent); outline-offset:2px; }
 .personnel-candidate-rating-display { display:grid; grid-template-columns:max-content repeat(5,20px); align-items:center; justify-content:end; gap:3px; min-width:0; }
 .personnel-candidate-rating-display > span { display:grid; place-items:center; width:20px; height:20px; border-radius:6px; color:var(--muted); background:#e8ecea; font-size:7px; font-weight:900; }
 .personnel-candidate-rating-display > span.current.score-1 { color:#762f25; background:#f4d6d1; }
@@ -2569,6 +2584,10 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .personnel-candidate-toolbar,.personnel-candidate-status-form,.personnel-workflow-toolbar { grid-template-columns:1fr; }
   .personnel-candidate-target-row,.personnel-candidate-trial-row,.personnel-candidate-feedback-form { grid-template-columns:1fr; }
   .personnel-candidate-row-note,.personnel-candidate-feedback-comment,.personnel-candidate-feedback-form .personnel-candidate-form-actions { grid-column:1; }
+  .personnel-candidate-trial-cancellation,.personnel-candidate-trial-cancelled-meta,.personnel-candidate-trial-relation,.personnel-candidate-trial-row-actions { grid-column:1; }
+  .personnel-candidate-trial-row-actions { display:grid; grid-template-columns:1fr; }
+  .personnel-candidate-trial-row-actions :is(.primary-button,.secondary-button) { width:100%; }
+  .personnel-candidate-trial-cancellation-summary,.personnel-candidate-trial-link { grid-template-columns:1fr; gap:2px; }
   .personnel-candidate-editor-group > header,.personnel-candidate-form-actions { align-items:stretch; flex-direction:column; }
   .personnel-candidate-editor-group > header .secondary-button,.personnel-candidate-form-actions :is(.primary-button,.secondary-button) { width:100%; }
   .personnel-candidate-toolbar-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
