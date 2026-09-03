@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.92.25 Beta · Artikelstamm-Verwaltung und kontrollierter TradeFoto-Import
+
+- Die Verkaufsverwaltung erhält eine suchzentrierte Artikelstamm-Arbeitsfläche mit kompakter, sortierbarer Zehn-Zeilen-Ergebnisliste, stabiler Scrollfläche, erweiterter Suche und vollbreiter Artikelkartei.
+- Getrennte Rechte steuern Zugang, Lesen, Schreiben, Import sowie Verkaufs- und Kostenpreise. Anlegen, Kopieren, Bearbeiten und Archivieren sind revisionsgebunden, auditiert und über das persönliche Aktionslog kontrolliert rücknehmbar.
+- Der vorbereitete TradeFoto-Import akzeptiert ausschließlich den versionierten JSON-Dateivertrag. Vorschau, Akteurbindung, Fingerprint und ausdrückliche Bestätigung sichern den Import; fehlerhafte Preise, Kennungen und Dubletten werden quarantänisiert, während eine unabhängige sichere Teilmenge atomar übernommen werden kann.
+- Mit diesem Release werden keine Daten aus der verschlüsselten TradeFoto-ACCDB extrahiert, importiert oder aktiviert. Der analysierte Echtdatenbestand von 18.996 Artikeln bleibt unverändert und benötigt später einen eigenen kontrollierten Übernahmelauf.
+- Importläufe, Findings und Auswirkungen bleiben unveränderlich nachvollziehbar. Eine persönliche Rücknahme stellt frühere Artikelrevisionen atomar wieder her beziehungsweise archiviert importierte Neuanlagen, sofern zwischenzeitlich keine konkurrierende Änderung erfolgt ist.
+- Die vorhandene Leihverwaltung verwendet weiterhin ausschließlich den zentralen Artikelstamm. Ein realitätsnaher Kapazitätsvertrag begrenzt Großimporte; SQLite ist produktiv umgesetzt, während PostgreSQL weiterhin ein geprüfter, nicht aktivierter Vertrag bleibt.
+- Die Startreihenfolge initialisiert die geschützten Personalakt-Dokumentregeln vor den synchronen Migrationen und verhindert dadurch einen frühen Startabbruch bei bestehenden Installationen.
+
 ## v0.92.24 Beta · CRM, zentraler Artikelstamm und bearbeitbare Schnuppertermine
 
 - Die Verkaufsverwaltung erhält ein suchzentriertes CRM-Grundgerüst mit geschützter Kundenkartei, frei ergänzbaren Textfeldern und einer pro Benutzer konfigurierbaren, sortierbaren Ergebnisliste. Das persönliche Aktionslog dokumentiert die letzten eigenen Änderungen und bietet ausschließlich dafür vorgesehene, auditierte Rücknahmen an.

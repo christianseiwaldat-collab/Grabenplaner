@@ -6,9 +6,9 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("v0.92.24: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () => {
+test("v0.92.25: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.92.24-beta");
+  assert.equal(packageJson.version, "0.92.25-beta");
   assert.equal(packageJson.dependencies.sharp, "0.35.3");
   assert.equal(packageJson.dependencies["pdfjs-dist"], "6.2.108");
   assert.match(read("pnpm-workspace.yaml"), /brace-expansion:\s*5\.0\.9/);
@@ -46,7 +46,7 @@ test("v0.92.24: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", 
   const pilotAcceptanceDocs = read("docs/PILOT-UND-ABNAHME.md");
   const genericLauncher = read("Dienstplan starten.cmd");
 
-  assert.match(indexHtml, /v0\.92\.24 Beta/);
+  assert.match(indexHtml, /v0\.92\.25 Beta/);
   assert.match(indexHtml, /id="serverRestartModal"/);
   assert.match(indexHtml, /Nicht gespeicherte Eingaben in geöffneten Browserfenstern können verloren gehen/);
   assert.match(indexHtml, /Vor dem Neustart erstellt Grabenplaner automatisch einen verifizierten Sicherungspunkt/);
@@ -55,7 +55,7 @@ test("v0.92.24: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", 
   assert.match(appJavascript, /\/api\/portal\/v1\/server-monitor\/restart/);
   assert.match(appJavascript, /JSON\.stringify\(\{ confirmation: "SERVER_RESTART" \}\)/);
   assert.match(read("server.js"), /sqliteBranchOrderOperations\.ensureConfiguredLocationCatalogContent\(\);/);
-  assert.match(readme, /v0\.92\.24 Beta/);
+  assert.match(readme, /v0\.92\.25 Beta/);
   assert.match(readme, /verwalteten Ubuntu-Einzelserver/i);
   assert.match(readme, /SQLite/);
   assert.match(readme, /PostgreSQL/);
@@ -70,7 +70,7 @@ test("v0.92.24: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", 
   assert.match(codespacesDocs, /Repository ist privat/i);
   assert.match(codespacesDocs, /nur Personen mit Repository-Zugriff/i);
   assert.match(codespacesDocs, /eingeladene Collaborators mit Schreibzugriff/);
-  assert.equal(devcontainer.name, "Grabenplaner v0.92.24 Codespaces-Demo");
+  assert.equal(devcontainer.name, "Grabenplaner v0.92.25 Codespaces-Demo");
   assert.equal(Object.hasOwn(devcontainer.features, "ghcr.io/devcontainers/features/sshd:1"), false);
   assert.match(codespacesStart, /EXPECTED_REPOSITORY="christianseiwaldat-collab\/Grabenplaner"/);
   assert.match(codespacesStart, /permissions\.admin or \.permissions\.push/);
@@ -96,6 +96,7 @@ test("v0.92.24: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", 
   assert.match(pilotAcceptanceDocs, /WCAG 2\.2/);
   assert.match(pilotAcceptanceDocs, /OWASP ASVS 5\.0\.0/);
   assert.match(pilotAcceptanceDocs, /keine pauschale Rechts-, Sicherheits- oder Barrierefreiheitsgarantie/);
+  assert.match(versionLog, /v0\.92\.25 Beta · Artikelstamm-Verwaltung und kontrollierter TradeFoto-Import/);
   assert.match(versionLog, /v0\.92\.24 Beta · CRM, zentraler Artikelstamm und bearbeitbare Schnuppertermine/);
   assert.match(versionLog, /v0\.90\.7 Beta/);
   assert.match(versionLog, /v0\.92\.21 Beta · Delegierbare AL-Grundrechte und optionale Positionszeile/);
