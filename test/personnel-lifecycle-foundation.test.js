@@ -164,3 +164,19 @@ test("Personalmodul-Fundament: Import und Sicherung bleiben für alle Bewerberda
     "candidateConversionProtectionContext",
   ]) assert.match(importedProtection, new RegExp(contextFactory));
 });
+
+test("Personalmodul-Fundament: Dokumentregeln sind vor synchronen Startmigrationen initialisiert", () => {
+  const startupMigrationIndex = server.indexOf(
+    "const startupSchemaMigrationState = runSqliteStartupSchemaMigrations(",
+  );
+  const categoriesIndex = server.indexOf("const PERSONNEL_DOCUMENT_CATEGORIES = new Set(");
+  const visibilityIndex = server.indexOf(
+    'const PERSONNEL_DOCUMENT_VISIBILITY = "hr_confidential";',
+  );
+
+  assert.notEqual(startupMigrationIndex, -1);
+  assert.notEqual(categoriesIndex, -1);
+  assert.notEqual(visibilityIndex, -1);
+  assert.ok(categoriesIndex < startupMigrationIndex);
+  assert.ok(visibilityIndex < startupMigrationIndex);
+});

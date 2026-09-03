@@ -638,6 +638,10 @@ const {
 } = require("./lib/product-readiness");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
+const PERSONNEL_DOCUMENT_CATEGORIES = new Set([
+  "contract", "amendment", "certificate", "training", "identity", "payroll", "other",
+]);
+const PERSONNEL_DOCUMENT_VISIBILITY = "hr_confidential";
 const PORTAL_API_VERSION = 1;
 const LOAN_OVERVIEW_PERMISSION = "loans:overview:read";
 const LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION = "loans:branch-overview:manage";
@@ -8717,11 +8721,6 @@ function requirePersonnelRecordSession(request, { write = false } = {}) {
   }
   return { session, access };
 }
-
-const PERSONNEL_DOCUMENT_CATEGORIES = new Set([
-  "contract", "amendment", "certificate", "training", "identity", "payroll", "other",
-]);
-const PERSONNEL_DOCUMENT_VISIBILITY = "hr_confidential";
 
 function validatePersonnelDocumentFields(value = {}) {
   const category = String(value.category || "other").trim().toLowerCase();
