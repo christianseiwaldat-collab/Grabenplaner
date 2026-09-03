@@ -6,6 +6,7 @@ const path = require("node:path");
 const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const net = require("node:net");
+const zlib = require("node:zlib");
 const { promisify } = require("node:util");
 const {
   SALES_ANALYTICS_PERMISSIONS,
@@ -18,6 +19,13 @@ const {
   buildCrmProjection,
   resolveCrmPermissionDependencies,
 } = require("./lib/crm-access");
+const {
+  SALES_ARTICLE_CATALOG_PERMISSIONS,
+  SALES_ARTICLE_CATALOG_PERMISSION_IDS,
+  buildSalesArticleCatalogProjection,
+  resolveSalesArticleCatalogPermissionDependencies,
+  salesArticlePriceGroup,
+} = require("./lib/sales-article-catalog-access");
 const {
   CRM_DEFAULT_PREFERENCES,
   CRM_PREFERENCE_KEYS,
@@ -299,8 +307,28 @@ const {
   storefrontBaseUrl,
 } = require("./lib/article-catalog");
 const {
+  SalesArticleCatalogError,
+  normalizeSalesArticleManualArchive,
+  normalizeSalesArticleManualCopy,
+  normalizeSalesArticleManualCreate,
+  normalizeSalesArticleManualUpdate,
+  normalizeSalesArticleNumber,
+  normalizeSalesArticleSearch,
   salesArticleImportContentSha256,
 } = require("./lib/sales-article-catalog");
+const {
+  TRADEFOTO_ARTICLE_IMPORT_FORMAT,
+  TRADEFOTO_ARTICLE_IMPORT_MAX_BYTES,
+  TRADEFOTO_ARTICLE_IMPORT_MAX_ROWS,
+  TRADEFOTO_ARTICLE_IMPORT_MAX_WORK_UNITS,
+  TRADEFOTO_ARTICLE_IMPORT_MIME_TYPE,
+  TRADEFOTO_ARTICLE_SOURCE_PROFILE_VERSION,
+  TRADEFOTO_ARTICLE_SOURCE_SCHEMA_SHA256,
+  TRADEFOTO_ARTICLE_SOURCE_SYSTEM,
+  TradeFotoArticleImportError,
+  decodeTradeFotoArticleImportBuffer,
+  inspectTradeFotoArticleImportPayload,
+} = require("./lib/tradefoto-article-import");
 const {
   LoanWorkflowError,
   MAX_LOAN_ITEMS,
@@ -787,6 +815,15 @@ const integrationCache = new IntegrationCache({
   maxEntryBytes: 16 * 1024 * 1024,
   maxBytes: 64 * 1024 * 1024,
 });
+const salesArticleImportCache = new IntegrationCache({
+  ttlMs: 15 * 60 * 1000,
+  maxEntries: 8,
+  maxEntriesPerActor: 2,
+  maxEntryBytes: 48 * 1024 * 1024,
+  maxBytes: 96 * 1024 * 1024,
+});
+const SALES_ARTICLE_IMPORT_SNAPSHOT_MAX_BYTES = 128 * 1024 * 1024;
+let salesArticleImportHeavyOperation = null;
 
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
@@ -819,6 +856,12 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", description: "Öffnet den geschützten CRM-Arbeitsbereich und gewährt allein noch keinen Zugriff auf Kundendaten.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", description: "Sucht und liest Kundendaten ausschließlich im CRM-Arbeitsbereich.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: CRM_PERMISSIONS.CUSTOMERS_WRITE, label: "Kundenkartei bearbeiten", description: "Legt Kundenkarten an und bearbeitet Stammdaten, eigene Textfelder sowie Kundenfotos.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.ACCESS, label: "Artikelstamm öffnen", description: "Öffnet ausschließlich den geschützten Artikelstamm-Arbeitsbereich und gewährt allein noch keinen Zugriff auf Artikeldaten.", group: "Verkaufsverwaltung", warningLevel: "high", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.READ, label: "Artikelstamm lesen", description: "Sucht und liest freigegebene Stammdaten, Kennungen und die Änderungshistorie des zentralen Artikelstamms; Preise und Kosten bleiben getrennt geschützt.", group: "Verkaufsverwaltung", warningLevel: "high", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.PRICES_READ, label: "Verkaufspreise im Artikelstamm lesen", description: "Liest freigegebene Verkaufs-, Listen- und Internetpreise; Einkaufs- und Kalkulationswerte bleiben getrennt geschützt.", group: "Verkaufsverwaltung", warningLevel: "high", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.COSTS_READ, label: "Einkaufs- und Kalkulationspreise im Artikelstamm lesen", description: "Liest wirtschaftlich sensible Einkaufs-, Einstands- und Kalkulationswerte im zentralen Artikelstamm.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE, label: "Artikelstamm bearbeiten", description: "Legt Artikel manuell an, bearbeitet oder kopiert sie und archiviert sie revisionssicher; das Importrecht bleibt getrennt.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT, label: "Artikelstamm importieren", description: "Eigenständiges kritisches Fachrecht für kontrollierte Artikelimporte; vermittelt keine manuelle Artikelpflege.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
   { id: "positions:write", label: "Positionskatalog verwalten", description: "Unternehmensweite Positionen anlegen, bearbeiten und revisionssicher archivieren; Positionen selbst vergeben keine Benutzerrechte.", group: "Personalverwaltung", warningLevel: "high", hrDelegable: true },
   { id: "locations:operational:write", label: "Eigenen Standort betrieblich pflegen", description: "Öffnungszeiten und Mindestbesetzung ausschließlich in zugewiesenen Standorten bearbeiten; keine Neuanlage, Deaktivierung, Kostenstellen- oder Zeiterfassungseinstellungen.", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
@@ -1069,6 +1112,11 @@ function portalPermissionRoleRestrictionError(permissions) {
   if (restricted.length && restricted.every((permission) => CRM_PERMISSION_IDS.includes(permission))) {
     return httpError(403, "CRM-Rechte dürfen nur dafür vorgesehenen kaufmännischen Rollen zugewiesen werden.", "CRM_PERMISSION_ROLE_RESTRICTED");
   }
+  if (restricted.length && restricted.every(
+    (permission) => SALES_ARTICLE_CATALOG_PERMISSION_IDS.includes(permission),
+  )) {
+    return httpError(403, "Artikelstamm-Rechte dürfen nur dafür vorgesehenen kaufmännischen Rollen zugewiesen werden.", "SALES_ARTICLE_CATALOG_PERMISSION_ROLE_RESTRICTED");
+  }
   if (restricted.length && restricted.every((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission))) {
     return httpError(403, "Schulungs- und Wissensrechte dürfen nur den dafür vorgesehenen persönlichen Fachrollen zugewiesen werden.", "PERSONNEL_LEARNING_PERMISSION_ROLE_RESTRICTED");
   }
@@ -1127,6 +1175,16 @@ function assertPortalPermissionDependencies(permissions) {
     throw httpError(
       400,
       "CRM-Rechte können nur zusammen mit ihren erforderlichen Basisrechten vergeben werden.",
+      "PORTAL_PERMISSION_DEPENDENCY",
+    );
+  }
+  const salesArticleCatalogDependencies = resolveSalesArticleCatalogPermissionDependencies(
+    [...projected],
+  );
+  if (!salesArticleCatalogDependencies.valid) {
+    throw httpError(
+      400,
+      "Artikelstamm-Rechte können nur zusammen mit den erforderlichen Zugangs- und Leserechten vergeben werden.",
       "PORTAL_PERMISSION_DEPENDENCY",
     );
   }
@@ -1384,6 +1442,12 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: CRM_PERMISSIONS.CUSTOMERS_WRITE, label: "Kundenkartei bearbeiten", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.ACCESS, label: "Artikelstamm öffnen", group: "Verkaufsverwaltung", warningLevel: "high", scopeBehavior: "global" },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.READ, label: "Artikelstamm lesen", group: "Verkaufsverwaltung", warningLevel: "high", scopeBehavior: "global" },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.PRICES_READ, label: "Verkaufspreise im Artikelstamm lesen", group: "Verkaufsverwaltung", warningLevel: "high", scopeBehavior: "global" },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.COSTS_READ, label: "Einkaufs- und Kalkulationspreise im Artikelstamm lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE, label: "Artikelstamm bearbeiten", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
+  { id: SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT, label: "Artikelstamm importieren", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: "wifi:settings", label: "WLAN-Zeitvorschläge verwalten", group: "Zeit & Abwesenheit", scopeBehavior: "global" },
   { id: "users:write", label: "Portal-Zugänge verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
   { id: "roles:read", label: "App-Rollen lesen", group: "Zugänge & Rechte", scopeBehavior: "global" },
@@ -1402,6 +1466,7 @@ const portalGlobalPermissionIds = new Set([
   "positions:write", "hr:approve", "hr:settings", "sickness:settings",
   "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
   ...CRM_PERMISSION_IDS,
+  ...SALES_ARTICLE_CATALOG_PERMISSION_IDS,
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
   "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
@@ -5616,6 +5681,8 @@ function enforceAdminApiAccess(request, _response, next) {
     const timeRecordStatementsRoute = /^\/time-record-statements(?:\/|$)/.test(request.path);
     const personnelDirectoryRoute = /^\/personnel-directory(?:\/|$)/.test(request.path);
     const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
+    const salesArticleCatalogRoute = /^\/sales\/articles(?:\/|$)/.test(request.path);
+    const salesArticleImportRoute = /^\/sales\/articles\/import(?:\/|$)/.test(request.path);
     const costCenterRoute = /^\/cost-center(?:s|-types)(?:\/|$)/.test(request.path);
     const offsiteFolderRoute = /^\/backup\/offsite-folders(?:\/|$)/.test(request.path);
     const approvedVacationMutationRoute = !["GET", "HEAD", "OPTIONS"].includes(method)
@@ -5671,7 +5738,13 @@ function enforceAdminApiAccess(request, _response, next) {
       request.portalSession = session;
       return next();
     }
-    if (offsiteFolderRoute) {
+    if (salesArticleCatalogRoute) {
+      permission = salesArticleImportRoute
+        ? SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT
+        : ["GET", "HEAD", "OPTIONS"].includes(method)
+          ? SALES_ARTICLE_CATALOG_PERMISSIONS.READ
+          : SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE;
+    } else if (offsiteFolderRoute) {
       permission = "system:offsite:configure";
     } else if (privacyGovernanceRoute) {
       if (/^\/privacy-governance\/retention(?:\/|$)/.test(request.path)) {
@@ -35902,6 +35975,1052 @@ app.put("/api/portal/v1/ui-preferences", async (request, response) => {
   response.json(await saveUiPreferencesForActor(actor, request.body || {}));
 });
 
+function setSalesArticleCatalogPrivateHeaders(response) {
+  response.set({
+    "Cache-Control": "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    "X-Content-Type-Options": "nosniff",
+  });
+}
+
+function salesArticleCatalogSession(request, permission) {
+  const session = requirePortalAnyPermissionOrLocal(request, [permission]);
+  if (isLocalSystemSession(session)) return session;
+  if (session.sessionKind === "organization" || session.isEmployee === false) {
+    throw httpError(
+      403,
+      "Diese Funktion ist ausschließlich für persönliche Mitarbeiterzugänge verfügbar.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
+  const projection = buildSalesArticleCatalogProjection(session);
+  const allowed = ({
+    [SALES_ARTICLE_CATALOG_PERMISSIONS.ACCESS]: projection.workspace,
+    [SALES_ARTICLE_CATALOG_PERMISSIONS.READ]: projection.read,
+    [SALES_ARTICLE_CATALOG_PERMISSIONS.PRICES_READ]: projection.pricesRead,
+    [SALES_ARTICLE_CATALOG_PERMISSIONS.COSTS_READ]: projection.costsRead,
+    [SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE]: projection.write,
+    [SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT]: projection.import,
+  })[permission] === true;
+  if (!allowed) {
+    throw httpError(
+      403,
+      "Für diese Artikelstamm-Aktion fehlt die Berechtigung.",
+      permission === SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT
+        ? "SALES_ARTICLE_IMPORT_DENIED"
+        : "SALES_ARTICLE_CATALOG_PERMISSION_DENIED",
+    );
+  }
+  return session;
+}
+
+function salesArticleCatalogProjectionForSession(session) {
+  if (isLocalSystemSession(session)) {
+    return Object.freeze({
+      workspace: true,
+      read: true,
+      pricesRead: true,
+      costsRead: true,
+      write: true,
+      import: true,
+    });
+  }
+  return buildSalesArticleCatalogProjection(session);
+}
+
+function salesArticleImportError(error) {
+  if (error instanceof TradeFotoArticleImportError) {
+    throw httpError(error.status, error.message, error.code);
+  }
+  if (error instanceof SalesArticleCatalogError) {
+    throw httpError(
+      422,
+      "Die normalisierten TradeFoto-Artikeldaten sind widersprüchlich.",
+      "SALES_ARTICLE_IMPORT_ROW_INVALID",
+    );
+  }
+  if (error instanceof IntegrationCacheError) {
+    throw httpError(
+      error.status,
+      error.message,
+      error.code === "INTEGRATION_SESSION_EXPIRED"
+        ? "SALES_ARTICLE_IMPORT_PREVIEW_EXPIRED"
+        : "SALES_ARTICLE_IMPORT_PREVIEW_LIMIT",
+    );
+  }
+  if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)) {
+    throw httpError(
+      409,
+      "Der Artikelstamm wurde seit der Vorschau verändert. Bitte die Datei erneut prüfen.",
+      "SALES_ARTICLE_IMPORT_PREVIEW_STALE",
+    );
+  }
+  if (error?.code === "PERSISTENCE_STATEMENT_INVALID") {
+    throw httpError(
+      409,
+      "Der gespeicherte Importlauf stimmt nicht mit der bestätigten Vorschau überein.",
+      "SALES_ARTICLE_IMPORT_REPLAY_MISMATCH",
+    );
+  }
+  throw error;
+}
+
+function salesArticleImportSnapshot(prepared, articles) {
+  const contentSha256 = salesArticleImportContentSha256(articles);
+  return {
+    sourceSystem: prepared.sourceSystem,
+    sourceProfileVersion: prepared.sourceProfileVersion,
+    sourceSchemaSha256: prepared.sourceSchemaSha256,
+    sourceFileSha256: prepared.source.fileSha256,
+    contentSha256,
+    snapshotAt: prepared.source.snapshotAt,
+    articles,
+  };
+}
+
+function salesArticleImportFinding(rowNumber, articleNumber, code) {
+  return Object.freeze({
+    rowNumber,
+    articleNumber: articleNumber || null,
+    code,
+    detailSha256: crypto.createHash("sha256").update(JSON.stringify({
+      rowNumber,
+      articleNumber: articleNumber || null,
+      code,
+    })).digest("hex"),
+  });
+}
+
+function safeSalesArticleImportRows(rows) {
+  const priority = { blocked: 0, unchanged: 1, create: 2, update: 3 };
+  return [...rows]
+    .sort((left, right) => (
+      (priority[left.action] ?? 9) - (priority[right.action] ?? 9)
+      || left.rowNumber - right.rowNumber
+    ))
+    .slice(0, 200);
+}
+
+function encodeSalesArticleImportSnapshot(snapshot) {
+  if (!snapshot) return Object.freeze({ gzipBase64: null, jsonSha256: null });
+  const json = JSON.stringify(snapshot);
+  const byteLength = Buffer.byteLength(json, "utf8");
+  if (byteLength > SALES_ARTICLE_IMPORT_SNAPSHOT_MAX_BYTES) {
+    throw new TradeFotoArticleImportError(
+      "Der normalisierte Import ist für die sichere Vorschau zu groß.",
+      "SALES_ARTICLE_IMPORT_NORMALIZED_SIZE_LIMIT",
+      413,
+    );
+  }
+  return Object.freeze({
+    gzipBase64: zlib.gzipSync(json, { level: 9 }).toString("base64"),
+    jsonSha256: crypto.createHash("sha256").update(json).digest("hex"),
+  });
+}
+
+function decodeSalesArticleImportSnapshot(entry) {
+  if (!entry.snapshotGzipBase64 || !entry.snapshotJsonSha256) return null;
+  let json;
+  try {
+    json = zlib.gunzipSync(Buffer.from(entry.snapshotGzipBase64, "base64"), {
+      maxOutputLength: SALES_ARTICLE_IMPORT_SNAPSHOT_MAX_BYTES,
+    }).toString("utf8");
+  } catch {
+    throw httpError(
+      410,
+      "Die Importvorschau ist nicht mehr lesbar. Bitte die Datei erneut prüfen.",
+      "SALES_ARTICLE_IMPORT_PREVIEW_EXPIRED",
+    );
+  }
+  const actualSha256 = crypto.createHash("sha256").update(json).digest("hex");
+  if (actualSha256 !== entry.snapshotJsonSha256) {
+    throw httpError(
+      410,
+      "Die Importvorschau ist nicht mehr gültig. Bitte die Datei erneut prüfen.",
+      "SALES_ARTICLE_IMPORT_PREVIEW_EXPIRED",
+    );
+  }
+  try {
+    return JSON.parse(json);
+  } catch {
+    throw httpError(
+      410,
+      "Die Importvorschau ist nicht mehr gültig. Bitte die Datei erneut prüfen.",
+      "SALES_ARTICLE_IMPORT_PREVIEW_EXPIRED",
+    );
+  }
+}
+
+function exactSalesArticleImportRequest(value, keys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
+}
+
+function matchingSecret(left, right) {
+  const first = Buffer.from(String(left || ""), "utf8");
+  const second = Buffer.from(String(right || ""), "utf8");
+  return first.length === second.length && crypto.timingSafeEqual(first, second);
+}
+
+function salesArticleImportRawBody(request, response, next) {
+  express.raw({
+    type: () => true,
+    limit: TRADEFOTO_ARTICLE_IMPORT_MAX_BYTES,
+  })(request, response, (error) => {
+    if (error?.type === "entity.too.large") {
+      next(httpError(
+        413,
+        "Die Importdatei ist größer als 64 MiB.",
+        "SALES_ARTICLE_IMPORT_FILE_SIZE_INVALID",
+      ));
+      return;
+    }
+    next(error);
+  });
+}
+
+function requireSalesArticleImportMutation(request, _response, next) {
+  try {
+    request.salesArticleImportSession = salesArticleCatalogSession(
+      request,
+      SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT,
+    );
+    assertPortalCsrf(request);
+    const contentType = String(request.get("Content-Type") || "")
+      .split(";", 1)[0].trim().toLowerCase();
+    if (contentType !== TRADEFOTO_ARTICLE_IMPORT_MIME_TYPE) {
+      throw httpError(
+        415,
+        "Für diesen Import ist ausschließlich der versionierte TradeFoto-JSON-Dateityp erlaubt.",
+        "SALES_ARTICLE_IMPORT_CONTENT_TYPE_UNSUPPORTED",
+      );
+    }
+    const contentLength = request.get("Content-Length");
+    if (contentLength !== undefined) {
+      const declaredLength = Number(contentLength);
+      if (!Number.isSafeInteger(declaredLength) || declaredLength < 0
+        || declaredLength > TRADEFOTO_ARTICLE_IMPORT_MAX_BYTES) {
+        throw httpError(
+          413,
+          "Die Importdatei ist größer als 64 MiB oder hat eine ungültige Größenangabe.",
+          "SALES_ARTICLE_IMPORT_FILE_SIZE_INVALID",
+        );
+      }
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+function acquireSalesArticleImportHeavyOperation(request, response, session) {
+  if (salesArticleImportHeavyOperation) {
+    response.set("Retry-After", "5");
+    throw httpError(
+      429,
+      "Ein Artikelimport wird bereits verarbeitet. Bitte in wenigen Sekunden erneut versuchen.",
+      "SALES_ARTICLE_IMPORT_BUSY",
+    );
+  }
+  const operationId = crypto.randomUUID();
+  salesArticleImportHeavyOperation = Object.freeze({
+    id: operationId,
+    actor: session?.employeeNumber || "local",
+  });
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    if (salesArticleImportHeavyOperation?.id === operationId) {
+      salesArticleImportHeavyOperation = null;
+    }
+  };
+  response.once("finish", release);
+  response.once("close", release);
+}
+
+function guardSalesArticleImportHeavyOperation(request, response, next) {
+  try {
+    acquireSalesArticleImportHeavyOperation(
+      request,
+      response,
+      request.salesArticleImportSession || request.portalSession,
+    );
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+function requireSalesArticleImportApply(request, response, next) {
+  try {
+    request.salesArticleImportSession = salesArticleCatalogSession(
+      request,
+      SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT,
+    );
+    assertPortalCsrf(request);
+    acquireSalesArticleImportHeavyOperation(
+      request,
+      response,
+      request.salesArticleImportSession,
+    );
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+app.get("/api/sales/articles/import/catalog", (request, response) => {
+  salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT);
+  setSalesArticleCatalogPrivateHeaders(response);
+  response.json({
+    format: TRADEFOTO_ARTICLE_IMPORT_FORMAT,
+    mimeType: TRADEFOTO_ARTICLE_IMPORT_MIME_TYPE,
+    maxBytes: TRADEFOTO_ARTICLE_IMPORT_MAX_BYTES,
+    maxRows: TRADEFOTO_ARTICLE_IMPORT_MAX_ROWS,
+    maxWorkUnits: TRADEFOTO_ARTICLE_IMPORT_MAX_WORK_UNITS,
+    sourceSystem: TRADEFOTO_ARTICLE_SOURCE_SYSTEM,
+    sourceProfileVersion: TRADEFOTO_ARTICLE_SOURCE_PROFILE_VERSION,
+    sourceSchemaSha256: TRADEFOTO_ARTICLE_SOURCE_SCHEMA_SHA256,
+    currency: "EUR",
+  });
+});
+
+app.post(
+  "/api/sales/articles/import/preview",
+  requireSalesArticleImportMutation,
+  guardSalesArticleImportHeavyOperation,
+  salesArticleImportRawBody,
+  async (request, response) => {
+    const session = request.salesArticleImportSession;
+    setSalesArticleCatalogPrivateHeaders(response);
+    try {
+      const contentType = String(request.get("Content-Type") || "")
+        .split(";", 1)[0].trim().toLowerCase();
+      if (contentType !== TRADEFOTO_ARTICLE_IMPORT_MIME_TYPE) {
+        throw new TradeFotoArticleImportError(
+          "Für diesen Import ist ausschließlich der versionierte TradeFoto-JSON-Dateityp erlaubt.",
+          "SALES_ARTICLE_IMPORT_CONTENT_TYPE_UNSUPPORTED",
+          415,
+        );
+      }
+      const declaredLength = Number(request.get("Content-Length") || 0);
+      if (Number.isFinite(declaredLength) && declaredLength > TRADEFOTO_ARTICLE_IMPORT_MAX_BYTES) {
+        throw new TradeFotoArticleImportError(
+          "Die Importdatei ist größer als 64 MiB.",
+          "SALES_ARTICLE_IMPORT_FILE_SIZE_INVALID",
+          413,
+        );
+      }
+      if (!Buffer.isBuffer(request.body)) {
+        throw new TradeFotoArticleImportError(
+          "Die TradeFoto-Importdatei konnte nicht unverändert gelesen werden.",
+          "SALES_ARTICLE_IMPORT_JSON_INVALID",
+        );
+      }
+      let fileName = String(request.get("X-Import-Filename") || "tradefoto-artikel.json");
+      try { fileName = decodeURIComponent(fileName); } catch {}
+      let decodedImport;
+      try {
+        decodedImport = decodeTradeFotoArticleImportBuffer(request.body, { fileName });
+      } finally {
+        request.body = null;
+      }
+      const prepared = inspectTradeFotoArticleImportPayload(decodedImport);
+      let inspectedRows = [];
+      if (prepared.normalizedArticles.length) {
+        inspectedRows = (await salesArticleCatalogRepository.inspectImportSnapshot({
+          snapshot: salesArticleImportSnapshot(prepared, prepared.normalizedArticles),
+        })).rows;
+      }
+
+      const findings = [...prepared.findings];
+      const rows = [];
+      const acceptedArticles = [];
+      let readyIndex = 0;
+      let create = 0;
+      let update = 0;
+      let unchanged = 0;
+      for (const row of prepared.rows) {
+        if (row.action === "blocked") {
+          rows.push(row);
+          continue;
+        }
+        const inspection = inspectedRows[readyIndex];
+        const article = prepared.normalizedArticles[readyIndex];
+        readyIndex += 1;
+        const action = inspection?.action || "blocked";
+        const issueCodes = inspection?.issueCodes || ["preview_state_invalid"];
+        rows.push(Object.freeze({ ...row, action, issueCodes }));
+        if (action === "create" || action === "update") {
+          acceptedArticles.push(article);
+          if (action === "create") create += 1;
+          else update += 1;
+        } else if (action === "unchanged") {
+          unchanged += 1;
+        } else {
+          for (const code of issueCodes) {
+            if (findings.length >= 100000) {
+              throw new TradeFotoArticleImportError(
+                "Die Importdatei erzeugt mehr als 100.000 einzelne Prüfhinweise.",
+                "SALES_ARTICLE_IMPORT_FINDING_LIMIT",
+                413,
+              );
+            }
+            findings.push(salesArticleImportFinding(row.rowNumber, row.articleNumber, code));
+          }
+        }
+      }
+
+      const snapshot = salesArticleImportSnapshot(prepared, acceptedArticles);
+      const finalInspection = await salesArticleCatalogRepository.inspectImportSnapshot({ snapshot });
+      const stateSha256 = finalInspection.stateSha256;
+      if (acceptedArticles.length) {
+        if (finalInspection.rows.some(({ action }) => !["create", "update"].includes(action))) {
+          throw httpError(
+            409,
+            "Der Artikelstamm wurde während der Vorschau verändert. Bitte erneut prüfen.",
+            "SALES_ARTICLE_IMPORT_PREVIEW_STALE",
+          );
+        }
+      }
+      const quarantined = rows.filter(({ action }) => action === "blocked").length;
+      const summary = Object.freeze({
+        total: rows.length,
+        create,
+        update,
+        unchanged,
+        blocked: quarantined,
+        identifierCount: acceptedArticles.reduce(
+          (sum, article) => sum + article.identifiers.length,
+          0,
+        ),
+        priceCount: acceptedArticles.reduce((sum, article) => sum + article.prices.length, 0),
+      });
+      const encoded = encodeSalesArticleImportSnapshot(snapshot);
+      const confirmationFingerprint = crypto.createHash("sha256").update(JSON.stringify({
+        sourceFileSha256: prepared.source.fileSha256,
+        contentSha256: snapshot.contentSha256,
+        stateSha256,
+        findingCount: findings.length,
+        nonce: crypto.randomBytes(32).toString("hex"),
+      })).digest("hex");
+      salesArticleImportCache.deleteKind(session.employeeNumber, "sales-article-import-preview");
+      const previewSession = salesArticleImportCache.create(
+        session.employeeNumber,
+        "sales-article-import-preview",
+        Object.freeze({
+          snapshotGzipBase64: encoded.gzipBase64,
+          snapshotJsonSha256: encoded.jsonSha256,
+          stateSha256,
+          findings: Object.freeze(findings),
+          confirmationFingerprint,
+          summary,
+          source: prepared.source,
+        }),
+      );
+      response.status(201).json({
+        previewId: previewSession.id,
+        expiresAt: previewSession.expiresAt,
+        confirmationFingerprint,
+        source: prepared.source,
+        summary,
+        rows: safeSalesArticleImportRows(rows),
+        truncated: rows.length > 200,
+        canApply: acceptedArticles.length > 0 || (quarantined > 0 && findings.length > 0),
+      });
+    } catch (error) {
+      salesArticleImportError(error);
+    }
+  },
+);
+
+app.post(
+  "/api/sales/articles/import/apply",
+  requireSalesArticleImportApply,
+  async (request, response) => {
+  const session = request.salesArticleImportSession;
+  setSalesArticleCatalogPrivateHeaders(response);
+  try {
+    if (!exactSalesArticleImportRequest(request.body, ["previewId", "confirmationFingerprint"])
+      || typeof request.body.previewId !== "string"
+      || typeof request.body.confirmationFingerprint !== "string") {
+      throw httpError(
+        400,
+        "Die Importbestätigung ist unvollständig oder enthält unbekannte Felder.",
+        "SALES_ARTICLE_IMPORT_REQUEST_INVALID",
+      );
+    }
+    const entry = salesArticleImportCache.get(
+      request.body.previewId,
+      session.employeeNumber,
+      "sales-article-import-preview",
+    );
+    if (!matchingSecret(
+      request.body.confirmationFingerprint,
+      entry.value.confirmationFingerprint,
+    )) {
+      throw httpError(
+        409,
+        "Die Importbestätigung passt nicht zur geprüften Vorschau.",
+        "SALES_ARTICLE_IMPORT_CONFIRMATION_INVALID",
+      );
+    }
+    const snapshot = decodeSalesArticleImportSnapshot(entry.value);
+    if (!snapshot || (entry.value.summary.create + entry.value.summary.update < 1
+      && (entry.value.summary.blocked < 1 || entry.value.findings.length < 1))) {
+      throw httpError(
+        422,
+        "Die Vorschau enthält keine sicher übernehmbaren Artikel.",
+        "SALES_ARTICLE_IMPORT_NO_SAFE_ROWS",
+      );
+    }
+    const createdAt = new Date().toISOString();
+    const outcome = await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const liveActor = await livePersonnelLearningRoleAdministrationActor(
+        session,
+        repositories.organizationPersonnel,
+      );
+      if (!salesArticleCatalogProjectionForSession(liveActor).import) {
+        throw httpError(
+          403,
+          "Das Importrecht ist nicht mehr wirksam.",
+          "SALES_ARTICLE_IMPORT_DENIED",
+        );
+      }
+      const result = await repositories.salesArticleCatalog.importSnapshot({
+        snapshot,
+        actor: liveActor.employeeNumber || "local",
+        timestamp: createdAt,
+        expectedStateSha256: entry.value.stateSha256,
+        findings: entry.value.findings,
+        runSummary: {
+          total: entry.value.summary.total,
+          safe: entry.value.summary.create + entry.value.summary.update,
+          create: entry.value.summary.create,
+          update: entry.value.summary.update,
+          unchanged: entry.value.summary.unchanged,
+          quarantined: entry.value.summary.blocked,
+        },
+      });
+      let receipt = null;
+      if (!result.replayed
+        && entry.value.summary.create + entry.value.summary.update > 0
+        && liveActor?.sessionKind === "employee"
+        && liveActor?.isEmployee === true
+        && liveActor.employeeNumber) {
+        receipt = await repositories.personalActionLog.record({
+          actorId: liveActor.employeeNumber,
+          actionType: "sales.article-catalog.import",
+          entityType: "sales_article_import_snapshot",
+          entityId: result.snapshot.id,
+          scope: `TradeFoto · ${entry.value.summary.total} geprüft · ${entry.value.summary.create + entry.value.summary.update} übernommen`,
+          summary: "TradeFoto-Artikelimport übernommen",
+          compensatorKey: "sales.article-catalog.import.restore.v1",
+          undoPayload: { snapshotId: result.snapshot.id },
+          resultRevision: null,
+          resultFingerprint: result.impactSha256,
+          sourceAuditId: result.auditId,
+          undoExpiresAt: new Date(
+            new Date(createdAt).getTime() + PERSONAL_ACTION_UNDO_WINDOW_MS,
+          ).toISOString(),
+          compensatesActionId: null,
+          createdAt,
+        });
+      }
+      return { result, receipt };
+    }, { isolation: "serializable" });
+    salesArticleImportCache.delete(entry.id, session.employeeNumber);
+    response.status(201).json({
+      ok: true,
+      replayed: outcome.result.replayed === true,
+      snapshotId: outcome.result.snapshot.id,
+      personalActionId: outcome.receipt
+        ? `${PERSONAL_ACTION_PUBLIC_RECEIPT_PREFIX}${outcome.receipt.id}`
+        : null,
+      summary: entry.value.summary,
+    });
+  } catch (error) {
+    salesArticleImportError(error);
+  }
+  },
+);
+
+app.delete("/api/sales/articles/import/previews/:id", (request, response) => {
+  const session = salesArticleCatalogSession(
+    request,
+    SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT,
+  );
+  assertPortalCsrf(request);
+  setSalesArticleCatalogPrivateHeaders(response);
+  salesArticleImportCache.delete(request.params.id, session.employeeNumber);
+  response.status(204).end();
+});
+
+app.get("/api/sales/articles", async (request, response) => {
+  salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  setSalesArticleCatalogPrivateHeaders(response);
+  try {
+    const allowedQueryKeys = new Set([
+      "query", "identifier", "status", "sourceSystem", "sort", "direction", "limit", "offset",
+    ]);
+    if (Object.keys(request.query || {}).some((key) => !allowedQueryKeys.has(key))) {
+      throw new SalesArticleCatalogError(
+        "Die Suchparameter enthalten unbekannte Felder.",
+        "SALES_ARTICLE_SEARCH_INVALID",
+      );
+    }
+    const search = normalizeSalesArticleSearch({
+      query: request.query?.query,
+      identifier: request.query?.identifier,
+      status: request.query?.status,
+      sourceSystem: request.query?.sourceSystem,
+      sort: request.query?.sort,
+      direction: request.query?.direction,
+      limit: request.query?.limit,
+      offset: request.query?.offset,
+    });
+    response.json(await salesArticleCatalogRepository.search({
+      query: search.query,
+      identifier: search.identifier,
+      status: search.status,
+      sourceSystem: search.sourceSystem,
+      sort: search.sort,
+      direction: search.direction,
+      limit: search.limit,
+      offset: search.offset,
+    }));
+  } catch (error) {
+    if (error instanceof SalesArticleCatalogError) {
+      throw httpError(400, error.message, error.code);
+    }
+    throw error;
+  }
+});
+
+const SALES_ARTICLE_USABLE_PRICE_QUALITY_STATUSES = new Set(["confirmed", "inferred"]);
+const SALES_ARTICLE_PRICE_DISPLAY_LABELS_BY_SOURCE_FIELD = new Map([
+  ["UPE", "UVP"],
+  ["Verkaufspreis", "Verkaufspreis"],
+  ["Großhandelspreis", "Großhandelspreis"],
+  ["Internet_VK", "Internetpreis 1"],
+  ["ZukunftsUVP", "Künftige UVP"],
+  ["InternetVK2", "Internetpreis 2"],
+  ["InternetVKN2", "Internetpreis 2"],
+  ["InternetVK3", "Internetpreis 3"],
+  ["InternetVKN3", "Internetpreis 3"],
+  ["InternetVK4", "Internetpreis 4"],
+  ["InternetVKN4", "Internetpreis 4"],
+  ["InternetVK5", "Internetpreis 5"],
+  ["InternetVKN5", "Internetpreis 5"],
+  ["eNvk", "Verkaufspreis"],
+  ["Invk", "Internetpreis 1"],
+  ["GNVK", "Großhandelspreis"],
+  ["DurchschnittEK", "Durchschnittlicher EK"],
+  ["Listeneckpreis", "Listen-EK"],
+  ["Rechnungspreis", "Rechnungs-EK"],
+  ["NNPreis", "Netto-Netto-EK"],
+  ["SonderPreis", "Sonder-EK"],
+  ["EKBestell", "Bestell-EK"],
+  ["ListeneckpreisZu", "Künftiger Listen-EK"],
+  ["RechnungspreisZu", "Künftiger Rechnungs-EK"],
+  ["NNPreisZu", "Künftiger Netto-Netto-EK"],
+  ["SonderPreisZu", "Künftiger Sonder-EK"],
+  ["ZDEK", "ZDEK"],
+  ["DEK_A", "DEK A"],
+  ["Pfand", "Pfand"],
+  ["EuroEk", "Euro-EK (Altfeld)"],
+  ["EuroVK", "Euro-VK (Altfeld)"],
+  ["VertragsVK", "Vertrags-VK"],
+  ["RVK", "RVK (Bedeutung ungeklärt)"],
+  ["REVK", "REVK (Bedeutung ungeklärt)"],
+  ["VWien", "Wien-VK (Bedeutung ungeklärt)"],
+]);
+
+function salesArticlePriceDisplayLabel(price) {
+  return SALES_ARTICLE_PRICE_DISPLAY_LABELS_BY_SOURCE_FIELD.get(
+    String(price?.sourceField || ""),
+  ) || null;
+}
+
+function projectSalesArticleIdentifiers(article) {
+  const projected = new Map();
+  for (const identifier of article?.identifiers || []) {
+    const observations = Array.isArray(identifier.equivalentIdentifiers)
+      && identifier.equivalentIdentifiers.length
+      ? identifier.equivalentIdentifiers
+      : [identifier];
+    for (const observation of observations) {
+      const identifierType = String(observation.identifierType || "");
+      const identifierValue = String(observation.identifierValue || "");
+      const key = `${identifierType}\0${identifierValue}`;
+      const candidate = {
+        identifierType,
+        identifierValue,
+        isPrimary: observation.isPrimary === true,
+        verifiedAt: observation.verifiedAt || null,
+      };
+      const existing = projected.get(key);
+      if (!existing || (!existing.isPrimary && candidate.isPrimary)) projected.set(key, candidate);
+    }
+  }
+  return [...projected.values()].sort((left, right) => (
+    Number(right.isPrimary) - Number(left.isPrimary)
+    || left.identifierType.localeCompare(right.identifierType)
+    || left.identifierValue.localeCompare(right.identifierValue)
+  ));
+}
+
+function projectSalesArticlePrice(price) {
+  const qualityStatus = String(price?.qualityStatus || "");
+  const usable = SALES_ARTICLE_USABLE_PRICE_QUALITY_STATUSES.has(qualityStatus)
+    && typeof price?.amount === "string";
+  return {
+    priceType: String(price?.priceType || ""),
+    displayLabel: salesArticlePriceDisplayLabel(price),
+    amount: usable ? price.amount : null,
+    currency: String(price?.currency || ""),
+    priceBasis: String(price?.priceBasis || ""),
+    qualityStatus,
+    usable,
+  };
+}
+
+function projectSalesArticleDetail(article, revisions, projection) {
+  const groupedPrices = { prices: [], costs: [] };
+  for (const price of article?.prices || []) {
+    const group = salesArticlePriceGroup(price.priceType);
+    if (group) groupedPrices[group].push(projectSalesArticlePrice(price));
+  }
+  return {
+    article: {
+      articleNumber: article.articleNumber,
+      description: article.description,
+      active: article.active === true,
+      currentRevision: article.currentRevision,
+      identifiers: projectSalesArticleIdentifiers(article),
+      provenance: {
+        originSourceSystem: article.sourceSystem,
+        currentSourceSystem: article.currentSourceSystem,
+        sourceUpdatedAt: article.sourceUpdatedAt || null,
+        createdAt: article.createdAt,
+        updatedAt: article.updatedAt,
+      },
+      prices: {
+        sales: projection.pricesRead ? groupedPrices.prices : null,
+        costs: projection.costsRead ? groupedPrices.costs : null,
+      },
+    },
+    revisions: (revisions || []).map((revision) => ({
+      revision: revision.revision,
+      articleNumber: revision.articleNumber,
+      description: revision.description,
+      active: revision.active === true,
+      sourceUpdatedAt: revision.sourceUpdatedAt || null,
+      createdAt: revision.createdAt,
+    })),
+    capabilities: {
+      pricesRead: projection.pricesRead === true,
+      costsRead: projection.costsRead === true,
+      write: projection.write === true,
+      import: projection.import === true,
+    },
+  };
+}
+
+app.get("/api/sales/articles/detail", async (request, response) => {
+  const session = salesArticleCatalogSession(
+    request,
+    SALES_ARTICLE_CATALOG_PERMISSIONS.READ,
+  );
+  setSalesArticleCatalogPrivateHeaders(response);
+  try {
+    const allowedQueryKeys = new Set(["articleNumber"]);
+    if (Object.keys(request.query || {}).some((key) => !allowedQueryKeys.has(key))) {
+      throw new SalesArticleCatalogError(
+        "Die Detailparameter enthalten unbekannte Felder.",
+        "SALES_ARTICLE_DETAIL_INVALID",
+      );
+    }
+    const articleNumber = normalizeSalesArticleNumber(request.query?.articleNumber);
+    const article = await salesArticleCatalogRepository.getByArticleNumber(articleNumber);
+    if (!article) {
+      throw httpError(404, "Der Artikel wurde nicht gefunden.", "SALES_ARTICLE_NOT_FOUND");
+    }
+    const revisions = await salesArticleCatalogRepository.listRevisions(article.productId);
+    response.json(projectSalesArticleDetail(
+      article,
+      revisions,
+      salesArticleCatalogProjectionForSession(session),
+    ));
+  } catch (error) {
+    if (error instanceof SalesArticleCatalogError) {
+      throw httpError(400, error.message, error.code);
+    }
+    throw error;
+  }
+});
+
+function assertSalesArticleManualPriceGroupAccess(input, projection) {
+  const prices = input?.prices;
+  if (!prices) return;
+  for (const [group, capability] of [
+    ["sales", "pricesRead"],
+    ["costs", "costsRead"],
+  ]) {
+    if (!Object.hasOwn(prices, group)) continue;
+    if (projection[capability] !== true) {
+      throw httpError(
+        403,
+        "Eine nicht freigegebene Preisgruppe darf nicht verändert werden.",
+        "SALES_ARTICLE_PRICE_GROUP_PERMISSION_DENIED",
+      );
+    }
+    if (prices[group].some((price) => {
+      const accessGroup = salesArticlePriceGroup(price.priceType);
+      const payloadGroup = accessGroup === "prices" ? "sales" : accessGroup;
+      return payloadGroup !== group;
+    })) {
+      throw httpError(
+        400,
+        "Eine Preisart wurde der falschen Preisgruppe zugeordnet.",
+        "SALES_ARTICLE_PRICE_GROUP_INVALID",
+      );
+    }
+  }
+}
+
+function salesArticleMutationOutcomeError(outcome) {
+  if (outcome?.outcome === "not_found") {
+    return httpError(404, "Der Artikel wurde nicht gefunden.", "SALES_ARTICLE_NOT_FOUND");
+  }
+  if (outcome?.outcome === "already_archived") {
+    return httpError(
+      409,
+      "Der Artikel ist bereits archiviert.",
+      "SALES_ARTICLE_ALREADY_ARCHIVED",
+    );
+  }
+  return httpError(
+    409,
+    "Der Artikel wurde inzwischen geändert. Bitte den aktuellen Stand neu laden.",
+    "SALES_ARTICLE_REVISION_CONFLICT",
+  );
+}
+
+function salesArticleMutationRouteError(error) {
+  if (error instanceof SalesArticleCatalogError) {
+    throw httpError(400, error.message, error.code);
+  }
+  if (error?.code === "PERSISTENCE_UNIQUE_VIOLATION") {
+    throw httpError(
+      409,
+      "Artikelnummer oder EAN/GTIN ist bereits einem anderen Artikel zugeordnet.",
+      "SALES_ARTICLE_UNIQUE_CONFLICT",
+    );
+  }
+  if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)) {
+    throw httpError(
+      409,
+      "Der Artikel wurde gleichzeitig geändert. Bitte den aktuellen Stand neu laden.",
+      "SALES_ARTICLE_REVISION_CONFLICT",
+    );
+  }
+  if ([
+    "PERSISTENCE_FOREIGN_KEY_VIOLATION",
+    "PERSISTENCE_NOT_NULL_VIOLATION",
+    "PERSISTENCE_CHECK_VIOLATION",
+    "PERSISTENCE_STATEMENT_INVALID",
+  ].includes(error?.code)) {
+    throw httpError(
+      400,
+      "Die Artikeldaten verletzen eine gespeicherte Katalogregel.",
+      "SALES_ARTICLE_MUTATION_INVALID",
+    );
+  }
+  throw error;
+}
+
+function salesArticleImportUndoRouteError(error) {
+  if ([
+    "PERSISTENCE_UNIQUE_VIOLATION",
+    "PERSISTENCE_FOREIGN_KEY_VIOLATION",
+    "PERSISTENCE_CHECK_VIOLATION",
+    "PERSISTENCE_RETRYABLE_TRANSACTION",
+    "PERSISTENCE_BUSY",
+  ].includes(error?.code)) {
+    throw httpError(
+      409,
+      "Der Importlauf kann wegen eines inzwischen geänderten Artikel- oder Identifierstands nicht sicher zurückgenommen werden.",
+      "PERSONAL_ACTION_UNDO_CONFLICT",
+    );
+  }
+  throw error;
+}
+
+async function recordSalesArticlePersonalAction(
+  repositories,
+  session,
+  outcome,
+  { actionType, summary, restoreRevision, createdAt },
+) {
+  if (session?.sessionKind !== "employee" || session?.isEmployee !== true
+    || !session.employeeNumber) return null;
+  return repositories.personalActionLog.record({
+    actorId: session.employeeNumber,
+    actionType,
+    entityType: "sales_article",
+    entityId: outcome.article.productId,
+    scope: `Artikel ${outcome.article.articleNumber}`,
+    summary,
+    compensatorKey: "sales.article-catalog.restore.v1",
+    undoPayload: {
+      productId: outcome.article.productId,
+      restoreRevision,
+    },
+    resultRevision: outcome.revision,
+    resultFingerprint: null,
+    sourceAuditId: outcome.auditId,
+    undoExpiresAt: new Date(
+      new Date(createdAt).getTime() + PERSONAL_ACTION_UNDO_WINDOW_MS,
+    ).toISOString(),
+    compensatesActionId: null,
+    createdAt,
+  });
+}
+
+async function runSalesArticleManualMutation(
+  session,
+  { method, input, actionType, summary, restoreRevision },
+) {
+  const createdAt = new Date().toISOString();
+  const actor = session?.employeeNumber || "local";
+  const mutationId = crypto.randomUUID();
+  return persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const catalog = repositories.salesArticleCatalog;
+    const outcome = await catalog[method]({
+      input,
+      actor,
+      timestamp: createdAt,
+      mutationId,
+    });
+    if (!outcome || !["created", "updated"].includes(outcome.outcome)) {
+      throw salesArticleMutationOutcomeError(outcome);
+    }
+    await recordSalesArticlePersonalAction(repositories, session, outcome, {
+      actionType,
+      summary,
+      restoreRevision: typeof restoreRevision === "function"
+        ? restoreRevision(outcome)
+        : restoreRevision,
+      createdAt,
+    });
+    const revisions = await catalog.listRevisions(outcome.article.productId);
+    return projectSalesArticleDetail(
+      outcome.article,
+      revisions,
+      salesArticleCatalogProjectionForSession(session),
+    );
+  }, { isolation: "serializable" });
+}
+
+app.post("/api/sales/articles", async (request, response) => {
+  const session = salesArticleCatalogSession(
+    request,
+    SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE,
+  );
+  setSalesArticleCatalogPrivateHeaders(response);
+  try {
+    const input = normalizeSalesArticleManualCreate(request.body || {});
+    assertSalesArticleManualPriceGroupAccess(
+      input,
+      salesArticleCatalogProjectionForSession(session),
+    );
+    response.status(201).json(await runSalesArticleManualMutation(session, {
+      method: "createManual",
+      input: request.body || {},
+      actionType: "sales.article-catalog.create",
+      summary: "Artikel angelegt",
+      restoreRevision: null,
+    }));
+  } catch (error) {
+    salesArticleMutationRouteError(error);
+  }
+});
+
+app.put("/api/sales/articles", async (request, response) => {
+  const session = salesArticleCatalogSession(
+    request,
+    SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE,
+  );
+  setSalesArticleCatalogPrivateHeaders(response);
+  try {
+    const input = normalizeSalesArticleManualUpdate(request.body || {});
+    assertSalesArticleManualPriceGroupAccess(
+      input,
+      salesArticleCatalogProjectionForSession(session),
+    );
+    response.json(await runSalesArticleManualMutation(session, {
+      method: "updateManual",
+      input: request.body || {},
+      actionType: "sales.article-catalog.update",
+      summary: "Artikel bearbeitet",
+      restoreRevision: (outcome) => outcome.previousRevision,
+    }));
+  } catch (error) {
+    salesArticleMutationRouteError(error);
+  }
+});
+
+app.post("/api/sales/articles/copy", async (request, response) => {
+  const session = salesArticleCatalogSession(
+    request,
+    SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE,
+  );
+  setSalesArticleCatalogPrivateHeaders(response);
+  try {
+    const input = normalizeSalesArticleManualCopy(request.body || {});
+    assertSalesArticleManualPriceGroupAccess(
+      input,
+      salesArticleCatalogProjectionForSession(session),
+    );
+    response.status(201).json(await runSalesArticleManualMutation(session, {
+      method: "copyManual",
+      input: request.body || {},
+      actionType: "sales.article-catalog.copy",
+      summary: "Artikel kopiert",
+      restoreRevision: null,
+    }));
+  } catch (error) {
+    salesArticleMutationRouteError(error);
+  }
+});
+
+app.post("/api/sales/articles/archive", async (request, response) => {
+  const session = salesArticleCatalogSession(
+    request,
+    SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE,
+  );
+  setSalesArticleCatalogPrivateHeaders(response);
+  try {
+    const input = normalizeSalesArticleManualArchive(request.body || {});
+    response.json(await runSalesArticleManualMutation(session, {
+      method: "archiveManual",
+      input: request.body || {},
+      actionType: "sales.article-catalog.archive",
+      summary: "Artikel archiviert",
+      restoreRevision: (outcome) => outcome.previousRevision,
+    }));
+  } catch (error) {
+    salesArticleMutationRouteError(error);
+  }
+});
+
 function setCrmPrivateHeaders(response) {
   response.set({
     "Cache-Control": "private, no-store, max-age=0",
@@ -41636,15 +42755,66 @@ function normalizedArticleDescription(value, { required = false } = {}) {
   return description;
 }
 
+function loanArticleArchivedError(articleNumber) {
+  return httpError(
+    409,
+    `Der Artikel ${articleNumber} ist archiviert und kann nicht für neue Leihvorgänge verwendet werden.`,
+    "LOAN_ARTICLE_ARCHIVED",
+  );
+}
+
+function loanArticleIdentityConflictError() {
+  return httpError(
+    409,
+    "Artikelnummer und Quellidentität verweisen auf unterschiedliche Artikel.",
+    "LOAN_ARTICLE_IDENTITY_CONFLICT",
+  );
+}
+
 async function saveArticleRecord(article, actorEmployeeNumber, {
   catalogRepository = salesArticleCatalogRepository,
   readRepository = loanModuleRepository,
+  allowArchivedReference = false,
 } = {}) {
   const sourceProvider = ["manual", "shopware_storefront", "import"].includes(article.sourceProvider)
     ? article.sourceProvider
     : "manual";
   const articleNumber = normalizeArticleNumber(article.articleNumber);
-  const current = await catalogRepository.getByArticleNumber(articleNumber);
+  const sourceSystem = sourceProvider === "shopware_storefront"
+    ? "shopware.storefront"
+    : sourceProvider === "import" ? "f18.loan_catalog" : "manual.loan";
+  const sourceArticleKey = String(article.sourceProductNumber || articleNumber).trim();
+  const [byNumber, bySource] = await Promise.all([
+    catalogRepository.getByArticleNumber(articleNumber),
+    catalogRepository.getBySource({ sourceSystem, sourceArticleKey }),
+  ]);
+  if (byNumber && bySource && byNumber.productId !== bySource.productId) {
+    throw loanArticleIdentityConflictError();
+  }
+  const current = byNumber || bySource;
+  if (current && !current.active) {
+    if (allowArchivedReference) {
+      const archived = await readRepository.getArticle({
+        articleNumber: current.articleNumber,
+      });
+      if (archived) return archived;
+    }
+    throw loanArticleArchivedError(current.articleNumber);
+  }
+  if (current?.currentSourceSystem === "manual.article-catalog") {
+    const governed = await readRepository.getArticle({
+      articleNumber: current.articleNumber,
+    });
+    if (!governed) {
+      throw httpError(
+        409,
+        "Der lokal verwaltete Artikel konnte nicht konsistent aufgelöst werden.",
+        "LOAN_ARTICLE_UNRESOLVED",
+      );
+    }
+    return governed;
+  }
+  const effectiveArticleNumber = bySource ? current.articleNumber : articleNumber;
   const incomingIdentifier = article.identifier && article.identifier.type !== "internal"
     ? article.identifier
     : null;
@@ -41687,14 +42857,10 @@ async function saveArticleRecord(article, actorEmployeeNumber, {
     qualityStatus: price.qualityStatus,
     sourceField: price.sourceField,
   }));
-  const sourceSystem = sourceProvider === "shopware_storefront"
-    ? "shopware.storefront"
-    : sourceProvider === "import" ? "f18.loan_catalog" : "manual.loan";
-  const sourceArticleKey = String(article.sourceProductNumber || articleNumber).trim();
   const snapshotAt = article.sourceFetchedAt || new Date().toISOString();
   const importedArticle = {
     sourceArticleKey,
-    articleNumber,
+    articleNumber: effectiveArticleNumber,
     description: normalizedArticleDescription(article.description, { required: true }),
     active: true,
     sourceUpdatedAt: article.sourceFetchedAt || null,
@@ -41732,7 +42898,7 @@ async function saveArticleRecord(article, actorEmployeeNumber, {
     actor: actorEmployeeNumber,
     timestamp: new Date().toISOString(),
   });
-  return readRepository.getArticle({ articleNumber });
+  return readRepository.getArticle({ articleNumber: effectiveArticleNumber });
 }
 
 function articleLookupHttpError(error) {
@@ -42335,6 +43501,7 @@ async function insertF18Migration(inspection, mappings, location, actor, artifac
           }, actor.employeeNumber, {
             catalogRepository: repositories.salesArticleCatalog,
             readRepository: repository,
+            allowArchivedReference: true,
           });
           await repository.insertLoanItem({
             id: crypto.randomUUID(),
@@ -42451,6 +43618,9 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
   }
   const setting = await enabledLoanLocationForSession(actor, request.body || {});
   let existing = await articleRowByIdentifier(identifier);
+  if (existing && !existing.active) {
+    throw loanArticleArchivedError(existing.article_number);
+  }
   const manualDescription = normalizedArticleDescription(request.body?.manualDescription);
   let manualArticleNumber = "";
   if (identifier.type !== "internal" && request.body?.manualArticleNumber) {
@@ -45332,6 +46502,13 @@ const PERSONAL_ACTION_EXACT_LABELS = Object.freeze({
   "personnel-lifecycle.team-evaluation.pdf": "Bewerbungsbewertung als PDF exportiert",
   "sales.analytics.preferences.update": "Verkaufsanalyse-Einstellungen geändert",
   "sales.report.charts.export": "Verkaufsanalyse als PDF exportiert",
+  "sales.article-catalog.create": "Artikel angelegt",
+  "sales.article-catalog.update": "Artikel bearbeitet",
+  "sales.article-catalog.copy": "Artikel kopiert",
+  "sales.article-catalog.archive": "Artikel archiviert",
+  "sales.article-catalog.import": "TradeFoto-Artikelimport übernommen",
+  "sales.article-catalog.import.undo": "TradeFoto-Artikelimport rückgängig gemacht",
+  "sales.article-catalog.undo": "Artikeländerung rückgängig gemacht",
   "schedule.manual-lock.lock": "Dienstplan gesperrt",
   "schedule.manual-lock.unlock": "Dienstplansperre aufgehoben",
   "schedule.past-week-preference.update": "Persönliche Dienstplanoption geändert",
@@ -45355,6 +46532,7 @@ function personalActionIsoTimestamp(value) {
 }
 
 function personalActionDomainLabel(action) {
+  if (action.startsWith("sales.article-catalog.")) return "Artikelstamm";
   if (action.startsWith("sales.")) return "Verkaufsanalyse";
   if (action.startsWith("crm.")) return "CRM";
   if (action.startsWith("schedule.")) return "Dienstplanung";
@@ -45530,6 +46708,41 @@ async function personalActionReceiptPresentation(session, row, now = new Date())
         } else {
           available = true;
           undoLabel = "Sperrstatus wiederherstellen";
+          reason = "";
+        }
+      }
+    } else if (row.compensatorKey === "sales.article-catalog.import.restore.v1") {
+      const internal = await personalActionLogRepository.getOwn(session.employeeNumber, row.id);
+      const projection = buildSalesArticleCatalogProjection(session);
+      if (!projection.import) {
+        reason = "Das aktuell wirksame Artikelimportrecht fehlt.";
+      } else {
+        const status = await salesArticleCatalogRepository.inspectImportUndo({
+          snapshotId: internal.undoPayload.snapshotId,
+        });
+        if (status.outcome !== "found"
+          || status.impactSha256 !== internal.resultFingerprint
+          || !status.canUndo) {
+          reason = "Mindestens ein Artikel des Importlaufs wurde inzwischen erneut geändert.";
+        } else {
+          available = true;
+          undoLabel = "Artikelimport zurücknehmen";
+          reason = "";
+        }
+      }
+    } else if (row.compensatorKey === "sales.article-catalog.restore.v1") {
+      const internal = await personalActionLogRepository.getOwn(session.employeeNumber, row.id);
+      const productId = String(internal?.undoPayload?.productId || "");
+      const projection = buildSalesArticleCatalogProjection(session);
+      if (!projection.write) {
+        reason = "Das aktuell wirksame Artikelstammrecht fehlt.";
+      } else {
+        const current = await salesArticleCatalogRepository.getByProductId(productId);
+        if (!current || current.currentRevision !== Number(internal?.resultRevision || 0)) {
+          reason = "Der Artikel wurde inzwischen erneut geändert.";
+        } else {
+          available = true;
+          undoLabel = "Artikeländerung zurücknehmen";
           reason = "";
         }
       }
@@ -45795,32 +47008,299 @@ async function undoPersonalScheduleLockAction(session, sourceId) {
   }
 }
 
+async function undoPersonalSalesArticleAction(session, sourceId) {
+  try {
+    return await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const personalActions = repositories.personalActionLog;
+      const catalog = repositories.salesArticleCatalog;
+      const source = await personalActions.getOwn(session.employeeNumber, sourceId);
+      if (!source || source.compensatorKey !== "sales.article-catalog.restore.v1") {
+        throw httpError(404, "Die persönliche Aktion wurde nicht gefunden.", "PERSONAL_ACTION_NOT_FOUND");
+      }
+      const liveSession = await livePersonnelLearningRoleAdministrationActor(
+        session,
+        repositories.organizationPersonnel,
+      );
+      if (liveSession?.mustChangePassword) {
+        throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+      }
+      if (!buildSalesArticleCatalogProjection(liveSession).write) {
+        throw httpError(
+          403,
+          "Für diese Gegenaktion fehlt das aktuell wirksame Artikelstammrecht.",
+          "PERSONAL_ACTION_UNDO_PERMISSION_DENIED",
+        );
+      }
+      const existingCompensation = await personalActions.findCompensation(
+        session.employeeNumber,
+        source.id,
+      );
+      if (existingCompensation) {
+        return {
+          alreadyUndone: true,
+          article: await catalog.getByProductId(source.undoPayload.productId),
+          liveSession,
+        };
+      }
+      const now = new Date();
+      if (!source.undoExpiresAt || new Date(source.undoExpiresAt).getTime() <= now.getTime()) {
+        throw httpError(409, "Die Rückgängig-Frist für diese Aktion ist abgelaufen.", "PERSONAL_ACTION_UNDO_EXPIRED");
+      }
+      const current = await catalog.getByProductId(source.undoPayload.productId);
+      const expectedRevision = Number(source.resultRevision || 0);
+      if (!current || !expectedRevision || current.currentRevision !== expectedRevision) {
+        throw httpError(
+          409,
+          "Der Artikel wurde inzwischen erneut geändert und kann deshalb nicht sicher wiederhergestellt werden.",
+          "PERSONAL_ACTION_UNDO_CONFLICT",
+        );
+      }
+      const createdAt = now.toISOString();
+      const outcome = await catalog.restoreManual({
+        productId: source.undoPayload.productId,
+        expectedRevision,
+        restoreRevision: source.undoPayload.restoreRevision,
+        actor: session.employeeNumber,
+        timestamp: createdAt,
+        mutationId: crypto.randomUUID(),
+      });
+      if (!outcome || outcome.outcome !== "updated") {
+        throw salesArticleMutationOutcomeError(outcome);
+      }
+      const compensation = await personalActions.record({
+        actorId: session.employeeNumber,
+        actionType: "personal.action.undo",
+        entityType: "sales_article",
+        entityId: source.entityId,
+        scope: source.scope,
+        summary: "Artikeländerung rückgängig gemacht",
+        compensatorKey: null,
+        undoPayload: null,
+        resultRevision: null,
+        resultFingerprint: null,
+        sourceAuditId: outcome.auditId,
+        undoExpiresAt: null,
+        compensatesActionId: source.id,
+        createdAt,
+      });
+      return {
+        alreadyUndone: false,
+        article: outcome.article,
+        compensation,
+        liveSession,
+      };
+    }, { isolation: "serializable" });
+  } catch (error) {
+    if (isUniquePersistenceViolation(error)) {
+      const compensation = await personalActionLogRepository.findCompensation(
+        session.employeeNumber,
+        sourceId,
+      );
+      if (compensation) {
+        const source = await personalActionLogRepository.getOwn(
+          session.employeeNumber,
+          sourceId,
+        );
+        return {
+          alreadyUndone: true,
+          article: await salesArticleCatalogRepository.getByProductId(
+            source.undoPayload.productId,
+          ),
+          compensation,
+          liveSession: await livePersonnelLearningRoleAdministrationActor(session),
+        };
+      }
+    }
+    throw error;
+  }
+}
+
+async function undoPersonalSalesArticleImportAction(session, sourceId) {
+  try {
+    return await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const personalActions = repositories.personalActionLog;
+      const catalog = repositories.salesArticleCatalog;
+      const source = await personalActions.getOwn(session.employeeNumber, sourceId);
+      if (!source
+        || source.compensatorKey !== "sales.article-catalog.import.restore.v1") {
+        throw httpError(404, "Die persönliche Aktion wurde nicht gefunden.", "PERSONAL_ACTION_NOT_FOUND");
+      }
+      const liveSession = await livePersonnelLearningRoleAdministrationActor(
+        session,
+        repositories.organizationPersonnel,
+      );
+      if (liveSession?.mustChangePassword) {
+        throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+      }
+      if (!buildSalesArticleCatalogProjection(liveSession).import) {
+        throw httpError(
+          403,
+          "Für diese Gegenaktion fehlt das aktuell wirksame Artikelimportrecht.",
+          "PERSONAL_ACTION_UNDO_PERMISSION_DENIED",
+        );
+      }
+      const existingCompensation = await personalActions.findCompensation(
+        session.employeeNumber,
+        source.id,
+      );
+      if (existingCompensation) {
+        return {
+          alreadyUndone: true,
+          snapshotId: source.undoPayload.snapshotId,
+          articleCount: 0,
+        };
+      }
+      const now = new Date();
+      if (!source.undoExpiresAt || new Date(source.undoExpiresAt).getTime() <= now.getTime()) {
+        throw httpError(409, "Die Rückgängig-Frist für diesen Import ist abgelaufen.", "PERSONAL_ACTION_UNDO_EXPIRED");
+      }
+      const status = await catalog.inspectImportUndo({
+        snapshotId: source.undoPayload.snapshotId,
+      });
+      if (status.outcome !== "found"
+        || status.impactSha256 !== source.resultFingerprint
+        || !status.canUndo) {
+        throw httpError(
+          409,
+          "Mindestens ein Artikel des Importlaufs wurde inzwischen erneut geändert.",
+          "PERSONAL_ACTION_UNDO_CONFLICT",
+        );
+      }
+      const createdAt = now.toISOString();
+      const outcome = await catalog.undoImport({
+        snapshotId: source.undoPayload.snapshotId,
+        expectedImpactSha256: source.resultFingerprint,
+        actor: session.employeeNumber,
+        timestamp: createdAt,
+        undoId: source.id,
+      });
+      if (!outcome || outcome.outcome !== "updated") {
+        throw httpError(
+          outcome?.outcome === "not_found" ? 404 : 409,
+          outcome?.outcome === "not_found"
+            ? "Der bestätigte Importlauf wurde nicht gefunden."
+            : "Der Importlauf wurde inzwischen verändert und kann nicht sicher zurückgenommen werden.",
+          outcome?.outcome === "not_found"
+            ? "PERSONAL_ACTION_NOT_FOUND"
+            : "PERSONAL_ACTION_UNDO_CONFLICT",
+        );
+      }
+      const compensation = await personalActions.record({
+        actorId: session.employeeNumber,
+        actionType: "sales.article-catalog.import.undo",
+        entityType: "sales_article_import_snapshot",
+        entityId: source.undoPayload.snapshotId,
+        scope: source.scope,
+        summary: "TradeFoto-Artikelimport rückgängig gemacht",
+        compensatorKey: null,
+        undoPayload: null,
+        resultRevision: null,
+        resultFingerprint: null,
+        sourceAuditId: outcome.auditId,
+        undoExpiresAt: null,
+        compensatesActionId: source.id,
+        createdAt,
+      });
+      return {
+        alreadyUndone: false,
+        snapshotId: outcome.snapshotId,
+        articleCount: outcome.articleCount,
+        compensation,
+      };
+    }, { isolation: "serializable" });
+  } catch (error) {
+    if (isUniquePersistenceViolation(error)) {
+      const compensation = await personalActionLogRepository.findCompensation(
+        session.employeeNumber,
+        sourceId,
+      );
+      if (compensation) {
+        const source = await personalActionLogRepository.getOwn(
+          session.employeeNumber,
+          sourceId,
+        );
+        return {
+          alreadyUndone: true,
+          snapshotId: source.undoPayload.snapshotId,
+          articleCount: 0,
+          compensation,
+        };
+      }
+    }
+    throw error;
+  }
+}
+
 app.post("/api/portal/v1/me/actions/:actionId/undo", async (request, response) => {
-  const session = requireEmployeePortalSession(request, "schedule:write");
+  const session = requireEmployeePortalSession(request);
   assertPortalCsrf(request);
   const sourceId = personalActionReceiptId(request.params.actionId);
   if (!sourceId) {
     throw httpError(404, "Die persönliche Aktion wurde nicht gefunden.", "PERSONAL_ACTION_NOT_FOUND");
   }
   const source = await personalActionLogRepository.getOwn(session.employeeNumber, sourceId);
-  if (!source || source.compensatorKey !== "schedule.manual-lock.restore.v1") {
+  if (!source || ![
+    "schedule.manual-lock.restore.v1",
+    "sales.article-catalog.restore.v1",
+    "sales.article-catalog.import.restore.v1",
+  ].includes(source.compensatorKey)) {
     throw httpError(404, "Die persönliche Aktion wurde nicht gefunden.", "PERSONAL_ACTION_NOT_FOUND");
   }
-  const outcome = await undoPersonalScheduleLockAction(session, sourceId);
-  const row = outcome.row || await organizationPersonnelRepository.getScheduleManualLock(
-    source.undoPayload.locationId,
-    source.undoPayload.weekStart,
-  );
   response.set({ "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache" });
-  response.json({
-    undone: true,
-    alreadyUndone: outcome.alreadyUndone,
-    manualScheduleLock: scheduleManualLockForApi(row, {
-      actor: session,
-      locationId: source.undoPayload.locationId,
-      weekStart: source.undoPayload.weekStart,
-    }),
-  });
+  if (source.compensatorKey === "schedule.manual-lock.restore.v1") {
+    const outcome = await undoPersonalScheduleLockAction(session, sourceId);
+    const row = outcome.row || await organizationPersonnelRepository.getScheduleManualLock(
+      source.undoPayload.locationId,
+      source.undoPayload.weekStart,
+    );
+    response.json({
+      undone: true,
+      alreadyUndone: outcome.alreadyUndone,
+      manualScheduleLock: scheduleManualLockForApi(row, {
+        actor: session,
+        locationId: source.undoPayload.locationId,
+        weekStart: source.undoPayload.weekStart,
+      }),
+    });
+    return;
+  }
+  if (source.compensatorKey === "sales.article-catalog.import.restore.v1") {
+    acquireSalesArticleImportHeavyOperation(request, response, session);
+    try {
+      const outcome = await undoPersonalSalesArticleImportAction(session, sourceId);
+      response.json({
+        undone: true,
+        alreadyUndone: outcome.alreadyUndone,
+        salesArticleImport: {
+          snapshotId: outcome.snapshotId,
+          articleCount: outcome.articleCount,
+        },
+      });
+    } catch (error) {
+      salesArticleImportUndoRouteError(error);
+    }
+    return;
+  }
+  try {
+    const outcome = await undoPersonalSalesArticleAction(session, sourceId);
+    const article = outcome.article;
+    if (!article) {
+      throw httpError(404, "Der Artikel wurde nicht gefunden.", "SALES_ARTICLE_NOT_FOUND");
+    }
+    response.json({
+      undone: true,
+      alreadyUndone: outcome.alreadyUndone,
+      salesArticle: projectSalesArticleDetail(
+        article,
+        await salesArticleCatalogRepository.listRevisions(article.productId),
+        salesArticleCatalogProjectionForSession(outcome.liveSession),
+      ),
+    });
+  } catch (error) {
+    salesArticleMutationRouteError(error);
+  }
 });
 
 function requireCandidateEvaluationPortalSession(request, { csrf = false } = {}) {

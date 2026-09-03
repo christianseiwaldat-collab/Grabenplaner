@@ -508,9 +508,10 @@ weder verworfen noch still interpretiert.
 
 ## 12. Implementierungsstand des Grundgerüsts
 
-Das lokale Grabenplaner-Grundgerüst bildet den derzeit freigegebenen Kern in sieben
-getrennten Tabellen ab: Import-Snapshots, Produkte, unveränderliche Revisionen,
-unveränderliche Quellbindungen, globale GTIN-Eigentümer, validierte Identifier und
+Das lokale Grabenplaner-Grundgerüst bildet den derzeit freigegebenen Kern in zehn
+getrennten Tabellen ab: Import-Snapshots, laufbezogene Befunde und Zählmetadaten,
+Produkte, unveränderliche Revisionen, unveränderliche Importauswirkungen und
+Quellbindungen, globale GTIN-Eigentümer, validierte Identifier sowie
 unveränderliche Preis-Snapshots. `product_id` ist ein anwendungsseitig erzeugter
 UUID-v4-Primärschlüssel; `article_number` bleibt der eindeutige fachliche
 Schlüssel. Dadurch kann eine fachliche Artikelnummer später kontrolliert
@@ -535,6 +536,56 @@ Quellspalten. Neue, fehlende oder typveränderte Felder sowie ein abweichender
 Quellschema-Fingerprint führen fail-closed in die Importprüfung; sie werden nicht
 als scheinbar identischer Snapshot wiederverwendet.
 
+Der kontrollierte Import nimmt ausschließlich das vorbereitete, versionierte
+JSON-Format `grabenplaner.tradefoto.article-catalog.v1` mit dem eigenen MIME-Typ
+entgegen. Ein ACCDB-Extractor, Zugangsdaten oder eine automatische Verbindung zum
+Altsystem sind nicht Bestandteil dieses Stands. Die Extraktion aus einer
+Access-Datei bleibt ein vorgelagerter, ausdrücklich gestarteter Read-only-Schritt;
+erst dessen JSON-Ergebnis darf die Importgrenze passieren.
+
+Vorschau und Übernahme verlangen das getrennte Recht
+`sales:articles:import`; jede Mutation zusätzlich Sessionbindung, Live-Rechte und
+CSRF. Die Datei ist auf 64 MiB, 25.000 Zeilen, 256 Aliase je Artikel und 100.000
+Einzelbefunde begrenzt. Zusätzlich gilt vor der eigentlichen Adaption ein
+Arbeitsbudget von 750.000 Einheiten: `Artikelzeilen × 36 + Aliaszeilen`. Der
+analysierte Bestand liegt mit 18.996 Artikeln und 37.412 Aliaszeilen bei 721.268
+Einheiten. Ein einzelner Schwerlauf ist zulässig; parallele Vorschauen,
+Übernahmen oder Rücknahmen werden mit `429` geschlossen abgewiesen. Der
+normalisierte, komprimiert zwischengespeicherte Snapshot darf entpackt höchstens
+128 MiB umfassen.
+
+Die Vorschau selbst verändert weder Artikeltabellen noch Auditdaten. Sie
+klassifiziert jede Zeile als Anlage, Aktualisierung, unverändert oder Quarantäne.
+Dateiinterne Konflikte bei Quellschlüssel, Artikelnummer oder GTIN sperren alle
+beteiligten Zeilen; andere sichere Zeilen bleiben als exakt bezeichnete Teilmenge
+übernehmbar. Blockierte Zeilen gelangen nie in den Artikelsnapshot. Ein vollständig
+quarantänisierter Lauf kann ausschließlich zur revisionsfesten Protokollierung
+seiner Befunde bestätigt werden und verändert dabei keinen Artikel. Reine
+Hinweisläufe ohne sichere oder blockierte Zeile bleiben geschlossen.
+
+Für die Brutto-/Nettopaare wird der jeweilige TradeFoto-Steuercode verwendet:
+`0 = 0 %`, `1 = 20 %`, `2 = 10 %`, `3 = 19 %`, `4 = 7 %`. Die Prüfung rechnet
+dezimalverlustfrei, rundet kaufmännisch auf Cent und toleriert höchstens einen Cent
+Differenz. Ein unbekannter Steuercode, ein nur einseitig belegtes Paar oder eine
+größere Abweichung quarantänisiert die Zeile und verhindert ihre Aktivierung.
+
+Die bestätigte Übernahme wiederholt Zustands- und Konfliktprüfung innerhalb
+derselben seriellen Transaktion wie Snapshot, Revisionen, Quellbindungen,
+laufbezogene Befunde, Zählmetadaten und Audit. Nur weiterhin sichere Anlagen und
+Aktualisierungen werden aktiv; unveränderte Artikel erzeugen keine Revision.
+Manuell gepflegte oder archivierte aktuelle Stände werden weder überschrieben noch
+reaktiviert. Idempotente Wiederholungen müssen Snapshot, Befunde und Laufmetadaten
+exakt treffen; abweichende Daten unter demselben Schlüssel werden abgewiesen. In
+Vorschau und Audit stehen keine Rohzeilen oder Rohpreise.
+
+Für jede tatsächlich übernommene Teilmenge entsteht ein persönlicher,
+eigentümergebundener Aktionsbeleg. Seine zeitlich begrenzte Rücknahme prüft das
+aktuell wirksame Importrecht und jeden Artikelkopf gegen die unveränderlich
+gespeicherte Importauswirkung. Neuanlagen werden durch eine Gegenrevision
+archiviert, Aktualisierungen durch eine Gegenrevision auf den exakt vorherigen
+Stand zurückgeführt. Import-Snapshots, Quellbindungen, Historie und Befunde werden
+nicht gelöscht; ein veränderter Artikelkopf sperrt die gesamte Rücknahme atomar.
+
 Der bestehende Leihartikelstamm wird beim Cutover unter der nachweisbaren Quelle
 `legacy.loan_articles` in diesen Katalog überführt. Historische Leihpositionen
 referenzieren danach die stabile `product_id`, bewahren aber Artikelnummer,
@@ -554,12 +605,10 @@ Warenwirtschaftsvorgänge; sobald diese Laufzeitpfade entstehen, ist das
 `SalesArticleCatalog`-Repository mit seinen Quellbindungen die verbindliche
 Artikelstammgrenze und keine zweite Artikeltabelle.
 
-Die 18.996 realen Artikel sind mit diesem Arbeitsschritt noch nicht importiert
-oder aktiviert. Vor einem produktiven Gesamtimport sind die laufbezogene
-Persistenz aller Quarantänebefunde sowie die automatisierte Prüfung bestätigter
-Brutto-/Nettopaare als eigenes Import-Gate umzusetzen. Bis dahin liefert der
-TradeFoto-Adapter nur inaktive Importzeilen und verwirft keine Entscheidung
-stillschweigend. Solche inaktiven Revisionen bleiben im Staging und ändern weder
-die aktuelle Produktrevision noch den operativen Aktivstatus. Erst ein
-ausdrücklich aktiver Import darf die neue Revision atomar zur aktuellen Revision
-befördern.
+Die 18.996 realen Artikel sind mit diesem Arbeitsschritt weiterhin weder importiert
+noch aktiviert. Implementiert sind jetzt die laufbezogene Quarantänepersistenz,
+das Brutto-/Netto-Gate, die ausdrücklich bestätigte atomare Aktivierung und die
+abgegrenzte Rücknahme. Vor einem realen Lauf muss dennoch zuerst außerhalb des
+Grabenplaners das passende versionierte JSON read-only erzeugt und anschließend
+als Vorschau fachlich geprüft werden. Dieser Stand enthält weder einen
+ACCDB-Extractor noch einen Produktivimport und startet keinen Import automatisch.

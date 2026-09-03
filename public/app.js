@@ -376,6 +376,50 @@ const state = {
     previewHorizon: "period",
     loading: false,
   },
+  salesArticleCatalog: {
+    actorKey: "",
+    detailAccessKey: "",
+    items: [],
+    total: 0,
+    limit: 50,
+    nextOffset: 0,
+    query: "",
+    identifier: "",
+    status: "active",
+    sourceSystem: "",
+    sort: "articleNumber",
+    direction: "asc",
+    searchStarted: false,
+    loading: false,
+    error: "",
+    requestId: 0,
+    resultsExpanded: true,
+    selectedArticleNumber: "",
+    detail: null,
+    detailLoading: false,
+    detailError: "",
+    detailRequestId: 0,
+    detailMoveFocus: false,
+    editorMode: "",
+    editorOriginalArticleNumber: "",
+    editorPending: false,
+    editorReturnFocus: null,
+    editorPriceDirtyGroups: new Set(),
+    archivePending: false,
+    archiveArticleNumber: "",
+    archiveExpectedRevision: 0,
+    archiveReturnFocus: null,
+    importCatalog: null,
+    importCatalogPending: false,
+    importCatalogRequestId: 0,
+    importPreview: null,
+    importPreviewPending: false,
+    importApplyPending: false,
+    importRejectedCount: 0,
+    importFailureCode: "",
+    importRequestId: 0,
+    importReturnFocus: null,
+  },
   crm: {
     actorKey: "",
     items: [],
@@ -706,8 +750,8 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 
 const elements = Object.fromEntries(
   [
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchIdentifier", "salesArticleSearchStatusFilter", "salesArticleSearchSourceSystem", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
@@ -1257,6 +1301,9 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  state.salesArticleCatalog.actorKey = "";
+  state.salesArticleCatalog.detailAccessKey = "";
+  clearSalesArticleCatalogState();
   resetSalesAnalyticsActorState("");
   if (employeeProfileIsOpen()) closeEmployeeProfile({ restoreFocus: false });
   clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
@@ -1295,6 +1342,7 @@ function renderSidebarSession() {
   const visible = state.portalStatus?.portalEnabled === true && Boolean(user);
   elements.sidebarSessionInfo?.classList.toggle("hidden", !visible);
   elements.personalActionsAdminButton?.classList.toggle("hidden", !visible || user?.isEmployee === false);
+  elements.salesArticleActionsLogButton?.classList.toggle("hidden", !visible || user?.isEmployee === false);
   if (!visible) return;
   elements.sidebarSessionRole.textContent = user.roleName || user.role || "Angemeldet";
   elements.sidebarSessionIdentity.textContent = `${user.employeeNumber} · ${user.fullName || user.nickname || ""}`;
@@ -1463,6 +1511,9 @@ async function undoAdminPersonalAction(actionId) {
   if (!action || state.personalActionsLoading || state.personalActionUndoPending) return;
   if (!window.confirm(`„${String(action.title || "Diese Aktion")}“ wirklich rückgängig machen? Die ursprüngliche Historie bleibt erhalten.`)) return;
   const actorKey = currentAdminPersonalActionsActorKey();
+  const salesArticleRequestContext = captureSalesArticleMutationContext();
+  const salesArticleImportRequestContext = captureSalesArticleImportContext();
+  const salesArticleReloadNumber = state.salesArticleCatalog.selectedArticleNumber;
   const requestId = ++state.personalActionsRequestId;
   state.personalActionUndoPending = String(actionId);
   setAdminPersonalActionsMessage();
@@ -1474,6 +1525,55 @@ async function undoAdminPersonalAction(actionId) {
     });
     if (!adminPersonalActionsRequestIsCurrent(actorKey, requestId)) return;
     applyCurrentManualScheduleLockResult(result?.manualScheduleLock);
+    if (result?.salesArticle) {
+      if (!salesArticleMutationContextIsCurrent(salesArticleRequestContext)) {
+        await discardStaleSalesArticleMutationResponse(salesArticleRequestContext, {
+          reloadArticleNumber: salesArticleReloadNumber,
+        });
+        if (adminPersonalActionsRequestIsCurrent(actorKey, requestId)) await loadAdminPersonalActions();
+        return;
+      }
+      if (state.currentView === "articleCatalog" && canReadSalesArticles()) {
+        const refreshed = await refreshSalesArticleAfterMutation(result.salesArticle, "Artikelaktion rückgängig gemacht.", {
+          refreshPersonalActions: false,
+          focusDetail: false,
+          expectedActorKey: salesArticleRequestContext.actorKey,
+          expectedAccessKey: salesArticleRequestContext.accessKey,
+          reloadArticleNumber: salesArticleReloadNumber,
+        });
+        if (!refreshed) {
+          if (adminPersonalActionsRequestIsCurrent(actorKey, requestId)) await loadAdminPersonalActions();
+          return;
+        }
+        if (!adminPersonalActionsRequestIsCurrent(actorKey, requestId)) return;
+      } else {
+        clearSalesArticleCatalogState();
+      }
+      showToast(result.alreadyUndone ? "Die Artikelaktion war bereits rückgängig." : "Artikelaktion rückgängig gemacht.");
+    }
+    if (result?.salesArticleImport) {
+      if (!salesArticleImportContextIsCurrent(salesArticleImportRequestContext)) {
+        clearSalesArticleCatalogState(
+          canReadSalesArticles()
+            ? "Artikelzustand wurde wegen einer geänderten Sitzung neu aufgebaut."
+            : "Artikeldaten wurden wegen geänderter Rechte aus der Ansicht entfernt.",
+        );
+      } else if (state.currentView === "articleCatalog" && canReadSalesArticles()) {
+        resetSalesArticleCatalogDetailState();
+        if (state.salesArticleCatalog.searchStarted) {
+          await loadSalesArticleCatalog({ reset: true, preserveDetail: false });
+        } else {
+          renderSalesArticleCatalogResults();
+          renderSalesArticleCatalogDetail();
+        }
+        setSalesArticleCatalogDetailStatus("Artikelimport rückgängig gemacht. Bitte einen Artikel neu auswählen.");
+      } else {
+        clearSalesArticleCatalogState();
+      }
+      showToast(result.alreadyUndone
+        ? "Der Artikelimport war bereits rückgängig."
+        : `${new Intl.NumberFormat("de-AT").format(Number(result.salesArticleImport.articleCount || 0))} Artikeländerungen rückgängig gemacht.`);
+    }
     await loadAdminPersonalActions();
   } catch (error) {
     if (!adminPersonalActionsRequestIsCurrent(actorKey, requestId)) return;
@@ -1712,8 +1812,43 @@ function canWriteCrm() {
     || (canAccessCrm() && state.portalSession?.user?.crm?.write === true);
 }
 
+function canAccessSalesArticleCatalog() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("sales:articles:access") === true;
+}
+
+function canReadSalesArticles() {
+  return !state.portalStatus?.portalEnabled
+    || (canAccessSalesArticleCatalog()
+      && state.portalSession?.user?.permissions?.includes("sales:articles:read") === true);
+}
+
+function canReadSalesArticlePrices() {
+  return !state.portalStatus?.portalEnabled
+    || (canReadSalesArticles()
+      && state.portalSession?.user?.permissions?.includes("sales:articles:prices:read") === true);
+}
+
+function canReadSalesArticleCosts() {
+  return !state.portalStatus?.portalEnabled
+    || (canReadSalesArticles()
+      && state.portalSession?.user?.permissions?.includes("sales:articles:costs:read") === true);
+}
+
+function canWriteSalesArticles() {
+  return !state.portalStatus?.portalEnabled
+    || (canReadSalesArticles()
+      && state.portalSession?.user?.permissions?.includes("sales:articles:write") === true);
+}
+
+function canImportSalesArticles() {
+  return !state.portalStatus?.portalEnabled
+    || (canReadSalesArticles()
+      && state.portalSession?.user?.permissions?.includes("sales:articles:import") === true);
+}
+
 function canOpenSalesAdministrationModule() {
-  return canAccessSalesAnalytics() || canAccessCrm();
+  return canAccessSalesAnalytics() || canAccessCrm() || canAccessSalesArticleCatalog();
 }
 
 function canReadVacationAccounts() {
@@ -2350,6 +2485,7 @@ function applyRoleVisibility() {
   const features = state.portalStatus?.installationFeatures || {};
   const lanActive = state.portalStatus?.portalEnabled === true;
   syncCrmActorState();
+  syncSalesArticleCatalogActorState();
   syncSalesAnalyticsActorState();
   syncAdminPersonalActionsActorState();
   const serverActive = state.portalStatus?.operationMode === "server";
@@ -2444,15 +2580,23 @@ function applyRoleVisibility() {
   const salesAnalyticsAccess = canAccessSalesAnalytics();
   const crmAccess = canAccessCrm();
   const crmWriteAccess = canWriteCrm();
-  const salesModuleAccess = salesAnalyticsAccess || crmAccess;
+  const salesArticleCatalogAccess = canAccessSalesArticleCatalog();
+  const salesArticleCatalogReadAccess = canReadSalesArticles();
+  const salesArticleCatalogWriteAccess = canWriteSalesArticles();
+  const salesArticleCatalogImportAccess = canImportSalesArticles();
+  const salesModuleAccess = salesAnalyticsAccess || crmAccess || salesArticleCatalogAccess;
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || positionWriteAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelLearningAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
   elements.salesAdministrationNav?.classList.toggle("hidden", !salesModuleAccess);
   elements.salesAnalyticsNavButton?.classList.toggle("hidden", !salesAnalyticsAccess);
+  elements.salesArticleCatalogNavButton?.classList.toggle("hidden", !salesArticleCatalogAccess);
   elements.crmNavButton?.classList.toggle("hidden", !crmAccess);
   elements.salesAnalyticsDashboardCard?.classList.toggle("hidden", !salesAnalyticsAccess);
+  elements.salesArticleCatalogDashboardCard?.classList.toggle("hidden", !salesArticleCatalogAccess);
+  elements.salesArticleCreateButton?.classList.toggle("hidden", !salesArticleCatalogWriteAccess);
+  elements.salesArticleImportButton?.classList.toggle("hidden", !salesArticleCatalogImportAccess);
   elements.crmDashboardCard?.classList.toggle("hidden", !crmAccess);
   elements.crmCreateButton?.classList.toggle("hidden", !crmWriteAccess);
   elements.crmColumnsButton?.classList.toggle("hidden", !crmAccess);
@@ -2830,7 +2974,13 @@ function applyRoleVisibility() {
   if (!branchOrderManagementAccess && state.currentView === "branchOrders") setView("startDashboard");
   if (!salesModuleAccess && state.currentView === "salesAdministration") setView("startDashboard");
   if (!salesAnalyticsAccess && state.currentView === "salesAnalytics") setView("startDashboard");
+  applySalesArticleCatalogReadState(salesArticleCatalogReadAccess);
+  applySalesArticleCatalogManagementState(salesArticleCatalogWriteAccess);
+  if (!salesArticleCatalogAccess && state.currentView === "articleCatalog") setView("startDashboard");
   if (!crmAccess && state.currentView === "crm") setView("startDashboard");
+  if (!salesArticleCatalogReadAccess && (state.salesArticleCatalog.searchStarted || state.salesArticleCatalog.items.length)) {
+    clearSalesArticleCatalogState("Artikeldaten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
+  }
   if (!crmAccess && (state.crm.searchStarted || state.crm.selectedCustomer || state.crm.items.length)) {
     clearCrmState("CRM-Daten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
   }
@@ -4492,11 +4642,12 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "crm"].includes(state.currentView);
+  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "articleCatalog", "crm"].includes(state.currentView);
   elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
   setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
   setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
+  setNavigationCurrent(elements.salesArticleCatalogNavButton, state.currentView === "articleCatalog");
   setNavigationCurrent(elements.crmNavButton, state.currentView === "crm");
 }
 
@@ -22907,6 +23058,7 @@ function pageViewElement(view) {
     personnel: elements.personnelView,
     salesAdministration: elements.salesAdministrationView,
     salesAnalytics: elements.salesAnalyticsView,
+    articleCatalog: elements.salesArticleCatalogView,
     loans: elements.loansView,
     branchOrders: elements.branchOrdersView,
     rightsDashboard: elements.rightsDashboardView,
@@ -22941,6 +23093,7 @@ function applyGlobalTheme(theme) {
   const normalized = theme === "dark" ? "dark" : "light";
   state.globalTheme = normalized;
   for (const view of UI_APPEARANCE_VIEWS) applyPageTheme(view, normalized);
+  elements.salesArticleCatalogView?.setAttribute("data-page-theme", normalized);
   document.querySelectorAll("button[data-global-theme-choice]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.globalThemeChoice === normalized));
   });
@@ -28882,6 +29035,1821 @@ function canManageSalesReportImports() {
   return state.portalSession?.user?.salesAnalytics?.importManagement === true;
 }
 
+const SALES_ARTICLE_CATALOG_COLUMNS = Object.freeze([
+  Object.freeze({ id: "articleNumber", label: "Artikelnummer" }),
+  Object.freeze({ id: "description", label: "Bezeichnung" }),
+  Object.freeze({ id: "primaryIdentifier", label: "EAN / GTIN" }),
+  Object.freeze({ id: "status", label: "Status" }),
+  Object.freeze({ id: "sourceSystem", label: "Quellsystem" }),
+]);
+const SALES_ARTICLE_CATALOG_SORT_KEYS = new Set(SALES_ARTICLE_CATALOG_COLUMNS.map(({ id }) => id));
+const SALES_ARTICLE_IMPORT_MIME = "application/vnd.grabenplaner.tradefoto-articles+json";
+const SALES_ARTICLE_IMPORT_DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
+const SALES_ARTICLE_IMPORT_ACTION_LABELS = Object.freeze({
+  create: "Neu anlegen",
+  update: "Aktualisieren",
+  unchanged: "Unverändert",
+  blocked: "Konflikt",
+});
+const SALES_ARTICLE_IMPORT_ISSUE_LABELS = Object.freeze({
+  manual_head: "Manuell gepflegter Artikel bleibt geschützt.",
+  archived_head: "Archivierter Artikel bleibt geschützt.",
+  number_source_conflict: "Artikelnummer und Quellzuordnung widersprechen einander.",
+  gtin_conflict: "Eine EAN / GTIN ist bereits einem anderen Artikel zugeordnet.",
+  duplicate_source_key: "Der TradeFoto-Quellschlüssel kommt in der Datei mehrfach vor.",
+  duplicate_article_number: "Die abgeleitete Artikelnummer kommt in der Datei mehrfach vor.",
+  duplicate_gtin: "Eine EAN / GTIN ist in der Datei mehreren Artikeln zugeordnet.",
+  row_invalid: "Der Quelldatensatz konnte nicht sicher zugeordnet werden.",
+  invalid_source_key: "Der TradeFoto-Quellschlüssel ist ungültig.",
+  invalid_identifier: "Mindestens eine EAN-/GTIN-Kennung ist ungültig.",
+  invalid_price: "Mindestens ein Preisfeld hat kein sicher übernehmbares Format.",
+  negative_price: "Mindestens ein negativer Preiswert bleibt in Prüfung.",
+  gross_net_pair_incomplete: "Ein zusammengehöriges Brutto-/Netto-Preispaar ist unvollständig.",
+  gross_net_mismatch: "Brutto-/Netto-Zuordnung ist nicht eindeutig.",
+  tax_code_unknown: "Der TradeFoto-Steuercode ist nicht eindeutig auflösbar.",
+});
+const SALES_ARTICLE_IMPORT_ERROR_LABELS = Object.freeze({
+  SALES_ARTICLE_IMPORT_DENIED: "Für den Artikelimport fehlt das erforderliche Importrecht.",
+  SALES_ARTICLE_IMPORT_CONTENT_TYPE_UNSUPPORTED: "Die Datei hat nicht das freigegebene TradeFoto-Importformat.",
+  SALES_ARTICLE_IMPORT_FILE_SIZE_INVALID: "Die Datei ist leer oder überschreitet die zulässige Größe.",
+  SALES_ARTICLE_IMPORT_WORK_BUDGET_EXCEEDED: "Die Datei überschreitet das sichere serverseitige Arbeitsbudget. Bitte den TradeFoto-Export kleiner aufteilen.",
+  SALES_ARTICLE_IMPORT_JSON_INVALID: "Die Datei ist kein gültiger UTF-8-JSON-Export.",
+  SALES_ARTICLE_IMPORT_SCHEMA_MISMATCH: "Quellformat oder Schema passen nicht zum freigegebenen TradeFoto-Katalog.",
+  SALES_ARTICLE_IMPORT_ROW_INVALID: "Mindestens ein Artikelsatz entspricht nicht dem freigegebenen Datenvertrag.",
+  SALES_ARTICLE_IMPORT_PREVIEW_EXPIRED: "Die Prüfvorschau ist abgelaufen. Bitte die Datei erneut prüfen.",
+  SALES_ARTICLE_IMPORT_PREVIEW_STALE: "Der Artikelstamm hat sich seit der Vorschau geändert. Bitte erneut prüfen.",
+  SALES_ARTICLE_IMPORT_CONFIRMATION_INVALID: "Die Importbestätigung stimmt nicht mehr mit der Vorschau überein.",
+  SALES_ARTICLE_IMPORT_REQUEST_INVALID: "Die Importanfrage ist unvollständig oder ungültig.",
+});
+const SALES_ARTICLE_CATALOG_HEADER_HEIGHT = 42;
+const SALES_ARTICLE_CATALOG_ROW_HEIGHT = 39;
+const SALES_ARTICLE_CATALOG_RENDER_OVERSCAN = 8;
+
+function normalizeSalesArticleCatalogItem(article = {}) {
+  return {
+    productId: String(article.productId || ""),
+    articleNumber: String(article.articleNumber || ""),
+    description: String(article.description || ""),
+    primaryIdentifier: String(article.primaryIdentifier || ""),
+    active: article.active === true,
+    sourceSystem: String(article.sourceSystem || ""),
+    currentRevision: Math.max(0, Number(article.currentRevision || 0)),
+  };
+}
+
+function salesArticleCatalogItemKey(article) {
+  return article.productId || `article:${article.articleNumber}`;
+}
+
+function salesArticleCatalogSort(sort, direction = state.salesArticleCatalog.direction) {
+  return {
+    sort: SALES_ARTICLE_CATALOG_SORT_KEYS.has(sort) ? sort : "articleNumber",
+    direction: direction === "desc" ? "desc" : "asc",
+  };
+}
+
+function salesArticleCatalogSourceLabel(sourceSystem) {
+  const value = String(sourceSystem || "");
+  if (!value) return "–";
+  if (value === "manual.article-catalog") return "Manuelle Pflege";
+  if (value === "legacy.loan_articles") return "Übernommene Leihartikel";
+  if (value === "manual.loan") return "Manuell / Leihe";
+  if (value.startsWith("tradefoto")) return "TradeFoto";
+  if (value === "shopware.storefront") return "Shopware";
+  return value;
+}
+
+const SALES_ARTICLE_IDENTIFIER_LABELS = Object.freeze({
+  ean8: "EAN-8",
+  upca: "UPC-A",
+  ean13: "EAN-13",
+  gtin14: "GTIN-14",
+});
+const SALES_ARTICLE_PRICE_TYPE_LABELS = Object.freeze({
+  upe: "UVP",
+  average_purchase: "Ø Einkauf",
+  list_purchase: "Listen-EK",
+  invoice_purchase: "Rechnungs-EK",
+  sales: "Verkaufspreis",
+  net_net_purchase: "Netto-Netto-EK",
+  wholesale: "Großhandel",
+  special: "Sonderpreis",
+  internet_1: "Internet 1",
+  internet_2: "Internet 2",
+  internet_3: "Internet 3",
+  internet_4: "Internet 4",
+  internet_5: "Internet 5",
+  zdek: "ZDEK",
+  dek_a: "DEK A",
+  future_upe: "Künftige UVP",
+  order_purchase: "Bestell-EK",
+  future_purchase: "Künftiger EK",
+  calculation: "Kalkulationspreis",
+  deposit: "Pfand",
+  other: "Weiterer Preis",
+});
+const SALES_ARTICLE_PRICE_BASIS_LABELS = Object.freeze({
+  gross: "Brutto",
+  net: "Netto",
+  unknown: "Basis ungeklärt",
+});
+const SALES_ARTICLE_PRICE_QUALITY_LABELS = Object.freeze({
+  confirmed: "Bestätigt",
+  inferred: "Abgeleitet",
+  unresolved: "Ungeklärt",
+  quarantined: "In Prüfung",
+});
+const SALES_ARTICLE_SALES_PRICE_TYPES = Object.freeze([
+  "upe", "future_upe", "sales", "wholesale", "internet_1", "internet_2", "internet_3",
+  "internet_4", "internet_5", "deposit",
+]);
+const SALES_ARTICLE_COST_PRICE_TYPES = Object.freeze([
+  "average_purchase", "list_purchase", "invoice_purchase", "net_net_purchase",
+  "order_purchase", "future_purchase", "calculation", "zdek", "dek_a", "special", "other",
+]);
+
+function salesArticleCatalogTimestamp(value, fallback = "–") {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return new Intl.DateTimeFormat("de-AT", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
+function normalizeSalesArticleDetailIdentifier(value = {}) {
+  return {
+    identifierType: String(value.identifierType || ""),
+    identifierValue: String(value.identifierValue || ""),
+    isPrimary: value.isPrimary === true,
+    verifiedAt: String(value.verifiedAt || ""),
+  };
+}
+
+function normalizeSalesArticleDetailPrice(value = {}) {
+  const qualityStatus = String(value.qualityStatus || "unresolved");
+  return {
+    priceType: String(value.priceType || ""),
+    displayLabel: String(value.displayLabel || ""),
+    amount: value.amount === null || value.amount === undefined ? null : String(value.amount),
+    currency: String(value.currency || "EUR").toUpperCase(),
+    priceBasis: String(value.priceBasis || "unknown"),
+    qualityStatus,
+    usable: value.usable === true && ["confirmed", "inferred"].includes(qualityStatus),
+  };
+}
+
+function normalizeSalesArticleDetailPayload(payload = {}) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const articleValue = source.article && typeof source.article === "object" ? source.article : null;
+  if (!articleValue) throw new Error("Der ausgewählte Artikel wurde nicht gefunden.");
+  const capabilities = source.capabilities && typeof source.capabilities === "object"
+    ? source.capabilities
+    : {};
+  const prices = articleValue.prices && typeof articleValue.prices === "object"
+    ? articleValue.prices
+    : {};
+  const provenance = articleValue.provenance && typeof articleValue.provenance === "object"
+    ? articleValue.provenance
+    : {};
+  const effectiveCapabilities = {
+    pricesRead: capabilities.pricesRead === true && canReadSalesArticlePrices(),
+    costsRead: capabilities.costsRead === true && canReadSalesArticleCosts(),
+    write: capabilities.write === true && canWriteSalesArticles(),
+    import: capabilities.import === true && canImportSalesArticles(),
+  };
+  const normalizedPriceGroup = (value, allowed) => (
+    allowed === true && Array.isArray(value)
+      ? value.map(normalizeSalesArticleDetailPrice)
+      : null
+  );
+  return {
+    article: {
+      articleNumber: String(articleValue.articleNumber || ""),
+      description: String(articleValue.description || ""),
+      active: articleValue.active === true,
+      currentRevision: Math.max(0, Number(articleValue.currentRevision || 0)),
+      identifiers: Array.isArray(articleValue.identifiers)
+        ? articleValue.identifiers.map(normalizeSalesArticleDetailIdentifier)
+        : [],
+      provenance: {
+        originSourceSystem: String(provenance.originSourceSystem || ""),
+        currentSourceSystem: String(provenance.currentSourceSystem || ""),
+        sourceUpdatedAt: String(provenance.sourceUpdatedAt || ""),
+        updatedAt: String(provenance.updatedAt || ""),
+      },
+      prices: {
+        sales: normalizedPriceGroup(prices.sales, effectiveCapabilities.pricesRead),
+        costs: normalizedPriceGroup(prices.costs, effectiveCapabilities.costsRead),
+      },
+    },
+    revisions: Array.isArray(source.revisions)
+      ? source.revisions.map((revision = {}) => ({
+        revision: Math.max(0, Number(revision.revision || 0)),
+        articleNumber: String(revision.articleNumber || ""),
+        description: String(revision.description || ""),
+        active: revision.active === true,
+        sourceUpdatedAt: String(revision.sourceUpdatedAt || ""),
+        createdAt: String(revision.createdAt || ""),
+      }))
+      : [],
+    capabilities: effectiveCapabilities,
+  };
+}
+
+function salesArticleCatalogMoney(amount, currency) {
+  if (amount === null || amount === undefined || amount === "") return "–";
+  const rawAmount = String(amount);
+  const normalizedCurrency = /^[A-Z]{3}$/.test(String(currency || "")) ? String(currency) : "EUR";
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(rawAmount);
+  if (!match) return `${rawAmount} ${normalizedCurrency}`;
+  const fraction = match[3] || "";
+  let minorUnits = (BigInt(match[2]) * 100n) + BigInt((`${fraction}00`).slice(0, 2));
+  if ((fraction[2] || "0") >= "5") minorUnits += 1n;
+  const negative = match[1] === "-" && minorUnits !== 0n;
+  const whole = (minorUnits / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const cents = (minorUnits % 100n).toString().padStart(2, "0");
+  const formatted = `${negative ? "-" : ""}${whole},${cents}`;
+  return normalizedCurrency === "EUR" ? `${formatted} €` : `${formatted} ${normalizedCurrency}`;
+}
+
+function renderSalesArticleDetailIdentifiers(identifiers) {
+  if (!identifiers.length) {
+    return '<p class="sales-article-detail-message">Für diesen Artikel sind keine EAN-/GTIN-Kennungen hinterlegt.</p>';
+  }
+  return `<div class="sales-article-detail-table-wrap"><table class="sales-article-detail-table">
+    <caption class="visually-hidden">EAN- und GTIN-Kennungen des ausgewählten Artikels</caption>
+    <thead><tr><th scope="col">Kennung</th><th scope="col">Typ</th><th scope="col">Verwendung</th><th scope="col">Geprüft</th></tr></thead>
+    <tbody>${identifiers.map((identifier) => `<tr>
+      <td class="numeric"><strong>${escapeHtml(identifier.identifierValue || "–")}</strong></td>
+      <td>${escapeHtml(SALES_ARTICLE_IDENTIFIER_LABELS[identifier.identifierType] || identifier.identifierType || "–")}</td>
+      <td>${identifier.isPrimary ? '<span class="sales-article-detail-primary">Primäre Kennung</span>' : "Weitere Kennung"}</td>
+      <td>${escapeHtml(salesArticleCatalogTimestamp(identifier.verifiedAt))}</td>
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+function renderSalesArticleDetailPriceGroup(prices, { title, description, protectedMessage }) {
+  let content = "";
+  if (prices === null) {
+    content = `<p class="sales-article-detail-message protected">${escapeHtml(protectedMessage)}</p>`;
+  } else if (!prices.length) {
+    content = '<p class="sales-article-detail-message">Für diesen Artikel sind in diesem Preisbereich keine Werte hinterlegt.</p>';
+  } else {
+    content = `<div class="sales-article-detail-table-wrap"><table class="sales-article-detail-table prices">
+      <caption class="visually-hidden">${escapeHtml(title)} des ausgewählten Artikels</caption>
+      <thead><tr><th scope="col">Preisart</th><th scope="col">Betrag</th><th scope="col">Basis</th><th scope="col">Datenstatus</th></tr></thead>
+      <tbody>${prices.map((price) => {
+    const quality = Object.hasOwn(SALES_ARTICLE_PRICE_QUALITY_LABELS, price.qualityStatus)
+      ? price.qualityStatus
+      : "unresolved";
+    return `<tr>
+        <td><strong>${escapeHtml(price.displayLabel || SALES_ARTICLE_PRICE_TYPE_LABELS[price.priceType] || price.priceType || "Preis")}</strong></td>
+        <td class="numeric">${price.usable ? escapeHtml(salesArticleCatalogMoney(price.amount, price.currency)) : "–"}</td>
+        <td>${escapeHtml(SALES_ARTICLE_PRICE_BASIS_LABELS[price.priceBasis] || price.priceBasis || "Basis ungeklärt")}</td>
+        <td><span class="sales-article-detail-quality ${escapeHtmlAttribute(quality)}">${escapeHtml(SALES_ARTICLE_PRICE_QUALITY_LABELS[quality])}</span></td>
+      </tr>`;
+  }).join("")}</tbody>
+    </table></div>`;
+  }
+  return `<section class="sales-article-detail-card">
+    <header><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p></div>${prices === null ? "" : `<span class="sales-article-detail-count">${prices.length}</span>`}</header>
+    ${content}
+  </section>`;
+}
+
+function renderSalesArticleDetailHistory(revisions, currentRevision) {
+  if (!revisions.length) {
+    return '<p class="sales-article-detail-message">Noch kein Versionsverlauf verfügbar.</p>';
+  }
+  return `<div class="sales-article-detail-table-wrap"><table class="sales-article-detail-table">
+    <caption class="visually-hidden">Versionsverlauf des ausgewählten Artikels</caption>
+    <thead><tr><th scope="col">Revision</th><th scope="col">Status</th><th scope="col">Artikelnummer</th><th scope="col">Bezeichnung</th><th scope="col">Datenstand</th></tr></thead>
+    <tbody>${revisions.map((revision) => `<tr>
+      <td class="numeric"><strong>${revision.revision}</strong>${revision.revision === currentRevision ? ' <span class="sales-article-detail-primary">Aktuell</span>' : ""}</td>
+      <td>${revision.active ? "Aktiv" : "Inaktiv"}</td>
+      <td class="numeric">${escapeHtml(revision.articleNumber || "–")}</td>
+      <td>${escapeHtml(revision.description || "–")}</td>
+      <td>${escapeHtml(salesArticleCatalogTimestamp(revision.sourceUpdatedAt || revision.createdAt))}</td>
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+function salesArticleEditableIdentifiers(identifiers = []) {
+  const byCanonicalGtin = new Map();
+  (Array.isArray(identifiers) ? identifiers : []).forEach((identifier = {}) => {
+    const identifierValue = String(identifier.identifierValue || "").trim();
+    if (!identifierValue) return;
+    const canonicalGtin = identifierValue.padStart(14, "0");
+    const current = byCanonicalGtin.get(canonicalGtin);
+    if (!current || (identifier.isPrimary === true && current.isPrimary !== true)) {
+      byCanonicalGtin.set(canonicalGtin, {
+        identifierValue,
+        isPrimary: identifier.isPrimary === true,
+      });
+    }
+  });
+  return [...byCanonicalGtin.values()];
+}
+
+function salesArticleIdentifierType(value) {
+  return ({ 8: "EAN-8", 12: "UPC-A", 13: "EAN-13", 14: "GTIN-14" })[String(value || "").length]
+    || "Länge prüfen";
+}
+
+function salesArticleIdentifierChecksumIsValid(value) {
+  const digits = String(value || "");
+  if (!/^\d+$/.test(digits) || ![8, 12, 13, 14].includes(digits.length)) return false;
+  let sum = 0;
+  for (let index = digits.length - 2, position = 0; index >= 0; index -= 1, position += 1) {
+    sum += Number(digits[index]) * (position % 2 === 0 ? 3 : 1);
+  }
+  return (10 - (sum % 10)) % 10 === Number(digits.at(-1));
+}
+
+function validateSalesArticleIdentifierInput(input) {
+  if (!input) return false;
+  const value = String(input.value || "").trim();
+  let message = "";
+  if (!value) message = "Bitte eine EAN-/GTIN-Kennung eingeben oder die Zeile entfernen.";
+  else if (!/^\d+$/.test(value)) message = "EAN / GTIN darf nur aus Ziffern bestehen.";
+  else if (![8, 12, 13, 14].includes(value.length)) message = "Erlaubt sind EAN-8, UPC-A, EAN-13 oder GTIN-14.";
+  else if (!salesArticleIdentifierChecksumIsValid(value)) message = "Die Prüfziffer dieser EAN-/GTIN-Kennung ist ungültig.";
+  input.setCustomValidity(message);
+  const row = input.closest("[data-sales-article-identifier-row]");
+  const type = row?.querySelector("[data-sales-article-identifier-type]");
+  if (type) type.textContent = value ? salesArticleIdentifierType(value) : "EAN / GTIN";
+  return !message;
+}
+
+function updateSalesArticleIdentifierRows() {
+  const rows = [...(elements.salesArticleIdentifierRows?.querySelectorAll("[data-sales-article-identifier-row]") || [])];
+  rows.forEach((row, index) => {
+    const input = row.querySelector("[data-sales-article-identifier-value]");
+    const radio = row.querySelector("[data-sales-article-identifier-primary]");
+    const remove = row.querySelector("[data-sales-article-identifier-remove]");
+    if (input) input.setAttribute("aria-label", `EAN-/GTIN-Kennung ${index + 1}`);
+    if (radio) radio.setAttribute("aria-label", `Kennung ${index + 1} als primär verwenden`);
+    if (remove) remove.setAttribute("aria-label", `Kennung ${index + 1} entfernen`);
+  });
+  if (rows.length && !rows.some((row) => row.querySelector("[data-sales-article-identifier-primary]")?.checked)) {
+    const firstPrimary = rows[0].querySelector("[data-sales-article-identifier-primary]");
+    if (firstPrimary) firstPrimary.checked = true;
+  }
+  if (elements.salesArticleIdentifierAdd) elements.salesArticleIdentifierAdd.disabled = rows.length >= 32;
+}
+
+function appendSalesArticleIdentifierRow(identifier = {}, { focus = false } = {}) {
+  if (!elements.salesArticleIdentifierRows) return;
+  const count = elements.salesArticleIdentifierRows.querySelectorAll("[data-sales-article-identifier-row]").length;
+  if (count >= 32) return;
+  const row = document.createElement("div");
+  row.className = "sales-article-identifier-editor-row";
+  row.dataset.salesArticleIdentifierRow = "true";
+  row.innerHTML = `<label class="field"><span>Kennung</span><input type="text" inputmode="numeric" pattern="[0-9]{8}|[0-9]{12}|[0-9]{13}|[0-9]{14}" maxlength="14" autocomplete="off" data-sales-article-identifier-value required /></label>
+    <span class="sales-article-identifier-type" data-sales-article-identifier-type>EAN / GTIN</span>
+    <label class="sales-article-identifier-primary-choice"><input type="radio" name="salesArticlePrimaryIdentifier" data-sales-article-identifier-primary /> <span>Primär</span></label>
+    <button class="text-button danger" type="button" data-sales-article-identifier-remove>Entfernen</button>`;
+  const input = row.querySelector("[data-sales-article-identifier-value]");
+  const primary = row.querySelector("[data-sales-article-identifier-primary]");
+  if (input) input.value = String(identifier.identifierValue || "");
+  if (primary) primary.checked = identifier.isPrimary === true;
+  elements.salesArticleIdentifierRows.append(row);
+  validateSalesArticleIdentifierInput(input);
+  updateSalesArticleIdentifierRows();
+  if (focus) input?.focus();
+}
+
+function renderSalesArticleIdentifierEditor(identifiers = []) {
+  if (!elements.salesArticleIdentifierRows) return;
+  elements.salesArticleIdentifierRows.replaceChildren();
+  identifiers.slice(0, 32).forEach((identifier) => appendSalesArticleIdentifierRow(identifier));
+  updateSalesArticleIdentifierRows();
+}
+
+function salesArticleEditorIdentifiers() {
+  const rows = [...(elements.salesArticleIdentifierRows?.querySelectorAll("[data-sales-article-identifier-row]") || [])];
+  const identifiers = [];
+  const canonicalOwners = new Map();
+  let valid = true;
+  rows.forEach((row, index) => {
+    const input = row.querySelector("[data-sales-article-identifier-value]");
+    if (!validateSalesArticleIdentifierInput(input)) valid = false;
+    const identifierValue = String(input?.value || "").trim();
+    if (!identifierValue) return;
+    const canonical = identifierValue.padStart(14, "0");
+    if (canonicalOwners.has(canonical)) {
+      input.setCustomValidity(`Diese Kennung entspricht bereits Kennung ${canonicalOwners.get(canonical) + 1}.`);
+      valid = false;
+      return;
+    }
+    canonicalOwners.set(canonical, index);
+    identifiers.push({
+      identifierValue,
+      isPrimary: row.querySelector("[data-sales-article-identifier-primary]")?.checked === true,
+    });
+  });
+  if (identifiers.length && !identifiers.some(({ isPrimary }) => isPrimary)) identifiers[0].isPrimary = true;
+  return { identifiers, valid };
+}
+
+function salesArticleEditorAmount(value) {
+  const amount = String(value || "").trim().replace(",", ".");
+  if (!amount) return "";
+  const match = /^(\d{1,18})(?:\.(\d{1,12}))?$/.exec(amount);
+  if (!match) return null;
+  const integer = match[1].replace(/^0+(?=\d)/, "");
+  return match[2] ? `${integer}.${match[2]}` : integer;
+}
+
+function salesArticleEditorDisplayAmount(value) {
+  const amount = String(value ?? "");
+  if (!/^\d+(?:\.\d+)?$/.test(amount)) return "";
+  return amount.includes(".") ? amount.replace(/0+$/, "").replace(/\.$/, "") : amount;
+}
+
+function salesArticlePriceBasisOptions(selected) {
+  return [
+    ["unknown", "Basis ungeklärt"],
+    ["gross", "Brutto"],
+    ["net", "Netto"],
+  ].map(([value, label]) => `<option value="${value}"${selected === value ? " selected" : ""}>${label}</option>`).join("");
+}
+
+function renderSalesArticlePriceEditorGroup(group, prices, { mode = "create" } = {}) {
+  const isSales = group === "sales";
+  const section = isSales ? elements.salesArticleSalesPricesEditor : elements.salesArticleCostPricesEditor;
+  const container = isSales ? elements.salesArticleSalesPriceFields : elements.salesArticleCostPriceFields;
+  if (!section || !container) return;
+  const allowed = isSales ? canReadSalesArticlePrices() : canReadSalesArticleCosts();
+  const priceTypes = isSales ? SALES_ARTICLE_SALES_PRICE_TYPES : SALES_ARTICLE_COST_PRICE_TYPES;
+  section.dataset.salesArticlePriceGroup = group;
+  section.dataset.salesArticlePriceGroupEnabled = String(allowed && Array.isArray(prices));
+  section.classList.toggle("protected", !allowed || !Array.isArray(prices));
+  if (!allowed || !Array.isArray(prices)) {
+    container.innerHTML = `<p class="sales-article-editor-protected">Dieser Preisbereich ist für dein Benutzerkonto nicht freigegeben und wird beim Speichern nicht übertragen.</p>`;
+    return;
+  }
+  const visiblePrices = prices.filter((price) => price && typeof price === "object");
+  const unsafePrices = visiblePrices.filter((price) => price.usable !== true);
+  const duplicateTypes = new Set(visiblePrices.map(({ priceType }) => priceType)).size !== visiblePrices.length;
+  const hasProtectedSourceValues = mode === "edit" && (unsafePrices.length > 0 || duplicateTypes);
+  section.dataset.salesArticlePriceReplacementRequired = String(hasProtectedSourceValues);
+  if (hasProtectedSourceValues) {
+    section.dataset.salesArticlePriceGroupEnabled = "false";
+    section.classList.add("protected");
+    container.innerHTML = '<p class="sales-article-editor-protected"><strong>Quellwerte bleiben geschützt.</strong><span>Dieser Preisbereich enthält nicht eindeutig bearbeitbare Werte. Er wird beim Speichern vollständig ausgelassen und dadurch unverändert erhalten.</span></p>';
+    return;
+  }
+  const currentByType = new Map();
+  visiblePrices.filter(({ usable }) => usable === true).forEach((price) => {
+    if (!currentByType.has(price.priceType)) currentByType.set(price.priceType, price);
+  });
+  const fields = priceTypes.map((priceType) => {
+    const price = currentByType.get(priceType) || {};
+    const amount = salesArticleEditorDisplayAmount(price.amount);
+    const currency = /^[A-Z]{3}$/.test(String(price.currency || "")) ? String(price.currency) : "EUR";
+    const basis = ["unknown", "gross", "net"].includes(price.priceBasis) ? price.priceBasis : "unknown";
+    return `<div class="sales-article-price-editor-field" data-sales-article-price-type="${escapeHtmlAttribute(priceType)}">
+      <label><span>${escapeHtml(SALES_ARTICLE_PRICE_TYPE_LABELS[priceType] || priceType)}</span><input type="text" inputmode="decimal" maxlength="31" pattern="[0-9]{1,18}([,.][0-9]{1,12})?" autocomplete="off" value="${escapeHtmlAttribute(amount)}" data-sales-article-price-amount /></label>
+      <div><select aria-label="Preisbasis ${escapeHtmlAttribute(SALES_ARTICLE_PRICE_TYPE_LABELS[priceType] || priceType)}" data-sales-article-price-basis>${salesArticlePriceBasisOptions(basis)}</select><input type="text" maxlength="3" pattern="[A-Za-z]{3}" aria-label="Währung ${escapeHtmlAttribute(SALES_ARTICLE_PRICE_TYPE_LABELS[priceType] || priceType)}" value="${escapeHtmlAttribute(currency)}" data-sales-article-price-currency /></div>
+    </div>`;
+  }).join("");
+  container.innerHTML = fields;
+}
+
+function markSalesArticlePriceGroupDirty(target) {
+  const section = target?.closest("[data-sales-article-price-group]");
+  const group = section?.dataset.salesArticlePriceGroup;
+  if (!group || !["sales", "costs"].includes(group)) return;
+  state.salesArticleCatalog.editorPriceDirtyGroups.add(group);
+}
+
+function salesArticleEditorPriceGroup(group) {
+  const isSales = group === "sales";
+  const section = isSales ? elements.salesArticleSalesPricesEditor : elements.salesArticleCostPricesEditor;
+  if (!section || section.dataset.salesArticlePriceGroupEnabled !== "true") return undefined;
+  const mode = state.salesArticleCatalog.editorMode;
+  if (mode === "edit" && !state.salesArticleCatalog.editorPriceDirtyGroups.has(group)) return undefined;
+  const prices = [];
+  let valid = true;
+  section.querySelectorAll("[data-sales-article-price-type]").forEach((row) => {
+    const amountInput = row.querySelector("[data-sales-article-price-amount]");
+    const currencyInput = row.querySelector("[data-sales-article-price-currency]");
+    const amount = salesArticleEditorAmount(amountInput?.value);
+    const currency = String(currencyInput?.value || "EUR").trim().toUpperCase();
+    amountInput?.setCustomValidity(amount === null ? "Der Preis darf höchstens 18 Vor- und 12 Nachkommastellen haben und nicht negativ sein." : "");
+    currencyInput?.setCustomValidity(/^[A-Z]{3}$/.test(currency) ? "" : "Die Währung muss aus drei Buchstaben bestehen.");
+    if (amount === null || !/^[A-Z]{3}$/.test(currency)) valid = false;
+    if (!amount) return;
+    prices.push({
+      priceType: String(row.dataset.salesArticlePriceType || ""),
+      amount,
+      currency,
+      priceBasis: String(row.querySelector("[data-sales-article-price-basis]")?.value || "unknown"),
+    });
+  });
+  return { prices, valid };
+}
+
+function setSalesArticleEditorMessage(message = "", isError = false) {
+  if (!elements.salesArticleEditorMessage) return;
+  elements.salesArticleEditorMessage.textContent = message;
+  elements.salesArticleEditorMessage.classList.toggle("hidden", !message);
+  elements.salesArticleEditorMessage.classList.toggle("error", Boolean(isError));
+}
+
+function setSalesArticleArchiveMessage(message = "", isError = false) {
+  if (!elements.salesArticleArchiveMessage) return;
+  elements.salesArticleArchiveMessage.textContent = message;
+  elements.salesArticleArchiveMessage.classList.toggle("hidden", !message);
+  elements.salesArticleArchiveMessage.classList.toggle("error", Boolean(isError));
+}
+
+function salesArticleDetailCanWrite() {
+  return canWriteSalesArticles()
+    && state.salesArticleCatalog.detail?.capabilities?.write === true;
+}
+
+function renderSalesArticleManagementActions() {
+  const catalog = state.salesArticleCatalog;
+  const article = catalog.detail?.article || null;
+  const writable = Boolean(article) && salesArticleDetailCanWrite();
+  elements.salesArticleDetailActions?.classList.toggle("hidden", !writable);
+  if (elements.salesArticleEditButton) {
+    elements.salesArticleEditButton.disabled = !writable || !article?.active || catalog.editorPending || catalog.archivePending;
+    elements.salesArticleEditButton.title = article && !article.active ? "Archivierte Artikel sind schreibgeschützt." : "";
+  }
+  if (elements.salesArticleCopyButton) elements.salesArticleCopyButton.disabled = !writable || catalog.editorPending || catalog.archivePending;
+  if (elements.salesArticleArchiveButton) {
+    elements.salesArticleArchiveButton.disabled = !writable || !article?.active || catalog.editorPending || catalog.archivePending;
+    elements.salesArticleArchiveButton.title = article && !article.active ? "Dieser Artikel ist bereits archiviert." : "";
+  }
+  if (elements.salesArticleCreateButton) {
+    elements.salesArticleCreateButton.classList.toggle("hidden", !canWriteSalesArticles());
+    elements.salesArticleCreateButton.disabled = !canWriteSalesArticles() || catalog.editorPending || catalog.archivePending;
+  }
+}
+
+function resetSalesArticleEditorState({ restoreFocus = false } = {}) {
+  const catalog = state.salesArticleCatalog;
+  const returnFocus = catalog.editorReturnFocus;
+  catalog.editorMode = "";
+  catalog.editorOriginalArticleNumber = "";
+  catalog.editorPending = false;
+  catalog.editorReturnFocus = null;
+  catalog.editorPriceDirtyGroups = new Set();
+  elements.salesArticleEditorForm?.reset();
+  elements.salesArticleIdentifierRows?.replaceChildren();
+  elements.salesArticleSalesPriceFields?.replaceChildren();
+  elements.salesArticleCostPriceFields?.replaceChildren();
+  if (elements.salesArticleEditorSubmit) elements.salesArticleEditorSubmit.disabled = false;
+  setSalesArticleEditorMessage();
+  if (restoreFocus) requestAnimationFrame(() => returnFocus?.isConnected && returnFocus.focus());
+  renderSalesArticleManagementActions();
+}
+
+function closeSalesArticleEditor({ restoreFocus = true, force = false } = {}) {
+  if (state.salesArticleCatalog.editorPending && !force) return;
+  if (elements.salesArticleEditorDialog?.open) elements.salesArticleEditorDialog.close();
+  resetSalesArticleEditorState({ restoreFocus });
+}
+
+function resetSalesArticleArchiveState({ restoreFocus = false } = {}) {
+  const catalog = state.salesArticleCatalog;
+  const returnFocus = catalog.archiveReturnFocus;
+  catalog.archivePending = false;
+  catalog.archiveArticleNumber = "";
+  catalog.archiveExpectedRevision = 0;
+  catalog.archiveReturnFocus = null;
+  if (elements.salesArticleArchiveConfirmation) {
+    elements.salesArticleArchiveConfirmation.value = "";
+    elements.salesArticleArchiveConfirmation.setCustomValidity("");
+  }
+  if (elements.salesArticleArchiveTarget) elements.salesArticleArchiveTarget.replaceChildren();
+  if (elements.salesArticleArchiveSubmit) elements.salesArticleArchiveSubmit.disabled = true;
+  setSalesArticleArchiveMessage();
+  if (restoreFocus) requestAnimationFrame(() => returnFocus?.isConnected && returnFocus.focus());
+  renderSalesArticleManagementActions();
+}
+
+function closeSalesArticleArchive({ restoreFocus = true, force = false } = {}) {
+  if (state.salesArticleCatalog.archivePending && !force) return;
+  if (elements.salesArticleArchiveDialog?.open) elements.salesArticleArchiveDialog.close();
+  resetSalesArticleArchiveState({ restoreFocus });
+}
+
+function salesArticleImportInteger(value, maximum = 100000) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 && number <= maximum ? number : 0;
+}
+
+function salesArticleImportErrorMessage(error) {
+  return SALES_ARTICLE_IMPORT_ERROR_LABELS[String(error?.code || "")]
+    || "Der TradeFoto-Import konnte nicht sicher verarbeitet werden. Bitte die Exportdatei und den aktuellen Zugriff prüfen.";
+}
+
+function normalizeSalesArticleImportCatalog(payload = {}) {
+  if (String(payload?.format || "") !== "grabenplaner.tradefoto.article-catalog.v1"
+    || String(payload?.mimeType || "") !== SALES_ARTICLE_IMPORT_MIME
+    || String(payload?.sourceSystem || "") !== "tradefoto.artikel_stamm"
+    || String(payload?.sourceProfileVersion || "") !== "tradefoto-article-v1"
+    || !/^[a-f0-9]{64}$/i.test(String(payload?.sourceSchemaSha256 || ""))) {
+    throw new Error("Der serverseitige TradeFoto-Importkatalog ist ungültig.");
+  }
+  const maxBytes = salesArticleImportInteger(payload.maxBytes, SALES_ARTICLE_IMPORT_DEFAULT_MAX_BYTES);
+  const maxRows = salesArticleImportInteger(payload.maxRows, 100000);
+  const maxWorkUnits = salesArticleImportInteger(payload.maxWorkUnits, 10000000);
+  if (!maxBytes || !maxRows || !maxWorkUnits || String(payload.currency || "") !== "EUR") {
+    throw new Error("Der serverseitige TradeFoto-Importkatalog ist unvollständig.");
+  }
+  return {
+    format: String(payload.format),
+    mimeType: String(payload.mimeType),
+    maxBytes,
+    maxRows,
+    maxWorkUnits,
+    sourceSystem: String(payload.sourceSystem),
+    sourceProfileVersion: String(payload.sourceProfileVersion),
+    sourceSchemaSha256: String(payload.sourceSchemaSha256).toLowerCase(),
+  };
+}
+
+function normalizeSalesArticleImportPreview(payload = {}) {
+  const previewId = String(payload?.previewId || "");
+  const confirmationFingerprint = String(payload?.confirmationFingerprint || "");
+  if (!previewId || previewId.length > 200 || !/^[a-f0-9]{64}$/i.test(confirmationFingerprint)) {
+    throw new Error("Die Importvorschau ist unvollständig.");
+  }
+  const summaryValue = payload.summary && typeof payload.summary === "object" ? payload.summary : {};
+  const summary = {
+    total: salesArticleImportInteger(summaryValue.total, 100000),
+    create: salesArticleImportInteger(summaryValue.create, 100000),
+    update: salesArticleImportInteger(summaryValue.update, 100000),
+    unchanged: salesArticleImportInteger(summaryValue.unchanged, 100000),
+    blocked: salesArticleImportInteger(summaryValue.blocked, 100000),
+    identifierCount: salesArticleImportInteger(summaryValue.identifierCount, 10000000),
+    priceCount: salesArticleImportInteger(summaryValue.priceCount, 10000000),
+  };
+  if (summary.create + summary.update + summary.unchanged + summary.blocked !== summary.total) {
+    throw new Error("Die Importvorschau enthält widersprüchliche Zähler.");
+  }
+  const safeText = (value, maximum) => String(value || "")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maximum);
+  const sourceValue = payload.source && typeof payload.source === "object" ? payload.source : {};
+  const rows = (Array.isArray(payload.rows) ? payload.rows : []).slice(0, 200).map((row = {}) => {
+    const action = String(row.action || "");
+    if (!Object.hasOwn(SALES_ARTICLE_IMPORT_ACTION_LABELS, action)) {
+      throw new Error("Die Importvorschau enthält einen unbekannten Aktionsstatus.");
+    }
+    return {
+      rowNumber: salesArticleImportInteger(row.rowNumber, 100000),
+      articleNumber: safeText(row.articleNumber, 80),
+      description: safeText(row.description, 300),
+      action,
+      issueCodes: [...new Set((Array.isArray(row.issueCodes) ? row.issueCodes : [])
+        .map((code) => String(code))
+        .filter((code) => Object.hasOwn(SALES_ARTICLE_IMPORT_ISSUE_LABELS, code)))],
+    };
+  });
+  const safeToApply = payload.canApply === true
+    && summary.total > 0
+    && (summary.create + summary.update > 0 || summary.blocked > 0);
+  return {
+    previewId,
+    confirmationFingerprint: confirmationFingerprint.toLowerCase(),
+    expiresAt: String(payload.expiresAt || ""),
+    source: {
+      fileName: safeText(sourceValue.fileName || "TradeFoto-Export", 180),
+      snapshotAt: String(sourceValue.snapshotAt || ""),
+      articleCount: salesArticleImportInteger(sourceValue.articleCount, 100000),
+    },
+    summary,
+    rows,
+    truncated: payload.truncated === true,
+    canApply: safeToApply,
+  };
+}
+
+function setSalesArticleImportMessage(message = "", isError = false) {
+  if (!elements.salesArticleImportMessage) return;
+  elements.salesArticleImportMessage.textContent = message;
+  elements.salesArticleImportMessage.classList.toggle("hidden", !message);
+  elements.salesArticleImportMessage.classList.toggle("error", Boolean(isError));
+}
+
+function captureSalesArticleImportContext() {
+  return {
+    actorKey: currentSalesArticleCatalogActorKey(),
+    accessKey: currentSalesArticleCatalogDetailAccessKey(),
+  };
+}
+
+function salesArticleImportContextIsCurrent(context) {
+  return Boolean(context)
+    && context.actorKey === currentSalesArticleCatalogActorKey()
+    && context.accessKey === currentSalesArticleCatalogDetailAccessKey()
+    && canReadSalesArticles()
+    && canImportSalesArticles();
+}
+
+function salesArticleImportIssueText(row) {
+  const messages = row.issueCodes.map((code) => SALES_ARTICLE_IMPORT_ISSUE_LABELS[code]).filter(Boolean);
+  if (row.action === "blocked" && !messages.length) return "Konflikt bleibt ohne Änderung bestehen.";
+  return messages.join(" ") || "Keine Konflikte erkannt.";
+}
+
+function renderSalesArticleImport() {
+  const catalog = state.salesArticleCatalog;
+  const preview = catalog.importPreview;
+  const summary = preview?.summary || {
+    total: 0, create: 0, update: 0, unchanged: 0, blocked: 0, identifierCount: 0, priceCount: 0,
+  };
+  const importAllowed = canImportSalesArticles();
+  const busy = catalog.importCatalogPending || catalog.importPreviewPending || catalog.importApplyPending;
+  const selectedFile = elements.salesArticleImportFile?.files?.[0] || null;
+  if (elements.salesArticleImportButton) {
+    elements.salesArticleImportButton.classList.toggle("hidden", !importAllowed);
+    elements.salesArticleImportButton.disabled = !importAllowed || busy;
+  }
+  if (elements.salesArticleImportFile) {
+    elements.salesArticleImportFile.disabled = !importAllowed || busy || !catalog.importCatalog;
+  }
+  if (elements.salesArticleImportFileName) {
+    elements.salesArticleImportFileName.textContent = selectedFile
+      ? `${selectedFile.name} · ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(selectedFile.size / 1024 / 1024)} MB`
+      : "Noch keine Datei ausgewählt.";
+  }
+  if (elements.salesArticleImportPreviewButton) {
+    elements.salesArticleImportPreviewButton.disabled = !importAllowed
+      || busy
+      || !catalog.importCatalog
+      || !selectedFile;
+    elements.salesArticleImportPreviewButton.textContent = catalog.importPreviewPending
+      ? "Datei wird geprüft …"
+      : "Vorschau prüfen";
+  }
+  const showPreview = Boolean(preview || catalog.importRejectedCount);
+  elements.salesArticleImportPreview?.classList.toggle("hidden", !showPreview);
+  elements.salesArticleImportPreview?.setAttribute("aria-busy", String(catalog.importPreviewPending || catalog.importApplyPending));
+  if (elements.salesArticleImportValidCount) elements.salesArticleImportValidCount.textContent = String(summary.create + summary.update);
+  if (elements.salesArticleImportUnchangedCount) elements.salesArticleImportUnchangedCount.textContent = String(summary.unchanged);
+  if (elements.salesArticleImportConflictCount) elements.salesArticleImportConflictCount.textContent = String(summary.blocked);
+  if (elements.salesArticleImportRejectedCount) elements.salesArticleImportRejectedCount.textContent = String(catalog.importRejectedCount);
+  if (elements.salesArticleImportPreviewMeta) {
+    const expiry = salesArticleCatalogTimestamp(preview?.expiresAt, "befristet");
+    elements.salesArticleImportPreviewMeta.textContent = preview
+      ? `${preview.source.fileName} · ${summary.total} Artikel · Vorschau gültig bis ${expiry}.`
+      : "Die ausgewählte Datei wurde nicht als übernehmbare Vorschau akzeptiert.";
+  }
+  if (elements.salesArticleImportBreakdown) {
+    elements.salesArticleImportBreakdown.textContent = preview
+      ? `${summary.create} neu · ${summary.update} zu aktualisieren · ${summary.unchanged} unverändert · ${summary.blocked} blockiert · ${summary.identifierCount} Kennungen · ${summary.priceCount} Preisfelder ohne Betragsvorschau.${preview.truncated ? " Das Prüfprotokoll zeigt höchstens 200 Zeilen." : ""}`
+      : "Keine Artikeldaten wurden übernommen.";
+  }
+  const rows = preview?.rows || [];
+  if (elements.salesArticleImportIssuesCount) {
+    elements.salesArticleImportIssuesCount.textContent = preview?.truncated
+      ? `${rows.length} von ${summary.total} Einträgen`
+      : `${rows.length || catalog.importRejectedCount} Einträge`;
+  }
+  if (elements.salesArticleImportIssues) {
+    if (rows.length) {
+      elements.salesArticleImportIssues.innerHTML = rows.map((row) => `<tr>
+        <td class="numeric">${row.rowNumber || "–"}</td>
+        <td class="numeric">${escapeHtml(row.articleNumber || "–")}</td>
+        <td>${escapeHtml(row.description || "–")}</td>
+        <td><span class="sales-article-import-action ${escapeHtmlAttribute(row.action)}">${escapeHtml(SALES_ARTICLE_IMPORT_ACTION_LABELS[row.action])}</span></td>
+        <td>${escapeHtml(salesArticleImportIssueText(row))}</td>
+      </tr>`).join("");
+    } else if (catalog.importRejectedCount) {
+      elements.salesArticleImportIssues.innerHTML = `<tr class="sales-article-import-empty"><td colspan="5">${escapeHtml(SALES_ARTICLE_IMPORT_ERROR_LABELS[catalog.importFailureCode] || "Datei konnte nicht sicher geprüft werden.")}</td></tr>`;
+    } else {
+      elements.salesArticleImportIssues.innerHTML = '<tr class="sales-article-import-empty"><td colspan="5">Noch keine Prüfvorschau vorhanden.</td></tr>';
+    }
+  }
+  const confirmed = elements.salesArticleImportConfirmed?.checked === true;
+  if (elements.salesArticleImportConfirmed) {
+    elements.salesArticleImportConfirmed.disabled = !preview?.canApply || busy || !importAllowed;
+  }
+  if (elements.salesArticleImportApplyButton) {
+    elements.salesArticleImportApplyButton.disabled = !preview?.canApply || !confirmed || busy || !importAllowed;
+    elements.salesArticleImportApplyButton.textContent = catalog.importApplyPending
+      ? "Import wird übernommen …"
+      : "Bestätigten Import übernehmen";
+  }
+  if (elements.salesArticleImportReset) elements.salesArticleImportReset.disabled = busy;
+  if (elements.salesArticleImportCancel) elements.salesArticleImportCancel.disabled = catalog.importApplyPending;
+  elements.salesArticleImportDialog?.querySelectorAll("[data-close-sales-article-import]").forEach((button) => {
+    button.disabled = catalog.importApplyPending;
+  });
+}
+
+function clearSalesArticleImportPreviewState({ clearFile = true, message = "" } = {}) {
+  const catalog = state.salesArticleCatalog;
+  catalog.importRequestId += 1;
+  catalog.importPreview = null;
+  catalog.importPreviewPending = false;
+  catalog.importApplyPending = false;
+  catalog.importRejectedCount = 0;
+  catalog.importFailureCode = "";
+  if (clearFile && elements.salesArticleImportFile) elements.salesArticleImportFile.value = "";
+  if (elements.salesArticleImportConfirmed) elements.salesArticleImportConfirmed.checked = false;
+  setSalesArticleImportMessage(message);
+  renderSalesArticleImport();
+}
+
+async function releaseSalesArticleImportPreview(previewId, context) {
+  if (!previewId || !salesArticleImportContextIsCurrent(context)) return;
+  try {
+    await api(`/api/sales/articles/import/previews/${encodeURIComponent(previewId)}`, { method: "DELETE" });
+  } catch {}
+}
+
+function discardSalesArticleImportPreview({ clearFile = true, message = "" } = {}) {
+  const previewId = state.salesArticleCatalog.importPreview?.previewId || "";
+  const context = captureSalesArticleImportContext();
+  clearSalesArticleImportPreviewState({ clearFile, message });
+  void releaseSalesArticleImportPreview(previewId, context);
+}
+
+function resetSalesArticleImportState({ restoreFocus = false, clearCatalog = true } = {}) {
+  const catalog = state.salesArticleCatalog;
+  const returnFocus = catalog.importReturnFocus;
+  discardSalesArticleImportPreview();
+  catalog.importCatalogRequestId += 1;
+  catalog.importCatalogPending = false;
+  if (clearCatalog) catalog.importCatalog = null;
+  catalog.importReturnFocus = null;
+  if (restoreFocus) requestAnimationFrame(() => returnFocus?.isConnected && returnFocus.focus());
+  renderSalesArticleImport();
+}
+
+function closeSalesArticleImport({ restoreFocus = true, force = false } = {}) {
+  if (state.salesArticleCatalog.importApplyPending && !force) return;
+  if (elements.salesArticleImportDialog?.open) elements.salesArticleImportDialog.close();
+  resetSalesArticleImportState({ restoreFocus });
+}
+
+async function loadSalesArticleImportCatalog() {
+  if (!canImportSalesArticles()) return;
+  const catalog = state.salesArticleCatalog;
+  const context = captureSalesArticleImportContext();
+  const requestId = ++catalog.importCatalogRequestId;
+  catalog.importCatalogPending = true;
+  setSalesArticleImportMessage("Importvorgaben werden geladen …");
+  renderSalesArticleImport();
+  try {
+    const payload = await api("/api/sales/articles/import/catalog");
+    if (requestId !== catalog.importCatalogRequestId || !salesArticleImportContextIsCurrent(context)) return;
+    catalog.importCatalog = normalizeSalesArticleImportCatalog(payload);
+    setSalesArticleImportMessage(`Bereit für UTF-8-JSON mit höchstens ${new Intl.NumberFormat("de-AT").format(catalog.importCatalog.maxRows)} Artikeln und ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 0 }).format(catalog.importCatalog.maxBytes / 1024 / 1024)} MB. Das serverseitige Arbeitsbudget wird vor der Detailprüfung zusätzlich kontrolliert.`);
+  } catch (error) {
+    if (requestId !== catalog.importCatalogRequestId || !salesArticleImportContextIsCurrent(context)) return;
+    catalog.importCatalog = null;
+    setSalesArticleImportMessage(salesArticleImportErrorMessage(error), true);
+  } finally {
+    if (requestId === catalog.importCatalogRequestId && salesArticleImportContextIsCurrent(context)) {
+      catalog.importCatalogPending = false;
+      renderSalesArticleImport();
+    }
+  }
+}
+
+function openSalesArticleImport() {
+  if (!canImportSalesArticles() || !elements.salesArticleImportDialog) return;
+  closeSalesArticleEditor({ restoreFocus: false, force: true });
+  closeSalesArticleArchive({ restoreFocus: false, force: true });
+  resetSalesArticleImportState({ restoreFocus: false });
+  state.salesArticleCatalog.importReturnFocus = document.activeElement;
+  elements.salesArticleImportDialog.showModal();
+  renderSalesArticleImport();
+  void loadSalesArticleImportCatalog();
+}
+
+async function previewSalesArticleImport() {
+  const catalog = state.salesArticleCatalog;
+  const file = elements.salesArticleImportFile?.files?.[0];
+  if (!file || catalog.importPreviewPending || catalog.importApplyPending || !canImportSalesArticles()) return;
+  const contract = catalog.importCatalog;
+  if (!contract || file.size < 1 || file.size > contract.maxBytes) {
+    catalog.importRejectedCount = 1;
+    catalog.importFailureCode = "SALES_ARTICLE_IMPORT_FILE_SIZE_INVALID";
+    setSalesArticleImportMessage(SALES_ARTICLE_IMPORT_ERROR_LABELS[catalog.importFailureCode], true);
+    renderSalesArticleImport();
+    return;
+  }
+  const previousPreviewId = catalog.importPreview?.previewId || "";
+  const previousContext = captureSalesArticleImportContext();
+  clearSalesArticleImportPreviewState({ clearFile: false });
+  void releaseSalesArticleImportPreview(previousPreviewId, previousContext);
+  const context = captureSalesArticleImportContext();
+  const requestId = ++catalog.importRequestId;
+  catalog.importPreviewPending = true;
+  setSalesArticleImportMessage("Datei wird ohne Datenänderung geprüft …");
+  renderSalesArticleImport();
+  try {
+    const response = await rawApi("/api/sales/articles/import/preview", {
+      method: "POST",
+      headers: {
+        "Content-Type": SALES_ARTICLE_IMPORT_MIME,
+        "X-Import-Filename": encodeURIComponent(file.name || "tradefoto-artikel.json"),
+      },
+      body: file,
+    });
+    if (requestId !== catalog.importRequestId || !salesArticleImportContextIsCurrent(context)) {
+      await response.body?.cancel();
+      return;
+    }
+    const payload = await response.json();
+    if (requestId !== catalog.importRequestId || !salesArticleImportContextIsCurrent(context)) {
+      void releaseSalesArticleImportPreview(String(payload?.previewId || ""), context);
+      return;
+    }
+    catalog.importPreview = normalizeSalesArticleImportPreview(payload);
+    catalog.importRejectedCount = 0;
+    catalog.importFailureCode = "";
+    const safeCount = catalog.importPreview.summary.create + catalog.importPreview.summary.update;
+    if (!catalog.importPreview.canApply) {
+      setSalesArticleImportMessage("Die Datei enthält keine neue, sicher übernehmbare Artikeländerung.");
+    } else if (!safeCount && catalog.importPreview.summary.blocked) {
+      setSalesArticleImportMessage("Der vollständig quarantänisierte Prüflauf kann bestätigt werden. Dabei werden nur Befunde und Auditnachweis gespeichert; Artikeldaten bleiben unverändert.");
+    } else if (catalog.importPreview.summary.blocked) {
+      setSalesArticleImportMessage("Die sichere Teilmenge kann atomar übernommen werden. Konflikt- und Quarantänezeilen bleiben unverändert und werden protokolliert.");
+    } else {
+      setSalesArticleImportMessage("Vorschau vollständig geprüft. Bitte Zusammenfassung kontrollieren und den Import ausdrücklich bestätigen.");
+    }
+  } catch (error) {
+    if (requestId !== catalog.importRequestId || !salesArticleImportContextIsCurrent(context)) return;
+    catalog.importPreview = null;
+    catalog.importRejectedCount = 1;
+    catalog.importFailureCode = String(error?.code || "");
+    setSalesArticleImportMessage(salesArticleImportErrorMessage(error), true);
+  } finally {
+    if (requestId === catalog.importRequestId && salesArticleImportContextIsCurrent(context)) {
+      catalog.importPreviewPending = false;
+      renderSalesArticleImport();
+    }
+  }
+}
+
+async function applySalesArticleImport(event) {
+  event.preventDefault();
+  const catalog = state.salesArticleCatalog;
+  const preview = catalog.importPreview;
+  if (!preview?.canApply || catalog.importApplyPending
+    || elements.salesArticleImportConfirmed?.checked !== true || !canImportSalesArticles()) return;
+  const context = captureSalesArticleImportContext();
+  const requestId = ++catalog.importRequestId;
+  const selectedArticleNumber = catalog.selectedArticleNumber;
+  const searchStarted = catalog.searchStarted;
+  catalog.importApplyPending = true;
+  setSalesArticleImportMessage("Bestätigter Import wird atomar und revisionssicher übernommen …");
+  renderSalesArticleImport();
+  try {
+    const result = await api("/api/sales/articles/import/apply", {
+      method: "POST",
+      body: JSON.stringify({
+        previewId: preview.previewId,
+        confirmationFingerprint: preview.confirmationFingerprint,
+      }),
+    });
+    if (requestId !== catalog.importRequestId || !salesArticleImportContextIsCurrent(context)) return;
+    const appliedSummary = result?.summary && typeof result.summary === "object" ? result.summary : preview.summary;
+    catalog.importApplyPending = false;
+    if (elements.salesArticleImportDialog?.open) elements.salesArticleImportDialog.close();
+    resetSalesArticleImportState({ restoreFocus: true });
+    if (searchStarted && canReadSalesArticles()) {
+      await loadSalesArticleCatalog({ reset: true, preserveDetail: Boolean(selectedArticleNumber) });
+    }
+    if (selectedArticleNumber && salesArticleImportContextIsCurrent(context)) {
+      await loadSalesArticleCatalogDetail(selectedArticleNumber);
+    }
+    if (!salesArticleImportContextIsCurrent(context)) return;
+    const changed = salesArticleImportInteger(appliedSummary.create, 100000)
+      + salesArticleImportInteger(appliedSummary.update, 100000);
+    invalidateAdminPersonalActionsAfterMutation();
+    showToast(result?.replayed === true
+      ? "Dieser bestätigte Artikelimport war bereits vollständig verarbeitet."
+      : changed
+        ? `${new Intl.NumberFormat("de-AT").format(changed)} Artikel revisionssicher übernommen.`
+        : "Quarantänebefunde revisionssicher protokolliert; Artikeldaten blieben unverändert.");
+  } catch (error) {
+    if (requestId !== catalog.importRequestId || !salesArticleImportContextIsCurrent(context)) return;
+    catalog.importApplyPending = false;
+    if (["SALES_ARTICLE_IMPORT_PREVIEW_EXPIRED", "SALES_ARTICLE_IMPORT_PREVIEW_STALE", "SALES_ARTICLE_IMPORT_CONFIRMATION_INVALID"].includes(String(error?.code || ""))) {
+      const safeMessage = salesArticleImportErrorMessage(error);
+      discardSalesArticleImportPreview({ clearFile: false, message: safeMessage });
+      setSalesArticleImportMessage(safeMessage, true);
+    } else {
+      setSalesArticleImportMessage(salesArticleImportErrorMessage(error), true);
+      renderSalesArticleImport();
+    }
+  }
+}
+
+function closeSalesArticleManagementDialogs({ restoreFocus = false } = {}) {
+  closeSalesArticleEditor({ restoreFocus, force: true });
+  closeSalesArticleArchive({ restoreFocus, force: true });
+  closeSalesArticleImport({ restoreFocus, force: true });
+}
+
+function openSalesArticleEditor(mode) {
+  if (!canWriteSalesArticles() || !elements.salesArticleEditorDialog) return;
+  const catalog = state.salesArticleCatalog;
+  if (catalog.editorPending || catalog.archivePending) return;
+  const detail = catalog.detail;
+  if (mode !== "create" && (!detail || !salesArticleDetailCanWrite())) return;
+  if (mode === "edit" && !detail.article.active) return;
+  closeSalesArticleManagementDialogs({ restoreFocus: false });
+  catalog.editorMode = mode;
+  catalog.editorReturnFocus = document.activeElement;
+  catalog.editorPriceDirtyGroups = new Set();
+  const source = mode === "create" ? null : detail.article;
+  catalog.editorOriginalArticleNumber = source?.articleNumber || "";
+  if (elements.salesArticleEditorExpectedRevision) elements.salesArticleEditorExpectedRevision.value = String(source?.currentRevision || "");
+  if (elements.salesArticleEditorArticleNumber) elements.salesArticleEditorArticleNumber.value = mode === "edit" ? source.articleNumber : "";
+  if (elements.salesArticleEditorDescriptionField) elements.salesArticleEditorDescriptionField.value = source?.description || "";
+  const titles = {
+    create: ["Artikel anlegen", "Neue Stammdaten revisionssicher erfassen."],
+    edit: ["Artikel bearbeiten", "Artikelnummer, Bezeichnung und freigegebene Werte als neue Revision speichern."],
+    copy: ["Artikel kopieren", "Bezeichnung und sichtbare Preise werden vorbereitet. EAN / GTIN wird aus Eindeutigkeitsgründen nicht übernommen."],
+  };
+  if (elements.salesArticleEditorTitle) elements.salesArticleEditorTitle.textContent = titles[mode]?.[0] || "Artikel bearbeiten";
+  if (elements.salesArticleEditorDescription) elements.salesArticleEditorDescription.textContent = titles[mode]?.[1] || "";
+  if (elements.salesArticleEditorSubmit) {
+    elements.salesArticleEditorSubmit.disabled = false;
+    elements.salesArticleEditorSubmit.textContent = mode === "edit" ? "Änderungen speichern" : mode === "copy" ? "Kopie anlegen" : "Artikel anlegen";
+  }
+  renderSalesArticleIdentifierEditor(mode === "edit" ? salesArticleEditableIdentifiers(source.identifiers) : []);
+  renderSalesArticlePriceEditorGroup("sales", source?.prices?.sales ?? (canReadSalesArticlePrices() ? [] : null), { mode });
+  renderSalesArticlePriceEditorGroup("costs", source?.prices?.costs ?? (canReadSalesArticleCosts() ? [] : null), { mode });
+  setSalesArticleEditorMessage();
+  elements.salesArticleEditorDialog.showModal();
+  requestAnimationFrame(() => elements.salesArticleEditorArticleNumber?.focus());
+}
+
+function openSalesArticleArchive() {
+  const catalog = state.salesArticleCatalog;
+  const article = catalog.detail?.article;
+  if (!article?.active || !salesArticleDetailCanWrite() || !elements.salesArticleArchiveDialog) return;
+  closeSalesArticleManagementDialogs({ restoreFocus: false });
+  catalog.archiveArticleNumber = article.articleNumber;
+  catalog.archiveExpectedRevision = article.currentRevision;
+  catalog.archiveReturnFocus = document.activeElement;
+  if (elements.salesArticleArchiveTarget) {
+    const number = document.createElement("strong");
+    number.textContent = `Artikel ${article.articleNumber}`;
+    const description = document.createElement("span");
+    description.textContent = article.description || "Keine Bezeichnung hinterlegt";
+    elements.salesArticleArchiveTarget.replaceChildren(number, description);
+  }
+  if (elements.salesArticleArchiveConfirmation) {
+    elements.salesArticleArchiveConfirmation.value = "";
+    elements.salesArticleArchiveConfirmation.setCustomValidity("");
+  }
+  if (elements.salesArticleArchiveSubmit) elements.salesArticleArchiveSubmit.disabled = true;
+  setSalesArticleArchiveMessage();
+  elements.salesArticleArchiveDialog.showModal();
+  requestAnimationFrame(() => elements.salesArticleArchiveConfirmation?.focus());
+}
+
+function salesArticleEditorPayload() {
+  const catalog = state.salesArticleCatalog;
+  const articleNumber = String(elements.salesArticleEditorArticleNumber?.value || "").trim();
+  const description = String(elements.salesArticleEditorDescriptionField?.value || "").trim();
+  const identifierResult = salesArticleEditorIdentifiers();
+  const sales = salesArticleEditorPriceGroup("sales");
+  const costs = salesArticleEditorPriceGroup("costs");
+  if (!identifierResult.valid || sales?.valid === false || costs?.valid === false
+    || !elements.salesArticleEditorForm?.reportValidity()) return null;
+  const payload = { articleNumber, description, identifiers: identifierResult.identifiers };
+  if (catalog.editorMode !== "create") {
+    payload.expectedRevision = Number(elements.salesArticleEditorExpectedRevision?.value || 0);
+  }
+  const prices = {};
+  if (sales && (catalog.editorMode === "edit" || sales.prices.length)) prices.sales = sales.prices;
+  if (costs && (catalog.editorMode === "edit" || costs.prices.length)) prices.costs = costs.prices;
+  if (Object.keys(prices).length) payload.prices = prices;
+  return payload;
+}
+
+function invalidateAdminPersonalActionsAfterMutation() {
+  state.personalActionsRequestId += 1;
+  state.personalActions = [];
+  state.personalActionsCursor = "";
+  state.personalActionsLoading = false;
+  state.personalActionUndoPending = "";
+  if (elements.personalActionsAdminDialog?.open) loadAdminPersonalActions();
+}
+
+function captureSalesArticleMutationContext() {
+  return {
+    actorKey: currentSalesArticleCatalogActorKey(),
+    accessKey: currentSalesArticleCatalogDetailAccessKey(),
+  };
+}
+
+function salesArticleMutationContextIsCurrent(context, { requireWrite = true } = {}) {
+  return Boolean(context)
+    && context.actorKey === currentSalesArticleCatalogActorKey()
+    && context.accessKey === currentSalesArticleCatalogDetailAccessKey()
+    && canReadSalesArticles()
+    && (!requireWrite || canWriteSalesArticles());
+}
+
+async function discardStaleSalesArticleMutationResponse(context, { reloadArticleNumber = "" } = {}) {
+  const actorChanged = !context || context.actorKey !== currentSalesArticleCatalogActorKey();
+  const canRead = canReadSalesArticles();
+  closeSalesArticleManagementDialogs({ restoreFocus: false });
+  if (actorChanged || !canRead) {
+    resetSalesArticleCatalogSearch(
+      canRead
+        ? "Artikelzustand wurde wegen einer geänderten Sitzung neu aufgebaut."
+        : "Artikeldaten wurden wegen geänderter Rechte aus der Ansicht entfernt.",
+      { error: !canRead },
+    );
+  } else {
+    resetSalesArticleCatalogDetailState();
+    renderSalesArticleCatalogResults();
+    setSalesArticleCatalogDetailStatus("Artikeldetails wurden wegen geänderter Rechte aus der Ansicht entfernt.");
+  }
+  const articleNumber = String(reloadArticleNumber || "").trim();
+  if (canRead && articleNumber) {
+    await loadSalesArticleCatalogDetail(articleNumber);
+  }
+  return null;
+}
+
+async function refreshSalesArticleAfterMutation(payload, message, {
+  refreshPersonalActions = true,
+  focusDetail = true,
+  expectedActorKey = "",
+  expectedAccessKey = "",
+  requireWrite = true,
+  reloadArticleNumber = "",
+} = {}) {
+  const expectedContext = { actorKey: expectedActorKey, accessKey: expectedAccessKey };
+  if (!salesArticleMutationContextIsCurrent(expectedContext, { requireWrite })) {
+    return discardStaleSalesArticleMutationResponse(expectedContext, { reloadArticleNumber });
+  }
+  const detail = normalizeSalesArticleDetailPayload(payload);
+  const catalog = state.salesArticleCatalog;
+  catalog.detailRequestId += 1;
+  catalog.selectedArticleNumber = detail.article.articleNumber;
+  catalog.detail = detail;
+  catalog.detailLoading = false;
+  catalog.detailError = "";
+  catalog.detailMoveFocus = false;
+  catalog.detailAccessKey = currentSalesArticleCatalogDetailAccessKey();
+  renderSalesArticleCatalogResults();
+  setSalesArticleCatalogDetailStatus(message);
+  if (canReadSalesArticles()) await loadSalesArticleCatalog({ reset: true, preserveDetail: true });
+  if (!salesArticleMutationContextIsCurrent(expectedContext, { requireWrite })) {
+    return discardStaleSalesArticleMutationResponse(expectedContext, { reloadArticleNumber });
+  }
+  if (refreshPersonalActions) invalidateAdminPersonalActionsAfterMutation();
+  if (focusDetail) requestAnimationFrame(() => elements.salesArticleDetailTitle?.focus());
+  return detail;
+}
+
+async function submitSalesArticleEditor(event) {
+  event.preventDefault();
+  const catalog = state.salesArticleCatalog;
+  if (catalog.editorPending || !canWriteSalesArticles()) return;
+  const payload = salesArticleEditorPayload();
+  if (!payload) return;
+  const mode = catalog.editorMode;
+  const originalArticleNumber = catalog.editorOriginalArticleNumber;
+  const requestContext = captureSalesArticleMutationContext();
+  catalog.editorPending = true;
+  if (elements.salesArticleEditorSubmit) elements.salesArticleEditorSubmit.disabled = true;
+  setSalesArticleEditorMessage("Artikel wird revisionssicher gespeichert …");
+  renderSalesArticleManagementActions();
+  try {
+    let result;
+    if (mode === "create") {
+      result = await api("/api/sales/articles", { method: "POST", body: JSON.stringify(payload) });
+    } else if (mode === "copy") {
+      result = await api("/api/sales/articles/copy", {
+        method: "POST",
+        body: JSON.stringify({ sourceArticleNumber: originalArticleNumber, ...payload }),
+      });
+    } else {
+      result = await api("/api/sales/articles", {
+        method: "PUT",
+        body: JSON.stringify({ currentArticleNumber: originalArticleNumber, ...payload }),
+      });
+    }
+    if (!salesArticleMutationContextIsCurrent(requestContext)) {
+      await discardStaleSalesArticleMutationResponse(requestContext, {
+        reloadArticleNumber: payload.articleNumber,
+      });
+      return;
+    }
+    catalog.editorPending = false;
+    closeSalesArticleEditor({ restoreFocus: false, force: true });
+    const success = mode === "edit" ? "Artikeländerung gespeichert." : mode === "copy" ? "Artikelkopie angelegt." : "Artikel angelegt.";
+    const refreshed = await refreshSalesArticleAfterMutation(result, success, {
+      expectedActorKey: requestContext.actorKey,
+      expectedAccessKey: requestContext.accessKey,
+      reloadArticleNumber: payload.articleNumber,
+    });
+    if (!refreshed) return;
+    showToast(success);
+  } catch (error) {
+    if (!salesArticleMutationContextIsCurrent(requestContext)) {
+      await discardStaleSalesArticleMutationResponse(requestContext, {
+        reloadArticleNumber: payload.articleNumber,
+      });
+      return;
+    }
+    catalog.editorPending = false;
+    if (elements.salesArticleEditorSubmit) elements.salesArticleEditorSubmit.disabled = false;
+    const message = error.code === "SALES_ARTICLE_REVISION_CONFLICT"
+      ? "Der Artikel wurde zwischenzeitlich geändert. Bitte den Dialog schließen, den aktuellen Stand neu öffnen und erneut bearbeiten."
+      : error.message;
+    setSalesArticleEditorMessage(message, true);
+    renderSalesArticleManagementActions();
+  }
+}
+
+async function submitSalesArticleArchive(event) {
+  event.preventDefault();
+  const catalog = state.salesArticleCatalog;
+  if (catalog.archivePending || !salesArticleDetailCanWrite()) return;
+  const articleNumber = catalog.archiveArticleNumber;
+  if (!articleNumber || String(elements.salesArticleArchiveConfirmation?.value || "").trim() !== articleNumber) {
+    elements.salesArticleArchiveConfirmation?.setCustomValidity("Die Artikelnummer stimmt nicht überein.");
+    elements.salesArticleArchiveConfirmation?.reportValidity();
+    return;
+  }
+  elements.salesArticleArchiveConfirmation?.setCustomValidity("");
+  const requestContext = captureSalesArticleMutationContext();
+  catalog.archivePending = true;
+  if (elements.salesArticleArchiveSubmit) elements.salesArticleArchiveSubmit.disabled = true;
+  setSalesArticleArchiveMessage("Artikel wird revisionssicher archiviert …");
+  renderSalesArticleManagementActions();
+  try {
+    const result = await api("/api/sales/articles/archive", {
+      method: "POST",
+      body: JSON.stringify({ articleNumber, expectedRevision: catalog.archiveExpectedRevision }),
+    });
+    if (!salesArticleMutationContextIsCurrent(requestContext)) {
+      await discardStaleSalesArticleMutationResponse(requestContext, { reloadArticleNumber: articleNumber });
+      return;
+    }
+    catalog.archivePending = false;
+    closeSalesArticleArchive({ restoreFocus: false, force: true });
+    const refreshed = await refreshSalesArticleAfterMutation(result, "Artikel archiviert.", {
+      expectedActorKey: requestContext.actorKey,
+      expectedAccessKey: requestContext.accessKey,
+      reloadArticleNumber: articleNumber,
+    });
+    if (!refreshed) return;
+    showToast("Artikel archiviert. Die Historie bleibt erhalten.");
+  } catch (error) {
+    if (!salesArticleMutationContextIsCurrent(requestContext)) {
+      await discardStaleSalesArticleMutationResponse(requestContext, { reloadArticleNumber: articleNumber });
+      return;
+    }
+    catalog.archivePending = false;
+    const message = error.code === "SALES_ARTICLE_REVISION_CONFLICT"
+      ? "Der Artikel wurde zwischenzeitlich geändert. Bitte den Dialog schließen und den aktuellen Stand neu laden."
+      : error.message;
+    setSalesArticleArchiveMessage(message, true);
+    if (elements.salesArticleArchiveSubmit) elements.salesArticleArchiveSubmit.disabled = false;
+    renderSalesArticleManagementActions();
+  }
+}
+
+function setSalesArticleCatalogDetailStatus(message) {
+  if (elements.salesArticleDetailStatus) elements.salesArticleDetailStatus.textContent = message;
+}
+
+function resetSalesArticleCatalogDetailState() {
+  const catalog = state.salesArticleCatalog;
+  catalog.detailRequestId += 1;
+  catalog.selectedArticleNumber = "";
+  catalog.detail = null;
+  catalog.detailLoading = false;
+  catalog.detailError = "";
+  catalog.detailMoveFocus = false;
+}
+
+function renderSalesArticleCatalogDetail() {
+  const catalog = state.salesArticleCatalog;
+  if (!elements.salesArticleDetail || !elements.salesArticleDetailBody) return;
+  elements.salesArticleDetail.setAttribute("aria-busy", String(catalog.detailLoading));
+  elements.salesArticleDetailMeta?.classList.add("hidden");
+  elements.salesArticleDetailNavigation?.classList.add("hidden");
+  renderSalesArticleManagementActions();
+
+  if (catalog.detailLoading) {
+    if (elements.salesArticleDetailTitle) elements.salesArticleDetailTitle.textContent = `Artikel ${catalog.selectedArticleNumber}`;
+    if (elements.salesArticleDetailSubtitle) elements.salesArticleDetailSubtitle.textContent = "Die freigegebenen Detaildaten werden geladen.";
+    elements.salesArticleDetailBody.innerHTML = '<div class="sales-article-detail-loading"><strong>Artikel wird geöffnet …</strong><span>Stammdaten, Kennungen und freigegebene Preisbereiche werden geladen.</span></div>';
+    return;
+  }
+
+  if (catalog.detailError) {
+    if (elements.salesArticleDetailTitle) elements.salesArticleDetailTitle.textContent = `Artikel ${catalog.selectedArticleNumber || "öffnen"}`;
+    if (elements.salesArticleDetailSubtitle) elements.salesArticleDetailSubtitle.textContent = "Die Detailansicht konnte nicht geladen werden.";
+    elements.salesArticleDetailBody.innerHTML = `<div class="sales-article-detail-error"><strong>Artikelansicht nicht verfügbar</strong><span>${escapeHtml(catalog.detailError)}</span><button class="secondary-button" type="button" data-sales-article-detail-retry>Erneut laden</button></div>`;
+    if (catalog.detailMoveFocus) {
+      catalog.detailMoveFocus = false;
+      requestAnimationFrame(() => (
+        elements.salesArticleDetailBody?.querySelector("[data-sales-article-detail-retry]")
+        || elements.salesArticleDetailTitle
+      )?.focus());
+    }
+    return;
+  }
+
+  if (!catalog.detail) {
+    if (elements.salesArticleDetailTitle) elements.salesArticleDetailTitle.textContent = "Artikelstamm im Detail";
+    if (elements.salesArticleDetailSubtitle) elements.salesArticleDetailSubtitle.textContent = "Einen Treffer auswählen, um die freigegebenen Artikeldaten zu öffnen.";
+    elements.salesArticleDetailBody.innerHTML = '<div class="sales-article-detail-empty"><strong>Noch kein Artikel ausgewählt</strong><span>Artikelnummer in der Ergebnisliste wählen. Die Detaildaten werden erst dann geladen.</span></div>';
+    return;
+  }
+
+  const { article, revisions } = catalog.detail;
+  if (elements.salesArticleDetailTitle) elements.salesArticleDetailTitle.textContent = `Artikel ${article.articleNumber || "–"}`;
+  if (elements.salesArticleDetailSubtitle) elements.salesArticleDetailSubtitle.textContent = article.description || "Keine Artikelbezeichnung hinterlegt.";
+  if (elements.salesArticleDetailMeta) {
+    elements.salesArticleDetailMeta.innerHTML = `<span class="sales-article-detail-chip ${article.active ? "active" : "inactive"}">${article.active ? "Aktiv" : "Inaktiv"}</span><span class="sales-article-detail-chip">Revision ${article.currentRevision || "–"}</span>`;
+    elements.salesArticleDetailMeta.classList.remove("hidden");
+  }
+  elements.salesArticleDetailNavigation?.classList.remove("hidden");
+  renderSalesArticleManagementActions();
+  const provenance = article.provenance;
+  elements.salesArticleDetailBody.innerHTML = `<div class="sales-article-detail-content">
+    <div class="sales-article-detail-overview">
+      <section class="sales-article-detail-card" id="salesArticleMasterDataSection" aria-labelledby="salesArticleMasterDataTitle">
+        <header><div><h3 id="salesArticleMasterDataTitle">Stammdaten</h3><p>Aktuelle, revisionssicher gespeicherte Fassung.</p></div></header>
+        <dl class="sales-article-detail-data">
+          <div><dt>Artikelnummer</dt><dd class="numeric"><strong>${escapeHtml(article.articleNumber || "–")}</strong></dd></div>
+          <div><dt>Status</dt><dd>${article.active ? "Aktiv" : "Inaktiv"}</dd></div>
+          <div class="wide"><dt>Bezeichnung</dt><dd>${escapeHtml(article.description || "–")}</dd></div>
+          <div><dt>Aktuelle Revision</dt><dd>${article.currentRevision || "–"}</dd></div>
+          <div><dt>Primäre Kennung</dt><dd class="numeric">${escapeHtml(article.identifiers.find((identifier) => identifier.isPrimary)?.identifierValue || "–")}</dd></div>
+        </dl>
+      </section>
+      <section class="sales-article-detail-card" aria-labelledby="salesArticleDataStateTitle">
+        <header><div><h3 id="salesArticleDataStateTitle">Datenherkunft</h3><p>Freigegebene Herkunft und Aktualität.</p></div></header>
+        <dl class="sales-article-detail-data">
+          <div class="wide"><dt>Ursprungsquelle</dt><dd>${escapeHtml(salesArticleCatalogSourceLabel(provenance.originSourceSystem))}</dd></div>
+          <div class="wide"><dt>Aktuelle Datenquelle</dt><dd>${escapeHtml(salesArticleCatalogSourceLabel(provenance.currentSourceSystem || provenance.originSourceSystem))}</dd></div>
+          <div><dt>Quelle aktualisiert</dt><dd>${escapeHtml(salesArticleCatalogTimestamp(provenance.sourceUpdatedAt))}</dd></div>
+          <div><dt>Im Grabenplaner aktualisiert</dt><dd>${escapeHtml(salesArticleCatalogTimestamp(provenance.updatedAt))}</dd></div>
+        </dl>
+      </section>
+    </div>
+    <section class="sales-article-detail-card" id="salesArticleIdentifiersSection" aria-labelledby="salesArticleIdentifiersTitle">
+      <header><div><h3 id="salesArticleIdentifiersTitle">EAN / GTIN</h3><p>Primäre und weitere bestätigte Artikelkennungen.</p></div><span class="sales-article-detail-count">${article.identifiers.length}</span></header>
+      ${renderSalesArticleDetailIdentifiers(article.identifiers)}
+    </section>
+    <section class="sales-article-detail-price-grid" id="salesArticlePricesSection" aria-label="Freigegebene Preisbereiche">
+      ${renderSalesArticleDetailPriceGroup(article.prices.sales, {
+    title: "Verkaufspreise",
+    description: "Verkauf, UVP und freigegebene Absatzpreise.",
+    protectedMessage: "Verkaufspreise sind für diesen Zugriff nicht freigegeben.",
+  })}
+      ${renderSalesArticleDetailPriceGroup(article.prices.costs, {
+    title: "EK & Kalkulation",
+    description: "Geschützte Einkaufs- und Kalkulationswerte.",
+    protectedMessage: "Einkaufs- und Kalkulationswerte sind für diesen Zugriff nicht freigegeben.",
+  })}
+    </section>
+    <details class="sales-article-history" id="salesArticleHistorySection">
+      <summary><span>Herkunft &amp; Versionsverlauf</span><small>${revisions.length} ${revisions.length === 1 ? "Fassung" : "Fassungen"}</small></summary>
+      ${renderSalesArticleDetailHistory(revisions, article.currentRevision)}
+    </details>
+  </div>`;
+
+  if (catalog.detailMoveFocus) {
+    catalog.detailMoveFocus = false;
+    requestAnimationFrame(() => elements.salesArticleDetailTitle?.focus());
+  }
+}
+
+async function loadSalesArticleCatalogDetail(articleNumber, { moveFocus = false } = {}) {
+  if (!canReadSalesArticles()) {
+    applySalesArticleCatalogReadState(false);
+    return;
+  }
+  const normalizedArticleNumber = String(articleNumber || "").trim();
+  if (!normalizedArticleNumber) return;
+  const catalog = state.salesArticleCatalog;
+  catalog.detailRequestId += 1;
+  const requestId = catalog.detailRequestId;
+  catalog.selectedArticleNumber = normalizedArticleNumber;
+  catalog.detail = null;
+  catalog.detailLoading = true;
+  catalog.detailError = "";
+  catalog.detailMoveFocus = moveFocus;
+  setSalesArticleCatalogDetailStatus(`Artikel ${normalizedArticleNumber} wird geladen.`);
+  renderSalesArticleCatalogRows();
+  renderSalesArticleCatalogDetail();
+  try {
+    const parameters = new URLSearchParams({ articleNumber: normalizedArticleNumber });
+    const payload = await api(`/api/sales/articles/detail?${parameters}`);
+    if (requestId !== catalog.detailRequestId
+      || normalizedArticleNumber !== catalog.selectedArticleNumber) return;
+    const detail = normalizeSalesArticleDetailPayload(payload);
+    if (detail.article.articleNumber !== normalizedArticleNumber) {
+      throw new Error("Die geladene Artikelnummer stimmt nicht mit der Auswahl überein.");
+    }
+    catalog.detail = detail;
+    setSalesArticleCatalogDetailStatus(`Artikel ${normalizedArticleNumber} wurde geöffnet.`);
+  } catch (error) {
+    if (requestId !== catalog.detailRequestId
+      || normalizedArticleNumber !== catalog.selectedArticleNumber) return;
+    catalog.detailError = error.message || "Die Artikelansicht konnte nicht geladen werden.";
+    setSalesArticleCatalogDetailStatus(catalog.detailError);
+  } finally {
+    if (requestId === catalog.detailRequestId
+      && normalizedArticleNumber === catalog.selectedArticleNumber) {
+      catalog.detailLoading = false;
+      renderSalesArticleCatalogRows();
+      renderSalesArticleCatalogDetail();
+    }
+  }
+}
+
+function salesArticleCatalogCell(article, columnId) {
+  if (columnId === "articleNumber") {
+    const selected = state.salesArticleCatalog.selectedArticleNumber === article.articleNumber;
+    const accessibleName = `Artikel ${article.articleNumber || "ohne Nummer"}${article.description ? `, ${article.description}` : ""} öffnen`;
+    return `<button class="sales-article-number sales-article-open-button" type="button" data-sales-article-open="${escapeHtmlAttribute(article.articleNumber)}" aria-label="${escapeHtmlAttribute(accessibleName)}"${selected ? ' aria-current="true"' : ""}>${escapeHtml(article.articleNumber || "–")}</button>`;
+  }
+  if (columnId === "description") {
+    return `<span class="sales-article-description" title="${escapeHtmlAttribute(article.description)}">${escapeHtml(article.description || "–")}</span>`;
+  }
+  if (columnId === "primaryIdentifier") {
+    return article.primaryIdentifier
+      ? `<span class="sales-article-identifier">${escapeHtml(article.primaryIdentifier)}</span>`
+      : '<span class="sales-article-cell-muted">–</span>';
+  }
+  if (columnId === "status") {
+    return `<span class="sales-article-status-badge ${article.active ? "active" : "inactive"}">${article.active ? "Aktiv" : "Inaktiv"}</span>`;
+  }
+  if (columnId === "sourceSystem") {
+    return `<span class="sales-article-source" title="${escapeHtmlAttribute(article.sourceSystem)}">${escapeHtml(salesArticleCatalogSourceLabel(article.sourceSystem))}</span>`;
+  }
+  return "–";
+}
+
+function setSalesArticleCatalogStatus(message, isError = false) {
+  if (!elements.salesArticleSearchStatus) return;
+  elements.salesArticleSearchStatus.textContent = message;
+  elements.salesArticleSearchStatus.classList.toggle("error", isError);
+}
+
+function renderSalesArticleCatalogHead() {
+  if (!elements.salesArticleTableHead) return;
+  const sort = salesArticleCatalogSort(
+    state.salesArticleCatalog.sort,
+    state.salesArticleCatalog.direction,
+  );
+  let buttons = [...elements.salesArticleTableHead.querySelectorAll("[data-sales-article-sort]")];
+  if (buttons.length !== SALES_ARTICLE_CATALOG_COLUMNS.length) {
+    elements.salesArticleTableHead.innerHTML = `<tr>${SALES_ARTICLE_CATALOG_COLUMNS.map((column) => (
+      `<th scope="col" aria-sort="none"><button type="button" class="sales-article-sort-button" data-sales-article-sort="${column.id}">${escapeHtml(column.label)}</button></th>`
+    )).join("")}</tr>`;
+    buttons = [...elements.salesArticleTableHead.querySelectorAll("[data-sales-article-sort]")];
+  }
+  buttons.forEach((button) => {
+    const columnId = button.dataset.salesArticleSort;
+    const active = columnId === sort.sort;
+    button.closest("th")?.setAttribute(
+      "aria-sort",
+      active ? (sort.direction === "asc" ? "ascending" : "descending") : "none",
+    );
+    button.classList.toggle("active", active);
+    button.classList.toggle("ascending", active && sort.direction === "asc");
+    button.classList.toggle("descending", active && sort.direction === "desc");
+    button.disabled = !canReadSalesArticles() || !state.salesArticleCatalog.searchStarted;
+  });
+}
+
+function salesArticleCatalogVisibleWindow(itemCount) {
+  const scrollArea = elements.salesArticleTableScroll;
+  const scrollTop = Math.max(0, Number(scrollArea?.scrollTop || 0) - SALES_ARTICLE_CATALOG_HEADER_HEIGHT);
+  const viewportHeight = Math.max(
+    SALES_ARTICLE_CATALOG_ROW_HEIGHT * 10,
+    Number(scrollArea?.clientHeight || 0) - SALES_ARTICLE_CATALOG_HEADER_HEIGHT,
+  );
+  const firstVisible = Math.floor(scrollTop / SALES_ARTICLE_CATALOG_ROW_HEIGHT);
+  const visibleCount = Math.ceil(viewportHeight / SALES_ARTICLE_CATALOG_ROW_HEIGHT) + 1;
+  const start = Math.max(0, Math.min(itemCount, firstVisible - SALES_ARTICLE_CATALOG_RENDER_OVERSCAN));
+  const end = Math.max(start, Math.min(
+    itemCount,
+    firstVisible + visibleCount + SALES_ARTICLE_CATALOG_RENDER_OVERSCAN,
+  ));
+  return { start, end };
+}
+
+function salesArticleCatalogSpacerRow(height, columnCount) {
+  if (height <= 0) return "";
+  return `<tr class="sales-article-spacer-row" aria-hidden="true" style="--sales-article-spacer-height:${height}px"><td colspan="${columnCount}"></td></tr>`;
+}
+
+function renderSalesArticleCatalogRows() {
+  const catalog = state.salesArticleCatalog;
+  if (!elements.salesArticleTableBody) return;
+  const columnCount = SALES_ARTICLE_CATALOG_COLUMNS.length;
+  if (!catalog.searchStarted) {
+    elements.salesArticleTableBody.innerHTML = `<tr class="sales-article-empty-row"><td colspan="${columnCount}"><strong>Noch keine Suche ausgeführt</strong><span>Artikelnummer oder Bezeichnung eingeben und „Artikel suchen“ wählen.</span></td></tr>`;
+    return;
+  }
+  if (catalog.loading && !catalog.items.length) {
+    elements.salesArticleTableBody.innerHTML = `<tr class="sales-article-empty-row"><td colspan="${columnCount}"><strong>Artikel werden gesucht …</strong><span>Der zentrale Artikelstamm wird serverseitig gefiltert.</span></td></tr>`;
+    return;
+  }
+  if (catalog.error && !catalog.items.length) {
+    elements.salesArticleTableBody.innerHTML = `<tr class="sales-article-empty-row error"><td colspan="${columnCount}"><strong>Suche nicht verfügbar</strong><span>${escapeHtml(catalog.error)}</span></td></tr>`;
+    return;
+  }
+  if (!catalog.items.length) {
+    elements.salesArticleTableBody.innerHTML = `<tr class="sales-article-empty-row"><td colspan="${columnCount}"><strong>Keine passenden Artikel gefunden</strong><span>Suchbegriff oder Filter anpassen und erneut suchen.</span></td></tr>`;
+    return;
+  }
+  const { start, end } = salesArticleCatalogVisibleWindow(catalog.items.length);
+  const rows = catalog.items.slice(start, end).map((article, index) => `<tr class="${catalog.selectedArticleNumber === article.articleNumber ? "is-selected" : ""}" data-sales-article-id="${escapeHtmlAttribute(article.productId)}" data-sales-article-number="${escapeHtmlAttribute(article.articleNumber)}" aria-rowindex="${start + index + 2}">
+      ${SALES_ARTICLE_CATALOG_COLUMNS.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${salesArticleCatalogCell(article, column.id)}</td>`).join("")}
+    </tr>`).join("");
+  elements.salesArticleTableBody.innerHTML = `${salesArticleCatalogSpacerRow(start * SALES_ARTICLE_CATALOG_ROW_HEIGHT, columnCount)}${rows}${salesArticleCatalogSpacerRow((catalog.items.length - end) * SALES_ARTICLE_CATALOG_ROW_HEIGHT, columnCount)}${catalog.loading && end === catalog.items.length ? `<tr class="sales-article-loading-row"><td colspan="${columnCount}">Weitere Artikel werden geladen …</td></tr>` : ""}`;
+}
+
+function renderSalesArticleCatalogResults() {
+  const catalog = state.salesArticleCatalog;
+  renderSalesArticleCatalogDetail();
+  if (!elements.salesArticleResults || !elements.salesArticleTableBody) return;
+  renderSalesArticleCatalogHead();
+  renderSalesArticleCatalogRows();
+  elements.salesArticleResults.setAttribute("aria-busy", String(catalog.loading));
+  elements.salesArticleTable?.setAttribute("aria-rowcount", String(catalog.searchStarted ? catalog.total + 1 : 1));
+  elements.salesArticleResultsBody?.classList.toggle("hidden", !catalog.resultsExpanded);
+  if (elements.salesArticleResultsBody) elements.salesArticleResultsBody.hidden = !catalog.resultsExpanded;
+  elements.salesArticleResultsToggle?.setAttribute("aria-expanded", String(catalog.resultsExpanded));
+  if (elements.salesArticleResultsToggle) {
+    elements.salesArticleResultsToggle.querySelector("span").textContent = catalog.resultsExpanded
+      ? "Ergebnisse einklappen"
+      : "Ergebnisse ausklappen";
+  }
+
+  const formatter = new Intl.NumberFormat("de-AT");
+  elements.salesArticleLoadStatus?.classList.toggle("error", Boolean(catalog.error));
+  if (!catalog.searchStarted) {
+    if (elements.salesArticleResultCount) elements.salesArticleResultCount.textContent = "Noch keine Suche";
+    if (elements.salesArticleResultRange) elements.salesArticleResultRange.textContent = "Die Ergebnisliste bleibt bis zur Suche leer.";
+    if (elements.salesArticleLoadStatus) elements.salesArticleLoadStatus.textContent = "Noch keine Artikel geladen.";
+    return;
+  }
+  const loaded = catalog.items.length;
+  if (catalog.loading && !loaded) {
+    if (elements.salesArticleResultCount) elements.salesArticleResultCount.textContent = "Suche läuft …";
+    if (elements.salesArticleResultRange) elements.salesArticleResultRange.textContent = "Treffer werden ermittelt.";
+    if (elements.salesArticleLoadStatus) elements.salesArticleLoadStatus.textContent = "Artikel werden gesucht …";
+    return;
+  }
+  if (elements.salesArticleResultCount) elements.salesArticleResultCount.textContent = `${formatter.format(catalog.total)} Treffer`;
+  if (elements.salesArticleResultRange) {
+    elements.salesArticleResultRange.textContent = catalog.total
+      ? `${formatter.format(loaded)} von ${formatter.format(catalog.total)} geladen`
+      : "Keine Ergebnisse";
+  }
+  if (!elements.salesArticleLoadStatus) return;
+  if (catalog.loading && loaded) {
+    elements.salesArticleLoadStatus.textContent = `${formatter.format(loaded)} von ${formatter.format(catalog.total)} geladen. Weitere Treffer werden geladen …`;
+  } else if (catalog.error) {
+    elements.salesArticleLoadStatus.textContent = catalog.error;
+  } else if (catalog.nextOffset < catalog.total) {
+    elements.salesArticleLoadStatus.textContent = `${formatter.format(loaded)} von ${formatter.format(catalog.total)} geladen. Für weitere Treffer innerhalb der Liste nach unten scrollen.`;
+  } else {
+    elements.salesArticleLoadStatus.textContent = catalog.total
+      ? `Alle ${formatter.format(catalog.total)} Treffer geladen.`
+      : "Keine passenden Artikel gefunden.";
+  }
+}
+
+function salesArticleCatalogFormValues() {
+  const status = String(elements.salesArticleSearchStatusFilter?.value || "active");
+  return {
+    query: String(elements.salesArticleSearchQuery?.value || "").trim(),
+    identifier: String(elements.salesArticleSearchIdentifier?.value || "").replace(/\s+/g, "").trim(),
+    status: ["active", "inactive", "all"].includes(status) ? status : "active",
+    sourceSystem: String(elements.salesArticleSearchSourceSystem?.value || "").trim(),
+  };
+}
+
+function salesArticleCatalogSearchParameters(offset) {
+  const catalog = state.salesArticleCatalog;
+  const parameters = new URLSearchParams();
+  if (catalog.query) parameters.set("query", catalog.query);
+  if (catalog.identifier) parameters.set("identifier", catalog.identifier);
+  parameters.set("status", catalog.status);
+  if (catalog.sourceSystem) parameters.set("sourceSystem", catalog.sourceSystem);
+  parameters.set("sort", catalog.sort);
+  parameters.set("direction", catalog.direction);
+  parameters.set("limit", String(catalog.limit));
+  parameters.set("offset", String(offset));
+  return parameters;
+}
+
+async function loadSalesArticleCatalog({ reset = false, preserveDetail = false } = {}) {
+  if (!canReadSalesArticles()) {
+    applySalesArticleCatalogReadState(false);
+    return;
+  }
+  const catalog = state.salesArticleCatalog;
+  if (!reset && (catalog.loading || !catalog.searchStarted || catalog.nextOffset >= catalog.total)) return;
+  if (reset) {
+    if (!preserveDetail) resetSalesArticleCatalogDetailState();
+    Object.assign(catalog, salesArticleCatalogFormValues(), {
+      items: [],
+      total: 0,
+      nextOffset: 0,
+      searchStarted: true,
+      error: "",
+      resultsExpanded: true,
+    });
+    catalog.requestId += 1;
+    if (elements.salesArticleTableScroll) elements.salesArticleTableScroll.scrollTop = 0;
+  }
+  const requestId = catalog.requestId;
+  const offset = reset ? 0 : catalog.nextOffset;
+  catalog.loading = true;
+  catalog.error = "";
+  setSalesArticleCatalogStatus(reset ? "Artikel werden gesucht …" : "Weitere Artikel werden geladen …");
+  renderSalesArticleCatalogResults();
+  try {
+    const payload = await api(`/api/sales/articles?${salesArticleCatalogSearchParameters(offset)}`);
+    if (requestId !== catalog.requestId) return;
+    const incoming = (Array.isArray(payload?.items) ? payload.items : []).map(normalizeSalesArticleCatalogItem);
+    const combined = reset ? [] : [...catalog.items];
+    const seen = new Set(combined.map(salesArticleCatalogItemKey));
+    incoming.forEach((article) => {
+      const key = salesArticleCatalogItemKey(article);
+      if (!seen.has(key)) {
+        seen.add(key);
+        combined.push(article);
+      }
+    });
+    catalog.items = combined;
+    catalog.total = Math.max(0, Number(payload?.total ?? combined.length) || 0);
+    catalog.limit = Math.min(100, Math.max(1, Number(payload?.limit || catalog.limit) || 50));
+    const responseOffset = Math.max(0, Number(payload?.offset ?? offset) || 0);
+    catalog.nextOffset = incoming.length ? responseOffset + incoming.length : catalog.total;
+    const responseSort = salesArticleCatalogSort(payload?.sort, payload?.direction);
+    catalog.sort = responseSort.sort;
+    catalog.direction = responseSort.direction;
+    setSalesArticleCatalogStatus(catalog.total
+      ? `${new Intl.NumberFormat("de-AT").format(catalog.total)} passende Artikel gefunden.`
+      : "Keine passenden Artikel gefunden.");
+  } catch (error) {
+    if (requestId !== catalog.requestId) return;
+    catalog.error = error.message || "Die Artikelsuche konnte nicht geladen werden.";
+    setSalesArticleCatalogStatus(catalog.error, true);
+  } finally {
+    if (requestId === catalog.requestId) {
+      catalog.loading = false;
+      renderSalesArticleCatalogResults();
+    }
+  }
+}
+
+function changeSalesArticleCatalogSort(sort) {
+  if (!SALES_ARTICLE_CATALOG_SORT_KEYS.has(sort) || !canReadSalesArticles()) return;
+  const catalog = state.salesArticleCatalog;
+  if (!catalog.searchStarted) return;
+  catalog.direction = catalog.sort === sort && catalog.direction === "asc" ? "desc" : "asc";
+  catalog.sort = sort;
+  loadSalesArticleCatalog({ reset: true, preserveDetail: true });
+}
+
+function resetSalesArticleCatalogSearch(
+  message = "Suchbegriff eingeben oder die erweiterte Suche verwenden.",
+  { error = false } = {},
+) {
+  const catalog = state.salesArticleCatalog;
+  resetSalesArticleCatalogDetailState();
+  elements.salesArticleSearchForm?.reset();
+  Object.assign(catalog, {
+    items: [],
+    total: 0,
+    limit: 50,
+    nextOffset: 0,
+    query: "",
+    identifier: "",
+    status: "active",
+    sourceSystem: "",
+    sort: "articleNumber",
+    direction: "asc",
+    searchStarted: false,
+    loading: false,
+    error: "",
+    resultsExpanded: true,
+  });
+  catalog.requestId += 1;
+  if (elements.salesArticleAdvancedSearch) elements.salesArticleAdvancedSearch.open = false;
+  if (elements.salesArticleTableScroll) elements.salesArticleTableScroll.scrollTop = 0;
+  setSalesArticleCatalogStatus(message, error);
+  renderSalesArticleCatalogResults();
+}
+
+function currentSalesArticleCatalogActorKey() {
+  if (state.portalStatus?.portalEnabled !== true) return "local";
+  const user = state.portalSession?.user;
+  return String(user?.employeeNumber || user?.id || user?.username || "anonymous");
+}
+
+function currentSalesArticleCatalogDetailAccessKey() {
+  return [
+    currentSalesArticleCatalogActorKey(),
+    canReadSalesArticles(),
+    canReadSalesArticlePrices(),
+    canReadSalesArticleCosts(),
+    canWriteSalesArticles(),
+    canImportSalesArticles(),
+  ].join("|");
+}
+
+function syncSalesArticleCatalogActorState() {
+  const catalog = state.salesArticleCatalog;
+  const actorKey = currentSalesArticleCatalogActorKey();
+  const detailAccessKey = currentSalesArticleCatalogDetailAccessKey();
+  const actorChanged = catalog.actorKey !== actorKey;
+  const detailAccessChanged = Boolean(catalog.detailAccessKey)
+    && catalog.detailAccessKey !== detailAccessKey;
+  catalog.actorKey = actorKey;
+  catalog.detailAccessKey = detailAccessKey;
+  if (actorChanged) {
+    closeSalesArticleManagementDialogs({ restoreFocus: false });
+    resetSalesArticleCatalogSearch();
+    return;
+  }
+  if (detailAccessChanged) {
+    closeSalesArticleManagementDialogs({ restoreFocus: false });
+    if (!canReadSalesArticles()) {
+      resetSalesArticleCatalogSearch(
+        "Artikeldaten wurden wegen geänderter Rechte aus der Ansicht entfernt.",
+        { error: true },
+      );
+    } else {
+      resetSalesArticleCatalogDetailState();
+      renderSalesArticleCatalogDetail();
+      setSalesArticleCatalogDetailStatus(
+        "Artikeldetails wurden wegen geänderter Artikelrechte aus der Ansicht entfernt.",
+      );
+    }
+  }
+}
+
+function clearSalesArticleCatalogState(message = "") {
+  closeSalesArticleManagementDialogs({ restoreFocus: false });
+  resetSalesArticleCatalogSearch(
+    message || "Suchbegriff eingeben oder die erweiterte Suche verwenden.",
+    { error: Boolean(message) },
+  );
+}
+
+function applySalesArticleCatalogReadState(canRead = canReadSalesArticles()) {
+  [
+    elements.salesArticleSearchQuery,
+    elements.salesArticleSearchReset,
+    elements.salesArticleSearchSubmit,
+    elements.salesArticleSearchIdentifier,
+    elements.salesArticleSearchStatusFilter,
+    elements.salesArticleSearchSourceSystem,
+  ].forEach((control) => { if (control) control.disabled = !canRead; });
+  elements.salesArticleAdvancedSearch?.classList.toggle("access-disabled", !canRead);
+  if (canRead && !state.salesArticleCatalog.searchStarted) {
+    setSalesArticleCatalogStatus("Suchbegriff eingeben oder die erweiterte Suche verwenden.");
+  } else if (!canRead && !state.salesArticleCatalog.searchStarted) {
+    setSalesArticleCatalogStatus("Für die Artikelsuche fehlt das Leserecht „sales:articles:read“.", true);
+  }
+}
+
+function applySalesArticleCatalogManagementState(canWrite = canWriteSalesArticles()) {
+  const canImport = canImportSalesArticles();
+  elements.salesArticleCreateButton?.classList.toggle("hidden", !canWrite);
+  elements.salesArticleImportButton?.classList.toggle("hidden", !canImport);
+  if (!canWrite && (elements.salesArticleEditorDialog?.open || elements.salesArticleArchiveDialog?.open)) {
+    closeSalesArticleManagementDialogs({ restoreFocus: false });
+  }
+  if (!canImport && elements.salesArticleImportDialog?.open) {
+    closeSalesArticleImport({ restoreFocus: false, force: true });
+  }
+  renderSalesArticleManagementActions();
+  renderSalesArticleImport();
+}
+
 const CRM_DISPLAY_COLUMNS = Object.freeze([
   { id: "photo", label: "Foto", group: "Person", sortable: false },
   { id: "customerNumber", label: "Kundennummer", group: "Stammdaten", sortKey: "customerNumber" },
@@ -31610,6 +33578,7 @@ function setView(view) {
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
+    || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
     || (view === "crm" && !canAccessCrm())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "branchOrders" && !canManageBranchOrders())
@@ -31655,6 +33624,7 @@ function setView(view) {
   elements.personnelAdministrationView?.classList.toggle("active", view === "personnelAdministration");
   elements.salesAdministrationView?.classList.toggle("active", view === "salesAdministration");
   elements.salesAnalyticsView?.classList.toggle("active", view === "salesAnalytics");
+  elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
   elements.crmView?.classList.toggle("active", view === "crm");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.loansView?.classList.toggle("active", view === "loans");
@@ -31672,6 +33642,7 @@ function setView(view) {
   if (view === "branchOrders") loadBranchOrdersManagement();
   if (view === "startDashboard") loadStartDashboard();
   if (view === "salesAnalytics") loadSalesAnalytics();
+  if (view === "articleCatalog") renderSalesArticleCatalogResults();
   if (view === "crm") {
     syncCrmCustomerWorkspace(Boolean(state.crm.selectedCustomer || state.crm.detailLoading));
     loadCrmPreferences().catch((error) => setCrmSearchStatus(error.message, true));
@@ -31688,7 +33659,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }
@@ -36753,6 +38724,130 @@ elements.salesDashboardGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-sales-dashboard-view]");
   if (button) setView(button.dataset.salesDashboardView);
 });
+elements.salesArticleSearchForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!canReadSalesArticles()) {
+    applySalesArticleCatalogReadState(false);
+    return;
+  }
+  if (!elements.salesArticleSearchForm.reportValidity()) return;
+  loadSalesArticleCatalog({ reset: true });
+});
+elements.salesArticleSearchReset?.addEventListener("click", () => {
+  resetSalesArticleCatalogSearch();
+  elements.salesArticleSearchQuery?.focus();
+});
+elements.salesArticleResultsToggle?.addEventListener("click", () => {
+  state.salesArticleCatalog.resultsExpanded = !state.salesArticleCatalog.resultsExpanded;
+  renderSalesArticleCatalogResults();
+});
+elements.salesArticleResults?.addEventListener("click", (event) => {
+  const sortButton = event.target.closest("[data-sales-article-sort]");
+  if (sortButton) {
+    changeSalesArticleCatalogSort(sortButton.dataset.salesArticleSort);
+    return;
+  }
+  const openButton = event.target.closest("[data-sales-article-open]");
+  if (openButton) {
+    loadSalesArticleCatalogDetail(openButton.dataset.salesArticleOpen, {
+      moveFocus: event.detail === 0,
+    });
+    return;
+  }
+  const row = event.target.closest("tr[data-sales-article-number]");
+  if (row) loadSalesArticleCatalogDetail(row.dataset.salesArticleNumber);
+});
+elements.salesArticleActionsLogButton?.addEventListener("click", openAdminPersonalActions);
+elements.salesArticleCreateButton?.addEventListener("click", () => openSalesArticleEditor("create"));
+elements.salesArticleImportButton?.addEventListener("click", openSalesArticleImport);
+elements.salesArticleImportFile?.addEventListener("change", () => {
+  const file = elements.salesArticleImportFile?.files?.[0];
+  discardSalesArticleImportPreview({
+    clearFile: false,
+    message: file ? "Datei ausgewählt. Erst „Vorschau prüfen“ liest und validiert den Inhalt." : "",
+  });
+});
+elements.salesArticleImportPreviewButton?.addEventListener("click", () => void previewSalesArticleImport());
+elements.salesArticleImportConfirmed?.addEventListener("change", renderSalesArticleImport);
+elements.salesArticleImportReset?.addEventListener("click", () => {
+  discardSalesArticleImportPreview({ message: "Vorschau verworfen. Es wurden keine Artikeldaten geändert." });
+});
+elements.salesArticleImportForm?.addEventListener("submit", applySalesArticleImport);
+document.querySelectorAll("[data-close-sales-article-import]").forEach((button) => {
+  button.addEventListener("click", () => closeSalesArticleImport());
+});
+elements.salesArticleImportDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeSalesArticleImport();
+});
+elements.salesArticleDetail?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-sales-article-action]");
+  if (actionButton) {
+    const action = actionButton.dataset.salesArticleAction;
+    if (action === "edit" || action === "copy") openSalesArticleEditor(action);
+    else if (action === "archive") openSalesArticleArchive();
+    return;
+  }
+  if (event.target.closest("[data-sales-article-detail-retry]")) {
+    loadSalesArticleCatalogDetail(state.salesArticleCatalog.selectedArticleNumber, {
+      moveFocus: true,
+    });
+  }
+});
+elements.salesArticleEditorForm?.addEventListener("submit", submitSalesArticleEditor);
+elements.salesArticleIdentifierAdd?.addEventListener("click", () => appendSalesArticleIdentifierRow({}, { focus: true }));
+elements.salesArticleIdentifierRows?.addEventListener("input", (event) => {
+  const input = event.target.closest("[data-sales-article-identifier-value]");
+  if (input) validateSalesArticleIdentifierInput(input);
+});
+elements.salesArticleIdentifierRows?.addEventListener("click", (event) => {
+  const remove = event.target.closest("[data-sales-article-identifier-remove]");
+  if (!remove) return;
+  remove.closest("[data-sales-article-identifier-row]")?.remove();
+  updateSalesArticleIdentifierRows();
+});
+[elements.salesArticleSalesPricesEditor, elements.salesArticleCostPricesEditor].forEach((section) => {
+  section?.addEventListener("input", (event) => {
+    if (event.target.matches("[data-sales-article-price-amount],[data-sales-article-price-currency]")) {
+      markSalesArticlePriceGroupDirty(event.target);
+    }
+  });
+  section?.addEventListener("change", (event) => {
+    if (event.target.matches("[data-sales-article-price-basis],[data-sales-article-price-currency]")) {
+      markSalesArticlePriceGroupDirty(event.target);
+    }
+  });
+});
+document.querySelectorAll("[data-close-sales-article-editor]").forEach((button) => {
+  button.addEventListener("click", () => closeSalesArticleEditor());
+});
+elements.salesArticleEditorDialog?.addEventListener("cancel", (event) => {
+  if (state.salesArticleCatalog.editorPending) event.preventDefault();
+  else resetSalesArticleEditorState({ restoreFocus: true });
+});
+elements.salesArticleArchiveForm?.addEventListener("submit", submitSalesArticleArchive);
+elements.salesArticleArchiveConfirmation?.addEventListener("input", () => {
+  const matches = String(elements.salesArticleArchiveConfirmation.value || "").trim()
+    === state.salesArticleCatalog.archiveArticleNumber;
+  elements.salesArticleArchiveConfirmation.setCustomValidity(matches ? "" : "Die Artikelnummer stimmt nicht überein.");
+  if (elements.salesArticleArchiveSubmit) elements.salesArticleArchiveSubmit.disabled = !matches || state.salesArticleCatalog.archivePending;
+});
+document.querySelectorAll("[data-close-sales-article-archive]").forEach((button) => {
+  button.addEventListener("click", () => closeSalesArticleArchive());
+});
+elements.salesArticleArchiveDialog?.addEventListener("cancel", (event) => {
+  if (state.salesArticleCatalog.archivePending) event.preventDefault();
+  else resetSalesArticleArchiveState({ restoreFocus: true });
+});
+elements.salesArticleTableScroll?.addEventListener("scroll", () => {
+  const scrollArea = elements.salesArticleTableScroll;
+  const catalog = state.salesArticleCatalog;
+  renderSalesArticleCatalogRows();
+  if (!scrollArea || !catalog.resultsExpanded || catalog.loading || !catalog.searchStarted
+    || catalog.nextOffset >= catalog.total) return;
+  const remaining = scrollArea.scrollHeight - scrollArea.scrollTop - scrollArea.clientHeight;
+  if (remaining <= Math.max(72, scrollArea.clientHeight * 0.3)) loadSalesArticleCatalog();
+}, { passive: true });
 elements.crmSearchForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!elements.crmSearchForm.reportValidity()) return;

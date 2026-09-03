@@ -182,6 +182,9 @@
               <button class="nav-item nav-module-route hidden" data-view="salesAnalytics" id="salesAnalyticsNavButton">
                 <span class="nav-symbol" aria-hidden="true">⌁</span><span>Verkaufsanalysen</span>
               </button>
+              <button class="nav-item nav-module-route hidden" data-view="articleCatalog" id="salesArticleCatalogNavButton">
+                <span class="nav-symbol article-catalog-nav-symbol" aria-hidden="true">Art</span><span>Artikelstamm</span>
+              </button>
               <button class="nav-item nav-module-route hidden" data-view="crm" id="crmNavButton">
                 <span class="nav-symbol crm-nav-symbol" aria-hidden="true">CRM</span><span>CRM</span>
               </button>
@@ -1488,13 +1491,18 @@
 
         <section id="salesAdministrationView" class="view" aria-labelledby="salesAdministrationTitle">
           <header class="topbar">
-            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAdministrationTitle">Verkaufsverwaltung</h1><p class="subtitle">Verkaufsberichte und Auswertungen in einem geschützten Desktop-Arbeitsbereich.</p></div>
+            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAdministrationTitle">Verkaufsverwaltung</h1><p class="subtitle">Artikel, Kunden, Verkaufsberichte und Auswertungen in einem geschützten Arbeitsbereich.</p></div>
           </header>
           <section class="personnel-dashboard-section active">
             <div class="personnel-dashboard-heading">
               <div><span class="eyebrow">Arbeitsbereiche</span><h2>Verkaufsverwaltung im Überblick</h2><p>Öffne die aktuell verfügbaren Bereiche der Verkaufsverwaltung.</p></div>
             </div>
             <div class="personnel-dashboard-grid sales-dashboard-grid" id="salesDashboardGrid">
+              <button class="personnel-dashboard-card hidden" id="salesArticleCatalogDashboardCard" type="button" data-sales-dashboard-view="articleCatalog">
+                <span class="personnel-dashboard-card-symbol article-catalog-dashboard-symbol" aria-hidden="true">Art</span>
+                <span class="personnel-dashboard-card-copy"><small>Sortiment &amp; Stammdaten</small><strong>Artikelstamm</strong><span>Artikel gezielt nach Nummer, Bezeichnung oder Kennung im zentralen Katalog finden.</span></span>
+                <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
+              </button>
               <button class="personnel-dashboard-card" id="salesAnalyticsDashboardCard" type="button" data-sales-dashboard-view="salesAnalytics">
                 <span class="personnel-dashboard-card-symbol" aria-hidden="true">⌁</span>
                 <span class="personnel-dashboard-card-copy"><small>Berichte &amp; Kennzahlen</small><strong>Verkaufsanalysen</strong><span>TradeFoto-Berichte sicher importieren, vergleichen und auswerten.</span></span>
@@ -1507,6 +1515,85 @@
               </button>
             </div>
           </section>
+        </section>
+
+        <section id="salesArticleCatalogView" class="view sales-article-catalog-view" aria-labelledby="salesArticleCatalogTitle">
+          <header class="topbar sales-article-catalog-topbar">
+            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p></div>
+            <div class="topbar-actions sales-article-topbar-actions">
+              <button class="secondary-button hidden" id="salesArticleActionsLogButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog">Meine Aktionen</button>
+              <button class="secondary-button hidden" id="salesArticleImportButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleImportDialog">TradeFoto-Import</button>
+              <button class="primary-button hidden" id="salesArticleCreateButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">+ Artikel anlegen</button>
+            </div>
+          </header>
+
+          <div class="sales-article-catalog-workspace">
+            <section class="sales-article-search-shell" aria-labelledby="salesArticleSearchTitle">
+              <div class="sales-article-search-heading">
+                <div><span class="eyebrow">Artikelsuche</span><h2 id="salesArticleSearchTitle">Artikel finden</h2><p>Die Liste wird erst nach einer ausdrücklichen Suche geladen.</p></div>
+              </div>
+              <form class="sales-article-search-form" id="salesArticleSearchForm">
+                <label class="field sales-article-search-query"><span>Artikelnummer oder Bezeichnung</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="z. B. 010152 oder Canon EF-S" /></label>
+                <div class="sales-article-search-actions"><button class="secondary-button" id="salesArticleSearchReset" type="button">Zurücksetzen</button><button class="primary-button" id="salesArticleSearchSubmit" type="submit">Artikel suchen</button></div>
+              </form>
+              <details class="sales-article-advanced-search" id="salesArticleAdvancedSearch">
+                <summary><span>Erweiterte Suche</span><small>EAN/GTIN, Status und Quelle</small></summary>
+                <div class="sales-article-advanced-fields">
+                  <label class="field"><span>EAN / GTIN oder Teil davon</span><input id="salesArticleSearchIdentifier" form="salesArticleSearchForm" type="search" inputmode="numeric" pattern="[0-9]{1,14}" maxlength="14" autocomplete="off" placeholder="Bis zu 14 Ziffern" /></label>
+                  <label class="field"><span>Status</span><select id="salesArticleSearchStatusFilter" form="salesArticleSearchForm"><option value="active">Nur aktive Artikel</option><option value="all">Aktive und inaktive</option><option value="inactive">Nur inaktive Artikel</option></select></label>
+                  <label class="field"><span>Quelle</span><select id="salesArticleSearchSourceSystem" form="salesArticleSearchForm"><option value="">Alle Quellen</option><option value="manual.article-catalog">Manuelle Pflege</option><option value="tradefoto.artikel_stamm">TradeFoto-Artikelstamm</option><option value="tradefoto">TradeFoto</option><option value="legacy.loan_articles">Übernommene Leihartikel</option><option value="manual.loan">Manuell angelegte Leihartikel</option><option value="shopware.storefront">Shopware-Storefront</option></select></label>
+                </div>
+              </details>
+              <p class="sales-article-search-status" id="salesArticleSearchStatus" role="status" aria-live="polite">Suchbegriff eingeben oder die erweiterte Suche verwenden.</p>
+            </section>
+
+            <section class="sales-article-results" id="salesArticleResults" aria-labelledby="salesArticleResultCount" aria-busy="false">
+              <div class="sales-article-results-heading">
+                <div><span class="eyebrow">Suchergebnisse</span><strong id="salesArticleResultCount">Noch keine Suche</strong><small id="salesArticleResultRange">Die Ergebnisliste bleibt bis zur Suche leer.</small></div>
+                <button class="sales-article-results-toggle" id="salesArticleResultsToggle" type="button" aria-controls="salesArticleResultsBody" aria-expanded="true"><span>Ergebnisse einklappen</span><i aria-hidden="true"></i></button>
+              </div>
+              <div class="sales-article-results-body" id="salesArticleResultsBody">
+                <div class="sales-article-table-scroll" id="salesArticleTableScroll" tabindex="0" role="region" aria-label="Artikel-Suchergebnisse; weitere Treffer werden beim Scrollen nachgeladen">
+                  <table class="sales-article-table" id="salesArticleTable">
+                    <caption class="visually-hidden">Ergebnisse der Artikelstammsuche</caption>
+                    <thead id="salesArticleTableHead"></thead>
+                    <tbody id="salesArticleTableBody"></tbody>
+                  </table>
+                </div>
+                <p class="sales-article-load-status" id="salesArticleLoadStatus">Noch keine Artikel geladen.</p>
+              </div>
+            </section>
+
+            <section class="sales-article-detail" id="salesArticleDetail" aria-labelledby="salesArticleDetailTitle" aria-busy="false">
+              <header class="sales-article-detail-heading">
+                <span class="sales-article-detail-symbol" aria-hidden="true">Art</span>
+                <div class="sales-article-detail-heading-copy">
+                  <span class="eyebrow">Artikelansicht</span>
+                  <h2 id="salesArticleDetailTitle" tabindex="-1">Artikelstamm im Detail</h2>
+                  <p id="salesArticleDetailSubtitle">Einen Treffer auswählen, um die freigegebenen Artikeldaten zu öffnen.</p>
+                </div>
+                <div class="sales-article-detail-heading-meta hidden" id="salesArticleDetailMeta" aria-label="Status des ausgewählten Artikels"></div>
+              </header>
+              <div class="sales-article-detail-actions hidden" id="salesArticleDetailActions" aria-label="Aktionen für den ausgewählten Artikel">
+                <button class="text-button" id="salesArticleEditButton" type="button" data-sales-article-action="edit" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Bearbeiten</button>
+                <button class="text-button" id="salesArticleCopyButton" type="button" data-sales-article-action="copy" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Kopieren</button>
+                <button class="text-button danger" id="salesArticleArchiveButton" type="button" data-sales-article-action="archive" aria-haspopup="dialog" aria-controls="salesArticleArchiveDialog">Archivieren</button>
+              </div>
+              <nav class="sales-article-detail-navigation hidden" id="salesArticleDetailNavigation" aria-label="Bereiche der Artikelansicht">
+                <a href="#salesArticleMasterDataSection">Stammdaten</a>
+                <a href="#salesArticleIdentifiersSection">EAN / GTIN</a>
+                <a href="#salesArticlePricesSection">Preise</a>
+                <a href="#salesArticleHistorySection">Herkunft &amp; Verlauf</a>
+              </nav>
+              <div class="sales-article-detail-body" id="salesArticleDetailBody">
+                <div class="sales-article-detail-empty">
+                  <strong>Noch kein Artikel ausgewählt</strong>
+                  <span>Artikelnummer in der Ergebnisliste wählen. Die Detaildaten werden erst dann geladen.</span>
+                </div>
+              </div>
+              <p class="visually-hidden" id="salesArticleDetailStatus" role="status" aria-live="polite"></p>
+            </section>
+          </div>
         </section>
 
         <section id="crmView" class="view crm-view" aria-labelledby="crmTitle">
@@ -2814,6 +2901,96 @@
         <div class="crm-column-options" id="crmColumnOptions"></div>
         <p class="calculation-note" id="crmColumnsMessage" role="status" aria-live="polite">Mit den Pfeilen legst du die Position der eingeblendeten Spalten fest.</p>
         <div class="modal-actions"><button type="button" class="secondary-button" id="crmColumnsReset">Standard wiederherstellen</button><span></span><button type="button" class="secondary-button" data-close="crmColumnsDialog">Abbrechen</button><button type="submit" class="primary-button" id="crmColumnsSave">Übernehmen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal sales-article-editor-dialog" id="salesArticleEditorDialog" aria-labelledby="salesArticleEditorTitle" aria-describedby="salesArticleEditorDescription">
+      <form id="salesArticleEditorForm">
+        <div class="modal-header">
+          <div><span class="eyebrow">Artikelstamm</span><h2 id="salesArticleEditorTitle">Artikel anlegen</h2><p id="salesArticleEditorDescription">Stammdaten und freigegebene Preisbereiche revisionssicher erfassen.</p></div>
+          <button type="button" class="close-button" data-close-sales-article-editor aria-label="Artikeleditor schließen">×</button>
+        </div>
+        <input id="salesArticleEditorExpectedRevision" type="hidden" />
+        <section class="sales-article-editor-section" aria-labelledby="salesArticleEditorMasterDataTitle">
+          <div class="sales-article-editor-section-heading"><div><h3 id="salesArticleEditorMasterDataTitle">Stammdaten</h3><p>Artikelnummer und Bezeichnung sind Pflichtfelder.</p></div></div>
+          <div class="sales-article-editor-master-fields">
+            <label class="field"><span>Artikelnummer</span><input id="salesArticleEditorArticleNumber" type="text" maxlength="80" autocomplete="off" required /></label>
+            <label class="field sales-article-editor-description"><span>Artikelbezeichnung</span><textarea id="salesArticleEditorDescriptionField" maxlength="300" rows="2" required></textarea></label>
+          </div>
+        </section>
+        <section class="sales-article-editor-section" aria-labelledby="salesArticleEditorIdentifiersTitle">
+          <div class="sales-article-editor-section-heading"><div><h3 id="salesArticleEditorIdentifiersTitle">EAN / GTIN</h3><p>Nur gültige EAN-8, UPC-A, EAN-13 oder GTIN-14 werden übernommen.</p></div><button class="secondary-button compact" id="salesArticleIdentifierAdd" type="button">Kennung hinzufügen</button></div>
+          <div class="sales-article-editor-rows" id="salesArticleIdentifierRows"></div>
+        </section>
+        <div class="sales-article-editor-price-columns">
+          <section class="sales-article-editor-section" id="salesArticleSalesPricesEditor" aria-labelledby="salesArticleSalesPricesEditorTitle">
+            <div class="sales-article-editor-section-heading"><div><h3 id="salesArticleSalesPricesEditorTitle">Verkaufspreise</h3><p>Freigegebene Absatz-, UVP- und Pfandwerte.</p></div></div>
+            <div class="sales-article-price-editor-grid" id="salesArticleSalesPriceFields"></div>
+          </section>
+          <section class="sales-article-editor-section" id="salesArticleCostPricesEditor" aria-labelledby="salesArticleCostPricesEditorTitle">
+            <div class="sales-article-editor-section-heading"><div><h3 id="salesArticleCostPricesEditorTitle">EK &amp; Kalkulation</h3><p>Geschützte Einkaufs- und Kalkulationswerte.</p></div></div>
+            <div class="sales-article-price-editor-grid" id="salesArticleCostPriceFields"></div>
+          </section>
+        </div>
+        <p class="message hidden" id="salesArticleEditorMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions sales-article-editor-modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close-sales-article-editor>Abbrechen</button><button type="submit" class="primary-button" id="salesArticleEditorSubmit">Artikel speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal sales-article-archive-dialog" id="salesArticleArchiveDialog" aria-labelledby="salesArticleArchiveTitle" aria-describedby="salesArticleArchiveDescription salesArticleArchiveWarning">
+      <form id="salesArticleArchiveForm">
+        <div class="modal-header">
+          <div><span class="eyebrow">Artikelstamm</span><h2 id="salesArticleArchiveTitle">Artikel archivieren</h2><p id="salesArticleArchiveDescription">Der Artikel bleibt in Historie und bestehenden Vorgängen erhalten.</p></div>
+          <button type="button" class="close-button" data-close-sales-article-archive aria-label="Archivierungsdialog schließen">×</button>
+        </div>
+        <section class="sales-article-archive-warning" id="salesArticleArchiveWarning">
+          <strong>Dieser Artikel wird für neue Vorgänge gesperrt</strong>
+          <p>Die Archivierung erstellt eine neue Revision. Bestehende Leihen, Auswertungen und sonstige historische Bezüge bleiben unverändert nachvollziehbar.</p>
+        </section>
+        <div class="sales-article-archive-target" id="salesArticleArchiveTarget"></div>
+        <label class="field"><span>Zur Bestätigung die Artikelnummer eingeben</span><input id="salesArticleArchiveConfirmation" type="text" maxlength="80" autocomplete="off" required /></label>
+        <p class="message hidden" id="salesArticleArchiveMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close-sales-article-archive>Abbrechen</button><button type="submit" class="danger-button" id="salesArticleArchiveSubmit" disabled>Artikel archivieren</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal sales-article-import-dialog" id="salesArticleImportDialog" aria-labelledby="salesArticleImportTitle" aria-describedby="salesArticleImportDescription">
+      <form id="salesArticleImportForm">
+        <div class="modal-header">
+          <div><span class="eyebrow">Kontrollierter Datenabgleich</span><h2 id="salesArticleImportTitle">TradeFoto-Artikel prüfen</h2><p id="salesArticleImportDescription">Eine vorbereitete Exportdatei wird zuerst vollständig geprüft. Ohne ausdrückliche Bestätigung werden keine Artikeldaten verändert.</p></div>
+          <button type="button" class="close-button" data-close-sales-article-import aria-label="TradeFoto-Import schließen">×</button>
+        </div>
+        <section class="sales-article-import-source" aria-labelledby="salesArticleImportSourceTitle">
+          <div><h3 id="salesArticleImportSourceTitle">Exportdatei</h3><p>Nur das freigegebene Grabenplaner-TradeFoto-Format als UTF-8-JSON auswählen. Zugangsdaten oder eine Verbindung zum Fremdsystem werden nicht benötigt.</p></div>
+          <div class="sales-article-import-file-actions">
+            <label class="secondary-button sales-article-import-file-button" for="salesArticleImportFile">Datei auswählen</label>
+            <input id="salesArticleImportFile" type="file" accept="application/vnd.grabenplaner.tradefoto-articles+json,.json" />
+            <button class="primary-button" id="salesArticleImportPreviewButton" type="button" disabled>Vorschau prüfen</button>
+          </div>
+          <p class="sales-article-import-file-name" id="salesArticleImportFileName">Noch keine Datei ausgewählt.</p>
+        </section>
+        <p class="message hidden" id="salesArticleImportMessage" role="status" aria-live="polite"></p>
+        <section class="sales-article-import-preview hidden" id="salesArticleImportPreview" aria-labelledby="salesArticleImportPreviewTitle" aria-busy="false">
+          <div class="sales-article-import-preview-heading">
+            <div><span class="eyebrow">Prüfvorschau</span><h3 id="salesArticleImportPreviewTitle">Geplante Änderungen</h3><p id="salesArticleImportPreviewMeta">Die Quelldatei bleibt nur für diese befristete Vorschau vorgemerkt.</p></div>
+            <button class="secondary-button" id="salesArticleImportReset" type="button">Vorschau verwerfen</button>
+          </div>
+          <dl class="sales-article-import-summary" id="salesArticleImportSummary">
+            <div><dt>Übernehmbar</dt><dd id="salesArticleImportValidCount">0</dd><small>Neu oder geändert</small></div>
+            <div><dt>Unverändert</dt><dd id="salesArticleImportUnchangedCount">0</dd><small>Keine neue Revision</small></div>
+            <div><dt>Konflikte</dt><dd id="salesArticleImportConflictCount">0</dd><small>Bleiben unangetastet</small></div>
+            <div><dt>Abgewiesen</dt><dd id="salesArticleImportRejectedCount">0</dd><small>Datei- oder Zeilenfehler</small></div>
+          </dl>
+          <div class="sales-article-import-breakdown" id="salesArticleImportBreakdown"></div>
+          <section class="sales-article-import-issues" aria-labelledby="salesArticleImportIssuesTitle">
+            <div class="sales-article-import-issues-heading"><h4 id="salesArticleImportIssuesTitle">Prüfprotokoll</h4><span id="salesArticleImportIssuesCount">0 Einträge</span></div>
+            <div class="sales-article-import-issues-scroll" tabindex="0" role="region" aria-label="Prüfprotokoll des TradeFoto-Artikelimports">
+              <table><caption class="visually-hidden">Geplante Artikelaktionen und Konflikthinweise</caption><thead><tr><th>Zeile</th><th>Artikelnummer</th><th>Bezeichnung</th><th>Aktion</th><th>Hinweis</th></tr></thead><tbody id="salesArticleImportIssues"></tbody></table>
+            </div>
+          </section>
+          <label class="sales-article-import-confirmation"><input id="salesArticleImportConfirmed" type="checkbox" /><span>Ich habe die vollständige Vorschau geprüft. Die sichere Teilmenge wird gemeinsam und revisionssicher übernommen; Konflikt- und Quarantänezeilen bleiben vollständig unangetastet und werden protokolliert.</span></label>
+        </section>
+        <div class="modal-actions sales-article-import-actions"><button type="button" class="secondary-button" id="salesArticleImportCancel" data-close-sales-article-import>Abbrechen</button><span></span><span></span><button type="submit" class="primary-button" id="salesArticleImportApplyButton" disabled>Bestätigten Import übernehmen</button></div>
       </form>
     </dialog>
 

@@ -129,8 +129,8 @@ function availableIds(availableGateIds) {
 }
 
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
-  assert.equal(catalogApi.FUNCTION_SEARCH_CATALOG.length, 102);
-  assert.equal(ALL_GATE_IDS.size, 98);
+  assert.equal(catalogApi.FUNCTION_SEARCH_CATALOG.length, 103);
+  assert.equal(ALL_GATE_IDS.size, 99);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 

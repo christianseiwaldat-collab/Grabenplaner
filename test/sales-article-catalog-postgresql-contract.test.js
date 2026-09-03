@@ -23,7 +23,7 @@ test("Sales-Artikelstamm liefert einen reproduzierbaren, deaktivierten PostgreSQ
     schemaName: "gp_sales_article_contract",
   });
 
-  assert.equal(POSTGRESQL_SALES_ARTICLE_CATALOG_SCHEMA_CONTRACT_VERSION, 2);
+  assert.equal(POSTGRESQL_SALES_ARTICLE_CATALOG_SCHEMA_CONTRACT_VERSION, 5);
   assert.deepEqual(POSTGRESQL_SALES_ARTICLE_UUID_CONTRACT, {
     applicationType: "canonical-uuid-string",
     storageType: "UUID",
@@ -62,12 +62,12 @@ test("Sales-Artikelstamm liefert einen reproduzierbaren, deaktivierten PostgreSQ
   });
   assert.equal(first.consumerReferenceContract,
     POSTGRESQL_SALES_ARTICLE_CONSUMER_REFERENCE_CONTRACT);
-  assert.equal(first.contractVersion, 2);
+  assert.equal(first.contractVersion, 5);
   assert.equal(first.status, "development-contract");
   assert.equal(first.executable, true);
   assert.equal(first.applicationExecutable, false);
   assert.equal(first.productActivation, false);
-  assert.equal(first.statements.length, 23);
+  assert.equal(first.statements.length, 31);
   assert.equal(first.fingerprint, second.fingerprint);
   assert.equal(Object.isFrozen(first), true);
   assert.equal(Object.isFrozen(first.statements), true);
@@ -95,6 +95,9 @@ test("Sales-Artikelstamm trennt Business-Schluessel und UUID-Identitaet revision
 
   for (const relation of [
     "sales_article_import_snapshots",
+    "sales_article_import_findings",
+    "sales_article_import_run_metadata",
+    "sales_article_import_impacts",
     "sales_articles",
     "sales_article_revisions",
     "sales_article_source_links",
@@ -117,6 +120,11 @@ test("Sales-Artikelstamm trennt Business-Schluessel und UUID-Identitaet revision
     ddl,
     /UNIQUE \(\s*source_system,\s*source_profile_version,\s*source_schema_sha256,\s*source_file_sha256,\s*content_sha256\s*\)/,
   );
+  assert.match(ddl, /sales_article_import_findings" \([\s\S]*?source_row INTEGER NOT NULL/);
+  assert.match(ddl, /sales_article_import_findings" \([\s\S]*?detail_sha256 TEXT NOT NULL/);
+  assert.match(ddl, /sales_article_import_run_metadata" \([\s\S]*?quarantined_count INTEGER NOT NULL/);
+  assert.match(ddl, /sales_article_import_impacts" \([\s\S]*?previous_current_revision INTEGER/);
+  assert.match(ddl, /PRIMARY KEY \(snapshot_id, ordinal\)/);
   assert.doesNotMatch(ddl, /UNIQUE \(source_system, content_sha256\)/);
   assert.match(ddl, /product_id UUID PRIMARY KEY/);
   assert.match(ddl, /article_number TEXT NOT NULL UNIQUE/);
@@ -233,10 +241,13 @@ test("Sales-Artikel-Identifier und Preise sind qualitaetsgesichert und unveraend
   assert.match(ddl, /RAISE EXCEPTION 'sales-article-record-immutable'/);
   assert.equal(
     contract.statements.filter(({ id }) => id.endsWith("no-mutation")).length,
-    6,
+    9,
   );
   for (const immutableRelation of [
     "sales_article_import_snapshots",
+    "sales_article_import_findings",
+    "sales_article_import_run_metadata",
+    "sales_article_import_impacts",
     "sales_article_revisions",
     "sales_article_source_links",
     "sales_article_identifier_owners",
