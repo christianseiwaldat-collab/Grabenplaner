@@ -174,7 +174,7 @@ test("Zielbereiche, Schnuppertermine und Kompetenzratings sind dynamisch und bar
   assert.match(app, /data-candidate-trial-range-button/);
   assert.match(app, /function initializePersonnelCandidateTrialDateRangeCalendar\(\)/);
   assert.match(app, /personnelCandidateTrialDateRangeCalendar\.open\(\{/);
-  assert.match(app, /Bitte für jeden Schnuppertermin einen gültigen Zeitraum auswählen/);
+  assert.match(app, /Bitte einen gültigen Zeitraum für den Schnuppertermin auswählen/);
   assert.doesNotMatch(app, /data-candidate-trial-from type="date"/);
   assert.match(app, /targetAreas,[\s\S]*?trialAppointments,[\s\S]*?competencyRatings,/);
   assert.match(app, /String\(scope\?\.type \|\| ""\)\.toLowerCase\(\) === "department"/);
@@ -205,6 +205,79 @@ test("Zielbereiche, Schnuppertermine und Kompetenzratings sind dynamisch und bar
   assert.match(styles, /\.personnel-candidate-rating-summary article > header \{ display:grid; grid-template-columns:minmax\(0,1fr\) auto;/);
   assert.match(styles, /\.personnel-candidate-rating-display \{ display:grid; grid-template-columns:max-content repeat\(5,20px\);[^}]*justify-content:end/);
   assert.match(styles, /\.personnel-candidate-rating-display > strong \{[^}]*white-space:nowrap/);
+});
+
+test("Schnuppertermine lassen sich direkt absagen und mit einem eigenständigen Ersatztermin verknüpfen", () => {
+  const trialEditor = between(
+    app,
+    "function renderPersonnelCandidateTrialEditorRow(",
+    "function updatePersonnelCandidateTrialRangeText(",
+  );
+  for (const marker of [
+    "data-candidate-trial-cancellation-reason",
+    "data-candidate-trial-replacement-id",
+    "data-candidate-trial-replaces-id",
+    "data-candidate-add-replacement-trial",
+    "data-candidate-save-trial",
+  ]) assert.match(trialEditor, new RegExp(marker));
+  assert.match(trialEditor, /Absagegrund/);
+  assert.match(trialEditor, /Ersatztermin eintragen/);
+  assert.match(trialEditor, /const cancellationLocked = persisted && status === "cancelled"/);
+  assert.match(trialEditor, /data-candidate-trial-cancelled-at/);
+  assert.match(trialEditor, /data-candidate-trial-cancelled-by/);
+  assert.match(trialEditor, /Absage protokolliert/);
+  assert.match(trialEditor, /type="submit" formnovalidate data-candidate-save-trial/);
+  assert.match(trialEditor, /Ende <small class="personnel-candidate-optional-marker">\* optional<\/small>/);
+
+  const trialSummary = between(
+    app,
+    "function renderPersonnelCandidateTrialAppointments(",
+    "function renderPersonnelCandidateCompetencyRatings(",
+  );
+  assert.match(trialSummary, /data-candidate-edit-trial/);
+  assert.match(trialSummary, /canWritePersonnelCandidateApplication\(application\)/);
+  assert.match(trialSummary, /canWritePersonnelCandidateStructuredScope\(appointment\)/);
+  assert.match(trialSummary, /appointment\.cancellationReason/);
+  assert.match(trialSummary, /replacementAppointmentId/);
+  assert.match(trialSummary, /replacesAppointmentId/);
+
+  const replacementAction = between(
+    app,
+    "function addPersonnelCandidateReplacementTrial(",
+    "function handlePersonnelCandidateDynamicClick(",
+  );
+  assert.match(replacementAction, /personnelCandidateClientId\("trial"\)/);
+  assert.match(replacementAction, /status: "planned"/);
+  assert.match(replacementAction, /replacesAppointmentId: appointmentId/);
+  assert.match(replacementAction, /replacementInput\.value = replacementAppointmentId/);
+  assert.match(app, /persisted: true/);
+  const directSave = between(
+    app,
+    "async function savePersonnelCandidateTrialAppointment(",
+    "async function savePersonnelCandidateApplication(",
+  );
+  assert.match(directSave, /\/trial-appointments\/\$\{encodeURIComponent\(appointment\.id\)\}/);
+  assert.match(directSave, /method: "PUT"/);
+  assert.match(directSave, /revision: application\.revision/);
+  assert.match(directSave, /replacement: \{/);
+  assert.doesNotMatch(directSave, /trialAppointments:/);
+  assert.match(directSave, /validatePersonnelCandidateTrialRow\(row, \{ reportInvalid: true \}\)/);
+  assert.ok(
+    directSave.indexOf("validatePersonnelCandidateTrialRow(row, { reportInvalid: true })")
+      < directSave.indexOf("canWritePersonnelCandidateStructuredScope(appointment)"),
+    "Die konkrete Terminzeile muss vor der Scope-Prüfung sichtbar validiert werden.",
+  );
+  assert.match(directSave, /Schnuppertermine dürfen nur im freigegebenen eigenen Bereich gespeichert werden/);
+  assert.match(app, /event\.submitter\?\.closest\("\[data-candidate-save-trial\]"\)/);
+  assert.match(app, /savePersonnelCandidateTrialAppointment\(applicationForm, trialSubmit\)/);
+  assert.match(app, /personnelCandidatePendingDirectTrialRow\(form\)/);
+
+  assert.match(styles, /\.personnel-candidate-trial-cancellation-summary/);
+  assert.match(styles, /\.personnel-candidate-trial-cancelled-meta/);
+  assert.match(styles, /\.personnel-candidate-trial-link/);
+  assert.match(styles, /\.personnel-candidate-trial-row\.is-direct-edit/);
+  assert.match(styles, /\.personnel-candidate-trial-row-actions \{[^}]*flex-wrap:wrap/);
+  assert.match(styles, /\.personnel-candidate-trial-cancellation,.personnel-candidate-trial-cancelled-meta,.personnel-candidate-trial-relation,.personnel-candidate-trial-row-actions \{ grid-column:1; \}/);
 });
 
 test("Foto, Teamfeedback und Bearbeitung bleiben capability- und revisionsgebunden", () => {

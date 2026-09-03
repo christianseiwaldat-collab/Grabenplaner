@@ -170,6 +170,11 @@ test("Block 4/7: application migration stages are provider-neutral and determini
   assert.equal(new Set(APPLICATION_MIGRATION_OPERATION_IDS).size, 10);
   assert.equal(APPLICATION_MIGRATION_OPERATION_CONTEXT_VERSION, 1);
   assert.equal(APPLICATION_MIGRATION_RUNTIME_CONTEXT_KEY, "applicationMigrations");
+  assert.deepEqual(
+    APPLICATION_MIGRATION_MANIFEST.migrations.slice(0, 2).map((migration) => migration.id),
+    ["stage.startup-compatibility", "stage.application-schema"],
+    "Backup- und Startup-Gate muss jeder Anwendungsschema-Mutation vorausgehen",
+  );
   assert.match(APPLICATION_MIGRATION_MANIFEST.fingerprint, /^[a-f0-9]{64}$/);
   assert.equal(Object.isFrozen(APPLICATION_MIGRATION_MANIFEST), true);
 

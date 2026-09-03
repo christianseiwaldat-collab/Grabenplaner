@@ -147,6 +147,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/planning-settings.js",
   "lib/persistence/repositories/portal-access.js",
   "lib/persistence/repositories/runtime-recovery.js",
+  "lib/persistence/repositories/sales-article-catalog.js",
   "lib/persistence/repositories/sickness-amu-management.js",
   "lib/persistence/repositories/system-center-metrics.js",
   "lib/persistence/repositories/time-tracking.js",
@@ -166,6 +167,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/loan-module-catalog.js",
   "lib/persistence/sqlite/mobile-auth-catalog.js",
   "lib/persistence/sqlite/operations/audit-log.js",
+  "lib/persistence/sqlite/operations/central-article-loan-migration.js",
   "lib/persistence/sqlite/operations/collective-agreements-schema.js",
   "lib/persistence/sqlite/operations/crm-schema.js",
   "lib/persistence/sqlite/operations/personal-action-log-schema.js",
@@ -194,6 +196,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/personnel-workflow-instance-schema.js",
   "lib/persistence/sqlite/operations/personnel-workflow-schema.js",
   "lib/persistence/sqlite/operations/protected-record-migrations.js",
+  "lib/persistence/sqlite/operations/sales-article-catalog-schema.js",
   "lib/persistence/sqlite/operations/startup-schema-migrations.js",
   "lib/persistence/sqlite/operations/system-diagnostics.js",
   "lib/persistence/sqlite/operations/system-center-metrics-schema.js",
@@ -209,6 +212,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/portal-access-catalog.js",
   "lib/persistence/sqlite/provider.js",
   "lib/persistence/sqlite/runtime-recovery-catalog.js",
+  "lib/persistence/sqlite/sales-article-catalog-catalog.js",
   "lib/persistence/sqlite/sickness-amu-management-catalog.js",
   "lib/persistence/sqlite/system-center-metrics-catalog.js",
   "lib/persistence/sqlite/time-tracking-catalog.js",
@@ -236,6 +240,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/planning-settings.js",
   "lib/persistence/statements/portal-access.js",
   "lib/persistence/statements/runtime-recovery.js",
+  "lib/persistence/statements/sales-article-catalog.js",
   "lib/persistence/statements/sickness-amu-management.js",
   "lib/persistence/statements/system-center-metrics.js",
   "lib/persistence/statements/time-tracking.js",
@@ -257,6 +262,9 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/crm-api-contract.test.js",
   "test/crm-persistence-contract.test.js",
   "test/personal-action-log-persistence.test.js",
+  "test/sales-article-catalog-persistence.test.js",
+  "test/sales-article-catalog-schema.test.js",
+  "test/v09224-central-article-loan-migration.test.js",
   "test/v087-custom-process-management-persistence.test.js",
   "test/v087-integration-runtime-persistence.test.js",
   "test/v087-loan-module-persistence.test.js",
@@ -381,10 +389,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1135;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1148;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 33;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1102;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1029;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1115;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1042;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -405,6 +413,7 @@ const PHASE_5_POSTGRESQL_FILES = Object.freeze([
   "lib/persistence/postgresql/policy.js",
   "lib/persistence/postgresql/pool.js",
   "lib/persistence/postgresql/provider.js",
+  "lib/persistence/postgresql/sales-article-catalog-schema.js",
   "lib/persistence/postgresql/system-center-metrics-catalog.js",
   "lib/persistence/postgresql/ui-preferences-catalog.js",
 ]);
@@ -419,6 +428,7 @@ const PHASE_5_POSTGRESQL_TEST_FILES = Object.freeze([
   "test/v087-database-block5-postgresql-planning-settings.test.js",
   "test/v087-database-block5-postgresql-pool-policy.test.js",
   "test/v087-database-block5-postgresql-provider.test.js",
+  "test/sales-article-catalog-postgresql-contract.test.js",
   "test/v087-database-block5-postgresql-system-center-metrics.test.js",
   "test/v087-database-block5-postgresql-ui-preferences.test.js",
 ]);
@@ -508,7 +518,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1021;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1034;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 114;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

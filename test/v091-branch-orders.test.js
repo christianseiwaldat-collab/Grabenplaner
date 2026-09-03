@@ -225,6 +225,57 @@ async function requestBinary(route, { method = "GET", session = null } = {}) {
   return { response, content: Buffer.from(await response.arrayBuffer()) };
 }
 
+function insertCentralArticle(articleNumber, description) {
+  const productId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  const digest = (label) => crypto.createHash("sha256")
+    .update(`${label}\0${articleNumber}\0${productId}`)
+    .digest("hex");
+  const snapshotId = digest("snapshot");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO sales_article_import_snapshots (
+        id, idempotency_key, source_system, source_profile_version,
+        source_schema_sha256, source_file_sha256, content_sha256,
+        snapshot_at, article_count, identifier_count, price_count,
+        imported_by, imported_at
+      ) VALUES (?, ?, 'manual.loan', 'test-v1', ?, ?, ?, ?, 1, 0, 0, 'test', ?)
+    `).run(
+      snapshotId,
+      digest("idempotency"),
+      digest("schema"),
+      digest("file"),
+      digest("content"),
+      timestamp,
+      timestamp,
+    );
+    db.prepare(`
+      INSERT INTO sales_articles (
+        product_id, article_number, source_system, source_article_key,
+        current_revision, created_by, created_at, updated_by, updated_at
+      ) VALUES (?, ?, 'manual.loan', ?, 1, 'test', ?, 'test', ?)
+    `).run(productId, articleNumber, articleNumber, timestamp, timestamp);
+    db.prepare(`
+      INSERT INTO sales_article_revisions (
+        product_id, revision, article_number, description, active,
+        source_snapshot_id, created_by, created_at
+      ) VALUES (?, 1, ?, ?, 1, ?, 'test', ?)
+    `).run(productId, articleNumber, description, snapshotId, timestamp);
+    db.prepare(`
+      INSERT INTO sales_article_source_links (
+        product_id, source_system, source_article_key, source_snapshot_id,
+        match_method, match_confidence, linked_by, linked_at
+      ) VALUES (?, 'manual.loan', ?, ?, 'source_import', 'authoritative', 'test', ?)
+    `).run(productId, articleNumber, snapshotId, timestamp);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return { productId, revision: 1 };
+}
+
 function insertReadOnlyFixtures() {
   for (const date of ["2031-03-03", "2031-03-10", "2031-03-17"]) {
     db.prepare(`
@@ -237,10 +288,7 @@ function insertReadOnlyFixtures() {
       (employee_number, group_id, week_start, date_from, date_to, option_type, note, all_day)
     VALUES (?, 'v091-vacation', '2031-03-10', '2031-03-10', '2031-03-14', 'vacation', 'nicht für Filialkonto', 1)
   `).run(EMPLOYEE);
-  db.prepare(`
-    INSERT INTO articles (article_number, description, source_provider, active, created_by, updated_by)
-    VALUES ('910018', 'V091 Testkamera', 'manual', 1, 'test', 'test')
-  `).run();
+  const article = insertCentralArticle("910018", "V091 Testkamera");
   db.prepare(`
     INSERT INTO loans
       (id, location_id, borrower_employee_number, created_by_employee_number,
@@ -251,9 +299,12 @@ function insertReadOnlyFixtures() {
   `).run(LOCATION, EMPLOYEE, EMPLOYEE);
   db.prepare(`
     INSERT INTO loan_items
-      (id, loan_id, position, article_number, description_snapshot, serial_number, quantity, condition_out, item_note)
-    VALUES (?, 'v091-loan', 1, '910018', 'V091 Testkamera', 'V091-SERIAL', 1, 'good', 'intern')
-  `).run(crypto.randomUUID());
+      (id, loan_id, position, product_id, product_revision_snapshot,
+       article_number_snapshot, description_snapshot, serial_number,
+       quantity, condition_out, item_note)
+    VALUES (?, 'v091-loan', 1, ?, ?, '910018', 'V091 Testkamera',
+            'V091-SERIAL', 1, 'good', 'intern')
+  `).run(crypto.randomUUID(), article.productId, article.revision);
 }
 
 test.before(() => {
