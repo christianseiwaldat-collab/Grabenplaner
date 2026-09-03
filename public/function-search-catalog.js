@@ -21,6 +21,7 @@
     "personnelAdministration",
     "salesAdministration",
     "salesAnalytics",
+    "crm",
     "rightsDashboard",
     "settings",
   ]);
@@ -543,6 +544,15 @@
       ["verkaufsanalyse", "umsatzanalyse", "statistik", "kennzahlen", "tradefoto", "warengruppen", "sales analytics"],
       ["salesAnalyticsNavButton"],
       { view: "salesAnalytics", focusId: "salesAnalyticsView" },
+    ),
+    entry(
+      "sales.crm",
+      "CRM öffnen",
+      ["Verkaufsverwaltung", "CRM", "Kundenkartei"],
+      "Öffnet die berechtigungsgeschützte Kundensuche und lädt erst nach einem ausdrücklichen Suchauftrag Ergebnisse.",
+      ["crm", "kunde", "kunden", "kundenkartei", "kundennummer", "kontakt", "telefon", "email", "website", "uid", "geburtstag"],
+      ["crmNavButton"],
+      { view: "crm", focusId: "crmSearchForm" },
     ),
     entry(
       "sales.report-import",

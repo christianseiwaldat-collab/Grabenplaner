@@ -86,7 +86,10 @@ function resetFixture() {
   }
 }
 
-function seedSalesAnalyticsPdfFixture(locationId) {
+function seedSalesAnalyticsPdfFixture(locationId, {
+  nonPositiveComparisons = false,
+  extraYearToDateGroups = 0,
+} = {}) {
   const reportId = crypto.createHash("sha256").update(`v071-sales-pdf-${crypto.randomUUID()}`).digest("hex");
   const sourceHash = crypto.createHash("sha256").update(`${reportId}-source`).digest("hex");
   db.prepare(`
@@ -98,11 +101,17 @@ function seedSalesAnalyticsPdfFixture(locationId) {
       imported_by, imported_at
     ) VALUES (
       ?, 'tradefoto_report', ?, 2, 'pdf_text_coordinates', 'source_text_confirmed',
-      'product_group_net', '18', ?, 'EUR', '2026-07-01', '2026-07-31',
+      'product_group_net', ?, ?, 'EUR', '2026-07-01', '2026-07-31',
       '2025-07-01', '2025-07-31', '2026-01-01', '2025-01-01', '2026-08-03',
-      1, 3, 0, 'match', 'v071-admin', '2026-08-21T10:00:00.000Z'
+      1, ?, 0, 'match', 'v071-admin', '2026-08-21T10:00:00.000Z'
     )
-  `).run(reportId, sourceHash, locationId);
+  `).run(
+    reportId,
+    sourceHash,
+    `v071-${reportId.slice(0, 12)}`,
+    locationId,
+    35 + extraYearToDateGroups,
+  );
   const insertGroup = db.prepare(`
     INSERT INTO sales_report_product_group_metrics (
       report_id, horizon, external_product_group_id, product_group_label,
@@ -113,9 +122,23 @@ function seedSalesAnalyticsPdfFixture(locationId) {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
   `);
   const groups = [
-    ["101", "Kameras", 12, 10, 1200, 1000, 320, 270, 11, 9, 109.09, 111.11],
-    ["202", "Objektive", 8, 11, 880, 1210, 250, 350, 7, 10, 125.71, 121],
+    ["101", "Kameras", 12, 10, 1200, nonPositiveComparisons ? 0 : 1000, 320, 270, 11, 9, 109.09, 111.11],
+    ["202", "Objektive", 8, 11, 880, nonPositiveComparisons ? -100 : 1210, 250, 350, 7, 10, 125.71, 121],
     ["303", "Zubehör", 30, 24, 750, 600, 210, 165, 25, 20, 30, 30],
+    ...Array.from({ length: 32 }, (_, index) => [
+      String(400 + index),
+      `Testgruppe ${String(index + 1).padStart(2, "0")}`,
+      10 + index,
+      9 + index,
+      400 + index * 10,
+      390 + index * 9,
+      100 + index * 3,
+      95 + index * 2,
+      8 + index,
+      7 + index,
+      40 + index,
+      39 + index,
+    ]),
   ];
   for (const horizon of ["period", "year_to_date"]) {
     groups.forEach((group, index) => insertGroup.run(
@@ -132,9 +155,24 @@ function seedSalesAnalyticsPdfFixture(locationId) {
         current_net_revenue, comparison_net_revenue, current_gross_margin,
         comparison_gross_margin, current_customer_count, comparison_customer_count,
         current_revenue_per_customer, comparison_revenue_per_customer, source_page
-      ) VALUES (?, ?, '50.0000', '45.0000', '2830.0000', '2810.0000',
+      ) VALUES (?, ?, '50.0000', '45.0000', '2830.0000', ?,
         '780.0000', '785.0000', '43.0000', '39.0000', '65.8100', '72.0500', 1)
-    `).run(reportId, horizon);
+    `).run(
+      reportId,
+      horizon,
+      String(nonPositiveComparisons && horizon === "year_to_date" ? -1 : 2810),
+    );
+  }
+  for (let index = 0; index < extraYearToDateGroups; index += 1) {
+    const serial = String(index + 1).padStart(3, "0");
+    insertGroup.run(
+      reportId,
+      "year_to_date",
+      `CAP-${serial}`,
+      `Seitengrenze ${serial}`,
+      ...Array.from({ length: 10 }, () => "1.0000"),
+      String(2000 + index),
+    );
   }
   return reportId;
 }
@@ -555,4 +593,184 @@ test("Verkaufsanalyse: Grafikexport erzeugt aus der Rechteprojektion eine dreise
   `).get();
   assert.equal(audit.action, "sales.report.charts.export");
   assert.equal(JSON.parse(audit.detail).metric, "netRevenue");
+});
+
+test("Verkaufsanalyse: persönliche Einstellungen sind streng validiert und kontogebunden", async () => {
+  const admin = createPortalSession("v071-admin", "admin");
+  const manager = createPortalSession("v071-manager", "admin");
+  for (const employeeNumber of ["v071-admin", "v071-manager"]) {
+    for (const permission of ["sales:analytics:access", "sales:analytics:company:read"]) {
+      db.prepare(`
+        INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+        VALUES (?, ?, 'v071-admin')
+      `).run(employeeNumber, permission);
+    }
+  }
+
+  const initial = await requestJson("/api/sales-analytics/preferences", { session: admin });
+  assert.equal(initial.response.status, 200, JSON.stringify(initial.payload));
+  assert.equal(initial.response.headers.get("cache-control"), "private, no-store");
+  assert.equal(initial.payload.preferences.horizon, "year_to_date");
+  assert.equal(initial.payload.preferences.chartMetric, "netRevenue");
+  assert.deepEqual(initial.payload.preferences.pdf.charts, [
+    "ranking",
+    "change",
+    "absolute_change",
+    "share",
+    "pareto",
+  ]);
+
+  const preferences = {
+    version: 1,
+    horizon: "period",
+    chartType: "pareto",
+    chartMetric: "customerCount",
+    pdf: {
+      orientation: "portrait",
+      charts: ["pareto", "absolute_change"],
+      topN: 7,
+      includeKpis: false,
+      includeTable: true,
+      filenamePrefix: "Meine Verkaufsanalyse",
+    },
+  };
+  const saved = await requestJson("/api/sales-analytics/preferences", {
+    method: "PUT",
+    session: admin,
+    body: preferences,
+  });
+  assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+  assert.deepEqual(saved.payload.preferences, preferences);
+
+  const reread = await requestJson("/api/sales-analytics/preferences", { session: admin });
+  assert.deepEqual(reread.payload.preferences, preferences);
+  const isolated = await requestJson("/api/sales-analytics/preferences", { session: manager });
+  assert.equal(isolated.payload.preferences.horizon, "year_to_date");
+  assert.equal(isolated.payload.preferences.chartType, "ranking");
+
+  const invalid = await requestJson("/api/sales-analytics/preferences", {
+    method: "PUT",
+    session: admin,
+    body: { ...preferences, unknown: true },
+  });
+  assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
+  assert.equal(invalid.payload.code, "SALES_ANALYTICS_PREFERENCES_INVALID");
+  const unsafeFilename = await requestJson("/api/sales-analytics/preferences", {
+    method: "PUT",
+    session: admin,
+    body: { ...preferences, pdf: { ...preferences.pdf, filenamePrefix: "../Analyse" } },
+  });
+  assert.equal(unsafeFilename.response.status, 400, JSON.stringify(unsafeFilename.payload));
+});
+
+test("Verkaufsanalyse: versionierte PDF-Optionen steuern Seiten, Hochformat und Dateiname", async () => {
+  const session = createPortalSession("v071-admin", "admin");
+  for (const permission of ["sales:analytics:access", "sales:analytics:company:read"]) {
+    db.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES ('v071-admin', ?, 'v071-admin')
+    `).run(permission);
+  }
+  const locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id);
+  const reportId = seedSalesAnalyticsPdfFixture(locationId, { nonPositiveComparisons: true });
+  const body = {
+    reportId,
+    horizon: "year_to_date",
+    metric: "netRevenue",
+    optionsVersion: 1,
+    options: {
+      orientation: "portrait",
+      charts: ["absolute_change", "pareto", "share", "change"],
+      topN: 5,
+      includeKpis: true,
+      includeTable: true,
+      filenamePrefix: "Verkaufsanalyse Test",
+    },
+  };
+  const response = await fetch(`${baseUrl}/api/sales-analytics/charts.pdf`, {
+    method: "POST",
+    headers: {
+      Accept: "application/pdf",
+      "Content-Type": "application/json",
+      Cookie: session.cookie,
+      "X-CSRF-Token": session.csrf,
+    },
+    body: JSON.stringify(body),
+  });
+  const buffer = Buffer.from(await response.arrayBuffer());
+  assert.equal(response.status, 200, buffer.toString("utf8", 0, 400));
+  assert.match(response.headers.get("content-disposition") || "", /Verkaufsanalyse.Test/);
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer), disableWorker: true });
+  try {
+    const document = await loadingTask.promise;
+    assert.equal(document.numPages, 7);
+    const pageTexts = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 1 });
+      assert.ok(viewport.height > viewport.width, `Seite ${pageNumber} ist nicht im Hochformat.`);
+      const content = await page.getTextContent();
+      pageTexts.push(content.items.map((item) => item.str).join(" "));
+      page.cleanup();
+    }
+    assert.match(pageTexts[0], /Kennzahlenübersicht/);
+    assert.match(pageTexts[0], /Abweichung: nicht verfügbar/);
+    assert.match(pageTexts[1], /Absolute Abweichungen/);
+    assert.match(pageTexts[2], /Pareto und kumulierter Anteil/);
+    assert.match(pageTexts[2], /Anteil/);
+    assert.match(pageTexts[2], /kum\./);
+    assert.match(pageTexts[3], /Anteile nach Warengruppe/);
+    assert.match(pageTexts[3], /Rest \(30 weitere Warengruppen\)/);
+    assert.match(pageTexts[4], /Größte relative Abweichungen/);
+    assert.doesNotMatch(pageTexts[4], /Objektive/);
+    assert.match(pageTexts[5], /Detailtabelle/);
+    assert.match(pageTexts[5], /nicht verfügbar/);
+    assert.match(pageTexts[6], /Detailtabelle \(2\/2\)/);
+    assert.match(`${pageTexts[5]} ${pageTexts[6]}`, /Testgruppe 32/);
+  } finally {
+    await loadingTask.destroy();
+  }
+
+  const invalid = await requestJson("/api/sales-analytics/charts.pdf", {
+    method: "POST",
+    session,
+    body: { ...body, options: { ...body.options, charts: [] } },
+  });
+  assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
+  assert.equal(invalid.payload.code, "SALES_ANALYTICS_CHART_PDF_OPTIONS_INVALID");
+});
+
+test("Verkaufsanalyse: PDF-Detailtabelle bricht oberhalb von 24 Seiten kontrolliert ab", async () => {
+  const session = createPortalSession("v071-admin", "admin");
+  for (const permission of ["sales:analytics:access", "sales:analytics:company:read"]) {
+    db.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES ('v071-admin', ?, 'v071-admin')
+    `).run(permission);
+  }
+  const locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id);
+  const reportId = seedSalesAnalyticsPdfFixture(locationId, { extraYearToDateGroups: 400 });
+
+  const result = await requestJson("/api/sales-analytics/charts.pdf", {
+    method: "POST",
+    session,
+    body: {
+      reportId,
+      horizon: "year_to_date",
+      metric: "netRevenue",
+      optionsVersion: 1,
+      options: {
+        orientation: "landscape",
+        charts: ["ranking"],
+        topN: 5,
+        includeKpis: false,
+        includeTable: true,
+        filenamePrefix: "Seitengrenze",
+      },
+    },
+  });
+  assert.equal(result.response.status, 413, JSON.stringify(result.payload));
+  assert.equal(result.payload.code, "SALES_ANALYTICS_CHART_PDF_TABLE_TOO_LARGE");
+  assert.match(result.payload.error, /mehr als 24 Seiten/);
 });

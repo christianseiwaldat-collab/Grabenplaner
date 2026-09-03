@@ -27,10 +27,13 @@ test("Verkaufsverwaltung ist ein fester Hauptbereich mit erstem Unterpunkt", () 
     "</nav>",
   );
   assert.match(navigation, /id="salesAdministrationToggle"[^>]*data-nav-toggle="salesAdministration"[^>]*aria-controls="salesAdministrationNavChildren"/);
-  assert.match(navigation, /<span>Verkaufsverwaltung<\/span>/);
+  assert.match(navigation, /<span>Verkauf<\/span>/);
+  assert.match(navigation, /aria-label="Verkaufsverwaltung"/);
   assert.match(navigation, /<button(?=[^>]*id="salesDashboardNavButton")(?=[^>]*data-view="salesAdministration")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="salesAnalyticsNavButton")(?=[^>]*data-view="salesAnalytics")[^>]*>/);
   assert.match(navigation, /<span>Verkaufsanalysen<\/span>/);
+  assert.match(navigation, /<button(?=[^>]*id="crmNavButton")(?=[^>]*data-view="crm")[^>]*>/);
+  assert.match(navigation, /<span>CRM<\/span>/);
   assert.ok(html.indexOf("personnelAdministrationNav") < html.indexOf("salesAdministrationNav"));
 });
 
@@ -57,23 +60,33 @@ test("Verkaufsverwaltung bleibt außerhalb des optionalen Installationskatalogs"
 test("Navigation und Direktaufruf bleiben ohne Zugangsrecht fail-closed", () => {
   const accessHelper = between(app, "function canAccessSalesAnalytics()", "function canReadVacationAccounts()");
   assert.match(accessHelper, /user\?\.salesAnalytics\?\.workspace === true/);
+  assert.match(accessHelper, /function canAccessCrm\(\)/);
+  assert.match(accessHelper, /user\?\.crm\?\.workspace === true/);
+  assert.match(accessHelper, /function canOpenSalesAdministrationModule\(\)[\s\S]*canAccessSalesAnalytics\(\) \|\| canAccessCrm\(\)/);
 
   const visibility = between(app, "function applyRoleVisibility()", "async function bootstrapApplication()");
-  assert.match(visibility, /salesAdministrationNav\?\.classList\.toggle\("hidden", !salesAnalyticsAccess\)/);
+  assert.match(visibility, /salesModuleAccess = salesAnalyticsAccess \|\| crmAccess/);
+  assert.match(visibility, /salesAdministrationNav\?\.classList\.toggle\("hidden", !salesModuleAccess\)/);
   assert.match(visibility, /salesAnalyticsNavButton\?\.classList\.toggle\("hidden", !salesAnalyticsAccess\)/);
-  assert.match(visibility, /!salesAnalyticsAccess && \["salesAdministration", "salesAnalytics"\]\.includes\(state\.currentView\)/);
+  assert.match(visibility, /crmNavButton\?\.classList\.toggle\("hidden", !crmAccess\)/);
+  assert.match(visibility, /!salesModuleAccess && state\.currentView === "salesAdministration"/);
+  assert.match(visibility, /!salesAnalyticsAccess && state\.currentView === "salesAnalytics"/);
+  assert.match(visibility, /!crmAccess && state\.currentView === "crm"/);
 
   const groups = between(app, "function navigationGroups()", "function setNavigationCurrent");
   assert.match(groups, /salesAdministration:\s*\{\s*toggle:\s*elements\.salesAdministrationToggle,\s*children:\s*elements\.salesAdministrationNavChildren\s*\}/);
 
   const viewSwitch = between(app, "function setView(view)", "function applyRequestedView()");
-  assert.match(viewSwitch, /view === "salesAdministration" && !canAccessSalesAnalytics\(\)/);
+  assert.match(viewSwitch, /view === "salesAdministration" && !canOpenSalesAdministrationModule\(\)/);
   assert.match(viewSwitch, /view === "salesAnalytics" && !canAccessSalesAnalytics\(\)/);
+  assert.match(viewSwitch, /view === "crm" && !canAccessCrm\(\)/);
   assert.match(viewSwitch, /salesAdministrationView\?\.classList\.toggle\("active", view === "salesAdministration"\)/);
   assert.match(viewSwitch, /salesAnalyticsView\?\.classList\.toggle\("active", view === "salesAnalytics"\)/);
+  assert.match(viewSwitch, /crmView\?\.classList\.toggle\("active", view === "crm"\)/);
 
   const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
   assert.match(requestedView, /"salesAnalytics"/);
+  assert.match(requestedView, /"crm"/);
 });
 
 test("Fest integrierter Verkaufsbereich bleibt eine klar gekennzeichnete Desktop-Arbeitsfläche", () => {
@@ -82,6 +95,7 @@ test("Fest integrierter Verkaufsbereich bleibt eine klar gekennzeichnete Desktop
   assert.match(landing, /id="salesDashboardGrid"/);
   assert.match(landing, /class="personnel-dashboard-card"[^>]*data-sales-dashboard-view="salesAnalytics"/);
   assert.match(landing, />Verkaufsanalysen</);
+  assert.match(landing, /id="crmDashboardCard"[^>]*data-sales-dashboard-view="crm"/);
   assert.match(app, /salesDashboardGrid\?\.addEventListener\("click"[\s\S]*setView\(button\.dataset\.salesDashboardView\)/);
 
   const view = between(html, '<section id="salesAnalyticsView"', '<section id="personnelView"');

@@ -22,6 +22,8 @@ test("v0.75.2 Navigation: Personalverwaltung bündelt ausschließlich berechtigt
   const navigation = between(html, '<section class="nav-module hidden" id="personnelAdministrationNav"', "</nav>");
   assert.match(navigation, /id="personnelAdministrationToggle"[^>]*data-nav-toggle="personnelAdministration"[^>]*aria-controls="personnelAdministrationNavChildren"/);
   assert.match(navigation, /id="personnelAdministrationToggle"[^>]*aria-label="Unterpunkte der Personalverwaltung ein- oder ausklappen"/);
+  assert.match(navigation, /<span>Personal<\/span>/);
+  assert.match(navigation, /aria-label="Personalverwaltung"/);
   assert.match(navigation, /<button(?=[^>]*id="personnelDashboardNavButton")(?=[^>]*data-view="personnelAdministration")(?=[^>]*data-personnel-administration-route="dashboard")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="personnelDirectoryNavButton")(?=[^>]*data-personnel-administration-route="employees")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="positionManagementNavButton")(?=[^>]*data-personnel-administration-route="positions")[^>]*>/);

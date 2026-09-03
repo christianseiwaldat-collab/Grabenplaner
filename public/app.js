@@ -76,6 +76,66 @@ function normalizeCandidateEvaluationPdfPreferences(value) {
   };
 }
 
+const SALES_ANALYTICS_CHART_TYPE_IDS = Object.freeze([
+  "ranking",
+  "change",
+  "absolute_change",
+  "share",
+  "pareto",
+]);
+const SALES_ANALYTICS_PDF_DEFAULTS = Object.freeze({
+  orientation: "landscape",
+  charts: Object.freeze(["ranking", "change", "absolute_change", "share", "pareto"]),
+  topN: 12,
+  includeKpis: true,
+  includeTable: false,
+  filenamePrefix: "Grabenplaner-Verkaufsanalyse",
+});
+
+function normalizeSalesAnalyticsFilenamePrefix(value) {
+  return String(value || "")
+    .replace(/[\x00-\x1F\x7F<>:"/\\|?*]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[. _-]+|[. _-]+$/g, "")
+    .slice(0, 64) || SALES_ANALYTICS_PDF_DEFAULTS.filenamePrefix;
+}
+
+function normalizeSalesAnalyticsPdfOptions(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const charts = [...new Set(Array.isArray(source.charts) ? source.charts : [])]
+    .filter((chartId) => SALES_ANALYTICS_CHART_TYPE_IDS.includes(chartId));
+  const parsedTopN = Number.parseInt(source.topN, 10);
+  return {
+    orientation: source.orientation === "portrait" ? "portrait" : "landscape",
+    charts: charts.length ? charts : [...SALES_ANALYTICS_PDF_DEFAULTS.charts],
+    topN: Number.isInteger(parsedTopN) ? Math.max(5, Math.min(20, parsedTopN)) : SALES_ANALYTICS_PDF_DEFAULTS.topN,
+    includeKpis: typeof source.includeKpis === "boolean" ? source.includeKpis : SALES_ANALYTICS_PDF_DEFAULTS.includeKpis,
+    includeTable: typeof source.includeTable === "boolean" ? source.includeTable : SALES_ANALYTICS_PDF_DEFAULTS.includeTable,
+    filenamePrefix: normalizeSalesAnalyticsFilenamePrefix(source.filenamePrefix),
+  };
+}
+
+function normalizeSalesAnalyticsPreferences(value) {
+  const payload = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const source = payload.preferences && typeof payload.preferences === "object"
+    ? payload.preferences
+    : payload;
+  const chartType = SALES_ANALYTICS_CHART_TYPE_IDS.includes(source.chartType)
+    ? source.chartType
+    : "ranking";
+  const chartMetric = ["netRevenue", "grossMargin", "quantity", "customerCount", "revenuePerCustomer"].includes(source.chartMetric)
+    ? source.chartMetric
+    : "netRevenue";
+  return {
+    version: 1,
+    horizon: source.horizon === "period" ? "period" : "year_to_date",
+    chartType,
+    chartMetric,
+    pdf: normalizeSalesAnalyticsPdfOptions(source.pdf || source.pdfOptions),
+  };
+}
+
 const state = {
   weekStart: getMonday(new Date()),
   vacationYear: new Date().getFullYear(),
@@ -134,6 +194,12 @@ const state = {
   brandingKits: [],
   portalStatus: null,
   portalSession: null,
+  personalActions: [],
+  personalActionsCursor: "",
+  personalActionsLoading: false,
+  personalActionUndoPending: "",
+  personalActionsActorKey: "",
+  personalActionsRequestId: 0,
   portalUsers: [],
   mobilePortalLocationDisplay: null,
   organizationAccounts: [],
@@ -280,6 +346,7 @@ const state = {
   selectedSicknessCase: null,
   selectedAmuReport: null,
   salesAnalytics: {
+    actorKey: "",
     context: null,
     reports: [],
     selectedReportId: "",
@@ -287,19 +354,54 @@ const state = {
     locationFilter: "",
     dateFrom: "",
     dateTo: "",
-    horizon: "period",
+    horizon: "year_to_date",
     chartType: "ranking",
     chartMetric: "netRevenue",
+    pdfOptions: normalizeSalesAnalyticsPdfOptions(),
+    pdfOptionsDraft: null,
+    preferencesLoaded: false,
+    preferencesLoading: false,
+    preferencesRequestId: 0,
+    preferencesSaving: false,
+    preferencesError: "",
     tableSearch: "",
     tableSort: "netRevenue_current_desc",
     archiveSelection: [],
     reportSeries: null,
     seriesLoading: false,
+    seriesRequestId: 0,
     seriesError: "",
     previewId: "",
     preview: null,
     previewHorizon: "period",
     loading: false,
+  },
+  crm: {
+    actorKey: "",
+    items: [],
+    total: 0,
+    limit: 50,
+    offset: 0,
+    query: "",
+    customerType: "",
+    sort: { key: "lastName", direction: "asc" },
+    columns: ["customerNumber", "name", "customerType", "companyName", "city", "phone", "email"],
+    columnDraftOrder: [],
+    columnDraftVisible: new Set(),
+    preferencesLoaded: false,
+    preferencesLoading: false,
+    preferencesRequestId: 0,
+    searchStarted: false,
+    searchLoading: false,
+    searchError: "",
+    searchRequestId: 0,
+    selectedCustomer: null,
+    detailRequestId: 0,
+    detailLoading: false,
+    detailError: "",
+    mutationPending: false,
+    editing: false,
+    photoObjectUrl: "",
   },
   allEmployees: [],
   personnelDirectory: [],
@@ -605,6 +707,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
@@ -642,7 +745,7 @@ const elements = Object.fromEntries(
     "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationCatalogSection", "birthdayPresentationCatalog", "birthdayPresentationDeveloperPreviewSection", "birthdayPresentationDeveloperPreviewEnabled", "birthdayPresentationDeveloperPreviewDesign", "birthdayPresentationDeveloperPreviewHint", "saveBirthdayPresentationDeveloperPreviewButton", "openBirthdayPresentationDeveloperPreviewButton", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton", "sicknessCaseFields", "sicknessExpectedEnd", "sicknessReturnDate", "sicknessCaseHint",
-    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordForm", "personnelRecordTitle", "personnelRecordContent", "personnelRecordMessage", "savePersonnelRecordButton",
+    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "personalActionsAdminButton", "personalActionsAdminDialog", "personalActionsAdminMessage", "personalActionsAdminList", "personalActionsAdminLoadMore", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordForm", "personnelRecordTitle", "personnelRecordContent", "personnelRecordMessage", "savePersonnelRecordButton",
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
     "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewEntries", "addTimeCorrectionReviewEntry", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
     "timeDayReviewPanel", "timeReviewDate", "timeReviewFilter", "loadTimeDayReviewButton", "timeDayReviewSummary", "timeDayReviewList", "timeDayReviewModal", "timeDayReviewForm", "timeDayReviewTitle", "timeDayReviewDetail", "timeDayReviewEmployee", "timeDayReviewWorkDate", "timeDayReviewMetrics", "timeDayReviewIssues", "timeDayReviewNote", "timeDayReviewMessage", "removeTimeDayReviewButton",
@@ -659,7 +762,7 @@ const elements = Object.fromEntries(
     "payrollHandoffMonth", "payrollHandoffLocation", "payrollHandoffDepartment", "payrollHandoffPreflightButton", "payrollHandoffCreateButton", "payrollHandoffPreflightResult", "payrollHandoffList", "payrollHandoffProtocolModal", "payrollHandoffProtocolForm", "payrollHandoffProtocolId", "payrollHandoffProtocolSummary", "payrollHandoffProtocolResult", "payrollHandoffProtocolNumber", "payrollHandoffProtocolNote", "payrollHandoffProtocolMessage", "savePayrollHandoffProtocolButton",
     "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportSourceType", "personnelImportFileField", "personnelImportSqlConnectionField", "personnelImportSqlConnection", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultCostCenter", "personnelImportDefaultDepartment", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
     "integrationConnectionModal", "integrationConnectionForm", "integrationConnectionTitle", "integrationConnectionId", "integrationConnectionKind", "integrationConnectionName", "integrationConnectionActive", "integrationConnectionScopeLocations", "integrationConnectionScopeDepartments", "integrationSqlFields", "integrationSqlHost", "integrationSqlPort", "integrationSqlDatabase", "integrationSqlInstance", "integrationSqlSchema", "integrationSqlView", "integrationSqlAllowedColumns", "integrationSqlTls", "integrationSqlTimeout", "integrationSqlRowLimit", "integrationApiFields", "integrationApiEndpoint", "integrationApiAuthentication", "integrationApiKeyHeaderField", "integrationApiKeyHeader", "integrationApiTimeout", "integrationApiRequestLimit", "integrationApiResponseLimit", "integrationCredentialPanel", "integrationCredentialTitle", "integrationCredentialStatus", "integrationSqlCredentials", "integrationApiCredentials", "integrationBearerTokenField", "integrationApiKeyField", "integrationBasicUsernameField", "integrationBasicPasswordField", "integrationCredentialUsername", "integrationCredentialPassword", "integrationCredentialToken", "integrationCredentialApiKey", "integrationCredentialBasicUsername", "integrationCredentialBasicPassword", "integrationConnectionMessage", "deleteIntegrationConnectionButton", "testIntegrationConnectionButton", "saveIntegrationConnectionButton",
-    "salesAnalyticsStatusBadge", "salesReportImportPanel", "salesReportImportFile", "salesReportInspectButton", "salesReportImportMessage", "salesReportPreview", "salesReportPreviewSummary", "salesReportOcrReview", "salesReportOcrReviewState", "salesReportOcrReportFields", "salesReportImportLocation", "salesReportImportCurrency", "salesReportPreviewIssues", "salesReportPreviewTableTitle", "salesReportPreviewHorizonField", "salesReportPreviewHorizon", "salesReportPreviewHead", "salesReportPreviewBody", "salesReportPreviewFoot", "salesReportImportConfirmed", "salesReportConfirmationText", "salesReportDiscardButton", "salesReportApplyButton", "salesReportLocationFilter", "salesReportDateFrom", "salesReportDateTo", "salesReportResetFilters", "salesReportFilterNotice", "salesReportSelect", "salesReportHorizon", "salesReportArchive", "salesReportArchiveBody", "salesReportArchiveEmpty", "salesReportArchiveSelectionSummary", "salesReportCoverageChart", "salesReportSeriesAnalyzeButton", "salesReportSeriesClearButton", "salesReportKpis", "salesReportSummary", "salesAnalyticsChartEyebrow", "salesAnalyticsChartTitle", "salesReportChartType", "salesReportChartMetric", "salesReportChartPdfButton", "salesReportChartLegend", "salesReportChart", "salesReportGroupSearch", "salesReportTableCount", "salesReportTableHead", "salesReportTableBody", "salesReportTableEmpty",
+    "salesAnalyticsStatusBadge", "salesReportImportPanel", "salesReportImportFile", "salesReportInspectButton", "salesReportImportMessage", "salesReportPreview", "salesReportPreviewSummary", "salesReportOcrReview", "salesReportOcrReviewState", "salesReportOcrReportFields", "salesReportImportLocation", "salesReportImportCurrency", "salesReportPreviewIssues", "salesReportPreviewTableTitle", "salesReportPreviewHorizonField", "salesReportPreviewHorizon", "salesReportPreviewHead", "salesReportPreviewBody", "salesReportPreviewFoot", "salesReportImportConfirmed", "salesReportConfirmationText", "salesReportDiscardButton", "salesReportApplyButton", "salesReportLocationFilter", "salesReportDateFrom", "salesReportDateTo", "salesReportResetFilters", "salesReportFilterNotice", "salesReportSelect", "salesReportHorizon", "salesReportArchive", "salesReportArchiveBody", "salesReportArchiveEmpty", "salesReportArchiveSelectionSummary", "salesReportCoverageChart", "salesReportSeriesAnalyzeButton", "salesReportSeriesClearButton", "salesReportKpis", "salesReportSummary", "salesAnalyticsChartEyebrow", "salesAnalyticsChartTitle", "salesReportChartType", "salesReportChartMetric", "salesReportChartPdfButton", "salesReportChartLegend", "salesReportChart", "salesReportGroupSearch", "salesReportTableCount", "salesReportTableHead", "salesReportTableBody", "salesReportTableEmpty", "salesReportPdfOptionsModal", "salesReportPdfOptionsForm", "salesReportPdfOrientation", "salesReportPdfTopN", "salesReportPdfIncludeKpis", "salesReportPdfIncludeTable", "salesReportPdfFilenamePrefix", "salesReportPdfOptionsMessage", "salesReportPdfOptionsReset", "salesReportPdfExportButton",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
 
@@ -1152,6 +1255,9 @@ function closeAdminCredentialDialogsForLogin() {
 
 function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
+  resetAdminPersonalActionsState("");
+  state.portalSession = null;
+  resetSalesAnalyticsActorState("");
   if (employeeProfileIsOpen()) closeEmployeeProfile({ restoreFocus: false });
   clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
   document.body.classList.add("portal-locked");
@@ -1188,10 +1294,197 @@ function renderSidebarSession() {
   const user = state.portalSession?.user;
   const visible = state.portalStatus?.portalEnabled === true && Boolean(user);
   elements.sidebarSessionInfo?.classList.toggle("hidden", !visible);
+  elements.personalActionsAdminButton?.classList.toggle("hidden", !visible || user?.isEmployee === false);
   if (!visible) return;
   elements.sidebarSessionRole.textContent = user.roleName || user.role || "Angemeldet";
   elements.sidebarSessionIdentity.textContent = `${user.employeeNumber} · ${user.fullName || user.nickname || ""}`;
   elements.sidebarSessionPosition.textContent = user.positionName ? `Position: ${user.positionName}` : "Position: nicht hinterlegt";
+}
+
+function currentAdminPersonalActionsActorKey() {
+  if (state.portalStatus?.portalEnabled !== true) return "";
+  const user = state.portalSession?.user;
+  return user?.isEmployee === false ? "" : String(user?.employeeNumber || "");
+}
+
+function resetAdminPersonalActionsState(actorKey = "") {
+  state.personalActionsActorKey = actorKey;
+  state.personalActionsRequestId += 1;
+  state.personalActions = [];
+  state.personalActionsCursor = "";
+  state.personalActionsLoading = false;
+  state.personalActionUndoPending = "";
+  if (elements.personalActionsAdminDialog?.open) elements.personalActionsAdminDialog.close();
+  elements.personalActionsAdminButton?.setAttribute("aria-expanded", "false");
+  elements.personalActionsAdminList?.replaceChildren();
+  setAdminPersonalActionsMessage();
+}
+
+function syncAdminPersonalActionsActorState() {
+  const actorKey = currentAdminPersonalActionsActorKey();
+  if (state.personalActionsActorKey !== actorKey) resetAdminPersonalActionsState(actorKey);
+}
+
+function adminPersonalActionsRequestIsCurrent(actorKey, requestId) {
+  return actorKey === currentAdminPersonalActionsActorKey()
+    && actorKey === state.personalActionsActorKey
+    && requestId === state.personalActionsRequestId;
+}
+
+function adminPersonalActionTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Zeitpunkt nicht verfügbar";
+  return new Intl.DateTimeFormat("de-AT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function setAdminPersonalActionsMessage(text = "", error = false) {
+  if (!elements.personalActionsAdminMessage) return;
+  elements.personalActionsAdminMessage.textContent = text;
+  elements.personalActionsAdminMessage.classList.toggle("hidden", !text);
+  elements.personalActionsAdminMessage.classList.toggle("error", Boolean(error));
+}
+
+function renderAdminPersonalActions() {
+  const list = elements.personalActionsAdminList;
+  if (!list) return;
+  if (state.personalActionsLoading && !state.personalActions.length) {
+    const loading = document.createElement("p");
+    loading.className = "empty-state";
+    loading.textContent = "Aktionen werden geladen.";
+    list.replaceChildren(loading);
+  } else if (!state.personalActions.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = state.personalActionsCursor
+      ? "Weitere ältere Aktionen können geladen werden."
+      : "Noch keine persönlichen Aktionen protokolliert.";
+    list.replaceChildren(empty);
+  } else {
+    const fragment = document.createDocumentFragment();
+    state.personalActions.forEach((action) => {
+      const row = document.createElement("article");
+      row.className = "admin-personal-action-row";
+      row.setAttribute("role", "listitem");
+      const copy = document.createElement("div");
+      copy.className = "admin-personal-action-copy";
+      const title = document.createElement("strong");
+      title.textContent = String(action.title || "Aktion");
+      const summary = document.createElement("p");
+      summary.textContent = String(action.summary || "Sicher protokolliert.");
+      const meta = document.createElement("small");
+      meta.textContent = adminPersonalActionTimestamp(action.createdAt);
+      copy.append(title, summary, meta);
+      const controls = document.createElement("div");
+      controls.className = "admin-personal-action-controls";
+      if (action.canUndo === true || action.undo?.available === true) {
+        const undo = document.createElement("button");
+        undo.type = "button";
+        undo.className = "text-button admin-personal-action-undo";
+        undo.dataset.undoPersonalActionAdmin = String(action.id || "");
+        undo.textContent = String(action.undo?.label || "Rückgängig");
+        undo.disabled = state.personalActionsLoading
+          || state.personalActionUndoPending === String(action.id || "");
+        controls.append(undo);
+      } else {
+        const finalState = document.createElement("span");
+        finalState.className = "admin-personal-action-final";
+        finalState.textContent = String(action.undo?.reason || "Nicht rückgängig");
+        controls.append(finalState);
+      }
+      row.append(copy, controls);
+      fragment.append(row);
+    });
+    list.replaceChildren(fragment);
+  }
+  elements.personalActionsAdminLoadMore?.classList.toggle("hidden", !state.personalActionsCursor);
+  if (elements.personalActionsAdminLoadMore) {
+    elements.personalActionsAdminLoadMore.disabled = state.personalActionsLoading;
+  }
+}
+
+async function loadAdminPersonalActions({ append = false } = {}) {
+  if (state.personalActionsLoading) return;
+  const actorKey = currentAdminPersonalActionsActorKey();
+  const requestId = ++state.personalActionsRequestId;
+  state.personalActionsLoading = true;
+  if (!append) {
+    state.personalActions = [];
+    state.personalActionsCursor = "";
+  }
+  setAdminPersonalActionsMessage();
+  renderAdminPersonalActions();
+  try {
+    const query = new URLSearchParams({ limit: "25" });
+    if (append && state.personalActionsCursor) query.set("cursor", state.personalActionsCursor);
+    const result = await api(`/api/portal/v1/me/actions?${query}`);
+    if (!adminPersonalActionsRequestIsCurrent(actorKey, requestId)) return;
+    const actions = Array.isArray(result?.actions) ? result.actions : [];
+    state.personalActions = append ? [...state.personalActions, ...actions] : actions;
+    state.personalActionsCursor = String(result?.nextCursor || "");
+  } catch (error) {
+    if (!adminPersonalActionsRequestIsCurrent(actorKey, requestId)) return;
+    setAdminPersonalActionsMessage(error.message, true);
+  } finally {
+    if (adminPersonalActionsRequestIsCurrent(actorKey, requestId)) {
+      state.personalActionsLoading = false;
+      renderAdminPersonalActions();
+    }
+  }
+}
+
+async function openAdminPersonalActions() {
+  if (!elements.personalActionsAdminDialog) return;
+  elements.personalActionsAdminButton?.setAttribute("aria-expanded", "true");
+  elements.personalActionsAdminDialog.showModal();
+  await loadAdminPersonalActions();
+}
+
+function closeAdminPersonalActions() {
+  if (elements.personalActionsAdminDialog?.open) elements.personalActionsAdminDialog.close();
+}
+
+function applyCurrentManualScheduleLockResult(manualScheduleLock) {
+  if (!manualScheduleLock || !state.data
+    || String(manualScheduleLock.locationId || "") !== String(state.locationId || "")
+    || String(manualScheduleLock.weekStart || "") !== String(state.weekStart || "")) return false;
+  state.data.manualScheduleLock = manualScheduleLock;
+  renderManualScheduleLockControl();
+  return true;
+}
+
+async function undoAdminPersonalAction(actionId) {
+  const action = state.personalActions.find((entry) => String(entry.id) === String(actionId));
+  if (!action || state.personalActionsLoading || state.personalActionUndoPending) return;
+  if (!window.confirm(`„${String(action.title || "Diese Aktion")}“ wirklich rückgängig machen? Die ursprüngliche Historie bleibt erhalten.`)) return;
+  const actorKey = currentAdminPersonalActionsActorKey();
+  const requestId = ++state.personalActionsRequestId;
+  state.personalActionUndoPending = String(actionId);
+  setAdminPersonalActionsMessage();
+  renderAdminPersonalActions();
+  try {
+    const result = await api(`/api/portal/v1/me/actions/${encodeURIComponent(actionId)}/undo`, {
+      method: "POST",
+      body: "{}",
+    });
+    if (!adminPersonalActionsRequestIsCurrent(actorKey, requestId)) return;
+    applyCurrentManualScheduleLockResult(result?.manualScheduleLock);
+    await loadAdminPersonalActions();
+  } catch (error) {
+    if (!adminPersonalActionsRequestIsCurrent(actorKey, requestId)) return;
+    setAdminPersonalActionsMessage(error.message, true);
+  } finally {
+    if (actorKey === currentAdminPersonalActionsActorKey()
+      && actorKey === state.personalActionsActorKey) {
+      state.personalActionUndoPending = "";
+      renderAdminPersonalActions();
+    }
+  }
 }
 
 let functionSearchController = null;
@@ -1406,6 +1699,21 @@ function hasGovernancePermission(permission) {
 function canAccessSalesAnalytics() {
   return !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.salesAnalytics?.workspace === true;
+}
+
+function canAccessCrm() {
+  return !state.portalStatus?.portalEnabled
+    || (state.portalSession?.user?.crm?.workspace === true
+      && state.portalSession?.user?.crm?.read === true);
+}
+
+function canWriteCrm() {
+  return !state.portalStatus?.portalEnabled
+    || (canAccessCrm() && state.portalSession?.user?.crm?.write === true);
+}
+
+function canOpenSalesAdministrationModule() {
+  return canAccessSalesAnalytics() || canAccessCrm();
 }
 
 function canReadVacationAccounts() {
@@ -2041,6 +2349,9 @@ function applyRoleVisibility() {
   const permissions = state.portalSession?.user?.permissions || [];
   const features = state.portalStatus?.installationFeatures || {};
   const lanActive = state.portalStatus?.portalEnabled === true;
+  syncCrmActorState();
+  syncSalesAnalyticsActorState();
+  syncAdminPersonalActionsActorState();
   const serverActive = state.portalStatus?.operationMode === "server";
   const role = state.portalSession?.user?.role || "admin";
   const globalAdministration = !lanActive || ["developer", "it_admin", "admin", "hr"].includes(role);
@@ -2131,12 +2442,20 @@ function applyRoleVisibility() {
     && features.employeePortal !== false;
   const portalUserAdministrationAccess = scopeAccess || permissions.includes("users:write") || globalAdministration;
   const salesAnalyticsAccess = canAccessSalesAnalytics();
+  const crmAccess = canAccessCrm();
+  const crmWriteAccess = canWriteCrm();
+  const salesModuleAccess = salesAnalyticsAccess || crmAccess;
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || positionWriteAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelLearningAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
-  elements.salesAdministrationNav?.classList.toggle("hidden", !salesAnalyticsAccess);
+  elements.salesAdministrationNav?.classList.toggle("hidden", !salesModuleAccess);
   elements.salesAnalyticsNavButton?.classList.toggle("hidden", !salesAnalyticsAccess);
+  elements.crmNavButton?.classList.toggle("hidden", !crmAccess);
+  elements.salesAnalyticsDashboardCard?.classList.toggle("hidden", !salesAnalyticsAccess);
+  elements.crmDashboardCard?.classList.toggle("hidden", !crmAccess);
+  elements.crmCreateButton?.classList.toggle("hidden", !crmWriteAccess);
+  elements.crmColumnsButton?.classList.toggle("hidden", !crmAccess);
   elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
   elements.positionManagementNavButton?.classList.toggle("hidden", !positionWriteAccess);
   elements.candidatePreboardingNavButton?.classList.toggle("hidden", !candidatePreboardingAccess);
@@ -2509,7 +2828,12 @@ function applyRoleVisibility() {
   if (!timeReadAccess && state.currentView === "timeTracking") setView("startDashboard");
   if (!loanManagementAccess && state.currentView === "loans") setView("startDashboard");
   if (!branchOrderManagementAccess && state.currentView === "branchOrders") setView("startDashboard");
-  if (!salesAnalyticsAccess && ["salesAdministration", "salesAnalytics"].includes(state.currentView)) setView("startDashboard");
+  if (!salesModuleAccess && state.currentView === "salesAdministration") setView("startDashboard");
+  if (!salesAnalyticsAccess && state.currentView === "salesAnalytics") setView("startDashboard");
+  if (!crmAccess && state.currentView === "crm") setView("startDashboard");
+  if (!crmAccess && (state.crm.searchStarted || state.crm.selectedCustomer || state.crm.items.length)) {
+    clearCrmState("CRM-Daten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
+  }
   renderStartDashboard();
   renderSidebarSession();
   refreshFunctionSearchAccess();
@@ -4168,11 +4492,12 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAdministrationActive = ["salesAdministration", "salesAnalytics"].includes(state.currentView);
+  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "crm"].includes(state.currentView);
   elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
   setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
   setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
+  setNavigationCurrent(elements.crmNavButton, state.currentView === "crm");
 }
 
 function schedulePdfDesignCatalog(settings = state.data?.settings) {
@@ -28163,8 +28488,9 @@ async function preflightPayrollExport() {
   }
 }
 
-function downloadFileResponse(response, fallbackName) {
+function downloadFileResponse(response, fallbackName, { beforeSave = null } = {}) {
   return response.blob().then((blob) => {
+    if (beforeSave && beforeSave() !== true) return false;
     const disposition = response.headers.get("Content-Disposition") || "";
     const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
     const simple = disposition.match(/filename="?([^";]+)"?/i)?.[1];
@@ -28178,6 +28504,7 @@ function downloadFileResponse(response, fallbackName) {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
   });
 }
 
@@ -28244,6 +28571,763 @@ async function deliverPayrollExport() {
 
 function canManageSalesReportImports() {
   return state.portalSession?.user?.salesAnalytics?.importManagement === true;
+}
+
+const CRM_DISPLAY_COLUMNS = Object.freeze([
+  { id: "photo", label: "Foto", group: "Person", sortable: false },
+  { id: "customerNumber", label: "Kundennummer", group: "Stammdaten", sortKey: "customerNumber" },
+  { id: "name", label: "Name", group: "Person", sortKey: "lastName" },
+  { id: "customerType", label: "Kundentyp", group: "Stammdaten", sortKey: "customerType" },
+  { id: "companyName", label: "Unternehmen", group: "Stammdaten", sortKey: "companyName" },
+  { id: "address", label: "Adresse", group: "Adresse", sortable: false },
+  { id: "postalCode", label: "PLZ", group: "Adresse", sortKey: "postalCode" },
+  { id: "city", label: "Ort", group: "Adresse", sortKey: "city" },
+  { id: "country", label: "Land", group: "Adresse", sortKey: "country" },
+  { id: "phone", label: "Telefon", group: "Kontakt", sortKey: "phone" },
+  { id: "email", label: "E-Mail", group: "Kontakt", sortKey: "email" },
+  { id: "website", label: "Website", group: "Kontakt", sortKey: "website" },
+  { id: "vatId", label: "UID-Nummer", group: "Stammdaten", sortKey: "vatId" },
+  { id: "birthDate", label: "Geburtstag", group: "Person", sortKey: "birthDate" },
+]);
+const CRM_DEFAULT_DISPLAY_COLUMNS = Object.freeze([
+  "customerNumber", "name", "customerType", "companyName", "city", "phone", "email",
+]);
+const CRM_SORT_KEYS = new Set(CRM_DISPLAY_COLUMNS.map((column) => column.sortKey).filter(Boolean));
+const CRM_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const CRM_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+function crmColumnDefinition(columnId) {
+  return CRM_DISPLAY_COLUMNS.find((column) => column.id === columnId) || null;
+}
+
+function normalizeCrmDisplayColumns(columns) {
+  const known = new Set(CRM_DISPLAY_COLUMNS.map((column) => column.id));
+  const normalized = [...new Set((Array.isArray(columns) ? columns : []).map(String).filter((column) => known.has(column)))];
+  return normalized.length ? normalized : [...CRM_DEFAULT_DISPLAY_COLUMNS];
+}
+
+function normalizeCrmSort(sort = {}, columns = state.crm.columns) {
+  const visible = normalizeCrmDisplayColumns(columns);
+  const submittedKey = String(sort?.key || "");
+  const firstSortable = visible.map(crmColumnDefinition).find((column) => column?.sortKey)?.sortKey || "lastName";
+  return {
+    key: CRM_SORT_KEYS.has(submittedKey) ? submittedKey : firstSortable,
+    direction: sort?.direction === "desc" ? "desc" : "asc",
+  };
+}
+
+function normalizeCrmCustomer(customer = {}) {
+  const customFields = Array.isArray(customer.customFields) ? customer.customFields : [];
+  return {
+    id: String(customer.id || ""),
+    customerNumber: String(customer.customerNumber || ""),
+    customerType: customer.customerType === "business" ? "business" : "private",
+    companyName: String(customer.companyName || ""),
+    firstName: String(customer.firstName || ""),
+    lastName: String(customer.lastName || ""),
+    street: String(customer.street || ""),
+    addressSupplement: String(customer.addressSupplement || ""),
+    postalCode: String(customer.postalCode || ""),
+    city: String(customer.city || ""),
+    country: String(customer.country || ""),
+    phone: String(customer.phone || ""),
+    email: String(customer.email || ""),
+    website: String(customer.website || ""),
+    vatId: String(customer.vatId || ""),
+    birthDate: String(customer.birthDate || "").slice(0, 10),
+    revision: Number(customer.revision || 0),
+    photoAvailable: customer.photoAvailable === true,
+    photoUpdatedAt: String(customer.photoUpdatedAt || ""),
+    customFields: customFields.map((field, index) => ({
+      id: String(field?.id || ""),
+      title: String(field?.title || ""),
+      value: String(field?.value || ""),
+      sortOrder: Number.isFinite(Number(field?.sortOrder)) ? Number(field.sortOrder) : index,
+    })).sort((left, right) => left.sortOrder - right.sortOrder),
+  };
+}
+
+function crmCustomerName(customer) {
+  return [customer?.firstName, customer?.lastName].filter(Boolean).join(" ")
+    || customer?.companyName
+    || customer?.customerNumber
+    || "Unbenannter Kunde";
+}
+
+function crmCustomerInitials(customer) {
+  const source = [customer?.firstName, customer?.lastName].filter(Boolean);
+  if (!source.length && customer?.companyName) source.push(customer.companyName);
+  return source.slice(0, 2).map((part) => String(part).trim()[0] || "").join("").toLocaleUpperCase("de-AT") || "K";
+}
+
+function crmCustomerTypeLabel(customerType) {
+  return customerType === "business" ? "Gewerblich" : "Privat";
+}
+
+function crmCustomerPhotoUrl(customer) {
+  if (!customer?.id || customer.photoAvailable !== true) return "";
+  const version = customer.photoUpdatedAt || customer.revision || "current";
+  return `/api/crm/customers/${encodeURIComponent(customer.id)}/photo?v=${encodeURIComponent(String(version))}`;
+}
+
+function crmCustomerPhotoMarkup(customer, className = "") {
+  const photoUrl = crmCustomerPhotoUrl(customer);
+  const initials = crmCustomerInitials(customer);
+  return `<span class="crm-customer-photo-frame ${escapeHtmlAttribute(className)}">
+    <span class="crm-customer-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>
+    ${photoUrl ? `<img src="${escapeHtmlAttribute(photoUrl)}" alt="Foto von ${escapeHtmlAttribute(crmCustomerName(customer))}" loading="lazy" />` : ""}
+  </span>`;
+}
+
+function safeCrmWebsiteUrl(value) {
+  const submitted = String(value || "").trim();
+  if (!submitted) return "";
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(submitted) ? submitted : `https://${submitted}`);
+    return ["http:", "https:"].includes(url.protocol) ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function crmCustomerAddress(customer) {
+  return [customer?.street, customer?.addressSupplement, [customer?.postalCode, customer?.city].filter(Boolean).join(" "), customer?.country]
+    .filter(Boolean).join(", ");
+}
+
+function crmColumnCell(customer, column) {
+  if (column.id === "photo") return crmCustomerPhotoMarkup(customer, "table");
+  if (column.id === "customerNumber") return `<strong>${escapeHtml(customer.customerNumber || "–")}</strong>`;
+  if (column.id === "name") return `<strong>${escapeHtml(crmCustomerName(customer))}</strong>${customer.companyName && crmCustomerName(customer) !== customer.companyName ? `<small>${escapeHtml(customer.companyName)}</small>` : ""}`;
+  if (column.id === "customerType") return `<span class="crm-type-badge ${customer.customerType === "business" ? "business" : "private"}">${escapeHtml(crmCustomerTypeLabel(customer.customerType))}</span>`;
+  if (column.id === "address") return escapeHtml(crmCustomerAddress(customer) || "–");
+  if (column.id === "birthDate") return customer.birthDate ? escapeHtml(formatDate(customer.birthDate)) : "–";
+  if (column.id === "email" && customer.email) return `<a href="mailto:${escapeHtmlAttribute(customer.email)}">${escapeHtml(customer.email)}</a>`;
+  if (column.id === "phone" && customer.phone) {
+    const dial = customer.phone.replace(/[^+0-9]/g, "");
+    return `<a href="tel:${escapeHtmlAttribute(dial)}">${escapeHtml(customer.phone)}</a>`;
+  }
+  if (column.id === "website" && customer.website) {
+    const url = safeCrmWebsiteUrl(customer.website);
+    return url ? `<a href="${escapeHtmlAttribute(url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(customer.website)}</a>` : escapeHtml(customer.website);
+  }
+  return escapeHtml(String(customer[column.id] || "–"));
+}
+
+function setCrmSearchStatus(message, isError = false) {
+  if (!elements.crmSearchStatus) return;
+  elements.crmSearchStatus.textContent = message;
+  elements.crmSearchStatus.classList.toggle("error", isError);
+}
+
+function renderCrmTableHead() {
+  if (!elements.crmTableHead) return;
+  const columns = normalizeCrmDisplayColumns(state.crm.columns).map(crmColumnDefinition).filter(Boolean);
+  const sort = normalizeCrmSort(state.crm.sort, state.crm.columns);
+  elements.crmTable?.style.setProperty("--crm-column-count", String(columns.length + 1));
+  elements.crmTableHead.innerHTML = `<tr>${columns.map((column) => {
+    if (!column.sortKey) return `<th scope="col">${escapeHtml(column.label)}</th>`;
+    const active = sort.key === column.sortKey;
+    return `<th scope="col" aria-sort="${active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}"><button type="button" class="crm-sort-button ${active ? `active ${sort.direction === "asc" ? "ascending" : "descending"}` : ""}" data-crm-sort="${escapeHtmlAttribute(column.sortKey)}">${escapeHtml(column.label)}</button></th>`;
+  }).join("")}<th scope="col"><span class="visually-hidden">Aktion</span></th></tr>`;
+}
+
+function renderCrmResults() {
+  if (!elements.crmResults || !elements.crmTableBody) return;
+  elements.crmResults.classList.toggle("hidden", !state.crm.searchStarted);
+  elements.crmResults.setAttribute("aria-busy", String(state.crm.searchLoading));
+  if (!state.crm.searchStarted) return;
+  renderCrmTableHead();
+  const columns = normalizeCrmDisplayColumns(state.crm.columns).map(crmColumnDefinition).filter(Boolean);
+  const columnCount = columns.length + 1;
+  if (state.crm.searchLoading) {
+    elements.crmTableBody.innerHTML = `<tr><td class="crm-empty-cell" colspan="${columnCount}">Kunden werden gesucht …</td></tr>`;
+  } else if (state.crm.searchError) {
+    elements.crmTableBody.innerHTML = `<tr><td class="crm-empty-cell error" colspan="${columnCount}">${escapeHtml(state.crm.searchError)}</td></tr>`;
+  } else if (!state.crm.items.length) {
+    elements.crmTableBody.innerHTML = `<tr><td class="crm-empty-cell" colspan="${columnCount}">Keine passenden Kunden gefunden.</td></tr>`;
+  } else {
+    elements.crmTableBody.innerHTML = state.crm.items.map((customer) => `<tr>
+      ${columns.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${crmColumnCell(customer, column)}</td>`).join("")}
+      <td data-label="Aktion"><button class="crm-open-customer" type="button" data-crm-customer-id="${escapeHtmlAttribute(customer.id)}">Kundenkartei öffnen</button></td>
+    </tr>`).join("");
+  }
+  const first = state.crm.total ? state.crm.offset + 1 : 0;
+  const last = Math.min(state.crm.offset + state.crm.limit, state.crm.total);
+  const page = state.crm.total ? Math.floor(state.crm.offset / state.crm.limit) + 1 : 1;
+  const pages = Math.max(1, Math.ceil(state.crm.total / state.crm.limit));
+  if (elements.crmResultCount) elements.crmResultCount.textContent = `${state.crm.total} Treffer`;
+  if (elements.crmResultRange) elements.crmResultRange.textContent = state.crm.total ? `${first}–${last} von ${state.crm.total}` : "Keine Ergebnisse";
+  if (elements.crmPageStatus) elements.crmPageStatus.textContent = `Seite ${page} von ${pages}`;
+  if (elements.crmPreviousPage) elements.crmPreviousPage.disabled = state.crm.searchLoading || state.crm.offset <= 0;
+  if (elements.crmNextPage) elements.crmNextPage.disabled = state.crm.searchLoading
+    || state.crm.offset + state.crm.limit >= state.crm.total
+    || state.crm.offset + state.crm.limit > 100000;
+}
+
+function crmSearchParameters({ offset = state.crm.offset } = {}) {
+  const parameters = new URLSearchParams();
+  parameters.set("query", state.crm.query);
+  if (state.crm.customerType) parameters.set("customerType", state.crm.customerType);
+  parameters.set("sort", state.crm.sort.key);
+  parameters.set("direction", state.crm.sort.direction);
+  parameters.set("limit", String(state.crm.limit));
+  parameters.set("offset", String(offset));
+  return parameters;
+}
+
+async function loadCrmCustomers({ offset = 0 } = {}) {
+  if (!canAccessCrm()) return;
+  state.crm.query = String(elements.crmSearchQuery?.value ?? state.crm.query).trim();
+  state.crm.customerType = String(elements.crmSearchCustomerType?.value ?? state.crm.customerType);
+  if (state.crm.query.length < 2 || state.crm.query.length > 120) {
+    setCrmSearchStatus("Bitte einen Suchbegriff mit 2 bis 120 Zeichen eingeben. Der Kundentyp ist nur ein zusätzlicher Filter.", true);
+    elements.crmSearchQuery?.focus();
+    return;
+  }
+  state.crm.offset = Math.max(0, Number(offset) || 0);
+  state.crm.searchStarted = true;
+  state.crm.searchLoading = true;
+  state.crm.searchError = "";
+  const requestId = ++state.crm.searchRequestId;
+  setCrmSearchStatus("Kunden werden gesucht …");
+  renderCrmResults();
+  try {
+    const payload = await api(`/api/crm/customers?${crmSearchParameters({ offset: state.crm.offset })}`);
+    if (requestId !== state.crm.searchRequestId) return;
+    state.crm.items = (Array.isArray(payload?.items) ? payload.items : []).map(normalizeCrmCustomer);
+    state.crm.total = Math.max(0, Number(payload?.total || 0));
+    state.crm.limit = Math.max(1, Number(payload?.limit || state.crm.limit));
+    state.crm.offset = Math.max(0, Number(payload?.offset || 0));
+    state.crm.sort = normalizeCrmSort({ key: payload?.sort || state.crm.sort.key, direction: payload?.direction || state.crm.sort.direction });
+    setCrmSearchStatus(state.crm.total ? `${state.crm.total} passende Kunden gefunden.` : "Keine passenden Kunden gefunden.");
+  } catch (error) {
+    if (requestId !== state.crm.searchRequestId) return;
+    state.crm.items = [];
+    state.crm.total = 0;
+    state.crm.searchError = error.message || "Die Kundensuche konnte nicht geladen werden.";
+    setCrmSearchStatus(state.crm.searchError, true);
+  } finally {
+    if (requestId === state.crm.searchRequestId) {
+      state.crm.searchLoading = false;
+      renderCrmResults();
+    }
+  }
+}
+
+async function loadCrmPreferences({ force = false } = {}) {
+  if (!canAccessCrm() || state.crm.preferencesLoading || (state.crm.preferencesLoaded && !force)) return;
+  const actorKey = state.crm.actorKey;
+  const requestId = ++state.crm.preferencesRequestId;
+  state.crm.preferencesLoading = true;
+  try {
+    const payload = await api("/api/crm/preferences");
+    if (actorKey !== state.crm.actorKey || requestId !== state.crm.preferencesRequestId) return;
+    state.crm.columns = normalizeCrmDisplayColumns(payload?.columns);
+    state.crm.sort = normalizeCrmSort(payload?.sort, state.crm.columns);
+    state.crm.preferencesLoaded = true;
+    renderCrmResults();
+  } catch (error) {
+    if (actorKey !== state.crm.actorKey || requestId !== state.crm.preferencesRequestId) return;
+    state.crm.preferencesLoaded = true;
+    state.crm.columns = normalizeCrmDisplayColumns(state.crm.columns);
+    state.crm.sort = normalizeCrmSort(state.crm.sort, state.crm.columns);
+    setCrmSearchStatus(`Die persönlichen Anzeigespalten konnten nicht geladen werden: ${error.message}`, true);
+  } finally {
+    if (actorKey === state.crm.actorKey && requestId === state.crm.preferencesRequestId) {
+      state.crm.preferencesLoading = false;
+    }
+  }
+}
+
+function renderCrmColumnOptions() {
+  if (!elements.crmColumnOptions) return;
+  const order = state.crm.columnDraftOrder.length
+    ? state.crm.columnDraftOrder
+    : [...state.crm.columns, ...CRM_DISPLAY_COLUMNS.map((column) => column.id).filter((id) => !state.crm.columns.includes(id))];
+  const visible = state.crm.columnDraftVisible;
+  const visibleOrder = order.filter((id) => visible.has(id));
+  elements.crmColumnOptions.innerHTML = order.map((id) => {
+    const column = crmColumnDefinition(id);
+    if (!column) return "";
+    const selectedIndex = visibleOrder.indexOf(id);
+    const selected = selectedIndex >= 0;
+    return `<article class="crm-column-option ${selected ? "selected" : ""}">
+      <label><input type="checkbox" data-crm-column-visible="${escapeHtmlAttribute(id)}" ${selected ? "checked" : ""} /><span><strong>${escapeHtml(column.label)}</strong><small>${escapeHtml(column.group)}</small></span></label>
+      <div>
+        <button type="button" data-crm-column-move="${escapeHtmlAttribute(id)}" data-direction="-1" ${!selected || selectedIndex === 0 ? "disabled" : ""} aria-label="${escapeHtmlAttribute(`${column.label} nach vorne verschieben`)}">↑</button>
+        <button type="button" data-crm-column-move="${escapeHtmlAttribute(id)}" data-direction="1" ${!selected || selectedIndex === visibleOrder.length - 1 ? "disabled" : ""} aria-label="${escapeHtmlAttribute(`${column.label} nach hinten verschieben`)}">↓</button>
+      </div>
+    </article>`;
+  }).join("");
+}
+
+async function openCrmColumnsDialog() {
+  await loadCrmPreferences();
+  state.crm.columnDraftOrder = [...state.crm.columns, ...CRM_DISPLAY_COLUMNS.map((column) => column.id).filter((id) => !state.crm.columns.includes(id))];
+  state.crm.columnDraftVisible = new Set(state.crm.columns);
+  if (elements.crmColumnsMessage) elements.crmColumnsMessage.textContent = "Mit den Pfeilen legst du die Position der eingeblendeten Spalten fest.";
+  renderCrmColumnOptions();
+  elements.crmColumnsDialog?.showModal();
+}
+
+function moveCrmColumnDraft(columnId, direction) {
+  const visible = state.crm.columnDraftOrder.filter((id) => state.crm.columnDraftVisible.has(id));
+  const current = visible.indexOf(columnId);
+  const targetId = visible[current + direction];
+  if (current < 0 || !targetId) return;
+  const left = state.crm.columnDraftOrder.indexOf(columnId);
+  const right = state.crm.columnDraftOrder.indexOf(targetId);
+  [state.crm.columnDraftOrder[left], state.crm.columnDraftOrder[right]] = [state.crm.columnDraftOrder[right], state.crm.columnDraftOrder[left]];
+  renderCrmColumnOptions();
+  elements.crmColumnOptions?.querySelector(`[data-crm-column-move="${CSS.escape(columnId)}"][data-direction="${direction}"]`)?.focus();
+}
+
+async function saveCrmPreferences(event) {
+  event?.preventDefault();
+  const actorKey = state.crm.actorKey;
+  const columns = state.crm.columnDraftOrder.filter((id) => state.crm.columnDraftVisible.has(id));
+  if (!columns.length) {
+    if (elements.crmColumnsMessage) elements.crmColumnsMessage.textContent = "Bitte mindestens eine Anzeigespalte auswählen.";
+    return;
+  }
+  const previousColumns = [...state.crm.columns];
+  const previousSort = { ...state.crm.sort };
+  const sort = normalizeCrmSort(state.crm.sort, columns);
+  if (elements.crmColumnsSave) elements.crmColumnsSave.disabled = true;
+  if (elements.crmColumnsMessage) elements.crmColumnsMessage.textContent = "Persönliche Ansicht wird gespeichert …";
+  try {
+    const payload = await api("/api/crm/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ columns, sort }),
+    });
+    if (actorKey !== state.crm.actorKey) return;
+    state.crm.columns = normalizeCrmDisplayColumns(payload?.columns || columns);
+    state.crm.sort = normalizeCrmSort(payload?.sort || sort, state.crm.columns);
+    state.crm.preferencesLoaded = true;
+    renderCrmResults();
+    elements.crmColumnsDialog?.close();
+    showToast("Die persönliche CRM-Ergebnisliste wurde gespeichert.");
+  } catch (error) {
+    if (actorKey !== state.crm.actorKey) return;
+    state.crm.columns = previousColumns;
+    state.crm.sort = previousSort;
+    if (elements.crmColumnsMessage) elements.crmColumnsMessage.textContent = error.message;
+  } finally {
+    if (actorKey === state.crm.actorKey && elements.crmColumnsSave) elements.crmColumnsSave.disabled = false;
+  }
+}
+
+async function changeCrmSort(sortKey) {
+  if (!CRM_SORT_KEYS.has(sortKey) || !canAccessCrm()) return;
+  const actorKey = state.crm.actorKey;
+  const previous = { ...state.crm.sort };
+  state.crm.sort = previous.key === sortKey
+    ? { key: sortKey, direction: previous.direction === "asc" ? "desc" : "asc" }
+    : { key: sortKey, direction: "asc" };
+  renderCrmResults();
+  try {
+    const payload = await api("/api/crm/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ columns: state.crm.columns, sort: state.crm.sort }),
+    });
+    if (actorKey !== state.crm.actorKey) return;
+    state.crm.columns = normalizeCrmDisplayColumns(payload?.columns || state.crm.columns);
+    state.crm.sort = normalizeCrmSort(payload?.sort || state.crm.sort, state.crm.columns);
+    if (state.crm.searchStarted) await loadCrmCustomers({ offset: 0 });
+  } catch (error) {
+    if (actorKey !== state.crm.actorKey) return;
+    state.crm.sort = previous;
+    renderCrmResults();
+    showToast(error.message, true);
+  }
+}
+
+function resetCrmColumnDraft() {
+  state.crm.columnDraftOrder = [...CRM_DEFAULT_DISPLAY_COLUMNS, ...CRM_DISPLAY_COLUMNS.map((column) => column.id).filter((id) => !CRM_DEFAULT_DISPLAY_COLUMNS.includes(id))];
+  state.crm.columnDraftVisible = new Set(CRM_DEFAULT_DISPLAY_COLUMNS);
+  renderCrmColumnOptions();
+  if (elements.crmColumnsMessage) elements.crmColumnsMessage.textContent = "Die Standardspalten sind vorbereitet. Zum Übernehmen bitte speichern.";
+}
+
+function clearCrmPhotoObjectUrl() {
+  if (state.crm.photoObjectUrl) URL.revokeObjectURL(state.crm.photoObjectUrl);
+  state.crm.photoObjectUrl = "";
+}
+
+function syncCrmCustomerWorkspace(open) {
+  elements.crmDirectoryWorkspace?.classList.toggle("hidden", open);
+  elements.crmCustomerWorkspace?.classList.toggle("hidden", !open);
+  elements.crmColumnsButton?.classList.toggle("hidden", open || !canAccessCrm());
+  elements.crmCreateButton?.classList.toggle("hidden", open || !canWriteCrm());
+}
+
+function crmDetailFact(label, value, { html = false } = {}) {
+  const rendered = html ? value : escapeHtml(String(value || "Nicht angegeben"));
+  return `<div><span>${escapeHtml(label)}</span><strong>${rendered || "Nicht angegeben"}</strong></div>`;
+}
+
+function renderCrmCustomerReadView(customer) {
+  const websiteUrl = safeCrmWebsiteUrl(customer.website);
+  const email = customer.email ? `<a href="mailto:${escapeHtmlAttribute(customer.email)}">${escapeHtml(customer.email)}</a>` : "Nicht angegeben";
+  const phoneDial = customer.phone.replace(/[^+0-9]/g, "");
+  const phone = customer.phone ? `<a href="tel:${escapeHtmlAttribute(phoneDial)}">${escapeHtml(customer.phone)}</a>` : "Nicht angegeben";
+  const website = websiteUrl ? `<a href="${escapeHtmlAttribute(websiteUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(customer.website)}</a>` : escapeHtml(customer.website || "Nicht angegeben");
+  const customFields = customer.customFields.length
+    ? `<div class="crm-custom-field-list">${customer.customFields.map((field) => `<article><h4>${escapeHtml(field.title)}</h4><p>${escapeHtml(field.value || "–")}</p></article>`).join("")}</div>`
+    : '<div class="crm-empty compact"><strong>Noch keine eigenen Textfelder</strong><p>Beim Bearbeiten können frei betitelbare Notizen ergänzt werden.</p></div>';
+  return `<header class="crm-customer-header">
+      ${crmCustomerPhotoMarkup(customer, "detail")}
+      <div><span class="eyebrow">Kundenkartei</span><h2 id="crmCustomerName" tabindex="-1">${escapeHtml(crmCustomerName(customer))}</h2><p>${escapeHtml(customer.companyName || "Persönlicher Kundenkontakt")}</p></div>
+      <div class="crm-customer-header-actions"><span class="crm-type-badge ${customer.customerType}">${escapeHtml(crmCustomerTypeLabel(customer.customerType))}</span>${canWriteCrm() ? '<button class="primary-button" type="button" data-crm-edit-customer>Bearbeiten</button>' : ""}</div>
+    </header>
+    ${state.crm.detailError ? `<p class="crm-detail-message error">${escapeHtml(state.crm.detailError)}</p>` : ""}
+    <div class="crm-customer-section-grid">
+      <section class="crm-customer-section"><div class="crm-section-heading"><span>01</span><div><h3>Stammdaten</h3><p>Identität und Kundenart</p></div></div><div class="crm-facts">
+        ${crmDetailFact("Kundennummer", customer.customerNumber || "Noch nicht übernommen")}
+        ${crmDetailFact("Kundentyp", crmCustomerTypeLabel(customer.customerType))}
+        ${crmDetailFact("Vorname", customer.firstName)}
+        ${crmDetailFact("Nachname", customer.lastName)}
+        ${crmDetailFact("Unternehmen", customer.companyName)}
+        ${crmDetailFact("UID-Nummer", customer.vatId)}
+        ${crmDetailFact("Geburtstag", customer.birthDate ? formatDate(customer.birthDate) : "Nicht angegeben")}
+      </div></section>
+      <section class="crm-customer-section"><div class="crm-section-heading"><span>02</span><div><h3>Kontakt &amp; Adresse</h3><p>Erreichbarkeit und Anschrift</p></div></div><div class="crm-facts">
+        ${crmDetailFact("Telefon", phone, { html: true })}
+        ${crmDetailFact("E-Mail", email, { html: true })}
+        ${crmDetailFact("Website", website, { html: true })}
+        ${crmDetailFact("Straße", customer.street)}
+        ${crmDetailFact("Adresszusatz", customer.addressSupplement)}
+        ${crmDetailFact("PLZ / Ort", [customer.postalCode, customer.city].filter(Boolean).join(" "))}
+        ${crmDetailFact("Land", customer.country)}
+      </div></section>
+    </div>
+    <section class="crm-customer-section crm-customer-custom-fields"><div class="crm-section-heading"><span>03</span><div><h3>Eigene Textfelder</h3><p>Individuelle Informationen mit frei gewähltem Titel</p></div></div>${customFields}</section>`;
+}
+
+function crmCustomFieldEditorRow(field = {}, index = 0) {
+  return `<article class="crm-custom-field-editor" data-crm-custom-field data-field-id="${escapeHtmlAttribute(field.id || "")}">
+    <label class="field"><span>Titel</span><input name="customFieldTitle" maxlength="120" value="${escapeHtmlAttribute(field.title || "")}" placeholder="z. B. Vorhandene Ausrüstung" required /></label>
+    <label class="field"><span>Text</span><textarea name="customFieldValue" maxlength="10000" rows="3" placeholder="Freie Information zur Kundenbeziehung">${escapeHtml(field.value || "")}</textarea></label>
+    <div><span>Feld ${index + 1}</span><button class="crm-text-action danger" type="button" data-crm-remove-custom-field aria-label="Textfeld ${index + 1} entfernen">Entfernen</button></div>
+  </article>`;
+}
+
+function renderCrmCustomerEditor(customer) {
+  const existing = Boolean(customer.id);
+  const photoUrl = crmCustomerPhotoUrl(customer);
+  return `<header class="crm-customer-header editor">
+      ${crmCustomerPhotoMarkup(customer, "detail")}
+      <div><span class="eyebrow">${existing ? "Kundenkartei bearbeiten" : "Neue Kundenkartei"}</span><h2 id="crmCustomerName" tabindex="-1">${escapeHtml(existing ? crmCustomerName(customer) : "Kunde anlegen")}</h2><p>Pflichtangaben werden vor dem Speichern geprüft.</p></div>
+      <button class="secondary-button" type="button" data-crm-cancel-edit>${existing ? "Bearbeiten abbrechen" : "Anlage abbrechen"}</button>
+    </header>
+    <form class="crm-customer-form" data-crm-customer-form novalidate>
+      <p class="crm-detail-message hidden" data-crm-form-message role="status" aria-live="polite"></p>
+      <fieldset><legend>Person &amp; Kundentyp</legend><div class="crm-form-grid">
+        <label class="field"><span>Kundennummer</span><input name="customerNumber" maxlength="80" value="${escapeHtmlAttribute(customer.customerNumber)}" placeholder="Wird aus dem bestehenden System übernommen" /></label>
+        <label class="field"><span>Kundentyp</span><select name="customerType" required><option value="private" ${customer.customerType !== "business" ? "selected" : ""}>Privat</option><option value="business" ${customer.customerType === "business" ? "selected" : ""}>Gewerblich</option></select></label>
+        <label class="field"><span>Vorname</span><input name="firstName" maxlength="120" value="${escapeHtmlAttribute(customer.firstName)}" autocomplete="given-name" /></label>
+        <label class="field"><span>Nachname</span><input name="lastName" maxlength="120" value="${escapeHtmlAttribute(customer.lastName)}" autocomplete="family-name" /></label>
+        <label class="field crm-span-2"><span>Unternehmen</span><input name="companyName" maxlength="200" value="${escapeHtmlAttribute(customer.companyName)}" autocomplete="organization" /></label>
+        <label class="field"><span>UID-Nummer</span><input name="vatId" maxlength="32" value="${escapeHtmlAttribute(customer.vatId)}" /></label>
+        <label class="field"><span>Geburtstag</span><input name="birthDate" type="date" max="${escapeHtmlAttribute(toIsoDate(new Date()))}" value="${escapeHtmlAttribute(customer.birthDate)}" /></label>
+      </div></fieldset>
+      <fieldset><legend>Kontakt &amp; Adresse</legend><div class="crm-form-grid">
+        <label class="field"><span>Telefonnummer</span><input name="phone" type="tel" maxlength="80" value="${escapeHtmlAttribute(customer.phone)}" autocomplete="tel" /></label>
+        <label class="field"><span>E-Mail</span><input name="email" type="email" maxlength="254" value="${escapeHtmlAttribute(customer.email)}" autocomplete="email" /></label>
+        <label class="field crm-span-2"><span>Website</span><input name="website" type="url" inputmode="url" maxlength="500" value="${escapeHtmlAttribute(customer.website)}" placeholder="https://…" /></label>
+        <label class="field crm-span-2"><span>Straße und Hausnummer</span><input name="street" maxlength="240" value="${escapeHtmlAttribute(customer.street)}" autocomplete="street-address" /></label>
+        <label class="field crm-span-2"><span>Adresszusatz</span><input name="addressSupplement" maxlength="160" value="${escapeHtmlAttribute(customer.addressSupplement)}" /></label>
+        <label class="field"><span>PLZ</span><input name="postalCode" maxlength="32" value="${escapeHtmlAttribute(customer.postalCode)}" autocomplete="postal-code" /></label>
+        <label class="field"><span>Ort</span><input name="city" maxlength="120" value="${escapeHtmlAttribute(customer.city)}" autocomplete="address-level2" /></label>
+        <label class="field crm-span-2"><span>Land</span><input name="country" maxlength="120" value="${escapeHtmlAttribute(customer.country)}" autocomplete="country-name" /></label>
+      </div></fieldset>
+      <fieldset class="crm-custom-fields-editor"><legend>Eigene Textfelder</legend><div class="crm-custom-field-editor-list" data-crm-custom-field-list>${customer.customFields.map(crmCustomFieldEditorRow).join("")}</div><button class="secondary-button" type="button" data-crm-add-custom-field>+ Textfeld hinzufügen</button></fieldset>
+      <div class="crm-form-actions"><span>${existing ? `Revision ${customer.revision}` : "Die Kundennummer kann später aus dem Bestandssystem ergänzt werden."}</span><button class="primary-button" type="submit">${existing ? "Kundenkartei speichern" : "Kunde anlegen"}</button></div>
+    </form>
+    <section class="crm-photo-editor ${existing ? "" : "hidden"}"><div class="crm-section-heading"><span>Foto</span><div><h3>Kundenfoto</h3><p>JPG, PNG oder WebP bis 5 MB</p></div></div>
+      ${existing ? `<form data-crm-photo-form><div class="crm-photo-editor-row"><span class="crm-photo-preview">${photoUrl ? `<img src="${escapeHtmlAttribute(photoUrl)}" alt="Aktuelles Kundenfoto" data-crm-photo-preview />` : `<span data-crm-photo-placeholder>${escapeHtml(crmCustomerInitials(customer))}</span><img alt="Vorschau des Kundenfotos" data-crm-photo-preview hidden />`}</span><label class="field"><span>Bilddatei</span><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required /><small>Das vorhandene Foto bleibt bis zum erfolgreichen Hochladen erhalten.</small></label></div><div class="crm-photo-actions">${customer.photoAvailable ? '<button class="crm-text-action danger" type="button" data-crm-delete-photo>Foto entfernen</button>' : "<span></span>"}<button class="secondary-button" type="submit">Foto speichern</button></div></form>` : ""}
+    </section>`;
+}
+
+function renderCrmCustomerDetail() {
+  if (!elements.crmCustomerDetail) return;
+  elements.crmCustomerShell?.setAttribute("aria-busy", String(state.crm.detailLoading || state.crm.mutationPending));
+  if (state.crm.detailLoading) {
+    elements.crmCustomerDetail.innerHTML = '<div class="crm-empty"><strong>Kundenkartei wird geladen</strong><p>Die freigegebenen Kundendaten werden abgerufen.</p></div>';
+    return;
+  }
+  if (!state.crm.selectedCustomer) {
+    elements.crmCustomerDetail.innerHTML = `<div class="crm-empty ${state.crm.detailError ? "error" : ""}"><strong>${state.crm.detailError ? "Kundenkartei nicht verfügbar" : "Keine Kundenkartei geöffnet"}</strong><p>${escapeHtml(state.crm.detailError || "Bitte zuerst einen Kunden suchen oder neu anlegen.")}</p></div>`;
+    return;
+  }
+  elements.crmCustomerDetail.innerHTML = state.crm.editing
+    ? renderCrmCustomerEditor(state.crm.selectedCustomer)
+    : renderCrmCustomerReadView(state.crm.selectedCustomer);
+  requestAnimationFrame(() => elements.crmCustomerDetail?.querySelector("#crmCustomerName")?.focus());
+}
+
+async function openCrmCustomer(customerId) {
+  if (!canAccessCrm() || !customerId) return;
+  const requestId = ++state.crm.detailRequestId;
+  clearCrmPhotoObjectUrl();
+  state.crm.selectedCustomer = null;
+  state.crm.detailLoading = true;
+  state.crm.detailError = "";
+  state.crm.editing = false;
+  syncCrmCustomerWorkspace(true);
+  renderCrmCustomerDetail();
+  try {
+    const payload = await api(`/api/crm/customers/${encodeURIComponent(customerId)}`);
+    if (requestId !== state.crm.detailRequestId) return;
+    state.crm.selectedCustomer = normalizeCrmCustomer(payload?.customer || payload);
+  } catch (error) {
+    if (requestId !== state.crm.detailRequestId) return;
+    state.crm.detailError = error.message || "Die Kundenkartei konnte nicht geladen werden.";
+  } finally {
+    if (requestId !== state.crm.detailRequestId) return;
+    state.crm.detailLoading = false;
+    renderCrmCustomerDetail();
+  }
+}
+
+function openNewCrmCustomer() {
+  if (!canWriteCrm()) return;
+  clearCrmPhotoObjectUrl();
+  state.crm.selectedCustomer = normalizeCrmCustomer({ customerType: "private", country: "Österreich", customFields: [] });
+  state.crm.detailLoading = false;
+  state.crm.detailError = "";
+  state.crm.editing = true;
+  syncCrmCustomerWorkspace(true);
+  renderCrmCustomerDetail();
+}
+
+function closeCrmCustomer() {
+  state.crm.detailRequestId += 1;
+  clearCrmPhotoObjectUrl();
+  state.crm.selectedCustomer = null;
+  state.crm.detailLoading = false;
+  state.crm.detailError = "";
+  state.crm.editing = false;
+  syncCrmCustomerWorkspace(false);
+  renderCrmCustomerDetail();
+  requestAnimationFrame(() => elements.crmSearchQuery?.focus());
+}
+
+function crmCustomerFormPayload(form) {
+  const values = Object.fromEntries(new FormData(form).entries());
+  const customFields = [...form.querySelectorAll("[data-crm-custom-field]")].map((row) => ({
+    ...(row.dataset.fieldId ? { id: row.dataset.fieldId } : {}),
+    title: String(row.querySelector('[name="customFieldTitle"]')?.value || "").trim(),
+    value: String(row.querySelector('[name="customFieldValue"]')?.value || "").trim(),
+  }));
+  return {
+    customerNumber: String(values.customerNumber || "").trim() || null,
+    customerType: values.customerType === "business" ? "business" : "private",
+    companyName: String(values.companyName || "").trim(),
+    firstName: String(values.firstName || "").trim(),
+    lastName: String(values.lastName || "").trim(),
+    street: String(values.street || "").trim(),
+    addressSupplement: String(values.addressSupplement || "").trim(),
+    postalCode: String(values.postalCode || "").trim(),
+    city: String(values.city || "").trim(),
+    country: String(values.country || "").trim(),
+    phone: String(values.phone || "").trim(),
+    email: String(values.email || "").trim(),
+    website: String(values.website || "").trim(),
+    vatId: String(values.vatId || "").trim(),
+    birthDate: String(values.birthDate || "").trim() || null,
+    customFields,
+  };
+}
+
+function setCrmFormMessage(form, message, isError = false) {
+  const element = form?.querySelector("[data-crm-form-message]");
+  if (!element) return;
+  element.textContent = message;
+  element.classList.toggle("hidden", !message);
+  element.classList.toggle("error", Boolean(message) && isError);
+}
+
+async function saveCrmCustomer(form) {
+  if (!form || !canWriteCrm() || state.crm.mutationPending) return;
+  const actorKey = state.crm.actorKey;
+  if (!form.reportValidity()) return;
+  const body = crmCustomerFormPayload(form);
+  if (!body.firstName && !body.lastName && !body.companyName) {
+    setCrmFormMessage(form, "Bitte zumindest einen Namen oder ein Unternehmen angeben.", true);
+    form.elements.firstName?.focus();
+    return;
+  }
+  if (body.customFields.some((field) => !field.title)) {
+    setCrmFormMessage(form, "Jedes eigene Textfeld benötigt einen Titel.", true);
+    return;
+  }
+  const existing = Boolean(state.crm.selectedCustomer?.id);
+  if (existing) body.expectedRevision = Number(state.crm.selectedCustomer.revision || 0);
+  state.crm.mutationPending = true;
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  setCrmFormMessage(form, existing ? "Kundenkartei wird gespeichert …" : "Kunde wird angelegt …");
+  try {
+    const payload = await api(existing ? `/api/crm/customers/${encodeURIComponent(state.crm.selectedCustomer.id)}` : "/api/crm/customers", {
+      method: existing ? "PUT" : "POST",
+      body: JSON.stringify(body),
+    });
+    if (actorKey !== state.crm.actorKey) return;
+    state.crm.selectedCustomer = normalizeCrmCustomer(payload?.customer || payload);
+    state.crm.editing = false;
+    state.crm.detailError = "";
+    renderCrmCustomerDetail();
+    showToast(existing ? "Die Kundenkartei wurde gespeichert." : "Der Kunde wurde angelegt.");
+    if (state.crm.searchStarted) loadCrmCustomers({ offset: state.crm.offset }).catch(() => {});
+  } catch (error) {
+    if (actorKey !== state.crm.actorKey) return;
+    setCrmFormMessage(form, error.message || "Die Kundenkartei konnte nicht gespeichert werden.", true);
+  } finally {
+    if (actorKey === state.crm.actorKey) {
+      state.crm.mutationPending = false;
+      if (submit) submit.disabled = false;
+      elements.crmCustomerShell?.setAttribute("aria-busy", "false");
+    }
+  }
+}
+
+function crmPhotoFile(input) {
+  const file = input?.files?.[0] || null;
+  if (!file) return null;
+  if (!CRM_PHOTO_TYPES.has(file.type)) {
+    input.setCustomValidity("Bitte ein JPG-, PNG- oder WebP-Bild auswählen.");
+    return null;
+  }
+  if (file.size > CRM_PHOTO_MAX_BYTES) {
+    input.setCustomValidity("Das Bild darf höchstens 5 MB groß sein.");
+    return null;
+  }
+  input.setCustomValidity("");
+  return file;
+}
+
+function updateCrmPhotoPreview(input) {
+  const form = input?.closest("[data-crm-photo-form]");
+  const preview = form?.querySelector("[data-crm-photo-preview]");
+  const placeholder = form?.querySelector("[data-crm-photo-placeholder]");
+  if (!form || !preview) return;
+  clearCrmPhotoObjectUrl();
+  const file = crmPhotoFile(input);
+  if (!file) return;
+  state.crm.photoObjectUrl = URL.createObjectURL(file);
+  preview.src = state.crm.photoObjectUrl;
+  preview.hidden = false;
+  if (placeholder) placeholder.hidden = true;
+}
+
+async function saveCrmCustomerPhoto(form) {
+  const customer = state.crm.selectedCustomer;
+  if (!form || !customer?.id || !canWriteCrm() || state.crm.mutationPending) return;
+  const actorKey = state.crm.actorKey;
+  const input = form.elements.photo;
+  const file = crmPhotoFile(input);
+  if (!file) {
+    input?.reportValidity();
+    return;
+  }
+  state.crm.mutationPending = true;
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  try {
+    const formData = new FormData();
+    formData.append("photo", file, file.name || "Kundenfoto");
+    const response = await rawApi(`/api/crm/customers/${encodeURIComponent(customer.id)}/photo`, { method: "PUT", body: formData });
+    const payload = response.status === 204 ? null : await response.json();
+    if (actorKey !== state.crm.actorKey) return;
+    clearCrmPhotoObjectUrl();
+    if (payload?.customer) state.crm.selectedCustomer = normalizeCrmCustomer(payload.customer);
+    else await openCrmCustomer(customer.id);
+    if (payload?.customer) renderCrmCustomerDetail();
+    showToast("Das Kundenfoto wurde gespeichert.");
+  } catch (error) {
+    if (actorKey !== state.crm.actorKey) return;
+    showToast(error.message, true);
+  } finally {
+    if (actorKey === state.crm.actorKey) {
+      state.crm.mutationPending = false;
+      if (submit) submit.disabled = false;
+      elements.crmCustomerShell?.setAttribute("aria-busy", "false");
+    }
+  }
+}
+
+async function deleteCrmCustomerPhoto() {
+  const customer = state.crm.selectedCustomer;
+  if (!customer?.id || customer.photoAvailable !== true || !canWriteCrm() || state.crm.mutationPending) return;
+  if (!window.confirm("Das Kundenfoto wirklich entfernen? Die übrige Kundenkartei bleibt erhalten.")) return;
+  const actorKey = state.crm.actorKey;
+  state.crm.mutationPending = true;
+  try {
+    await api(`/api/crm/customers/${encodeURIComponent(customer.id)}/photo`, { method: "DELETE" });
+    if (actorKey !== state.crm.actorKey) return;
+    clearCrmPhotoObjectUrl();
+    await openCrmCustomer(customer.id);
+    showToast("Das Kundenfoto wurde entfernt.");
+  } catch (error) {
+    if (actorKey !== state.crm.actorKey) return;
+    showToast(error.message, true);
+  } finally {
+    if (actorKey === state.crm.actorKey) {
+      state.crm.mutationPending = false;
+      elements.crmCustomerShell?.setAttribute("aria-busy", "false");
+    }
+  }
+}
+
+function currentCrmActorKey() {
+  if (state.portalStatus?.portalEnabled !== true) return "local";
+  return String(state.portalSession?.user?.employeeNumber || "anonymous");
+}
+
+function syncCrmActorState() {
+  const actorKey = currentCrmActorKey();
+  if (state.crm.actorKey === actorKey) return;
+  state.crm.actorKey = actorKey;
+  clearCrmState("", { resetPreferences: true });
+}
+
+function clearCrmState(message = "", { resetPreferences = false } = {}) {
+  clearCrmPhotoObjectUrl();
+  elements.crmSearchForm?.reset();
+  state.crm.items = [];
+  state.crm.total = 0;
+  state.crm.offset = 0;
+  state.crm.query = "";
+  state.crm.customerType = "";
+  state.crm.searchStarted = false;
+  state.crm.searchLoading = false;
+  state.crm.searchError = "";
+  state.crm.searchRequestId += 1;
+  state.crm.selectedCustomer = null;
+  state.crm.detailRequestId += 1;
+  state.crm.detailLoading = false;
+  state.crm.detailError = "";
+  state.crm.mutationPending = false;
+  state.crm.editing = false;
+  if (resetPreferences) {
+    state.crm.preferencesRequestId += 1;
+    state.crm.preferencesLoaded = false;
+    state.crm.preferencesLoading = false;
+    state.crm.columns = [...CRM_DEFAULT_DISPLAY_COLUMNS];
+    state.crm.sort = { key: "lastName", direction: "asc" };
+    state.crm.columnDraftOrder = [];
+    state.crm.columnDraftVisible = new Set();
+    if (elements.crmColumnsDialog?.open) elements.crmColumnsDialog.close();
+  }
+  syncCrmCustomerWorkspace(false);
+  renderCrmResults();
+  renderCrmCustomerDetail();
+  setCrmSearchStatus(
+    message || "Suchbegriff eingeben und „Kunden suchen“ wählen. Der Kundentyp ist ein zusätzlicher Filter.",
+    Boolean(message),
+  );
 }
 
 function salesAnalyticsLocationName(locationId) {
@@ -28757,7 +29841,7 @@ function formatSalesMetric(metricDefinition, value) {
 }
 
 function salesMetricRelativeChange(current, comparison) {
-  if (!Number.isFinite(current) || !Number.isFinite(comparison) || comparison === 0) return null;
+  if (!Number.isFinite(current) || !Number.isFinite(comparison) || comparison <= 0) return null;
   return ((current / comparison) - 1) * 100;
 }
 
@@ -28768,6 +29852,7 @@ function salesMetricChangeClass(current, comparison) {
 
 function formatSalesMetricChange(current, comparison) {
   if (!Number.isFinite(current) || !Number.isFinite(comparison)) return "Vergleich nicht verfügbar";
+  if (comparison < 0) return "Kein Prozentvergleich";
   if (current === comparison) return "±0,0 %";
   const relative = salesMetricRelativeChange(current, comparison);
   if (relative === null) return "Kein Prozentvergleich";
@@ -28775,6 +29860,61 @@ function formatSalesMetricChange(current, comparison) {
     maximumFractionDigits: 1,
     signDisplay: "always",
   }).format(relative)} %`;
+}
+
+function salesMetricAbsoluteChange(current, comparison) {
+  if (!Number.isFinite(current) || !Number.isFinite(comparison)) return null;
+  return current - comparison;
+}
+
+function formatSalesMetricAbsoluteChange(metricDefinition, value) {
+  if (!Number.isFinite(value)) return "Vergleich nicht verfügbar";
+  const formatted = formatSalesMetric(metricDefinition, Math.abs(value));
+  return value === 0 ? `±${formatted}` : `${value > 0 ? "+" : "−"}${formatted}`;
+}
+
+function salesAnalyticsParetoEntries(candidates, limit = 12) {
+  const positive = [...candidates]
+    .filter((entry) => Number.isFinite(entry.current) && entry.current > 0)
+    .sort((left, right) => right.current - left.current);
+  const total = positive.reduce((sum, entry) => sum + entry.current, 0);
+  let cumulative = 0;
+  return positive.slice(0, limit).map((entry) => {
+    const share = total > 0 ? (entry.current / total) * 100 : 0;
+    cumulative += share;
+    return { ...entry, share, cumulativeShare: Math.min(100, cumulative), total };
+  });
+}
+
+function salesAnalyticsShareEntries(candidates, limit = 12) {
+  const positive = [...candidates]
+    .filter((entry) => Number.isFinite(entry.current) && entry.current > 0)
+    .sort((left, right) => right.current - left.current);
+  const total = positive.reduce((sum, entry) => sum + entry.current, 0);
+  const rows = positive.slice(0, limit).map((entry) => ({
+    ...entry,
+    share: total > 0 ? (entry.current / total) * 100 : 0,
+    total,
+    isRemainder: false,
+  }));
+  const omitted = positive.slice(limit);
+  const remainder = omitted.reduce((sum, entry) => sum + entry.current, 0);
+  if (remainder > 0) {
+    rows.push({
+      group: {
+        externalProductGroupId: "REST",
+        label: omitted.length === 1
+          ? "1 weitere Warengruppe"
+          : `${omitted.length} weitere Warengruppen`,
+      },
+      current: remainder,
+      comparison: null,
+      share: (remainder / total) * 100,
+      total,
+      isRemainder: true,
+    });
+  }
+  return rows;
 }
 
 function salesAnalyticsPeriods(detail, horizon) {
@@ -29029,10 +30169,10 @@ function renderSalesReportArchive() {
     checkbox.checked = selected;
     checkbox.dataset.salesArchiveReport = report.id;
     checkbox.setAttribute("aria-label", `${salesPeriodLabel(report.periods.period)} für gemeinsame Analyse auswählen`);
-    checkbox.disabled = !selected && (
+    checkbox.disabled = state.salesAnalytics.seriesLoading || (!selected && (
       selectedIds.size >= SALES_REPORT_SERIES_MAX_REPORTS
       || (selectedLocationId && String(report.locationId) !== selectedLocationId)
-    );
+    ));
     if (checkbox.disabled && selectedLocationId && String(report.locationId) !== selectedLocationId) {
       checkbox.title = "Für eine gemeinsame Analyse muss dieselbe GP-Filiale gewählt bleiben.";
     }
@@ -29194,7 +30334,7 @@ function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
     }))
     .filter((entry) => entry.current !== null || entry.comparison !== null)
     .filter((entry) => entry.current !== 0 || entry.comparison !== 0);
-  const chartType = ["ranking", "change", "share"].includes(state.salesAnalytics.chartType)
+  const chartType = SALES_ANALYTICS_CHART_TYPE_IDS.includes(state.salesAnalytics.chartType)
     ? state.salesAnalytics.chartType
     : "ranking";
   let groups = [];
@@ -29205,12 +30345,22 @@ function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
     })).filter((entry) => Number.isFinite(entry.change))
       .sort((left, right) => Math.abs(right.change) - Math.abs(left.change))
       .slice(0, 12);
+  } else if (chartType === "absolute_change") {
+    groups = candidates.map((entry) => ({
+      ...entry,
+      absoluteChange: salesMetricAbsoluteChange(entry.current, entry.comparison),
+    })).filter((entry) => Number.isFinite(entry.absoluteChange))
+      .sort((left, right) => Math.abs(right.absoluteChange) - Math.abs(left.absoluteChange))
+      .slice(0, 12);
+  } else if (chartType === "pareto") {
+    groups = salesAnalyticsParetoEntries(candidates, 12);
+  } else if (chartType === "share") {
+    groups = salesAnalyticsShareEntries(candidates, 12);
   } else {
     groups = candidates.sort((left, right) => (right.current ?? Number.NEGATIVE_INFINITY)
       - (left.current ?? Number.NEGATIVE_INFINITY))
       .slice(0, 12);
   }
-  if (chartType === "share") groups = groups.filter((entry) => Number(entry.current) > 0);
   if (!groups.length) {
     renderSalesAnalyticsEmpty(
       elements.salesReportChart,
@@ -29221,21 +30371,23 @@ function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
   }
   const chart = document.createDocumentFragment();
   if (chartType === "share") {
-    const total = candidates.reduce((sum, entry) => sum + Math.max(0, Number(entry.current) || 0), 0);
+    const total = groups.reduce((sum, entry) => sum + entry.current, 0);
     const palette = ["#2f7764", "#4d927d", "#72aa98", "#9bc1b4", "#d08f54", "#bd6b61", "#7d8da3", "#8d79a6", "#87935f", "#5d7770", "#b39c69", "#8790a0"];
     const summary = document.createElement("div");
     summary.className = "sales-chart-share-summary";
     groups.forEach((entry, index) => {
+      const color = entry.isRemainder ? "#8b9893" : palette[index % palette.length];
       const segment = document.createElement("span");
       segment.className = "sales-chart-share-segment";
       segment.style.width = `${total > 0 ? (entry.current / total) * 100 : 0}%`;
-      segment.style.background = palette[index % palette.length];
+      segment.style.background = color;
       segment.title = `${entry.group.externalProductGroupId} · ${entry.group.label}`;
       summary.append(segment);
     });
     chart.append(summary);
     groups.forEach((entry, index) => {
-      const share = total > 0 ? (entry.current / total) * 100 : 0;
+      const share = Number(entry.share) || (total > 0 ? (entry.current / total) * 100 : 0);
+      const color = entry.isRemainder ? "#8b9893" : palette[index % palette.length];
       const row = document.createElement("div");
       row.className = "sales-chart-share-row";
       row.setAttribute("aria-label", `${entry.group.externalProductGroupId} ${entry.group.label}: ${share.toLocaleString("de-AT", { maximumFractionDigits: 1 })} Prozent Anteil`);
@@ -29247,7 +30399,7 @@ function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
       const bar = document.createElement("div");
       bar.className = "sales-chart-share-bar";
       bar.style.width = `${Math.max(share > 0 ? 1 : 0, share)}%`;
-      bar.style.setProperty("--sales-share-color", palette[index % palette.length]);
+      bar.style.setProperty("--sales-share-color", color);
       track.append(bar);
       const values = document.createElement("div");
       values.className = "sales-chart-values";
@@ -29263,28 +30415,67 @@ function renderSalesAnalyticsGraph(detail, horizon, metricDefinitions) {
     elements.salesReportChart?.replaceChildren(chart);
     return;
   }
-  if (chartType === "change") {
-    const maximumChange = Math.max(1, ...groups.map((entry) => Math.abs(entry.change)));
+  if (chartType === "pareto") {
+    for (const entry of groups) {
+      const row = document.createElement("div");
+      row.className = "sales-chart-pareto-row";
+      row.setAttribute(
+        "aria-label",
+        `${entry.group.externalProductGroupId} ${entry.group.label}: ${entry.share.toLocaleString("de-AT", { maximumFractionDigits: 1 })} Prozent Anteil, kumuliert ${entry.cumulativeShare.toLocaleString("de-AT", { maximumFractionDigits: 1 })} Prozent`,
+      );
+      const label = document.createElement("div");
+      label.className = "sales-chart-label";
+      label.textContent = `${entry.group.externalProductGroupId} · ${entry.group.label}`;
+      const track = document.createElement("div");
+      track.className = "sales-chart-pareto-track";
+      const shareBar = document.createElement("div");
+      shareBar.className = "sales-chart-pareto-share";
+      shareBar.style.width = `${Math.max(1, entry.share)}%`;
+      const cumulativeMarker = document.createElement("span");
+      cumulativeMarker.className = "sales-chart-pareto-marker";
+      cumulativeMarker.style.left = `${entry.cumulativeShare}%`;
+      cumulativeMarker.setAttribute("aria-hidden", "true");
+      track.append(shareBar, cumulativeMarker);
+      const values = document.createElement("div");
+      values.className = "sales-chart-values";
+      const amount = document.createElement("span");
+      amount.textContent = formatSalesMetric(definition, entry.current);
+      const shares = document.createElement("span");
+      shares.className = "comparison";
+      shares.textContent = `${entry.share.toLocaleString("de-AT", { maximumFractionDigits: 1 })} % · kum. ${entry.cumulativeShare.toLocaleString("de-AT", { maximumFractionDigits: 1 })} %`;
+      values.append(amount, shares);
+      row.append(label, track, values);
+      chart.append(row);
+    }
+    elements.salesReportChart?.replaceChildren(chart);
+    return;
+  }
+  if (chartType === "change" || chartType === "absolute_change") {
+    const valueKey = chartType === "change" ? "change" : "absoluteChange";
+    const maximumChange = Math.max(1, ...groups.map((entry) => Math.abs(entry[valueKey])));
     for (const entry of groups) {
       const row = document.createElement("div");
       row.className = "sales-chart-change-row";
-      row.setAttribute("aria-label", `${entry.group.externalProductGroupId} ${entry.group.label}: ${formatSalesMetricChange(entry.current, entry.comparison)}`);
+      const formattedChange = chartType === "change"
+        ? formatSalesMetricChange(entry.current, entry.comparison)
+        : formatSalesMetricAbsoluteChange(definition, entry.absoluteChange);
+      row.setAttribute("aria-label", `${entry.group.externalProductGroupId} ${entry.group.label}: ${formattedChange}`);
       const label = document.createElement("div");
       label.className = "sales-chart-label";
       label.textContent = `${entry.group.externalProductGroupId} · ${entry.group.label}`;
       const track = document.createElement("div");
       track.className = "sales-chart-change-track";
       const bar = document.createElement("div");
-      bar.className = `sales-chart-change-bar${entry.change < 0 ? " negative" : ""}`;
-      const width = Math.max(1, (Math.abs(entry.change) / maximumChange) * 50);
+      bar.className = `sales-chart-change-bar${entry[valueKey] < 0 ? " negative" : ""}`;
+      const width = Math.max(1, (Math.abs(entry[valueKey]) / maximumChange) * 50);
       bar.style.width = `${width}%`;
-      bar.style.left = entry.change < 0 ? `${50 - width}%` : "50%";
+      bar.style.left = entry[valueKey] < 0 ? `${50 - width}%` : "50%";
       track.append(bar);
       const values = document.createElement("div");
       values.className = "sales-chart-values";
       const change = document.createElement("span");
-      change.className = entry.change < 0 ? "negative" : "positive";
-      change.textContent = formatSalesMetricChange(entry.current, entry.comparison);
+      change.className = entry[valueKey] < 0 ? "negative" : entry[valueKey] > 0 ? "positive" : "";
+      change.textContent = formattedChange;
       values.append(change);
       row.append(label, track, values);
       chart.append(row);
@@ -29549,7 +30740,7 @@ function renderSalesAnalyticsReport() {
   const detail = series || state.salesAnalytics.selectedReport;
   const horizon = series ? "period" : state.salesAnalytics.horizon;
   const hasGrossMargin = detail?.rights?.grossMargin === true;
-  if (!["ranking", "change", "share"].includes(state.salesAnalytics.chartType)) {
+  if (!SALES_ANALYTICS_CHART_TYPE_IDS.includes(state.salesAnalytics.chartType)) {
     state.salesAnalytics.chartType = "ranking";
   }
   if (elements.salesReportChartType) elements.salesReportChartType.value = state.salesAnalytics.chartType;
@@ -29559,7 +30750,9 @@ function renderSalesAnalyticsReport() {
   const chartPresentation = {
     ranking: { eyebrow: "Aktuell und Vergleich", title: "Stärkste Warengruppen" },
     change: { eyebrow: "Relative Entwicklung", title: "Größte Abweichungen" },
+    absolute_change: { eyebrow: "Absolute Entwicklung", title: "Größte Wertveränderungen" },
     share: { eyebrow: "Verteilung im aktuellen Zeitraum", title: "Anteile nach Warengruppe" },
+    pareto: { eyebrow: "Anteil und kumulierter Anteil", title: "Pareto-Analyse der Warengruppen" },
   }[state.salesAnalytics.chartType];
   if (elements.salesAnalyticsChartEyebrow) elements.salesAnalyticsChartEyebrow.textContent = chartPresentation.eyebrow;
   if (elements.salesAnalyticsChartTitle) elements.salesAnalyticsChartTitle.textContent = chartPresentation.title;
@@ -29590,9 +30783,14 @@ function renderSalesAnalyticsReport() {
         { className: "current", text: series ? `Ausgewählte PDF-Zeiträume · ${salesPeriodLabel(periods.current)}` : `Aktuell · ${salesPeriodLabel(periods.current)}` },
         { className: "comparison", text: series ? `Zugehörige Vergleichszeiträume · ${salesPeriodLabel(periods.comparison)}` : `Vergleich · ${salesPeriodLabel(periods.comparison)}` },
       ]
-      : state.salesAnalytics.chartType === "change"
+      : ["change", "absolute_change"].includes(state.salesAnalytics.chartType)
         ? [{ className: "current", text: "Über Vergleich" }, { className: "negative", text: "Unter Vergleich" }]
-        : [{ className: "current", text: `Anteil an ${salesPeriodLabel(periods.current)}` }];
+        : state.salesAnalytics.chartType === "pareto"
+          ? [
+            { className: "current", text: "Anteil der Warengruppe" },
+            { className: "cumulative", text: "Kumulierter Anteil" },
+          ]
+          : [{ className: "current", text: `Anteil an ${salesPeriodLabel(periods.current)}` }];
     elements.salesReportChartLegend.replaceChildren(...legendEntries.map((entry) => {
       const item = document.createElement("span");
       item.className = entry.className;
@@ -29632,21 +30830,186 @@ async function loadSalesReportDetail(reportId = state.salesAnalytics.selectedRep
     return;
   }
   const requestedId = reportId;
+  const actorKey = currentSalesAnalyticsActorKey();
   try {
     const detail = await api(`/api/sales-analytics/reports/${encodeURIComponent(requestedId)}`);
-    if (state.salesAnalytics.selectedReportId !== requestedId) return;
+    if (!salesAnalyticsActorIsCurrent(actorKey)
+      || state.salesAnalytics.selectedReportId !== requestedId) return;
     state.salesAnalytics.selectedReport = detail;
     renderSalesAnalyticsReport();
   } catch (error) {
-    if (state.salesAnalytics.selectedReportId !== requestedId) return;
+    if (!salesAnalyticsActorIsCurrent(actorKey)
+      || state.salesAnalytics.selectedReportId !== requestedId) return;
     state.salesAnalytics.selectedReport = null;
     renderSalesAnalyticsReport();
     showToast(error.message, true);
   }
 }
 
+function applySalesAnalyticsPreferences(value) {
+  const preferences = normalizeSalesAnalyticsPreferences(value);
+  state.salesAnalytics.pdfOptions = preferences.pdf;
+  return preferences;
+}
+
+function currentSalesAnalyticsActorKey() {
+  if (state.portalStatus?.portalEnabled !== true) return "local";
+  const user = state.portalSession?.user;
+  return String(user?.employeeNumber || user?.loginName || "anonymous");
+}
+
+function salesAnalyticsActorIsCurrent(actorKey) {
+  return state.salesAnalytics.actorKey === actorKey
+    && currentSalesAnalyticsActorKey() === actorKey;
+}
+
+function resetSalesAnalyticsActorState(actorKey) {
+  Object.assign(state.salesAnalytics, {
+    actorKey,
+    context: null,
+    reports: [],
+    selectedReportId: "",
+    selectedReport: null,
+    locationFilter: "",
+    dateFrom: "",
+    dateTo: "",
+    horizon: "year_to_date",
+    chartType: "ranking",
+    chartMetric: "netRevenue",
+    pdfOptions: normalizeSalesAnalyticsPdfOptions(),
+    pdfOptionsDraft: null,
+    preferencesLoaded: false,
+    preferencesLoading: false,
+    preferencesSaving: false,
+    preferencesError: "",
+    tableSearch: "",
+    tableSort: "netRevenue_current_desc",
+    archiveSelection: [],
+    reportSeries: null,
+    seriesLoading: false,
+    seriesError: "",
+    previewId: "",
+    preview: null,
+    previewHorizon: "period",
+    loading: false,
+  });
+  state.salesAnalytics.preferencesRequestId += 1;
+  state.salesAnalytics.seriesRequestId += 1;
+  if (elements.salesReportPdfOptionsModal?.open) elements.salesReportPdfOptionsModal.close();
+}
+
+function syncSalesAnalyticsActorState() {
+  const actorKey = currentSalesAnalyticsActorKey();
+  if (state.salesAnalytics.actorKey === actorKey) return;
+  resetSalesAnalyticsActorState(actorKey);
+}
+
+async function loadSalesAnalyticsPreferences() {
+  if (state.salesAnalytics.preferencesLoaded || state.salesAnalytics.preferencesLoading) return;
+  const actorKey = currentSalesAnalyticsActorKey();
+  const requestId = ++state.salesAnalytics.preferencesRequestId;
+  state.salesAnalytics.preferencesLoading = true;
+  state.salesAnalytics.preferencesError = "";
+  try {
+    const payload = await api("/api/sales-analytics/preferences");
+    if (actorKey !== currentSalesAnalyticsActorKey()
+      || requestId !== state.salesAnalytics.preferencesRequestId) return;
+    applySalesAnalyticsPreferences(payload);
+  } catch (error) {
+    if (actorKey !== currentSalesAnalyticsActorKey()
+      || requestId !== state.salesAnalytics.preferencesRequestId) return;
+    state.salesAnalytics.preferencesError = `Persönliche PDF-Optionen konnten nicht geladen werden: ${error.message}`;
+  } finally {
+    if (actorKey === currentSalesAnalyticsActorKey()
+      && requestId === state.salesAnalytics.preferencesRequestId) {
+      state.salesAnalytics.preferencesLoaded = true;
+      state.salesAnalytics.preferencesLoading = false;
+    }
+  }
+}
+
+function salesAnalyticsPreferencePayload(pdfOptions = state.salesAnalytics.pdfOptions) {
+  return {
+    version: 1,
+    horizon: "year_to_date",
+    chartType: "ranking",
+    chartMetric: "netRevenue",
+    pdf: normalizeSalesAnalyticsPdfOptions(pdfOptions),
+  };
+}
+
+async function saveSalesAnalyticsPreferences(pdfOptions) {
+  const preferences = salesAnalyticsPreferencePayload(pdfOptions);
+  const payload = await api("/api/sales-analytics/preferences", {
+    method: "PUT",
+    body: JSON.stringify(preferences),
+  });
+  const saved = payload?.preferences && typeof payload.preferences === "object"
+    ? payload
+    : preferences;
+  return normalizeSalesAnalyticsPreferences(saved);
+}
+
+function salesAnalyticsPdfChartInputs() {
+  return [...(elements.salesReportPdfOptionsForm?.querySelectorAll("[data-sales-pdf-chart]") || [])];
+}
+
+function setSalesAnalyticsPdfOptionsMessage(message, error = false) {
+  if (!elements.salesReportPdfOptionsMessage) return;
+  elements.salesReportPdfOptionsMessage.textContent = message;
+  elements.salesReportPdfOptionsMessage.classList.toggle("error", error);
+}
+
+function renderSalesAnalyticsPdfOptionsDraft() {
+  const options = normalizeSalesAnalyticsPdfOptions(
+    state.salesAnalytics.pdfOptionsDraft || state.salesAnalytics.pdfOptions,
+  );
+  state.salesAnalytics.pdfOptionsDraft = options;
+  if (elements.salesReportPdfOrientation) elements.salesReportPdfOrientation.value = options.orientation;
+  if (elements.salesReportPdfTopN) elements.salesReportPdfTopN.value = String(options.topN);
+  if (elements.salesReportPdfIncludeKpis) elements.salesReportPdfIncludeKpis.checked = options.includeKpis;
+  if (elements.salesReportPdfIncludeTable) elements.salesReportPdfIncludeTable.checked = options.includeTable;
+  if (elements.salesReportPdfFilenamePrefix) elements.salesReportPdfFilenamePrefix.value = options.filenamePrefix;
+  const selectedCharts = new Set(options.charts);
+  salesAnalyticsPdfChartInputs().forEach((input) => {
+    input.checked = selectedCharts.has(input.value);
+  });
+  setSalesAnalyticsPdfOptionsMessage(
+    state.salesAnalytics.preferencesError || "Die Auswahl wird nur für dein Benutzerkonto gespeichert.",
+    Boolean(state.salesAnalytics.preferencesError),
+  );
+}
+
+function readSalesAnalyticsPdfOptionsDraft() {
+  const charts = salesAnalyticsPdfChartInputs().filter((input) => input.checked).map((input) => input.value);
+  if (!charts.length) {
+    setSalesAnalyticsPdfOptionsMessage("Wähle mindestens eine Diagrammseite aus.", true);
+    return null;
+  }
+  const options = normalizeSalesAnalyticsPdfOptions({
+    orientation: elements.salesReportPdfOrientation?.value,
+    charts,
+    topN: elements.salesReportPdfTopN?.value,
+    includeKpis: Boolean(elements.salesReportPdfIncludeKpis?.checked),
+    includeTable: Boolean(elements.salesReportPdfIncludeTable?.checked),
+    filenamePrefix: elements.salesReportPdfFilenamePrefix?.value,
+  });
+  state.salesAnalytics.pdfOptionsDraft = options;
+  if (elements.salesReportPdfTopN) elements.salesReportPdfTopN.value = String(options.topN);
+  if (elements.salesReportPdfFilenamePrefix) elements.salesReportPdfFilenamePrefix.value = options.filenamePrefix;
+  return options;
+}
+
+function openSalesAnalyticsPdfOptions() {
+  if (!state.salesAnalytics.reportSeries && !state.salesAnalytics.selectedReport) return;
+  state.salesAnalytics.pdfOptionsDraft = normalizeSalesAnalyticsPdfOptions(state.salesAnalytics.pdfOptions);
+  renderSalesAnalyticsPdfOptionsDraft();
+  if (!elements.salesReportPdfOptionsModal?.open) elements.salesReportPdfOptionsModal?.showModal();
+}
+
 async function loadSalesAnalytics({ selectReportId = "" } = {}) {
   if (!canAccessSalesAnalytics() || state.salesAnalytics.loading) return;
+  const actorKey = currentSalesAnalyticsActorKey();
   state.salesAnalytics.loading = true;
   renderSalesAnalytics();
   try {
@@ -29655,7 +31018,9 @@ async function loadSalesAnalytics({ selectReportId = "" } = {}) {
       canManageSalesReportImports()
         ? api("/api/sales-analytics/report-import/context")
         : Promise.resolve(null),
+      loadSalesAnalyticsPreferences(),
     ]);
+    if (!salesAnalyticsActorIsCurrent(actorKey)) return;
     state.salesAnalytics.reports = reportPayload.reports || [];
     state.salesAnalytics.context = context;
     const knownReportIds = new Set(state.salesAnalytics.reports.map((report) => report.id));
@@ -29670,17 +31035,20 @@ async function loadSalesAnalytics({ selectReportId = "" } = {}) {
       : state.salesAnalytics.reports[0]?.id || "";
     state.salesAnalytics.selectedReport = null;
   } catch (error) {
-    showToast(error.message, true);
+    if (salesAnalyticsActorIsCurrent(actorKey)) showToast(error.message, true);
   } finally {
-    state.salesAnalytics.loading = false;
-    renderSalesAnalytics();
+    if (salesAnalyticsActorIsCurrent(actorKey)) {
+      state.salesAnalytics.loading = false;
+      renderSalesAnalytics();
+    }
   }
-  await loadSalesReportDetail();
+  if (salesAnalyticsActorIsCurrent(actorKey)) await loadSalesReportDetail();
 }
 
 async function inspectSalesReportPdf() {
   const file = elements.salesReportImportFile?.files?.[0];
   if (!file) return;
+  const actorKey = currentSalesAnalyticsActorKey();
   elements.salesReportInspectButton.disabled = true;
   setSalesReportMessage("Textschicht und Berichtssummen werden geprüft; falls nötig folgt die lokale OCR seitenweise …");
   try {
@@ -29692,7 +31060,12 @@ async function inspectSalesReportPdf() {
       },
       body: file,
     });
+    if (!salesAnalyticsActorIsCurrent(actorKey)) {
+      await response.body?.cancel();
+      return;
+    }
     const payload = await response.json();
+    if (!salesAnalyticsActorIsCurrent(actorKey)) return;
     state.salesAnalytics.previewId = payload.previewId;
     state.salesAnalytics.preview = payload.preview;
     state.salesAnalytics.previewHorizon = "period";
@@ -29703,12 +31076,15 @@ async function inspectSalesReportPdf() {
       : "Die Statistik wurde gelesen. Bitte Filiale, EUR und Prüfhilfen bestätigen.");
     renderSalesReportPreview();
   } catch (error) {
+    if (!salesAnalyticsActorIsCurrent(actorKey)) return;
     state.salesAnalytics.previewId = "";
     state.salesAnalytics.preview = null;
     setSalesReportMessage(error.message, true);
     renderSalesReportPreview();
   } finally {
-    elements.salesReportInspectButton.disabled = !elements.salesReportImportFile?.files?.length;
+    if (salesAnalyticsActorIsCurrent(actorKey)) {
+      elements.salesReportInspectButton.disabled = !elements.salesReportImportFile?.files?.length;
+    }
   }
 }
 
@@ -29729,6 +31105,7 @@ async function discardSalesReportPreview() {
 
 async function applySalesReportPreview() {
   if (!state.salesAnalytics.previewId || elements.salesReportApplyButton?.disabled) return;
+  const actorKey = currentSalesAnalyticsActorKey();
   elements.salesReportApplyButton.disabled = true;
   setSalesReportMessage("Der bestätigte Statistikbericht wird unveränderlich übernommen …");
   try {
@@ -29745,6 +31122,7 @@ async function applySalesReportPreview() {
       method: "POST",
       body: JSON.stringify(requestBody),
     });
+    if (!salesAnalyticsActorIsCurrent(actorKey)) return;
     state.salesAnalytics.previewId = "";
     state.salesAnalytics.preview = null;
     state.salesAnalytics.previewHorizon = "period";
@@ -29754,12 +31132,14 @@ async function applySalesReportPreview() {
       : "Dieser identische Statistikbericht war bereits übernommen.");
     await loadSalesAnalytics({ selectReportId: result.report.id });
   } catch (error) {
+    if (!salesAnalyticsActorIsCurrent(actorKey)) return;
     setSalesReportMessage(error.message, true);
     updateSalesReportApplyState();
   }
 }
 
 function clearSalesReportSeries({ clearSelection = true } = {}) {
+  state.salesAnalytics.seriesRequestId += 1;
   if (clearSelection) state.salesAnalytics.archiveSelection = [];
   state.salesAnalytics.reportSeries = null;
   state.salesAnalytics.seriesError = "";
@@ -29768,13 +31148,16 @@ function clearSalesReportSeries({ clearSelection = true } = {}) {
 
 async function analyzeSalesReportSeries() {
   if (state.salesAnalytics.seriesLoading) return;
+  const actorKey = currentSalesAnalyticsActorKey();
   const reports = selectedSalesAnalyticsReports();
+  const reportIds = reports.map((report) => report.id);
   const validation = salesReportSeriesSelectionValidation(reports);
   if (!validation.ok) {
     state.salesAnalytics.seriesError = validation.message;
     renderSalesAnalytics();
     return;
   }
+  const requestId = ++state.salesAnalytics.seriesRequestId;
   state.salesAnalytics.seriesLoading = true;
   state.salesAnalytics.seriesError = "";
   state.salesAnalytics.reportSeries = null;
@@ -29782,25 +31165,39 @@ async function analyzeSalesReportSeries() {
   try {
     const series = await api("/api/sales-analytics/report-series/analyze", {
       method: "POST",
-      body: JSON.stringify({ reportIds: reports.map((report) => report.id) }),
+      body: JSON.stringify({ reportIds }),
     });
+    if (!salesAnalyticsActorIsCurrent(actorKey)
+      || requestId !== state.salesAnalytics.seriesRequestId) return;
+    const currentReportIds = selectedSalesAnalyticsReports().map((report) => report.id);
+    if (currentReportIds.length !== reportIds.length
+      || currentReportIds.some((reportId, index) => reportId !== reportIds[index])) return;
     state.salesAnalytics.reportSeries = series;
-    state.salesAnalytics.horizon = "period";
   } catch (error) {
+    if (!salesAnalyticsActorIsCurrent(actorKey)
+      || requestId !== state.salesAnalytics.seriesRequestId) return;
     state.salesAnalytics.reportSeries = null;
     state.salesAnalytics.seriesError = error.message;
     showToast(error.message, true);
   } finally {
-    state.salesAnalytics.seriesLoading = false;
-    renderSalesAnalytics();
+    if (salesAnalyticsActorIsCurrent(actorKey)
+      && requestId === state.salesAnalytics.seriesRequestId) {
+      state.salesAnalytics.seriesLoading = false;
+      renderSalesAnalytics();
+    }
   }
 }
 
-async function downloadSalesAnalyticsChartsPdf() {
+async function downloadSalesAnalyticsChartsPdf(pdfOptions = state.salesAnalytics.pdfOptions) {
   const series = state.salesAnalytics.reportSeries;
   const reportId = state.salesAnalytics.selectedReportId;
-  if (!series && !reportId) return;
-  const button = elements.salesReportChartPdfButton;
+  if (!series && !reportId) return false;
+  const actorKey = currentSalesAnalyticsActorKey();
+  const requestId = state.salesAnalytics.preferencesRequestId;
+  const requestIsCurrent = () => salesAnalyticsActorIsCurrent(actorKey)
+    && requestId === state.salesAnalytics.preferencesRequestId;
+  const options = normalizeSalesAnalyticsPdfOptions(pdfOptions);
+  const button = elements.salesReportPdfExportButton;
   if (button) {
     button.disabled = true;
     button.textContent = "PDF wird erstellt …";
@@ -29811,24 +31208,88 @@ async function downloadSalesAnalyticsChartsPdf() {
         reportIds: series.selection.reportIds,
         horizon: "period",
         metric: state.salesAnalytics.chartMetric,
+        optionsVersion: 1,
+        options,
       }
       : {
         reportId,
         horizon: state.salesAnalytics.horizon,
         metric: state.salesAnalytics.chartMetric,
+        optionsVersion: 1,
+        options,
       };
     const response = await rawApi("/api/sales-analytics/charts.pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    await downloadFileResponse(response, "Grabenplaner-Verkaufsanalyse-Grafiken.pdf");
-    showToast("Die Diagramm-PDF wurde erstellt.");
+    if (!requestIsCurrent()) {
+      await response.body?.cancel();
+      return false;
+    }
+    const downloaded = await downloadFileResponse(response, `${options.filenamePrefix}.pdf`, {
+      beforeSave: requestIsCurrent,
+    });
+    if (!downloaded || !requestIsCurrent()) return false;
+    showToast("Die Verkaufsanalyse-PDF wurde erstellt.");
+    return true;
   } catch (error) {
-    showToast(error.message, true);
+    if (requestIsCurrent()) {
+      showToast(error.message, true);
+      setSalesAnalyticsPdfOptionsMessage(error.message, true);
+    }
+    return false;
   } finally {
-    if (button) button.textContent = "Grafiken als PDF";
-    renderSalesAnalyticsReport();
+    if (requestIsCurrent()) {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Speichern & PDF erstellen";
+      }
+      renderSalesAnalyticsReport();
+    }
+  }
+}
+
+async function submitSalesAnalyticsPdfOptions(event) {
+  event.preventDefault();
+  if (state.salesAnalytics.preferencesSaving) return;
+  const actorKey = currentSalesAnalyticsActorKey();
+  const options = readSalesAnalyticsPdfOptionsDraft();
+  if (!options || !elements.salesReportPdfOptionsForm?.reportValidity()) return;
+  const requestId = ++state.salesAnalytics.preferencesRequestId;
+  state.salesAnalytics.preferencesLoading = false;
+  state.salesAnalytics.preferencesSaving = true;
+  if (elements.salesReportPdfExportButton) {
+    elements.salesReportPdfExportButton.disabled = true;
+    elements.salesReportPdfExportButton.textContent = "Optionen werden gespeichert …";
+  }
+  if (elements.salesReportPdfOptionsReset) elements.salesReportPdfOptionsReset.disabled = true;
+  setSalesAnalyticsPdfOptionsMessage("Persönliche Exportoptionen werden gespeichert …");
+  try {
+    const saved = await saveSalesAnalyticsPreferences(options);
+    if (!salesAnalyticsActorIsCurrent(actorKey)
+      || requestId !== state.salesAnalytics.preferencesRequestId) return;
+    applySalesAnalyticsPreferences(saved);
+    state.salesAnalytics.preferencesError = "";
+    state.salesAnalytics.pdfOptionsDraft = saved.pdf;
+    const downloaded = await downloadSalesAnalyticsChartsPdf(saved.pdf);
+    if (downloaded) elements.salesReportPdfOptionsModal?.close();
+  } catch (error) {
+    if (salesAnalyticsActorIsCurrent(actorKey)
+      && requestId === state.salesAnalytics.preferencesRequestId) {
+      state.salesAnalytics.preferencesError = error.message;
+      setSalesAnalyticsPdfOptionsMessage(error.message, true);
+    }
+  } finally {
+    if (salesAnalyticsActorIsCurrent(actorKey)
+      && requestId === state.salesAnalytics.preferencesRequestId) {
+      state.salesAnalytics.preferencesSaving = false;
+      if (elements.salesReportPdfExportButton) {
+        elements.salesReportPdfExportButton.disabled = false;
+        elements.salesReportPdfExportButton.textContent = "Speichern & PDF erstellen";
+      }
+      if (elements.salesReportPdfOptionsReset) elements.salesReportPdfOptionsReset.disabled = false;
+    }
   }
 }
 
@@ -29838,8 +31299,9 @@ function setView(view) {
     || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
-    || (view === "salesAdministration" && !canAccessSalesAnalytics())
+    || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
+    || (view === "crm" && !canAccessCrm())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "branchOrders" && !canManageBranchOrders())
     || (view === "rightsDashboard" && accessibleDashboardModes().length === 0)) view = "startDashboard";
@@ -29884,6 +31346,7 @@ function setView(view) {
   elements.personnelAdministrationView?.classList.toggle("active", view === "personnelAdministration");
   elements.salesAdministrationView?.classList.toggle("active", view === "salesAdministration");
   elements.salesAnalyticsView?.classList.toggle("active", view === "salesAnalytics");
+  elements.crmView?.classList.toggle("active", view === "crm");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.loansView?.classList.toggle("active", view === "loans");
   elements.branchOrdersView?.classList.toggle("active", view === "branchOrders");
@@ -29900,6 +31363,10 @@ function setView(view) {
   if (view === "branchOrders") loadBranchOrdersManagement();
   if (view === "startDashboard") loadStartDashboard();
   if (view === "salesAnalytics") loadSalesAnalytics();
+  if (view === "crm") {
+    syncCrmCustomerWorkspace(Boolean(state.crm.selectedCustomer || state.crm.detailLoading));
+    loadCrmPreferences().catch((error) => setCrmSearchStatus(error.message, true));
+  }
   if (view === "rightsDashboard") loadRightsDashboard();
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
@@ -29912,7 +31379,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }
@@ -33401,14 +34868,13 @@ elements.salesReportImportConfirmed?.addEventListener("change", updateSalesRepor
 elements.salesReportApplyButton?.addEventListener("click", applySalesReportPreview);
 elements.salesReportArchiveBody?.addEventListener("change", (event) => {
   const checkbox = event.target.closest?.("[data-sales-archive-report]");
-  if (!checkbox) return;
+  if (!checkbox || state.salesAnalytics.seriesLoading) return;
   const reportId = checkbox.dataset.salesArchiveReport;
   const selected = new Set(state.salesAnalytics.archiveSelection || []);
   if (checkbox.checked) selected.add(reportId);
   else selected.delete(reportId);
   state.salesAnalytics.archiveSelection = [...selected];
-  state.salesAnalytics.reportSeries = null;
-  state.salesAnalytics.seriesError = "";
+  clearSalesReportSeries({ clearSelection: false });
   renderSalesAnalytics();
 });
 elements.salesReportArchiveBody?.addEventListener("click", (event) => {
@@ -33480,7 +34946,25 @@ elements.salesReportChartType?.addEventListener("change", () => {
   state.salesAnalytics.chartType = elements.salesReportChartType.value;
   renderSalesAnalyticsReport();
 });
-elements.salesReportChartPdfButton?.addEventListener("click", downloadSalesAnalyticsChartsPdf);
+elements.salesReportChartPdfButton?.addEventListener("click", openSalesAnalyticsPdfOptions);
+elements.salesReportPdfOptionsForm?.addEventListener("submit", submitSalesAnalyticsPdfOptions);
+elements.salesReportPdfOptionsReset?.addEventListener("click", () => {
+  state.salesAnalytics.pdfOptionsDraft = normalizeSalesAnalyticsPdfOptions(SALES_ANALYTICS_PDF_DEFAULTS);
+  renderSalesAnalyticsPdfOptionsDraft();
+});
+elements.salesReportPdfOptionsForm?.addEventListener("change", (event) => {
+  if (!event.target.matches("[data-sales-pdf-chart]")) return;
+  const count = salesAnalyticsPdfChartInputs().filter((input) => input.checked).length;
+  setSalesAnalyticsPdfOptionsMessage(
+    count
+      ? `${count} Diagrammseite${count === 1 ? "" : "n"} ausgewählt. Die Optionen gelten nur für dein Benutzerkonto.`
+      : "Wähle mindestens eine Diagrammseite aus.",
+    count === 0,
+  );
+});
+elements.salesReportPdfOptionsModal?.addEventListener("close", () => {
+  state.salesAnalytics.pdfOptionsDraft = null;
+});
 elements.salesReportGroupSearch?.addEventListener("input", () => {
   state.salesAnalytics.tableSearch = elements.salesReportGroupSearch.value;
   renderSalesAnalyticsReport();
@@ -33547,6 +35031,18 @@ elements.adminLoginForm?.addEventListener("submit", loginToAdministration);
 elements.adminLoginPersonnelNumber?.addEventListener("input", scheduleAdminLoginBrandingPreview);
 elements.adminLoginPersonnelNumber?.addEventListener("blur", previewAdminLoginBranding);
 elements.portalLogoutButton?.addEventListener("click", logoutPortal);
+elements.personalActionsAdminButton?.addEventListener("click", openAdminPersonalActions);
+elements.personalActionsAdminLoadMore?.addEventListener("click", () => loadAdminPersonalActions({ append: true }));
+elements.personalActionsAdminList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-undo-personal-action-admin]");
+  if (button) undoAdminPersonalAction(button.dataset.undoPersonalActionAdmin);
+});
+document.querySelectorAll("[data-close-personal-actions-admin]").forEach((button) => {
+  button.addEventListener("click", closeAdminPersonalActions);
+});
+elements.personalActionsAdminDialog?.addEventListener("close", () => {
+  elements.personalActionsAdminButton?.setAttribute("aria-expanded", "false");
+});
 elements.openPersonnelLifecycleEditorButton?.addEventListener("click", (event) => {
   openPersonnelLifecycleEditor(event.currentTarget);
 });
@@ -34947,6 +36443,104 @@ elements.scheduleSearchNext?.addEventListener("click", () => {
 elements.salesDashboardGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-sales-dashboard-view]");
   if (button) setView(button.dataset.salesDashboardView);
+});
+elements.crmSearchForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!elements.crmSearchForm.reportValidity()) return;
+  loadCrmCustomers({ offset: 0 });
+});
+elements.crmSearchReset?.addEventListener("click", () => {
+  elements.crmSearchForm?.reset();
+  state.crm.query = "";
+  state.crm.customerType = "";
+  state.crm.items = [];
+  state.crm.total = 0;
+  state.crm.offset = 0;
+  state.crm.searchStarted = false;
+  state.crm.searchLoading = false;
+  state.crm.searchError = "";
+  state.crm.searchRequestId += 1;
+  elements.crmResults?.classList.add("hidden");
+  setCrmSearchStatus("Suchbegriff eingeben und „Kunden suchen“ wählen. Der Kundentyp ist ein zusätzlicher Filter.");
+  elements.crmSearchQuery?.focus();
+});
+elements.crmResults?.addEventListener("click", (event) => {
+  const sortButton = event.target.closest("[data-crm-sort]");
+  if (sortButton) {
+    changeCrmSort(sortButton.dataset.crmSort);
+    return;
+  }
+  const customerButton = event.target.closest("[data-crm-customer-id]");
+  if (customerButton) openCrmCustomer(customerButton.dataset.crmCustomerId);
+});
+elements.crmPreviousPage?.addEventListener("click", () => loadCrmCustomers({
+  offset: Math.max(0, state.crm.offset - state.crm.limit),
+}));
+elements.crmNextPage?.addEventListener("click", () => loadCrmCustomers({
+  offset: state.crm.offset + state.crm.limit,
+}));
+elements.crmColumnsButton?.addEventListener("click", openCrmColumnsDialog);
+elements.crmColumnsForm?.addEventListener("submit", saveCrmPreferences);
+elements.crmColumnsReset?.addEventListener("click", resetCrmColumnDraft);
+elements.crmColumnOptions?.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-crm-column-visible]");
+  if (!input) return;
+  const columnId = input.dataset.crmColumnVisible;
+  if (input.checked) state.crm.columnDraftVisible.add(columnId);
+  else state.crm.columnDraftVisible.delete(columnId);
+  renderCrmColumnOptions();
+});
+elements.crmColumnOptions?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-crm-column-move]");
+  if (button) moveCrmColumnDraft(button.dataset.crmColumnMove, Number(button.dataset.direction));
+});
+elements.crmCreateButton?.addEventListener("click", openNewCrmCustomer);
+elements.crmCustomerBackButton?.addEventListener("click", closeCrmCustomer);
+elements.crmCustomerDetail?.addEventListener("click", (event) => {
+  if (event.target.closest("[data-crm-edit-customer]")) {
+    state.crm.editing = true;
+    renderCrmCustomerDetail();
+    return;
+  }
+  if (event.target.closest("[data-crm-cancel-edit]")) {
+    if (state.crm.selectedCustomer?.id) {
+      state.crm.editing = false;
+      renderCrmCustomerDetail();
+    } else closeCrmCustomer();
+    return;
+  }
+  const addButton = event.target.closest("[data-crm-add-custom-field]");
+  if (addButton) {
+    const list = addButton.closest("fieldset")?.querySelector("[data-crm-custom-field-list]");
+    const index = list?.querySelectorAll("[data-crm-custom-field]").length || 0;
+    if (index >= 50) {
+      showToast("Pro Kundenkartei sind höchstens 50 eigene Textfelder möglich.", true);
+      return;
+    }
+    list?.insertAdjacentHTML("beforeend", crmCustomFieldEditorRow({}, index));
+    list?.lastElementChild?.querySelector("input")?.focus();
+    return;
+  }
+  const removeButton = event.target.closest("[data-crm-remove-custom-field]");
+  if (removeButton) {
+    removeButton.closest("[data-crm-custom-field]")?.remove();
+    return;
+  }
+  if (event.target.closest("[data-crm-delete-photo]")) deleteCrmCustomerPhoto();
+});
+elements.crmCustomerDetail?.addEventListener("submit", (event) => {
+  const customerForm = event.target.closest("[data-crm-customer-form]");
+  const photoForm = event.target.closest("[data-crm-photo-form]");
+  if (customerForm) {
+    event.preventDefault();
+    saveCrmCustomer(customerForm);
+  } else if (photoForm) {
+    event.preventDefault();
+    saveCrmCustomerPhoto(photoForm);
+  }
+});
+elements.crmCustomerDetail?.addEventListener("change", (event) => {
+  if (event.target.matches('[data-crm-photo-form] input[name="photo"]')) updateCrmPhotoPreview(event.target);
 });
 elements.personnelDashboardGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-personnel-dashboard-item]");
