@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.26 Beta · Erweiterte Datenprüfung
+
+- Der Artikelstamm erhält eine erweiterte Datenprüfung.
+- Die Access-Extraktion ist auf das freigegebene Tabellen-, Spalten- und Typmodell sowie feste Datei-, Zeilen-, Arbeits- und Zeitgrenzen beschränkt. Ihr Ergebnis durchläuft unverändert dieselbe Vorschau, Quarantäne, Bestätigung und atomare Übernahme wie der weiterhin verfügbare JSON-Import.
+- Die Artikelstamm-Verwaltung zeigt den Zeitpunkt des zuletzt bestätigten Datenstands.
+
 ## v0.92.25 Beta · Artikelstamm-Verwaltung und Datenprüfung
 
 - Die Verkaufsverwaltung erhält eine suchzentrierte Artikelstamm-Arbeitsfläche mit kompakter, sortierbarer Zehn-Zeilen-Ergebnisliste, stabiler Scrollfläche, erweiterter Suche und vollbreiter Artikelkartei.

@@ -34,6 +34,7 @@ const subject = require("../server");
 const { app, db } = subject;
 
 const MIME = "application/vnd.grabenplaner.tradefoto-articles+json";
+const ACCDB_MIME = "application/vnd.grabenplaner.tradefoto-articles+accdb";
 const IMPORTER = "article-importer";
 const OTHER_IMPORTER = "article-importer-other";
 const WRITER = "article-import-writer";
@@ -108,11 +109,13 @@ async function requestRaw(route, body, {
   csrf = true,
   contentType = MIME,
   fileName = "TradeFoto-Artikel.json",
+  extraHeaders = {},
 } = {}) {
   const headers = {
     ...authHeaders(employeeNumber, { csrf }),
     "Content-Type": contentType,
     "X-Import-Filename": fileName,
+    ...extraHeaders,
   };
   return responsePayload(await fetch(`${baseUrl}${route}`, {
     method: "POST",
@@ -407,6 +410,25 @@ test.after(async () => {
 });
 
 test("Artikelimport verlangt sein eigenes Live-Recht, CSRF, MIME und den festen Dateivertrag", async () => {
+  const unauthenticatedStatus = await responsePayload(await fetch(
+    `${baseUrl}/api/sales/articles/import-status`,
+    { headers: { Accept: "application/json" } },
+  ));
+  assert.equal(unauthenticatedStatus.response.status, 401, unauthenticatedStatus.text);
+
+  const readOnlyStatus = await requestJson("/api/sales/articles/import-status", {
+    employeeNumber: WRITER,
+  });
+  assert.equal(readOnlyStatus.response.status, 200, readOnlyStatus.text);
+  noStore(readOnlyStatus.response);
+  assert.deepEqual(readOnlyStatus.payload, { lastImportAt: null });
+
+  const invalidStatusQuery = await requestJson("/api/sales/articles/import-status?unexpected=1", {
+    employeeNumber: WRITER,
+  });
+  assert.equal(invalidStatusQuery.response.status, 400, invalidStatusQuery.text);
+  assert.equal(invalidStatusQuery.payload?.code, "SALES_ARTICLE_IMPORT_STATUS_INVALID");
+
   const unauthenticated = await responsePayload(await fetch(
     `${baseUrl}/api/sales/articles/import/catalog`,
     { headers: { Accept: "application/json" } },
@@ -421,11 +443,16 @@ test("Artikelimport verlangt sein eigenes Live-Recht, CSRF, MIME und den festen 
   const catalogResult = await catalog();
   noStore(catalogResult.response);
   assert.deepEqual(Object.keys(catalogResult.payload).sort(), [
-    "currency", "format", "maxBytes", "maxRows", "maxWorkUnits", "mimeType", "sourceProfileVersion",
+    "currency", "databaseMimeType", "databaseUpload", "format", "maxBytes", "maxDatabaseBytes",
+    "maxDatabasePasswordBytes", "maxRows", "maxWorkUnits", "mimeType", "sourceProfileVersion",
     "sourceSchemaSha256", "sourceSystem",
   ]);
   assert.equal(catalogResult.payload.mimeType, MIME);
   assert.equal(catalogResult.payload.maxBytes, 64 * 1024 * 1024);
+  assert.equal(catalogResult.payload.databaseUpload, true);
+  assert.equal(catalogResult.payload.databaseMimeType, ACCDB_MIME);
+  assert.equal(catalogResult.payload.maxDatabaseBytes, 256 * 1024 * 1024);
+  assert.equal(catalogResult.payload.maxDatabasePasswordBytes, 256);
   assert.equal(catalogResult.payload.maxRows, 25000);
   assert.equal(catalogResult.payload.maxWorkUnits, 750000);
   assert.equal(catalogResult.payload.sourceSystem, "tradefoto.artikel_stamm");
@@ -478,6 +505,61 @@ test("Artikelimport verlangt sein eigenes Live-Recht, CSRF, MIME und den festen 
   assert.match(tooManyRows.payload?.code || "", /^SALES_ARTICLE_IMPORT_/);
 });
 
+test("Direkter ACCDB-Upload verlangt Importrecht, CSRF, Dateityp und flüchtiges Passwort", async () => {
+  const databaseBytes = Buffer.alloc(4096);
+  databaseBytes[0] = 0;
+  databaseBytes.write("Standard ACE DB", 4, "ascii");
+  databaseBytes[0x14] = 0x03;
+  const secret = `nicht-speichern-${crypto.randomBytes(8).toString("hex")}`;
+  const options = {
+    contentType: ACCDB_MIME,
+    fileName: "Trade_Daten.accdb",
+    extraHeaders: {
+      "X-TradeFoto-Database-Password": encodeURIComponent(secret),
+    },
+  };
+
+  const noCsrf = await requestRaw(
+    "/api/sales/articles/import/database-preview",
+    databaseBytes,
+    { ...options, csrf: false },
+  );
+  assert.equal(noCsrf.response.status, 403, noCsrf.text);
+
+  const withoutImportRight = await requestRaw(
+    "/api/sales/articles/import/database-preview",
+    databaseBytes,
+    { ...options, employeeNumber: WRITER },
+  );
+  assert.equal(withoutImportRight.response.status, 403, withoutImportRight.text);
+
+  const wrongMime = await requestRaw(
+    "/api/sales/articles/import/database-preview",
+    databaseBytes,
+    { ...options, contentType: "application/octet-stream" },
+  );
+  assert.equal(wrongMime.response.status, 415, wrongMime.text);
+  assert.equal(wrongMime.payload?.code, "SALES_ARTICLE_IMPORT_CONTENT_TYPE_UNSUPPORTED");
+
+  const missingPassword = await requestRaw(
+    "/api/sales/articles/import/database-preview",
+    databaseBytes,
+    { contentType: ACCDB_MIME, fileName: "Trade_Daten.accdb" },
+  );
+  assert.equal(missingPassword.response.status, 400, missingPassword.text);
+  assert.equal(missingPassword.payload?.code, "SALES_ARTICLE_ACCDB_PASSWORD_REQUIRED");
+
+  const invalidDatabase = await requestRaw(
+    "/api/sales/articles/import/database-preview",
+    databaseBytes,
+    options,
+  );
+  assert.equal(invalidDatabase.response.status, 422, invalidDatabase.text);
+  assert.equal(invalidDatabase.payload?.code, "SALES_ARTICLE_ACCDB_PASSWORD_OR_FILE_INVALID");
+  assert.equal(invalidDatabase.text.includes(secret), false);
+  noStore(invalidDatabase.response);
+});
+
 test("Das eigenständige Importrecht erlaubt Preview und Apply ohne manuelles Schreibrecht", async () => {
   const manualWrite = await requestJson("/api/sales/articles", {
     employeeNumber: OTHER_IMPORTER,
@@ -498,6 +580,21 @@ test("Das eigenständige Importrecht erlaubt Preview und Apply ohne manuelles Sc
   assert.equal(
     db.prepare("SELECT COUNT(*) AS count FROM sales_articles WHERE article_number = '093759'").get().count,
     1,
+  );
+
+  const importStatus = await requestJson("/api/sales/articles/import-status", {
+    employeeNumber: WRITER,
+  });
+  assert.equal(importStatus.response.status, 200, importStatus.text);
+  noStore(importStatus.response);
+  assert.deepEqual(Object.keys(importStatus.payload), ["lastImportAt"]);
+  assert.equal(
+    importStatus.payload.lastImportAt,
+    db.prepare(`
+      SELECT imported_at AS importedAt
+      FROM sales_article_import_snapshots
+      WHERE id = ?
+    `).get(applied.payload.snapshotId).importedAt,
   );
 
   const foreignUndo = await requestJson(

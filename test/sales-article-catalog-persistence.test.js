@@ -127,7 +127,7 @@ function persistenceCode(code) {
 
 test("Statementkatalog ist vollständig und PostgreSQL-portabel kompilierbar", () => {
   const statements = Object.values(SALES_ARTICLE_CATALOG_STATEMENTS);
-  assert.equal(statements.length, 27);
+  assert.equal(statements.length, 28);
   assert.equal(SQLITE_SALES_ARTICLE_CATALOG.length, statements.length);
   assert.equal(new Set(statements).size, statements.length);
   assert.deepEqual(
@@ -139,6 +139,56 @@ test("Statementkatalog ist vollständig und PostgreSQL-portabel kompilierbar", (
   for (const entry of SQLITE_SALES_ARTICLE_CATALOG) {
     const compiled = compilePostgresqlDialectEntry(entry);
     assert.equal(compiled.strategy, "portable-generated", entry.statement.id);
+  }
+});
+
+test("Letzter Importzeitpunkt wird nach Quellsystem getrennt und PostgreSQL-portabel gelesen", async () => {
+  const context = await fixture();
+  try {
+    await context.repository.importSnapshot({
+      snapshot: snapshot({
+        sourceSystem: "tradefoto.artikel_stamm",
+        sourceFileSha256: "1".repeat(64),
+      }),
+      actor: "419",
+      timestamp: "2026-09-03T08:00:00.000Z",
+    });
+    await context.repository.importSnapshot({
+      snapshot: snapshot({
+        sourceSystem: "manual.article-catalog",
+        sourceFileSha256: "2".repeat(64),
+        articles: [article({
+          sourceArticleKey: "manual-093758",
+          articleNumber: "093758",
+        })],
+      }),
+      actor: "419",
+      timestamp: "2026-09-03T10:00:00.000Z",
+    });
+    await context.repository.importSnapshot({
+      snapshot: snapshot({
+        sourceSystem: "tradefoto.artikel_stamm",
+        sourceFileSha256: "3".repeat(64),
+        articles: [article({
+          sourceArticleKey: "0000000093759",
+          articleNumber: "093759",
+        })],
+      }),
+      actor: "419",
+      timestamp: "2026-09-03T09:00:00.000Z",
+    });
+
+    assert.equal(
+      await context.repository.getLatestImportAt("tradefoto.artikel_stamm"),
+      "2026-09-03T09:00:00.000Z",
+    );
+    assert.equal(
+      await context.repository.getLatestImportAt("manual.article-catalog"),
+      "2026-09-03T10:00:00.000Z",
+    );
+    assert.equal(await context.repository.getLatestImportAt("unseen.source"), null);
+  } finally {
+    await context.close();
   }
 });
 
