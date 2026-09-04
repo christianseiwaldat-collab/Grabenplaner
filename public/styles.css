@@ -339,6 +339,13 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .sales-analytics-desktop-workspace { display:grid; gap:16px; }
 .sales-article-catalog-view,.crm-view { min-width:0; }
 .article-catalog-dashboard-symbol { font-size:10px; font-weight:950; letter-spacing:-.04em; }
+.sales-article-catalog-heading { min-width:0; }
+.sales-article-last-import { display:inline-flex; align-items:center; gap:7px; min-height:28px; margin:10px 0 0; padding:4px 10px; border:1px solid var(--line); border-radius:999px; color:var(--ink); background:var(--surface); font-size:8px; line-height:1.2; }
+.sales-article-last-import > span { color:var(--muted); font-weight:700; }
+.sales-article-last-import time { font-weight:850; font-variant-numeric:tabular-nums; }
+.sales-article-last-import.loading time,.sales-article-last-import.empty time { color:var(--muted); font-weight:700; }
+.sales-article-last-import.error { border-color:color-mix(in srgb,var(--danger-ink) 24%,var(--line)); }
+.sales-article-last-import.error time { color:var(--danger-ink); }
 .sales-article-catalog-workspace { display:grid; min-width:0; gap:15px; }
 .sales-article-search-shell { min-width:0; padding:18px 20px; border:1px solid var(--line); border-radius:17px; background:var(--surface); box-shadow:var(--shadow); }
 .sales-article-search-heading { display:flex; align-items:start; justify-content:space-between; gap:18px; margin-bottom:13px; }
@@ -533,6 +540,10 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .sales-article-import-file-button { display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
 .sales-article-import-file-button:focus-within { outline:3px solid color-mix(in srgb,var(--green) 30%,transparent); outline-offset:2px; }
 .sales-article-import-file-name { grid-column:1 / -1; margin:0 !important; padding-top:9px; border-top:1px solid var(--line); overflow-wrap:anywhere; }
+.sales-article-import-password { grid-column:1 / -1; display:grid; grid-template-columns:minmax(240px,360px) minmax(0,1fr); align-items:end; gap:12px 18px; padding-top:9px; border-top:1px solid var(--line); }
+.sales-article-import-password.hidden { display:none; }
+.sales-article-import-password .field { margin:0; }
+.sales-article-import-password p { margin:0 0 5px !important; }
 .sales-article-import-dialog .message { margin:0; padding:10px 12px; border:1px solid var(--line); border-radius:9px; color:var(--muted); background:var(--surface-soft); font-size:8.5px; line-height:1.45; }
 .sales-article-import-dialog .message.error { color:var(--danger-ink,#9b3327); border-color:color-mix(in srgb,var(--coral) 40%,var(--line)); background:color-mix(in srgb,var(--coral) 8%,var(--surface)); }
 .sales-article-import-preview { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:13px; background:var(--surface); }
@@ -570,11 +581,13 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
   .sales-article-editor-price-columns { grid-template-columns:1fr; }
   .sales-article-import-source { grid-template-columns:1fr; }
   .sales-article-import-file-actions { justify-content:flex-start; }
+  .sales-article-import-password { grid-template-columns:1fr; align-items:start; }
 }
 @media (max-width:820px) and (any-pointer:fine) {
   .sales-article-table-scroll { height:calc(var(--sales-article-header-height) + (10 * var(--sales-article-row-height)) + 18px); min-height:calc(var(--sales-article-header-height) + (10 * var(--sales-article-row-height)) + 18px); max-height:calc(var(--sales-article-header-height) + (10 * var(--sales-article-row-height)) + 18px); }
 }
 @media (max-width:650px) {
+  .sales-article-last-import { align-items:flex-start; flex-direction:column; gap:2px; border-radius:11px; }
   .sales-article-search-shell { padding:14px; }
   .sales-article-search-form { grid-template-columns:1fr; padding:10px; }
   .sales-article-search-actions { display:grid; grid-template-columns:1fr; }

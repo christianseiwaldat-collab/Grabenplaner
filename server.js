@@ -330,6 +330,13 @@ const {
   inspectTradeFotoArticleImportPayload,
 } = require("./lib/tradefoto-article-import");
 const {
+  TRADEFOTO_ACCDB_IMPORT_MAX_BYTES,
+  TRADEFOTO_ACCDB_IMPORT_MIME_TYPE,
+  TRADEFOTO_ACCDB_PASSWORD_MAX_BYTES,
+  inspectTradeFotoAccdbBufferInWorker,
+  normalizeTradeFotoAccdbPassword,
+} = require("./lib/tradefoto-accdb-import");
+const {
   LoanWorkflowError,
   MAX_LOAN_ITEMS,
   normalizeLoanCondition,
@@ -36182,6 +36189,38 @@ function salesArticleImportRawBody(request, response, next) {
   });
 }
 
+function salesArticleAccdbRawBody(request, response, next) {
+  express.raw({
+    type: () => true,
+    limit: TRADEFOTO_ACCDB_IMPORT_MAX_BYTES,
+  })(request, response, (error) => {
+    if (error) request.salesArticleAccdbPassword = "";
+    if (error?.type === "entity.too.large") {
+      next(httpError(
+        413,
+        "Die TradeFoto-Datenbank ist größer als 256 MiB.",
+        "SALES_ARTICLE_ACCDB_FILE_SIZE_INVALID",
+      ));
+      return;
+    }
+    next(error);
+  });
+}
+
+function consumeSensitiveRequestHeader(request, headerName) {
+  const lowerName = headerName.toLowerCase();
+  const value = String(request.headers?.[lowerName] || "");
+  if (request.headers) delete request.headers[lowerName];
+  if (Array.isArray(request.rawHeaders)) {
+    for (let index = 0; index < request.rawHeaders.length - 1; index += 2) {
+      if (String(request.rawHeaders[index] || "").toLowerCase() === lowerName) {
+        request.rawHeaders[index + 1] = "";
+      }
+    }
+  }
+  return value;
+}
+
 function requireSalesArticleImportMutation(request, _response, next) {
   try {
     request.salesArticleImportSession = salesArticleCatalogSession(
@@ -36212,6 +36251,59 @@ function requireSalesArticleImportMutation(request, _response, next) {
     }
     next();
   } catch (error) {
+    next(error);
+  }
+}
+
+function requireSalesArticleAccdbImportMutation(request, _response, next) {
+  const encodedPassword = consumeSensitiveRequestHeader(
+    request,
+    "X-TradeFoto-Database-Password",
+  );
+  try {
+    request.salesArticleImportSession = salesArticleCatalogSession(
+      request,
+      SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT,
+    );
+    assertPortalCsrf(request);
+    const contentType = String(request.get("Content-Type") || "")
+      .split(";", 1)[0].trim().toLowerCase();
+    if (contentType !== TRADEFOTO_ACCDB_IMPORT_MIME_TYPE) {
+      throw httpError(
+        415,
+        "Für den direkten Datenbankimport ist ausschließlich eine TradeFoto-ACCDB-Datei erlaubt.",
+        "SALES_ARTICLE_IMPORT_CONTENT_TYPE_UNSUPPORTED",
+      );
+    }
+    const contentLength = request.get("Content-Length");
+    if (contentLength !== undefined) {
+      const declaredLength = Number(contentLength);
+      if (!Number.isSafeInteger(declaredLength) || declaredLength < 0
+        || declaredLength > TRADEFOTO_ACCDB_IMPORT_MAX_BYTES) {
+        throw httpError(
+          413,
+          "Die TradeFoto-Datenbank ist größer als 256 MiB oder hat eine ungültige Größenangabe.",
+          "SALES_ARTICLE_ACCDB_FILE_SIZE_INVALID",
+        );
+      }
+    }
+    let password;
+    try {
+      password = decodeURIComponent(encodedPassword);
+    } catch {
+      throw httpError(
+        400,
+        "Das TradeFoto-Datenbank-Passwort hat ein ungültiges Format.",
+        "SALES_ARTICLE_ACCDB_PASSWORD_INVALID",
+      );
+    }
+    request.salesArticleAccdbPassword = normalizeTradeFotoAccdbPassword(password);
+    next();
+  } catch (error) {
+    if (error instanceof TradeFotoArticleImportError) {
+      next(httpError(error.status, error.message, error.code));
+      return;
+    }
     next(error);
   }
 }
@@ -36251,6 +36343,9 @@ function guardSalesArticleImportHeavyOperation(request, response, next) {
     );
     next();
   } catch (error) {
+    if (request.salesArticleAccdbPassword !== undefined) {
+      request.salesArticleAccdbPassword = "";
+    }
     next(error);
   }
 }
@@ -36273,6 +36368,127 @@ function requireSalesArticleImportApply(request, response, next) {
   }
 }
 
+async function buildSalesArticleImportPreview(session, prepared) {
+  let inspectedRows = [];
+  if (prepared.normalizedArticles.length) {
+    inspectedRows = (await salesArticleCatalogRepository.inspectImportSnapshot({
+      snapshot: salesArticleImportSnapshot(prepared, prepared.normalizedArticles),
+    })).rows;
+  }
+
+  const findings = [...prepared.findings];
+  const rows = [];
+  const acceptedArticles = [];
+  let readyIndex = 0;
+  let create = 0;
+  let update = 0;
+  let unchanged = 0;
+  for (const row of prepared.rows) {
+    if (row.action === "blocked") {
+      rows.push(row);
+      continue;
+    }
+    const inspection = inspectedRows[readyIndex];
+    const article = prepared.normalizedArticles[readyIndex];
+    readyIndex += 1;
+    const action = inspection?.action || "blocked";
+    const issueCodes = inspection?.issueCodes || ["preview_state_invalid"];
+    rows.push(Object.freeze({ ...row, action, issueCodes }));
+    if (action === "create" || action === "update") {
+      acceptedArticles.push(article);
+      if (action === "create") create += 1;
+      else update += 1;
+    } else if (action === "unchanged") {
+      unchanged += 1;
+    } else {
+      for (const code of issueCodes) {
+        if (findings.length >= 100000) {
+          throw new TradeFotoArticleImportError(
+            "Die Importdatei erzeugt mehr als 100.000 einzelne Prüfhinweise.",
+            "SALES_ARTICLE_IMPORT_FINDING_LIMIT",
+            413,
+          );
+        }
+        findings.push(salesArticleImportFinding(row.rowNumber, row.articleNumber, code));
+      }
+    }
+  }
+
+  const snapshot = salesArticleImportSnapshot(prepared, acceptedArticles);
+  const finalInspection = await salesArticleCatalogRepository.inspectImportSnapshot({ snapshot });
+  const stateSha256 = finalInspection.stateSha256;
+  if (acceptedArticles.length
+    && finalInspection.rows.some(({ action }) => !["create", "update"].includes(action))) {
+    throw httpError(
+      409,
+      "Der Artikelstamm wurde während der Vorschau verändert. Bitte erneut prüfen.",
+      "SALES_ARTICLE_IMPORT_PREVIEW_STALE",
+    );
+  }
+  const quarantined = rows.filter(({ action }) => action === "blocked").length;
+  const summary = Object.freeze({
+    total: rows.length,
+    create,
+    update,
+    unchanged,
+    blocked: quarantined,
+    identifierCount: acceptedArticles.reduce(
+      (sum, article) => sum + article.identifiers.length,
+      0,
+    ),
+    priceCount: acceptedArticles.reduce((sum, article) => sum + article.prices.length, 0),
+  });
+  const encoded = encodeSalesArticleImportSnapshot(snapshot);
+  const confirmationFingerprint = crypto.createHash("sha256").update(JSON.stringify({
+    sourceFileSha256: prepared.source.fileSha256,
+    contentSha256: snapshot.contentSha256,
+    stateSha256,
+    findingCount: findings.length,
+    nonce: crypto.randomBytes(32).toString("hex"),
+  })).digest("hex");
+  salesArticleImportCache.deleteKind(session.employeeNumber, "sales-article-import-preview");
+  const previewSession = salesArticleImportCache.create(
+    session.employeeNumber,
+    "sales-article-import-preview",
+    Object.freeze({
+      snapshotGzipBase64: encoded.gzipBase64,
+      snapshotJsonSha256: encoded.jsonSha256,
+      stateSha256,
+      findings: Object.freeze(findings),
+      confirmationFingerprint,
+      summary,
+      source: prepared.source,
+    }),
+  );
+  return {
+    previewId: previewSession.id,
+    expiresAt: previewSession.expiresAt,
+    confirmationFingerprint,
+    source: prepared.source,
+    summary,
+    rows: safeSalesArticleImportRows(rows),
+    truncated: rows.length > 200,
+    canApply: acceptedArticles.length > 0 || (quarantined > 0 && findings.length > 0),
+  };
+}
+
+app.get("/api/sales/articles/import-status", async (request, response) => {
+  salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  setSalesArticleCatalogPrivateHeaders(response);
+  if (Object.keys(request.query || {}).length) {
+    throw httpError(
+      400,
+      "Der Status des Artikelimports akzeptiert keine Suchparameter.",
+      "SALES_ARTICLE_IMPORT_STATUS_INVALID",
+    );
+  }
+  response.json({
+    lastImportAt: await salesArticleCatalogRepository.getLatestImportAt(
+      TRADEFOTO_ARTICLE_SOURCE_SYSTEM,
+    ),
+  });
+});
+
 app.get("/api/sales/articles/import/catalog", (request, response) => {
   salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT);
   setSalesArticleCatalogPrivateHeaders(response);
@@ -36280,6 +36496,10 @@ app.get("/api/sales/articles/import/catalog", (request, response) => {
     format: TRADEFOTO_ARTICLE_IMPORT_FORMAT,
     mimeType: TRADEFOTO_ARTICLE_IMPORT_MIME_TYPE,
     maxBytes: TRADEFOTO_ARTICLE_IMPORT_MAX_BYTES,
+    databaseUpload: true,
+    databaseMimeType: TRADEFOTO_ACCDB_IMPORT_MIME_TYPE,
+    maxDatabaseBytes: TRADEFOTO_ACCDB_IMPORT_MAX_BYTES,
+    maxDatabasePasswordBytes: TRADEFOTO_ACCDB_PASSWORD_MAX_BYTES,
     maxRows: TRADEFOTO_ARTICLE_IMPORT_MAX_ROWS,
     maxWorkUnits: TRADEFOTO_ARTICLE_IMPORT_MAX_WORK_UNITS,
     sourceSystem: TRADEFOTO_ARTICLE_SOURCE_SYSTEM,
@@ -36330,110 +36550,68 @@ app.post(
         request.body = null;
       }
       const prepared = inspectTradeFotoArticleImportPayload(decodedImport);
-      let inspectedRows = [];
-      if (prepared.normalizedArticles.length) {
-        inspectedRows = (await salesArticleCatalogRepository.inspectImportSnapshot({
-          snapshot: salesArticleImportSnapshot(prepared, prepared.normalizedArticles),
-        })).rows;
-      }
-
-      const findings = [...prepared.findings];
-      const rows = [];
-      const acceptedArticles = [];
-      let readyIndex = 0;
-      let create = 0;
-      let update = 0;
-      let unchanged = 0;
-      for (const row of prepared.rows) {
-        if (row.action === "blocked") {
-          rows.push(row);
-          continue;
-        }
-        const inspection = inspectedRows[readyIndex];
-        const article = prepared.normalizedArticles[readyIndex];
-        readyIndex += 1;
-        const action = inspection?.action || "blocked";
-        const issueCodes = inspection?.issueCodes || ["preview_state_invalid"];
-        rows.push(Object.freeze({ ...row, action, issueCodes }));
-        if (action === "create" || action === "update") {
-          acceptedArticles.push(article);
-          if (action === "create") create += 1;
-          else update += 1;
-        } else if (action === "unchanged") {
-          unchanged += 1;
-        } else {
-          for (const code of issueCodes) {
-            if (findings.length >= 100000) {
-              throw new TradeFotoArticleImportError(
-                "Die Importdatei erzeugt mehr als 100.000 einzelne Prüfhinweise.",
-                "SALES_ARTICLE_IMPORT_FINDING_LIMIT",
-                413,
-              );
-            }
-            findings.push(salesArticleImportFinding(row.rowNumber, row.articleNumber, code));
-          }
-        }
-      }
-
-      const snapshot = salesArticleImportSnapshot(prepared, acceptedArticles);
-      const finalInspection = await salesArticleCatalogRepository.inspectImportSnapshot({ snapshot });
-      const stateSha256 = finalInspection.stateSha256;
-      if (acceptedArticles.length) {
-        if (finalInspection.rows.some(({ action }) => !["create", "update"].includes(action))) {
-          throw httpError(
-            409,
-            "Der Artikelstamm wurde während der Vorschau verändert. Bitte erneut prüfen.",
-            "SALES_ARTICLE_IMPORT_PREVIEW_STALE",
-          );
-        }
-      }
-      const quarantined = rows.filter(({ action }) => action === "blocked").length;
-      const summary = Object.freeze({
-        total: rows.length,
-        create,
-        update,
-        unchanged,
-        blocked: quarantined,
-        identifierCount: acceptedArticles.reduce(
-          (sum, article) => sum + article.identifiers.length,
-          0,
-        ),
-        priceCount: acceptedArticles.reduce((sum, article) => sum + article.prices.length, 0),
-      });
-      const encoded = encodeSalesArticleImportSnapshot(snapshot);
-      const confirmationFingerprint = crypto.createHash("sha256").update(JSON.stringify({
-        sourceFileSha256: prepared.source.fileSha256,
-        contentSha256: snapshot.contentSha256,
-        stateSha256,
-        findingCount: findings.length,
-        nonce: crypto.randomBytes(32).toString("hex"),
-      })).digest("hex");
-      salesArticleImportCache.deleteKind(session.employeeNumber, "sales-article-import-preview");
-      const previewSession = salesArticleImportCache.create(
-        session.employeeNumber,
-        "sales-article-import-preview",
-        Object.freeze({
-          snapshotGzipBase64: encoded.gzipBase64,
-          snapshotJsonSha256: encoded.jsonSha256,
-          stateSha256,
-          findings: Object.freeze(findings),
-          confirmationFingerprint,
-          summary,
-          source: prepared.source,
-        }),
-      );
-      response.status(201).json({
-        previewId: previewSession.id,
-        expiresAt: previewSession.expiresAt,
-        confirmationFingerprint,
-        source: prepared.source,
-        summary,
-        rows: safeSalesArticleImportRows(rows),
-        truncated: rows.length > 200,
-        canApply: acceptedArticles.length > 0 || (quarantined > 0 && findings.length > 0),
-      });
+      response.status(201).json(await buildSalesArticleImportPreview(session, prepared));
     } catch (error) {
       salesArticleImportError(error);
+    }
+  },
+);
+
+app.post(
+  "/api/sales/articles/import/database-preview",
+  requireSalesArticleAccdbImportMutation,
+  guardSalesArticleImportHeavyOperation,
+  salesArticleAccdbRawBody,
+  async (request, response) => {
+    const session = request.salesArticleImportSession;
+    setSalesArticleCatalogPrivateHeaders(response);
+    let databaseBytes = request.body;
+    let databasePassword = request.salesArticleAccdbPassword;
+    request.body = null;
+    request.salesArticleAccdbPassword = "";
+    const inspectionAbortController = new AbortController();
+    const abortInspection = () => inspectionAbortController.abort();
+    request.once("aborted", abortInspection);
+    response.once("close", abortInspection);
+    try {
+      if (!Buffer.isBuffer(databaseBytes)) {
+        throw new TradeFotoArticleImportError(
+          "Die TradeFoto-Datenbank konnte nicht unverändert gelesen werden.",
+          "SALES_ARTICLE_ACCDB_PASSWORD_OR_FILE_INVALID",
+        );
+      }
+      let fileName;
+      try {
+        fileName = decodeURIComponent(String(
+          request.get("X-Import-Filename") || "Trade_Daten.accdb",
+        ));
+      } catch {
+        throw new TradeFotoArticleImportError(
+          "Bitte eine gültige TradeFoto-ACCDB-Datei auswählen.",
+          "SALES_ARTICLE_ACCDB_FILENAME_INVALID",
+          400,
+        );
+      }
+      const inspection = inspectTradeFotoAccdbBufferInWorker(databaseBytes, {
+        fileName,
+        password: databasePassword,
+        signal: inspectionAbortController.signal,
+      });
+      databaseBytes = null;
+      databasePassword = "";
+      const prepared = await inspection;
+      response.status(201).json(await buildSalesArticleImportPreview(session, prepared));
+    } catch (error) {
+      salesArticleImportError(error);
+    } finally {
+      request.off("aborted", abortInspection);
+      response.off("close", abortInspection);
+      if (Buffer.isBuffer(databaseBytes) && databaseBytes.byteLength) {
+        databaseBytes.fill(0);
+      }
+      databaseBytes = null;
+      databasePassword = "";
+      request.salesArticleAccdbPassword = "";
     }
   },
 );

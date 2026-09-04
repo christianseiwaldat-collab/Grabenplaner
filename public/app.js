@@ -412,6 +412,11 @@ const state = {
     importCatalog: null,
     importCatalogPending: false,
     importCatalogRequestId: 0,
+    lastImportAt: null,
+    lastImportLoaded: false,
+    lastImportLoading: false,
+    lastImportError: "",
+    lastImportRequestId: 0,
     importPreview: null,
     importPreviewPending: false,
     importApplyPending: false,
@@ -751,7 +756,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchIdentifier", "salesArticleSearchStatusFilter", "salesArticleSearchSourceSystem", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
+    "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchIdentifier", "salesArticleSearchStatusFilter", "salesArticleSearchSourceSystem", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
@@ -2977,6 +2982,9 @@ function applyRoleVisibility() {
   applySalesArticleCatalogReadState(salesArticleCatalogReadAccess);
   applySalesArticleCatalogManagementState(salesArticleCatalogWriteAccess);
   if (!salesArticleCatalogAccess && state.currentView === "articleCatalog") setView("startDashboard");
+  if (salesArticleCatalogReadAccess && state.currentView === "articleCatalog") {
+    void loadSalesArticleLastImport();
+  }
   if (!crmAccess && state.currentView === "crm") setView("startDashboard");
   if (!salesArticleCatalogReadAccess && (state.salesArticleCatalog.searchStarted || state.salesArticleCatalog.items.length)) {
     clearSalesArticleCatalogState("Artikeldaten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
@@ -29045,6 +29053,8 @@ const SALES_ARTICLE_CATALOG_COLUMNS = Object.freeze([
 const SALES_ARTICLE_CATALOG_SORT_KEYS = new Set(SALES_ARTICLE_CATALOG_COLUMNS.map(({ id }) => id));
 const SALES_ARTICLE_IMPORT_MIME = "application/vnd.grabenplaner.tradefoto-articles+json";
 const SALES_ARTICLE_IMPORT_DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
+const SALES_ARTICLE_ACCDB_IMPORT_MIME = "application/vnd.grabenplaner.tradefoto-articles+accdb";
+const SALES_ARTICLE_ACCDB_IMPORT_DEFAULT_MAX_BYTES = 256 * 1024 * 1024;
 const SALES_ARTICLE_IMPORT_ACTION_LABELS = Object.freeze({
   create: "Neu anlegen",
   update: "Aktualisieren",
@@ -29080,6 +29090,18 @@ const SALES_ARTICLE_IMPORT_ERROR_LABELS = Object.freeze({
   SALES_ARTICLE_IMPORT_PREVIEW_STALE: "Der Artikelstamm hat sich seit der Vorschau geändert. Bitte erneut prüfen.",
   SALES_ARTICLE_IMPORT_CONFIRMATION_INVALID: "Die Importbestätigung stimmt nicht mehr mit der Vorschau überein.",
   SALES_ARTICLE_IMPORT_REQUEST_INVALID: "Die Importanfrage ist unvollständig oder ungültig.",
+  SALES_ARTICLE_IMPORT_BUSY: "Ein Artikelimport wird bereits verarbeitet. Bitte in wenigen Sekunden erneut versuchen.",
+  SALES_ARTICLE_ACCDB_FILE_CHANGED: "Die TradeFoto-Datenbank wurde während der Prüfung verändert. Bitte die Datei erneut auswählen.",
+  SALES_ARTICLE_ACCDB_FILE_SIZE_INVALID: "Die TradeFoto-Datenbank ist leer, unvollständig oder überschreitet 256 MB.",
+  SALES_ARTICLE_ACCDB_FILENAME_INVALID: "Bitte eine TradeFoto-Datenbank mit der Dateiendung .accdb auswählen.",
+  SALES_ARTICLE_ACCDB_PASSWORD_INVALID: "Das Datenbank-Passwort hat ein ungültiges Format.",
+  SALES_ARTICLE_ACCDB_PASSWORD_OR_FILE_INVALID: "Die TradeFoto-Datenbank konnte mit diesem Passwort nicht sicher geöffnet werden.",
+  SALES_ARTICLE_ACCDB_PASSWORD_REQUIRED: "Bitte das Passwort der verschlüsselten TradeFoto-Datenbank eingeben.",
+  SALES_ARTICLE_ACCDB_REQUEST_ABORTED: "Die Prüfung der TradeFoto-Datenbank wurde abgebrochen.",
+  SALES_ARTICLE_ACCDB_RELATION_INVALID: "Die TradeFoto-Datenbank enthält widersprüchliche Artikel- oder Zweit-EAN-Bezüge.",
+  SALES_ARTICLE_ACCDB_ROW_INVALID: "Mindestens ein TradeFoto-Feld konnte nicht sicher gelesen werden.",
+  SALES_ARTICLE_ACCDB_SCHEMA_MISMATCH: "Die TradeFoto-Datenbank weicht vom freigegebenen Quellschema ab.",
+  SALES_ARTICLE_ACCDB_TIMEOUT: "Die Prüfung der TradeFoto-Datenbank hat das sichere Zeitlimit überschritten.",
 });
 const SALES_ARTICLE_CATALOG_HEADER_HEIGHT = 42;
 const SALES_ARTICLE_CATALOG_ROW_HEIGHT = 39;
@@ -29176,6 +29198,103 @@ function salesArticleCatalogTimestamp(value, fallback = "–") {
     dateStyle: "short",
     timeStyle: "short",
   }).format(parsed);
+}
+
+function renderSalesArticleLastImport() {
+  const catalog = state.salesArticleCatalog;
+  const container = elements.salesArticleLastImport;
+  const value = elements.salesArticleLastImportValue;
+  if (!container || !value) return;
+
+  let label = "Wird geladen …";
+  let stateClass = "loading";
+  let dateTime = "";
+  if (!canReadSalesArticles()) {
+    label = "Nicht verfügbar";
+    stateClass = "empty";
+  } else if (catalog.lastImportLoading) {
+    label = "Wird geladen …";
+  } else if (catalog.lastImportError) {
+    label = "Status nicht verfügbar";
+    stateClass = "error";
+  } else if (!catalog.lastImportLoaded) {
+    label = "Wird geladen …";
+  } else if (!catalog.lastImportAt) {
+    label = "Noch kein Import";
+    stateClass = "empty";
+  } else {
+    label = salesArticleCatalogTimestamp(catalog.lastImportAt, "Zeitpunkt unbekannt");
+    dateTime = catalog.lastImportAt;
+    stateClass = "ready";
+  }
+
+  value.textContent = label;
+  if (dateTime) value.setAttribute("datetime", dateTime);
+  else value.removeAttribute("datetime");
+  container.classList.remove("loading", "ready", "empty", "error");
+  container.classList.add(stateClass);
+  container.title = catalog.lastImportError
+    ? "Der Zeitpunkt des letzten Imports konnte nicht geladen werden."
+    : "";
+}
+
+function resetSalesArticleLastImportState() {
+  const catalog = state.salesArticleCatalog;
+  catalog.lastImportRequestId += 1;
+  Object.assign(catalog, {
+    lastImportAt: null,
+    lastImportLoaded: false,
+    lastImportLoading: false,
+    lastImportError: "",
+  });
+  renderSalesArticleLastImport();
+}
+
+async function loadSalesArticleLastImport({ force = false } = {}) {
+  const catalog = state.salesArticleCatalog;
+  if (!canReadSalesArticles()) {
+    resetSalesArticleLastImportState();
+    return;
+  }
+  if (!force && (catalog.lastImportLoading || catalog.lastImportLoaded)) {
+    renderSalesArticleLastImport();
+    return;
+  }
+
+  const actorKey = currentSalesArticleCatalogActorKey();
+  const requestId = ++catalog.lastImportRequestId;
+  catalog.lastImportLoading = true;
+  catalog.lastImportError = "";
+  renderSalesArticleLastImport();
+  try {
+    const payload = await api("/api/sales/articles/import-status");
+    if (requestId !== catalog.lastImportRequestId
+      || actorKey !== currentSalesArticleCatalogActorKey()
+      || !canReadSalesArticles()) return;
+    const lastImportAt = payload?.lastImportAt;
+    if (lastImportAt !== null && (
+      typeof lastImportAt !== "string"
+      || Number.isNaN(new Date(lastImportAt).getTime())
+    )) {
+      throw new Error("Der Importstatus enthält keinen gültigen Zeitpunkt.");
+    }
+    catalog.lastImportAt = lastImportAt;
+    catalog.lastImportLoaded = true;
+  } catch (error) {
+    if (requestId !== catalog.lastImportRequestId
+      || actorKey !== currentSalesArticleCatalogActorKey()
+      || !canReadSalesArticles()) return;
+    catalog.lastImportAt = null;
+    catalog.lastImportLoaded = false;
+    catalog.lastImportError = error.message || "Der Importstatus konnte nicht geladen werden.";
+  } finally {
+    if (requestId === catalog.lastImportRequestId
+      && actorKey === currentSalesArticleCatalogActorKey()
+      && canReadSalesArticles()) {
+      catalog.lastImportLoading = false;
+      renderSalesArticleLastImport();
+    }
+  }
 }
 
 function normalizeSalesArticleDetailIdentifier(value = {}) {
@@ -29653,27 +29772,48 @@ function salesArticleImportErrorMessage(error) {
 function normalizeSalesArticleImportCatalog(payload = {}) {
   if (String(payload?.format || "") !== "grabenplaner.tradefoto.article-catalog.v1"
     || String(payload?.mimeType || "") !== SALES_ARTICLE_IMPORT_MIME
+    || payload?.databaseUpload !== true
+    || String(payload?.databaseMimeType || "") !== SALES_ARTICLE_ACCDB_IMPORT_MIME
     || String(payload?.sourceSystem || "") !== "tradefoto.artikel_stamm"
     || String(payload?.sourceProfileVersion || "") !== "tradefoto-article-v1"
     || !/^[a-f0-9]{64}$/i.test(String(payload?.sourceSchemaSha256 || ""))) {
     throw new Error("Der serverseitige TradeFoto-Importkatalog ist ungültig.");
   }
   const maxBytes = salesArticleImportInteger(payload.maxBytes, SALES_ARTICLE_IMPORT_DEFAULT_MAX_BYTES);
+  const maxDatabaseBytes = salesArticleImportInteger(
+    payload.maxDatabaseBytes,
+    SALES_ARTICLE_ACCDB_IMPORT_DEFAULT_MAX_BYTES,
+  );
+  const maxDatabasePasswordBytes = salesArticleImportInteger(
+    payload.maxDatabasePasswordBytes,
+    4096,
+  );
   const maxRows = salesArticleImportInteger(payload.maxRows, 100000);
   const maxWorkUnits = salesArticleImportInteger(payload.maxWorkUnits, 10000000);
-  if (!maxBytes || !maxRows || !maxWorkUnits || String(payload.currency || "") !== "EUR") {
+  if (!maxBytes || !maxDatabaseBytes || !maxDatabasePasswordBytes || !maxRows || !maxWorkUnits
+    || String(payload.currency || "") !== "EUR") {
     throw new Error("Der serverseitige TradeFoto-Importkatalog ist unvollständig.");
   }
   return {
     format: String(payload.format),
     mimeType: String(payload.mimeType),
     maxBytes,
+    databaseMimeType: String(payload.databaseMimeType),
+    maxDatabaseBytes,
+    maxDatabasePasswordBytes,
     maxRows,
     maxWorkUnits,
     sourceSystem: String(payload.sourceSystem),
     sourceProfileVersion: String(payload.sourceProfileVersion),
     sourceSchemaSha256: String(payload.sourceSchemaSha256).toLowerCase(),
   };
+}
+
+function salesArticleImportFileKind(file) {
+  const name = String(file?.name || "").trim().toLowerCase();
+  if (name.endsWith(".accdb")) return "database";
+  if (name.endsWith(".json")) return "json";
+  return "";
 }
 
 function normalizeSalesArticleImportPreview(payload = {}) {
@@ -29772,6 +29912,9 @@ function renderSalesArticleImport() {
   const importAllowed = canImportSalesArticles();
   const busy = catalog.importCatalogPending || catalog.importPreviewPending || catalog.importApplyPending;
   const selectedFile = elements.salesArticleImportFile?.files?.[0] || null;
+  const selectedFileKind = salesArticleImportFileKind(selectedFile);
+  const needsDatabasePassword = selectedFileKind === "database";
+  const hasDatabasePassword = Boolean(elements.salesArticleImportDatabasePassword?.value);
   if (elements.salesArticleImportButton) {
     elements.salesArticleImportButton.classList.toggle("hidden", !importAllowed);
     elements.salesArticleImportButton.disabled = !importAllowed || busy;
@@ -29781,14 +29924,27 @@ function renderSalesArticleImport() {
   }
   if (elements.salesArticleImportFileName) {
     elements.salesArticleImportFileName.textContent = selectedFile
-      ? `${selectedFile.name} · ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(selectedFile.size / 1024 / 1024)} MB`
+      ? `${selectedFile.name} · ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(selectedFile.size / 1024 / 1024)} MB · ${selectedFileKind === "database" ? "direkte Datenbankprüfung" : selectedFileKind === "json" ? "vorbereiteter JSON-Import" : "nicht unterstützter Dateityp"}`
       : "Noch keine Datei ausgewählt.";
+  }
+  elements.salesArticleImportDatabasePasswordField?.classList.toggle(
+    "hidden",
+    !needsDatabasePassword,
+  );
+  if (elements.salesArticleImportDatabasePassword) {
+    setAdminCredentialDisabled(elements.salesArticleImportDatabasePassword, !importAllowed
+      || busy
+      || !catalog.importCatalog
+      || !needsDatabasePassword);
+    elements.salesArticleImportDatabasePassword.required = needsDatabasePassword;
   }
   if (elements.salesArticleImportPreviewButton) {
     elements.salesArticleImportPreviewButton.disabled = !importAllowed
       || busy
       || !catalog.importCatalog
-      || !selectedFile;
+      || !selectedFile
+      || !selectedFileKind
+      || (needsDatabasePassword && !hasDatabasePassword);
     elements.salesArticleImportPreviewButton.textContent = catalog.importPreviewPending
       ? "Datei wird geprüft …"
       : "Vorschau prüfen";
@@ -29858,6 +30014,9 @@ function clearSalesArticleImportPreviewState({ clearFile = true, message = "" } 
   catalog.importRejectedCount = 0;
   catalog.importFailureCode = "";
   if (clearFile && elements.salesArticleImportFile) elements.salesArticleImportFile.value = "";
+  if (clearFile && elements.salesArticleImportDatabasePassword) {
+    elements.salesArticleImportDatabasePassword.value = "";
+  }
   if (elements.salesArticleImportConfirmed) elements.salesArticleImportConfirmed.checked = false;
   setSalesArticleImportMessage(message);
   renderSalesArticleImport();
@@ -29907,7 +30066,7 @@ async function loadSalesArticleImportCatalog() {
     const payload = await api("/api/sales/articles/import/catalog");
     if (requestId !== catalog.importCatalogRequestId || !salesArticleImportContextIsCurrent(context)) return;
     catalog.importCatalog = normalizeSalesArticleImportCatalog(payload);
-    setSalesArticleImportMessage(`Bereit für UTF-8-JSON mit höchstens ${new Intl.NumberFormat("de-AT").format(catalog.importCatalog.maxRows)} Artikeln und ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 0 }).format(catalog.importCatalog.maxBytes / 1024 / 1024)} MB. Das serverseitige Arbeitsbudget wird vor der Detailprüfung zusätzlich kontrolliert.`);
+    setSalesArticleImportMessage(`Bereit für die direkte, rein lesende ACCDB-Prüfung bis ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 0 }).format(catalog.importCatalog.maxDatabaseBytes / 1024 / 1024)} MB oder vorbereitetes UTF-8-JSON bis ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 0 }).format(catalog.importCatalog.maxBytes / 1024 / 1024)} MB. Höchstens ${new Intl.NumberFormat("de-AT").format(catalog.importCatalog.maxRows)} Artikel; das Passwort und die Datenbankdatei werden nicht gespeichert.`);
   } catch (error) {
     if (requestId !== catalog.importCatalogRequestId || !salesArticleImportContextIsCurrent(context)) return;
     catalog.importCatalog = null;
@@ -29936,9 +30095,44 @@ async function previewSalesArticleImport() {
   const file = elements.salesArticleImportFile?.files?.[0];
   if (!file || catalog.importPreviewPending || catalog.importApplyPending || !canImportSalesArticles()) return;
   const contract = catalog.importCatalog;
-  if (!contract || file.size < 1 || file.size > contract.maxBytes) {
+  const fileKind = salesArticleImportFileKind(file);
+  if (!fileKind) {
     catalog.importRejectedCount = 1;
-    catalog.importFailureCode = "SALES_ARTICLE_IMPORT_FILE_SIZE_INVALID";
+    catalog.importFailureCode = "SALES_ARTICLE_IMPORT_CONTENT_TYPE_UNSUPPORTED";
+    setSalesArticleImportMessage(SALES_ARTICLE_IMPORT_ERROR_LABELS[catalog.importFailureCode], true);
+    renderSalesArticleImport();
+    return;
+  }
+  const maximumBytes = fileKind === "database" ? contract?.maxDatabaseBytes : contract?.maxBytes;
+  if (!contract || file.size < 1 || file.size > maximumBytes) {
+    catalog.importRejectedCount = 1;
+    catalog.importFailureCode = fileKind === "database"
+      ? "SALES_ARTICLE_ACCDB_FILE_SIZE_INVALID"
+      : "SALES_ARTICLE_IMPORT_FILE_SIZE_INVALID";
+    setSalesArticleImportMessage(SALES_ARTICLE_IMPORT_ERROR_LABELS[catalog.importFailureCode], true);
+    renderSalesArticleImport();
+    return;
+  }
+  let databasePassword = fileKind === "database"
+    ? String(elements.salesArticleImportDatabasePassword?.value || "")
+    : "";
+  if (fileKind === "database" && !databasePassword) {
+    catalog.importRejectedCount = 1;
+    catalog.importFailureCode = "SALES_ARTICLE_ACCDB_PASSWORD_REQUIRED";
+    setSalesArticleImportMessage(SALES_ARTICLE_IMPORT_ERROR_LABELS[catalog.importFailureCode], true);
+    elements.salesArticleImportDatabasePassword?.focus();
+    renderSalesArticleImport();
+    return;
+  }
+  if (fileKind === "database"
+    && new TextEncoder().encode(databasePassword).length > contract.maxDatabasePasswordBytes) {
+    databasePassword = "";
+    if (elements.salesArticleImportDatabasePassword) {
+      elements.salesArticleImportDatabasePassword.value = "";
+      elements.salesArticleImportDatabasePassword.focus();
+    }
+    catalog.importRejectedCount = 1;
+    catalog.importFailureCode = "SALES_ARTICLE_ACCDB_PASSWORD_INVALID";
     setSalesArticleImportMessage(SALES_ARTICLE_IMPORT_ERROR_LABELS[catalog.importFailureCode], true);
     renderSalesArticleImport();
     return;
@@ -29950,14 +30144,25 @@ async function previewSalesArticleImport() {
   const context = captureSalesArticleImportContext();
   const requestId = ++catalog.importRequestId;
   catalog.importPreviewPending = true;
-  setSalesArticleImportMessage("Datei wird ohne Datenänderung geprüft …");
+  setSalesArticleImportMessage(fileKind === "database"
+    ? "TradeFoto-Datenbank wird rein lesend geöffnet, extrahiert und ohne Datenänderung geprüft …"
+    : "Exportdatei wird ohne Datenänderung geprüft …");
   renderSalesArticleImport();
   try {
-    const response = await rawApi("/api/sales/articles/import/preview", {
+    const response = await rawApi(fileKind === "database"
+      ? "/api/sales/articles/import/database-preview"
+      : "/api/sales/articles/import/preview", {
       method: "POST",
       headers: {
-        "Content-Type": SALES_ARTICLE_IMPORT_MIME,
-        "X-Import-Filename": encodeURIComponent(file.name || "tradefoto-artikel.json"),
+        "Content-Type": fileKind === "database"
+          ? contract.databaseMimeType
+          : contract.mimeType,
+        "X-Import-Filename": encodeURIComponent(file.name || (fileKind === "database"
+          ? "Trade_Daten.accdb"
+          : "tradefoto-artikel.json")),
+        ...(fileKind === "database" ? {
+          "X-TradeFoto-Database-Password": encodeURIComponent(databasePassword),
+        } : {}),
       },
       body: file,
     });
@@ -29990,6 +30195,10 @@ async function previewSalesArticleImport() {
     catalog.importFailureCode = String(error?.code || "");
     setSalesArticleImportMessage(salesArticleImportErrorMessage(error), true);
   } finally {
+    databasePassword = "";
+    if (elements.salesArticleImportDatabasePassword) {
+      elements.salesArticleImportDatabasePassword.value = "";
+    }
     if (requestId === catalog.importRequestId && salesArticleImportContextIsCurrent(context)) {
       catalog.importPreviewPending = false;
       renderSalesArticleImport();
@@ -30029,6 +30238,8 @@ async function applySalesArticleImport(event) {
     if (selectedArticleNumber && salesArticleImportContextIsCurrent(context)) {
       await loadSalesArticleCatalogDetail(selectedArticleNumber);
     }
+    if (!salesArticleImportContextIsCurrent(context)) return;
+    await loadSalesArticleLastImport({ force: true });
     if (!salesArticleImportContextIsCurrent(context)) return;
     const changed = salesArticleImportInteger(appliedSummary.create, 100000)
       + salesArticleImportInteger(appliedSummary.update, 100000);
@@ -30588,6 +30799,7 @@ function renderSalesArticleCatalogRows() {
 
 function renderSalesArticleCatalogResults() {
   const catalog = state.salesArticleCatalog;
+  renderSalesArticleLastImport();
   renderSalesArticleCatalogDetail();
   if (!elements.salesArticleResults || !elements.salesArticleTableBody) return;
   renderSalesArticleCatalogHead();
@@ -30791,12 +31003,14 @@ function syncSalesArticleCatalogActorState() {
   catalog.detailAccessKey = detailAccessKey;
   if (actorChanged) {
     closeSalesArticleManagementDialogs({ restoreFocus: false });
+    resetSalesArticleLastImportState();
     resetSalesArticleCatalogSearch();
     return;
   }
   if (detailAccessChanged) {
     closeSalesArticleManagementDialogs({ restoreFocus: false });
     if (!canReadSalesArticles()) {
+      resetSalesArticleLastImportState();
       resetSalesArticleCatalogSearch(
         "Artikeldaten wurden wegen geänderter Rechte aus der Ansicht entfernt.",
         { error: true },
@@ -30813,6 +31027,7 @@ function syncSalesArticleCatalogActorState() {
 
 function clearSalesArticleCatalogState(message = "") {
   closeSalesArticleManagementDialogs({ restoreFocus: false });
+  resetSalesArticleLastImportState();
   resetSalesArticleCatalogSearch(
     message || "Suchbegriff eingeben oder die erweiterte Suche verwenden.",
     { error: Boolean(message) },
@@ -30834,6 +31049,7 @@ function applySalesArticleCatalogReadState(canRead = canReadSalesArticles()) {
   } else if (!canRead && !state.salesArticleCatalog.searchStarted) {
     setSalesArticleCatalogStatus("Für die Artikelsuche fehlt das Leserecht „sales:articles:read“.", true);
   }
+  renderSalesArticleLastImport();
 }
 
 function applySalesArticleCatalogManagementState(canWrite = canWriteSalesArticles()) {
@@ -33642,7 +33858,10 @@ function setView(view) {
   if (view === "branchOrders") loadBranchOrdersManagement();
   if (view === "startDashboard") loadStartDashboard();
   if (view === "salesAnalytics") loadSalesAnalytics();
-  if (view === "articleCatalog") renderSalesArticleCatalogResults();
+  if (view === "articleCatalog") {
+    renderSalesArticleCatalogResults();
+    void loadSalesArticleLastImport({ force: true });
+  }
   if (view === "crm") {
     syncCrmCustomerWorkspace(Boolean(state.crm.selectedCustomer || state.crm.detailLoading));
     loadCrmPreferences().catch((error) => setCrmSearchStatus(error.message, true));
@@ -38762,11 +38981,22 @@ elements.salesArticleCreateButton?.addEventListener("click", () => openSalesArti
 elements.salesArticleImportButton?.addEventListener("click", openSalesArticleImport);
 elements.salesArticleImportFile?.addEventListener("change", () => {
   const file = elements.salesArticleImportFile?.files?.[0];
+  const fileKind = salesArticleImportFileKind(file);
+  if (fileKind !== "database" && elements.salesArticleImportDatabasePassword) {
+    elements.salesArticleImportDatabasePassword.value = "";
+  }
   discardSalesArticleImportPreview({
     clearFile: false,
-    message: file ? "Datei ausgewählt. Erst „Vorschau prüfen“ liest und validiert den Inhalt." : "",
+    message: fileKind === "database"
+      ? "Datenbank ausgewählt. Bitte Passwort eingeben; erst „Vorschau prüfen“ öffnet die Datei rein lesend. Datei und Passwort werden nicht gespeichert."
+      : fileKind === "json"
+        ? "Exportdatei ausgewählt. Erst „Vorschau prüfen“ liest und validiert den Inhalt."
+        : file
+          ? "Dieser Dateityp wird nicht unterstützt. Bitte .accdb oder .json auswählen."
+          : "",
   });
 });
+elements.salesArticleImportDatabasePassword?.addEventListener("input", renderSalesArticleImport);
 elements.salesArticleImportPreviewButton?.addEventListener("click", () => void previewSalesArticleImport());
 elements.salesArticleImportConfirmed?.addEventListener("change", renderSalesArticleImport);
 elements.salesArticleImportReset?.addEventListener("click", () => {

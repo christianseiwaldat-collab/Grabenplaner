@@ -18,7 +18,7 @@ function between(source, start, end) {
   return source.slice(startIndex, endIndex);
 }
 
-test("Importdialog zeigt den bestätigten sicheren Teilimport statt eines direkten Dateiimports", () => {
+test("Importdialog bietet direkte ACCDB-Prüfung und bestätigten sicheren Teilimport", () => {
   const dialog = between(
     html,
     '<dialog class="modal sales-article-import-dialog"',
@@ -28,6 +28,8 @@ test("Importdialog zeigt den bestätigten sicheren Teilimport statt eines direkt
     "salesArticleImportDialog",
     "salesArticleImportForm",
     "salesArticleImportFile",
+    "salesArticleImportDatabasePasswordField",
+    "salesArticleImportDatabasePassword",
     "salesArticleImportPreviewButton",
     "salesArticleImportSummary",
     "salesArticleImportValidCount",
@@ -47,9 +49,44 @@ test("Importdialog zeigt den bestätigten sicheren Teilimport statt eines direkt
   assert.match(dialog, /Ohne ausdrückliche Bestätigung werden keine Artikeldaten verändert/);
   assert.match(dialog, /sichere Teilmenge wird gemeinsam und revisionssicher übernommen/);
   assert.match(dialog, /Konflikt- und Quarantänezeilen bleiben vollständig unangetastet/);
-  assert.match(dialog, /UTF-8-JSON/);
-  assert.doesNotMatch(dialog, /\.accdb|Access-Passwort|Zugangsdaten eingeben/i);
+  assert.match(dialog, /\.accdb/);
+  assert.match(dialog, /vorbereitete(?:n|s)? Grabenplaner-JSON/i);
+  assert.match(dialog, /ausschließlich lesend/);
+  assert.match(dialog, /Passwort wird nur flüchtig/);
+  assert.match(dialog, /id="salesArticleImportDatabasePassword" type="password" autocomplete="current-password"/);
   assert.match(dialog, /id="salesArticleImportApplyButton"[^>]*disabled/);
+});
+
+test("Artikelstamm-Startseite zeigt den letzten TradeFoto-Import oben und aktualisiert ihn nach Apply", () => {
+  const view = between(
+    html,
+    '<section id="salesArticleCatalogView"',
+    '<section id="crmView"',
+  );
+  assert.match(view, /id="salesArticleLastImport"[^>]*aria-live="polite"/);
+  assert.match(view, /Letzter TradeFoto-Import/);
+  assert.match(view, /id="salesArticleLastImportValue"/);
+
+  const loader = between(
+    app,
+    "async function loadSalesArticleLastImport",
+    "function normalizeSalesArticleDetailIdentifier",
+  );
+  assert.match(loader, /canReadSalesArticles\(\)/);
+  assert.match(loader, /api\("\/api\/sales\/articles\/import-status"\)/);
+  assert.match(loader, /currentSalesArticleCatalogActorKey\(\)/);
+  assert.match(loader, /lastImportRequestId/);
+  assert.match(loader, /lastImportAt !== null/);
+
+  const apply = between(
+    app,
+    "async function applySalesArticleImport(event)",
+    "function closeSalesArticleManagementDialogs",
+  );
+  assert.match(apply, /loadSalesArticleLastImport\(\{ force: true \}\)/);
+  assert.match(app, /view === "articleCatalog"[\s\S]{0,180}loadSalesArticleLastImport\(\{ force: true \}\)/);
+  assert.match(styles, /\.sales-article-last-import\s*\{[^}]*display:inline-flex/s);
+  assert.match(styles, /\.sales-article-last-import\.error\s*\{/);
 });
 
 test("Import bleibt ein eigenständiges Recht und wird bei Live-Rechtewechsel geschlossen", () => {
@@ -75,6 +112,10 @@ test("Client bindet sich an MIME, serverseitige Limits und den singularen Währu
   assert.match(normalizer, /tradefoto-article-v1/);
   assert.match(normalizer, /sourceSchemaSha256/);
   assert.match(normalizer, /payload\.maxBytes/);
+  assert.match(normalizer, /payload\?\.databaseUpload/);
+  assert.match(normalizer, /payload\.databaseMimeType/);
+  assert.match(normalizer, /payload\.maxDatabaseBytes/);
+  assert.match(normalizer, /payload\.maxDatabasePasswordBytes/);
   assert.match(normalizer, /payload\.maxRows/);
   assert.match(normalizer, /payload\.maxWorkUnits/);
   assert.match(normalizer, /String\(payload\.currency/);
@@ -87,11 +128,17 @@ test("Client bindet sich an MIME, serverseitige Limits und den singularen Währu
     "async function previewSalesArticleImport() {",
     "async function applySalesArticleImport(event) {",
   );
-  assert.match(preview, /file\.size < 1 \|\| file\.size > contract\.maxBytes/);
-  assert.match(preview, /rawApi\("\/api\/sales\/articles\/import\/preview"/);
-  assert.match(preview, /"Content-Type": SALES_ARTICLE_IMPORT_MIME/);
+  assert.match(preview, /salesArticleImportFileKind\(file\)/);
+  assert.match(preview, /contract\?\.maxDatabaseBytes/);
+  assert.match(preview, /TextEncoder\(\)\.encode\(databasePassword\)\.length > contract\.maxDatabasePasswordBytes/);
+  assert.match(preview, /\/api\/sales\/articles\/import\/database-preview/);
+  assert.match(preview, /\/api\/sales\/articles\/import\/preview/);
+  assert.match(preview, /contract\.databaseMimeType/);
+  assert.match(preview, /contract\.mimeType/);
   assert.match(preview, /"X-Import-Filename": encodeURIComponent\(file\.name/);
+  assert.match(preview, /"X-TradeFoto-Database-Password": encodeURIComponent\(databasePassword\)/);
   assert.match(preview, /body: file/);
+  assert.match(preview, /salesArticleImportDatabasePassword\.value = ""/);
   assert.doesNotMatch(preview, /FileReader|readAsText|JSON\.parse\(/);
 });
 
@@ -187,4 +234,5 @@ test("Importdialog bleibt kompakt, scrollbar und auf schmalen Ansichten bedienba
   assert.match(styles, /\.sales-article-import-summary\s*\{[^}]*grid-template-columns:/s);
   assert.match(styles, /@media \(max-width:900px\)[\s\S]*\.sales-article-import-summary\s*\{[^}]*grid-template-columns:/s);
   assert.match(styles, /@media \(max-width:650px\)[\s\S]*\.sales-article-import-file-actions\s*\{[^}]*grid-template-columns:1fr/s);
+  assert.match(styles, /\.sales-article-import-password\s*\{[^}]*grid-template-columns:/s);
 });

@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.26 Beta · Direkter TradeFoto-Datenbankimport
+
+- Der Artikelstamm kann eine ausdrücklich ausgewählte TradeFoto-ACCDB nun direkt und ausschließlich lesend prüfen. Das Datenbankpasswort und die hochgeladenen Quelldaten bleiben flüchtig und werden weder gespeichert noch protokolliert.
+- Die Access-Extraktion ist auf das freigegebene Tabellen-, Spalten- und Typmodell sowie feste Datei-, Zeilen-, Arbeits- und Zeitgrenzen beschränkt. Ihr Ergebnis durchläuft unverändert dieselbe Vorschau, Quarantäne, Bestätigung und atomare Übernahme wie der weiterhin verfügbare JSON-Import.
+- Oben in der Artikelstamm-Verwaltung ist der Zeitpunkt des zuletzt bestätigten TradeFoto-Imports sichtbar. Dieser lokale Stand startet keinen Import und enthält weiterhin keine importierten TradeFoto-Echtdaten.
+
 ## v0.92.25 Beta · Artikelstamm-Verwaltung und kontrollierter TradeFoto-Import
 
 - Die Verkaufsverwaltung erhält eine suchzentrierte Artikelstamm-Arbeitsfläche mit kompakter, sortierbarer Zehn-Zeilen-Ergebnisliste, stabiler Scrollfläche, erweiterter Suche und vollbreiter Artikelkartei.

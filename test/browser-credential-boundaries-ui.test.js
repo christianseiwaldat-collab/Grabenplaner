@@ -89,12 +89,12 @@ test("Alle statischen und dynamischen Passwortoberflächen fallen unter den zent
   const staticPasswordInputs = [...adminHtml.matchAll(/<input\b[^>]*type="password"[^>]*>/g)];
   const portalPasswordInputs = [...portalHtml.matchAll(/<input\b[^>]*type="password"[^>]*>/g)];
   const dynamicPasswordInputs = [...adminScript.matchAll(/<input\b[^>`]*type="password"[^>`]*>/g)];
-  assert.equal(staticPasswordInputs.length, 16);
+  assert.equal(staticPasswordInputs.length, 17);
   assert.equal(portalPasswordInputs.length, 6);
   assert.equal(dynamicPasswordInputs.length, 3);
   assert.match(boundaries, /function hardenRoot\(root\)[\s\S]*?input\[type="password"\][\s\S]*?forEach\(reconcilePassword\)/);
   assert.match(boundaries, /function surfaceIsActive\(input\)[\s\S]*?dialog && !dialog\.open[\s\S]*?\[hidden\], \.hidden[\s\S]*?getClientRects\(\)\.length === 0/);
-  for (const inputName of ["databaseDownloadCurrentPassword", "vpsRebootCurrentPassword", "offsiteCreateCurrentPassword", "offsiteActivateCurrentPassword"]) {
+  for (const inputName of ["databaseDownloadCurrentPassword", "salesArticleImportDatabasePassword", "vpsRebootCurrentPassword", "offsiteCreateCurrentPassword", "offsiteActivateCurrentPassword"]) {
     assert.match(adminScript, new RegExp(`setAdminCredentialDisabled\\(\\s*elements\\.${inputName}`));
   }
   assert.match(adminHtml, /data-usb-wizard-panel="team" data-gp-credential-preserve-on-hide="true"/);

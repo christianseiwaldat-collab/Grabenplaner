@@ -109,7 +109,7 @@ test("Weitere Seiten werden nur innerhalb der Ergebnisliste stabil nachgeladen",
   assert.match(styles, /\.sales-article-spacer-row td\s*\{[^}]*max-height:none/s);
 
   const setView = between(app, "function setView(view)", "function applyRequestedView()");
-  assert.match(setView, /view === "articleCatalog"\) renderSalesArticleCatalogResults\(\)/);
+  assert.match(setView, /view === "articleCatalog"\) \{[\s\S]*?renderSalesArticleCatalogResults\(\)/);
   assert.doesNotMatch(setView, /view === "articleCatalog"\) loadSalesArticleCatalog/);
   const bootstrap = between(app, "async function bootstrapApplication()", "async function loginToAdministration(event)");
   assert.doesNotMatch(bootstrap, /loadSalesArticleCatalog|\/api\/sales\/articles/);

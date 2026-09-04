@@ -536,12 +536,15 @@ Quellspalten. Neue, fehlende oder typveränderte Felder sowie ein abweichender
 Quellschema-Fingerprint führen fail-closed in die Importprüfung; sie werden nicht
 als scheinbar identischer Snapshot wiederverwendet.
 
-Der kontrollierte Import nimmt ausschließlich das vorbereitete, versionierte
-JSON-Format `grabenplaner.tradefoto.article-catalog.v1` mit dem eigenen MIME-Typ
-entgegen. Ein ACCDB-Extractor, Zugangsdaten oder eine automatische Verbindung zum
-Altsystem sind nicht Bestandteil dieses Stands. Die Extraktion aus einer
-Access-Datei bleibt ein vorgelagerter, ausdrücklich gestarteter Read-only-Schritt;
-erst dessen JSON-Ergebnis darf die Importgrenze passieren.
+Der kontrollierte Import nimmt sowohl das vorbereitete, versionierte JSON-Format
+`grabenplaner.tradefoto.article-catalog.v1` als auch eine ausdrücklich ausgewählte
+TradeFoto-`.accdb` entgegen. Die direkte Datenbankprüfung öffnet die Quelldatei
+ausschließlich lesend in einem begrenzten Worker, liest nur die freigegebenen
+Tabellen und Spalten und erzeugt intern exakt denselben versionierten Datenvertrag.
+Schema-, Typ-, Beziehungs-, Zeilen-, Arbeits- und Zeitgrenzen schließen den Weg
+fail-closed. Das beim Aufruf eingegebene Datenbankpasswort wird weder gespeichert
+noch in Vorschau oder Audit übernommen; auch die hochgeladenen ACCDB-Bytes werden
+nicht persistiert. Eine automatische Verbindung zum Altsystem findet nicht statt.
 
 Vorschau und Übernahme verlangen das getrennte Recht
 `sales:articles:import`; jede Mutation zusätzlich Sessionbindung, Live-Rechte und
@@ -607,8 +610,9 @@ Artikelstammgrenze und keine zweite Artikeltabelle.
 
 Die 18.996 realen Artikel sind mit diesem Arbeitsschritt weiterhin weder importiert
 noch aktiviert. Implementiert sind jetzt die laufbezogene Quarantänepersistenz,
-das Brutto-/Netto-Gate, die ausdrücklich bestätigte atomare Aktivierung und die
-abgegrenzte Rücknahme. Vor einem realen Lauf muss dennoch zuerst außerhalb des
-Grabenplaners das passende versionierte JSON read-only erzeugt und anschließend
-als Vorschau fachlich geprüft werden. Dieser Stand enthält weder einen
-ACCDB-Extractor noch einen Produktivimport und startet keinen Import automatisch.
+das Brutto-/Netto-Gate, die ausdrücklich bestätigte atomare Aktivierung, die
+abgegrenzte Rücknahme und die direkte Read-only-Extraktion aus der ausgewählten
+ACCDB. Ein realer Lauf startet weiterhin niemals automatisch: Erst Vorschau und
+fachliche Prüfung, danach die ausdrückliche Bestätigung, dürfen den sicheren
+Teilbestand aktivieren. Das vorbereitete JSON bleibt als alternative Importquelle
+erhalten.

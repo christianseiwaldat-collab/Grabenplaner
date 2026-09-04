@@ -34,7 +34,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.25 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.26 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1519,7 +1519,7 @@
 
         <section id="salesArticleCatalogView" class="view sales-article-catalog-view" aria-labelledby="salesArticleCatalogTitle">
           <header class="topbar sales-article-catalog-topbar">
-            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p></div>
+            <div class="sales-article-catalog-heading"><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p><p class="sales-article-last-import" id="salesArticleLastImport" aria-live="polite"><span>Letzter TradeFoto-Import</span><time id="salesArticleLastImportValue">Wird geladen …</time></p></div>
             <div class="topbar-actions sales-article-topbar-actions">
               <button class="secondary-button hidden" id="salesArticleActionsLogButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog">Meine Aktionen</button>
               <button class="secondary-button hidden" id="salesArticleImportButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleImportDialog">TradeFoto-Import</button>
@@ -2860,7 +2860,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.25 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.26 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -2957,17 +2957,21 @@
     <dialog class="modal sales-article-import-dialog" id="salesArticleImportDialog" aria-labelledby="salesArticleImportTitle" aria-describedby="salesArticleImportDescription">
       <form id="salesArticleImportForm">
         <div class="modal-header">
-          <div><span class="eyebrow">Kontrollierter Datenabgleich</span><h2 id="salesArticleImportTitle">TradeFoto-Artikel prüfen</h2><p id="salesArticleImportDescription">Eine vorbereitete Exportdatei wird zuerst vollständig geprüft. Ohne ausdrückliche Bestätigung werden keine Artikeldaten verändert.</p></div>
+          <div><span class="eyebrow">Kontrollierter Datenabgleich</span><h2 id="salesArticleImportTitle">TradeFoto-Artikel prüfen</h2><p id="salesArticleImportDescription">Die TradeFoto-Datenbank oder eine vorbereitete Exportdatei wird zuerst vollständig geprüft. Ohne ausdrückliche Bestätigung werden keine Artikeldaten verändert.</p></div>
           <button type="button" class="close-button" data-close-sales-article-import aria-label="TradeFoto-Import schließen">×</button>
         </div>
         <section class="sales-article-import-source" aria-labelledby="salesArticleImportSourceTitle">
-          <div><h3 id="salesArticleImportSourceTitle">Exportdatei</h3><p>Nur das freigegebene Grabenplaner-TradeFoto-Format als UTF-8-JSON auswählen. Zugangsdaten oder eine Verbindung zum Fremdsystem werden nicht benötigt.</p></div>
+          <div><h3 id="salesArticleImportSourceTitle">TradeFoto-Datei</h3><p>Eine <strong>.accdb</strong>-Datenbank wird ausschließlich lesend und nur für diese Prüfung verarbeitet. Alternativ bleibt das vorbereitete Grabenplaner-JSON verfügbar.</p></div>
           <div class="sales-article-import-file-actions">
             <label class="secondary-button sales-article-import-file-button" for="salesArticleImportFile">Datei auswählen</label>
-            <input id="salesArticleImportFile" type="file" accept="application/vnd.grabenplaner.tradefoto-articles+json,.json" />
+            <input id="salesArticleImportFile" type="file" accept="application/vnd.ms-access,application/vnd.grabenplaner.tradefoto-articles+accdb,application/vnd.grabenplaner.tradefoto-articles+json,.accdb,.json" />
             <button class="primary-button" id="salesArticleImportPreviewButton" type="button" disabled>Vorschau prüfen</button>
           </div>
           <p class="sales-article-import-file-name" id="salesArticleImportFileName">Noch keine Datei ausgewählt.</p>
+          <div class="sales-article-import-password hidden" id="salesArticleImportDatabasePasswordField">
+            <label class="field" for="salesArticleImportDatabasePassword"><span>Datenbank-Passwort</span><input id="salesArticleImportDatabasePassword" type="password" autocomplete="current-password" maxlength="255" spellcheck="false" /></label>
+            <p>Das Passwort wird nur flüchtig zum Öffnen dieser Datei verwendet, nicht gespeichert und nicht in die Importvorschau übernommen.</p>
+          </div>
         </section>
         <p class="message hidden" id="salesArticleImportMessage" role="status" aria-live="polite"></p>
         <section class="sales-article-import-preview hidden" id="salesArticleImportPreview" aria-labelledby="salesArticleImportPreviewTitle" aria-busy="false">
