@@ -126,6 +126,24 @@ const PHASE_2_CLASSIFICATION = Object.freeze({
   laterPhase: "2-5",
 });
 const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
+  // Read-only route bridge, composed without a production import source.
+  "lib/sales-history-routes.js",
+  "scripts/verify-tradefoto-test-import.mjs",
+  "lib/persistence/repositories/sales-history-workspace.js",
+  "lib/persistence/repositories/import-history.js",
+  "lib/persistence/sqlite/import-history-catalog.js",
+  "lib/persistence/sqlite/operations/import-history-schema.js",
+  "lib/persistence/statements/import-history.js",
+  // Isolated Block-3 master-data adapters; no production import activation.
+  "lib/persistence/repositories/import-master-data.js",
+  "lib/persistence/sqlite/import-master-catalog.js",
+  "lib/persistence/sqlite/operations/import-master-schema.js",
+  "lib/persistence/statements/import-master-data.js",
+  // Isolated Block-2 import foundation; not part of the application startup catalog.
+  "lib/persistence/repositories/data-import.js",
+  "lib/persistence/sqlite/data-import-catalog.js",
+  "lib/persistence/sqlite/operations/data-import-schema.js",
+  "lib/persistence/statements/data-import.js",
   "lib/persistence/application-repositories.js",
   "lib/persistence/repositories/absence-management.js",
   "lib/persistence/repositories/branding-snapshot.js",
@@ -251,6 +269,10 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "test-support/tradefoto-block6-store.js",
+  "test/tradefoto-history.test.js",
+  "test/tradefoto-master-data.test.js",
+  "test/data-import-foundation.test.js",
   "test/custom-work-rules-persistence.test.js",
   "test/governance-store-persistence.test.js",
   "test/work-rule-governance-persistence.test.js",

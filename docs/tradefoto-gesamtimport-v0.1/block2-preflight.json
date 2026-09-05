@@ -1,0 +1,1006 @@
+{
+  "format": "grabenplaner.tradefoto.block2-preflight.v1",
+  "createdAt": "2026-09-04T23:39:34.369Z",
+  "checks": [
+    {
+      "id": "trade",
+      "matchesCatalog": true,
+      "stableDuringRead": true,
+      "sha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+      "bytes": 188649472
+    },
+    {
+      "id": "cash",
+      "matchesCatalog": true,
+      "stableDuringRead": true,
+      "sha256": "bffbfb81e6f79fe495b0746b36f1fff0abcb89eaf06ec99af16ec7e90add680a",
+      "bytes": 330928128
+    }
+  ],
+  "contractVersion": 1,
+  "mode": "inventory_diagnostic_only",
+  "canImport": false,
+  "catalogFingerprint": "f6f3e7b7da5436c3169a06d695df8daa74dd2dcc91136d11266846443f74afcf",
+  "sources": [
+    {
+      "id": "trade",
+      "fileSha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "bytes": 188649472,
+      "tables": [
+        {
+          "name": "ADANREDE",
+          "declaredRows": 320,
+          "scannedRows": 320,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Bemerkungen",
+          "declaredRows": 1544,
+          "scannedRows": 1544,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_BILDER",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_BILDER_V2",
+          "declaredRows": 29895,
+          "scannedRows": 29895,
+          "fields": 9,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Eigenschaften",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_Etiketten",
+          "declaredRows": 3,
+          "scannedRows": 3,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_FILIALEN",
+          "declaredRows": 231355,
+          "scannedRows": 231351,
+          "fields": 27,
+          "rowCountMatches": false
+        },
+        {
+          "name": "ARTIKEL_GKundenPreisgruppe",
+          "declaredRows": 63,
+          "scannedRows": 63,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Ibestand",
+          "declaredRows": 12,
+          "scannedRows": 12,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_KundenPreisgruppe",
+          "declaredRows": 168,
+          "scannedRows": 168,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_Kundenrabatt",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_PlattForm",
+          "declaredRows": 1729,
+          "scannedRows": 1729,
+          "fields": 15,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Preisgruppe",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Preisschild",
+          "declaredRows": 22,
+          "scannedRows": 22,
+          "fields": 19,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_Provisionen",
+          "declaredRows": 10,
+          "scannedRows": 10,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Sellout",
+          "declaredRows": 227,
+          "scannedRows": 227,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_Set",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Sortiment_Kunden_Rabattgruppen",
+          "declaredRows": 32,
+          "scannedRows": 32,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_Sortimente",
+          "declaredRows": 231,
+          "scannedRows": 231,
+          "fields": 9,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Sortimentsart",
+          "declaredRows": 18,
+          "scannedRows": 18,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_Sparten",
+          "declaredRows": 18,
+          "scannedRows": 18,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Stamm_StaffelPreise",
+          "declaredRows": 301,
+          "scannedRows": 301,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_Warengruppen",
+          "declaredRows": 93,
+          "scannedRows": 93,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_WKZ",
+          "declaredRows": 89,
+          "scannedRows": 89,
+          "fields": 7,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_Zubehör",
+          "declaredRows": 1947,
+          "scannedRows": 1947,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_Zusatz",
+          "declaredRows": 38,
+          "scannedRows": 38,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_ZWEITEAN",
+          "declaredRows": 37817,
+          "scannedRows": 37817,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_ZWEITLIEFERANT",
+          "declaredRows": 3938,
+          "scannedRows": 3938,
+          "fields": 21,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Batterien",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Benutzer",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Berichtstexte",
+          "declaredRows": 23,
+          "scannedRows": 23,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Bundle",
+          "declaredRows": 500,
+          "scannedRows": 500,
+          "fields": 14,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Bundle_Artikel",
+          "declaredRows": 999,
+          "scannedRows": 999,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Colorbild_Größe",
+          "declaredRows": 9,
+          "scannedRows": 9,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Default_Bank",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Defaultaktualisieren",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 24,
+          "rowCountMatches": true
+        },
+        {
+          "name": "DefaultMail",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 7,
+          "rowCountMatches": true
+        },
+        {
+          "name": "dummy",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Eigenschaften",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "EinAusZahlung",
+          "declaredRows": 25,
+          "scannedRows": 25,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Einfügefehler",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Einheit",
+          "declaredRows": 33,
+          "scannedRows": 33,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ENTWICKLUNGSLABOR",
+          "declaredRows": 2,
+          "scannedRows": 2,
+          "fields": 10,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Euro",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Feiertage",
+          "declaredRows": 26,
+          "scannedRows": 26,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Feiertage-Standard",
+          "declaredRows": 6,
+          "scannedRows": 6,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Fibu_Konten",
+          "declaredRows": 121,
+          "scannedRows": 121,
+          "fields": 8,
+          "rowCountMatches": true
+        },
+        {
+          "name": "FiL_Umsatz",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "FILIALEN",
+          "declaredRows": 13,
+          "scannedRows": 13,
+          "fields": 20,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Filialen_Anlage",
+          "declaredRows": 13,
+          "scannedRows": 13,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Filialen_Internet",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "FOWIS_Lieferanten",
+          "declaredRows": 81,
+          "scannedRows": 81,
+          "fields": 10,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Gerätetyp",
+          "declaredRows": 98,
+          "scannedRows": 98,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Grundeinstellungen",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "KUNDEN",
+          "declaredRows": 30504,
+          "scannedRows": 30504,
+          "fields": 97,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kunden_Bemerkungen",
+          "declaredRows": 251,
+          "scannedRows": 251,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kunden_Dokumente",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kunden_GPreisgruppen",
+          "declaredRows": 4,
+          "scannedRows": 4,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kunden_Kurznamen",
+          "declaredRows": 55,
+          "scannedRows": 55,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kunden_Lieferadresse",
+          "declaredRows": 7,
+          "scannedRows": 7,
+          "fields": 15,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kunden_Preisgruppen",
+          "declaredRows": 33,
+          "scannedRows": 33,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kunden_WGR_Rabatt",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kunden_Zahlart",
+          "declaredRows": 43,
+          "scannedRows": 43,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kundengruppen",
+          "declaredRows": 5,
+          "scannedRows": 5,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "KundenKonten",
+          "declaredRows": 29,
+          "scannedRows": 29,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kundenrabattgruppen",
+          "declaredRows": 14,
+          "scannedRows": 14,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Lagerplatz",
+          "declaredRows": 3,
+          "scannedRows": 3,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "LAMP_Anbieter",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 10,
+          "rowCountMatches": true
+        },
+        {
+          "name": "LAMP_GeizArtikel",
+          "declaredRows": 3284,
+          "scannedRows": 3284,
+          "fields": 22,
+          "rowCountMatches": true
+        },
+        {
+          "name": "LAMP_GeizArtikelD",
+          "declaredRows": 2705,
+          "scannedRows": 2705,
+          "fields": 22,
+          "rowCountMatches": true
+        },
+        {
+          "name": "LIEFERANTEN",
+          "declaredRows": 910,
+          "scannedRows": 910,
+          "fields": 39,
+          "rowCountMatches": true
+        },
+        {
+          "name": "LIEFERANTEN_Adressen",
+          "declaredRows": 967,
+          "scannedRows": 967,
+          "fields": 14,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Lieferanten_Bemerkungen",
+          "declaredRows": 10,
+          "scannedRows": 10,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Lieferanten_Filialen",
+          "declaredRows": 896,
+          "scannedRows": 896,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Marken",
+          "declaredRows": 613,
+          "scannedRows": 613,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "MITARBEITER",
+          "declaredRows": 354,
+          "scannedRows": 354,
+          "fields": 48,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Mitarbeiter_Menue",
+          "declaredRows": 3715,
+          "scannedRows": 3715,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "MWST_Sätze",
+          "declaredRows": 5,
+          "scannedRows": 5,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "MWST_Sätze_Fil",
+          "declaredRows": 3,
+          "scannedRows": 3,
+          "fields": 10,
+          "rowCountMatches": true
+        },
+        {
+          "name": "MWST_Sätze_Land",
+          "declaredRows": 28,
+          "scannedRows": 28,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Pfahler_Verknüpfungstabelle",
+          "declaredRows": 170,
+          "scannedRows": 170,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Pfahler_Warengruppen",
+          "declaredRows": 25,
+          "scannedRows": 25,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Plugins",
+          "declaredRows": 6,
+          "scannedRows": 6,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Preis_Kennung",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 13,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Rechnung_Export",
+          "declaredRows": 83,
+          "scannedRows": 83,
+          "fields": 7,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Rechnungsdetails_Export",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 14,
+          "rowCountMatches": true
+        },
+        {
+          "name": "REPARATUR_WERKSTATT",
+          "declaredRows": 74,
+          "scannedRows": 74,
+          "fields": 11,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Reparatur_WerkstattArtikel",
+          "declaredRows": 120,
+          "scannedRows": 120,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ReparaturKalkulation",
+          "declaredRows": 4,
+          "scannedRows": 4,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Shopware_Protokoll_TradeDaten",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Sortiment_Rabattgruppen",
+          "declaredRows": 7,
+          "scannedRows": 7,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "SORTIMENTSZUORDNUNG",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Stamm",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 7,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Stamm_Artikel",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 13,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Standardwerte",
+          "declaredRows": 104,
+          "scannedRows": 104,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "TblErrorLog",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 7,
+          "rowCountMatches": true
+        },
+        {
+          "name": "tblProtBestand",
+          "declaredRows": 406,
+          "scannedRows": 406,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "tblProtBestand_comp",
+          "declaredRows": 10159,
+          "scannedRows": 10159,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "tblProtPreis",
+          "declaredRows": 94,
+          "scannedRows": 94,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Textbausteine",
+          "declaredRows": 27,
+          "scannedRows": 27,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "TMP_UNR",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Transfer_Alte_Umsatz_Kasse_Details",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 13,
+          "rowCountMatches": true
+        },
+        {
+          "name": "USysApplicationLog",
+          "declaredRows": 27286,
+          "scannedRows": 27286,
+          "fields": 9,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Verband",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Verkauf_Artikel",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 12,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Vertraege",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 9,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Vertreter",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "WE_Kontrolle",
+          "declaredRows": 165,
+          "scannedRows": 165,
+          "fields": 11,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Zahlungsarten",
+          "declaredRows": 30,
+          "scannedRows": 30,
+          "fields": 8,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Zugang",
+          "declaredRows": 106,
+          "scannedRows": 106,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Zugang_Mitarbeiter",
+          "declaredRows": 1154,
+          "scannedRows": 1154,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Artikel_PreisSpannen",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 12,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ARTIKEL_STAMM",
+          "declaredRows": 19187,
+          "scannedRows": 19186,
+          "fields": 199,
+          "rowCountMatches": false
+        },
+        {
+          "name": "Colorbild_Art",
+          "declaredRows": 9,
+          "scannedRows": 9,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Default_Lieferanten",
+          "declaredRows": 4,
+          "scannedRows": 4,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Export_Reparatur",
+          "declaredRows": 173,
+          "scannedRows": 173,
+          "fields": 47,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Hauptartikel",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Kostentraegercodes",
+          "declaredRows": 8,
+          "scannedRows": 8,
+          "fields": 1,
+          "rowCountMatches": true
+        },
+        {
+          "name": "KUNDEN_RLAdressen",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 15,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Lagerumschlag",
+          "declaredRows": 32,
+          "scannedRows": 32,
+          "fields": 10,
+          "rowCountMatches": true
+        },
+        {
+          "name": "LAMP_AnbieterD",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 10,
+          "rowCountMatches": true
+        },
+        {
+          "name": "LIEFERANTEN_Konditionen",
+          "declaredRows": 1363,
+          "scannedRows": 1363,
+          "fields": 50,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Protokoll",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 30,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Re_Freigabe",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 4,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Shopware_Artikel",
+          "declaredRows": 10587,
+          "scannedRows": 10587,
+          "fields": 6,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Switchboard Items",
+          "declaredRows": 1,
+          "scannedRows": 1,
+          "fields": 5,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Transfer_Alte_Umsatz_Kasse",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 7,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Vertraege_Artikel",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 6,
+          "rowCountMatches": true
+        }
+      ],
+      "linkedTables": []
+    },
+    {
+      "id": "cash",
+      "fileSha256": "bffbfb81e6f79fe495b0746b36f1fff0abcb89eaf06ec99af16ec7e90add680a",
+      "schemaSha256": "b10c01dd3edcc78336eddafa69aef84983ff6b6dd3b731d50217f6280d6152ce",
+      "bytes": 330928128,
+      "tables": [
+        {
+          "name": "EigeneKonten",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 2,
+          "rowCountMatches": true
+        },
+        {
+          "name": "KassenJournal",
+          "declaredRows": 39865,
+          "scannedRows": 39865,
+          "fields": 3,
+          "rowCountMatches": true
+        },
+        {
+          "name": "KassenJournal_Details",
+          "declaredRows": 89584,
+          "scannedRows": 89584,
+          "fields": 11,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Tagesbericht",
+          "declaredRows": 346921,
+          "scannedRows": 346921,
+          "fields": 10,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Umsatz_KASSE",
+          "declaredRows": 219885,
+          "scannedRows": 219885,
+          "fields": 12,
+          "rowCountMatches": true
+        },
+        {
+          "name": "Umsatz_Kasse_Details",
+          "declaredRows": 385798,
+          "scannedRows": 385798,
+          "fields": 46,
+          "rowCountMatches": true
+        },
+        {
+          "name": "ExportRichtTabelle",
+          "declaredRows": 0,
+          "scannedRows": 0,
+          "fields": 13,
+          "rowCountMatches": true
+        }
+      ],
+      "linkedTables": [
+        "ARTIKEL_STAMM"
+      ]
+    }
+  ],
+  "coverage": {
+    "tables": 135,
+    "fields": 1363,
+    "rowsScanned": 1509706
+  },
+  "gates": [
+    "BUSINESS_ADAPTERS_PENDING",
+    "SOURCE_ROW_COUNT_MISMATCH"
+  ],
+  "independentAccessCount": {
+    "status": "not_performed_by_this_tool",
+    "outcome": "An inventory hash comparison does not independently establish source row completeness."
+  },
+  "privacy": "Metadata, fingerprints and counts only; no source rows or credentials.",
+  "applicationWrites": false
+}

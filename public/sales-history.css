@@ -1,0 +1,29 @@
+.sales-history-panel { grid-column:1 / -1; min-width:0; padding:14px 16px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--surface); }
+.sales-history-panel > summary { cursor:pointer; font-size:13px; font-weight:800; }
+.sales-history-panel [data-history-body] { min-width:0; padding-top:12px; font-size:11px; line-height:1.5; }
+.sales-history-panel p { margin:6px 0; }
+.sales-history-filters { display:flex; flex-wrap:wrap; align-items:end; gap:10px; margin:12px 0; }
+.sales-history-filters label { display:grid; gap:4px; flex:1 1 160px; min-width:0; font-weight:650; }
+.sales-history-filters input,.sales-history-filters select { width:100%; min-height:36px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); }
+.sales-history-filters small { font-size:9px; color:var(--muted); }
+.sales-history-seller-fields { display:flex; flex-wrap:wrap; gap:10px; flex:2 1 320px; }
+.sales-history-panel [hidden] { display:none !important; }
+.sales-history-panel .date-range-trigger { min-height:36px; display:block; font-size:11px; color:var(--ink); background:var(--surface); border-color:var(--line); }
+.sales-history-summary { padding:12px; margin:12px 0; border:1px solid var(--line); border-radius:8px; }
+.sales-history-summary h3 { font-size:12px; margin:0 0 6px; }
+.sales-history-total { font-weight:800; }
+.sales-history-review { color:var(--ink); font-weight:700; text-decoration:underline dotted; text-underline-offset:3px; }
+.sales-history-table-scroll,.sales-history-days { max-height:400px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+.sales-history-days { max-height:240px; margin-top:8px; }
+.sales-history-panel table { width:100%; border-collapse:collapse; font-size:11px; }
+.sales-history-panel caption { text-align:left; color:var(--muted); padding:8px; }
+.sales-history-panel th { position:sticky; top:0; z-index:1; background:var(--surface); text-align:left; }
+.sales-history-panel th,.sales-history-panel td { padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+.sales-history-panel th button { border:0; padding:0; background:transparent; font-weight:750; text-decoration:underline; cursor:pointer; }
+.sales-history-panel td small { display:block; color:var(--muted); }
+.sales-history-panel td details { min-width:90px; }
+.sales-history-panel td summary,.sales-history-summary summary { cursor:pointer; text-decoration:underline; }
+.sales-history-panel dl { min-width:200px; max-width:340px; overflow-wrap:anywhere; }
+.sales-history-panel dt { font-weight:700; margin-top:5px; }.sales-history-panel dd { margin:0; }
+.sales-history-panel button:focus-visible,.sales-history-panel summary:focus-visible,.sales-history-table-scroll:focus-visible { outline:2px solid var(--green); outline-offset:3px; }
+@media(max-width:700px) { .sales-history-panel { padding:10px; }.sales-history-filters label { flex-basis:100%; }.sales-history-seller-fields { flex-basis:100%; } }

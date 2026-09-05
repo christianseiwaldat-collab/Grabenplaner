@@ -1306,6 +1306,7 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  syncSalesHistoryAccess();
   state.salesArticleCatalog.actorKey = "";
   state.salesArticleCatalog.detailAccessKey = "";
   clearSalesArticleCatalogState();
@@ -2590,6 +2591,7 @@ function applyRoleVisibility() {
   const salesArticleCatalogWriteAccess = canWriteSalesArticles();
   const salesArticleCatalogImportAccess = canImportSalesArticles();
   const salesModuleAccess = salesAnalyticsAccess || crmAccess || salesArticleCatalogAccess;
+  syncSalesHistoryAccess();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || positionWriteAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelLearningAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
@@ -31460,6 +31462,22 @@ function crmDetailFact(label, value, { html = false } = {}) {
   return `<div><span>${escapeHtml(label)}</span><strong>${rendered || "Nicht angegeben"}</strong></div>`;
 }
 
+let salesHistoryWorkspace = null;
+let crmPurchaseWorkspace = null;
+let salesHistoryActorKey = "";
+function syncSalesHistoryAccess() {
+  const user = state.portalSession?.user;
+  const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.permissions, user.scopes]) : "";
+  if (nextKey === salesHistoryActorKey) return;
+  salesHistoryActorKey = nextKey;
+  salesHistoryWorkspace?.destroy(); salesHistoryWorkspace = null;
+  crmPurchaseWorkspace?.destroy(); crmPurchaseWorkspace = null;
+  const panel = document.getElementById("salesHistoryPanel");
+  panel?.classList.toggle("hidden", !user?.salesHistory?.read);
+  document.getElementById("crmPurchaseHistory")?.classList.toggle("hidden", !user?.salesHistory?.customerPurchases);
+  if (panel && user?.salesHistory?.read) salesHistoryWorkspace = window.GrabenplanerSalesHistory?.mount(panel, { api });
+}
+
 function renderCrmCustomerReadView(customer) {
   const websiteUrl = safeCrmWebsiteUrl(customer.website);
   const email = customer.email ? `<a href="mailto:${escapeHtmlAttribute(customer.email)}">${escapeHtml(customer.email)}</a>` : "Nicht angegeben";
@@ -31495,7 +31513,8 @@ function renderCrmCustomerReadView(customer) {
         ${crmDetailFact("Land", customer.country)}
       </div></section>
     </div>
-    <section class="crm-customer-section crm-customer-custom-fields"><div class="crm-section-heading"><span>03</span><div><h3>Eigene Textfelder</h3><p>Individuelle Informationen mit frei gewähltem Titel</p></div></div>${customFields}</section>`;
+    <section class="crm-customer-section crm-customer-custom-fields"><div class="crm-section-heading"><span>03</span><div><h3>Eigene Textfelder</h3><p>Individuelle Informationen mit frei gewähltem Titel</p></div></div>${customFields}</section>
+    ${state.portalSession?.user?.salesHistory?.customerPurchases ? '<details id="crmPurchaseHistory" class="sales-history-panel"><summary>Kundenkäufe</summary><div data-history-body>Nur bestätigte Kundenverknüpfungen in freigegebenen Filialen.</div></details>' : ''}`;
 }
 
 function crmCustomFieldEditorRow(field = {}, index = 0) {
@@ -31544,6 +31563,7 @@ function renderCrmCustomerEditor(customer) {
 }
 
 function renderCrmCustomerDetail() {
+  crmPurchaseWorkspace?.destroy(); crmPurchaseWorkspace = null;
   if (!elements.crmCustomerDetail) return;
   elements.crmCustomerShell?.setAttribute("aria-busy", String(state.crm.detailLoading || state.crm.mutationPending));
   if (state.crm.detailLoading) {
@@ -31557,6 +31577,10 @@ function renderCrmCustomerDetail() {
   elements.crmCustomerDetail.innerHTML = state.crm.editing
     ? renderCrmCustomerEditor(state.crm.selectedCustomer)
     : renderCrmCustomerReadView(state.crm.selectedCustomer);
+  const purchases = document.getElementById("crmPurchaseHistory");
+  if (purchases && state.portalSession?.user?.salesHistory?.customerPurchases) {
+    crmPurchaseWorkspace = window.GrabenplanerSalesHistory?.mount(purchases, { api, customerId: state.crm.selectedCustomer.id });
+  }
   requestAnimationFrame(() => elements.crmCustomerDetail?.querySelector("#crmCustomerName")?.focus());
 }
 
