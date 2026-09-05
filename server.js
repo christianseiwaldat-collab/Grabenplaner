@@ -13,6 +13,8 @@ const {
   SALES_ANALYTICS_PERMISSION_IDS,
   buildSalesAnalyticsProjection,
 } = require("./lib/sales-analytics-access");
+const { SALES_HISTORY_PERMISSION_CATALOG, buildSalesHistoryProjection, salesHistoryPermissionDependencies } = require("./lib/sales-history-access");
+const { registerSalesHistoryRoutes } = require("./lib/sales-history-routes");
 const {
   CRM_PERMISSIONS,
   CRM_PERMISSION_IDS,
@@ -860,6 +862,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.INVENTORY_READ, label: "Bestandsdaten in Verkaufsanalysen lesen", description: "Bestand, bestellt und im Zulauf nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "high", eligibleRoles: ["manager", "admin", "developer"] },
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", description: "Wirtschaftlich sensible Kosten- und Rohertragswerte nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", description: "TradeFoto-Statistikberichte prüfen, einer freigegebenen Filiale zuordnen und nach ausdrücklicher Bestätigung unveränderlich übernehmen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
+  ...SALES_HISTORY_PERMISSION_CATALOG,
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", description: "Öffnet den geschützten CRM-Arbeitsbereich und gewährt allein noch keinen Zugriff auf Kundendaten.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", description: "Sucht und liest Kundendaten ausschließlich im CRM-Arbeitsbereich.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: CRM_PERMISSIONS.CUSTOMERS_WRITE, label: "Kundenkartei bearbeiten", description: "Legt Kundenkarten an und bearbeitet Stammdaten, eigene Textfelder sowie Kundenfotos.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
@@ -1178,6 +1181,9 @@ function assertPortalPermissionDependencies(permissions) {
     );
   }
   const crmDependencies = resolveCrmPermissionDependencies([...projected]);
+  if (!salesHistoryPermissionDependencies([...projected]).valid) {
+    throw httpError(400, "Einzelverkaufs-, Mitarbeiter-, Kundenkauf- und Kassenrechte benötigen ihre getrennten Basis- und Bereichsrechte.", "PORTAL_PERMISSION_DEPENDENCY");
+  }
   if (!crmDependencies.valid) {
     throw httpError(
       400,
@@ -1446,6 +1452,7 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.INVENTORY_READ, label: "Bestandsdaten in Verkaufsanalysen lesen", group: "Verkaufsverwaltung", warningLevel: "high", scopeBehavior: "organizational" },
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
+  ...SALES_HISTORY_PERMISSION_CATALOG,
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: CRM_PERMISSIONS.CUSTOMERS_WRITE, label: "Kundenkartei bearbeiten", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
@@ -4915,6 +4922,7 @@ function publicPortalUser(session) {
       deniedPermissions: [],
       scopes: session.scopes || [],
       salesAnalytics: buildSalesAnalyticsProjection(session),
+      salesHistory: buildSalesHistoryProjection(session),
       crm: buildCrmProjection(session),
       mustChangePassword: session.mustChangePassword,
       personnelRecordAccess: {
@@ -4948,6 +4956,7 @@ function publicPortalUser(session) {
     deniedPermissions: session.deniedPermissions || [],
     scopes: session.scopes || [],
     salesAnalytics: buildSalesAnalyticsProjection(session),
+    salesHistory: buildSalesHistoryProjection(session),
     crm: buildCrmProjection(session),
     mustChangePassword: session.mustChangePassword,
     personnelRecordAccess: {
@@ -25186,6 +25195,14 @@ app.delete("/api/integrations/personnel-import/sessions/:id", (request, response
   const actor = integrationActor(request, "employees:import");
   integrationCache.delete(request.params.id, actor.employeeNumber);
   response.status(204).end();
+});
+
+// Read-only UI bridge. No production schema, keys, import writer or source is
+// activated here. An audited production composition requires separate approval.
+registerSalesHistoryRoutes(app, {
+  requireSession: requireEmployeePortalSession,
+  assertCsrf: assertPortalCsrf,
+  customerExists: async (id) => Boolean(await crmCustomersRepository.get(id)),
 });
 
 function salesAnalyticsRequestContext(request, { importManagement = false, csrf = false } = {}) {

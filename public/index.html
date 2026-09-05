@@ -9,6 +9,7 @@
     <link rel="apple-touch-icon" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/sales-history.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="deploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
@@ -34,7 +35,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.26 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.27 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1646,6 +1647,10 @@
           </header>
 
           <div class="sales-analytics-desktop-workspace">
+            <details id="salesHistoryPanel" class="sales-history-panel hidden">
+              <summary>Einzelverkäufe &amp; Kassenhistorie</summary>
+              <div data-history-body>Zeitraum-, Mitarbeiteranalysen und Quellenprüfung</div>
+            </details>
             <section class="sales-analytics-import-card hidden" id="salesReportImportPanel" aria-labelledby="salesReportImportTitle">
               <div class="sales-analytics-section-heading">
                 <div><span class="eyebrow">PDF-Berichtsimport</span><h2 id="salesReportImportTitle">TradeFoto-Statistik prüfen</h2><p>Geeignet ist der Bericht „Warengruppenvergleich netto“. Eine vorhandene Textschicht wird direkt gelesen; reine Raster-PDFs werden lokal erkannt und anschließend als vollständig bearbeitbarer OCR-Vorschlag angezeigt.</p></div>
@@ -2860,7 +2865,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.26 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.27 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -4147,6 +4152,7 @@
     <script src="/api-errors.js"></script>
     <script src="/vendor/quill/quill.js"></script>
     <script src="/date-range-calendar.js"></script>
+    <script src="/sales-history.js"></script>
     <script src="/function-search-catalog.js"></script>
     <script src="/function-search.js"></script>
     <script src="/function-search-ui.js"></script>

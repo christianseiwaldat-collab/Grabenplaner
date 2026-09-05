@@ -1,0 +1,5646 @@
+{
+  "version": 1,
+  "sourceSystem": "tradefoto.master-data",
+  "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+  "coverage": {
+    "tables": 66,
+    "fields": 761
+  },
+  "tables": [
+    {
+      "name": "ADANREDE",
+      "group": "crm.customer_conditions",
+      "keys": [
+        "ANREDE"
+      ],
+      "columns": [
+        {
+          "name": "ANREDE",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ADR_ANREDE",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "BANREDE1",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "BANREDE2",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_Bemerkungen",
+      "group": "catalog.notes",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Text",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LBAe",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_BILDER",
+      "group": "catalog.media",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bild1",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bild2",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Ebaybildurl",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_BILDER_V2",
+      "group": "catalog.media",
+      "keys": [
+        "ID"
+      ],
+      "columns": [
+        {
+          "name": "ID",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bild",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Ebaybildurl",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sortierung",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Dateidatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Dateigroesse",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Geloescht",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_Eigenschaften",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "EigenschaftId",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Boolwert",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Textwert",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_GKundenPreisgruppe",
+      "group": "catalog.pricing",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "GPreisgruppe",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "VK",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NVk",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "EK",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Aufschlag",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_KundenPreisgruppe",
+      "group": "catalog.pricing",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Preisgruppe",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Gab",
+          "type": "datetime",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "VK",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NVk",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_Kundenrabatt",
+      "group": "catalog.pricing",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Kund_Nr",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "LArtikelnr",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Position",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "RVK_Preis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "RVK_Netto",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_Preisgruppe",
+      "group": "catalog.pricing",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "PreisGruppe",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "P_Vk",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_Provisionen",
+      "group": "catalog.pricing",
+      "keys": [
+        "ProvisionKZ"
+      ],
+      "columns": [
+        {
+          "name": "ProvisionKZ",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Provision",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Erklärung",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_Set",
+      "group": "catalog.bundles_accessories",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Menge",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SVerkaufspreis",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Rang",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_Sortiment_Kunden_Rabattgruppen",
+      "group": "catalog.pricing",
+      "keys": null,
+      "columns": [
+        {
+          "name": "KundenRabattGruppe",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SortimentRabattGruppe",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Rabatt_Prozent",
+          "type": "integer",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_Sortimente",
+      "group": "catalog.taxonomy",
+      "keys": [
+        "Sortiment"
+      ],
+      "columns": [
+        {
+          "name": "Sortiment",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Warengruppe",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "PunkteFaktor",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "InternetWgr",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "zufallsinventur",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SortimentRabattGruppe",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "RohertragGrenze",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "WebSortiment",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_Sortimentsart",
+      "group": "catalog.taxonomy",
+      "keys": [
+        "Sortimentsart"
+      ],
+      "columns": [
+        {
+          "name": "Sortimentsart",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_Sparten",
+      "group": "catalog.taxonomy",
+      "keys": [
+        "Sparte"
+      ],
+      "columns": [
+        {
+          "name": "Sparte",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FowisSparte",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_Stamm_StaffelPreise",
+      "group": "catalog.pricing",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SMenge",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Preisgruppe",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Gab",
+          "type": "datetime",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SVerkaufspreis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NVK",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_Warengruppen",
+      "group": "catalog.taxonomy",
+      "keys": [
+        "Warengruppe"
+      ],
+      "columns": [
+        {
+          "name": "Warengruppe",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sparte",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ware",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "bild",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FowisWarengruppe",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_WKZ",
+      "group": "catalog.pricing",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "WKZBetrag",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "WZProzent",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "WKZart",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Wvon",
+          "type": "datetime",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Wbis",
+          "type": "datetime",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_Zubehör",
+      "group": "catalog.bundles_accessories",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ZEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Rang",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_Zusatz",
+      "group": "catalog.bundles_accessories",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Text",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_ZWEITEAN",
+      "group": "catalog.identifiers",
+      "keys": [
+        "ZweitEAN"
+      ],
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ZweitEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Rang",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_ZWEITLIEFERANT",
+      "group": "suppliers.conditions",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZSuchname",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZKondition",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZBestellnummer",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZBemerkung",
+          "type": "memo",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZAbBestellmenge1",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZAbBestellmenge2",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZVPE",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZGeschriebenVon",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZDatenVom",
+          "type": "datetime",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZAutoLöschen",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZBestelldaten",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZListeneckpreis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZRechnungspreis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZNNPreis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZListeneckpreis2",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "dis",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Link",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZWKZArt",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZWKZ",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "HauptLief",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Batterien",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Batterie",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Bundle",
+      "group": "catalog.bundles_accessories",
+      "keys": [
+        "BundleId"
+      ],
+      "columns": [
+        {
+          "name": "BundleId",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Aktiv",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Preis",
+          "type": "currency",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Prozent",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IstProzent",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sortierung",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GültigVon",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GültigBis",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "RabattEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Änderungsdatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "StammEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "inVorbereitung",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Bundle_Artikel",
+      "group": "catalog.bundles_accessories",
+      "keys": null,
+      "columns": [
+        {
+          "name": "BundleId",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Position",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Menge",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SucheAktiv",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Änderungsdatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Colorbild_Größe",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Id",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Größe",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Eigenschaften",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EigenschaftId",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Anzeigen",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IstBool",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sortierung",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SW_tagId",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Einheit",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Einheit",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ENTWICKLUNGSLABOR",
+      "group": "suppliers.master",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Labor_ID",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Firma",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Straße",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "PLZ",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Ort",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Telefon",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Telefax",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "KundenNr",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Minilab",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "FILIALEN",
+      "group": "organization.source_locations",
+      "keys": [
+        "FilialID"
+      ],
+      "columns": [
+        {
+          "name": "FilialID",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FName",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Straße",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Ort",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Telefon",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Telefax",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bemerkung",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "UmsatzFilialid",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Reparatur_Daten",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Typ",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "BestandsFilialid",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "If",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "KontoNr",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "DEKDAT",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "UmlagerungsFiliale",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SEPA_InitiatorName",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SEPA_IBAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SEPA_BIC",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "eMail",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Filialen_Anlage",
+      "group": "organization.source_locations",
+      "keys": null,
+      "columns": [
+        {
+          "name": "FilialID",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "we",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Filialen_Internet",
+      "group": "organization.source_locations",
+      "keys": null,
+      "columns": [
+        {
+          "name": "InternetFiliale1",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "InternetFiliale2",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "FOWIS_Lieferanten",
+      "group": "suppliers.master",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Firma",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Anschrift",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Ort",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Telefon",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Telefax",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Kategorie",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bemerkung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "TSUCHNAME",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Gerätetyp",
+      "group": "catalog.taxonomy",
+      "keys": [
+        "Gerätetyp_ID"
+      ],
+      "columns": [
+        {
+          "name": "Gerätetyp_ID",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Gerätetyp",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Rep_Nur_Hersteller",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "KUNDEN",
+      "group": "crm.customers",
+      "keys": [
+        "KUND_NR"
+      ],
+      "columns": [
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KontoNr",
+          "type": "long",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "Lieferschein",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "NACHNAME",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "VORNAME",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ANREDE",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ORT",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "STRaße",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "TELEFON",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "TELEFAX",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "INFO",
+          "type": "memo",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "EMail",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Handy",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Kartenkunde",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Punkte",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Punktefaktor",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "RabattColorbild",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Kunde",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Jung",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Familie",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Senior",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Gerät",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Anlagedatum",
+          "type": "datetime",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Geburtstag",
+          "type": "datetime",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ZuAktualisieren",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Rabattkunde",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Großhandelskunde",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Abteilung",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "LieferscheinId",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "RechnungId",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Kennung",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Land",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "AdressZusatz",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "BankName",
+          "type": "text",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "Herkunft",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "SkontoT1",
+          "type": "integer",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "SkontoP1",
+          "type": "double",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "SkontoT2",
+          "type": "integer",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "SkontoP2",
+          "type": "double",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "SkontoT3",
+          "type": "integer",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "SkontoP3",
+          "type": "double",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "NettoTage",
+          "type": "integer",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Zahlungsart",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "PreisLieferschein",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Einzelrechnung",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Rechnungskopien",
+          "type": "byte",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Lieferscheinkopien",
+          "type": "byte",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "RoMwSt",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "WGRRabatt",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ARabatt",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KManzeige",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KMeldungstext",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Kennwort",
+          "type": "text",
+          "dataClass": "credential_exception",
+          "excluded": true
+        },
+        {
+          "name": "GPreisStandard",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "SortimentspunkteGeben",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Sortimentspunkte",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "UStID",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Internet",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Umsatz",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Rechnungsgrenze",
+          "type": "double",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "KF1",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KF2",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KF3",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Sperrung",
+          "type": "boolean",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "Sperrgrenze",
+          "type": "double",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "Sperremanuell",
+          "type": "boolean",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "Preisgruppe",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Rabattgruppe",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "OffeneRech",
+          "type": "double",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "Kundengruppe",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Kurzname",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Nettorechnung",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Personal",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Kreditlimit",
+          "type": "double",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "inKasse",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Änderungsdatum",
+          "type": "datetime",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "GPreisgruppe",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "WinCard",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "WinCardNr",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "WincardDatum",
+          "type": "datetime",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Newsletter",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "VertreterID",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "VerbandID",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Englisch",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "EU",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KFiliale",
+          "type": "byte",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "FesterZahlungstermin",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "BankKntNr",
+          "type": "text",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "Bankleitzahl",
+          "type": "text",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "MandatsID",
+          "type": "text",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "DateOfSignature",
+          "type": "datetime",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "SepaSequenceType",
+          "type": "text",
+          "dataClass": "restricted_finance",
+          "excluded": false
+        },
+        {
+          "name": "LeitwegID",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "RechnungMail",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "EMailRechnung",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "alfoKundNr",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kunden_Bemerkungen",
+      "group": "crm.customer_notes",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Kund_Nr",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Text",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kunden_Dokumente",
+      "group": "crm.customer_documents",
+      "keys": null,
+      "columns": [
+        {
+          "name": "ID",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Pfad",
+          "type": "memo",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Dateigroese",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Dateidatum",
+          "type": "datetime",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kunden_GPreisgruppen",
+      "group": "crm.customer_conditions",
+      "keys": [
+        "GPreisgruppe"
+      ],
+      "columns": [
+        {
+          "name": "GPreisgruppe",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "GBeschreibung",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "VonEK",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "GültigBis",
+          "type": "datetime",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ZusatzKosten",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kunden_Kurznamen",
+      "group": "crm.customer_conditions",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Kurzname",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kunden_Lieferadresse",
+      "group": "crm.customer_addresses",
+      "keys": null,
+      "columns": [
+        {
+          "name": "LID",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KID",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Standard",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Firma",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Anrede",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Vorname",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Nachname",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Adresse1",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Adresse2",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Ort",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Land",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Telefon",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "SW_addressId",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kunden_Preisgruppen",
+      "group": "crm.customer_conditions",
+      "keys": [
+        "Preisgruppe"
+      ],
+      "columns": [
+        {
+          "name": "Preisgruppe",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kunden_WGR_Rabatt",
+      "group": "crm.customer_conditions",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Kund_Nr",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Warengruppe",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "WProzent",
+          "type": "double",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kunden_Zahlart",
+      "group": "crm.customer_conditions",
+      "keys": [
+        "ID"
+      ],
+      "columns": [
+        {
+          "name": "ID",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Art",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "RGText",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "GiroCodeDruck",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kundengruppen",
+      "group": "crm.customer_conditions",
+      "keys": [
+        "Kundengruppe"
+      ],
+      "columns": [
+        {
+          "name": "Kundengruppe",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "KundenKonten",
+      "group": "crm.customer_conditions",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Buchstabe",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Konto",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Kundenrabattgruppen",
+      "group": "crm.customer_conditions",
+      "keys": [
+        "KundenRabattGruppe"
+      ],
+      "columns": [
+        {
+          "name": "KundenRabattGruppe",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Lagerplatz",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "LagerNr",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "AuftragNr",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "LIEFERANTEN",
+      "group": "suppliers.master",
+      "keys": [
+        "Suchname"
+      ],
+      "columns": [
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Firma",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Lieferant_ID",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FTelefon",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FTelefax",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "KundenNummer",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Verpackungsfrei",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FreiStation",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FreiHaus",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "MinMZ",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "MinMZbis",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GeschjahrV",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GeschjahrB",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "INFO",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Rechbedingung",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Rechtext",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FEMail",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FHandy",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "BLZ",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bank",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bankkonto",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Weaktualisiert",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "WeUmsatz",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FHomepage",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ustid",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SkontoT1",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SkontoT2",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SkontoT3",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SkontoP1",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SkontoP2",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SkontoP3",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Nettotage",
+          "type": "integer",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "romwst",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Umsatz",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "offeneForderungen",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ReUmsatz",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Kostenträgercode",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "DF",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "eu",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "LIEFERANTEN_Adressen",
+      "group": "suppliers.contacts",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Lieferant_ID",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Nr",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Funktion",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "A1",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "A2",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "A3",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Land",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ORT",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Telefon",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Telefax",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "EMail",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Handy",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Lieferanten_Bemerkungen",
+      "group": "suppliers.contacts",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Text",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Lieferanten_Filialen",
+      "group": "suppliers.conditions",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Filialid",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "KundenNr",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Marken",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Marke",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GPSRHersteller",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Änderungsdatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GUID_Id",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "MITARBEITER",
+      "group": "organization.source_employees",
+      "keys": [
+        "Verkäufer_ID"
+      ],
+      "columns": [
+        {
+          "name": "Verkäufer_ID",
+          "type": "long",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "NACHNAME",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "VORNAME",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ORT",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "STRaße",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Telefon",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Telefax",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Geburtstag",
+          "type": "datetime",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Eintritt",
+          "type": "datetime",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Ausbildung",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Tätigkeit",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "BLZ",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Bank",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "KtoNr",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "INFO",
+          "type": "memo",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Kennwort",
+          "type": "text",
+          "dataClass": "credential_exception",
+          "excluded": true
+        },
+        {
+          "name": "FilialNr",
+          "type": "long",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ArbeitszeitTag",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ZeitauswertungAktiv",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "AufschlagAnwenden",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Urlaub",
+          "type": "long",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "FeiertagNachholen",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Montag",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Dienstag",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Mittwoch",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Donnerstag",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Freitag",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Samstag",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Mo",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Di",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Mi",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Do",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Fr",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Sa",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Monat_Durchschnitt",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Jahr_Durchschnitt",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "EMail",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Jahresurlaub",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "GEMail",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "GTelefon",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "GTelefax",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Bild",
+          "type": "text",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "SamstagUrlaub",
+          "type": "long",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "UrlaubAlter",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ArbeitszeitHalberTag",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "ArbeitszeitHalberSamstag",
+          "type": "double",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        },
+        {
+          "name": "HMLeiste",
+          "type": "boolean",
+          "dataClass": "personnel_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Pfahler_Verknüpfungstabelle",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "WarengruppePfahler",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sortiment",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Pfahler_Warengruppen",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "WarengruppePfahler",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Zwischensumme",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Preis_Kennung",
+      "group": "catalog.pricing",
+      "keys": [
+        "KennungA",
+        "KennungB",
+        "KennungC",
+        "KennungD"
+      ],
+      "columns": [
+        {
+          "name": "KennungA",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "KennungB",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "KennungC",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "KennungD",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "BeschreibungA",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibungb",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "BeschreibungC",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "BeschreibungD",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "StandardA",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "StandardB",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "StandardC",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "StandardD",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "DurchEK",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Sortiment_Rabattgruppen",
+      "group": "catalog.pricing",
+      "keys": [
+        "SortimentRabattGruppe"
+      ],
+      "columns": [
+        {
+          "name": "SortimentRabattGruppe",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "SORTIMENTSZUORDNUNG",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sortiment",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Verband",
+      "group": "suppliers.master",
+      "keys": null,
+      "columns": [
+        {
+          "name": "VerbandID",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bonus",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Vertreter",
+      "group": "suppliers.master",
+      "keys": null,
+      "columns": [
+        {
+          "name": "VertreterID",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ProvisionProzent",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Artikel_PreisSpannen",
+      "group": "catalog.pricing",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Spannevon",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Spannebis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "APP",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "%A",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "BPP",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "%B",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "B+-",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "CPP",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "%C",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "C+-",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "DPP",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "%D",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "ARTIKEL_STAMM",
+      "group": "catalog.articles",
+      "keys": [
+        "EAN"
+      ],
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Erklärung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Artikelbezeichnung3",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Artikelbezeichnung4",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bestellnummer",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sonderartikel",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "MWST",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Kondition",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Provision",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ProvisionKz",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "EtikettenK",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bestelleinheit",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Lager Sollmenge",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sortiment",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Auslaufartikel",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Set",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SOnderRoh",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Rechnung",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Änderungsdatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Batterie",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Anzahl",
+          "type": "float",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Verfalltage",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Gerät",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SPreis",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "MAnzeige",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Meldungstext",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Abverkauf",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sonderbestellung",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Internet",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Änderungsperson",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Anlagedatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "AnlagePerson",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "OhneBestand",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "AbTNr",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Filialbestand",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Marke",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Vk4w",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Vkw",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Vkj",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "AgBestand",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Nummernverwaltung",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IAngebot",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bestelldaten",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "EuroEk",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "UPE",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "EuroVK",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "Gelegenheit",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "AKund_Nr",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Pfand",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "Pfandartikel",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "DurchschnittEK",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Listeneckpreis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Rechnungspreis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Verkaufspreis",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "NNPreis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Großhandelspreis",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "LBemerkung",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "NachfolgeEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Loeschen",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Kommission",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "F1",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "F2",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "F3",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FT1",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FT2",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "FT3",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bestellt",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Reserviert",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Gerichtet",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "PR",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "EKBestell",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "HMA",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "HMB",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "HMC",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SonderPreis",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Artpreisgruppe",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GWertmenge",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sortimentsart",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ListeneckpreisZu",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "RechnungspreisZu",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNPreisZu",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SonderPreisZu",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Internet_VK",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "PVers",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ZKGueltigab",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Sachkonto",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "eNvk",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "GNVK",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "Invk",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "Vertragswahl",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "VertragsVK",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "Mindestbestand",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "internet2",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "internet3",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "DEKAK",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ZuGesamt",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "AbGesamt",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Ibestand",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ArtikelBezInternet",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "WKZ",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "WKZArt",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GArtPreisgruppe",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "MwStG",
+          "type": "byte",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Wertliste",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "versteckt",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "RVK",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "REVK",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Bestand1",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Bestand2",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Verk",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IbestandEH",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IbestandGH",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IbestandZ1",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IbestandZ2",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "InternetZ1",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "InternetZ2",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "InternetVK2",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "InternetVKN2",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "InternetVK3",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "InternetVKN3",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "ZukunftsUVP",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "ZukunftsUVPab",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ListeneckVom",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "BWien",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "VWien",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Einheit",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IBSperre",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "VKSperre",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ArtikelbezE",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ErklE",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Artikelbez3E",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Artikelbez4E",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Erloeskonto",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "RK",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LVKDatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Kassensperre",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "F4",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "F5",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "InternetZ3",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "InternetZ4",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SK",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "NK",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ZBK",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Rak",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "InternetVK4",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "InternetVKN4",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "InternetVK5",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "InternetVKN5",
+          "type": "double",
+          "dataClass": "catalog_prices",
+          "excluded": false
+        },
+        {
+          "name": "AZweitLief",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IBestandZ3",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "IBestandZ4",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LUVPDatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LGHDatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternetDatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternet2Datum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternet3Datum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternet4Datum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternet5Datum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Listenpreisvon",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "KZvon",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "KZBestellNr",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LVKAe",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LZUVPAe",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LUVPAe",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LGHAe",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternetAe",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternet2Ae",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternet3Ae",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternet4Ae",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "LInternet5Ae",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ZDEK",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "ALieferumfang",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "AKurzbeschreibung",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "VK12W",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "VKKosten",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "GVKKosten",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "IVKKosten",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "VKKostenP",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "BDatenVom",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "VAufschlag",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NPlattform",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "HerstellerLink",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "BestelltWien",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ScanEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "DEK_A",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "S_Out",
+          "type": "double",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "DEK_AAB",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "S_Oab",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ABild",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Banner",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ArtikelTyp",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ShopText",
+          "type": "memo",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "SW_Änderungsdatum",
+          "type": "datetime",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Aktion",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "ShopBundleID",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "F6",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "F7",
+          "type": "boolean",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Colorbild_Art",
+      "group": "catalog.taxonomy",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Id",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Art",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Entwicklungsdauer",
+          "type": "long",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "Hauptartikel",
+      "group": "catalog.bundles_accessories",
+      "keys": null,
+      "columns": [
+        {
+          "name": "HauptEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "UnterEAN",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        },
+        {
+          "name": "Artikeltext",
+          "type": "text",
+          "dataClass": "internal_business",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "KUNDEN_RLAdressen",
+      "group": "crm.customer_addresses",
+      "keys": null,
+      "columns": [
+        {
+          "name": "RLId",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Kund_Nr",
+          "type": "long",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Anschrift1",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Anschrift2",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Anschrift3",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Land",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Ort",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Bemerkung",
+          "type": "memo",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "Anlegedatum",
+          "type": "datetime",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "TELEFON",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "TELEFAX",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "EMAIL",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "HANDY",
+          "type": "text",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        },
+        {
+          "name": "PreisLieferschein",
+          "type": "boolean",
+          "dataClass": "customer_restricted",
+          "excluded": false
+        }
+      ]
+    },
+    {
+      "name": "LIEFERANTEN_Konditionen",
+      "group": "suppliers.conditions",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Lieferant_ID",
+          "type": "long",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Kondition",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "R1",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Rabatt1",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "R2",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Rabatt2",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "R2+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "RFaktor",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "RRabatt",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNK1",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNKondi1",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "nnK1+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNK2",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNKondi2",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "nnK2+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNK3",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNKondi3",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "nnK3+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNK4",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNKondi4",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "nnK4+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNFaktor",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "NNRabatt",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Bemerkungen",
+          "type": "memo",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Bestelladresse",
+          "type": "byte",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "DruckKondi",
+          "type": "boolean",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Kalkfaktor",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SK1",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SKondi1",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SK1+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SK2",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SKondi2",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SK2+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SK3",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SKondi3",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SK3+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SK4",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SKondi4",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SK4+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SFaktor",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SRabatt",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "SFixabzug",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "R3",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Rabatt3",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "R3+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "R4",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "Rabatt4",
+          "type": "double",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "R4+",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        },
+        {
+          "name": "AEBemerkung",
+          "type": "text",
+          "dataClass": "catalog_costs",
+          "excluded": false
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "from": "ARTIKEL_Kundenrabatt",
+      "fields": [
+        "Kund_Nr"
+      ],
+      "to": "KUNDEN",
+      "keys": [
+        "KUND_NR"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_PreisSpannen",
+      "fields": [
+        "APP",
+        "BPP",
+        "CPP",
+        "DPP"
+      ],
+      "to": "Preis_Kennung",
+      "keys": [
+        "KennungA",
+        "KennungB",
+        "KennungC",
+        "KennungD"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_GKundenPreisgruppe",
+      "fields": [
+        "GPreisgruppe"
+      ],
+      "to": "Kunden_GPreisgruppen",
+      "keys": [
+        "GPreisgruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Kunden_WGR_Rabatt",
+      "fields": [
+        "Kund_Nr"
+      ],
+      "to": "KUNDEN",
+      "keys": [
+        "KUND_NR"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_Sortimente",
+      "fields": [
+        "Warengruppe"
+      ],
+      "to": "ARTIKEL_Warengruppen",
+      "keys": [
+        "Warengruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "KUNDEN",
+      "fields": [
+        "ANREDE"
+      ],
+      "to": "ADANREDE",
+      "keys": [
+        "ANREDE"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_Warengruppen",
+      "fields": [
+        "Sparte"
+      ],
+      "to": "ARTIKEL_Sparten",
+      "keys": [
+        "Sparte"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_STAMM",
+      "fields": [
+        "ProvisionKz"
+      ],
+      "to": "ARTIKEL_Provisionen",
+      "keys": [
+        "ProvisionKZ"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_STAMM",
+      "fields": [
+        "Sortiment"
+      ],
+      "to": "ARTIKEL_Sortimente",
+      "keys": [
+        "Sortiment"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_STAMM",
+      "fields": [
+        "Sortimentsart"
+      ],
+      "to": "Artikel_Sortimentsart",
+      "keys": [
+        "Sortimentsart"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_Eigenschaften",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_Bemerkungen",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_BILDER",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_BILDER_V2",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_GKundenPreisgruppe",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_KundenPreisgruppe",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_Kundenrabatt",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_Set",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_Stamm_StaffelPreise",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_WKZ",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_Zubehör",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_ZWEITEAN",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_ZWEITLIEFERANT",
+      "fields": [
+        "EAN"
+      ],
+      "to": "ARTIKEL_STAMM",
+      "keys": [
+        "EAN"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Bundle_Artikel",
+      "fields": [
+        "BundleId"
+      ],
+      "to": "Bundle",
+      "keys": [
+        "BundleId"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_Eigenschaften",
+      "fields": [
+        "EigenschaftId"
+      ],
+      "to": "Eigenschaften",
+      "keys": [
+        "EigenschaftId"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Kunden_Lieferadresse",
+      "fields": [
+        "KID"
+      ],
+      "to": "KUNDEN",
+      "keys": [
+        "KUND_NR"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "KUNDEN",
+      "fields": [
+        "GPreisgruppe"
+      ],
+      "to": "Kunden_GPreisgruppen",
+      "keys": [
+        "GPreisgruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Kunden_Dokumente",
+      "fields": [
+        "KUND_NR"
+      ],
+      "to": "KUNDEN",
+      "keys": [
+        "KUND_NR"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_KundenPreisgruppe",
+      "fields": [
+        "Preisgruppe"
+      ],
+      "to": "Kunden_Preisgruppen",
+      "keys": [
+        "Preisgruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_Stamm_StaffelPreise",
+      "fields": [
+        "Preisgruppe"
+      ],
+      "to": "Kunden_Preisgruppen",
+      "keys": [
+        "Preisgruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "KUNDEN",
+      "fields": [
+        "Preisgruppe"
+      ],
+      "to": "Kunden_Preisgruppen",
+      "keys": [
+        "Preisgruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Kunden_Bemerkungen",
+      "fields": [
+        "Kund_Nr"
+      ],
+      "to": "KUNDEN",
+      "keys": [
+        "KUND_NR"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_Sortiment_Kunden_Rabattgruppen",
+      "fields": [
+        "KundenRabattGruppe"
+      ],
+      "to": "Kundenrabattgruppen",
+      "keys": [
+        "KundenRabattGruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "KUNDEN",
+      "fields": [
+        "Rabattgruppe"
+      ],
+      "to": "Kundenrabattgruppen",
+      "keys": [
+        "KundenRabattGruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_STAMM",
+      "fields": [
+        "Suchname"
+      ],
+      "to": "LIEFERANTEN",
+      "keys": [
+        "Suchname"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_ZWEITLIEFERANT",
+      "fields": [
+        "ZSuchname"
+      ],
+      "to": "LIEFERANTEN",
+      "keys": [
+        "Suchname"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "LIEFERANTEN_Adressen",
+      "fields": [
+        "Suchname"
+      ],
+      "to": "LIEFERANTEN",
+      "keys": [
+        "Suchname"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Lieferanten_Bemerkungen",
+      "fields": [
+        "Suchname"
+      ],
+      "to": "LIEFERANTEN",
+      "keys": [
+        "Suchname"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Lieferanten_Filialen",
+      "fields": [
+        "Suchname"
+      ],
+      "to": "LIEFERANTEN",
+      "keys": [
+        "Suchname"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "LIEFERANTEN_Konditionen",
+      "fields": [
+        "Suchname"
+      ],
+      "to": "LIEFERANTEN",
+      "keys": [
+        "Suchname"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Bundle_Artikel",
+      "fields": [
+        "BundleId"
+      ],
+      "to": "Bundle",
+      "keys": [
+        "BundleId"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Artikel_Sortiment_Kunden_Rabattgruppen",
+      "fields": [
+        "SortimentRabattGruppe"
+      ],
+      "to": "Sortiment_Rabattgruppen",
+      "keys": [
+        "SortimentRabattGruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "ARTIKEL_Sortimente",
+      "fields": [
+        "SortimentRabattGruppe"
+      ],
+      "to": "Sortiment_Rabattgruppen",
+      "keys": [
+        "SortimentRabattGruppe"
+      ],
+      "evidence": "declared_in_access",
+      "reviewOnly": false
+    },
+    {
+      "from": "Kunden_Lieferadresse",
+      "fields": [
+        "KUND_NR"
+      ],
+      "to": "KUNDEN",
+      "keys": [
+        "KUND_NR"
+      ],
+      "evidence": "tested_candidate_not_declared",
+      "reviewOnly": true
+    },
+    {
+      "from": "KUNDEN",
+      "fields": [
+        "KFiliale"
+      ],
+      "to": "FILIALEN",
+      "keys": [
+        "FilialID"
+      ],
+      "evidence": "tested_candidate_not_declared",
+      "reviewOnly": true
+    },
+    {
+      "from": "KUNDEN",
+      "fields": [
+        "Kundengruppe"
+      ],
+      "to": "Kundengruppen",
+      "keys": [
+        "Kundengruppe"
+      ],
+      "evidence": "tested_candidate_not_declared",
+      "reviewOnly": true
+    }
+  ]
+}

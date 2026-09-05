@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.27 Beta · Geschütztes Importfundament und Verkaufs-/Kassenhistorie
+
+- Ein allgemeines, verschlüsseltes Importfundament ergänzt Quellenmanifeste, Prüfablage, revisionsgebundene Vorschauen, wiederholbare Übernahme, Konfliktbehandlung, Audit und kontrollierte Rücknahme. Alte Zugangsdaten werden nicht als GP-Zugänge übernommen.
+- Die vorbereiteten TradeFoto-Adapter decken 109 Fachdatentabellen für Stammdaten, CRM sowie Verkaufs-, Kassen- und weitere Historien ab. Historische Kennungen, Dezimalwerte und Quellmemos bleiben nachvollziehbar erhalten; operative Artikel-, Kunden-, Personal- und Standortverknüpfungen benötigen geprüfte Zuordnungen.
+- Unter Verkaufsanalysen sind Einzelverkäufe und Kassenhistorie mit Tages-/Zeitraum- und getrennten Verkäuferfiltern integriert. Die Kundenkartei ergänzt geschützte Kundenkäufe. Getrennte persönliche Rechte, Filialgrenzen, begrenzte Suchergebnisse und sichtbare Datenlücken verhindern ungeprüfte Gesamtaussagen.
+- Ein isolierter Testlauf validierte 1.477.216 Quellzeilen und prüfte 1.041 davon durch verschlüsselten Import, Wiederholung, Wiederanlauf und Rücknahme. Dies ersetzt weder einen vollständigen Großdatenimport noch einen fachlichen Umsatzabgleich gegen bestätigte Quellberichte.
+- Die neue produktive Historienanbindung und Gesamtimport-Tabellen bleiben deaktiviert. Offene Quellzeilenzähler, Zuordnungen und Umsatz-/Rückgabe-/Stornoregeln werden durch dieses Release nicht freigegeben; bestehende Artikelimporte und Geschäftsdatensätze bleiben unverändert.
+
 ## v0.92.26 Beta · Direkter TradeFoto-Datenbankimport
 
 - Der Artikelstamm kann eine ausdrücklich ausgewählte TradeFoto-ACCDB nun direkt und ausschließlich lesend prüfen. Das Datenbankpasswort und die hochgeladenen Quelldaten bleiben flüchtig und werden weder gespeichert noch protokolliert.

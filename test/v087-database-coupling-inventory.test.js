@@ -308,7 +308,8 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // Verkaufsanalyse- und zentraler Artikelstamm-Schemaoperationen sowie die
   // persistenzfreie Funktionssuche sind
   // explizit klassifiziert.
-  assert.equal(report.summary.productionDirectFiles, 71);
+  // Block 5 adds a named query repository; raw test DB access stays in test-support.
+  assert.equal(report.summary.productionDirectFiles, 72);
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 5);
   assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 4);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];

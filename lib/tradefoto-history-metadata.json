@@ -1,0 +1,2627 @@
+{
+  "version": 1,
+  "coverage": {
+    "tables": 43,
+    "fields": 433
+  },
+  "tables": [
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "ARTIKEL_FILIALEN",
+      "group": "inventory.branch_snapshot",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialID",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ProvisionKZ",
+          "type": "text",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Gültigab",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gültigbis",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Verpackungseinheit",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Höchstmenge",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FBestand",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Fvkj",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Fvkw",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Fvk4w",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AktionVerkaufspreis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Verkaufspreis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AVerkaufspreis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WertSonderartikel",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestellt",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Wertmenge",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "inventurdat",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IF",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AV",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FVK3M",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "S_out",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LInventurBestand",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "InternetFiliale",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LGPLatz",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestandsänderungsdatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "im_Zulauf",
+          "type": "double",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Artikel_Ibestand",
+      "group": "inventory.branch_snapshot",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Bestandstext",
+          "type": "text",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "ARTIKEL_PlattForm",
+      "group": "commerce.channel_mapping",
+      "keys": [
+        "PEAN"
+      ],
+      "columns": [
+        {
+          "name": "PEAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NPlattform1",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NPlattform2",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NPlattform3",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NPlattformZ1",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NPlattformZ2",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NPlattformZ3",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NPlattformZ4",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AufAn",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AufAn2",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AufAn3",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AufAnZ1",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AufAnZ2",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AufAnZ3",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AufAnZ4",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Artikel_Sellout",
+      "group": "inventory.legacy_aggregates",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SBetrag",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SVon",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SBis",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Default_Bank",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "KontoNr",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "BLZ",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "EinAusZahlung",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "KontoNr",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "KontoBeschreibung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Art",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "bar",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Euro",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Faktor",
+          "type": "double",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Fibu_Konten",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Konto",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "EinAusZahlung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "ohneMwSt",
+          "type": "boolean",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Minus",
+          "type": "boolean",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Aufwand",
+          "type": "boolean",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Gegenkonto",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "FiL_Umsatz",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Filialid",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LDatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "LAMP_Anbieter",
+      "group": "commerce.channel_mapping",
+      "keys": null,
+      "columns": [
+        {
+          "name": "AAnbieter1",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter2",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter3",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter4",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter5",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter6",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter7",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter8",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter9",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter10",
+          "type": "text",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "LAMP_GeizArtikel",
+      "group": "commerce.channel_mapping",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "GArtikelbezeichnung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "1Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "1Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "2Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "2Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "3Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "3Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "4Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "4Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "5Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "5Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "6Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "6Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "7Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "7Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "8Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "8Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "9Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "9Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "10Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "10Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "LAMP_GeizArtikelD",
+      "group": "commerce.channel_mapping",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "GArtikelbezeichnung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "1Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "1Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "2Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "2Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "3Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "3Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "4Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "4Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "5Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "5Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "6Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "6Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "7Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "7Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "8Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "8Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "9Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "9Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "10Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "10Anbieter",
+          "type": "text",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "MWST_Sätze",
+      "group": "finance.reference_data",
+      "keys": [
+        "MWST"
+      ],
+      "columns": [
+        {
+          "name": "MWST",
+          "type": "byte",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Faktor",
+          "type": "double",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "KtoNr",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "MWST_Sätze_Fil",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "FilialID",
+          "type": "byte",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "MWST",
+          "type": "byte",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "KtoNr",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "KtoNrDrittland",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "KtoNrEGOUSTID",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "KtoNrEGUSTID",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "EKtoNr",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "EKtoNrDrittland",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "EKtoNrEGOUSTID",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "EKtoNrEGUSTID",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "MWST_Sätze_Land",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Mwst_ID",
+          "type": "byte",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "MwSt_Land",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Faktor_Land",
+          "type": "double",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Kuerzel_Land",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Buchungskonto",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Rechnung_Export",
+      "group": "legacy.documents_exports",
+      "keys": [
+        "Rechnungsnr"
+      ],
+      "columns": [
+        {
+          "name": "Rechnungsnr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Anlegedatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Rechnungsbetrag",
+          "type": "float",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bezahlt",
+          "type": "float",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Verkäufer_ID",
+          "type": "long",
+          "dataClass": "personnel_restricted"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Rechnungsdetails_Export",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Rechnungsnr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Ean",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "menge",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MWST",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheinnr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheindatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gebucht",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KameraNr",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "set",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VK",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EK",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Sollpreis",
+          "type": "double",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "REPARATUR_WERKSTATT",
+      "group": "repairs.reference_data",
+      "keys": [
+        "Werkstatt_Id"
+      ],
+      "columns": [
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Firma",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Werkstatt_Id",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Telefon",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Telefax",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kundennummer",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "zHdvon",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Straße",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Ort",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Garantie",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Reparatur_WerkstattArtikel",
+      "group": "repairs.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Werkstatt_Id",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Gerätetyp_ID",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KV-Kosten",
+          "type": "double",
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "ReparaturKalkulation",
+      "group": "repairs.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Bis_EK",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Aufschlag",
+          "type": "double",
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "tblProtBestand",
+      "group": "inventory.history",
+      "keys": [
+        "ID"
+      ],
+      "columns": [
+        {
+          "name": "ID",
+          "type": "repid",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Aenderung",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialID",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestand",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AlterBestand",
+          "type": "long",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "tblProtBestand_comp",
+      "group": "inventory.history",
+      "keys": [
+        "ID"
+      ],
+      "columns": [
+        {
+          "name": "ID",
+          "type": "repid",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Aenderung",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialID",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestand",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AlterBestand",
+          "type": "long",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "tblProtPreis",
+      "group": "inventory.history",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Aenderung",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialID",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NVKPreis",
+          "type": "double",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Transfer_Alte_Umsatz_Kasse_Details",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Bonnr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kassenid",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bondatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VKMenge",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MWST",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KameraNr",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Batterie",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Sollpreis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VK_Preis",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabatt_DM",
+          "type": "double",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Verkauf_Artikel",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "vkdatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VKMenge",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabatt",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Prov",
+          "type": "double",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "SetBestandteil",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SonderartikelS",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestand",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gesamt",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RohertragDmGes",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Vertraege",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "VertragNr",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VertragName",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VertragGrundprov",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VertragPerskaufProv",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VertragZusatzprov",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ProvKZ",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Provision",
+          "type": "double",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "VertragsEAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "WE_Kontrolle",
+      "group": "inventory.history",
+      "keys": null,
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialID",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "InterneLieferscheinnr1",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Menge",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid2",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "InterneLieferscheinnr2",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WEDatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bemerkung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "weverkaeuferid",
+          "type": "long",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Unr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KMenge",
+          "type": "double",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Zahlungsarten",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Rang",
+          "type": "byte",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Zahlungsart",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Anzeige",
+          "type": "boolean",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Art",
+          "type": "currency",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "menge",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Einheit",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Terminal",
+          "type": "boolean",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Kartentypcode",
+          "type": "integer",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Export_Reparatur",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "ReparaturNr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialId",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "WerkstattName",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Anlegedatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MWST",
+          "type": "float",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "GarantiekarteVom",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Fehler",
+          "type": "memo",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Garantie",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AName",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ANr",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zusatz",
+          "type": "memo",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ASuchname",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KVDatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AArbeit",
+          "type": "memo",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Reparatur",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "erledigt",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Belegtext",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lagerware",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bemerkung",
+          "type": "memo",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bearbeitungsgebühr",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KostenvoranschlagAb",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VVKosten",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IKosten",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "KVKosten",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ReparaturDauer",
+          "type": "integer",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ArtikelArt",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Reklamation",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ReklamationBemerkung",
+          "type": "memo",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ReklamationAkzeptiert",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ReklamationDatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WerkstattAuftragNr",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Reparieren",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RepAuftragDatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kassieren",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AbzuholenDatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AbgeholtDatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EK_Netto",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "EK_Brutto",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "VK_Kalkuliert",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "Bezahlt_Datum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bezahlt_Zeit",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BonNr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kasse_ID",
+          "type": "integer",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rechnungsbetrag",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AbholNachrichtDatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Kostentraegercodes",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Kostenträgercode",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Lagerumschlag",
+      "group": "inventory.legacy_aggregates",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Warengruppe",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Anfangsdatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Anfangsbestand",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Anfangswert",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Enddatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EndBestand",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Endwert",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zugangsmenge",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zugangswer",
+          "type": "double",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "LAMP_AnbieterD",
+      "group": "commerce.channel_mapping",
+      "keys": null,
+      "columns": [
+        {
+          "name": "AAnbieter1",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter2",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter3",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter4",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter5",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter6",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter7",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter8",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter9",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AAnbieter10",
+          "type": "text",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Re_Freigabe",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Kundevon",
+          "type": "datetime",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Kundebis",
+          "type": "datetime",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Lieferantenvon",
+          "type": "datetime",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Lieferantenbis",
+          "type": "datetime",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Shopware_Artikel",
+      "group": "commerce.channel_mapping",
+      "keys": [
+        "EAN"
+      ],
+      "columns": [
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EANVersion",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SW_id",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SW_crossSellingId",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SW_variantId",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SW_productConfiguratorSettingId",
+          "type": "text",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Transfer_Alte_Umsatz_Kasse",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Bonnr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kassenid",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bondatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bonzeit",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "source": "trade",
+      "sourceSystem": "tradefoto.history.trade",
+      "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+      "name": "Vertraege_Artikel",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "VertragNr",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "DatumVon",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "DatumBis",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WKZ",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AktionsVertragsVK",
+          "type": "double",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "cash",
+      "sourceSystem": "tradefoto.history.cash",
+      "schemaSha256": "b10c01dd3edcc78336eddafa69aef84983ff6b6dd3b731d50217f6280d6152ce",
+      "name": "EigeneKonten",
+      "group": "finance.reference_data",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Ekontobeschreibung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "EkontoNr",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "cash",
+      "sourceSystem": "tradefoto.history.cash",
+      "schemaSha256": "b10c01dd3edcc78336eddafa69aef84983ff6b6dd3b731d50217f6280d6152ce",
+      "name": "KassenJournal",
+      "group": "finance.cash_journal",
+      "keys": [
+        "Vorgang"
+      ],
+      "columns": [
+        {
+          "name": "Vorgang",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Filiale",
+          "type": "integer",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "cash",
+      "sourceSystem": "tradefoto.history.cash",
+      "schemaSha256": "b10c01dd3edcc78336eddafa69aef84983ff6b6dd3b731d50217f6280d6152ce",
+      "name": "KassenJournal_Details",
+      "group": "finance.cash_journal",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Vorgang",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Filiale",
+          "type": "integer",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Beleg",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Konto",
+          "type": "long",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "EinAuszahlung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bezeichnung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Beschreibung",
+          "type": "text",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Einzahlung",
+          "type": "double",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Auszahlung",
+          "type": "double",
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "MwSt_Satz",
+          "type": "byte",
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "source": "cash",
+      "sourceSystem": "tradefoto.history.cash",
+      "schemaSha256": "b10c01dd3edcc78336eddafa69aef84983ff6b6dd3b731d50217f6280d6152ce",
+      "name": "Tagesbericht",
+      "group": "sales.daily_report",
+      "keys": null,
+      "columns": [
+        {
+          "name": "ZBon",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KoBeschreibung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bondatum",
+          "type": "datetime",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kassenid",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rechnungsnr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KontoNr",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Einnahmen",
+          "type": "currency",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Ausgaben",
+          "type": "currency",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rang",
+          "type": "long",
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "source": "cash",
+      "sourceSystem": "tradefoto.history.cash",
+      "schemaSha256": "b10c01dd3edcc78336eddafa69aef84983ff6b6dd3b731d50217f6280d6152ce",
+      "name": "Umsatz_KASSE",
+      "group": "sales.receipts",
+      "keys": [
+        "Bonnr",
+        "Filialid",
+        "Kassenid",
+        "Bondatum"
+      ],
+      "columns": [
+        {
+          "name": "Bonnr",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kassenid",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bondatum",
+          "type": "datetime",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bonzeit",
+          "type": "datetime",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KontoNr",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Personalkennziffer",
+          "type": "text",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "RechnungsBetrag",
+          "type": "float",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "RechnungsNr",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KPLZ",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "source": "cash",
+      "sourceSystem": "tradefoto.history.cash",
+      "schemaSha256": "b10c01dd3edcc78336eddafa69aef84983ff6b6dd3b731d50217f6280d6152ce",
+      "name": "Umsatz_Kasse_Details",
+      "group": "sales.lines",
+      "keys": [
+        "RepID"
+      ],
+      "columns": [
+        {
+          "name": "RepID",
+          "type": "repid",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bonnr",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kassenid",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bondatum",
+          "type": "datetime",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VKMenge",
+          "type": "double",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Sollpreis",
+          "type": "currency",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VK_Preis",
+          "type": "currency",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "MWST",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Rabatt_DM",
+          "type": "double",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "RohertragDM",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "Provision_dm",
+          "type": "double",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "set",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "SonderartikelS",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Importiert",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Prov",
+          "type": "long",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Provision",
+          "type": "double",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "R",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Rabatt",
+          "type": "double",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "N",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "NachlaßDM",
+          "type": "double",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ZR",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ZRRabatt",
+          "type": "double",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Ret",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "RechnungsNr",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "BStorno",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AStorno",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Anfilialid",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Verkäuferid",
+          "type": "long",
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Sortiment",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Beratung",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KameraNr",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ExportWWS",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bestandsfilialid",
+          "type": "byte",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Colorbildid",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bestandgebucht",
+          "type": "boolean",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "SETEAN",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KalkRohertrag",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "UMarke",
+          "type": "text",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "DEK_A",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "TDEK",
+          "type": "double",
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "SoBetrag",
+          "type": "double",
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AltSortiment",
+          "type": "long",
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "source": "cash",
+      "sourceSystem": "tradefoto.history.cash",
+      "schemaSha256": "b10c01dd3edcc78336eddafa69aef84983ff6b6dd3b731d50217f6280d6152ce",
+      "name": "ExportRichtTabelle",
+      "group": "legacy.documents_exports",
+      "keys": null,
+      "columns": [
+        {
+          "name": "Richtid",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Idd",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Id",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialId",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KassenId",
+          "type": "long",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Position",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gerichtet",
+          "type": "double",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "set",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ExportWWS",
+          "type": "boolean",
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VK",
+          "type": "currency",
+          "dataClass": "internal_business"
+        }
+      ]
+    }
+  ]
+}

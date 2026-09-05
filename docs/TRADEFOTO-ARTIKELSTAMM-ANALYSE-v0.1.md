@@ -1,5 +1,10 @@
 # TradeFoto-Artikelstamm · Analyse v0.1
 
+Ergänzung 05.09.2026: Die [Gesamtinventur, Block 1/6](tradefoto-gesamtimport-v0.1/README.md)
+erfasst die neu bereitgestellten Trade- und Kassendateien einschließlich CRM und
+Verkaufsverknüpfungen. Die folgenden älteren Snapshot-Befunde und das vorhandene
+Artikelprofil bleiben als historische bzw. implementierte Grundlage erhalten.
+
 ## 1. Dokumentstatus und Grenze
 
 | Merkmal | Stand |

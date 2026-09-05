@@ -18,7 +18,8 @@ process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
-const { app, db, releaseInstanceLockForTests } = require("../server");
+const { app, db, getPortalRoles, releaseInstanceLockForTests } = require("../server");
+const { SALES_HISTORY_PERMISSIONS } = require("../lib/sales-history-access");
 
 const MANAGER = "v09220-fl";
 const LOCAL_DEPARTMENT_MANAGER = "v09220-al-local";
@@ -126,6 +127,17 @@ test.after(async () => {
   try { db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
+});
+
+test("Block 5: real app startup retains history rights only for developer and rejects ungranted personal access", async () => {
+  const roles = await getPortalRoles(), historyIds = Object.values(SALES_HISTORY_PERMISSIONS);
+  for (const id of historyIds) assert.ok(roles.find(role => role.id === 'developer').permissions.includes(id), id);
+  for (const role of roles.filter(role => ['manager', 'admin', 'it_admin', 'hr', 'department_manager', 'employee'].includes(role.id))) {
+    assert.ok(historyIds.every(id => !role.permissions.includes(id)), role.id);
+  }
+  const denied = await request('/api/sales-history/context'); assert.equal(denied.response.status, 403);
+  assert.match(denied.response.headers.get('cache-control'), /no-store/);
+  assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='import_history_records'").get(), undefined);
 });
 
 test("v0.92.20: FL entzieht nur AL-Grundrechte im eigenen Standort", async () => {

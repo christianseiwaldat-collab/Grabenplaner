@@ -1,5 +1,11 @@
 # Verkaufsanalysen · Datenmodell und Importfundament v0.1
 
+Ergänzung 05.09.2026: Der neue [Gesamtimport-Auftrag, Block 1/6](tradefoto-gesamtimport-v0.1/README.md)
+plant ausdrücklich auch CRM-, Kunden- und Verkäuferverknüpfungen. Das folgende
+personenfreie v0.1-Modell beschreibt den bisherigen Vertrag; es wurde dadurch
+nicht automatisch erweitert. Neue Verknüpfungen benötigen eigene versionierte
+Modelle, Persistenz, Sichten und Berechtigungen in den freigegebenen Folgeblöcken.
+
 ## 1. Dokumentstatus und Blockgrenze
 
 | Merkmal | Stand |
