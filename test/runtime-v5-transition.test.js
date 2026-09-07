@@ -15,7 +15,8 @@ function fixture(t) {
   const old = path.join(temporary, "old"), candidate = path.join(temporary, "new");
   const runtime = JSON.parse(read("server-tools/linux/runtime-schema.json"));
   const offsite = JSON.parse(read("server-tools/linux/offsite/module-schema.json"));
-  for (const relative of ["server-tools/linux/runtime-schema.json", "server-tools/linux/offsite/module-schema.json", ...runtime.managedArtifacts, ...offsite.managedArtifacts]) {
+  const hardening = JSON.parse(read("server-tools/linux/hardening/module-schema.json"));
+  for (const relative of ["server-tools/linux/runtime-schema.json", "server-tools/linux/offsite/module-schema.json", "server-tools/linux/hardening/module-schema.json", ...runtime.managedArtifacts, ...offsite.managedArtifacts, ...hardening.managedArtifacts]) {
     const value = read(relative);
     for (const target of [old, candidate]) {
       fs.mkdirSync(path.dirname(path.join(target, relative)), { recursive: true });
@@ -79,4 +80,14 @@ test("runtime-v5 and offsite-v7 are the current package contracts", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).deploymentSchemaVersion, 5);
   assert.equal(JSON.parse(read("server-tools/linux/offsite/module-schema.json")).moduleVersion, 7);
+});
+test("runtime-v5 verifier reads the installed runtime-v4/offsite-v6 predecessor without accepting it as a new package", t => {
+  const { old } = fixture(t);
+  const verifier = path.join(root, "server-tools/linux/lib/verify-package.js");
+  const result = spawnSync(process.execPath, [verifier, "--runtime-contract", old], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const contract = JSON.parse(result.stdout);
+  assert.equal(contract.deploymentSchemaVersion, 4);
+  assert.equal(contract.offsiteModule.moduleVersion, 6);
+  assert.notEqual(spawnSync(process.execPath, [verifier, old], { encoding: "utf8" }).status, 0);
 });
