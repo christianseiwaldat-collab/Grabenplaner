@@ -25490,8 +25490,13 @@ registerDataImportRoutes(app, {
   refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }),
   assertCsrf: assertPortalCsrf,
 });
+const managedSalesHistoryRuntime = createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true });
+require("./lib/receipt-search-routes").registerReceiptSearchRoutes(app, {
+  runtime: managedSalesHistoryRuntime, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
+  refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }), preferences: uiPreferencesRepository,
+});
 registerSalesHistoryRoutes(app, {
-  runtime: createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true }),
+  runtime: managedSalesHistoryRuntime,
   refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }),
   requireSession: requireEmployeePortalSession,
   assertCsrf: assertPortalCsrf,
@@ -37637,7 +37642,7 @@ function crmRouteError(error) {
   if (isUniquePersistenceViolation(error)) {
     throw httpError(
       409,
-      "Diese Kundennummer oder Fotozuordnung ist bereits vergeben.",
+      "Diese Kunden-Kontonummer, Kundennummer oder Fotozuordnung ist bereits vergeben.",
       "CRM_CUSTOMER_CONFLICT",
     );
   }

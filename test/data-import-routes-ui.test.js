@@ -82,7 +82,7 @@ test('Productive Block 2: mapping endpoints retain authentication, CSRF and priv
 test('Productive Block 2: mapping UI escapes imported values and requires explicit decisions before confirming',()=>{
   const row={id:'source',revision:1,table:'KUNDEN',number:'000419',label:'<img onerror=secret>',customer:{firstName:'<script>secret</script>'},candidate:{id:'crm',revision:2,label:'Existing'},binding:null};
   const rows=MappingUI.renderRows([row]);assert.doesNotMatch(rows,/<img|<script/);assert.match(rows,/Sortierung der aktuellen Seite/);
-  const editor=MappingUI.renderEditor(row,{write:true},false);assert.doesNotMatch(editor,/<img|<script/);assert.match(editor,/Bitte wählen/);
+  const editor=MappingUI.renderEditor(row,{write:true},false);assert.doesNotMatch(editor,/<img|<script/);assert.match(editor,/Nicht angegeben/);assert.doesNotMatch(editor, /data-m="type" required/);
   assert.match(editor,/Vorhandene CRM-Karte ausdrücklich verbinden/);assert.match(editor,/data-m="apply"[^>]*disabled/);
   const readOnly=MappingUI.renderEditor(row,{write:false},false);assert.doesNotMatch(readOnly,/data-m="edit"/);
   const source=fs.readFileSync(path.join(__dirname,'../public/import-mappings.js'),'utf8');assert.doesNotMatch(source,/localStorage|sessionStorage/);

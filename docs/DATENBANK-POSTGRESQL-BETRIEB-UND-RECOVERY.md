@@ -1,5 +1,7 @@
 # PostgreSQL-Betrieb und Recovery im nicht produktiven Status
 
+Katalogzahlen fortgeschrieben am 07.09.2026 für den aktuellen lokalen Codebestand einschließlich Belegsuche. Das ist keine neue Produktivfreigabe; datierte Abnahmen sind über ihre jeweiligen Nachweisartefakte belegt.
+
 **Status:** Block 6/7 als nicht produktiver `development-contract` lokal
 abgenommen; keine Produktiv-, Support- oder Cutoverfreigabe<br>
 **Stand:** 13.08.2026<br>
@@ -21,7 +23,7 @@ Produktkonfiguration und alle bestehenden Installationen bleiben auf SQLite.
 
 Block 6 schließt die weiterhin offene Phase-5-Parität nicht:
 
-- Vollanwendungskatalog PostgreSQL: **0/1324** akzeptierte Live- und
+- Vollanwendungskatalog PostgreSQL: **0/1325** akzeptierte Live- und
   Paritätsnachweise;
 - PostgreSQL-Anwendungsmigrationen: **0/10** implementiert;
 - `applicationExecutable`: `false`;
@@ -368,7 +370,7 @@ nach:
 
 Der E2E-Fall verwendet ein bewusst kleines synthetisches
 `grabenplaner`-Schema. Er ist ein realer Betriebsweg-Nachweis, aber **kein**
-Vollanwendungs-Restore: Die Gates 0/1324 und 0/10 bleiben unverändert.
+Vollanwendungs-Restore: Die Gates 0/1325 und 0/10 bleiben unverändert.
 
 Die lokale Block-5/6-Abnahme allein behauptet keinen vollständigen
 plattformübergreifenden `pnpm test`-Gesamtlauf. Der nachfolgend dokumentierte
@@ -396,7 +398,7 @@ extern geprüft. Alle vier Jobs sind grün:
 - Provider- und Block-4-Verträge auf der Node-Mindestversion.
 
 Damit ist das nicht produktive externe CI-Gate für diesen Integrationscommit
-erfüllt. Der Lauf aktiviert keine Produktcapability und ersetzt weder 1324/1324
+erfüllt. Der Lauf aktiviert keine Produktcapability und ersetzt weder 1325/1325
 Vollanwendungsparität noch 10/10 Anwendungsmigrationen oder eine
 installationsbezogene Betriebsfreigabe.
 
@@ -442,7 +444,7 @@ Block 6 enthält nicht:
 Vor einer konkreten freiwilligen Installation oder Migration müssen
 mindestens alle folgenden Punkte separat abgenommen sein:
 
-- [ ] PostgreSQL-Vollanwendungskatalog: 1324/1324 akzeptierte Live- und
+- [ ] PostgreSQL-Vollanwendungskatalog: 1325/1325 akzeptierte Live- und
       Paritätsnachweise;
 - [ ] PostgreSQL-Anwendungsmigrationen: 10/10 implementiert und mit historischen
       Beständen geprüft;
@@ -468,7 +470,7 @@ Block 7 ist als installationsbezogene Gate-Prüfung gestartet. Das Ergebnis ist
 
 - Es ist keine konkrete Zielinstallation ausgewählt oder für eine Migration
   freigegeben.
-- Der PostgreSQL-Vollanwendungskatalog steht bei 0/1324.
+- Der PostgreSQL-Vollanwendungskatalog steht bei 0/1325.
 - Die PostgreSQL-Anwendungsmigrationen stehen bei 0/10.
 - `productActivation` und alle PostgreSQL-Produktcapabilities bleiben `false`.
 - Der externe GitHub-Actions-Nachweis für den Integrationscommit ist grün,

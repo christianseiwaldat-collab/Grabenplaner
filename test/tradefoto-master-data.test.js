@@ -159,19 +159,39 @@ test("Block 3: customer address uses KID, not zero KUND_NR; missing supplier sta
   await f.engine.undo(customerRun.id, customerRun.revision);
 });
 
-test("Block 3: CRM creation requires a deliberate customer type and preserves the external number", async t => {
+test("CRM import uses KUND_NR as the account and allows an unspecified customer type", async t => {
   const f = await fixture(t), { records: [record] } = await f.ingest("KUNDEN", [customer({ Internet: true, "Großhandelskunde": true })]);
-  await assert.rejects(f.service.previewCustomer({ recordId: record.id, expectedSourceRevision: 1 }), errorCode("IMPORT_CUSTOMER_TYPE_REVIEW_REQUIRED"));
+  const preview = await f.service.previewCustomer({ recordId: record.id, expectedSourceRevision: 1 });
+  assert.equal(preview.proposed.customerType, 'unknown');
   const result = await f.sync(record.id), target = await f.crm(result.targetId);
-  assert.equal(target.customerNumber, "000419"); assert.equal(target.customerType, "private"); assert.equal(target.website, "");
+  assert.equal(target.accountNumber, "000419"); assert.equal(target.customerNumber, null); assert.equal(target.customerType, "private"); assert.equal(target.website, "");
   assert.notEqual(target.id, "000419");
   assert.equal((await f.service.resolve("KUNDEN", ["000419"], "test-ledger")).targetId, target.id);
   assert.equal((await f.service.resolve("KUNDEN", ["419"], "test-ledger")).status, "missing_source");
 });
 
+test('CRM übernimmt namenlose Konten, trennt doppelte TradeFoto-KontoNr und bewahrt Kontakte bei fehlenden Folgeangaben', async t => {
+  const f = await fixture(t);
+  const { records } = await f.ingest('KUNDEN', [customer({ KUND_NR: '419', KontoNr: 900, VORNAME: null, NACHNAME: null, TELEFON: null, EMail: null }),
+    customer({ KUND_NR: '420', KontoNr: 900, VORNAME: null, NACHNAME: null, TELEFON: '111', EMail: null })]);
+  const targets = [];
+  for (const record of records) {
+    const input = { recordId: record.id, expectedSourceRevision: 1 };
+    const preview = await f.service.previewCustomer(input), result = await f.service.syncCustomer(input, preview.planHash);
+    targets.push(await f.crm(result.targetId));
+  }
+  assert.deepEqual(targets.map(c => c.accountNumber).sort(), ['419', '420']);
+  assert.ok(targets.every(c => !c.firstName && !c.lastName && c.customerNumber === null && c.customerType === 'unknown'));
+  const target = targets.find(c => c.accountNumber === '420'); await f.manual(target.id, { phone: 'Manuell 222' });
+  await f.ingest('KUNDEN', [customer({ KUND_NR: '419', KontoNr: 900, VORNAME: null, NACHNAME: null, TELEFON: null, EMail: null }),
+    customer({ KUND_NR: '420', KontoNr: 900, VORNAME: null, NACHNAME: null, TELEFON: null, EMail: null })]);
+  const record = records.find(r => targets[records.indexOf(r)].accountNumber === '420');
+  await f.sync(record.id, 2, { decision: {} });
+  assert.equal((await f.crm(target.id)).phone, 'Manuell 222');
+});
+
 for (const [name, values, code] of [
   ["zero", { KUND_NR: 0 }, "IMPORT_CUSTOMER_UNASSIGNED_ZERO"],
-  ["missing name", { VORNAME: null, NACHNAME: null }, "IMPORT_CRM_NAME_REQUIRED"],
   ["invalid email", { EMail: "broken-email" }, "IMPORT_CRM_EMAIL_INVALID"],
   ["invalid VAT", { UStID: "?invalid?" }, "IMPORT_CRM_VAT_ID_INVALID"],
 ]) test(`Block 3: ${name} remains in protected source review without inventing a CRM customer`, async t => {

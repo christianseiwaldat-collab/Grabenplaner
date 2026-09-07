@@ -290,3 +290,14 @@ test("Suchstatements bleiben PostgreSQL-portabel und geben keine Preis- oder Kos
     "active", "sourceSystem", "currentRevision",
   ]);
 });
+
+
+test('Artikelstamm findet ungenaue Sony-Suche mit Joker, umgestellter Wortfolge und Kennung', async () => {
+  const f = await fixture(); try {
+    await f.repository.importSnapshot({ snapshot: snapshot('tradefoto.artikel_stamm', [article(99, { description: 'Sony A7 IV Kit FE 24-105mm F4 G OSS' })], 3), actor: 'tester', timestamp: '2026-09-07T11:00:00.000Z' });
+    for (const query of ['Sony  A7\\**24  -105mm  ', 'Sony A7*&#x32;4 -105mm', '105mm Sony A7 24']) {
+      const result = await f.repository.search({ query, status: 'all' }); assert.equal(result.total, 1, query); assert.equal(result.items[0].articleNumber, 'ART-099');
+    }
+    assert.equal((await f.repository.search({ query: 'Sony A9 24', status: 'all' })).total, 0);
+  } finally { await f.close(); }
+});

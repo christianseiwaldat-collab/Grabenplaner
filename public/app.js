@@ -436,7 +436,7 @@ const state = {
     query: "",
     customerType: "",
     sort: { key: "lastName", direction: "asc" },
-    columns: ["customerNumber", "name", "customerType", "companyName", "city", "phone", "email"],
+    columns: ["accountNumber", "customerNumber", "name", "customerType", "companyName", "city", "phone", "email"],
     columnDraftOrder: [],
     columnDraftVisible: new Set(),
     preferencesLoaded: false,
@@ -757,7 +757,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 
 const elements = Object.fromEntries(
   [
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchIdentifier", "salesArticleSearchStatusFilter", "salesArticleSearchSourceSystem", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
@@ -4654,11 +4654,12 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "articleCatalog", "crm"].includes(state.currentView);
+  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "articleCatalog", "crm"].includes(state.currentView);
   elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
   setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
   setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
+  setNavigationCurrent(elements.receiptSearchNavButton, state.currentView === "receiptSearch");
   setNavigationCurrent(elements.salesArticleCatalogNavButton, state.currentView === "articleCatalog");
   setNavigationCurrent(elements.crmNavButton, state.currentView === "crm");
 }
@@ -23173,6 +23174,7 @@ function pageViewElement(view) {
     personnel: elements.personnelView,
     salesAdministration: elements.salesAdministrationView,
     salesAnalytics: elements.salesAnalyticsView,
+    receiptSearch: elements.receiptSearchView,
     articleCatalog: elements.salesArticleCatalogView,
     loans: elements.loansView,
     branchOrders: elements.branchOrdersView,
@@ -31175,6 +31177,7 @@ function applySalesArticleCatalogManagementState(canWrite = canWriteSalesArticle
 
 const CRM_DISPLAY_COLUMNS = Object.freeze([
   { id: "photo", label: "Foto", group: "Person", sortable: false },
+  { id: "accountNumber", label: "Kunden-Kontonummer", group: "Stammdaten", sortKey: "accountNumber" },
   { id: "customerNumber", label: "Kundennummer", group: "Stammdaten", sortKey: "customerNumber" },
   { id: "name", label: "Name", group: "Person", sortKey: "lastName" },
   { id: "customerType", label: "Kundentyp", group: "Stammdaten", sortKey: "customerType" },
@@ -31190,7 +31193,7 @@ const CRM_DISPLAY_COLUMNS = Object.freeze([
   { id: "birthDate", label: "Geburtstag", group: "Person", sortKey: "birthDate" },
 ]);
 const CRM_DEFAULT_DISPLAY_COLUMNS = Object.freeze([
-  "customerNumber", "name", "customerType", "companyName", "city", "phone", "email",
+  "accountNumber", "customerNumber", "name", "customerType", "companyName", "city", "phone", "email",
 ]);
 const CRM_SORT_KEYS = new Set(CRM_DISPLAY_COLUMNS.map((column) => column.sortKey).filter(Boolean));
 const CRM_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -31220,8 +31223,9 @@ function normalizeCrmCustomer(customer = {}) {
   const customFields = Array.isArray(customer.customFields) ? customer.customFields : [];
   return {
     id: String(customer.id || ""),
+    accountNumber: String(customer.accountNumber || ""),
     customerNumber: String(customer.customerNumber || ""),
-    customerType: customer.customerType === "business" ? "business" : "private",
+    customerType: ["private", "business"].includes(customer.customerType) ? customer.customerType : "unknown",
     companyName: String(customer.companyName || ""),
     firstName: String(customer.firstName || ""),
     lastName: String(customer.lastName || ""),
@@ -31250,6 +31254,7 @@ function normalizeCrmCustomer(customer = {}) {
 function crmCustomerName(customer) {
   return [customer?.firstName, customer?.lastName].filter(Boolean).join(" ")
     || customer?.companyName
+    || (customer?.accountNumber ? `Kundenkonto ${customer.accountNumber}` : "")
     || customer?.customerNumber
     || "Unbenannter Kunde";
 }
@@ -31261,7 +31266,7 @@ function crmCustomerInitials(customer) {
 }
 
 function crmCustomerTypeLabel(customerType) {
-  return customerType === "business" ? "Gewerblich" : "Privat";
+  return customerType === "business" ? "Gewerblich" : customerType === "private" ? "Privat" : "Nicht angegeben";
 }
 
 function crmCustomerPhotoUrl(customer) {
@@ -31297,7 +31302,7 @@ function crmCustomerAddress(customer) {
 
 function crmColumnCell(customer, column) {
   if (column.id === "photo") return crmCustomerPhotoMarkup(customer, "table");
-  if (column.id === "customerNumber") return `<strong>${escapeHtml(customer.customerNumber || "–")}</strong>`;
+  if (column.id === "accountNumber" || column.id === "customerNumber") return `<strong>${escapeHtml(customer[column.id] || "–")}</strong>`;
   if (column.id === "name") return `<strong>${escapeHtml(crmCustomerName(customer))}</strong>${customer.companyName && crmCustomerName(customer) !== customer.companyName ? `<small>${escapeHtml(customer.companyName)}</small>` : ""}`;
   if (column.id === "customerType") return `<span class="crm-type-badge ${customer.customerType === "business" ? "business" : "private"}">${escapeHtml(crmCustomerTypeLabel(customer.customerType))}</span>`;
   if (column.id === "address") return escapeHtml(crmCustomerAddress(customer) || "–");
@@ -31400,7 +31405,7 @@ async function loadCrmCustomers({ offset = 0 } = {}) {
     state.crm.limit = Math.max(1, Number(payload?.limit || state.crm.limit));
     state.crm.offset = Math.max(0, Number(payload?.offset || 0));
     state.crm.sort = normalizeCrmSort({ key: payload?.sort || state.crm.sort.key, direction: payload?.direction || state.crm.sort.direction });
-    setCrmSearchStatus(state.crm.total ? `${state.crm.total} passende Kunden gefunden.` : "Keine passenden Kunden gefunden.");
+    setCrmSearchStatus(state.crm.total ? `${state.crm.total} passende Kunden gefunden.` : payload?.directoryEmpty ? "Die GP-Kundenkartei ist noch leer. Kundenstammdaten müssen separat übernommen werden; der Kassenimport allein legt keine Kundenkarten an." : "Keine passenden Kunden gefunden.");
   } catch (error) {
     if (requestId !== state.crm.searchRequestId) return;
     state.crm.items = [];
@@ -31571,12 +31576,18 @@ let salesHistoryWorkspace = null;
 let dataImportWorkspace = null;
 let importMappingWorkspace = null;
 let crmPurchaseWorkspace = null;
+let receiptSearchWorkspace = null;
 let salesHistoryActorKey = "";
 function syncSalesHistoryAccess() {
   const user = state.portalSession?.user;
   const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
+  receiptSearchWorkspace?.destroy(); receiptSearchWorkspace = null;
+  document.getElementById("receiptSearchNavButton")?.classList.toggle("hidden", !user?.salesHistory?.read);
+  document.getElementById("receiptSearchDashboardCard")?.classList.toggle("hidden", !user?.salesHistory?.read);
+  if (user?.salesHistory?.read) receiptSearchWorkspace = window.GrabenplanerReceiptSearch?.mount(document.getElementById("receiptSearchWorkspace"), { api, rawApi });
+  if (state.currentView === "receiptSearch") { if (user?.salesHistory?.read) void receiptSearchWorkspace?.load(); else setView("startDashboard"); }
   salesHistoryWorkspace?.destroy(); salesHistoryWorkspace = null;
   dataImportWorkspace?.destroy(); dataImportWorkspace = null;
   importMappingWorkspace?.destroy(); importMappingWorkspace = null;
@@ -31624,7 +31635,8 @@ function renderCrmCustomerReadView(customer) {
     ${state.crm.detailError ? `<p class="crm-detail-message error">${escapeHtml(state.crm.detailError)}</p>` : ""}
     <div class="crm-customer-section-grid">
       <section class="crm-customer-section"><div class="crm-section-heading"><span>01</span><div><h3>Stammdaten</h3><p>Identität und Kundenart</p></div></div><div class="crm-facts">
-        ${crmDetailFact("Kundennummer", customer.customerNumber || "Noch nicht übernommen")}
+        ${crmDetailFact("Kunden-Kontonummer", customer.accountNumber || "Nicht angegeben")}
+        ${crmDetailFact("Kundennummer", customer.customerNumber || "Nicht angegeben")}
         ${crmDetailFact("Kundentyp", crmCustomerTypeLabel(customer.customerType))}
         ${crmDetailFact("Vorname", customer.firstName)}
         ${crmDetailFact("Nachname", customer.lastName)}
@@ -31659,14 +31671,15 @@ function renderCrmCustomerEditor(customer) {
   const photoUrl = crmCustomerPhotoUrl(customer);
   return `<header class="crm-customer-header editor">
       ${crmCustomerPhotoMarkup(customer, "detail")}
-      <div><span class="eyebrow">${existing ? "Kundenkartei bearbeiten" : "Neue Kundenkartei"}</span><h2 id="crmCustomerName" tabindex="-1">${escapeHtml(existing ? crmCustomerName(customer) : "Kunde anlegen")}</h2><p>Pflichtangaben werden vor dem Speichern geprüft.</p></div>
+      <div><span class="eyebrow">${existing ? "Kundenkartei bearbeiten" : "Neue Kundenkartei"}</span><h2 id="crmCustomerName" tabindex="-1">${escapeHtml(existing ? crmCustomerName(customer) : "Kunde anlegen")}</h2><p>Eine eindeutige Kunden-Kontonummer genügt. Name, Kundenart und Kontaktdaten dürfen fehlen.</p></div>
       <button class="secondary-button" type="button" data-crm-cancel-edit>${existing ? "Bearbeiten abbrechen" : "Anlage abbrechen"}</button>
     </header>
     <form class="crm-customer-form" data-crm-customer-form novalidate>
       <p class="crm-detail-message hidden" data-crm-form-message role="status" aria-live="polite"></p>
       <fieldset><legend>Person &amp; Kundentyp</legend><div class="crm-form-grid">
+        <label class="field"><span>Kunden-Kontonummer</span><input name="accountNumber" maxlength="80" value="${escapeHtmlAttribute(customer.accountNumber)}" placeholder="Eindeutiges Kundenkonto" /></label>
         <label class="field"><span>Kundennummer</span><input name="customerNumber" maxlength="80" value="${escapeHtmlAttribute(customer.customerNumber)}" placeholder="Wird aus dem bestehenden System übernommen" /></label>
-        <label class="field"><span>Kundentyp</span><select name="customerType" required><option value="private" ${customer.customerType !== "business" ? "selected" : ""}>Privat</option><option value="business" ${customer.customerType === "business" ? "selected" : ""}>Gewerblich</option></select></label>
+        <label class="field"><span>Kundentyp</span><select name="customerType"><option value="unknown" ${customer.customerType === "unknown" ? "selected" : ""}>Nicht angegeben</option><option value="private" ${customer.customerType === "private" ? "selected" : ""}>Privat</option><option value="business" ${customer.customerType === "business" ? "selected" : ""}>Gewerblich</option></select></label>
         <label class="field"><span>Vorname</span><input name="firstName" maxlength="120" value="${escapeHtmlAttribute(customer.firstName)}" autocomplete="given-name" /></label>
         <label class="field"><span>Nachname</span><input name="lastName" maxlength="120" value="${escapeHtmlAttribute(customer.lastName)}" autocomplete="family-name" /></label>
         <label class="field crm-span-2"><span>Unternehmen</span><input name="companyName" maxlength="200" value="${escapeHtmlAttribute(customer.companyName)}" autocomplete="organization" /></label>
@@ -31768,6 +31781,7 @@ function crmCustomerFormPayload(form) {
     value: String(row.querySelector('[name="customFieldValue"]')?.value || "").trim(),
   }));
   return {
+    accountNumber: String(values.accountNumber || "").trim() || null,
     customerNumber: String(values.customerNumber || "").trim() || null,
     customerType: values.customerType === "business" ? "business" : "private",
     companyName: String(values.companyName || "").trim(),
@@ -33946,6 +33960,7 @@ function setView(view) {
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
+    || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
     || (view === "crm" && !canAccessCrm())
@@ -33993,6 +34008,8 @@ function setView(view) {
   elements.personnelAdministrationView?.classList.toggle("active", view === "personnelAdministration");
   elements.salesAdministrationView?.classList.toggle("active", view === "salesAdministration");
   elements.salesAnalyticsView?.classList.toggle("active", view === "salesAnalytics");
+  elements.receiptSearchView?.classList.toggle("active", view === "receiptSearch");
+  if (view === "receiptSearch") void receiptSearchWorkspace?.load(); else receiptSearchWorkspace?.suspend();
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
   elements.crmView?.classList.toggle("active", view === "crm");
   elements.personnelView.classList.toggle("active", view === "personnel");
@@ -34031,7 +34048,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }

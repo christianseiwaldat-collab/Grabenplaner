@@ -20,7 +20,7 @@
   const NOISE_TOKENS = new Set([
     "aendern", "am", "an", "anlegen", "anzeigen", "auf", "aufrufen", "bearbeiten", "bei", "bitte", "brauche",
     "das", "dem", "den", "der", "des", "die", "ein", "eine", "einem", "einen", "einer", "einrichten", "einstellen",
-    "erstellen", "finden", "fuer", "funktion", "funktionen", "gibt", "hinzufuegen", "ich", "im", "in", "kann",
+    "erstellen", "finde", "finden", "fuer", "funktion", "funktionen", "gibt", "hinzufuegen", "ich", "im", "in", "kann",
     "konfigurieren", "loeschen", "machen", "mit", "moechte", "neu", "neue", "neuen", "oder", "oeffne", "oeffnen",
     "seite", "speichern", "starten", "suchen", "und", "verwalten", "von", "will", "wo", "wie", "zeigen", "zu",
     "zum", "zur",

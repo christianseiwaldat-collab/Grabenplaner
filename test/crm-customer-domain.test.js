@@ -54,6 +54,15 @@ function assertCrmBadRequest(fn, acceptedCodes) {
   });
 }
 
+test('Eine Kunden-Kontonummer genügt ohne Namen, Typ, Telefonnummer oder andere optionale Angaben', () => {
+  const customer = normalizeCrmCustomerInput({ accountNumber: '  000419  ' });
+  assert.equal(customer.accountNumber, '000419'); assert.equal(customer.customerNumber, null);
+  for (const key of ['firstName', 'lastName', 'companyName', 'phone', 'email', 'street']) assert.equal(customer[key], '');
+  assert.equal(customer.customerType, 'unknown'); assert.equal(customer.birthDate, null);
+  assertCrmError(() => normalizeCrmCustomerInput({}), 'CRM_NAME_REQUIRED');
+  assertCrmError(() => normalizeCrmCustomerInput({ accountNumber: '000419', email: 'invalid' }), 'CRM_EMAIL_INVALID');
+});
+
 test("Kundennummer bleibt bis zum späteren Bestandsimport nullable", () => {
   const missingNumber = normalizeCrmCustomerInput(customerInput());
   assert.equal(missingNumber.customerNumber, null);

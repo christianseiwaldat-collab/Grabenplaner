@@ -129,8 +129,8 @@ function availableIds(availableGateIds) {
 }
 
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
-  assert.equal(catalogApi.FUNCTION_SEARCH_CATALOG.length, 103);
-  assert.equal(ALL_GATE_IDS.size, 98);
+  assert.equal(catalogApi.FUNCTION_SEARCH_CATALOG.length, 104);
+  assert.equal(ALL_GATE_IDS.size, 99);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 
@@ -236,8 +236,9 @@ test("Block 5: Tastatur-, Screenreader-, Mobile- und Bewegungsreduktion sind vol
 
 test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenzfrei klassifiziert", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.92.27-beta");
-  assert.match(read("README.md"), /v0\.92\.27 Beta/);
+  assert.equal(packageJson.version, "0.92.29-beta");
+  assert.match(read("README.md"), /v0\.92\.29 Beta/);
+  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.29 Beta · Belegsuche und flexible Kundenkartei/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.27 Beta · Geschütztes Importfundament und Verkaufs-\/Kassenhistorie/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.26 Beta · Direkter TradeFoto-Datenbankimport/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.25 Beta · Artikelstamm-Verwaltung und kontrollierter TradeFoto-Import/);

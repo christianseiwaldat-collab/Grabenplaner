@@ -309,7 +309,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // persistenzfreie Funktionssuche sind
   // explizit klassifiziert.
   // Block 5 adds a named query repository; raw test DB access stays in test-support.
-  assert.equal(report.summary.productionDirectFiles, 74);
+  // The CRM identity startup migration now reads its existing table schema
+  // through the already classified SQLite operations adapter.
+  assert.equal(report.summary.productionDirectFiles, 76);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
@@ -428,7 +430,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1324);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1325);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -445,7 +447,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1324,
+    requiredReceiptCount: 1325,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -564,6 +566,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     "lib/work-rules/governance.js",
     "lib/work-rules/store.js",
     "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
+    "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
   ]);
   assert.deepEqual(report.resolvedTestFiles, []);
   assert.deepEqual(report.missingIndirectFiles, []);
@@ -631,7 +634,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   assert.match(phase5, /nicht produktiven Status/i);
   assert.match(phase5, /`development-contract`/);
   assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1324/);
+  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1325/);
   assert.match(phase5, /`applicationExecutable: false`/);
   assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
   assert.match(strategy, /Block 3[\s\S]{0,100}abgeschlossen/i);
@@ -643,7 +646,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   );
   assert.match(
     strategy,
-    /1324 Anwendungsstatements:[\s\S]{0,60}1210[\s\S]{0,100}`portable-generated`[\s\S]{0,60}114[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1324[\s\S]{0,100}Vollanwendungskatalog/i,
+    /1325 Anwendungsstatements:[\s\S]{0,60}1211[\s\S]{0,100}`portable-generated`[\s\S]{0,60}114[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1325[\s\S]{0,100}Vollanwendungskatalog/i,
   );
   assert.match(
     strategy,
