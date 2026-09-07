@@ -20,6 +20,7 @@ process.env.TZ = "Europe/Vienna";
 
 const { app, db, getPortalRoles, releaseInstanceLockForTests } = require("../server");
 const { SALES_HISTORY_PERMISSIONS } = require("../lib/sales-history-access");
+const { DATA_IMPORT_PERMISSIONS } = require("../lib/data-import-access");
 
 const MANAGER = "v09220-fl";
 const LOCAL_DEPARTMENT_MANAGER = "v09220-al-local";
@@ -129,15 +130,19 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
-test("Block 5: real app startup retains history rights only for developer and rejects ungranted personal access", async () => {
-  const roles = await getPortalRoles(), historyIds = Object.values(SALES_HISTORY_PERMISSIONS);
+test("Productive Block 1: app creates empty import storage, retains developer rights and denies ungranted personal access", async () => {
+  const roles = await getPortalRoles(), historyIds = [...Object.values(SALES_HISTORY_PERMISSIONS),...Object.values(DATA_IMPORT_PERMISSIONS)];
   for (const id of historyIds) assert.ok(roles.find(role => role.id === 'developer').permissions.includes(id), id);
   for (const role of roles.filter(role => ['manager', 'admin', 'it_admin', 'hr', 'department_manager', 'employee'].includes(role.id))) {
     assert.ok(historyIds.every(id => !role.permissions.includes(id)), role.id);
   }
   const denied = await request('/api/sales-history/context'); assert.equal(denied.response.status, 403);
   assert.match(denied.response.headers.get('cache-control'), /no-store/);
-  assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='import_history_records'").get(), undefined);
+  const importDenied=await request('/api/data-import/context');assert.equal(importDenied.response.status,403);
+  assert.match(importDenied.response.headers.get('cache-control'),/no-store/);
+  for(const table of ['import_history_records','import_master_records','data_import_runs','data_import_sources','data_import_runtime_keys']) {
+    assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${table}`).get().n,0,table);
+  }
 });
 
 test("v0.92.20: FL entzieht nur AL-Grundrechte im eigenen Standort", async () => {

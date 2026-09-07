@@ -1,0 +1,163 @@
+{
+  "format": "grabenplaner.trade-only-import-calculation.v1",
+  "calculatedAt": "2026-09-07T04:16:14.628Z",
+  "scope": "Trade_Daten.accdb only; reuse the measured sequential prefix before any cash import",
+  "source": {
+    "file": "Trade_Daten.accdb",
+    "bytes": 188649472,
+    "sha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+    "tablesIncludingEmpty": 102,
+    "nonemptyTables": 83,
+    "rows": 395163
+  },
+  "measuredImport": {
+    "applied": true,
+    "countedRowsApplied": 395163,
+    "stageMs": 335219,
+    "reviewMs": 449670,
+    "applyMs": 3467872,
+    "phaseSumMs": 4252761,
+    "unchangedSourceRecognitionMs": 253,
+    "terminalElapsedMs": 4253939,
+    "databaseFamilyPeakBytes": 3527423472,
+    "databaseFamilyIncludes": [
+      "database",
+      "wal",
+      "shm"
+    ],
+    "sampledPeakOnly": true,
+    "compactedDatabaseBytes": null,
+    "independentArchiveBytes": null,
+    "nodeRssPeakBytes": 1152155648,
+    "includesJavaAndOtherProcessMemory": false,
+    "phases": [
+      {
+        "phase": "stage",
+        "durationMs": 335219,
+        "cumulativeDatabaseFamilyPeakBytes": 760303048,
+        "firstLogLine": 1,
+        "lastLogLine": 219
+      },
+      {
+        "phase": "review",
+        "durationMs": 449670,
+        "cumulativeDatabaseFamilyPeakBytes": 903376328,
+        "firstLogLine": 220,
+        "lastLogLine": 241
+      },
+      {
+        "phase": "apply",
+        "durationMs": 3467872,
+        "cumulativeDatabaseFamilyPeakBytes": 3527423472,
+        "firstLogLine": 242,
+        "lastLogLine": 410
+      }
+    ]
+  },
+  "tradeTargetsBeforeCashApply": {
+    "provenance": "cash.afterReview, before any cash apply; excludes source/staging counts which already include cash",
+    "importMasterRecords": 133733,
+    "importHistoryRecords": 261430,
+    "importHistoryVersions": 261430,
+    "importMasterHolds": 498260
+  },
+  "largestTablesByRowCountNotBytes": [
+    {
+      "name": "ARTIKEL_FILIALEN",
+      "rows": 231351
+    },
+    {
+      "name": "ARTIKEL_ZWEITEAN",
+      "rows": 37817
+    },
+    {
+      "name": "KUNDEN",
+      "rows": 30504
+    },
+    {
+      "name": "ARTIKEL_BILDER_V2",
+      "rows": 29895
+    },
+    {
+      "name": "ARTIKEL_STAMM",
+      "rows": 19186
+    },
+    {
+      "name": "Shopware_Artikel",
+      "rows": 10587
+    },
+    {
+      "name": "tblProtBestand_comp",
+      "rows": 10159
+    }
+  ],
+  "evidence": {
+    "reportFile": "tmp/tradefoto-block3-2Ap4l0/report.json",
+    "reportSha256": "97bf362b5e2659a6e3c4ec97cad9eb567789a8075ce79580d6bddcee5242a366",
+    "logFile": "tmp/full-stock-20260906-213054.stdout.log",
+    "logSha256": "e3312e8910964520398be8c1c133ba43922895635ce962ed4fed3d96e5cc7d2c",
+    "tradeTerminalLogLine": 410,
+    "firstCashLogLine": 411,
+    "importImplementationFilesUnchanged": 12,
+    "originalTestDatabaseRemoved": true,
+    "originalTestDatasetUsesSyntheticMappings": true
+  },
+  "proposedBoundedTradeOnlyFollowup": {
+    "format": "grabenplaner.tradefoto.measurement-budget.v1",
+    "scope": "isolated-local-test-only",
+    "productionQualified": false,
+    "databaseBudgetBytes": 4294967296,
+    "walBudgetBytes": 2147483648,
+    "coupledBudgetBytes": 4362076160,
+    "archiveBudgetBytes": 14159970304,
+    "reserveBytes": 10737418240,
+    "overheadBytes": 268435456,
+    "peakWorkspaceBudgetBytes": 18790481920,
+    "requiredStartFreeBytes": 29527900160,
+    "compressionCreditBytes": 0,
+    "deduplicationCreditBytes": 0,
+    "existingBackupDeletionCreditBytes": 0,
+    "phases": [
+      {
+        "phase": "import",
+        "bytes": 6710886400
+      },
+      {
+        "phase": "initial-compaction",
+        "bytes": 8925478912
+      },
+      {
+        "phase": "baseline-and-unchanged-backup",
+        "bytes": 14428405760
+      },
+      {
+        "phase": "stress-compaction",
+        "bytes": 18723373056
+      },
+      {
+        "phase": "third-backup",
+        "bytes": 18790481920
+      },
+      {
+        "phase": "sequential-restore-after-stage-removal",
+        "bytes": 18790481920
+      }
+    ],
+    "preflight": {
+      "freeBytes": 136530161664,
+      "requiredStartFreeBytes": 29527900160,
+      "remainingAboveBudgetBytes": 107002261504
+    },
+    "purpose": "Obtain separate compacted size, table/index footprint, archive size and restore evidence",
+    "databaseAndWalBudgetsAreEnforcedExperimentLimitsNotForecasts": true,
+    "requiresSeparateTradeOnlyMeasurementEntrypoint": true,
+    "existingFullMeasurementCliStillRequiresBothSources": true,
+    "started": false
+  },
+  "productionQualified": false,
+  "vpsCapacityClaim": false,
+  "newImportStarted": false,
+  "sourceFilesChanged": false,
+  "productionWrites": false,
+  "commitPushDeploy": false
+}

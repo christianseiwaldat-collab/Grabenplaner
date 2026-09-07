@@ -277,7 +277,7 @@ function applyRecovery(values, internalPolicy) {
   const databaseLockModule = path.resolve(values["database-lock-module"]);
   for (const helper of [amuModule, databaseLockModule]) regular(helper, { maximumBytes: 4 * 1024 * 1024 });
   const { readAndVerifyBackup, restoreEncryptedFilesBackup } = require(amuModule);
-  readAndVerifyBackup(source.documents);
+  readAndVerifyBackup(source.documents, { includeContent: false });
   const { acquireDatabaseLock, releaseDatabaseLock } = require(databaseLockModule);
 
   const targets = [

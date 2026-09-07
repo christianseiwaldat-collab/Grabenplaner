@@ -125,6 +125,7 @@ async function createShift(employeeNumber, startTime, endTime) {
       employeeNumber,
       locationId,
       departmentId: "",
+      dutyCode: "branch_supervision",
       date: DATE,
       startTime,
       endTime,

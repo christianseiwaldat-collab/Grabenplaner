@@ -1206,7 +1206,7 @@ test("temporäre Filialeinsätze sind eng berechtigt, konfliktgeprüft und revis
         const pdfSettings = await requestJson("/api/portal/v1/schedule-pdf-settings", {
           method: "PUT",
           session: hr,
-          body: { locationId, departmentId, schedulePdfDesignIds: ["timeline", "matrix"] },
+          body: { locationId, departmentId, schedulePdfDesignIds: ["timeline", "matrix"], scheduleMatrixShowDutyLabel: true },
         });
         assert.equal(pdfSettings.response.status, 200, pdfSettings.text);
       }
@@ -1228,9 +1228,12 @@ test("temporäre Filialeinsätze sind eng berechtigt, konfliktgeprüft und revis
       );
       assert.equal(homeMatrixPdf.response.status, 200);
       const homeMatrixText = await pdfText(homeMatrixPdf.payload);
-      assert.match(homeMatrixText, /Andere Filiale · ganztägig/);
+      assert.match(homeMatrixText, /Zielfiliale/);
+      assert.match(homeMatrixText, /Zweite Ziel-?\s*Abteilung/);
+      assert.match(homeMatrixText, /Geplanter Dienst/);
+      assert.match(homeMatrixText, /09:00-17:30/);
       assert.match(homeMatrixText, /1A/);
-      assert.doesNotMatch(homeMatrixText, /09:00-17:30/);
+      assert.doesNotMatch(homeMatrixText, /Andere Filiale · ganztägig/);
 
       const destinationSchedule = await requestJson(
         `/api/schedule?week=2031-05-12&location=${DESTINATION}&department=${secondDestinationDepartment}`,

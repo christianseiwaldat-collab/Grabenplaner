@@ -1,0 +1,262 @@
+{
+  "format": "grabenplaner.cash.business-integration.v1",
+  "generatedAt": "2026-09-07T13:08:04.686Z",
+  "status": "implemented_and_targeted_verified_locally",
+  "branch": "feature/schedule-pdf-day-separators",
+  "head": "41e6d92e5fc95c30a4ecb11d478802a930ea44e1",
+  "version": "0.92.27-beta",
+  "production": {
+    "deployedThisStep": false,
+    "cashImportedThisStep": false,
+    "cashActivatedThisStep": false,
+    "backupsChangedThisStep": false,
+    "commitCreated": false,
+    "pushed": false
+  },
+  "functions": [
+    "direct_compact_sales_reads_without_universal_row_copies",
+    "explicit_frozen_gp_reference_mappings",
+    "personal_permissions_and_location_seller_customer_finance_scopes",
+    "review_preview_and_atomic_activation",
+    "atomic_return_to_previous_publication",
+    "stale_preview_and_cursor_rejection",
+    "exact_decimal_totals_and_receipt_reconciliation",
+    "separate_daily_report_and_journal_views"
+  ],
+  "tests": {
+    "groups": [
+      {
+        "path": "tmp/cash-publication-final-functional-20260907.tap",
+        "tests": 43,
+        "passed": 43,
+        "failed": 0,
+        "skipped": 0,
+        "durationMs": 2774.4559
+      },
+      {
+        "path": "tmp/cash-publication-architecture-20260907.tap",
+        "tests": 32,
+        "passed": 32,
+        "failed": 0,
+        "skipped": 0,
+        "durationMs": 746.6437
+      },
+      {
+        "path": "tmp/cash-publication-startup-20260907.tap",
+        "tests": 20,
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0,
+        "durationMs": 31618.9894
+      }
+    ],
+    "totalPassed": 95,
+    "totalFailed": 0,
+    "fullRegressionRunForFinalChanges": false,
+    "restoredFreshVaultAndDatabaseCopyVerified": true
+  },
+  "persistenceAudit": {
+    "path": "tmp/cash-publication-persistence-final-20260907.json",
+    "ok": true,
+    "errors": [],
+    "phase4Progress": {
+      "status": "completed",
+      "statementCount": 1324,
+      "sqliteStatementCount": 1324,
+      "postgresqlStatementCount": 1324,
+      "sqliteBaselineStatementCount": 34,
+      "dialectVariantStatementCount": 1290,
+      "namedDollarParameterStatementCount": 1217,
+      "migrationCount": 10,
+      "migrationOperationCount": 10,
+      "sqliteMigrationBindingCount": 10,
+      "postgresqlMigrationBindingCount": 10,
+      "executablePostgresqlRuntimeArtifacts": 0,
+      "postgresqlRuntimeArtifacts": [],
+      "duplicateStatementIds": [],
+      "duplicateSqliteStatementBindings": [],
+      "duplicatePostgresqlStatementBindings": [],
+      "missingSqliteStatementBindings": [],
+      "extraSqliteStatementBindings": [],
+      "missingPostgresqlStatementBindings": [],
+      "extraPostgresqlStatementBindings": [],
+      "dialectMetadataViolations": [],
+      "duplicateMigrationOperationIds": [],
+      "duplicateSqliteMigrationBindings": [],
+      "duplicatePostgresqlMigrationBindings": [],
+      "missingSqliteMigrationBindings": [],
+      "extraSqliteMigrationBindings": [],
+      "missingPostgresqlMigrationBindings": [],
+      "extraPostgresqlMigrationBindings": [],
+      "migrationMetadataViolations": [],
+      "bindingImplementationErrors": [],
+      "missingFiles": [],
+      "missingTestFiles": [],
+      "moduleErrors": [],
+      "complete": true
+    },
+    "phaseBoundaryViolations": 0
+  },
+  "browser": {
+    "syntheticData": true,
+    "actualPublicModules": [
+      "public/data-import.js",
+      "public/cash-publication.js"
+    ],
+    "backendMocked": true,
+    "realBackendVerifiedSeparatelyInFunctionalTests": true,
+    "workflowSteps": [
+      "open_ready_cash_candidate",
+      "open_publication_panel",
+      "map_source_location_to_gp_location",
+      "preview",
+      "activate",
+      "observe_current_publication_and_confirmation"
+    ],
+    "activationVisible": true,
+    "tabClosed": true,
+    "previewServerStopped": true,
+    "productionConnection": false
+  },
+  "sourceRuleEvidence": {
+    "path": "tmp/confirmed-cash-policy-20260907.json",
+    "fileSha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+    "selectedRows": 86,
+    "evidenceSha256": "2a135e55d21d296deed3a431a3e8c91855c967f8123af9f9d765c52caf3f74f2",
+    "knownCombinations": 5,
+    "appliesTo": "matching_cash_schema",
+    "unknownCombinationsReviewRequired": true,
+    "zeroVatCodeOnlyForZeroPrice": true
+  },
+  "storage": {
+    "previousFullCashPrototypeReport": "docs/tradefoto-gesamtimport-v0.1/KASSE-VOLLBESTAND-GP-PROTOTYP-2026-09-07.json",
+    "previousFullCashPrototypeBytes": 816533504,
+    "previousFullCashSourceRows": 1082167,
+    "rowEncodingUnchanged": true,
+    "publicationMetadataAdditional": true,
+    "newFullMeasurementPerformed": false,
+    "tradeReimportPerformed": false,
+    "previousMeasurementNotReissuedAsNewCodeQualification": true
+  },
+  "nextBlock4": {
+    "localCashIntegrationPrerequisitesComplete": true,
+    "liveActivationComplete": false,
+    "nextSteps": [
+      "coordinated_application_runtime_and_backup_release",
+      "controlled_import_of_last_provided_cash_export",
+      "review_explicit_gp_mappings_and_activate",
+      "signed_operational_and_restore_check_on_installed_version"
+    ],
+    "productionCapacityQualificationGrantedByThisReport": false
+  },
+  "fileHashes": [
+    {
+      "path": "lib/persistence/statements/cash-publications.js",
+      "sha256": "1593b0bdf0a7d56d26fd6355d181e0cced9680c63d6335e2875fdcf821970cba"
+    },
+    {
+      "path": "lib/persistence/sqlite/cash-publications-catalog.js",
+      "sha256": "3c92d5a269ca76e73988a45eebfdfa8fb2e06d91d7b534a1ba65bd24bc730487"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/cash-publications-schema.js",
+      "sha256": "0e1716be438b39623b913cb5509d16f3e00cf6fbe83001d0012a8eadffeeffc7"
+    },
+    {
+      "path": "lib/persistence/repositories/cash-publications.js",
+      "sha256": "320fe177cc56f3efa95baf245b0f385a9804a768f3f2b3013e1de9517b3c6d10"
+    },
+    {
+      "path": "lib/persistence/repositories/cash-history-backend.js",
+      "sha256": "e91b2ac5a8a7ef85b6695a4486fe9160029e78f1da707d5cfe9c6b709f5f2b32"
+    },
+    {
+      "path": "lib/persistence/repositories/cash-publication-runtime.js",
+      "sha256": "8332bb5e985a39927468b1129c5c7f083c5afc284718947aa9d067d63d3f3cd2"
+    },
+    {
+      "path": "lib/persistence/repositories/cash-snapshots.js",
+      "sha256": "50c6bf8a1e88e431face5814f6efc439d73e739930eb06ba244609447c396530"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-history-workspace.js",
+      "sha256": "85dd7c616adda83981510e3c47e2e5ad134e8724856823b1bd8f0fb9dca330aa"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-history-runtime.js",
+      "sha256": "e9c2d9318762aef6f3f7ef00d0c65e0a875759c3f696eef5e898b27b2ffc3c28"
+    },
+    {
+      "path": "lib/persistence/sqlite/application-catalog.js",
+      "sha256": "c4eeba59a40c041e23be768ce191c1e613d982d695c9331863b054726742284d"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/data-import-runtime-schema.js",
+      "sha256": "80d59ef2308e6a90480e4fec11907b0c2c1fbdb8fc41861daf6cdf3c1d5a480d"
+    },
+    {
+      "path": "lib/persistence/postgresql/catalog-contract.js",
+      "sha256": "d62a4eb106c694ad964b9f0ae8420ed9bcdd0779df13745d881e70ef190e0921"
+    },
+    {
+      "path": "lib/cash-source-policies.js",
+      "sha256": "49e1a42615f8224a94b5b215b719b101618d691ac54d2cff9917a6971caeba0f"
+    },
+    {
+      "path": "lib/tradefoto-sales-rules.js",
+      "sha256": "29cf2913599c38076c6a4c812bde0f56bd00b07ede888e0c30d9568360f92ab8"
+    },
+    {
+      "path": "lib/data-import-routes.js",
+      "sha256": "74ef648967183be1121f2db3f271329dad357d5ced7fa31ed8436c08fb53cba1"
+    },
+    {
+      "path": "server.js",
+      "sha256": "3e391b90f74368de6f47796b2b2328b61600b54038d77158927a2965d904f8bb"
+    },
+    {
+      "path": "public/cash-publication.js",
+      "sha256": "ba3711fa7ab46fd60d7710ac1e9d599637b67fc9ea82b91dbdb1de3b5d493739"
+    },
+    {
+      "path": "public/data-import.js",
+      "sha256": "d4df11e2b6f0976b876425977c988d3385e6344d8011160c13bae329c41bbf83"
+    },
+    {
+      "path": "public/index.html",
+      "sha256": "7e50e911edf89af60302ba9515e78dedbaca649db699b23e59bd60d5b43c3739"
+    },
+    {
+      "path": "scripts/audit-persistence-coupling.js",
+      "sha256": "d2e9c2ff4fb1ef7887ee691bd76a3a6d81debd610b769995ff901cb57c25379d"
+    },
+    {
+      "path": "test/cash-publication-integration.test.js",
+      "sha256": "ec6ee4443a5ca383311afd443a78247ae3ea85124674ceda2036ffc7ce3eba99"
+    },
+    {
+      "path": "test/data-import-routes-ui.test.js",
+      "sha256": "e4449edc2eabe85e935a5c6db9b5e91951764ac5f8ade881b00baa155e44dd90"
+    },
+    {
+      "path": "tmp/cash-publication-final-functional-20260907.tap",
+      "sha256": "5e45c48fd564655cd610fb585e9eace9d6c61ccb74d0cd0f6db9de9b808794ea"
+    },
+    {
+      "path": "tmp/cash-publication-architecture-20260907.tap",
+      "sha256": "2f7029660e3aec20dd05c4dbc808fcc96859367a01c17aefe087c034e4718d93"
+    },
+    {
+      "path": "tmp/cash-publication-startup-20260907.tap",
+      "sha256": "bf956cf0ea4ef3fbd9032d76db5c8d0a1c574da2741749740d7610892013ad6e"
+    },
+    {
+      "path": "tmp/cash-publication-persistence-final-20260907.json",
+      "sha256": "a3ce82f4f16f617e1007cacfde6cbd03c36168384cc8e5b508ad60b325a15409"
+    },
+    {
+      "path": "tmp/confirmed-cash-policy-20260907.json",
+      "sha256": "9748fbde835080d4ba7677addf05d83cfedce6982ab9b51f19044b46a3275223"
+    }
+  ]
+}

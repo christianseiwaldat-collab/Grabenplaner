@@ -104,7 +104,7 @@ test("v0.71 Block 7 UI: globale Dienstplanung behält Standort und kennt filialf
   const saveShift = between(app, "async function saveShift(event)", "async function saveOption(event)");
   assert.match(saveShift, /employeeNumber: document\.querySelector\("#shiftEmployee"\)\.value/);
   assert.match(saveShift, /locationId: state\.locationId/);
-  assert.match(saveShift, /departmentId: elements\.shiftDepartment\.value/);
+  assert.match(saveShift, /\.\.\.currentShiftDuty\(\)/);
   const mobileSchedule = between(server, "function mobileSchedulePayload", "function portalStatusForSession");
   assert.match(mobileSchedule, /planningSettingsRepository\.listMobileScheduleShifts/);
   assert.match(mobileSchedule, /employeeNumber: session\.employeeNumber/);

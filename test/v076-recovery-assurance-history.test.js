@@ -60,6 +60,54 @@ function successfulRun(root, runId = crypto.randomUUID()) {
   return { runId, terminal };
 }
 
+test("Windows transient head rename failures preserve the signed file until atomic replacement succeeds", {
+  skip: process.platform !== "win32",
+}, context => {
+  const root = initialize(context), head = path.join(root, "head.json"), before = fs.readFileSync(head);
+  const rename = fs.renameSync;
+  let attempts = 0;
+  fs.renameSync = (source, destination, ...options) => {
+    if (destination === head && ++attempts <= 6) {
+      assert.deepEqual(fs.readFileSync(head), before);
+      const error = new Error("synthetic sharing conflict"); error.code = "EPERM"; throw error;
+    }
+    return rename(source, destination, ...options);
+  };
+  try { record(root, crypto.randomUUID(), "full-assurance-started", 0); }
+  finally { fs.renameSync = rename; }
+  assert.equal(attempts, 7);
+  assert.equal(history.inspectHistory({ root, statusGid, policy }).eventCount, 1);
+});
+
+test("Windows permanent head rename failure stays bounded and never removes the previous signed head", {
+  skip: process.platform !== "win32",
+}, context => {
+  for (const [code, expectedAttempts] of [["EPERM", 11], ["EIO", 1]]) {
+    const root = initialize(context), head = path.join(root, "head.json"), before = fs.readFileSync(head);
+    const runId = crypto.randomUUID();
+    const rename = fs.renameSync;
+    let attempts = 0;
+    fs.renameSync = (source, destination, ...options) => {
+      if (destination === head) {
+        attempts++; assert.deepEqual(fs.readFileSync(head), before);
+        const error = new Error("synthetic permanent failure"); error.code = code; throw error;
+      }
+      return rename(source, destination, ...options);
+    };
+    try { assert.throws(() => record(root, runId, "full-assurance-started", 0), { code }); }
+    finally { fs.renameSync = rename; }
+    assert.equal(attempts, expectedAttempts);
+    assert.deepEqual(fs.readFileSync(head), before);
+    // The existing recovery protocol, rather than a deleted/recreated head,
+    // repairs the already committed event after the failed publication.
+    assert.throws(() => history.inspectHistory({ root, statusGid, policy }), {
+      code: "ASSURANCE_HEAD_HISTORY_MISMATCH",
+    });
+    record(root, runId, "oauth-policy-passed", 1, { evidence: { appVersion: "0.76.0-beta" } });
+    assert.equal(history.inspectHistory({ root, statusGid, policy }).eventCount, 2);
+  }
+});
+
 test("v0.76 initializes a protected Ed25519 history with a signed empty head", (context) => {
   const root = initialize(context);
   const privatePath = path.join(root, "signing-private.pem");

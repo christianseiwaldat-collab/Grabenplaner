@@ -148,6 +148,8 @@ const state = {
   manualScheduleLockPending: false,
   schedulePdfDesignSelection: [],
   schedulePdfDesignNames: {},
+  scheduleDutyColorDraft: null,
+  scheduleDutyColorsDirty: false,
   employeeLendings: [],
   employeeLendingDelegates: [],
   employeeLendingCandidates: [],
@@ -742,7 +744,7 @@ const optionLabels = {
 const TEAM_MEETING_GROUP_PREFIX = "team-meeting:";
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const planningDayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-const dayKeyByNumber = { 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday", 5: "friday", 6: "saturday" };
+const dayKeyByNumber = { 0: "sunday", 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday", 5: "friday", 6: "saturday" };
 const preferredDayLabels = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag" };
 const fixedDayLabels = { ...preferredDayLabels, saturday: "Samstag" };
 const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thursday: "Do", friday: "Fr", saturday: "Sa" };
@@ -5247,9 +5249,7 @@ function renderSummary() {
   elements.breakRuleHint.textContent = settings.break_rule_enabled === "1"
     ? `Pause: ${Number(settings.break_after_minutes) / 60} h → ${settings.break_duration_minutes} min`
     : "Pausenregel aus";
-  elements.saturdayRuleHint.textContent = settings.saturday_bonus_enabled === "1"
-    ? `Sa ab ${settings.saturday_bonus_from}: ×${String(settings.saturday_bonus_factor).replace(".", ",")}`
-    : "Sa-Faktor aus";
+  elements.saturdayRuleHint.textContent = "Zeitgutschriften werden gesondert geprüft";
   const departments = departmentsForLocation(state.locationId);
   const showDepartmentPdf = !state.departmentId && departments.length > 0;
   elements.departmentPdfControl?.classList.toggle("hidden", !showDepartmentPdf);
@@ -5590,24 +5590,41 @@ function scheduleEmployeesForDate(date) {
   return (state.data?.employees || []).filter((employee) => scheduleEmployeeVisibleOnDate(employee, date));
 }
 
+function scheduleEmployeeAccessibleLabel(employee) {
+  const fullName = String(employee.full_name || employee.fullName || employee.nickname || "Teammitglied").trim();
+  const position = employee.position_name || employee.positionName
+    || (state.positions || []).find(item => String(item.id) === String(employee.position_id || employee.positionId))?.name || "";
+  return [fullName, employee.personnel_number, position].filter(Boolean).join(" · ");
+}
+
+function scheduleHasSundayEntries() {
+  const sunday = addDays(state.weekStart, 6);
+  return (state.data.shifts || []).some(shift => shift.shift_date === sunday)
+    || [...(state.data.weekOptions || []), ...(state.data.staffAssignments || state.data.employeeLendings || [])]
+      .some(entry => entry.date_from <= sunday && entry.date_to >= sunday)
+    || (state.data.globalDayBlocks || []).some(entry => entry.block_date === sunday)
+    || (state.data.sicknessCredits || []).some(entry => (entry.date || entry.workDate) === sunday);
+}
+
 function renderTimeline() {
   const employees = state.data.employees;
   const settings = state.data.settings;
   const timedOptionStarts = state.data.weekOptions.filter((option) => !optionIsAllDay(option) && option.start_time).map((option) => timeToMinutes(option.start_time));
   const timedOptionEnds = state.data.weekOptions.filter((option) => !optionIsAllDay(option) && option.end_time).map((option) => timeToMinutes(option.end_time));
+  const planningHours = window.GPScheduleDuty.manualPlanningHours();
   const start = Math.min(
-    ...planningDayKeys.map((day) => timeToMinutes(settings[`${day}_start_time`])),
+    timeToMinutes(planningHours.start),
     ...state.data.shifts.map((shift) => timeToMinutes(shift.start_time)),
     ...timedOptionStarts,
   );
   const end = Math.max(
-    ...planningDayKeys.map((day) => timeToMinutes(settings[`${day}_end_time`])),
+    timeToMinutes(planningHours.end),
     ...state.data.shifts.map((shift) => timeToMinutes(shift.end_time)),
     ...timedOptionEnds,
   );
   const range = end - start;
   const employeeCount = Math.max(1, employees.length);
-  const dayCount = settings.show_sunday === "1" ? 7 : 6;
+  const dayCount = settings.show_sunday === "1" || scheduleHasSundayEntries() ? 7 : 6;
 
   const timeLabels = [];
   for (let minute = start; minute <= end; minute += 60) {
@@ -5643,8 +5660,8 @@ function renderTimeline() {
       }).join("");
     const headers = dayEmployees.length
       ? dayEmployees.map((employee) => `
-          <div class="employee-strip" style="background:${employee.color};color:${contrastColor(employee.color)}" title="${escapeHtml(employee.full_name)} · ${employee.personnel_number}">
-            <strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.personnel_number)}</small>
+          <div class="employee-strip" style="background:${employee.color};color:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" aria-label="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" tabindex="0">
+            <strong>${escapeHtml(window.GPScheduleDuty.scheduleEmployeeInitials(employee))}</strong><small>${escapeHtml(employee.personnel_number)}</small>
           </div>`).join("")
       : '<div class="employee-strip" style="background:#d7ddda;color:#65716c"><strong>Kein Team</strong></div>';
 
@@ -5701,8 +5718,11 @@ function renderTimeline() {
             const barEnd = Math.min(end, timeToMinutes(shift.end_time));
             const top = ((barStart - start) / range) * 100;
             const height = Math.max(2.5, ((barEnd - barStart) / range) * 100);
-            const departmentLabel = shift.department_name || shift.area || "";
-            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color};--employee-contrast:${contrastColor(employee.color)}" title="${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)}${departmentLabel ? ` · ${escapeHtml(departmentLabel)}` : ""}" aria-label="${escapeHtml(employee.nickname)} ${shift.start_time} bis ${shift.end_time}">${departmentLabel ? `<span>${escapeHtml(departmentLabel)}</span>` : ""}</button>`;
+            const duty = window.GPScheduleDuty.resolveScheduleDuty(shift, employee, departmentsForLocation(state.locationId, true));
+            const dutyColor = window.GPScheduleDuty.scheduleDutyColor(duty.code, settings.schedule_duty_colors);
+            const dutyContrast = window.GPScheduleDuty.scheduleDutyTextColor(dutyColor);
+            const title = `${scheduleEmployeeAccessibleLabel(employee)} · ${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)} · ${duty.label}${shift.area ? ` · ${shift.area}` : ""}`;
+            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color};--employee-contrast:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(title)}" aria-label="${escapeHtmlAttribute(title)}"><span class="shift-duty-badge" style="--duty-color:${dutyColor};--duty-contrast:${dutyContrast}" aria-hidden="true">${escapeHtml(duty.code)}</span></button>`;
           }).join("");
           const unavailableLabel = locked
             ? "gesperrt"
@@ -5713,7 +5733,8 @@ function renderTimeline() {
                 : fullDayOutgoingAssignment
                   ? "Filialeinsatz"
                 : "frei";
-          return `<div class="employee-lane ${specialCase || fullDayOutgoingAssignment ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtml(unavailableText)}">${bars}${optionBlocks}${assignmentBlocks}${softPendingBlock}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
+          const laneLabel = `${scheduleEmployeeAccessibleLabel(employee)} · ${date}${unavailableText ? ` · ${unavailableText}` : ""}`;
+          return `<div class="employee-lane ${specialCase || fullDayOutgoingAssignment ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtmlAttribute(laneLabel)}" aria-label="${escapeHtmlAttribute(laneLabel)}">${bars}${optionBlocks}${assignmentBlocks}${softPendingBlock}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
         }).join("")
       : '<div class="employee-lane"></div>';
 
@@ -5725,6 +5746,7 @@ function renderTimeline() {
   }).join("");
 
   elements.timeline.style.setProperty("--employee-count", employeeCount);
+  elements.timeline.style.setProperty("--day-min-width", `${Math.max(124, employeeCount * 32)}px`);
   elements.timeline.style.setProperty("--day-count", dayCount);
   elements.timeline.style.setProperty("--hour-step", `${100 / (range / 60)}%`);
   elements.timeline.innerHTML = `<div class="time-header">Zeit</div>${dayColumns}<div class="time-axis">${timeLabels.join("")}</div>`;
@@ -8050,11 +8072,10 @@ function normalizeEmployeeProfileOffboarding(payload, expectedEmployeeNumber) {
   };
 }
 
-function employeeProfileInitials(displayName) {
-  const parts = String(displayName || "").trim().split(/\s+/).filter(Boolean);
-  return (parts.length ? `${parts[0][0] || ""}${parts.length > 1 ? parts.at(-1)[0] || "" : ""}` : "MA")
-    .toLocaleUpperCase("de-AT")
-    .slice(0, 2);
+function employeeProfileInitials(displayName, employeeNumber = "") {
+  const employee = [...(state.allEmployees || []), ...(state.data?.employees || [])]
+    .find(item => String(item.personnel_number) === String(employeeNumber));
+  return window.GPScheduleDuty.scheduleEmployeeInitials(employee || { full_name: displayName });
 }
 
 function employeeProfileReferenceLabel(reference, { includeCode = false } = {}) {
@@ -8079,7 +8100,7 @@ function renderEmployeeProfileHeader() {
     }
     return;
   }
-  if (elements.employeeProfileAvatar) elements.employeeProfileAvatar.textContent = employeeProfileInitials(profile.displayName);
+  if (elements.employeeProfileAvatar) elements.employeeProfileAvatar.textContent = employeeProfileInitials(profile.displayName, profile.employeeNumber);
   if (elements.employeeProfileName) elements.employeeProfileName.textContent = profile.displayName;
   if (elements.employeeProfileIdentity) elements.employeeProfileIdentity.textContent = `Personalnummer ${profile.employeeNumber}`;
   if (elements.employeeProfileStatus) {
@@ -21479,6 +21500,91 @@ function updateBranchSupervisionSettings({ applyPreset = false } = {}) {
   elements.branchSupervisionSettingsHint.textContent = `${modeCopy} Die gesamte Öffnungszeit muss abgedeckt bleiben; Abteilungsleitungen zählen nur innerhalb der gewählten Überbrückungsgrenze.`;
 }
 
+function canManageScheduleDutyColors() {
+  const user = state.portalSession?.user;
+  return ["hr", "developer"].includes(user?.role) && user?.permissions?.includes("settings:write") === true;
+}
+
+function renderScheduleDutyColorSettings({ preserveDraft = false } = {}) {
+  const list = document.querySelector("#scheduleDutyColorList");
+  if (!list) return;
+  const dutyApi = window.GPScheduleDuty;
+  const user = state.portalSession?.user;
+  const draftActor = `${user?.employeeNumber || user?.employee_number || ""}:${user?.role || ""}`;
+  if (!preserveDraft || !state.scheduleDutyColorDraft || state.scheduleDutyColorDraftActor !== draftActor) {
+    state.scheduleDutyColorDraft = dutyApi.normalizeScheduleDutyColors(state.data?.settings?.schedule_duty_colors);
+    state.scheduleDutyColorDraftActor = draftActor;
+    state.scheduleDutyColorsDirty = false;
+  }
+  const canManage = canManageScheduleDutyColors();
+  const labels = { FL: "Filialaufsicht", HW: "Hardware", FO: "Fotowelt", AG: "Allgemeiner Dienst" };
+  list.innerHTML = Object.entries(labels).map(([code, label]) => {
+    const color = state.scheduleDutyColorDraft[code];
+    const rgb = [1, 3, 5].map(offset => parseInt(color.slice(offset, offset + 2), 16));
+    return `<fieldset class="schedule-duty-color-row" data-duty-color-row="${code}" ${canManage ? "" : "disabled"}>
+      <legend><span class="schedule-duty-color-preview" style="--duty-color:${color};--duty-contrast:${dutyApi.scheduleDutyTextColor(color)}">${code}</span> ${label}</legend>
+      <label class="schedule-duty-color-picker"><span>Farbe</span><input type="color" value="${color}" data-duty-color="${code}" aria-label="Farbe für ${label}" /></label>
+      <div class="schedule-duty-rgb">${["R", "G", "B"].map((channel, index) => `<label><span>${channel}</span><input type="number" min="0" max="255" step="1" inputmode="numeric" value="${rgb[index]}" data-duty-rgb="${code}" data-rgb-channel="${index}" aria-label="${channel} für ${label}" /></label>`).join("")}</div>
+    </fieldset>`;
+  }).join("");
+  const save = document.querySelector("#saveScheduleDutyColors");
+  if (save) { save.hidden = !canManage; save.disabled = !canManage || !state.scheduleDutyColorsDirty; }
+  const hint = document.querySelector("#scheduleDutyColorsHint");
+  if (hint) hint.textContent = canManage
+    ? "Unternehmensweite Einstellung: Änderungen gelten für alle Accounts und Standorte in Dienstplanung und PDF. Nur Personalleitung und Developer dürfen speichern."
+    : "Diese Dienstfarben gelten unternehmensweit. Änderungen sind ausschließlich Personalleitung und Developer mit Einstellungsrecht vorbehalten.";
+}
+
+function updateScheduleDutyColor(target) {
+  if (!canManageScheduleDutyColors()) return;
+  const input = target.closest("[data-duty-color], [data-duty-rgb]");
+  const row = input?.closest("[data-duty-color-row]");
+  if (!row || !state.scheduleDutyColorDraft) return;
+  const code = row.dataset.dutyColorRow;
+  if (!Object.hasOwn(window.GPScheduleDuty.DEFAULT_DUTY_COLORS, code)) return;
+  state.scheduleDutyColorsDirty = true;
+  let color;
+  if (input.dataset.dutyColor) {
+    if (!/^#[0-9a-f]{6}$/i.test(input.value)) return;
+    color = input.value.toUpperCase();
+    row.querySelectorAll("[data-duty-rgb]").forEach(channel => {
+      const offset = 1 + Number(channel.dataset.rgbChannel) * 2;
+      channel.value = String(parseInt(color.slice(offset, offset + 2), 16));
+      channel.setCustomValidity("");
+    });
+  } else {
+    const channels = [...row.querySelectorAll("[data-duty-rgb]")];
+    const values = channels.map(channel => channel.value === "" ? NaN : Number(channel.value));
+    channels.forEach((channel, index) => channel.setCustomValidity(
+      Number.isInteger(values[index]) && values[index] >= 0 && values[index] <= 255 ? "" : "Bitte 0 bis 255 eingeben.",
+    ));
+    if (values.length !== 3 || values.some(value => !Number.isInteger(value) || value < 0 || value > 255)) {
+      document.querySelector("#saveScheduleDutyColors").disabled = true;
+      return;
+    }
+    color = "#" + values.map(value => value.toString(16).padStart(2, "0")).join("").toUpperCase();
+    row.querySelector("[data-duty-color]").value = color;
+  }
+  state.scheduleDutyColorDraft[code] = color;
+  state.scheduleDutyColorsDirty = true;
+  const preview = row.querySelector(".schedule-duty-color-preview");
+  preview.style.setProperty("--duty-color", color);
+  preview.style.setProperty("--duty-contrast", window.GPScheduleDuty.scheduleDutyTextColor(color));
+  document.querySelector("#saveScheduleDutyColors").disabled = [...document.querySelectorAll("[data-duty-rgb]")]
+    .some(channel => !channel.checkValidity());
+}
+
+async function saveScheduleDutyColors({ silent = false } = {}) {
+  if (!canManageScheduleDutyColors()) throw new Error("Nur Personalleitung und Developer dürfen die unternehmensweiten Dienstfarben ändern.");
+  if ([...document.querySelectorAll("[data-duty-rgb]")].some(input => !input.reportValidity())) throw new Error("Bitte gültige RGB-Werte zwischen 0 und 255 eingeben.");
+  const colors = window.GPScheduleDuty.normalizeScheduleDutyColors(state.scheduleDutyColorDraft, { strict: true });
+  const result = await api("/api/settings/schedule-duty-colors", { method: "PUT", body: JSON.stringify({ colors }) });
+  state.data.settings.schedule_duty_colors = JSON.stringify(window.GPScheduleDuty.normalizeScheduleDutyColors(result.colors, { strict: true }));
+  renderScheduleDutyColorSettings();
+  renderTimeline();
+  if (!silent) showToast("Unternehmensweite Dienstfarben wurden gespeichert.");
+}
+
 function renderSettings() {
   const settings = state.data.settings;
   const vacationSettings = state.vacationData?.settings || settings;
@@ -21497,15 +21603,17 @@ function renderSettings() {
   state.schedulePdfDesignSelection = schedulePdfDesignIdsFromSettings(settings);
   state.schedulePdfDesignNames = Object.fromEntries(schedulePdfDesignCatalog(settings).map((design) => [design.id, design.label]));
   renderSchedulePdfDesignSettings();
+  renderScheduleDutyColorSettings({ preserveDraft: state.scheduleDutyColorsDirty && canManageScheduleDutyColors() });
   document.querySelector("#scheduleMatrixTimeFontSize").value = ["6", "8.5", "11", "14.5", "18"].includes(
     String(settings.pdf_schedule_matrix_time_font_size),
-  ) ? String(settings.pdf_schedule_matrix_time_font_size) : "6";
+  ) ? String(settings.pdf_schedule_matrix_time_font_size) : "14.5";
   document.querySelector("#scheduleMatrixDetailFontSize").value = ["6", "8", "9.5"].includes(
     String(settings.pdf_schedule_matrix_detail_font_size),
   ) ? String(settings.pdf_schedule_matrix_detail_font_size) : "6";
   document.querySelector("#scheduleMatrixTimeFontBold").checked = settings.pdf_schedule_matrix_time_font_bold === "1";
   document.querySelector("#scheduleMatrixTimeEmployeeColor").checked = settings.pdf_schedule_matrix_time_employee_color === "1";
   document.querySelector("#scheduleMatrixShowPosition").checked = settings.pdf_schedule_matrix_show_position !== "0";
+  document.querySelector("#scheduleMatrixShowDutyLabel").checked = settings.pdf_schedule_matrix_show_duty_label === "1";
   document.querySelector("#scheduleMatrixHeaderText").value = settings.pdf_schedule_matrix_header_text || "Design 2";
   document.querySelector("#vacationPdfTitleSetting").value = vacationSettings.vacation_pdf_title || "Urlaubsplanung";
   document.querySelector("#vacationPdfFilenamePrefix").value = vacationSettings.vacation_pdf_filename_prefix || vacationSettings.vacation_pdf_title || "Urlaubsplanung";
@@ -21521,7 +21629,7 @@ function renderSettings() {
   document.querySelector("#showSaturdayServiceStats").checked = settings.show_saturday_service_stats !== "0";
   document.querySelector("#externalBackupEnabled").checked = settings.external_backup_enabled !== "0";
   document.querySelector("#backupDirectory").value = settings.backup_directory || "";
-  document.querySelector("#backupIntervalHours").value = settings.backup_interval_hours || "2";
+  document.querySelector("#backupIntervalHours").value = settings.backup_interval_hours || "24";
   const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing");
   allowPastWeekEditing.checked = state.portalStatus?.portalEnabled === true
     ? state.allowPastWeekEditing
@@ -21569,9 +21677,6 @@ function renderSettings() {
   document.querySelector("#breakRuleEnabled").checked = settings.break_rule_enabled === "1";
   document.querySelector("#breakAfterHours").value = Number(settings.break_after_minutes) / 60;
   document.querySelector("#breakDuration").value = settings.break_duration_minutes;
-  document.querySelector("#saturdayBonusEnabled").checked = settings.saturday_bonus_enabled === "1";
-  document.querySelector("#saturdayBonusFrom").value = settings.saturday_bonus_from;
-  document.querySelector("#saturdayBonusFactor").value = settings.saturday_bonus_factor;
   document.querySelector("#showSunday").checked = settings.show_sunday === "1";
   elements.rememberLastScheduleOverallPlan.checked = settings.remember_last_schedule_overall_plan !== "0";
   elements.rememberLastVacationOverallPlan.checked = settings.remember_last_vacation_overall_plan !== "0";
@@ -31463,14 +31568,38 @@ function crmDetailFact(label, value, { html = false } = {}) {
 }
 
 let salesHistoryWorkspace = null;
+let dataImportWorkspace = null;
+let importMappingWorkspace = null;
 let crmPurchaseWorkspace = null;
 let salesHistoryActorKey = "";
 function syncSalesHistoryAccess() {
   const user = state.portalSession?.user;
-  const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.permissions, user.scopes]) : "";
+  const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
   salesHistoryWorkspace?.destroy(); salesHistoryWorkspace = null;
+  dataImportWorkspace?.destroy(); dataImportWorkspace = null;
+  importMappingWorkspace?.destroy(); importMappingWorkspace = null;
+  let importPanel = document.getElementById("dataImportPanel");
+  if (!importPanel && elements.salesAdministrationView) {
+    importPanel = document.createElement("details");
+    importPanel.id = "dataImportPanel";
+    importPanel.className = "data-import-panel hidden";
+    importPanel.innerHTML = '<summary>TradeFoto-Gesamtimport</summary><div data-import-body></div>';
+    elements.salesAdministrationView.append(importPanel);
+  }
+  importPanel?.classList.toggle("hidden", !user?.dataImport?.read);
+  if (importPanel && user?.dataImport?.read) dataImportWorkspace = window.GrabenplanerDataImport?.mount(importPanel, { api });
+  let mappingPanel = document.getElementById("importMappingPanel");
+  if (!mappingPanel && elements.salesAdministrationView) {
+    mappingPanel = document.createElement("details");
+    mappingPanel.id = "importMappingPanel";
+    mappingPanel.className = "data-import-panel hidden";
+    mappingPanel.innerHTML = '<summary>Stammdaten-Zuordnung des Gesamtimports</summary><div data-mapping-body></div>';
+    elements.salesAdministrationView.append(mappingPanel);
+  }
+  mappingPanel?.classList.toggle("hidden", !user?.dataImport?.read);
+  if (mappingPanel && user?.dataImport?.read) importMappingWorkspace = window.GrabenplanerImportMappings?.mount(mappingPanel, { api });
   crmPurchaseWorkspace?.destroy(); crmPurchaseWorkspace = null;
   const panel = document.getElementById("salesHistoryPanel");
   panel?.classList.toggle("hidden", !user?.salesHistory?.read);
@@ -34506,6 +34635,7 @@ function openEmployeeModal(employee = null) {
   if (!fullAccess && !displayAccess) return;
   const centralPersonnelWrite = canWriteCentralPersonnel();
   state.employeeEditMode = fullAccess ? "full" : "display";
+  loadEmployeeSaturdayCredit(employee, fullAccess);
   elements.employeeForm.reset();
   elements.employeeForm.querySelectorAll("details").forEach((section) => { section.open = false; });
   state.employeePersonnelRecord = null;
@@ -34649,6 +34779,48 @@ function renderShiftRulePreview(assessmentValue = state.data?.workRuleAssessment
     ${findings.length > 4 ? `<small class="shift-rule-preview-more">+ ${findings.length - 4} weitere Hinweise in der Wochenprüfung</small>` : ""}`;
 }
 
+function currentShiftDuty() {
+  const selected = String(elements.shiftDepartment.value || "");
+  const departmentId = /^[1-9]\d*$/.test(selected) ? Number(selected) : 0;
+  if (Number.isSafeInteger(departmentId) && departmentId > 0) return { departmentId, dutyCode: "department" };
+  return { departmentId: "", dutyCode: selected === "__branch_supervision__" ? "branch_supervision" : "general" };
+}
+
+function shiftDutySelection(shift, employee, departments) {
+  const dutyApi = window.GPScheduleDuty;
+  if (shift) {
+    const duty = dutyApi.resolveScheduleDuty(shift, employee, departments);
+    if (duty.kind === "department" && duty.departmentId) return String(duty.departmentId);
+    return duty.kind === "branch_supervision" ? "__branch_supervision__" : "__general__";
+  }
+  if (dutyApi.defaultScheduleDutyCode(employee) === "branch_supervision") return "__branch_supervision__";
+  const preferred = [state.departmentId, employee?.preferred_department_id, employee?.preferredDepartmentId]
+    .map(value => String(value || "")).find(id => departments.some(department => String(department.id) === id));
+  return preferred || "__general__";
+}
+
+function shiftDutyOptions(departments) {
+  return `<option value="__branch_supervision__">FL · Filialaufsicht</option><option value="__general__">Allgemeiner Dienst</option>${departments.map(department => {
+    const duty = window.GPScheduleDuty.resolveScheduleDuty({ duty_code: "department", department_id: department.id }, {}, departments);
+    return `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(duty.code)} · ${escapeHtml(department.name)}</option>`;
+  }).join("")}`;
+}
+
+function handleShiftEmployeeChange() {
+  if (!document.querySelector("#shiftId").value && elements.shiftDepartment.dataset.userSelected !== "true") {
+    const employeeNumber = document.querySelector("#shiftEmployee").value;
+    const employee = [...(state.data?.employees || []), ...(state.allEmployees || [])]
+      .find(item => String(item.personnel_number) === String(employeeNumber));
+    elements.shiftDepartment.value = shiftDutySelection(null, employee, departmentsForLocation(state.locationId));
+  }
+  calculateShiftPreview();
+}
+
+function handleShiftDutyChange() {
+  elements.shiftDepartment.dataset.userSelected = "true";
+  calculateShiftPreview();
+}
+
 function currentShiftRuleCandidate() {
   const employeeNumber = document.querySelector("#shiftEmployee").value;
   const date = document.querySelector("#shiftDate").value;
@@ -34659,7 +34831,7 @@ function currentShiftRuleCandidate() {
     id: document.querySelector("#shiftId").value || null,
     employeeNumber,
     locationId: state.locationId,
-    departmentId: elements.shiftDepartment.value || "",
+    ...currentShiftDuty(),
     date,
     startTime,
     endTime,
@@ -34713,7 +34885,12 @@ function calculateShiftPreview() {
   }
   let start = timeToMinutes(startValue);
   let end = timeToMinutes(endValue);
-  if (end <= start) end += 1440;
+  const planningHours = window.GPScheduleDuty.manualPlanningHours();
+  if (startValue < planningHours.start || endValue > planningHours.end || end <= start) {
+    elements.shiftCalculation.textContent = `Dienstzeiten sind täglich zwischen ${planningHours.start} und ${planningHours.end} Uhr möglich; das Ende muss nach dem Beginn liegen.`;
+    scheduleShiftRulePreview();
+    return;
+  }
   const raw = end - start;
   const settings = state.data.settings;
   const rulePause = settings.break_rule_enabled === "1" && raw > Number(settings.break_after_minutes)
@@ -34723,15 +34900,8 @@ function calculateShiftPreview() {
     ? Math.max(0, Math.min(end, timeToMinutes(config.lunchEnd)) - Math.max(start, timeToMinutes(config.lunchStart)))
     : 0;
   const pause = Math.max(rulePause, lunchPause);
-  let counted = raw - pause;
-  let bonus = 0;
-  if (new Date(`${dateValue}T12:00:00`).getDay() === 6 && settings.saturday_bonus_enabled === "1") {
-    const bonusFrom = timeToMinutes(settings.saturday_bonus_from);
-    const eligible = Math.max(0, end - Math.max(start, bonusFrom));
-    bonus = eligible * (Number(settings.saturday_bonus_factor) - 1);
-    counted += bonus;
-  }
-  elements.shiftCalculation.textContent = `Planzeit ${formatHours(raw)} · Pause ${formatHours(pause)}${bonus ? ` · Samstagszuschlag +${formatHours(bonus)}` : ""} · Gewertet ${formatHours(counted)}`;
+  const counted = raw - pause;
+  elements.shiftCalculation.textContent = `Planzeit ${formatHours(raw)} · Pause ${formatHours(pause)} · Netto ${formatHours(counted)} · Zeitgutschriften werden gesondert geprüft`;
   scheduleShiftRulePreview();
 }
 
@@ -35007,10 +35177,13 @@ async function updateEmployeeLendingDelegate(employeeNumber, enabled, control) {
 
 function openShiftModal(employeeNumber, date, shift = null) {
   if (guardScheduleEditing()) return;
-  const hours = operatingHours(shift?.shift_date || date);
-  if (!hours) {
-    showToast("An Sonntagen ist kein Dienst vorgesehen.", true);
-    return;
+  const planningHours = window.GPScheduleDuty.manualPlanningHours();
+  const opening = operatingHours(shift?.shift_date || date);
+  const hours = opening && opening.start >= planningHours.start && opening.end <= planningHours.end
+    ? opening : { start: "09:00", end: "17:00" };
+  for (const id of ["shiftStart", "shiftEnd"]) {
+    document.querySelector(`#${id}`).min = planningHours.start;
+    document.querySelector(`#${id}`).max = planningHours.end;
   }
   const specialCase = fullDaySpecialCaseFor(shift?.employee_number || employeeNumber, shift?.shift_date || date);
   if (specialCase && !shift) {
@@ -35027,15 +35200,21 @@ function openShiftModal(employeeNumber, date, shift = null) {
   document.querySelector("#shiftEmployee").innerHTML = candidates.map((employee) =>
     `<option value="${escapeHtmlAttribute(employee.personnel_number)}">${escapeHtml(shiftEmployeeOptionLabel(employee))}</option>`,
   ).join("");
-  const departments = departmentsForLocation(state.locationId);
-  elements.shiftDepartment.innerHTML = `<option value="">Keine / Allgemein</option>${departments.map((department) =>
-    `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
-  ).join("")}`;
+  const departments = [...departmentsForLocation(state.locationId)];
+  const existingDuty = shift && window.GPScheduleDuty.resolveScheduleDuty(shift, initialEmployee, departmentsForLocation(state.locationId, true));
+  if (existingDuty?.kind === "department" && existingDuty.departmentId
+    && !departments.some(department => String(department.id) === String(existingDuty.departmentId))) {
+    const historical = departmentsForLocation(state.locationId, true)
+      .find(department => String(department.id) === String(existingDuty.departmentId));
+    departments.push(historical || { id: existingDuty.departmentId, name: existingDuty.label });
+  }
+  elements.shiftDepartment.innerHTML = shiftDutyOptions(departments);
   elements.shiftForm.reset();
   document.querySelector("#shiftId").value = shift?.id || "";
   document.querySelector("#shiftEmployee").value = selectedEmployeeNumber;
   const selectedEmployee = candidates.find((employee) => employee.personnel_number === selectedEmployeeNumber);
-  elements.shiftDepartment.value = shift?.department_id || state.departmentId || selectedEmployee?.preferred_department_id || "";
+  elements.shiftDepartment.value = shiftDutySelection(shift, selectedEmployee, departments);
+  elements.shiftDepartment.dataset.userSelected = "false";
   document.querySelector("#shiftDate").value = shift?.shift_date || date;
   document.querySelector("#shiftStart").value = shift?.start_time || hours.start;
   document.querySelector("#shiftEnd").value = shift?.end_time || hours.end;
@@ -35275,6 +35454,71 @@ function renderOptionList() {
   elements.optionList.innerHTML = blockItems.length || optionItems.length
     ? [...blockItems, ...optionItems].join("")
     : '<div class="empty-options">Für diese Woche sind noch keine Sonderfälle eingetragen.</div>';
+}
+
+async function loadEmployeeSaturdayCredit(employee, fullAccess) {
+  const panel = document.querySelector('#employeeSaturdayCredit');
+  if (!panel) return;
+  const number = String(employee?.personnel_number || '');
+  const generation = (state.employeeSaturdayCreditGeneration || 0) + 1;
+  state.employeeSaturdayCreditGeneration = generation;
+  state.employeeSaturdayCredit = null;
+  panel.classList.toggle('hidden', !fullAccess);
+  const control = id => document.querySelector('#' + id);
+  for (const id of ['employeeSalesActivity', 'employeeSalesEffectiveDate', 'employeeSalesReason', 'employeeSalesSave', 'employeeSaturdayCutoverSave']) control(id).disabled = true;
+  control('employeeSalesHistory').replaceChildren();
+  control('employeeSaturdayCutoverSave').classList.add('hidden');
+  control('employeeSaturdayCutoverHint').classList.add('hidden');
+  control('employeeSaturdayCreditStatus').textContent = number ? 'Verkaufszuordnung wird geladen.' : 'Bitte das neue Teammitglied zuerst speichern. Danach kann die Verkaufszuordnung festgelegt werden.';
+  if (!number || !fullAccess) return;
+  try {
+    const value = await api(`/api/employees/${encodeURIComponent(number)}/saturday-credit`);
+    if (state.employeeSaturdayCreditGeneration !== generation) return;
+    state.employeeSaturdayCredit = { ...value, employeeNumber: number };
+    control('employeeSalesActivity').value = value.assignment?.activity || '';
+    const today = toIsoDate(new Date());
+    control('employeeSalesEffectiveDate').value = value.cutoverDate && value.cutoverDate > today ? value.cutoverDate : today;
+    control('employeeSalesEffectiveDate').min = value.cutoverDate || '';
+    control('employeeSalesReason').value = '';
+    for (const id of ['employeeSalesActivity', 'employeeSalesEffectiveDate', 'employeeSalesReason']) control(id).disabled = !value.canAssign;
+    control('employeeSalesSave').disabled = !value.canAssign || !value.cutoverDate;
+    control('employeeSaturdayCutoverSave').classList.toggle('hidden', Boolean(value.cutoverDate) || !value.canConfigure);
+    control('employeeSaturdayCutoverSave').disabled = !value.canConfigure;
+    control('employeeSaturdayCutoverHint').classList.toggle('hidden', Boolean(value.cutoverDate));
+    control('employeeSaturdayCreditStatus').textContent = value.cutoverDate
+      ? `Firmenregel ab ${formatDate(value.cutoverDate)}. ${value.assignment ? (value.assignment.activity === 'retail_sales' ? 'Aktuell dem Verkauf zugeordnet.' : 'Aktuell einer anderen Tätigkeit zugeordnet.') : 'Die Tätigkeit ist noch nicht bestätigt.'} Pausen zählen nicht zur Zuschlagszeit.`
+      : 'Der Umstellungsstichtag ist noch nicht festgelegt; derzeit gilt die bisherige Berechnung.';
+    for (const entry of value.history) {
+      const item = document.createElement('li');
+      item.textContent = `${formatDate(entry.effectiveDate)}: ${entry.activity === 'retail_sales' ? 'Verkauf' : 'Andere Tätigkeit'} · ${entry.reason}`;
+      control('employeeSalesHistory').append(item);
+    }
+  } catch (error) {
+    if (state.employeeSaturdayCreditGeneration === generation) control('employeeSaturdayCreditStatus').textContent = error.message;
+  }
+}
+
+async function saveEmployeeSaturdayCredit(configure = false) {
+  const current = state.employeeSaturdayCredit;
+  if (!current || (configure ? !current.canConfigure : !current.canAssign)) return;
+  const effectiveDate = document.querySelector('#employeeSalesEffectiveDate').value;
+  const activity = document.querySelector('#employeeSalesActivity').value;
+  const reason = document.querySelector('#employeeSalesReason').value.trim();
+  if (!effectiveDate || (!configure && (!activity || !reason))) { showToast('Bitte Datum, Tätigkeit und Begründung angeben.', true); return; }
+  const button = document.querySelector(configure ? '#employeeSaturdayCutoverSave' : '#employeeSalesSave');
+  const generation = state.employeeSaturdayCreditGeneration;
+  button.disabled = true;
+  try {
+    await api(configure ? '/api/saturday-credit/cutover' : `/api/employees/${encodeURIComponent(current.employeeNumber)}/saturday-credit`, {
+      method: 'POST', body: JSON.stringify(configure ? { effectiveDate } : { effectiveDate, activity, reason, expectedPreviousId: current.history[0]?.id || '' }),
+    });
+    if (generation !== state.employeeSaturdayCreditGeneration) return;
+    await loadEmployeeSaturdayCredit({ personnel_number: current.employeeNumber }, true);
+    showToast(configure ? 'Der Umstellungsstichtag wurde gespeichert.' : 'Die Verkaufszuordnung wurde gespeichert.');
+  } catch (error) {
+    if (generation !== state.employeeSaturdayCreditGeneration) return;
+    button.disabled = false; showToast(error.message, true);
+  }
 }
 
 async function saveEmployee(event) {
@@ -35684,7 +35928,7 @@ async function saveShift(event) {
   const body = {
     employeeNumber: document.querySelector("#shiftEmployee").value,
     locationId: state.locationId,
-    departmentId: elements.shiftDepartment.value || "",
+    ...currentShiftDuty(),
     date: document.querySelector("#shiftDate").value,
     startTime: document.querySelector("#shiftStart").value,
     endTime: document.querySelector("#shiftEnd").value,
@@ -37096,6 +37340,7 @@ async function saveSettings(silent = false) {
       scheduleMatrixTimeFontBold: document.querySelector("#scheduleMatrixTimeFontBold").checked,
       scheduleMatrixTimeEmployeeColor: document.querySelector("#scheduleMatrixTimeEmployeeColor").checked,
       scheduleMatrixShowPosition: document.querySelector("#scheduleMatrixShowPosition").checked,
+      scheduleMatrixShowDutyLabel: document.querySelector("#scheduleMatrixShowDutyLabel").checked,
       scheduleMatrixHeaderText: document.querySelector("#scheduleMatrixHeaderText").value,
     };
     const payload = {
@@ -37123,9 +37368,6 @@ async function saveSettings(silent = false) {
         breakRuleEnabled: document.querySelector("#breakRuleEnabled").checked,
         breakAfterMinutes: Math.round(Number(document.querySelector("#breakAfterHours").value) * 60),
         breakDurationMinutes: Number(document.querySelector("#breakDuration").value),
-        saturdayBonusEnabled: document.querySelector("#saturdayBonusEnabled").checked,
-        saturdayBonusFrom: document.querySelector("#saturdayBonusFrom").value,
-        saturdayBonusFactor: Number(document.querySelector("#saturdayBonusFactor").value),
         showSunday: document.querySelector("#showSunday").checked,
         rememberLastScheduleOverallPlan: elements.rememberLastScheduleOverallPlan.checked,
         rememberLastVacationOverallPlan: elements.rememberLastVacationOverallPlan.checked,
@@ -37190,6 +37432,7 @@ async function saveSettings(silent = false) {
     if (!silent && canSaveBranding && state.brandingFormDirty) {
       await saveCustomManagementBranding();
     }
+    if (!silent && state.scheduleDutyColorsDirty && canManageScheduleDutyColors()) await saveScheduleDutyColors({ silent: true });
     if (!silent) showToast("Einstellungen wurden gespeichert.");
     await loadAll();
     return true;
@@ -37864,6 +38107,15 @@ elements.birthdayPresentationSettingsCard?.addEventListener("change", (event) =>
     updateBirthdayPresentationSettingsState();
   }
 });
+document.querySelector("#scheduleDutyColorList")?.addEventListener("input", event => updateScheduleDutyColor(event.target));
+document.querySelector("#saveScheduleDutyColors")?.addEventListener("click", async () => {
+  const button = document.querySelector("#saveScheduleDutyColors");
+  button.disabled = true;
+  try { await saveScheduleDutyColors(); }
+  catch (error) { showToast(error.message, true); }
+  finally { button.disabled = !canManageScheduleDutyColors() || !state.scheduleDutyColorsDirty; }
+});
+
 elements.schedulePdfDesignSettingsList?.addEventListener("change", (event) => {
   updateSchedulePdfDesignSelection(event.target);
 });
@@ -38752,19 +39004,8 @@ elements.departmentPdfSelect?.addEventListener("change", () => {
   const selectedDepartment = elements.departmentPdfSelect.value;
   elements.departmentPdfButton.href = `/api/schedule.pdf?week=${state.weekStart}&location=${encodeURIComponent(state.locationId)}&departmentId=${encodeURIComponent(selectedDepartment)}`;
 });
-document.querySelector("#shiftEmployee").addEventListener("change", () => {
-  if (!document.querySelector("#shiftId").value) {
-    const employeeNumber = document.querySelector("#shiftEmployee").value;
-    const employee = [...(state.data?.employees || []), ...state.allEmployees]
-      .find((item) => item.personnel_number === employeeNumber);
-    const departmentId = String(employee?.preferred_department_id || employee?.preferredDepartmentId || "");
-    if (departmentId && [...elements.shiftDepartment.options].some((option) => option.value === departmentId)) {
-      elements.shiftDepartment.value = departmentId;
-    }
-  }
-  calculateShiftPreview();
-});
-elements.shiftDepartment.addEventListener("change", calculateShiftPreview);
+document.querySelector("#shiftEmployee").addEventListener("change", handleShiftEmployeeChange);
+elements.shiftDepartment.addEventListener("change", handleShiftDutyChange);
 elements.shiftModal.addEventListener("close", () => {
   clearTimeout(shiftRulePreviewTimer);
   shiftRulePreviewRequest?.abort();
@@ -39947,6 +40188,8 @@ document.querySelector("#optionDateTo").addEventListener("change", () => {
   if (to < from) document.querySelector("#optionDateFrom").value = to;
 });
 elements.employeeForm.addEventListener("submit", saveEmployee);
+document.querySelector('#employeeSalesSave')?.addEventListener('click', () => saveEmployeeSaturdayCredit());
+document.querySelector('#employeeSaturdayCutoverSave')?.addEventListener('click', () => saveEmployeeSaturdayCredit(true));
 elements.personnelRecordForm?.addEventListener("submit", savePersonnelRecord);
 elements.personnelRecordContent?.addEventListener("toggle", (event) => {
   const section = event.target.closest("details[data-personnel-record-section]");

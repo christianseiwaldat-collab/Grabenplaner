@@ -38,14 +38,14 @@ const broker = require(path.join(root, "server-tools/linux/offsite/lib/assurance
 const history = require(path.join(root, "server-tools/linux/offsite/lib/assurance-history.js"));
 
 test("v0.86.2 packages module v6 and migrates only verified v1 through v5 installations", () => {
-  assert.equal(schema.moduleVersion, 6);
+  assert.equal(schema.moduleVersion, 7);
   for (const relative of [
     "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
     "server-tools/linux/offsite/lib/application-smoke.js",
     "server-tools/linux/offsite/systemd/grabenplaner-offsite-application-smoke.service.in",
     "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance.timer.in",
   ]) assert.ok(schema.managedArtifacts.includes(relative), `Fehlt im Modul-v5-Vertrag: ${relative}`);
-  assert.match(installer, /\[1, 2, 3, 4, 5, 6\]\.includes\(value\.moduleVersion\)/);
+  assert.match(installer, /\[1, 2, 3, 4, 5, 6, 7\]\.includes\(value\.moduleVersion\)/);
   assert.match(installer, /installed_module_version >= 1 && installed_module_version <= 5/);
   assert.match(installer, /kontrolliert auf v6 migriert/);
   assert.match(installer, /for template in "\$OFFSITE_MODULE_ROOT"\/systemd\/\*\.in/);

@@ -357,7 +357,16 @@ function atomicReplace(file, content, mode, gid, policy) {
   const temporary = temporaryName(directory, path.basename(file));
   try {
     writeTemporary(temporary, content, mode, gid, policy);
-    fs.renameSync(temporary, file);
+    // Windows can briefly deny replacing a recently inspected file. Retry
+    // the same atomic operation, never unlink the valid signed head first.
+    const delays = [20, 40, 80, 160, 200, 250, 250, 500, 500, 1000];
+    for (let attempt = 0; ; attempt++) {
+      try { fs.renameSync(temporary, file); break; }
+      catch (error) {
+        if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes(error.code) || attempt >= delays.length) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delays[attempt]);
+      }
+    }
     syncDirectory(directory);
   } finally {
     try { fs.unlinkSync(temporary); } catch { /* already absent */ }

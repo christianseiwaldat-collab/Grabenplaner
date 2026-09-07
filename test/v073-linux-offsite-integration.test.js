@@ -54,7 +54,7 @@ test("v0.73 integrates optional offsite health and prevents unsafe implicit core
   assert.match(install, /grabenplaner-linux-offsite-module-contract/);
   assert.match(install, /server-tools\/linux\/offsite\/module-schema\.json/);
   assert.match(builder, /server-tools\\linux\\offsite\\module-schema\.json/);
-  assert.match(prepare, /gp_wait_ready "\$internal_ready_url" 120/);
+  assert.match(prepare, /gp_wait_ready "\$internal_ready_url" 1500/);
   assert.match(prepareUnit, /IPAddressDeny=any/);
   assert.match(prepareUnit, /IPAddressAllow=127\.0\.0\.0\/8/);
   assert.match(prepareUnit, /IPAddressAllow=::1\/128/);

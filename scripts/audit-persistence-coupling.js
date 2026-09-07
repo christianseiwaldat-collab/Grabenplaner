@@ -68,6 +68,12 @@ const BASELINE_PACKAGE_DEPENDENCY_NAMES = Object.freeze([
   "tesseract.js",
 ]);
 const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer"]);
+// Explicit, source-hash-bound qualification entrypoints. These create only a
+// fresh isolated fixture and cannot load the application or a productive vault.
+const ISOLATED_CASH_QUALIFICATION_CLI_FILES = new Set([
+  "scripts/measure-cash-history-snapshot.mjs",
+  "scripts/verify-compact-cash-full.mjs",
+]);
 
 const SCAN_ROOTS = Object.freeze([
   "server.js",
@@ -126,6 +132,27 @@ const PHASE_2_CLASSIFICATION = Object.freeze({
   laterPhase: "2-5",
 });
 const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
+  "lib/persistence/repositories/cash-snapshots.js",
+  "lib/persistence/repositories/cash-publications.js",
+  "lib/persistence/repositories/cash-publication-runtime.js",
+  "lib/persistence/repositories/cash-history-backend.js",
+  "lib/persistence/statements/cash-publications.js",
+  "lib/persistence/sqlite/cash-publications-catalog.js",
+  "lib/persistence/sqlite/operations/cash-publications-schema.js",
+  "lib/persistence/statements/cash-snapshots.js",
+  "lib/persistence/sqlite/cash-snapshots-catalog.js",
+  "lib/persistence/sqlite/operations/cash-snapshots-schema.js",
+  "lib/data-import-routes.js",
+  "lib/persistence/repositories/data-import-runtime.js",
+  "lib/persistence/repositories/data-import-mapping-runtime.js",
+  "lib/persistence/repositories/sales-history-runtime.js",
+  "lib/persistence/sqlite/data-import-runtime-catalog.js",
+  "lib/persistence/sqlite/operations/data-import-runtime-schema.js",
+  "lib/persistence/statements/data-import-runtime.js",
+  "lib/persistence/statements/saturday-credit.js",
+  "lib/persistence/sqlite/saturday-credit-catalog.js",
+  "lib/persistence/sqlite/operations/saturday-credit-schema.js",
+  "lib/persistence/repositories/saturday-credit.js",
   // Read-only route bridge, composed without a production import source.
   "lib/sales-history-routes.js",
   "scripts/verify-tradefoto-test-import.mjs",
@@ -269,10 +296,34 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "scripts/measure-cash-history-snapshot.mjs",
+  "scripts/verify-compact-cash-full.mjs",
+  "test-support/cash-history-snapshot-prototype.js",
+  "test/cash-history-snapshot-prototype.test.js",
+  "test/cash-snapshots.test.js",
+  "test/cash-publication-integration.test.js",
+  "test-support/large-data-backup-qualification.mjs",
+  "test-support/tradefoto-full-backup-measurement.js",
+  "test/background-backup-consistency.test.js",
+  "test/backup-package-runtime.test.js",
+  "test/local-backup-management.test.js",
+  "test/backup-recovery-keys.test.js",
+  "test/full-source-backup-measurement.test.js",
+  "test/data-import-runtime.test.js",
+  "test/data-import-state-counts.test.js",
+  "test/saturday-credit-integration.test.js",
+  "test/saturday-credit-api.test.js",
+  "test/data-import-routes-ui.test.js",
   "test-support/tradefoto-block6-store.js",
+  "test-support/tradefoto-block3-store.js",
   "test/tradefoto-history.test.js",
+  "test/tradefoto-storage-comparison.test.js",
   "test/tradefoto-master-data.test.js",
   "test/data-import-foundation.test.js",
+  "test/data-import-payload-storage.test.js",
+  "test/data-import-payload-reuse.test.js",
+  "test/schedule-duty-persistence-api.test.js",
+  "test/schedule-duty-colors-api.test.js",
   "test/custom-work-rules-persistence.test.js",
   "test/governance-store-persistence.test.js",
   "test/work-rule-governance-persistence.test.js",
@@ -414,10 +465,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1160;
-const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 33;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1127;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1054;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1324;
+const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 34;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1290;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1217;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -543,7 +594,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1046;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1210;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 114;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
@@ -724,6 +775,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
       "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
       "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
       "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
+      "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
       "server-tools/linux/monitor/lib/monitor-status.js",
       "server-tools/linux/offsite/lib/application-smoke.js",
       "server-tools/linux/recovery/lib/recovery-apply.js",
@@ -771,8 +823,28 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
 
 const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
   Object.freeze({
+    id: "isolated-full-source-measurement",
+    files: Object.freeze(["scripts/verify-tradefoto-full-import.mjs"]),
+    scope: "isolated-test-only",
+    owner: "import-and-recovery-qualification",
+    targetLayer: "managed import runtime and isolated backup measurement with implementation provenance",
+    risk: "high",
+    transitionException: "only fresh encrypted test databases; source files remain read-only and no production activation",
+    laterPhase: "not-applicable",
+  }),
+  Object.freeze({
     id: "backup-bundle-contract",
-    files: Object.freeze(["lib/backup-commit.js"]),
+    files: Object.freeze([
+      "lib/backup-commit.js",
+      "lib/local-backup-archive.js",
+      "lib/background-backup-process.js",
+      "lib/backup-workspace.js",
+      "lib/backup-recovery-keys.js",
+      "scripts/manage-local-backup-archive.js",
+      "scripts/run-background-backup.js",
+      "server-tools/linux/lib/local-backup-archive.js",
+      "server-tools/linux/offsite/grabenplaner-offsite-prepare.sh",
+    ]),
     scope: "product-operations",
     owner: "backup-contract",
     targetLayer: "versioned provider-neutral backup bundle with provider-specific components",
@@ -1061,6 +1133,8 @@ const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   "scripts/cleanup-branch-order-test-data.js",
 ]);
 const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
+  "test-support/cash-history-snapshot-prototype.js",
+  "test/data-import-state-counts.test.js",
   ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![
     "test/block6-custom-work-rule-evaluator.test.js",
     "test/work-rule-store.test.js",
@@ -2339,7 +2413,7 @@ function architectureBoundaryViolationsForText(file, text) {
 function scanPhaseBoundary(root, files) {
   const violations = [];
   for (const file of files) {
-    if (file.startsWith("test/") || file.startsWith("test-support/") || EXCLUDED_FILES.has(file)) continue;
+    if (file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || EXCLUDED_FILES.has(file)) continue;
     const text = fs.readFileSync(path.join(root, file), "utf8");
     violations.push(...architectureBoundaryViolationsForText(file, text));
   }
@@ -3859,7 +3933,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     .sort();
   const records = [];
   for (const file of files) {
-    const isTest = file.startsWith("test/") || file.startsWith("test-support/");
+    const isTest = file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file);
     const classification = isTest
       ? (baselineTests.has(file)
         ? testClassification(file)

@@ -1,0 +1,39 @@
+{
+  "format": "grabenplaner.cash.storage-architecture-assessment.v1",
+  "assessedAt": "2026-09-07T06:09:02.050Z",
+  "decision": {
+    "trade": "full_previous_scope_unchanged",
+    "cash": "24_months_and_specialized_immutable_dataset_candidate"
+  },
+  "previousFullCombined": {
+    "sourceBytes": 519577600,
+    "databaseBytes": 11602071552,
+    "factor": 22.32981474182105,
+    "cashOnlyDatabaseBytes": null
+  },
+  "previousCash": {
+    "sourceRows": 1082167,
+    "measuredInfrastructureRows": {
+      "stagedRows": 1082167,
+      "links": 1082167,
+      "undoRows": 1082167,
+      "historyRecords": 1082167,
+      "historyVersions": 1082167,
+      "masterHolds": 2140395
+    },
+    "countedRowsLowerBound": 7551230,
+    "includesAllTables": false
+  },
+  "newStorageExperiment": {
+    "fullDatabaseBytes": 835137536,
+    "limitedDatabaseBytes": 481947648,
+    "limitedArchiveBytes": 267699825,
+    "databaseReductionFromWindowOnlyPercent": 42.291224232555635,
+    "measuredFullCashSourceFactor": 2.523622095973661,
+    "productionQualified": false
+  },
+  "evidence": {
+    "measurementSha256": "5f49092eada3c4a3ab404311173382b6a8058c84e23e011035f3d9d7f7fa0767",
+    "previousFullReportSha256": "97bf362b5e2659a6e3c4ec97cad9eb567789a8075ce79580d6bddcee5242a366"
+  }
+}

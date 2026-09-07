@@ -26,6 +26,7 @@ function Resolve-SafeDirectory([string]$Path, [switch]$MustExist) {
 
 function Test-ExcludedRelativePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
+    if ($normalized -cin @('scripts/run-background-backup.js', 'scripts/manage-local-backup-archive.js')) { return $false }
     $top = ($normalized -split '/', 2)[0].ToLowerInvariant()
     if ($top -in @('.git', '.github', '.devcontainer', 'backups', 'data', 'demo', 'docs', 'node_modules', 'output', 'release', 'runtime', 'scripts', 'test', 'tmp', 'usb-backups')) { return $true }
     if ($normalized -match '(^|/)(\.env($|\.)|\.npmrc$|\.pnpm-store($|/)|__pycache__($|/))') { return $true }
@@ -39,6 +40,9 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
     if ($normalized -in @(
         'server.js',
+        'backup.js',
+        'scripts/run-background-backup.js',
+        'scripts/manage-local-backup-archive.js',
         'package.json',
         'pnpm-lock.yaml',
         'pnpm-workspace.yaml',
@@ -291,6 +295,12 @@ try {
 
     $requiredPackageFiles = @(
         'server.js',
+        'backup.js',
+        'scripts\run-background-backup.js',
+        'scripts\manage-local-backup-archive.js',
+        'lib\backup-workspace.js',
+        'lib\background-backup-process.js',
+        'lib\local-backup-archive.js',
         'package.json',
         'pnpm-lock.yaml',
         'SERVERBETRIEB.md',
@@ -341,6 +351,7 @@ try {
         'server-tools\linux\migrate-grabenplaner-runtime-v2.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v3.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v4.sh',
+        'server-tools\linux\migrate-grabenplaner-runtime-v5.sh',
         'server-tools\linux\finalize-grabenplaner-runtime-v3.sh',
         'server-tools\linux\lib\extract-updater-contract.js',
         'lib\controlled-host-reboot.js',

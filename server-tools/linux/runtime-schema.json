@@ -1,7 +1,7 @@
 {
   "format": "grabenplaner-linux-runtime-contract",
   "schemaVersion": 1,
-  "deploymentSchemaVersion": 4,
+  "deploymentSchemaVersion": 5,
   "migrationPolicy": "explicit-maintenance",
   "managedArtifacts": [
     "server-tools/linux/Caddyfile.in",

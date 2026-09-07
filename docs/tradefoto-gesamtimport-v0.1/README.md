@@ -1,6 +1,46 @@
 # TradeFoto-Gesamtimport · Block 1/6
 
+Aktueller Umsetzungsstand vom 07.09.2026: [Kompakte Kasse funktional angebunden](KASSE-ANBINDUNG-ABSCHLUSS-2026-09-07.md). Auswertungsadapter, Rechte, festgehaltene Zuordnungen, Aktivierung und Rückkehr sind lokal implementiert und geprüft. Die nachstehenden früheren Inventur- und Vorprüfungsstände bleiben historische Nachweise; der VPS-Release und der produktive Erstimport sind der folgende Schritt.
+
 Stand: 05.09.2026. Status: vollständige Strukturinventur, Qualitätsprüfung und Zielvorschlag; **kein Import in den Grabenplaner**.
+
+Aktuelle Entscheidung vom 07.09.2026: **Gesamte Kasse im schlanken Prototyp, ohne 24-Monate-Grenze.**
+TradeFoto bleibt ausdrücklich im vollständigen bisherigen Umfang; auf die dort möglichen 0,09 % Zeilenersparnis wird verzichtet.
+Die frühere [24-Monate-Auswahl](24-MONATE-IMPORTUMFANG-2026-09-07.md) ist als Vorgabe aufgehoben und bleibt ein historischer Vergleich.
+Der neue [GP-Prototyp für die gesamte Kasse](KASSE-VOLLBESTAND-GP-PROTOTYP-2026-09-07.md) verwendet die normale geschützte Importvorschau und kompakte Kassentabellen in der GP-Datenbank. Geschäftliche Aktivierung und VPS-Freigabe bleiben gesonderte Schritte.
+
+Die anschließende [Kassen-Speicherprüfung](KASSE-SPEICHERARCHITEKTUR-2026-09-07.md) ist bestanden:
+835,14 MB für die ganze Kassenquelle im isolierten verschlüsselten Prototyp und 481,95 MB für 24 Monate; alle 97 Quellfelder bleiben enthalten.
+Das frühere 24-Monate-Archiv misst 267,70 MB, sein vollständiger Datei-/Werte-Restore bestand. Diese Werte sind Vergleichsmessungen des früheren isolierten Dateiprototyps. Den aktuellen gesamten GP-Kassenstand und seine gekoppelte Wiederherstellung dokumentiert der neue Prototypbericht.
+
+Aktuelle Fortsetzung: [Produktivanbindung – Block 4/4: Betriebsvorprüfung](PRODUKTIV-BLOCK-4-BETRIEBSVORPRUEFUNG.md), nach bestandener
+[Block-3-Vollabnahme](PRODUKTIV-BLOCK-3-TESTIMPORT.md),
+aufbauend auf [Block 2/4](PRODUKTIV-BLOCK-2-ZUORDNUNGEN-ANSICHTEN.md) und
+[Block 1/4](PRODUKTIV-BLOCK-1-IMPORTANBINDUNG.md).
+Die geschützte Importoberfläche, Stammdaten-Zuordnung und vollständige Zeitraumsauswertung sind lokal angebunden;
+1.477.330 Geschäftsdatenzeilen wurden isoliert importiert und vollständig zurückgenommen. Die unabhängig
+bestätigte Quellzähler-Abweichung Q01 wurde am 05.09.2026 ausschließlich für den
+geprüften Dateifingerabdruck [als Fehlertoleranz freigegeben](Q01-FEHLERTOLERANZ-2026-09-05.md).
+Integritäts- und Fremdschlüsselprüfungen des vollständigen Zielimports und seiner Rücknahme sind bestanden.
+Die Produktivvorprüfung verlangt noch eine tragfähige Großdaten-Sicherung und Kapazitätsplanung;
+die [Großdaten-Backup-Strategie](GROSSDATEN-BACKUP-STRATEGIE.md) wurde dafür mit der inzwischen bestätigten Aufbewahrung von 20 Kalendertagen
+überarbeitet, lokal hinter ausdrücklichem Opt-in eingebunden und mit synthetischen Archiv-/Rücksicherungstests geprüft.
+Die neuere [Vollbestands- und Wiederherstellungsprüfung vom 07.09.2026](VOLLBESTAND-BETRIEB-RESTORE-2026-09-07.md)
+ist abgeschlossen: 1.477.330 Zeilen, 11,60 GB kompaktierte Datenbank, 5,33 GB erste Archivbasis und zwei bestandene unabhängige lokale Restores.
+Der frühere Lauf an der Speicherreserve bleibt als historischer Fehlversuch dokumentiert.
+Die [Fortsetzung zur Begrenzung der Arbeitskopien](ARBEITSKOPIEN-UND-QUELLSTAENDE-2026-09-07.md) ergänzt lokal eine gemeinsame Sperre
+und einen Archivexport ohne zweite Vollkopie auf demselben Laufwerk. Die Gesamt-Kapazitätsfreigabe bleibt offen.
+Es gelten ausschließlich die zuletzt vom Nutzer bereitgestellten Quelldateien; auch wochenlang unveränderte Quellen sind zulässig.
+Ein normales Backup verlangt keinen erneuten Import. Neue Geschäftsdaten werden erst mit einem neuen bereitgestellten Export geprüft.
+Für die ausdrücklich historische Nutzung wurde anschließend der [lokale Einstieg in Block 4](LOKALER-BLOCK-4-START-2026-09-07.md) geprüft:
+Auf C: besteht die Start-Platzprüfung; eine dauerhaft nutzbare lokale Installation ist noch einzurichten. Nur den Erstimport lokal auszuführen beseitigt den offenen VPS-Betriebsbedarf nicht.
+Die letzte lesende VPS-Prüfung bestätigt getrennte lokale Sicherungsreihen und Google Drive als Offsite-Ziel.
+Der lokale Kandidat ersetzt die bisherige 30-Punkte-Zählung durch den letzten vollständigen Stand je Kalendertag für 20 Tage je lokaler Reihe. Die später angesprochenen drei lokalen Stände sind noch keine ausgeführte Änderung. Google Drive behält seine getrennte Langzeitaufbewahrung. Produktiv wurde die Änderung noch nicht ausgeführt.
+Kompression und transaktionale Fortschrittszähler sind zusätzlich implementiert; begrenzte Messungen und die vorbereitete vollständige Samstagsumstellung stehen im [Abschlussstand](ABSCHLUSS-VORBEREITUNG-2026-09-06.md).
+Kapazitäts-, Laufzeit-, Runtime-/Offsite-Migrations- und produktive Wiederherstellungsabnahme bleiben offen.
+Es wurden weder vorhandene Sicherungen entfernt noch produktive Archive aktiviert.
+Produktive Übernahme und Veröffentlichung bleiben ausstehend. Die nachfolgenden
+Inventurzahlen beziehen sich weiterhin auf den ursprünglichen Analyse-Snapshot.
 
 Fortsetzung: [Block 2/6 – technisches Importfundament](BLOCK-2-IMPORTFUNDAMENT.md)
 ist lokal umgesetzt und synthetisch geprüft. Dieses Dokument bleibt der

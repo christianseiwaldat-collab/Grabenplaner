@@ -1,6 +1,6 @@
 "use strict";
 
-const crypto = require("node:crypto");
+const { sha256File } = require("../../../lib/file-integrity");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
@@ -9,10 +9,6 @@ const {
 } = require("../../../lib/persistence/sqlite/operations/maintenance");
 
 const MAX_MARKER_BYTES = 64 * 1024;
-
-function sha256File(filePath) {
-  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
-}
 
 function verifyBackup(databasePath, amuBackupDirectory, amuModule, commitMarkerPath) {
   if (![databasePath, amuBackupDirectory, amuModule].every(Boolean)) throw new Error("Pruefparameter fehlen.");

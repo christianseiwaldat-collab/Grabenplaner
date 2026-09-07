@@ -12,7 +12,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 test("runtime schema 4 binds the boot ID through systemd without relaxing proc hardening", () => {
   const schema = JSON.parse(read("server-tools", "linux", "runtime-schema.json"));
   const unit = read("server-tools", "linux", "grabenplaner.service.in");
-  assert.equal(schema.deploymentSchemaVersion, 4);
+  assert.equal(schema.deploymentSchemaVersion, 5);
   assert.equal(schema.migrationPolicy, "explicit-maintenance");
   assert.equal(schema.managedArtifacts.length, 11);
   assert.match(unit, /^LoadCredential=host-boot-id:\/proc\/sys\/kernel\/random\/boot_id$/m);
@@ -33,7 +33,7 @@ test("runtime schema 4 binds the boot ID through systemd without relaxing proc h
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const contract = JSON.parse(verification.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 4);
+  assert.equal(contract.deploymentSchemaVersion, 5);
   assert.match(contract.fingerprint, /^[a-f0-9]{64}$/);
 });
 
@@ -72,6 +72,21 @@ test("runtime-v4 migration is package-bound, exact-delta-only, rollback-capable,
   assert.doesNotMatch(migration, /\bsystemctl\s+(?:reboot|poweroff)|\bshutdown\s+-r|\breboot\s+--/);
 });
 
+test("application and bootstrap units allow the complete bounded large-backup shutdown", () => {
+  for (const filename of ["grabenplaner.service.in", "grabenplaner-bootstrap.service.in"]) {
+    const unit = read("server-tools", "linux", filename);
+    assert.match(unit, /^TimeoutStartSec=1500s$/m);
+    assert.match(unit, /^TimeoutStopSec=1500s$/m);
+    assert.match(unit, /^KillSignal=SIGTERM$/m);
+    assert.match(unit, /^User=grabenplaner$/m);
+    assert.match(unit, /^ProtectSystem=strict$/m);
+    assert.doesNotMatch(unit, /^Timeout(?:Start|Stop)Sec=120s$/m);
+  }
+  // A changed managed unit must never silently bypass explicit maintenance.
+  const updater = read("server-tools", "linux", "update-grabenplaner-server.sh");
+  assert.match(updater, /schema-not-incremented/);
+});
+
 test("runtime-v4 migration pins the existing notification example delta byte-for-byte", () => {
   const migration = read("server-tools", "linux", "migrate-grabenplaner-runtime-v4.sh");
   const environment = read("server-tools", "linux", "grabenplaner.env.example");
@@ -93,11 +108,11 @@ test("package, installer, verifier, and updater understand the explicit schema-4
   for (const source of [builder, installer, verifier]) {
     assert.match(source, /migrate-grabenplaner-runtime-v4\.sh/);
   }
-  assert.match(installer, /deploymentSchemaVersion !== 4/);
-  assert.match(verifier, /contract\.deploymentSchemaVersion === 4 \? requiredV4/);
-  assert.match(verifier, /\[3, 4\]\.includes\(contract\.deploymentSchemaVersion\)/);
+  assert.match(installer, /deploymentSchemaVersion !== 5/);
+  assert.match(verifier, /\[4, 5\]\.includes\(contract\.deploymentSchemaVersion\) \? requiredV4/);
+  assert.match(verifier, /\[3, 4, 5\]\.includes\(contract\.deploymentSchemaVersion\)/);
   assert.match(updater, /installed_runtime_schema" == "3" \|\| "\$installed_runtime_schema" == "4"/);
-  assert.match(updater, /\.runtime-v\(2\|3\|4\)-migration/);
+  assert.match(updater, /\.runtime-v\(2\|3\|4\|5\)-migration/);
   assert.match(updater, /schema-not-incremented/);
 });
 

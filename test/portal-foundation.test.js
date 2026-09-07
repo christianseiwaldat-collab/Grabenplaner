@@ -2174,7 +2174,8 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(diagnostics.monitor.blocksMainReadiness, false);
     assert.equal(diagnostics.monitor.lastErrorCode, "MONITOR_STATUS_FILE_MISSING");
     assert.ok(diagnostics.alerts.some((alert) => alert.id === "SERVER_MONITOR_ATTENTION"));
-    assert.equal(diagnostics.backups.retentionCount, 30);
+    assert.equal(diagnostics.backups.retentionCount, 20);
+    assert.equal(diagnostics.backups.retentionUnit, 'calendar-days');
     assert.equal(typeof diagnostics.backups.offsite?.configured, "boolean");
     assert.equal("statusPath" in diagnostics.backups.offsite, false);
     assert.equal("repository" in diagnostics.backups.offsite, false);

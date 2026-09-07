@@ -355,6 +355,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
       scheduleMatrixTimeFontBold: true,
       scheduleMatrixTimeEmployeeColor: true,
       scheduleMatrixShowPosition: false,
+      scheduleMatrixShowDutyLabel: true,
       scheduleMatrixHeaderText: maximumHeaderText,
     },
   });
@@ -364,6 +365,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_time_font_bold, "1");
   assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_time_employee_color, "1");
   assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_show_position, "0");
+  assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_show_duty_label, "1");
   assert.equal(matrixSettings.payload.settings.pdf_schedule_matrix_header_text, maximumHeaderText);
 
   const persistedMatrixSettings = await request(`/api/portal/v1/schedule-pdf-settings?locationId=${LOCATION}`, { auth });
@@ -372,6 +374,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.equal(persistedMatrixSettings.payload.context.departmentId, null);
   assert.equal(persistedMatrixSettings.payload.settings.pdf_schedule_matrix_header_text.length, 200);
   assert.equal(persistedMatrixSettings.payload.settings.pdf_schedule_matrix_show_position, "0");
+  assert.equal(persistedMatrixSettings.payload.settings.pdf_schedule_matrix_show_duty_label, "1");
 
   const oversizedHeader = await request("/api/portal/v1/schedule-pdf-settings", {
     method: "PUT",
@@ -396,6 +399,15 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   });
   assert.equal(invalidMatrixBoolean.response.status, 400, invalidMatrixBoolean.text);
   assert.equal(invalidMatrixBoolean.payload?.code, "SCHEDULE_PDF_BOOLEAN_INVALID");
+  const invalidDutyLabel = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT", auth, body: { locationId: LOCATION, scheduleMatrixShowDutyLabel: "false" },
+  });
+  assert.equal(invalidDutyLabel.response.status, 400, invalidDutyLabel.text);
+  const hideDutyLabel = await request("/api/portal/v1/schedule-pdf-settings", {
+    method: "PUT", auth, body: { locationId: LOCATION, scheduleMatrixShowDutyLabel: false },
+  });
+  assert.equal(hideDutyLabel.response.status, 200, hideDutyLabel.text);
+  assert.equal(hideDutyLabel.payload.settings.pdf_schedule_matrix_show_duty_label, "0");
 
   const renderMatrixSettings = await request("/api/portal/v1/schedule-pdf-settings", {
     method: "PUT",
@@ -443,7 +455,8 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   assert.match(matrixPdfDetails.text, /18:30-20:00/);
   assert.match(matrixPdfDetails.text, /09:00-12:00/);
   assert.match(matrixPdfDetails.text, /09:00-18:00/);
-  assert.match(matrixPdfDetails.text, /Testteam/);
+  assert.doesNotMatch(matrixPdfDetails.text, /Testteam/);
+  assert.ok(matrixPdfDetails.items.some(item => item.str === "TE"));
   assert.doesNotMatch(matrixPdfDetails.text, /Matrix-PDF-Testposition/);
   assert.match(matrixPdfDetails.text, /\d+MA/);
   assert.match(matrixPdfDetails.text, /1U/);
@@ -484,7 +497,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   const positionVisibleSettings = await request("/api/portal/v1/schedule-pdf-settings", {
     method: "PUT",
     auth,
-    body: { locationId: LOCATION, scheduleMatrixShowPosition: true },
+    body: { locationId: LOCATION, scheduleMatrixShowPosition: true, scheduleMatrixShowDutyLabel: true },
   });
   assert.equal(positionVisibleSettings.response.status, 200, positionVisibleSettings.text);
   assert.equal(positionVisibleSettings.payload.settings.pdf_schedule_matrix_show_position, "1");
@@ -494,6 +507,7 @@ test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis
   });
   const positionVisiblePdfDetails = await pdfTextDetails(positionVisiblePdf.payload);
   assert.match(positionVisiblePdfDetails.text, /Matrix-PDF-Testposition/);
+  assert.match(positionVisiblePdfDetails.text, /Testteam/);
 
   const unavailablePdf = await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&departmentId=${departmentId}&design=unbekannt`, {
     auth,

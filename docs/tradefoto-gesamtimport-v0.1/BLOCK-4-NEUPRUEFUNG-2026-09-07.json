@@ -1,0 +1,398 @@
+{
+  "format": "grabenplaner.block4.focused-renewed-proof.v1",
+  "assembledAt": "2026-09-07T12:05:07.388Z",
+  "status": "focused_preflight_closed_integration_can_continue",
+  "scope": {
+    "cash": "Entire latest source, no history cutoff",
+    "trade": "Existing productive catalogue unchanged; additional full Trade rebuild aborted",
+    "productionWrites": false,
+    "commitPushDeploy": false
+  },
+  "cash": {
+    "sourceBytes": 330928128,
+    "rows": 1082167,
+    "fields": 97,
+    "tables": 7,
+    "databaseBytes": 816533504,
+    "archiveBytes": 449205660,
+    "importReviewCompactMs": 767101,
+    "fullProofDurationMs": 1014333,
+    "restore": {
+      "everyValueVerified": true,
+      "rows": 1082167,
+      "fileSha256Equal": true,
+      "managedKeyReopened": true,
+      "pairedDocumentsVerified": true,
+      "durationMs": 199432
+    },
+    "unchangedBackup": {
+      "addedArchiveBytes": 52534,
+      "durationMs": 18711,
+      "automaticCoupledRestorePassed": true
+    },
+    "sourceAndImplementationRevalidated": true
+  },
+  "existingGp": {
+    "databaseBytes": 638070784,
+    "protectedFilesBytes": 8071335,
+    "inventoryAt": "2026-09-07T11:10:49.768Z",
+    "compactCashPresent": false
+  },
+  "planningCombinedDatabaseBytes": 1454604288,
+  "tests": {
+    "tests": 3094,
+    "pass": 3053,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 41,
+    "duration_ms": 1288624.0847
+  },
+  "linuxTestsPassed": true,
+  "linuxShellScriptsChecked": 35,
+  "productionChecks": {
+    "selfTests": {
+      "startedAt": "2026-09-07T11:05:10.1353520Z",
+      "finishedAt": "2026-09-07T11:06:29.7541723Z",
+      "appExitCode": 0,
+      "offsiteExitCode": 0,
+      "productionImport": false
+    },
+    "driveRestore": {
+      "startedAt": "2026-09-07T11:07:49.6158274Z",
+      "finishedAt": "2026-09-07T11:09:16.0365590Z",
+      "exitCode": 0,
+      "unit": "grabenplaner-offsite-restore-test.service",
+      "productiveDataReplaced": false
+    },
+    "appRestore": {
+      "signedFullAssuranceRun": false,
+      "finishedAt": "2026-09-07T11:15:48.5102724Z",
+      "startedAt": "2026-09-07T11:10:46.0753701Z",
+      "report": "tmp/block4-renewed-isolated-recovery-20260907.log",
+      "exitCode": 0
+    },
+    "appProof": {
+      "standaloneRecoveryVerification": true,
+      "signedFullAssuranceRun": false,
+      "snapshotIdPrefix": "e8989274ad55",
+      "receiptSha256": "02e9e423d30c7ab5edfb9c23f8e8de3257e30f3602ce4cdd8d2c8ed36eb54583",
+      "applicationSmokePassed": true
+    },
+    "driveQuota": {
+      "total": 214748364800,
+      "used": 1394543554,
+      "trashed": 351941121,
+      "other": 103779171992,
+      "free": 109574649254
+    }
+  },
+  "existingBackupGrowth": {
+    "format": "grabenplaner.block4.existing-backup-growth.v1",
+    "startedAt": "2026-09-07T11:20:32.254Z",
+    "productionDataChanged": false,
+    "existingBackupsRemoved": 0,
+    "productionKeysRead": false,
+    "sources": [
+      {
+        "stream": "app",
+        "rawPoints": 30,
+        "availableCalendarDays": 4,
+        "periodStart": "2026-09-04",
+        "periodEnd": "2026-09-07",
+        "points": [
+          {
+            "calendarDay": "2026-09-04",
+            "sourceTime": "2026-09-04T06:18:24.038Z",
+            "databaseBytes": 150822912,
+            "archiveBytes": 17517422,
+            "addedArchiveBytes": 17516820,
+            "durationMs": 1681,
+            "databaseSha256": "b68332536cdcfe72bff975c435a7d06d1768b66769f6a72a93b1a7f45d1e228a",
+            "sourcePairVerified": true,
+            "snapshotId": "9d4b6d3a528f4da0806c7f221804d5228cf2c47d5780eed1cdd558de545c21d8",
+            "restorePassed": true
+          },
+          {
+            "calendarDay": "2026-09-05",
+            "sourceTime": "2026-09-05T11:47:51.048Z",
+            "databaseBytes": 579993600,
+            "archiveBytes": 94632475,
+            "addedArchiveBytes": 77115053,
+            "durationMs": 4989,
+            "databaseSha256": "f23af9f71769c575abd1f8fd1ecd21c2d3a94e8505adc3010c5a27586ef3c997",
+            "sourcePairVerified": true,
+            "snapshotId": "93052d13c21366b9e7ddf138dc3343bc4a7392234ca1e0298a76d5f2a2dd97a5"
+          },
+          {
+            "calendarDay": "2026-09-06",
+            "sourceTime": "2026-09-06T00:53:06.838Z",
+            "databaseBytes": 594329600,
+            "archiveBytes": 153040113,
+            "addedArchiveBytes": 58407638,
+            "durationMs": 4152,
+            "databaseSha256": "ef733facb36d1aee9d2126b5bd443571be23b1c4520ab5b9f75a83531e141b96",
+            "sourcePairVerified": true,
+            "snapshotId": "6591668a32e4c6cf37fed2b74c8fa5c9788781155fbd3966bd1002aaa74b6017"
+          },
+          {
+            "calendarDay": "2026-09-07",
+            "sourceTime": "2026-09-07T01:21:07.075Z",
+            "databaseBytes": 595324928,
+            "archiveBytes": 211530197,
+            "addedArchiveBytes": 58490084,
+            "durationMs": 4288,
+            "databaseSha256": "d581f5269ef970e897ab315439220a24848c683b62a86f2091ed2c9a10e02b3e",
+            "sourcePairVerified": true,
+            "snapshotId": "e74db5a537d0790cd84d64c24d7542284cd5be41b6a404df1e13c3b881ad86cf",
+            "restorePassed": true
+          }
+        ],
+        "archiveIntegrityPassed": true,
+        "totalArchiveBytes": 211530197,
+        "maximumObservedIncrementBytes": 77115053,
+        "meanObservedIncrementBytes": 64670925
+      },
+      {
+        "stream": "external",
+        "rawPoints": 30,
+        "availableCalendarDays": 7,
+        "periodStart": "2026-09-01",
+        "periodEnd": "2026-09-07",
+        "points": [
+          {
+            "calendarDay": "2026-09-01",
+            "sourceTime": "2026-09-01T15:13:31.719Z",
+            "databaseBytes": 141635584,
+            "archiveBytes": 16862721,
+            "addedArchiveBytes": 16862119,
+            "durationMs": 2187,
+            "databaseSha256": "4e21deb2a5e59219fd733612778348de4b682a03f50ee3cfee4e82f17ceff2c9",
+            "sourcePairVerified": true,
+            "snapshotId": "69185bbff2b8705abefa518625c8471ff77f9492921d5aabeb20d78516728c07",
+            "restorePassed": true
+          },
+          {
+            "calendarDay": "2026-09-02",
+            "sourceTime": "2026-09-02T02:11:33.076Z",
+            "databaseBytes": 141647872,
+            "archiveBytes": 25680660,
+            "addedArchiveBytes": 8817939,
+            "durationMs": 1597,
+            "databaseSha256": "d321fc5d68a40802db24f376cdb315d753382c53ba3c682aa1d8a300adf70295",
+            "sourcePairVerified": true,
+            "snapshotId": "100c0bc9928e8f084a68c25073b6a0b90ea36f6b3ee5f1e45b01c6d460ae1d88"
+          },
+          {
+            "calendarDay": "2026-09-03",
+            "sourceTime": "2026-09-03T14:58:23.254Z",
+            "databaseBytes": 143577088,
+            "archiveBytes": 34659562,
+            "addedArchiveBytes": 8978902,
+            "durationMs": 1656,
+            "databaseSha256": "679ca72226440c8d73e04554daf663f9a9126d6d401db0db8a77387a4f6acfbe",
+            "sourcePairVerified": true,
+            "snapshotId": "4392bcb5fa0b3674aee9fa503fd0e6c83c92e1acd33547d49f08e3a3e18d5d45"
+          },
+          {
+            "calendarDay": "2026-09-04",
+            "sourceTime": "2026-09-04T06:15:36.837Z",
+            "databaseBytes": 150822912,
+            "archiveBytes": 44034061,
+            "addedArchiveBytes": 9374499,
+            "durationMs": 1628,
+            "databaseSha256": "3dd3267b4bdaf44ee3232eb73a256aa7b290b8af7f2c30e661b6bd2d6a273f6c",
+            "sourcePairVerified": true,
+            "snapshotId": "3f29d2cddfb7e4179a23f9e77b3e8aa2fdc957002d961e5fa1fc4e1d6fb1c293"
+          },
+          {
+            "calendarDay": "2026-09-05",
+            "sourceTime": "2026-09-05T11:36:38.896Z",
+            "databaseBytes": 579993600,
+            "archiveBytes": 121038608,
+            "addedArchiveBytes": 77004547,
+            "durationMs": 6162,
+            "databaseSha256": "80f50e4043e9b562e7108e29d0b6bd46638a5ee180ec312de96869aab6c5dc11",
+            "sourcePairVerified": true,
+            "snapshotId": "6d923ad606033a10412bdf0957dd31f2069714c2f51a7b299195cc21d9c998e9"
+          },
+          {
+            "calendarDay": "2026-09-06",
+            "sourceTime": "2026-09-06T00:43:36.818Z",
+            "databaseBytes": 594329600,
+            "archiveBytes": 179000458,
+            "addedArchiveBytes": 57961850,
+            "durationMs": 4652,
+            "databaseSha256": "4ce25da88362374f2e30e9bc35202db3f8cdf943233431967063f0893649a375",
+            "sourcePairVerified": true,
+            "snapshotId": "e00d297675c92107b1eec2c4d008dde93338b27b1813723da886790f7bc5279b"
+          },
+          {
+            "calendarDay": "2026-09-07",
+            "sourceTime": "2026-09-07T01:09:35.544Z",
+            "databaseBytes": 595324928,
+            "archiveBytes": 236944270,
+            "addedArchiveBytes": 57943812,
+            "durationMs": 3934,
+            "databaseSha256": "1912c630dbb55661a0fd336d41b2ce7a3ebaa04759baf7d7bdc8849c2999807b",
+            "sourcePairVerified": true,
+            "snapshotId": "4a687b1dc6d9e33b8b4e13c8f13113023c978a8b38b4517509d5d8ca67cbfd2a",
+            "restorePassed": true
+          }
+        ],
+        "archiveIntegrityPassed": true,
+        "totalArchiveBytes": 236944270,
+        "maximumObservedIncrementBytes": 77004547,
+        "meanObservedIncrementBytes": 36680259
+      }
+    ],
+    "status": "passed_existing_daily_backup_measurement",
+    "minimumFreeBytes": 71397797888,
+    "peakWorkspaceBytes": 1051882116,
+    "binarySha256": "20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639",
+    "isolatedArchiveRemoved": true,
+    "durationMs": 375093
+  },
+  "capacity": {
+    "inputs": {
+      "freeBytes": 72452579328,
+      "liveGrowthBytes": 816533504,
+      "coupledSnapshotBytes": 1462675623,
+      "baselineArchiveBytes": 1095347779,
+      "changedBytesPerPoint": 154282640,
+      "walPeakBytes": 2147483648,
+      "candidateArchiveBytes": 4026717939,
+      "orphanBytes": 1462675623,
+      "gcDebtBytes": 1095347779,
+      "localAreas": 2,
+      "workingCopies": 8,
+      "legacyDeletionCreditBytes": 0
+    },
+    "result": {
+      "retentionPerArea": 20,
+      "localAreas": 2,
+      "workingCopies": 8,
+      "minimumWorkingCopies": 7,
+      "workingCopyBasis": "conservative-unverified-coordinator",
+      "reserveBytes": 10737418240,
+      "archivePerAreaBytes": 4026717939,
+      "walPeakBytes": 2147483648,
+      "candidateArchiveBytes": 4026717939,
+      "orphanBytes": 1462675623,
+      "gcDebtBytes": 1095347779,
+      "legacyDeletionCreditBytes": 0,
+      "requiredAdditionalBytes": 40041017595,
+      "remainingBytes": 32411561733,
+      "capacityFits": true,
+      "qualified": false,
+      "evidence": {
+        "measuredFullSource": false,
+        "measuredChangeWindow": false,
+        "steadyStateGcMeasured": false,
+        "globalSerializationVerified": false,
+        "offsiteSingleStageVerified": false,
+        "peakCapacityMeasured": false
+      },
+      "destructiveActions": false
+    },
+    "basis": "Arithmetic planning scenario for unchanged current GP plus measured compact cash; not a measured combined productive peak",
+    "assumptions": [
+      "Two compressed archive areas retaining 20 calendar days each; not yet deployed.",
+      "Twice the largest measured current-GP daily archive increment plus unchanged-cash overhead; not a bound on future changed exports.",
+      "Eight working pairs, 2 GiB WAL, candidate archive, orphan pair, baseline garbage debt, 10 GiB reserve.",
+      "Existing GP counted once; no existing backup deletion credit.",
+      "Combined productive peak, changed cash exports and steady-state retention are not qualified."
+    ]
+  },
+  "abortedExperiments": {
+    "trade": {
+      "reason": "User requested prompt closure; rebuilding full Trade was outside the necessary scope of unchanged existing GP plus compact cash qualification.",
+      "fullImportCompleted": false,
+      "removedTestBytes": 3009471312,
+      "abortedAt": "2026-09-07T12:01:26.7834195Z",
+      "status": "aborted_scope_correction",
+      "cashPhaseStarted": false,
+      "productionWrites": false,
+      "encryptedTestFilesRemoved": true
+    },
+    "conversion": {
+      "status": "aborted_scope_correction",
+      "at": "2026-09-07T12:01:25.665Z",
+      "pid": 1659872,
+      "childPids": [],
+      "isolatedTestRoot": "/var/tmp/gp-block4-backup-measure-OpZ3Jb",
+      "isolatedTestRootRemoved": true,
+      "existingBackupsRemoved": 0,
+      "productionDataChanged": false
+    },
+    "combinedImportPassed": false
+  },
+  "block4IntegrationMayContinue": true,
+  "productionActivationAllowed": false,
+  "remainingWork": [
+    "Compact cash business readers, scoped rights, confirmed mappings and atomic dataset activation/rollback.",
+    "Coordinated application/runtime/backup deployment using the existing release route.",
+    "Complete signed operating/recovery check after migration; installed prepare still uses the old 120-second startup window."
+  ],
+  "evidence": [
+    {
+      "kind": "cash",
+      "file": "docs/tradefoto-gesamtimport-v0.1/KASSE-VOLLBESTAND-GP-PROTOTYP-2026-09-07.json",
+      "sha256": "665f08d603c1f584daee6a4b71bd699bbea5a6d32c6d9767bf2ea390746e86d5"
+    },
+    {
+      "kind": "reuse",
+      "file": "tmp/block4-renewed-proof-reuse-20260907.json",
+      "sha256": "76be4d30eac6cf27a3f4e866e9e2c22d2c86d80cea10ff9f3ab294bff5462ec0"
+    },
+    {
+      "kind": "live",
+      "file": "tmp/block4-renewed-capacity-inventory-20260907.json",
+      "sha256": "7c99a27228b613b3eabe234797442704a4ac8a3d1477aedccf096e7cdea3f43b"
+    },
+    {
+      "kind": "growth",
+      "file": "tmp/block4-renewed-existing-backup-growth-v2-20260907.json",
+      "sha256": "f684dd53c258800abdd440f7c77f2ccf081328914e8a01ab3a0b415e0449f5ac"
+    },
+    {
+      "kind": "quota",
+      "file": "tmp/block4-renewed-drive-quota-20260907.json",
+      "sha256": "d871a68894f4583463a97d9c3c717b3bf1ead23e4610a8626dc2b6e017f17e17"
+    },
+    {
+      "kind": "selfTests",
+      "file": "tmp/block4-renewed-vps-self-tests-20260907.json",
+      "sha256": "36791fc2a731f812a7c220bd69c3b4dc61abbd0b246afa0a38f8397f251a9c84"
+    },
+    {
+      "kind": "driveRestore",
+      "file": "tmp/block4-renewed-drive-restore-20260907.json",
+      "sha256": "735622034d77becde7dd7d685eef8210bf78416c1c90ec2015ec84d5eb553411"
+    },
+    {
+      "kind": "appRestore",
+      "file": "tmp/block4-renewed-isolated-recovery-20260907.json",
+      "sha256": "5cce015a9a4cf3c19ef47e5f1584ed3d7dbd422837026f59cd33f134947bcd9c"
+    },
+    {
+      "kind": "linux",
+      "file": "tmp/block4-renewed-native-linux-20260907.json",
+      "sha256": "9bed9111fde0bc78ef1dc3eb551807ce5f3e23515ba0b72add95e2408e9e70a8"
+    },
+    {
+      "kind": "tests",
+      "file": "tmp/block4-renewed-final-regression-20260907.tap",
+      "sha256": "7b48bf1f325dd5fac4114ef757fb88cc71fe16a1aafb404af7e82f3b20adae32"
+    },
+    {
+      "kind": "stoppedTrade",
+      "file": "tmp/tradefoto-block3-CQtNWx/report.json",
+      "sha256": "bf593188a3e994303e245bac3b6e22a51891a694de19cbe6ffdebb22f20341f8"
+    },
+    {
+      "kind": "stoppedConversion",
+      "file": "tmp/block4-existing-backup-conversion-abort-20260907.json",
+      "sha256": "7b15b680539fa07b56e914a1ecbf69f9bb6657dbea34ce9de2398644120d8e40"
+    }
+  ]
+}

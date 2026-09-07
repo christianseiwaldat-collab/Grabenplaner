@@ -2,6 +2,8 @@
 
 Stand: 05.09.2026. Status: lokal implementiert und mit synthetischen Daten geprüft; nicht in der produktiven Anwendung aktiviert.
 
+Nachtrag 06.09.2026: Der nachfolgend beschriebene historische `purge`-Pfad wurde im Zuge der ausdrücklich freigegebenen [datenbewahrenden Speicheroptimierung](GROSSDATEN-BACKUP-STRATEGIE.md) gesperrt (`IMPORT_PURGE_DISABLED`). Weder Ablauf noch Abbruch erlauben nun das Leeren der Prüf-/Rücknahmepayloads. Bestehende Altläufe bleiben lesbar; gemeinsame Teilobjekte werden vorerst nur in isolierten Tests ausdrücklich aktiviert. Die übrigen Block-2-Angaben dokumentieren den damaligen Ausgangsstand.
+
 [Inventur und Gesamtplan](README.md) · [Aktueller Quellen-Vorabcheck](block2-preflight.json)
 
 ## Ergebnis und klare Blockgrenze

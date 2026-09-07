@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/sales-history.css" />
+    <link rel="stylesheet" href="/data-import.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="deploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
@@ -35,7 +36,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.27 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.28 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -484,7 +485,7 @@
             <article class="summary-card week-context-card"><span>Zeitraum</span><strong id="weekTitle">Diese Woche</strong><small id="calendarWeek">Kalenderwoche</small></article>
             <article class="summary-card"><span>Dienste</span><strong id="shiftCount">0</strong><small>in dieser Woche</small></article>
             <article class="summary-card accent summary-duo">
-              <div><span>Gewertete Zeit</span><strong id="totalHours">0 h</strong><small>inklusive Samstagsfaktor</small></div>
+              <div><span>Gewertete Zeit</span><strong id="totalHours">0 h</strong><small>inklusive Zeitgutschriften</small></div>
               <div><span>In Filiale eingeteilt</span><strong id="inStoreHours">0 h</strong><small>ohne Sonderfälle</small></div>
             </article>
             <article class="summary-card"><span>Sonderfälle</span><strong id="optionCount">0</strong><small>Urlaub, krank, Filiale</small></article>
@@ -532,7 +533,7 @@
               <div class="schedule-key">
                 <span><i class="key-line"></i> Arbeitszeit</span>
                 <span id="breakRuleHint">Pause automatisch</span>
-                <span id="saturdayRuleHint">Sa-Faktor aktiv</span>
+                <span id="saturdayRuleHint">Zeitgutschriften werden gesondert geprüft</span>
               </div>
             </div>
             <div class="week-lock-notice hidden" id="weekLockNotice">Diese Kalenderwoche ist automatisch für Änderungen gesperrt. Diese Regel wird getrennt von der manuellen Dienstplansperre verwaltet.</div>
@@ -546,7 +547,7 @@
             <div class="hours-heading">
               <div><h2>Wochenstunden je Teammitglied</h2><p>Eingeteilte Nettozeit, gewertete Zeit und Wochen-Soll im Vergleich.</p></div>
               <div class="hours-heading-actions">
-                <div class="hours-legend"><span>Eingeteilt = in Filiale nach Pause</span><span>Gewertet = inkl. Samstagsfaktor/Sonderfällen</span></div>
+                <div class="hours-legend"><span>Eingeteilt = in Filiale nach Pause</span><span>Gewertet = inkl. Zeitgutschriften und Sonderfällen</span></div>
                 <button type="button" class="secondary-button hidden" id="xoffiImportButton">xoffi importieren</button>
               </div>
             </div>
@@ -2104,7 +2105,7 @@
               <div class="card-heading"><div class="card-icon">Ansicht</div><div><h2>Ansicht &amp; Startverhalten</h2><p>Legt die Darstellung und den Wiedereinstieg in standortübergreifende Pläne fest.</p></div></div>
               <label class="switch-row"><span><strong>Letzten Dienstplan-Gesamtplan wieder öffnen</strong><small>Merkt sich den zuletzt angesehenen Standort pro angemeldetem Benutzer und Browser.</small></span><input id="rememberLastScheduleOverallPlan" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Letzten Urlaubs-Gesamtplan wieder öffnen</strong><small>Kehrt beim nächsten Aufruf zur zuletzt angesehenen Filiale zurück.</small></span><input id="rememberLastVacationOverallPlan" type="checkbox" /></label>
-              <label class="switch-row"><span><strong>Sonntag anzeigen</strong><small>Zeigt den Sonntag in Webansicht und PDF; für Dienste bleibt er gesperrt.</small></span><input id="showSunday" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Sonntag anzeigen</strong><small>Blendet den Sonntag in Webansicht und PDF ein. Vorhandene Sonntagsdienste oder Ereignisse bleiben immer sichtbar; Dienste sind täglich von 07:00 bis 23:00 Uhr planbar.</small></span><input id="showSunday" type="checkbox" /></label>
               <div class="field app-font-scale-field">
                 <span id="appFontScaleLabel">Schriftgröße im Grabenplaner</span>
                 <div class="app-font-scale-control" role="group" aria-labelledby="appFontScaleLabel" aria-describedby="appFontScaleHint">
@@ -2122,7 +2123,7 @@
               <p class="settings-note">Die beiden Startansichten können von Personalleitung, Admin, IT-Admin und Developer festgelegt werden.</p>
             </div>
 
-            <details class="settings-accordion full-settings-card hidden" id="loanSettingsCard">
+            <details class="settings-accordion hidden" id="loanSettingsCard">
               <summary>
                 <span class="card-icon">Leihe</span>
                 <span class="settings-accordion-copy"><strong>Leihe je Standort</strong><small>Artikelquelle, Foto-PDFs, Originalaufbewahrung und Belegzustellung festlegen.</small></span>
@@ -2134,7 +2135,7 @@
               </div>
             </details>
 
-            <details class="settings-accordion full-settings-card" id="brandingSettings">
+            <details class="settings-accordion" id="brandingSettings">
               <summary>
                 <span class="card-icon">Logo</span>
                 <span class="settings-accordion-copy"><strong>Branding</strong><small>Firmenauftritt und Standortzuordnungen verwalten.</small></span>
@@ -2198,10 +2199,11 @@
                         </summary>
                         <div class="schedule-matrix-pdf-settings-body">
                           <label class="field"><span>Schriftgröße der Uhrzeiten</span><select id="scheduleMatrixTimeFontSize"><option value="6">Sehr klein · 6 pt</option><option value="8.5">Klein · 8,5 pt</option><option value="11">Standard · 11 pt</option><option value="14.5">Groß · 14,5 pt</option><option value="18">Sehr groß · 18 pt</option></select><small>Bei sieben Wochentagen oder sehr langen Zeiten wird nur bei Bedarf passgenau verkleinert.</small></label>
-                          <label class="field"><span>Schriftgröße der Zusatzzeile</span><select id="scheduleMatrixDetailFontSize"><option value="6">Klein · 6 pt</option><option value="8">Standard · 8 pt</option><option value="9.5">Groß · 9,5 pt</option></select><small>Abteilung oder Arbeitsbereich steht direkt unter der Uhrzeit.</small></label>
+                          <label class="field"><span>Schriftgröße der Zusatzzeile</span><select id="scheduleMatrixDetailFontSize"><option value="6">Klein · 6 pt</option><option value="8">Standard · 8 pt</option><option value="9.5">Groß · 9,5 pt</option></select><small>Die Dienstzuordnung steht direkt unter der Uhrzeit.</small></label>
                           <label class="switch-row"><span><strong>Uhrzeiten fett darstellen</strong><small>Hebt Beginn und Ende des Dienstes stärker hervor.</small></span><input id="scheduleMatrixTimeFontBold" type="checkbox" /></label>
                           <label class="switch-row"><span><strong>Uhrzeiten in der MA-Farbe darstellen</strong><small>Verwendet die im Dienstplan hinterlegte Farbe des Teammitglieds.</small></span><input id="scheduleMatrixTimeEmployeeColor" type="checkbox" /></label>
                           <label class="switch-row"><span><strong>Position unter dem Namen anzeigen</strong><small>Blendet die Position des Teammitglieds in der linken Namensspalte ein oder aus.</small></span><input id="scheduleMatrixShowPosition" type="checkbox" checked /></label>
+                          <label class="switch-row"><span><strong>Dienstbezeichnung neben dem Button anzeigen</strong><small>Ergänzt etwa „Filialaufsicht“ rechts neben FL. Geteilte Dienste behalten ihre kompakte Darstellung.</small></span><input id="scheduleMatrixShowDutyLabel" type="checkbox" /></label>
                           <label class="field schedule-matrix-header-text"><span>Kopftext rechts oben</span><input id="scheduleMatrixHeaderText" maxlength="200" value="Design 2" /><small>Für berechtigte FL/AL im eigenen Bereich bearbeitbar · maximal 200 Zeichen.</small></label>
                         </div>
                       </details>
@@ -2218,6 +2220,12 @@
                     <div class="preview-line"><span>Dateiname</span><strong id="pdfFilenamePreview"></strong></div>
                     <p class="settings-note pdf-settings-wide">Standard: „Dienstplan KW31.pdf“. Der Text vor der KW muss 5 bis 80 Zeichen lang sein.</p>
                   </div>
+                  <section class="schedule-duty-color-settings" aria-labelledby="scheduleDutyColorsTitle">
+                    <h3 id="scheduleDutyColorsTitle">Dienstfarben · unternehmensweit</h3>
+                    <p class="settings-note" id="scheduleDutyColorsHint">Gilt für alle Accounts und Standorte. Änderungen nur durch Personalleitung und Developer.</p>
+                    <div id="scheduleDutyColorList" class="schedule-duty-color-list"></div>
+                    <button type="button" class="secondary-button" id="saveScheduleDutyColors">Dienstfarben unternehmensweit speichern</button>
+                  </section>
                   <div class="pdf-live-preview">
                     <div><strong>PDF-Vorschau Dienstplan</strong><small>Wird erst beim Klick generiert.</small></div>
                     <label class="field schedule-pdf-preview-design"><span>Design für die Vorschau</span><select id="schedulePdfPreviewDesign"></select></label>
@@ -2585,11 +2593,6 @@
                 <label class="field"><span>Pausendauer</span><div class="unit-input"><input id="breakDuration" type="number" min="0" max="240" step="5" /><em>Minuten</em></div></label>
               </div>
             </div>
-            <div class="settings-card saturday-card">
-              <div class="card-heading"><div class="card-icon">×1,5</div><div><h2>Samstagswertung</h2><p>Arbeitszeit ab einer Uhrzeit höher für die Sollzeit werten.</p></div></div>
-              <label class="switch-row"><span><strong>Samstagsfaktor aktiv</strong><small>Standardmäßig ab 13:00 Uhr mit Faktor 1,5.</small></span><input id="saturdayBonusEnabled" type="checkbox" /></label>
-              <div class="inline-fields"><label class="field"><span>Gültig ab</span><input id="saturdayBonusFrom" type="time" /></label><label class="field"><span>Faktor</span><input id="saturdayBonusFactor" type="number" min="1" max="5" step="0.1" /></label></div>
-            </div>
             <div class="settings-card full-span wifi-settings-card" id="wifiSettingsCard">
               <div class="card-heading"><div class="card-icon">WLAN</div><div><h2>WLAN-Zeitvorschläge</h2><p>Controller, Filialzuordnung und Anwesenheitsregeln gebündelt verwalten.</p></div></div>
               <p class="settings-note security-note">Die Erkennung erzeugt ausschließlich bearbeitbare Zeitvorschläge. Erst die persönliche Bestätigung übernimmt einen Vorschlag in die Zeiterfassung.</p>
@@ -2665,12 +2668,12 @@
                 <label class="switch-row"><span><strong>Zusätzliches lokales Sicherungsziel aktiv</strong><small>Für Serverinstallationen muss die IT ein getrenntes, geschütztes Ziel konfigurieren.</small></span><input id="externalBackupEnabled" type="checkbox" /></label>
                 <label class="field full-width"><span>Lokales Sicherungsziel</span><input id="backupDirectory" placeholder="Von der technischen Administration festgelegter Sicherungspfad" /></label>
                 <div class="inline-fields">
-                  <label class="field"><span>Backup-Intervall</span><div class="unit-input"><input id="backupIntervalHours" type="number" min="1" max="6" step="1" /><em>Stunden</em></div></label>
+                  <label class="field"><span>Backup-Intervall</span><div class="unit-input"><input id="backupIntervalHours" type="number" min="1" max="24" step="1" /><em>Stunden</em></div></label>
                   <div class="backup-actions">
                     <button type="button" class="secondary-button" id="createBackupButton">Backup jetzt erstellen</button>
                   </div>
                 </div>
-                <p class="settings-note">Standard: alle 2 Stunden, einstellbar von 1 bis 6 Stunden. Die letzten 30 Sicherungen bleiben je Backup-Ordner erhalten.</p>
+                <p class="settings-note">Standard: täglich. Je Backup-Ordner bleibt der letzte vollständige Stand pro Kalendertag für 20 Tage einschließlich heute erhalten. Zusätzliche Sicherungen am selben Tag ersetzen den älteren Tagesstand erst nach erfolgreicher Prüfung. Fehlende Tage werden nicht nachträglich aufgefüllt; der jüngste verfügbare Stand bleibt immer erhalten.</p>
               </div>
               <div class="server-database-download hidden" id="serverDatabaseDownloadPanel">
                 <div class="secure-download-copy">
@@ -2865,7 +2868,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.27 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.28 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -3077,6 +3080,18 @@
                 </div>
               </div>
             </div>
+          </details>
+          <details class="full-width hidden" id="employeeSaturdayCredit">
+            <summary>Verkaufszuordnung &amp; Samstagsgutschrift</summary>
+            <p class="calculation-note" id="employeeSaturdayCreditStatus">Verkaufszuordnung wird geladen.</p>
+            <div class="modal-grid">
+              <label class="field"><span>Tätigkeit für die Samstagsregel</span><select id="employeeSalesActivity"><option value="">Noch nicht zugeordnet</option><option value="retail_sales">Verkauf · 50 % Zeitgutschrift ab 13 Uhr</option><option value="other">Andere Tätigkeit · keine Verkaufsgutschrift</option></select></label>
+              <label class="field"><span>Gültig ab</span><input id="employeeSalesEffectiveDate" type="date" /></label>
+              <label class="field modal-span-3"><span>Begründung der Zuordnung</span><input id="employeeSalesReason" maxlength="500" autocomplete="off" /></label>
+            </div>
+            <p class="calculation-note hidden" id="employeeSaturdayCutoverHint">Vor der ersten Zuordnung legt die zentrale Personalverwaltung den einmaligen Umstellungsstichtag für das gesamte Unternehmen fest. Frühere Bewertungen behalten die bisherige Samstagsregel.</p>
+            <div class="button-row"><button type="button" class="secondary-button hidden" id="employeeSaturdayCutoverSave">Umstellung ab diesem Datum einrichten</button><button type="button" class="secondary-button" id="employeeSalesSave">Verkaufszuordnung speichern</button></div>
+            <ul id="employeeSalesHistory" class="calculation-note"></ul>
           </details>
           <details class="employee-protected-record full-width hidden" id="employeeProtectedRecord">
             <summary><span><strong>Geschützter Personalakt</strong><small>Persönliche, vertragliche und sensible Daten verschlüsselt erfassen.</small></span><span class="status-badge approved">PL+</span></summary>
@@ -3305,10 +3320,10 @@
         <input id="shiftId" type="hidden" />
         <div class="form-grid">
           <label class="field full-width"><span>Teammitglied</span><select id="shiftEmployee" required></select></label>
-          <label class="field full-width"><span>Abteilung</span><select id="shiftDepartment"><option value="">Keine / Allgemein</option></select></label>
+          <label class="field full-width"><span>Dienst</span><select id="shiftDepartment"><option value="__branch_supervision__">FL · Filialaufsicht</option><option value="__general__">Allgemeiner Dienst</option></select></label>
           <label class="field full-width"><span>Datum</span><input id="shiftDate" type="date" required /></label>
-          <label class="field"><span>Beginn</span><input id="shiftStart" type="time" required /></label>
-          <label class="field"><span>Ende</span><input id="shiftEnd" type="time" required /></label>
+          <label class="field"><span>Beginn</span><input id="shiftStart" type="time" min="07:00" max="23:00" required /></label>
+          <label class="field"><span>Ende</span><input id="shiftEnd" type="time" min="07:00" max="23:00" required /></label>
           <label class="field full-width"><span>Bereich / Filiale</span><input id="shiftArea" placeholder="Optional" /></label>
           <label class="field full-width"><span>Notiz</span><textarea id="shiftNote" rows="3" placeholder="Optional"></textarea></label>
           <div class="calculation-note full-width" id="shiftCalculation"></div>
@@ -3399,7 +3414,7 @@
             <li>Alle Sonderfälle sperren die betroffenen Tage für Dienste.</li>
             <li>Mindestbesetzung, Dienstzeiten und Mittagsschließungen werden beachtet.</li>
             <li>Bevorzugte freie Tage werden nach Möglichkeit freigehalten.</li>
-            <li>Pausenregel und Samstagsfaktor fließen in die Sollzeit ein.</li>
+            <li>Pausen und Zeitgutschriften werden bei der Zeitwertung getrennt berücksichtigt.</li>
             <li>Sonntag bleibt geschlossen.</li>
           </ul>
         </div>
@@ -4153,11 +4168,15 @@
     <script src="/vendor/quill/quill.js"></script>
     <script src="/date-range-calendar.js"></script>
     <script src="/sales-history.js"></script>
+    <script src="/data-import.js"></script>
+    <script src="/cash-publication.js"></script>
+    <script src="/import-mappings.js"></script>
     <script src="/function-search-catalog.js"></script>
     <script src="/function-search.js"></script>
     <script src="/function-search-ui.js"></script>
     <script src="/function-search-navigation.js"></script>
     <script src="/credential-boundaries.js"></script>
+    <script src="/schedule-duty.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

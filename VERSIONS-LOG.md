@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.28 Beta · Kompakte Kassenhistorie und verlässliche Sicherungen
+
+- Die vollständige Kassenhistorie wird in kompakten, verschlüsselten Tabellen gespeichert. Die bestehenden Verkaufsansichten verwenden diesen Bestand direkt; Zuordnung, Vorschau und Aktivierung sind persönlich berechtigt und nachvollziehbar. Ein bestätigter Datenstandswechsel kann auf den vorherigen Stand zurückgeführt werden.
+- Bekannte Belegregeln, exakte Dezimalbeträge und getrennte Verkäufer-, Filial-, Kunden- und Finanzrechte sichern Auswertungen ab. Unbekannte Status- oder Steuerkombinationen bleiben prüfpflichtig; Tagesberichte und Journale werden nicht zu Einzelverkäufen addiert.
+- Dienstplan und PDF verwenden kompakte, dynamische Felder und einheitlich angeordnete Dienstzeiten und Dienstkennzeichen. Dienstbezeichnungen sind optional; geteilte Dienste erhalten die vereinbarte Darstellung.
+- Eine ausdrücklich konfigurierte Umstellung ordnet vorhandene Mitarbeitende dem Verkauf zu. Samstags ab 13 Uhr werden 50 Prozent der tatsächlich gearbeiteten Zeit zusätzlich gutgeschrieben; frühere Bewertungen bleiben erhalten.
+- Speichersparende lokale Sicherungsarchive, gemeinsame Arbeitsbereichssperren und speicherbegrenzte Dateiprüfungen ergänzen die vorhandene gekoppelte Datenbank-, Dokument- und Schlüsselwiederherstellung. Das lokale Archiv bewahrt einen Stand je Kalendertag für 20 Tage.
+- Die explizite Migration von Linux-Runtime 4 auf 5 und Offsite-Modul 6 auf 7 verbindet die geänderten Sicherungswerkzeuge und 1500-Sekunden-Start-/Stoppfenster. Provider, Zugangsdaten, Host-Control und Hardening bleiben erhalten. Die produktive Datenübernahme wird getrennt vom Paketstatus bestätigt.
+
 ## v0.92.27 Beta · Geschütztes Importfundament und Verkaufs-/Kassenhistorie
 
 - Ein allgemeines, verschlüsseltes Importfundament ergänzt Quellenmanifeste, Prüfablage, revisionsgebundene Vorschauen, wiederholbare Übernahme, Konfliktbehandlung, Audit und kontrollierte Rücknahme. Alte Zugangsdaten werden nicht als GP-Zugänge übernommen.

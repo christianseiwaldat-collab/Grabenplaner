@@ -1079,7 +1079,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .key-line { width: 8px; height: 8px; border-radius: 2px; background: var(--coral); }
 .week-lock-notice { padding: 10px 18px; border-bottom: 1px solid #efd0c7; color: #9c432f; background: #fff0ec; font-size: 9.5px; font-weight: 700; }
 .timeline-scroll { overflow-x: auto; overflow-y: hidden; }
-.timeline { --employee-count: 1; --day-count: 6; position: relative; display: grid; grid-template-columns: 42px repeat(var(--day-count),minmax(124px,1fr)); min-width: calc(42px + var(--day-count) * 124px); padding-bottom: 0; }
+.timeline { --employee-count: 1; --day-count: 6; --day-min-width:124px; position: relative; display: grid; grid-template-columns: 42px repeat(var(--day-count),minmax(var(--day-min-width),1fr)); min-width: calc(42px + var(--day-count) * var(--day-min-width)); padding-bottom: 0; }
 .time-header { grid-column: 1; grid-row: 1; display: grid; place-items: end center; min-height: 79px; padding-bottom: 8px; color: var(--muted); background: #f7f8f5; font-size: 8px; font-weight: 700; }
 .day-column { grid-row: 1; min-width: 0; border-left: 1px solid #cbd3d9; }
 .day-title { display: grid; place-items: center; height: 35px; border-bottom: 1px solid #bcc7ce; background: var(--blue-soft); font: 700 9.5px "Manrope", "DM Sans", "Segoe UI", sans-serif; }
@@ -1106,9 +1106,10 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .option-block em { writing-mode: vertical-rl; font-size: 6px; font-style: normal; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .option-block.soft-pending-option { z-index: 5; border: 1px dashed #c18b20; color: #725515; background: rgba(255,239,182,.58); pointer-events: none; }
 .option-block.soft-pending-all-day { top: 2px; bottom: 2px; min-height: 0; }
-.shift-bar { position: absolute; left: 3px; right: 3px; z-index: 2; min-height: 10px; padding: 0; overflow: hidden; border: 1px solid rgba(23,35,49,.45); color: var(--employee-contrast,white); background: var(--employee-color); cursor: pointer; }
+.shift-bar { position: absolute; left: 3px; right: 3px; z-index: 2; min-height: 14px; padding: 0; overflow: visible; border: 1px solid rgba(23,35,49,.45); color: var(--employee-contrast,white); background: var(--employee-color); cursor: pointer; }
 .shift-bar:hover { filter: brightness(.94) saturate(1.08); }
-.shift-bar span { position: absolute; inset: 3px 2px auto; display: block; overflow: hidden; color: inherit; font-size: 7px; font-weight: 900; line-height: 1.1; text-align: center; text-overflow: ellipsis; text-shadow: 0 1px 2px rgba(0,0,0,.18); white-space: nowrap; }
+.shift-bar .shift-duty-badge { position:absolute; top:1px; left:50%; transform:translateX(-50%); display:inline-flex; align-items:center; justify-content:center; min-width:16px; padding:1px 2px; border:1px solid var(--duty-contrast,#172331); border-radius:3px; color:var(--duty-contrast,#172331); background:var(--duty-color,#fff); font-size:8px; font-weight:900; line-height:1; text-align:center; white-space:nowrap; pointer-events:none; }
+.employee-strip:focus-visible { outline:2px solid var(--ink); outline-offset:-2px; }
 .time-axis { position: absolute; top: 79px; left: 0; z-index: 3; width: 42px; height: 405px; background: #fafaf7; }
 .time-label { position: absolute; right: 6px; color: #3b4851; font-size: 7px; transform: translateY(-50%); }
 .timeline-grid-body { display: contents; }
@@ -4034,6 +4035,53 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 .schedule-settings-section > .settings-field-disclosure > .settings-field-disclosure-summary .settings-field-disclosure-chevron { width:26px; height:26px; border-radius:8px; font-size:19px; }
 .schedule-settings-section > .settings-field-disclosure > .settings-field-disclosure-body { gap:11px; padding:13px 14px 14px; }
 .legacy-usb-provisioning { order:99; }
+/* Compact settings keep the same two-column structure when disclosures are open. */
+#generalSettings > :is(.settings-card,.settings-accordion) { min-width:0; grid-column:auto; }
+#generalSettings :is(.settings-field-disclosure-summary,.settings-accordion > summary),
+#pdfSettings :is(.settings-field-disclosure-summary,.settings-accordion > summary) { grid-template-columns:30px minmax(0,1fr) 24px; gap:9px; min-height:56px; padding:10px 12px; }
+#generalSettings :is(.settings-field-disclosure-summary,.settings-accordion > summary) .card-icon,
+#pdfSettings :is(.settings-field-disclosure-summary,.settings-accordion > summary) .card-icon { flex-basis:30px; width:30px; height:30px; border-radius:9px; font-size:7.5px; }
+#generalSettings .settings-field-disclosure-summary h2,#pdfSettings .settings-field-disclosure-summary h2 { font-size:12px; line-height:1.3; }
+#generalSettings .settings-field-disclosure-summary p,#pdfSettings .settings-field-disclosure-summary p { margin-top:3px; font-size:8.2px; line-height:1.4; }
+#generalSettings .settings-accordion-copy strong,#pdfSettings .settings-accordion-copy strong { font-size:11.5px; }
+#generalSettings .settings-accordion-copy small,#pdfSettings .settings-accordion-copy small { font-size:8px; }
+#generalSettings .settings-field-disclosure-body,#pdfSettings .settings-field-disclosure-body { min-width:0; gap:11px; padding:12px; }
+#generalSettings #brandingSettings > .settings-accordion-grid { grid-template-columns:minmax(0,1fr); }
+#generalSettings #viewBehaviorSettingsCard > .settings-field-disclosure-body { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#generalSettings #viewBehaviorSettingsCard > .settings-field-disclosure-body > .settings-note { grid-column:1 / -1; }
+#pdfSettings .pdf-card > .settings-field-disclosure-body { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }
+#pdfSettings .pdf-card > .settings-field-disclosure-body > * { min-width:0; }
+#pdfSettings #schedulePdfDesignSettings { grid-column:auto; margin:0; }
+#pdfSettings .pdf-settings-fields { gap:9px 12px; }
+#pdfSettings .field { margin:0; }
+#pdfSettings .field > span,#generalSettings .field > span { font-size:8.5px; }
+#pdfSettings :is(input:not([type="checkbox"]):not([type="color"]),select),
+#generalSettings :is(.field input:not([type="checkbox"]),.field select) { min-height:30px; padding:6px 8px; font-size:9px; }
+#pdfSettings .switch-row { gap:8px; padding:8px 10px; }
+#pdfSettings .switch-row strong { font-size:9px; }
+#pdfSettings .switch-row small { font-size:8px; line-height:1.4; }
+#pdfSettings .schedule-pdf-design-settings-list { grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); }
+#pdfSettings .schedule-pdf-design-setting-row { padding:8px; gap:7px; }
+#pdfSettings .pdf-live-preview { grid-column:1 / -1; min-height:0; grid-template-rows:auto; padding:11px; gap:8px; }
+#pdfSettings .pdf-live-preview iframe:not([src]) { display:none; }
+#pdfSettings .pdf-live-preview iframe[src] { min-height:340px; }
+.schedule-duty-color-settings { min-width:0; padding:11px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
+.schedule-duty-color-settings h3 { margin:0; font-size:11px; }
+.schedule-duty-color-settings .settings-note { margin:7px 0 11px; }
+.schedule-duty-color-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:10px; }
+.schedule-duty-color-row { min-width:0; margin:0; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+.schedule-duty-color-row legend { padding:0 3px; font-size:8.5px; font-weight:750; }
+.schedule-duty-color-preview { display:inline-flex; justify-content:center; min-width:24px; padding:3px; border-radius:4px; color:var(--duty-contrast); background:var(--duty-color); }
+.schedule-duty-color-picker { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:8px; }
+.schedule-duty-color-picker input { width:42px; min-height:28px; padding:2px; }
+.schedule-duty-rgb { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin-top:6px; }
+.schedule-duty-rgb label { display:grid; gap:3px; min-width:0; font-size:8px; }
+.schedule-duty-rgb input { width:100%; min-width:0; }
+@media (max-width:820px) {
+  #generalSettings #viewBehaviorSettingsCard > .settings-field-disclosure-body,
+  #pdfSettings .pdf-card > .settings-field-disclosure-body { grid-template-columns:minmax(0,1fr); }
+}
+@media (max-width:460px) { .schedule-duty-color-list { grid-template-columns:minmax(0,1fr); } }
 @media (max-width:900px) {
   .portal-user-row { grid-template-columns:1fr; }
   .portal-user-heading { align-items:flex-start; flex-direction:column; }

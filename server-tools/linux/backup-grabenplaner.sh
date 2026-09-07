@@ -72,8 +72,16 @@ data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFA
 database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
 backup_dir="$(gp_safe_absolute_path "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
 amu_dir="$(gp_existing_directory "$data_dir/private/amu" "Geschuetzter Dokumentordner")"
-keep="${keep_arg:-${GRABENPLANER_BACKUP_KEEP:-30}}"
+keep="${keep_arg:-${GRABENPLANER_BACKUP_RETENTION_DAYS:-20}}"
 [[ "$keep" =~ ^[0-9]+$ ]] && (( keep >= 1 && keep <= 1000 )) || gp_die "--keep muss zwischen 1 und 1000 liegen."
+archive_enabled="${GRABENPLANER_LOCAL_BACKUP_ARCHIVE:-0}"
+[[ "$archive_enabled" == "0" || "$archive_enabled" == "1" ]] \
+  || gp_die "GRABENPLANER_LOCAL_BACKUP_ARCHIVE muss 0 oder 1 sein."
+if [[ "$archive_enabled" == "1" ]]; then
+  (( keep == 20 )) || gp_die "Das lokale Archiv verwendet 20 Kalendertage mit einem Sicherungsstand je Tag."
+elif [[ -e "$backup_dir/.gp-local-archive" || -L "$backup_dir/.gp-local-archive" ]]; then
+  gp_die "Ein lokales Archiv ist vorhanden; die bisherige Vollkopien-Aufbewahrung darf nicht als Ersatz starten."
+fi
 
 if [[ -n "$node_arg" ]]; then
   node="$(gp_existing_file "$node_arg" "Node.js")"
@@ -91,6 +99,7 @@ if systemctl is-active --quiet "$service"; then
   gp_die "$service muss fuer dieses externe Sicherungswerkzeug beendet sein. Der laufende Dienst erstellt seine eigenen konsistenten Sicherungen."
 fi
 (( lock_already_held == 1 )) || gp_acquire_maintenance_lock
+gp_acquire_backup_workspace_lock "$database" "$node" "$app_dir/lib/backup-workspace.js"
 
 database_dir="$(dirname -- "$database")"
 gp_path_is_same_or_child "$database" "$data_dir" || gp_die "Die SQLite-Datenbank muss innerhalb des geschuetzten Datenordners liegen."
@@ -107,13 +116,22 @@ for required in "$database_lock_module" "$amu_module" "$helper"; do
 done
 
 install -d -m 0750 -o "$service_user" -g "$service_group" -- "$backup_dir"
+if [[ "$archive_enabled" == "1" ]]; then
+  archive_helper="$app_dir/server-tools/linux/lib/local-backup-archive.js"
+  [[ -f "$archive_helper" && ! -L "$archive_helper" ]] || gp_die "Das lokale Archivmodul fehlt."
+  # Archivzustand pruefen, bevor eine weitere grosse Rohkopie entsteht.
+  "$node" "$archive_helper" preflight-as "$service_user" "$backup_dir" "$keep" >/dev/null \
+    || gp_die "Die Archiv-Vorpruefung ist fehlgeschlagen; es wurde kein neuer Rohpunkt angelegt."
+fi
 timestamp="$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N')"
 runtime_directory="$(gp_prepare_runtime_directory)"
 snapshot="dienstplan-$timestamp-$("$node" -e 'process.stdout.write(require("node:crypto").randomBytes(6).toString("hex"))')"
 target_database="$backup_dir/$snapshot.db"
 target_amu="$backup_dir/$snapshot.amu"
 target_marker="$backup_dir/$snapshot.complete.json"
-staging_directory="$(mktemp --directory --tmpdir="$runtime_directory" backup-stage.XXXXXXXX)"
+# Datenbank und Dokumente koennen groesser als /run (tmpfs) sein. Nur kleine
+# Ergebnis-/Markerdateien liegen dort; Nutzdaten bleiben auf dem Backupvolume.
+staging_directory="$(mktemp --directory --tmpdir="$backup_dir" .backup-stage.XXXXXXXX)"
 result_file="$(mktemp --tmpdir="$runtime_directory" backup-result.XXXXXXXX)"
 marker_file="$(mktemp --tmpdir="$runtime_directory" backup-marker.XXXXXXXX)"
 chown "$service_user:$service_group" -- "$staging_directory"
@@ -127,7 +145,8 @@ cleanup() {
   if [[ -f "$result_file" && ! -L "$result_file" ]]; then rm -f -- "$result_file"; fi
   if [[ -f "$marker_file" && ! -L "$marker_file" ]]; then rm -f -- "$marker_file"; fi
   if [[ -d "$staging_directory" && ! -L "$staging_directory" ]] \
-    && gp_path_is_same_or_child "$staging_directory" "$runtime_directory"; then
+    && [[ "$(basename -- "$staging_directory")" == .backup-stage.* ]] \
+    && gp_path_is_same_or_child "$staging_directory" "$backup_dir"; then
     rm -rf -- "$staging_directory"
   fi
   if (( snapshot_committed == 0 )); then
@@ -157,16 +176,15 @@ find "$target_amu" -type d -exec chmod 0750 -- {} +
 find "$target_amu" -type f -exec chmod 0640 -- {} +
 
 verification_json="$(cat -- "$result_file")"
-"$node" - "$marker_file" "$snapshot" "$target_database" "$target_amu" "$verification_json" <<'NODE'
-const crypto = require("node:crypto");
+"$node" - "$marker_file" "$snapshot" "$target_database" "$target_amu" "$verification_json" "$app_dir/lib/file-integrity.js" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
-const [file, snapshot, databasePath, documentsPath, raw] = process.argv.slice(2);
+const [file, snapshot, databasePath, documentsPath, raw, integrityModule] = process.argv.slice(2);
+const { sha256File } = require(integrityModule);
 const verification = JSON.parse(raw);
 const databaseStat = fs.lstatSync(databasePath);
 const manifestPath = path.join(documentsPath, "manifest.json");
 const manifestStat = fs.lstatSync(manifestPath);
-const sha256File = (target) => crypto.createHash("sha256").update(fs.readFileSync(target)).digest("hex");
 if (!databaseStat.isFile() || databaseStat.isSymbolicLink() || !manifestStat.isFile() || manifestStat.isSymbolicLink()
   || !Number.isSafeInteger(verification.fileCount) || verification.fileCount < 0
   || sha256File(databasePath) !== verification.databaseSha256) throw new Error("Der Sicherungsbeleg konnte nicht sicher erzeugt werden.");
@@ -194,10 +212,17 @@ verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
 "$node" "$verifier" "$target_database" "$target_amu" "$amu_module" "$target_marker" >/dev/null \
   || gp_die "Der veroeffentlichte Sicherungspunkt konnte nicht erneut verifiziert werden."
 snapshot_committed=1
-pruner="$app_dir/server-tools/linux/lib/prune-backups.js"
-[[ -f "$pruner" && ! -L "$pruner" ]] || gp_die "Das vertrauenswuerdige Aufbewahrungsmodul fehlt."
-"$node" "$pruner" "$backup_dir" "$keep" "$verifier" "$amu_module" >/dev/null \
-  || gp_die "Die verifizierte Backup-Aufbewahrung konnte nicht sicher ausgefuehrt werden."
+if [[ "$archive_enabled" == "1" ]]; then
+  # Der root-Launcher uebergibt die vorhandenen Vault-Secrets ausschliesslich
+  # als gefilterte Prozessumgebung, niemals als sichtbare Programmargumente.
+  "$node" "$archive_helper" archive-as "$service_user" "$backup_dir" "$snapshot" "$keep" >/dev/null \
+    || gp_die "Die lokale Archivierung ist fehlgeschlagen; der neue rohe Sicherungspunkt bleibt erhalten."
+else
+  pruner="$app_dir/server-tools/linux/lib/prune-backups.js"
+  [[ -f "$pruner" && ! -L "$pruner" ]] || gp_die "Das vertrauenswuerdige Aufbewahrungsmodul fehlt."
+  "$node" "$pruner" "$backup_dir" "$keep" "$verifier" "$amu_module" >/dev/null \
+    || gp_die "Die verifizierte Backup-Aufbewahrung konnte nicht sicher ausgefuehrt werden."
+fi
 "$node" - "$target_database" "$target_amu" "$target_marker" "$verification_json" <<'NODE'
 const [database, documents, marker, raw] = process.argv.slice(2);
 const verification = JSON.parse(raw);

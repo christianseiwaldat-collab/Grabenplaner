@@ -169,6 +169,25 @@ gp_require_systemd_unit() {
   gp_systemd_unit_exists "$1" || gp_die "systemd-Unit nicht gefunden: $1"
 }
 
+gp_acquire_backup_workspace_lock() {
+  local database="$1" node="$2" helper="$3" workspace_file opened named
+  [[ -f "$helper" && ! -L "$helper" ]] || gp_die "Das Modul fuer den gemeinsamen Backup-Arbeitsbereich fehlt."
+  workspace_file="$("$node" "$helper" prepare-linux-file "$database")" \
+    || gp_die "Der gemeinsame Backup-Arbeitsbereich konnte nicht vorbereitet werden."
+  [[ "$workspace_file" == "$database.backup-workspace.lock" && -f "$workspace_file" && ! -L "$workspace_file" ]] \
+    || gp_die "Die Backup-Arbeitsbereichssperre ist ungueltig."
+  exec 5<"$workspace_file"
+  flock --exclusive --timeout 1400 5 || gp_die "Ein laufender Backup- oder Wiederherstellungsvorgang wurde nicht rechtzeitig abgeschlossen."
+  opened="$(stat -L --format='%d:%i:%h' -- "/proc/${BASHPID:-$$}/fd/5")"
+  named="$(stat --format='%d:%i:%h' -- "$workspace_file")"
+  [[ "$opened" == "$named" && "$named" == *:1 && ! -L "$workspace_file" ]] \
+    || gp_die "Die Backup-Arbeitsbereichssperre wurde waehrend des Wartens veraendert."
+}
+
+gp_release_backup_workspace_lock() {
+  exec 5<&-
+}
+
 gp_stop_service() {
   local service="$1"
   local timeout_seconds="${2:-120}"

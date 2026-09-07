@@ -1,0 +1,100 @@
+{
+  "format": "grabenplaner.tradefoto.productive-block3-acceptance.v1",
+  "date": "2026-09-06",
+  "status": "passed_full_import_and_undo",
+  "productionWrites": false,
+  "productionReady": false,
+  "sourceWrites": false,
+  "branch": "feature/schedule-pdf-day-separators",
+  "head": "41e6d92e5fc95c30a4ecb11d478802a930ea44e1",
+  "version": "0.92.27-beta",
+  "privacy": "Aggregate evidence only; no source field values, account credentials or recoverable test keys.",
+  "localRunReport": "tmp/tradefoto-block3-7ZXLcj/report.json",
+  "historicalReport": "PRODUKTIV-BLOCK-3-PRUEFBERICHT.json",
+  "durationMs": 24234317,
+  "tables": 109,
+  "rows": 1477330,
+  "sources": [
+    {
+      "kind": "trade",
+      "fileSha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+      "bytes": 188649472,
+      "tables": 102,
+      "rows": 395163,
+      "apply": "applied",
+      "undo": "reverted",
+      "repeat": "passed_no_duplicates",
+      "repeatAfterApply": "passed_no_duplicates",
+      "phases": { "stageMs": 217631, "repeatMs": 330, "reviewMs": 355231, "applyMs": 3788289, "undoMs": 1372795 },
+      "sourceUnchanged": true
+    },
+    {
+      "kind": "cash",
+      "fileSha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+      "bytes": 330928128,
+      "tables": 7,
+      "rows": 1082167,
+      "apply": "applied",
+      "undo": "reverted",
+      "repeat": "passed_no_duplicates",
+      "repeatAfterApply": "passed_no_duplicates",
+      "phases": { "stageMs": 712547, "repeatMs": 579, "reviewMs": 2219360, "applyMs": 10527342, "undoMs": 4997792 },
+      "sourceUnchanged": true
+    }
+  ],
+  "acceptedDeviations": [
+    { "id": "q01-20260905-artikel-stamm", "table": "ARTIKEL_STAMM", "declared": 19187, "received": 19186 },
+    { "id": "q01-20260905-artikel-filialen", "table": "ARTIKEL_FILIALEN", "declared": 231355, "received": 231351 }
+  ],
+  "allTablesApplied": true,
+  "allExpectedRowsReceived": true,
+  "issues": [],
+  "restartReplay": "passed_same_source_and_checkpoint",
+  "repeat": "passed_both_complete_sources",
+  "mapping": { "status": "passed_before_history", "syntheticTargets": 3, "productiveAssignments": 0, "undo": "passed_after_dependent_history" },
+  "after": {
+    "data_import_sources": 2,
+    "data_import_runs": 109,
+    "data_import_rows": 1477330,
+    "data_import_links": 1477330,
+    "data_import_changes": 1477330,
+    "import_master_records": 133733,
+    "import_history_records": 1343597,
+    "import_history_versions": 1343597,
+    "import_master_holds": 2638655
+  },
+  "afterUndo": {
+    "data_import_sources": 2,
+    "data_import_runs": 109,
+    "data_import_rows": 1477330,
+    "data_import_links": 0,
+    "data_import_changes": 1477330,
+    "import_master_records": 0,
+    "import_history_records": 0,
+    "import_history_versions": 0,
+    "import_master_holds": 0
+  },
+  "undo": "passed_no_remaining_targets_versions_holds_links",
+  "verification": { "integrity": true, "foreignKeys": true },
+  "encryptedTestFilesRemoved": true,
+  "metrics": { "freeBytesBefore": 33842782208, "peakRssBytes": 1215750144, "peakDatabaseBytes": 21297287384, "freeBytesAfter": 48337158144 },
+  "benchmarkQualification": {
+    "notAVpsRuntimePrediction": true,
+    "pendingApplyIndexAddedDuringThisRun": true,
+    "identicalRowsWithinOneTransaction": 200,
+    "beforeQueryMs": 824.1118,
+    "indexCreationMs": 1084.2544,
+    "afterQueryMs": 1.9191,
+    "peakDatabaseBytesIncludesWalAndShm": true,
+    "compactedBackupSizeMeasured": false
+  },
+  "fullSuite": { "tests": 2884, "passed": 2844, "skipped": 40, "failed": 0, "durationMs": 742396.5115, "localReport": "tmp/data-import-q01-index-full.tap" },
+  "referenceRefreshSubset": {
+    "localReport": "tmp/tradefoto-block3-receipts-TbtwXx/report.json",
+    "status": "passed",
+    "fieldExactRoundtrips": 154,
+    "referenceRefresh": "passed_explicit_version_no_duplicates_same_amounts",
+    "fullSourceApplied": false,
+    "durationMs": 146582
+  }
+}

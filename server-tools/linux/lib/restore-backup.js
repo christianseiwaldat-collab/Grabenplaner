@@ -3,11 +3,8 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { sha256File } = require("../../../lib/file-integrity");
 const { DatabaseSync } = require("node:sqlite");
-
-function sha256File(filePath) {
-  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
-}
 
 function sqliteQuickCheck(filePath) {
   const database = new DatabaseSync(filePath, { readOnly: true });
@@ -30,7 +27,7 @@ function main() {
   const destinationDatabase = path.resolve(targetDatabase);
   const sourceAmu = path.resolve(backupAmu);
   const destinationAmu = path.resolve(targetAmu);
-  const manifest = readAndVerifyBackup(sourceAmu).manifest;
+  const manifest = readAndVerifyBackup(sourceAmu, { includeContent: false }).manifest;
   const backupSha256 = sha256File(sourceDatabase);
   if (manifest?.database?.fileName !== path.basename(sourceDatabase)
     || String(manifest?.database?.sha256 || "").toLowerCase() !== backupSha256) {

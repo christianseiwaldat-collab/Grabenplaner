@@ -1,16 +1,12 @@
 "use strict";
 
-const crypto = require("node:crypto");
+const { sha256File } = require("../../../lib/file-integrity");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const {
   protectedStorageReferencesFromDatabase,
 } = require("../../../lib/persistence/sqlite/operations/maintenance");
-
-function sha256File(filePath) {
-  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
-}
 
 function quoteSqlitePath(filePath) {
   return path.resolve(filePath).replaceAll("'", "''");

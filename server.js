@@ -8,6 +8,8 @@ const crypto = require("node:crypto");
 const net = require("node:net");
 const zlib = require("node:zlib");
 const { promisify } = require("node:util");
+const { resolveScheduleDuty, defaultScheduleDutyCode, manualPlanningHours, PLANNING_DAY_COUNT,
+  DEFAULT_DUTY_COLORS, normalizeScheduleDutyColors, scheduleDutyColor, scheduleDutyTextColor } = require("./public/schedule-duty");
 const {
   SALES_ANALYTICS_PERMISSIONS,
   SALES_ANALYTICS_PERMISSION_IDS,
@@ -15,6 +17,13 @@ const {
 } = require("./lib/sales-analytics-access");
 const { SALES_HISTORY_PERMISSION_CATALOG, buildSalesHistoryProjection, salesHistoryPermissionDependencies } = require("./lib/sales-history-access");
 const { registerSalesHistoryRoutes } = require("./lib/sales-history-routes");
+const { DATA_IMPORT_PERMISSION_CATALOG, buildDataImportProjection, dataImportPermissionDependencies } = require("./lib/data-import-access");
+const { createDataImportRuntime } = require("./lib/persistence/repositories/data-import-runtime");
+const { createDataImportMappingRuntime } = require("./lib/persistence/repositories/data-import-mapping-runtime");
+const { createManagedSalesHistoryRuntime } = require("./lib/persistence/repositories/sales-history-runtime");
+const { createCashPublicationRuntime } = require("./lib/persistence/repositories/cash-publication-runtime");
+const { CASH_SOURCE_POLICIES } = require("./lib/cash-source-policies");
+const { registerDataImportRoutes } = require("./lib/data-import-routes");
 const {
   CRM_PERMISSIONS,
   CRM_PERMISSION_IDS,
@@ -85,6 +94,7 @@ const {
   normalizePersonalEmailAddress,
 } = require("./lib/personal-email-address");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
+const { acquireBackupWorkspace, withBackupWorkspace, prepareBackupWorkspace, MAX_WAIT_MS: BACKUP_WORKSPACE_MAX_WAIT_MS } = require("./lib/backup-workspace");
 const {
   listCommittedBackupMetadata,
   listLegacyBackupMetadata,
@@ -92,6 +102,11 @@ const {
   verifyCommittedBackup,
   writeBackupCommitMarker,
 } = require("./lib/backup-commit");
+const { prepareLocalBackupArchive } = require("./lib/backup-archive-workflow");
+const { localBackupArchiveEnabled } = require("./lib/local-backup-environment");
+const { createSaturdayCreditService } = require("./lib/persistence/repositories/saturday-credit");
+const { createOrganizationPersonnelRepository } = require("./lib/persistence/repositories/organization-personnel");
+const { allocateSaturdayMinutes, plannedWorkSegments, projectSaturdayMinutes } = require("./lib/work-rules/saturday-credit-time");
 const {
   DEFAULT_STATUS_PATH: DEFAULT_OFFSITE_STATUS_PATH,
   readOffsiteBackupStatus,
@@ -863,6 +878,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", description: "Wirtschaftlich sensible Kosten- und Rohertragswerte nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", description: "TradeFoto-Statistikberichte prüfen, einer freigegebenen Filiale zuordnen und nach ausdrücklicher Bestätigung unveränderlich übernehmen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   ...SALES_HISTORY_PERMISSION_CATALOG,
+  ...DATA_IMPORT_PERMISSION_CATALOG,
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", description: "Öffnet den geschützten CRM-Arbeitsbereich und gewährt allein noch keinen Zugriff auf Kundendaten.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", description: "Sucht und liest Kundendaten ausschließlich im CRM-Arbeitsbereich.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: CRM_PERMISSIONS.CUSTOMERS_WRITE, label: "Kundenkartei bearbeiten", description: "Legt Kundenkarten an und bearbeitet Stammdaten, eigene Textfelder sowie Kundenfotos.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
@@ -1181,6 +1197,9 @@ function assertPortalPermissionDependencies(permissions) {
     );
   }
   const crmDependencies = resolveCrmPermissionDependencies([...projected]);
+  if (!dataImportPermissionDependencies([...projected]).valid) {
+    throw httpError(400, "Gesamtimportrechte benötigen ihre getrennten Basis- und Gesamtfirmenrechte.", "PORTAL_PERMISSION_DEPENDENCY");
+  }
   if (!salesHistoryPermissionDependencies([...projected]).valid) {
     throw httpError(400, "Einzelverkaufs-, Mitarbeiter-, Kundenkauf- und Kassenrechte benötigen ihre getrennten Basis- und Bereichsrechte.", "PORTAL_PERMISSION_DEPENDENCY");
   }
@@ -1453,6 +1472,7 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
   ...SALES_HISTORY_PERMISSION_CATALOG,
+  ...DATA_IMPORT_PERMISSION_CATALOG,
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: CRM_PERMISSIONS.CUSTOMERS_WRITE, label: "Kundenkartei bearbeiten", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
@@ -2122,7 +2142,7 @@ const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FOR
 const app = express();
 const configuredPortValue = process.env.PORT || runtimeConfig.port || 3000;
 const PORT = parseServerPort(configuredPortValue);
-const backupKeep = parseBackupKeep(process.env.GRABENPLANER_BACKUP_KEEP, 30);
+const backupKeep = parseBackupKeep(process.env.GRABENPLANER_BACKUP_RETENTION_DAYS, 20);
 const configuredHost = configuredOperationMode === "lan" ? "0.0.0.0" : "127.0.0.1";
 const HOST = String(process.env.GRABENPLANER_HOST || configuredHost).trim() || "127.0.0.1";
 const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -2392,6 +2412,8 @@ try {
   throw error;
 }
 const { database: db, provider: persistenceProvider } = applicationPersistence;
+if (databasePath !== ":memory:") prepareBackupWorkspace(databasePath);
+const saturdayCreditService = createSaturdayCreditService({ access: persistenceProvider, today: () => viennaTodayIso() });
 const applicationRepositories = createApplicationRepositories(persistenceProvider);
 const {
   absenceManagement: absenceManagementRepository,
@@ -2458,7 +2480,7 @@ function backupTimestamp(date = new Date()) {
 }
 
 function fileSha256(filePath) {
-  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+  return require("./lib/file-integrity").sha256File(filePath);
 }
 
 function verifyProtectedBackupPair(databaseFile, backupDirectory, expectedDatabase = {}) {
@@ -2481,14 +2503,21 @@ function verifyBackupPairPaths(paths, marker = null) {
   });
 }
 
-function pruneDatabaseBackups(backupDirectory, keep = 30) {
+function pruneDatabaseBackups(backupDirectory, keep = 20) {
   return pruneCommittedBackups(backupDirectory, keep, { verifyPair: verifyBackupPairPaths });
 }
 
-function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", kind = "external") {
+function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", kind = "external", { beforeListen = false } = {}) {
   if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
+  return withBackupWorkspace(databasePath, () => createDatabaseBackupToDirectoryWhileLocked(backupDirectory, reason, kind, { beforeListen }),
+    { waitMs: beforeListen ? BACKUP_WORKSPACE_MAX_WAIT_MS : 0 });
+}
+function createDatabaseBackupToDirectoryWhileLocked(backupDirectory, reason, kind, { beforeListen }) {
   if (amuMutationInProgress > 0) throw new Error("Die Sicherung wartet, bis der laufende AUM-Upload abgeschlossen ist.");
   if (!amuStorage) throw new Error("Ohne betriebsbereiten AUM-Speicher wird kein unvollständiger Sicherungspunkt erstellt.");
+  const archive = prepareLocalBackupArchive({ backupDirectory, keep: backupKeep, vault: integrationSecretVault, expectedStream: kind });
+  if (archive && !beforeListen) throw new Error("LOCAL_ARCHIVE_BACKGROUND_REQUIRED");
+  if (archive) archive.preflightBackup();
   verifyActiveProtectedDocumentBlobsForBackup();
   fs.mkdirSync(backupDirectory, { recursive: true });
   const snapshotName = `dienstplan-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}`;
@@ -2531,12 +2560,41 @@ function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", 
     safeRemoveFile(markerTarget);
     throw error;
   }
-  pruneDatabaseBackups(backupDirectory, backupKeep);
-  return { path: target, marker: markerTarget, createdAt: new Date().toISOString(), reason, kind, verified: true, committed: true, amuBackup };
+  // Pre-migration safety copies are synchronous, before listening. Preserve
+  // them as unregistered raw points; never run Restic on the live event loop.
+  const archiveResult = archive ? { archived: false, rawSafetyPointRetained: true } : null;
+  if (!archive) pruneDatabaseBackups(backupDirectory, backupKeep);
+  return { path: target, marker: markerTarget, createdAt: new Date().toISOString(), reason, kind, verified: true, committed: true, amuBackup, archive: archiveResult };
 }
 
 function createInternalDatabaseBackup(reason = "automatic") {
   return createDatabaseBackupToDirectory(appBackupDirectory, reason, "app");
+}
+
+function createPreMigrationDatabaseBackup(reason) {
+  return createDatabaseBackupToDirectory(appBackupDirectory, reason, "app", { beforeListen: true });
+}
+
+async function createDatabaseBackupInBackground(backupDirectory, reason, kind, { deadlineMs = Date.now() + 1400000 } = {}) {
+  if (!localBackupArchiveEnabled()) return createDatabaseBackupToDirectory(backupDirectory, reason, kind);
+  if (shutdownStarted && !String(reason).startsWith("shutdown-")) {
+    const error = new Error("Während des Dienststopps werden keine weiteren Sicherungsaufträge angenommen.");
+    error.code = "BACKGROUND_BACKUP_SHUTDOWN_IN_PROGRESS";
+    throw error;
+  }
+  if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
+  if (!amuStorage) throw new Error("LOCAL_ARCHIVE_DOCUMENT_STORAGE_REQUIRED");
+  prepareLocalBackupArchive({ backupDirectory, keep: backupKeep, vault: integrationSecretVault, expectedStream: kind });
+  const { createBackgroundBackup } = require("./lib/background-backup-process");
+  const result = await createBackgroundBackup({ databasePath, protectedDirectory: amuStorageDirectory,
+    backupDirectory, expectedStream: kind, deadlineMs, environment: { ...process.env,
+      GRABENPLANER_INTEGRATION_KEY_ID: integrationEncryptionConfiguration.keyId,
+      GRABENPLANER_INTEGRATION_KEYS: JSON.stringify(integrationEncryptionConfiguration.keys),
+      GRABENPLANER_AMU_KEY_ID: amuEncryptionConfiguration.keyId,
+      GRABENPLANER_AMU_KEY: amuEncryptionConfiguration.key,
+    } });
+  return { ...result, reason, kind, verified: true, committed: true,
+    amuBackup: { targetDirectory: result.protectedDirectory } };
 }
 
 function createExternalDatabaseBackup(reason = "automatic", settings = tableExists("settings") ? getSettings() : {}) {
@@ -2549,9 +2607,11 @@ function createDatabaseDownloadSnapshot() {
   if (databasePath === ":memory:" || !fs.existsSync(databasePath)) {
     throw httpError(409, "Die Datenbank steht derzeit nicht als Datei zur Verfügung.", "DATABASE_DOWNLOAD_UNAVAILABLE");
   }
-  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-db-download-"));
-  const snapshotPath = path.join(temporaryRoot, `grabenplaner-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}.db`);
+  const workspace = acquireBackupWorkspace({ databasePath });
+  let temporaryRoot;
   try {
+    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-db-download-"));
+    const snapshotPath = path.join(temporaryRoot, `grabenplaner-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}.db`);
     try { fs.chmodSync(temporaryRoot, 0o700); } catch {}
     sqliteMaintenanceOperations.vacuumInto(snapshotPath);
     const verification = verifyDatabaseFile(snapshotPath);
@@ -2566,17 +2626,21 @@ function createDatabaseDownloadSnapshot() {
       size: stat.size,
       sha256: fileSha256(snapshotPath),
       createdAt: new Date().toISOString(),
+      releaseWorkspace: () => workspace.release(),
     };
   } catch (error) {
-    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+    try { if (temporaryRoot) fs.rmSync(temporaryRoot, { recursive: true, force: true }); }
+    finally { workspace.release(); }
     throw error;
   }
 }
 
-function createDatabaseBackup(reason = "automatic") {
+async function createDatabaseBackup(reason = "automatic", { deadlineMs = Date.now() + 1400000 } = {}) {
   const settings = tableExists("settings") ? getSettings() : {};
-  const appBackup = createInternalDatabaseBackup(reason);
-  const externalBackup = createExternalDatabaseBackup(reason, settings);
+  // Both destinations and their queue time share one budget, not 1500 s each.
+  const appBackup = await createDatabaseBackupInBackground(appBackupDirectory, reason, "app", { deadlineMs });
+  const externalBackup = serverModeActive || settings.external_backup_enabled === "0" ? null
+    : await createDatabaseBackupInBackground(backupDirectoryFromSettings(settings), reason, "external", { deadlineMs });
   lastBackup = {
     path: externalBackup?.path || appBackup?.path || null,
     createdAt: new Date().toISOString(),
@@ -2596,7 +2660,7 @@ const startupSchemaMigrationState = runSqliteStartupSchemaMigrations({
   databaseExistedBeforeOpen,
   appVersion: packageMetadata.version,
   ensureApplicationSchema: createSchema,
-  createPreMigrationBackup: createInternalDatabaseBackup,
+  createPreMigrationBackup: createPreMigrationDatabaseBackup,
   workRuleSha256,
 });
 const {
@@ -3233,12 +3297,14 @@ const defaultSettings = {
   pdf_filename_include_timestamp: "0",
   pdf_schedule_designs: JSON.stringify(DEFAULT_SCHEDULE_PDF_DESIGN_IDS),
   pdf_schedule_design_names: "{}",
-  pdf_schedule_matrix_time_font_size: "6",
+  pdf_schedule_matrix_time_font_size: "14.5",
   pdf_schedule_matrix_time_font_bold: "0",
   pdf_schedule_matrix_time_employee_color: "0",
   pdf_schedule_matrix_show_position: "1",
+  pdf_schedule_matrix_show_duty_label: "0",
   pdf_schedule_matrix_detail_font_size: "6",
   pdf_schedule_matrix_header_text: "Design 2",
+  schedule_duty_colors: JSON.stringify(DEFAULT_DUTY_COLORS),
   vacation_pdf_title: "Urlaubsplanung",
   vacation_pdf_filename_prefix: "Urlaubsplanung",
   vacation_pdf_filename_include_period: "1",
@@ -3253,7 +3319,7 @@ const defaultSettings = {
   show_saturday_service_stats: "1",
   external_backup_enabled: "1",
   backup_directory: process.env.BACKUP_DIR || defaultBackupDirectorySetting,
-  backup_interval_hours: "2",
+  backup_interval_hours: "24",
   vacation_pdf_size: "A4",
   allow_past_week_editing: "0",
   current_week_auto_lock: "1",
@@ -4923,6 +4989,7 @@ function publicPortalUser(session) {
       scopes: session.scopes || [],
       salesAnalytics: buildSalesAnalyticsProjection(session),
       salesHistory: buildSalesHistoryProjection(session),
+      dataImport: buildDataImportProjection(session),
       crm: buildCrmProjection(session),
       mustChangePassword: session.mustChangePassword,
       personnelRecordAccess: {
@@ -4957,6 +5024,7 @@ function publicPortalUser(session) {
     scopes: session.scopes || [],
     salesAnalytics: buildSalesAnalyticsProjection(session),
     salesHistory: buildSalesHistoryProjection(session),
+    dataImport: buildDataImportProjection(session),
     crm: buildCrmProjection(session),
     mustChangePassword: session.mustChangePassword,
     personnelRecordAccess: {
@@ -12964,15 +13032,18 @@ async function plannedDayMetrics(
     locationId,
     filterLocation: filterLocation ? 1 : 0,
   }))
-    .map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings) })));
+    .map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, await settingsForLocation(shift.location_id || locationId)) })));
   return blocks.reduce((result, block) => ({
     grossMinutes: result.grossMinutes + Number(block.raw_minutes || 0),
     breakMinutes: result.breakMinutes + Number(block.break_minutes || 0),
     netMinutes: result.netMinutes + Math.max(0, Number(block.raw_minutes || 0) - Number(block.break_minutes || 0)),
     saturdayBonusMinutes: result.saturdayBonusMinutes + Number(block.bonus_minutes || 0),
+    saturdayEligibleMinutes: result.saturdayEligibleMinutes + Number(block.saturday_eligible_minutes || 0),
+    saturdayCreditReviewRequired: result.saturdayCreditReviewRequired || block.saturday_credit_status === 'review_required',
     valuedMinutes: result.valuedMinutes + Number(block.counted_minutes || 0),
     blocks: result.blocks,
-  }), { grossMinutes: 0, breakMinutes: 0, netMinutes: 0, saturdayBonusMinutes: 0, valuedMinutes: 0, blocks });
+  }), { grossMinutes: 0, breakMinutes: 0, netMinutes: 0, saturdayBonusMinutes: 0, saturdayEligibleMinutes: 0,
+    saturdayCreditReviewRequired: false, valuedMinutes: 0, blocks });
 }
 
 async function plannedMinutesForEmployeeDate(employeeNumber, date, locationId, departmentId = null) {
@@ -13001,6 +13072,84 @@ function actualDayMetrics(entries, date, settings, now = new Date()) {
     saturdayBonusMinutes,
     valuedMinutes: parsed.workedMinutes + saturdayBonusMinutes,
   };
+}
+
+async function employeeActualDayMetrics(employeeNumber, entries, date, settings, now, locationId, repository, persist = false) {
+  const context = await saturdayCreditService.status(employeeNumber, date);
+  if (context.cutover && date < context.cutover.effectiveDate) {
+    const saved = context.cutover.legacySettings[locationId] || context.cutover.legacySettings['*'];
+    if (saved) settings = { ...settings, saturday_bonus_enabled: saved.enabled ? '1' : '0', saturday_bonus_from: saved.from, saturday_bonus_factor: String(saved.factor) };
+  }
+  const legacy = actualDayMetrics(entries, date, settings, now);
+  if (!context.cutover || date < context.cutover.effectiveDate || new Date(date + 'T12:00:00Z').getUTCDay() !== 6) return legacy;
+  const midnight = viennaLocalDateTime(date, '00:00');
+  const segments = parsed => parsed.segments.map(segment => ({
+    startMinute: Math.max(0, (segment.start - midnight) / 60000),
+    endMinute: Math.min(1440, (segment.end - midnight) / 60000), workClassification: 'normal',
+  })).filter(segment => segment.endMinute > segment.startMinute);
+  const whole = await saturdayActualContext(employeeNumber, date, now, repository);
+  const wholeSegments = whole.segments, visible = segments(legacy);
+  const valued = await saturdayCreditService.evaluate({ employeeNumber, workDate: date, source: 'actual',
+    segments: wholeSegments, dayComplete: whole.complete, breaksResolved: whole.breaksResolved,
+    publicHoliday: whole.publicHoliday, legacy: { workedMinutes: whole.workedMinutes }, persist });
+  const allocated = valued.saturdayCreditStatus === 'calculated' ? projectSaturdayMinutes(wholeSegments, visible)
+    : { bonusMinutes: 0, eligibleMinutes: 0 };
+  return { ...legacy, saturdayBonusMinutes: allocated.bonusMinutes, saturdayEligibleMinutes: Math.floor(allocated.eligibleMinutes),
+    valuedMinutes: legacy.workedMinutes + allocated.bonusMinutes, saturdayCreditStatus: valued.saturdayCreditStatus,
+    saturdayCreditIssues: valued.saturdayCreditIssues || [], saturdayCreditReceipt: valued.saturdayCreditReceipt,
+    saturdayCreditRecordId: valued.saturdayCreditRecordId || null };
+}
+
+function importedSaturdaySegments(intervals) {
+  if (!Array.isArray(intervals) || intervals.length > 96) return [];
+  return intervals.map(value => {
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d-(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/.test(String(value))) return null;
+    const [from, to] = value.split('-');
+    const minute = clock => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3));
+    return { startMinute: minute(from), endMinute: minute(to), workClassification: 'normal' };
+  }).filter(Boolean);
+}
+
+async function saturdayActualContext(employeeNumber, date, now, repository) {
+  const imports = await saturdayCreditService.importedDay(employeeNumber, date);
+  const allEntries = await repository.listTimeEntriesForDay({ employeeNumber, date });
+  const importedLocations = new Set(imports.map(row => row.locationId));
+  const liveEntries = allEntries.filter(entry => !importedLocations.has(entry.location_id));
+  const parsed = parseTimeEntrySequence(liveEntries, date, now);
+  const midnight = viennaLocalDateTime(date, '00:00');
+  const segments = parsed.segments.map(segment => ({ startMinute: Math.max(0, (segment.start - midnight) / 60000),
+    endMinute: Math.min(1440, (segment.end - midnight) / 60000), workClassification: 'normal' })).filter(s => s.endMinute > s.startMinute);
+  let workedMinutes = parsed.workedMinutes, breakMinutes = parsed.breakMinutes;
+  let complete = !parsed.incomplete && !parsed.errors.length;
+  for (const row of imports) {
+    const parts = importedSaturdaySegments(row.intervals).sort((a, b) => a.startMinute - b.startMinute);
+    const minutes = parts.reduce((sum, p) => sum + p.endMinute - p.startMinute, 0);
+    if (parts.length !== row.intervals?.length || minutes !== row.actualMinutes || parts.some((p, i) => p.endMinute <= p.startMinute || (i && p.startMinute < parts[i - 1].endMinute))) complete = false;
+    segments.push(...parts); workedMinutes += row.actualMinutes;
+    breakMinutes += parts.reduce((sum, p, i) => sum + (i ? Math.max(0, p.startMinute - parts[i - 1].endMinute) : 0), 0);
+  }
+  const locations = new Set([...importedLocations, ...liveEntries.map(e => e.location_id).filter(Boolean)]);
+  let requiredBreak = 0, publicHoliday = false;
+  for (const id of locations) {
+    const settings = await settingsForLocation(id);
+    if (settingEnabled(settings, 'break_rule_enabled') && workedMinutes > Number(settings.break_after_minutes || 0)) requiredBreak = Math.max(requiredBreak, Number(settings.break_duration_minutes || 0));
+    publicHoliday ||= isVacationHoliday(date, id);
+  }
+  return { segments, workedMinutes, complete, breaksResolved: complete && breakMinutes >= requiredBreak, publicHoliday };
+}
+
+async function employeeXoffiDayMetrics(employeeNumber, row, date, settings, locationId, persist = false) {
+  const legacy = xoffiDayMetrics(row), context = await saturdayCreditService.status(employeeNumber, date);
+  if (!context.cutover || date < context.cutover.effectiveDate || new Date(date + 'T12:00:00Z').getUTCDay() !== 6) return legacy;
+  const whole = await saturdayActualContext(employeeNumber, date, new Date(), timeTrackingRepository);
+  const valued = await saturdayCreditService.evaluate({ employeeNumber, workDate: date, source: 'actual',
+    segments: whole.segments, dayComplete: whole.complete, breaksResolved: whole.breaksResolved,
+    publicHoliday: whole.publicHoliday, legacy: { workedMinutes: whole.workedMinutes }, persist });
+  const allocation = valued.saturdayCreditStatus === 'calculated' ? projectSaturdayMinutes(whole.segments, importedSaturdaySegments(legacy.intervals))
+    : { bonusMinutes: 0, eligibleMinutes: 0 };
+  return { ...legacy, saturdayBonusMinutes: allocation.bonusMinutes, saturdayEligibleMinutes: Math.floor(allocation.eligibleMinutes),
+    valuedMinutes: legacy.workedMinutes + allocation.bonusMinutes, saturdayCreditStatus: valued.saturdayCreditStatus,
+    saturdayCreditIssues: valued.saturdayCreditIssues || [], saturdayCreditReceipt: valued.saturdayCreditReceipt, saturdayCreditRecordId: valued.saturdayCreditRecordId || null };
 }
 
 function xoffiDayMetrics(row) {
@@ -13168,7 +13317,12 @@ async function evaluateTimeDay(
   const evaluationLocationId = String(evaluationOptions.locationId || context.locationId);
   const filterLocation = evaluationOptions.filterLocation === true;
   const location = await validateLocationExists(evaluationLocationId);
-  const settings = await settingsForLocation(evaluationLocationId);
+  let settings = await settingsForLocation(evaluationLocationId);
+  const saturdayContext = await saturdayCreditService.status(employeeNumber, date);
+  if (saturdayContext.cutover && date < saturdayContext.cutover.effectiveDate) {
+    const saved = saturdayContext.cutover.legacySettings[evaluationLocationId] || saturdayContext.cutover.legacySettings['*'];
+    if (saved) settings = { ...settings, saturday_bonus_enabled: saved.enabled ? '1' : '0', saturday_bonus_from: saved.from, saturday_bonus_factor: String(saved.factor) };
+  }
   const entries = (providedEntries || await timeEntriesForDay(employeeNumber, date, repository))
     .filter((entry) => (!departmentId || Number(entry.department_id || 0) === Number(departmentId))
       && (!filterLocation || String(entry.location_id || context.locationId) === evaluationLocationId));
@@ -13187,7 +13341,8 @@ async function evaluateTimeDay(
     filterLocation,
     repository,
   );
-  const actual = useXoffiActual ? xoffiDayMetrics(xoffiDay) : actualDayMetrics(entries, date, settings, now);
+  const actual = useXoffiActual ? await employeeXoffiDayMetrics(employeeNumber, xoffiDay, date, settings, evaluationLocationId, evaluationOptions.persistSaturdayCredit === true)
+    : await employeeActualDayMetrics(employeeNumber, entries, date, settings, now, evaluationLocationId, repository, evaluationOptions.persistSaturdayCredit === true);
   const hasActualData = useXoffiActual || entries.length > 0;
   const excused = await excusedTimeForEmployeeDate(
     employeeNumber,
@@ -13214,6 +13369,8 @@ async function evaluateTimeDay(
     : 0;
   const issues = [];
   const addIssue = (code, severity, label, message) => issues.push({ code, severity, label, message });
+  if (actual.saturdayCreditStatus === 'review_required') addIssue('saturday_credit_review_required', 'error', 'Samstagsgutschrift prüfen',
+    'Verkaufszuordnung, vollständige Zeitbuchungen und Pausenlage müssen für die Samstagsgutschrift geklärt sein.');
   if (actual.errors.length) addIssue("invalid_sequence", "error", "Buchungsfolge prüfen", "Mindestens eine Buchung passt nicht zur zeitlichen Reihenfolge.");
   if (isPast && actual.incomplete) addIssue("incomplete", "error", "Abschluss fehlt", "Der Arbeitstag wurde nicht vollständig mit „Gehen“ abgeschlossen.");
   if (bookingWindowEnded && planned.netMinutes > 0 && !hasActualData && !excused.excused) {
@@ -13239,6 +13396,8 @@ async function evaluateTimeDay(
   if (pendingCorrection) addIssue("pending_correction", "info", "Korrektur offen", "Für diesen Tag wartet ein Korrekturantrag auf Bearbeitung.");
   const evaluationHash = sha256(JSON.stringify({
     version: TIME_EVALUATION_VERSION,
+    ...(actual.saturdayCreditStatus ? { saturdayCredit: [actual.saturdayCreditStatus, actual.saturdayCreditReceipt, actual.saturdayBonusMinutes],
+      plannedSaturdayCredit: planned.blocks.map(block => [block.id, block.saturday_credit_status, block.saturday_credit_receipt, block.bonus_minutes]) } : {}),
     locationId: evaluationLocationId,
     departmentId: Number(departmentId || 0) || 0,
     planned: planned.blocks.map((block) => [block.id, block.department_id, block.start_time, block.end_time]),
@@ -13699,9 +13858,12 @@ async function setTimeDayReview(session, context, employeeNumber, date, body = {
   const evaluation = await evaluateTimeDay(employeeNumber, date, now, context.departmentId, null, {
     locationId: context.locationId,
     filterLocation: true,
+    persistSaturdayCredit: true,
   });
   const snapshot = {
     evaluationVersion: evaluation.evaluationVersion,
+    saturdayCreditReceipt: evaluation.actual.saturdayCreditReceipt || null,
+    saturdayCreditRecordId: evaluation.actual.saturdayCreditRecordId || null,
     evaluationHash: evaluation.evaluationHash,
     code: evaluation.code,
     severity: evaluation.severity,
@@ -15433,6 +15595,7 @@ async function prepareApprovedTimeOffMutation(
         employeeNumber: shift.employee_number,
         locationId: shift.location_id,
         departmentId: shift.department_id || null,
+        dutyCode: shift.duty_code || "",
         shiftDate: shift.shift_date,
         startTime: shift.start_time,
         endTime: entry.start_time,
@@ -15445,6 +15608,7 @@ async function prepareApprovedTimeOffMutation(
         employeeNumber: shift.employee_number,
         locationId: shift.location_id,
         departmentId: shift.department_id || null,
+        dutyCode: shift.duty_code || "",
         shiftDate: shift.shift_date,
         startTime: entry.end_time,
         endTime: shift.end_time,
@@ -15543,6 +15707,7 @@ async function prepareRestoreApprovedTimeOffMutation(
     employeeNumber: original.employee_number,
     locationId: original.location_id,
     departmentId: original.department_id || null,
+    dutyCode: original.duty_code || "",
     shiftDate: original.shift_date,
     startTime: original.start_time,
     endTime: original.end_time,
@@ -17034,6 +17199,7 @@ async function mobileSchedulePayload(session, weekValue = "") {
     locationName: shift.location_name || "",
     departmentId: Number(shift.department_id || 0) || null,
     departmentName: shift.department_name || "",
+    dutyCode: shift.duty_code || "",
   }));
   const options = storedOptions.map((option) => ({
     id: Number(option.id),
@@ -17891,10 +18057,11 @@ function defaultSchedulePdfSettings(context = {}) {
     pdf_filename_include_timestamp: "0",
     pdf_schedule_designs: JSON.stringify(DEFAULT_SCHEDULE_PDF_DESIGN_IDS),
     pdf_schedule_design_names: "{}",
-    pdf_schedule_matrix_time_font_size: "6",
+    pdf_schedule_matrix_time_font_size: "14.5",
     pdf_schedule_matrix_time_font_bold: "0",
     pdf_schedule_matrix_time_employee_color: "0",
     pdf_schedule_matrix_show_position: "1",
+    pdf_schedule_matrix_show_duty_label: "0",
     pdf_schedule_matrix_detail_font_size: "6",
     pdf_schedule_matrix_header_text: "Design 2",
   };
@@ -17944,11 +18111,12 @@ function applyScopedPdfSettings(settings, context, scopeType) {
     pdf_schedule_matrix_time_font_size: normalizeScheduleMatrixFontSize(
       scopedSettings.pdf_schedule_matrix_time_font_size,
       SCHEDULE_MATRIX_TIME_FONT_SIZES,
-      "6",
+      "14.5",
     ),
     pdf_schedule_matrix_time_font_bold: scopedSettings.pdf_schedule_matrix_time_font_bold === "1" ? "1" : "0",
     pdf_schedule_matrix_time_employee_color: scopedSettings.pdf_schedule_matrix_time_employee_color === "1" ? "1" : "0",
     pdf_schedule_matrix_show_position: scopedSettings.pdf_schedule_matrix_show_position === "0" ? "0" : "1",
+    pdf_schedule_matrix_show_duty_label: scopedSettings.pdf_schedule_matrix_show_duty_label === "1" ? "1" : "0",
     pdf_schedule_matrix_detail_font_size: normalizeScheduleMatrixFontSize(
       scopedSettings.pdf_schedule_matrix_detail_font_size,
       SCHEDULE_MATRIX_DETAIL_FONT_SIZES,
@@ -17999,6 +18167,7 @@ const SCHEDULE_PDF_SCOPED_SETTING_KEYS = Object.freeze([
   "pdf_schedule_matrix_time_font_bold",
   "pdf_schedule_matrix_time_employee_color",
   "pdf_schedule_matrix_show_position",
+  "pdf_schedule_matrix_show_duty_label",
   "pdf_schedule_matrix_detail_font_size",
   "pdf_schedule_matrix_header_text",
 ]);
@@ -18690,18 +18859,19 @@ function validateBackupDirectory(value) {
 }
 
 function backupIntervalMs(settings = getSettings()) {
-  const hours = Number(settings.backup_interval_hours || 2);
-  return Math.min(6, Math.max(1, Number.isFinite(hours) ? hours : 2)) * 60 * 60 * 1000;
+  const hours = Number(settings.backup_interval_hours || 24);
+  return Math.min(24, Math.max(1, Number.isFinite(hours) ? hours : 24)) * 60 * 60 * 1000;
 }
 
 function scheduleAutomaticBackups() {
   if (backupInterval) clearInterval(backupInterval);
   backupInterval = null;
   if (serverModeActive) return;
-  backupInterval = setInterval(() => {
+  backupInterval = setInterval(async () => {
     try {
       const settings = getSettings();
-      const backup = createExternalDatabaseBackup("scheduled", settings);
+      const backup = settings.external_backup_enabled === "0" ? null
+        : await createDatabaseBackupInBackground(backupDirectoryFromSettings(settings), "scheduled", "external");
       if (backup) {
         lastBackup = {
           path: backup.path,
@@ -18820,6 +18990,7 @@ function projectBranchSupervisionShifts(storedShifts, planningChange, {
       employee_number: String(submitted.employeeNumber ?? submitted.employee_number ?? ""),
       location_id: submittedLocationId,
       department_id: submitted.departmentId ?? submitted.department_id ?? null,
+      duty_code: submitted.dutyCode ?? submitted.duty_code ?? "",
       shift_date: shiftDate,
       start_time: String(submitted.startTime ?? submitted.start_time ?? ""),
       end_time: String(submitted.endTime ?? submitted.end_time ?? ""),
@@ -19094,7 +19265,14 @@ async function overlappingWeekOption(employeeNumber, date, startTime, endTime) {
     .find((option) => optionOverlapsTime(option, startTime, endTime));
 }
 
-async function shiftMetrics(shift, settings) {
+async function shiftMetrics(shift, settings, { legacyOnly = false } = {}) {
+  const saturdayContext = !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
+    ? await saturdayCreditService.status(shift.employee_number, shift.shift_date) : null;
+  const cutover = saturdayContext?.cutover;
+  if (cutover && shift.shift_date < cutover.effectiveDate) {
+    const saved = cutover.legacySettings[String(shift.location_id || '')] || cutover.legacySettings['*'];
+    if (saved) settings = { ...settings, saturday_bonus_enabled: saved.enabled ? '1' : '0', saturday_bonus_from: saved.from, saturday_bonus_factor: String(saved.factor) };
+  }
   const start = timeToMinutes(shift.start_time);
   let end = timeToMinutes(shift.end_time);
   if (end <= start) end += 24 * 60;
@@ -19141,13 +19319,46 @@ async function shiftMetrics(shift, settings) {
     countedMinutes += bonusMinutes;
   }
 
-  return {
+  const metrics = {
     raw_minutes: rawMinutes,
     break_minutes: breakMinutes,
     lunch_break_minutes: lunchBreakMinutes,
     bonus_minutes: bonusMinutes,
     counted_minutes: countedMinutes,
   };
+  if (!cutover || shift.shift_date < cutover.effectiveDate) return metrics;
+  metrics.bonus_minutes = 0; metrics.counted_minutes = rawMinutes - breakMinutes;
+  metrics.saturday_eligible_minutes = 0;
+  if (!isSaturday) return metrics;
+  const peers = (await timeTrackingRepository.listPlannedDayShifts({ employeeNumber: shift.employee_number,
+    date: shift.shift_date, departmentId: null, filterDepartment: 0, locationId: '', filterLocation: 0 }))
+    .filter(peer => shift.id ? String(peer.id) !== String(shift.id)
+      : !(peer.start_time === shift.start_time && peer.end_time === shift.end_time && String(peer.location_id || '') === String(shift.location_id || '')));
+  peers.push(shift);
+  const groups = [], netMinutes = [];
+  let breaksResolved = true, holiday = false;
+  for (const peer of peers) {
+    const peerSettings = peer === shift ? settings : await settingsForLocation(peer.location_id);
+    const base = peer === shift ? metrics : await shiftMetrics(peer, peerSettings, { legacyOnly: true });
+    const config = await dayConfiguration(peer.shift_date, peerSettings);
+    const from = timeToMinutes(peer.start_time); let to = timeToMinutes(peer.end_time); if (to <= from) to += 1440;
+    const lunch = config?.lunchEnabled && isTime(config.lunchStart) && isTime(config.lunchEnd);
+    groups.push(plannedWorkSegments(from, to, lunch ? timeToMinutes(config.lunchStart) : null, lunch ? timeToMinutes(config.lunchEnd) : null));
+    netMinutes.push(base.raw_minutes - base.break_minutes);
+    if (base.break_minutes > base.lunch_break_minutes) breaksResolved = false;
+    if (isVacationHoliday(peer.shift_date, peer.location_id)) holiday = true;
+  }
+  const valued = await saturdayCreditService.evaluate({ employeeNumber: shift.employee_number, workDate: shift.shift_date,
+    source: 'planned', segments: groups.flat(), dayComplete: true, breaksResolved, publicHoliday: holiday,
+    legacy: { workedMinutes: netMinutes.reduce((sum, n) => sum + n, 0) } });
+  if (valued.saturdayCreditStatus === 'calculated') {
+    const allocated = allocateSaturdayMinutes(groups).at(-1);
+    metrics.bonus_minutes = allocated.bonusMinutes; metrics.saturday_eligible_minutes = allocated.eligibleMinutes;
+    metrics.counted_minutes += allocated.bonusMinutes;
+  }
+  metrics.saturday_credit_status = valued.saturdayCreditStatus;
+  metrics.saturday_credit_receipt = valued.saturdayCreditReceipt;
+  return metrics;
 }
 
 function serializeEmployee(row, options = {}) {
@@ -19335,7 +19546,11 @@ async function validateShift(body, contextInput = {}, actor = null) {
   const endTime = String(body.endTime || "");
   const area = String(body.area || "").trim();
   const note = String(body.note || "").trim();
-  const departmentId = normalizeDepartmentId(body.departmentId ?? body.department_id, true);
+  const existing = contextInput.existingShift || null;
+  const hasDepartmentInput = Object.hasOwn(body, "departmentId") || Object.hasOwn(body, "department_id");
+  const departmentId = normalizeDepartmentId(hasDepartmentInput
+    ? body.departmentId ?? body.department_id
+    : existing?.department_id, true);
   const submittedLocationId = String(
     body.locationId ?? body.location_id ?? body.location
       ?? contextInput.locationId ?? contextInput.location_id ?? contextInput.location ?? "",
@@ -19348,6 +19563,21 @@ async function validateShift(body, contextInput = {}, actor = null) {
   const employee = await planningSettingsRepository.getPlanningEmployee({ employeeNumber });
   if (!employee) {
     throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
+  }
+  const hasDutyInput = Object.hasOwn(body, "dutyCode") || Object.hasOwn(body, "duty_code");
+  const rawDutyCode = body.dutyCode ?? body.duty_code;
+  if (hasDutyInput && (typeof rawDutyCode !== "string"
+    || !["", "branch_supervision", "department", "general"].includes(rawDutyCode))) {
+    throw httpError(400, "Die Dienstzuordnung ist ungültig.", "SHIFT_DUTY_INVALID");
+  }
+  const departmentChanged = existing && hasDepartmentInput
+    && Number(departmentId || 0) !== Number(existing.department_id || 0);
+  const dutyCode = !hasDutyInput && existing && !departmentChanged
+    ? String(existing.duty_code || "")
+    : (rawDutyCode || (departmentId ? "department" : defaultScheduleDutyCode(employee)));
+  if ((dutyCode === "department" && !departmentId)
+    || (["branch_supervision", "general"].includes(dutyCode) && departmentId)) {
+    throw httpError(400, "Dienstzuordnung und Abteilung passen nicht zusammen.", "SHIFT_DUTY_DEPARTMENT_MISMATCH");
   }
   const department = departmentId ? await validateDepartmentExists(departmentId) : null;
   const locationId = submittedLocationId
@@ -19411,17 +19641,17 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if (globalBlock) {
     throw httpError(409, `Dieser Tag ist für alle gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.`);
   }
-  const hours = await operatingHours(shiftDate, settings);
-  if (!hours) throw httpError(400, "An Sonntagen kann kein Dienst eingetragen werden.");
+  const hours = manualPlanningHours();
   if (startTime < hours.start || endTime > hours.end || endTime <= startTime) {
     throw httpError(
       400,
       `Der Dienst muss innerhalb der Dienstzeit ${hours.start}–${hours.end} Uhr liegen.`,
+      "SHIFT_PLANNING_WINDOW_INVALID",
     );
   }
   const dayConfig = await dayConfiguration(shiftDate, settings);
   if (
-    dayConfig.lunchEnabled &&
+    dayConfig?.lunchEnabled &&
     startTime >= dayConfig.lunchStart &&
     endTime <= dayConfig.lunchEnd
   ) {
@@ -19453,7 +19683,7 @@ async function validateShift(body, contextInput = {}, actor = null) {
     );
   }
 
-  return { employeeNumber, locationId, departmentId, shiftDate, startTime, endTime, area, note };
+  return { employeeNumber, locationId, departmentId, dutyCode, shiftDate, startTime, endTime, area, note };
 }
 
 function staffAssignmentShiftConstraintError(error) {
@@ -20059,6 +20289,7 @@ async function scheduleWorkRuleFacts(weekStart, context, employees, candidateShi
       employee_number: submittedEmployeeNumber,
       location_id: submitted.locationId ?? submitted.location_id,
       department_id: submitted.departmentId ?? submitted.department_id ?? null,
+      duty_code: submitted.dutyCode ?? submitted.duty_code ?? "",
       shift_date: submittedShiftDate,
       start_time: submitted.startTime ?? submitted.start_time,
       end_time: submitted.endTime ?? submitted.end_time,
@@ -20077,6 +20308,7 @@ async function scheduleWorkRuleFacts(weekStart, context, employees, candidateShi
       breakSource: metrics.lunch_break_minutes > 0 ? "planned_window" : (metrics.break_minutes > 0 ? "configured_assumption" : "none"),
       locationId: String(shift.location_id || ""),
       departmentId: shift.department_id ? Number(shift.department_id) : null,
+      dutyCode: String(shift.duty_code || ""),
     };
   }));
   const holidays = getGlobalDayBlocksForRange(range.start, range.end, context.locationId)
@@ -21855,6 +22087,30 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     ),
   })));
   const countedWeekShifts = [...shifts, ...externalShifts];
+  const pdfStaffAssignmentShifts = externalShifts.flatMap((shift) => {
+    const assignment = employeeLendings.find((item) => (
+      String(item.employee_number) === String(shift.employee_number)
+      && String(item.home_location_id) === String(context.locationId)
+      && String(item.destination_location_id) === String(shift.location_id)
+      && item.date_from <= shift.shift_date && item.date_to >= shift.shift_date
+      && (!item.destination_department_id
+        || Number(item.destination_department_id) === Number(shift.department_id || 0))
+      && (Number(item.all_day ?? 1) === 1
+        || (item.start_time <= shift.start_time && item.end_time >= shift.end_time))
+    ));
+    if (!assignment) return [];
+    return [{
+      employee_number: shift.employee_number,
+      shift_date: shift.shift_date,
+      start_time: shift.start_time,
+      end_time: shift.end_time,
+      department_id: shift.department_id || null,
+      department_name: shift.department_name || assignment.destination_department_name || "",
+      duty_code: shift.duty_code || "",
+      location_id: shift.location_id,
+      location_name: assignment.destination_location_name || "",
+    }];
+  });
   const weekOptions = storedWeekOptions.map((option) => ({ ...option }));
   const pendingTimeOff = (await absenceManagementRepository.pendingTimeOffForRange({
     dateFrom: weekStart,
@@ -22080,6 +22336,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     shifts,
     weekOptions,
     staffAssignments: employeeLendings,
+    pdfStaffAssignmentShifts,
     globalDayBlocks,
     scheduleNote: await getScheduleNote(weekStart, context),
     globalBlockDates: Array.from(globalBlockDates),
@@ -22801,23 +23058,37 @@ function directoryDiagnostics(directory) {
   }
 }
 
-function latestDatabaseBackup(backupDirectory) {
+function latestDatabaseBackup(backupDirectory, onError = () => {}, expectedStream = "app") {
   try {
+    let archived = [], archiveNeedsReview = false;
+    try {
+      const archive = prepareLocalBackupArchive({ backupDirectory, keep: backupKeep, vault: integrationSecretVault, expectedStream, cachedMetadataOnly: true });
+      archived = archive ? archive.listMetadata({ verifyInventory: false }) : [];
+    } catch (error) {
+      // An archive lock/journal failure must remain visible without hiding an
+      // independently committed raw rollback point that is still present.
+      archiveNeedsReview = true;
+      onError(error);
+    }
     const committed = listCommittedBackupMetadata(backupDirectory, { limit: 1 })[0];
     const legacy = listLegacyBackupMetadata(backupDirectory, { limit: 1 })[0];
-    const selected = [committed, legacy].filter(Boolean).sort((left, right) => right.modifiedMs - left.modifiedMs)[0];
+    const selected = [committed, legacy, ...archived].filter(Boolean).sort((left, right) => right.modifiedMs - left.modifiedMs)[0];
     if (!selected) return null;
     return {
-      name: path.basename(selected.databasePath),
-      path: selected.databasePath,
-      marker: selected.markerPath,
+      name: selected.databaseFileName || path.basename(selected.databasePath),
+      path: selected.databasePath || null,
+      marker: selected.markerPath || null,
       modifiedAt: selected.modifiedAt,
       modifiedMs: selected.modifiedMs,
       committed: selected.committed,
       legacy: selected.legacy,
       verified: selected.verified,
+      archived: selected.archived === true,
+      archiveSnapshotId: selected.archiveSnapshotId || null,
+      verificationCached: true,
+      archiveNeedsReview,
     };
-  } catch { return null; }
+  } catch (error) { onError(error); return null; }
 }
 
 const BACKUP_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -22875,8 +23146,14 @@ function serverDiagnostics() {
     }
   }
   const backupHealth = externalDirectory ? directoryDiagnostics(externalDirectory) : { writable: false, freeBytes: null, volume: "" };
-  const latestExternalBackup = externalDirectory ? latestDatabaseBackup(externalDirectory) : null;
-  const latestAppBackup = latestDatabaseBackup(appBackupDirectory);
+  const backupMetadataError = () => addAlert("BACKUP_METADATA_UNAVAILABLE", "critical", "Sicherungsarchiv prüfen",
+    "Die Sicherungsmetadaten oder die lokale Archivkonfiguration konnten nicht sicher geprüft werden.", "backup");
+  const latestExternalBackup = externalDirectory ? latestDatabaseBackup(externalDirectory, backupMetadataError, "external") : null;
+  const latestAppBackup = latestDatabaseBackup(appBackupDirectory, backupMetadataError);
+  const backgroundBackup = localBackupArchiveEnabled()
+    ? require("./lib/background-backup-process").backgroundBackupStatus() : null;
+  if (backgroundBackup?.lastErrorCode) addAlert("LOCAL_ARCHIVE_BACKGROUND_FAILED", "warning", "Archivierung prüfen",
+    "Die letzte Hintergrundsicherung wurde nicht sicher abgeschlossen. Vorhandene Sicherungspunkte bleiben erhalten.", "backup");
   const latestBackup = serverModeActive
     ? latestAppBackup
     : newestDatabaseBackup(latestExternalBackup, latestAppBackup);
@@ -22885,7 +23162,7 @@ function serverDiagnostics() {
   const latestAppBackupState = backupAgeState(latestAppBackup);
   const latestBackupAgeHours = latestBackupState.ageHours;
   const latestExternalBackupAgeHours = latestExternalBackupState.ageHours;
-  const backupFreshnessHours = Math.max(6, Number(settings.backup_interval_hours || 2) * 3);
+  const backupFreshnessHours = Math.max(6, Number(settings.backup_interval_hours || 24) * 3);
   const externalBackupReady = !serverModeActive
     && settingEnabled(settings, "external_backup_enabled") && backupHealth.writable
     && latestExternalBackup?.committed === true
@@ -23110,6 +23387,8 @@ function serverDiagnostics() {
       latestExternalAgeHours: serverModeActive ? null : latestExternalBackupAgeHours,
       latestExternalTimestampValid: serverModeActive ? false : latestExternalBackupState.timestampValid,
       retentionCount: backupKeep,
+      retentionUnit: 'calendar-days',
+      background: backgroundBackup,
       lastVerified: Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
       offsite,
     },
@@ -24600,10 +24879,14 @@ async function payrollPreflight(actor, body = {}) {
         blockers.push({ code: "INACTIVE_EMPLOYMENT_HISTORY_REQUIRED", employeeNumber: employee.personnel_number, workDate: date });
       }
       const settings = await settingsForLocation(context.locationId);
-      const saturdayFactor = Number(settings.saturday_bonus_factor || 1);
-      const plannedEligible = saturdayFactor > 1
+      const newSaturdayRule = Boolean(evaluation.actual?.saturdayCreditStatus || evaluation.planned?.blocks?.some(block => block.saturday_credit_status));
+      const saturdayFactor = newSaturdayRule ? 1.5 : Number(settings.saturday_bonus_factor || 1);
+      const plannedEligible = newSaturdayRule ? Number(evaluation.planned?.saturdayEligibleMinutes || 0) : saturdayFactor > 1
         ? Math.round(Number(evaluation.planned?.saturdayBonusMinutes || 0) / (saturdayFactor - 1))
         : 0;
+      if (config.sourceMode === 'planned' && evaluation.planned?.saturdayCreditReviewRequired) {
+        blockers.push({ code: 'SATURDAY_CREDIT_REVIEW_REQUIRED', employeeNumber: employee.personnel_number, workDate: date });
+      }
       days.push({
         personnelNumber: employee.personnel_number,
         fullName: employee.full_name,
@@ -25197,9 +25480,19 @@ app.delete("/api/integrations/personnel-import/sessions/:id", (request, response
   response.status(204).end();
 });
 
-// Read-only UI bridge. No production schema, keys, import writer or source is
-// activated here. An audited production composition requires separate approval.
+// Protected import preparation is separate from the read-only sales bridge.
+// Production apply and the sales workspace still require separate approval.
+registerDataImportRoutes(app, {
+  runtime: createDataImportRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowApply: false, compactCash: true }),
+  mappings: createDataImportMappingRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowMapping: false }),
+  cashPublications: createCashPublicationRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: true, policies: CASH_SOURCE_POLICIES }),
+  requireSession: requireEmployeePortalSession,
+  refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }),
+  assertCsrf: assertPortalCsrf,
+});
 registerSalesHistoryRoutes(app, {
+  runtime: createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true }),
+  refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }),
   requireSession: requireEmployeePortalSession,
   assertCsrf: assertPortalCsrf,
   customerExists: async (id) => Boolean(await crmCustomersRepository.get(id)),
@@ -27247,7 +27540,7 @@ app.get("/api/system-info", (request, response) => {
     appBackupDirectory: privileged ? appBackupDirectory : "",
     backupDirectory: privileged && !serverModeActive ? backupDirectoryFromSettings(settings) : "",
     externalBackupEnabled: !serverModeActive && settingEnabled(settings, "external_backup_enabled"),
-    backupIntervalHours: serverModeActive ? null : Number(settings.backup_interval_hours || 2),
+    backupIntervalHours: serverModeActive ? null : Number(settings.backup_interval_hours || 24),
     lastBackup: privileged ? lastBackup : null,
     adminContact: brandingFromSettings(settings).adminEmail,
     appName: brandingFromSettings(settings).appName,
@@ -27462,9 +27755,9 @@ app.put("/api/backup/settings", async (request, response) => {
   const backupDirectory = externalBackupEnabled
     ? validateBackupDirectory(request.body?.backupDirectory || currentSettings.backup_directory || defaultBackupDirectorySetting)
     : { stored: String(request.body?.backupDirectory || currentSettings.backup_directory || defaultBackupDirectorySetting).trim() || defaultBackupDirectorySetting };
-  const backupIntervalHours = Number(request.body?.backupIntervalHours || currentSettings.backup_interval_hours || 2);
-  if (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 6) {
-    throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 6 Stunden liegen.");
+  const backupIntervalHours = Number(request.body?.backupIntervalHours || currentSettings.backup_interval_hours || 24);
+  if (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 24) {
+    throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 24 Stunden liegen.");
   }
   sqliteMaintenanceOperations.updateLegacyBackupSettings({
     externalBackupEnabled,
@@ -27481,7 +27774,7 @@ app.put("/api/backup/settings", async (request, response) => {
   });
 });
 
-app.post("/api/backup", (_request, response) => {
+app.post("/api/backup", async (_request, response) => {
   if (serverModeActive) {
     throw httpError(
       409,
@@ -27489,7 +27782,7 @@ app.post("/api/backup", (_request, response) => {
       "SERVER_MANAGED_BACKUP",
     );
   }
-  response.status(201).json(createDatabaseBackup("manual"));
+  response.status(201).json(await createDatabaseBackup("manual"));
 });
 
 app.post("/api/backup/database-download", async (request, response, next) => {
@@ -27527,6 +27820,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       requestId,
       JSON.stringify({ requestId, errorCode: "SNAPSHOT_CREATION_FAILED" }),
     );
+    if (error?.code === "BACKUP_WORKSPACE_BUSY") throw httpError(409, "Eine Sicherung oder Wiederherstellung läuft gerade. Bitte den Download danach erneut starten.", "BACKUP_WORKSPACE_BUSY");
     throw httpError(500, "Der geprüfte Datenbankstand konnte nicht erstellt werden.", "DATABASE_DOWNLOAD_FAILED");
   }
 
@@ -27565,6 +27859,8 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       } catch {
         // Der Transferabschluss darf auch bei einem Auditfehler nicht abstürzen.
       }
+    } finally {
+      snapshot.releaseWorkspace();
     }
   };
   const finishTransfer = (outcome, errorCode = "") => {
@@ -27903,7 +28199,7 @@ function hostRebootHttpError(error, response) {
   );
 }
 
-app.post("/api/portal/v1/server-monitor/restart", (request, response) => {
+app.post("/api/portal/v1/server-monitor/restart", async (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "system:write");
   if (isLocalSystemSession(actor) || !SERVER_MONITOR_CONTROL_ROLES.has(actor.role)) {
     throw httpError(
@@ -27941,15 +28237,20 @@ app.post("/api/portal/v1/server-monitor/restart", (request, response) => {
   }
 
   const requestId = crypto.randomUUID();
-  createDatabaseBackup("server-monitor-restart");
-  auditPortal(
-    actor.employeeNumber,
-    "system.server_monitor.restart.accepted",
-    "system",
-    "server-monitor",
-    JSON.stringify({ requestId, result: "accepted" }),
-  );
   serverManagedRestartRequested = true;
+  try {
+    await createDatabaseBackup("server-monitor-restart");
+    auditPortal(
+      actor.employeeNumber,
+      "system.server_monitor.restart.accepted",
+      "system",
+      "server-monitor",
+      JSON.stringify({ requestId, result: "accepted" }),
+    );
+  } catch (error) {
+    serverManagedRestartRequested = false;
+    throw error;
+  }
   response.status(202).json({
     ok: true,
     code: "SERVER_RESTART_ACCEPTED",
@@ -28085,7 +28386,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
   });
 });
 
-app.post("/api/system/exit", (request, response) => {
+app.post("/api/system/exit", async (request, response) => {
   if (serverModeActive) {
     const session = requirePortalSession(request, "system:write");
     if (!["developer", "it_admin", "admin"].includes(session.role)) {
@@ -28095,9 +28396,12 @@ app.post("/api/system/exit", (request, response) => {
   const driveInfo = runtimeDriveInfo();
   let backup = null;
   try {
-    backup = createDatabaseBackup("shutdown");
+    backup = await createDatabaseBackup("shutdown");
   } catch (error) {
     console.error("Backup beim Beenden konnte nicht erstellt werden:", error);
+    if (localBackupArchiveEnabled()) throw httpError(503,
+      "Die Sicherung konnte nicht bestätigt werden. Der Server wurde nicht beendet; bitte zuerst den Sicherungsstatus prüfen.",
+      "SERVER_SHUTDOWN_BACKUP_UNVERIFIED");
   }
   response.json({
     ok: true,
@@ -28196,6 +28500,7 @@ const brandingPreserveSettingKeys = [
   "pdf_schedule_matrix_time_font_bold",
   "pdf_schedule_matrix_time_employee_color",
   "pdf_schedule_matrix_show_position",
+  "pdf_schedule_matrix_show_duty_label",
   "pdf_schedule_matrix_detail_font_size",
   "pdf_schedule_matrix_header_text",
   "vacation_pdf_title",
@@ -28500,7 +28805,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   if (preserveBranding) {
     applyBrandingSnapshotToDatabase(importPath, await currentBrandingSnapshot());
   }
-  const safetyBackup = createDatabaseBackup("before-import");
+  const safetyBackup = await createDatabaseBackup("before-import");
   response.status(202).json({
     ok: true,
     message: preserveBranding
@@ -30691,12 +30996,16 @@ app.post("/api/work-rules/evaluate", async (request, response) => {
     candidate = await validateShift({
       ...submitted,
       locationId: submitted.locationId ?? context.locationId,
-      departmentId: submitted.departmentId ?? context.departmentId,
+      departmentId: Object.hasOwn(submitted, "departmentId") ? submitted.departmentId
+        : Object.hasOwn(submitted, "department_id") ? submitted.department_id
+          : existing?.department_id ?? context.departmentId,
     }, {
       locationId: context.locationId,
       existingId: id,
+      existingShift: existing,
     }, request.portalSession);
     if (id) candidate.id = id;
+    assertSessionContextScope(request.portalSession, { locationId: candidate.locationId, departmentId: candidate.departmentId });
     await assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
   }
   const evaluated = await evaluateScheduleWorkRules(
@@ -31768,6 +32077,71 @@ app.get("/api/employees", async (request, response) => {
     }),
   })));
   response.json(employees);
+});
+
+async function saturdayLegacySettingsSnapshot() {
+  const pick = settings => ({ enabled: settingEnabled(settings, 'saturday_bonus_enabled'), ...saturdayBonusSettings(settings) });
+  const result = { '*': pick(getSettings()) };
+  for (const location of await organizationPersonnelRepository.listLocations()) result[location.id] = pick(await settingsForLocation(location.id));
+  return result;
+}
+
+async function activateSaturdaySalesRollout(environment = process.env) {
+  const rollout = environment.GRABENPLANER_SATURDAY_CREDIT_ROLLOUT;
+  if (rollout === undefined || rollout === '' || rollout === '0') return null;
+  if (rollout !== 'existing-sales') throw new Error('SATURDAY_CREDIT_ROLLOUT_INVALID');
+  return saturdayCreditService.initialize({ effectiveDate: viennaTodayIso(), legacySettings: await saturdayLegacySettingsSnapshot(),
+    actor: 'authorized-release', existingEmployees: async tx => (await createOrganizationPersonnelRepository(tx).listEmployees()).map(e => e.personnel_number) });
+}
+
+function canAssignSaturdaySales(session) {
+  return isLocalSystemSession(session) || sessionCanManageCentralPersonnel(session)
+    || session?.permissions?.includes('work_rules:assign') === true;
+}
+
+app.get('/api/employees/:personnelNumber/saturday-credit', async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(request, ['employees:write', 'personnel:central:write']);
+  await assertSessionEmployeeScope(actor, request.params.personnelNumber);
+  const employee = await organizationPersonnelRepository.getEmployeeScopeProjection(request.params.personnelNumber);
+  if (!employee) throw httpError(404, 'Das Teammitglied wurde nicht gefunden.');
+  const value = await saturdayCreditService.history(request.params.personnelNumber);
+  response.json({ policy: value.policy, cutoverDate: value.cutover?.effectiveDate || null,
+    assignment: value.assignment, history: value.history,
+    canAssign: canAssignSaturdaySales(actor), canConfigure: sessionCanManageCentralPersonnel(actor) });
+});
+
+app.post('/api/employees/:personnelNumber/saturday-credit', async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(request, ['employees:write', 'personnel:central:write'], { csrf: true });
+  const assignment = await saturdayCreditService.assign({
+    employeeNumber: request.params.personnelNumber, activity: request.body.activity,
+    effectiveDate: request.body.effectiveDate, reason: request.body.reason, expectedPreviousId: request.body.expectedPreviousId,
+  }, async tx => {
+    const organization = createOrganizationPersonnelRepository(tx);
+    const live = await livePersonnelLearningRoleAdministrationActor(actor, organization);
+    if (!canAssignSaturdaySales(live)) throw httpError(403, 'Für die Verkaufszuordnung fehlt die Berechtigung.', 'PORTAL_PERMISSION_DENIED');
+    if (!isLocalSystemSession(live) && !live.permissions?.some(p => ['employees:write', 'personnel:central:write'].includes(p))) {
+      throw httpError(403, 'Für die Personalbearbeitung fehlt die Berechtigung.', 'PORTAL_PERMISSION_DENIED');
+    }
+    const employee = await organization.getEmployeeScopeProjection(request.params.personnelNumber);
+    if (!employee) throw httpError(404, 'Das Teammitglied wurde nicht gefunden.');
+    if (!sessionHasGlobalScope(live) && !employee.home_location_id) throw httpError(403, 'Das Teammitglied liegt außerhalb des freigegebenen Bereichs.', 'PORTAL_SCOPE_DENIED');
+    assertSessionContextScope(live, { locationId: employee.home_location_id, departmentId: employee.preferred_department_id });
+    return live.employeeNumber;
+  });
+  response.status(201).json({ assignment });
+});
+
+app.post('/api/saturday-credit/cutover', async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(request, ['personnel:central:write'], { csrf: true });
+  if (!isIsoDate(request.body.effectiveDate)) throw httpError(400, 'Bitte den Umstellungsstichtag angeben.');
+  const legacySettings = await saturdayLegacySettingsSnapshot();
+  const value = await saturdayCreditService.initialize({ effectiveDate: request.body.effectiveDate, legacySettings,
+    authorize: async tx => {
+      const live = await livePersonnelLearningRoleAdministrationActor(actor, createOrganizationPersonnelRepository(tx));
+      if (!sessionCanManageCentralPersonnel(live)) throw httpError(403, 'Nur die zentrale Personalverwaltung kann den Stichtag festlegen.', 'PERSONNEL_CENTRAL_WRITE_REQUIRED');
+      return live.employeeNumber;
+    } });
+  response.status(201).json({ cutoverDate: value.effectiveDate });
 });
 
 app.post("/api/employees", async (request, response) => {
@@ -58335,6 +58709,37 @@ app.post("/api/usb-provisioning/create", async (request, response) => {
   }
 });
 
+// Duty badge colors are company-wide, never a location/department PDF override.
+app.put("/api/settings/schedule-duty-colors", async (request, response) => {
+  const session = requireEmployeePortalSession(request, "settings:write");
+  assertPortalCsrf(request);
+  const allowedRoles = new Set(["hr", "developer"]);
+  if (!allowedRoles.has(session.role)) {
+    throw httpError(403, "Dienstfarben dürfen nur Personalleitung und Developer unternehmensweit ändern.", "SCHEDULE_DUTY_COLORS_DENIED");
+  }
+  let colors;
+  try {
+    colors = normalizeScheduleDutyColors(request.body?.colors, { strict: true });
+  } catch (error) {
+    throw httpError(400, error.message, "SCHEDULE_DUTY_COLORS_INVALID");
+  }
+  await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(session, repositories.organizationPersonnel);
+    assertLivePortalRoutePermission(liveActor, "settings:write", { allowedRoles });
+    const current = settingsObjectFromRows(await repositories.planningSettings.listSettings());
+    const before = normalizeScheduleDutyColors(current.schedule_duty_colors);
+    if (JSON.stringify(before) === JSON.stringify(colors)) return;
+    await repositories.planningSettings.upsertSetting({ key: "schedule_duty_colors", value: JSON.stringify(colors) });
+    await repositories.organizationPersonnel.insertAudit(
+      liveActor?.employeeNumber || "local", "schedule.duty-colors.update", "schedule_settings", "company",
+      JSON.stringify({ scope: "company", before, after: colors }),
+    );
+  }, { isolation: "serializable" });
+  await refreshPlanningSettingsReadModel();
+  response.json({ colors });
+});
+
 app.get("/api/settings", async (request, response) => {
   if (getPortalStatus().portalEnabled && !request.portalSession?.permissions?.includes("settings:write")) {
     throw httpError(403, "Für die Grundeinstellungen fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
@@ -58447,6 +58852,7 @@ app.put("/api/portal/v1/schedule-pdf-settings", async (request, response) => {
     "scheduleMatrixTimeFontBold",
     "scheduleMatrixTimeEmployeeColor",
     "scheduleMatrixShowPosition",
+    "scheduleMatrixShowDutyLabel",
   ]) {
     if (Object.hasOwn(body, booleanKey) && typeof body[booleanKey] !== "boolean") {
       throw httpError(400, "Die Dienstplan-PDF-Einstellungen enthalten einen ungültigen Schalter.", "SCHEDULE_PDF_BOOLEAN_INVALID");
@@ -58472,7 +58878,7 @@ app.put("/api/portal/v1/schedule-pdf-settings", async (request, response) => {
         ? body.scheduleMatrixTimeFontSize
         : currentSettings.pdf_schedule_matrix_time_font_size,
       SCHEDULE_MATRIX_TIME_FONT_SIZES,
-      "6",
+      "14.5",
       { strict: true },
     ),
     pdf_schedule_matrix_time_font_bold: Object.hasOwn(body, "scheduleMatrixTimeFontBold")
@@ -58484,6 +58890,9 @@ app.put("/api/portal/v1/schedule-pdf-settings", async (request, response) => {
     pdf_schedule_matrix_show_position: Object.hasOwn(body, "scheduleMatrixShowPosition")
       ? (body.scheduleMatrixShowPosition ? "1" : "0")
       : currentSettings.pdf_schedule_matrix_show_position,
+    pdf_schedule_matrix_show_duty_label: Object.hasOwn(body, "scheduleMatrixShowDutyLabel")
+      ? (body.scheduleMatrixShowDutyLabel ? "1" : "0")
+      : currentSettings.pdf_schedule_matrix_show_duty_label,
     pdf_schedule_matrix_detail_font_size: normalizeScheduleMatrixFontSize(
       Object.hasOwn(body, "scheduleMatrixDetailFontSize")
         ? body.scheduleMatrixDetailFontSize
@@ -58787,7 +59196,7 @@ app.put("/api/settings", async (request, response) => {
       ? body.scheduleMatrixTimeFontSize
       : currentScheduleSettings.pdf_schedule_matrix_time_font_size,
     SCHEDULE_MATRIX_TIME_FONT_SIZES,
-    "6",
+    "14.5",
     { strict: true },
   );
   const scheduleMatrixDetailFontSize = normalizeScheduleMatrixFontSize(
@@ -58804,7 +59213,7 @@ app.put("/api/settings", async (request, response) => {
       : currentScheduleSettings.pdf_schedule_matrix_header_text,
     { strict: true },
   );
-  for (const booleanKey of ["scheduleMatrixTimeFontBold", "scheduleMatrixTimeEmployeeColor", "scheduleMatrixShowPosition"]) {
+  for (const booleanKey of ["scheduleMatrixTimeFontBold", "scheduleMatrixTimeEmployeeColor", "scheduleMatrixShowPosition", "scheduleMatrixShowDutyLabel"]) {
     if (Object.hasOwn(body, booleanKey) && typeof body[booleanKey] !== "boolean") {
       throw httpError(400, "Die Dienstplan-PDF-Einstellungen enthalten einen ungültigen Schalter.", "SCHEDULE_PDF_BOOLEAN_INVALID");
     }
@@ -58818,6 +59227,9 @@ app.put("/api/settings", async (request, response) => {
   const scheduleMatrixShowPosition = Object.hasOwn(body, "scheduleMatrixShowPosition")
     ? body.scheduleMatrixShowPosition === true
     : currentScheduleSettings.pdf_schedule_matrix_show_position !== "0";
+  const scheduleMatrixShowDutyLabel = Object.hasOwn(body, "scheduleMatrixShowDutyLabel")
+    ? body.scheduleMatrixShowDutyLabel === true
+    : currentScheduleSettings.pdf_schedule_matrix_show_duty_label === "1";
   const pdfTitle = validatePdfText(body.pdfTitle || scheduleDefaults.pdf_title, "den Dienstplan-PDF-Titel");
   const pdfFilenamePrefix = validatePdfText(body.pdfFilenamePrefix || scheduleDefaults.pdf_filename_prefix, "der Dienstplan-PDF-Dateiname", { min: 5, max: 80 });
   const vacationPdfTitle = validatePdfText(body.vacationPdfTitle || vacationDefaults.vacation_pdf_title, "den Urlaubsplaner-PDF-Titel");
@@ -58831,15 +59243,13 @@ app.put("/api/settings", async (request, response) => {
       ? validateBackupDirectory(body.backupDirectory || defaultBackupDirectorySetting)
       : { stored: String(body.backupDirectory || defaultBackupDirectorySetting).trim() || defaultBackupDirectorySetting };
   const backupIntervalHours = serverModeActive
-    ? Number(currentSettings.backup_interval_hours || 2)
-    : Number(body.backupIntervalHours || 2);
+    ? Number(currentSettings.backup_interval_hours || 24)
+    : Number(body.backupIntervalHours || 24);
   const vacationPdfCalendarStyle = ["bars", "dots"].includes(String(body.vacationPdfCalendarStyle))
     ? String(body.vacationPdfCalendarStyle)
     : "bars";
   const breakAfterMinutes = Number(body.breakAfterMinutes);
   const breakDurationMinutes = Number(body.breakDurationMinutes);
-  const saturdayBonusFrom = String(body.saturdayBonusFrom || "");
-  const saturdayBonusFactor = Number(body.saturdayBonusFactor);
   const toastDuration = ["short", "medium", "long"].includes(String(body.toastDuration))
     ? String(body.toastDuration)
     : "medium";
@@ -58858,18 +59268,14 @@ app.put("/api/settings", async (request, response) => {
     ? currentSettings.remember_last_vacation_overall_plan !== "0"
     : body.rememberLastVacationOverallPlan !== false;
 
-  if (!serverModeActive && (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 6)) {
-    throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 6 Stunden liegen.");
+  if (!serverModeActive && (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 24)) {
+    throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 24 Stunden liegen.");
   }
   if (!Number.isInteger(breakAfterMinutes) || breakAfterMinutes < 0 || breakAfterMinutes > 1440) {
     throw httpError(400, "Die Pausengrenze ist ungültig.");
   }
   if (!Number.isInteger(breakDurationMinutes) || breakDurationMinutes < 0 || breakDurationMinutes > 240) {
     throw httpError(400, "Die Pausendauer ist ungültig.");
-  }
-  if (!isTime(saturdayBonusFrom)) throw httpError(400, "Die Startzeit für den Samstagsfaktor ist ungültig.");
-  if (!Number.isFinite(saturdayBonusFactor) || saturdayBonusFactor < 1 || saturdayBonusFactor > 5) {
-    throw httpError(400, "Der Samstagsfaktor muss zwischen 1 und 5 liegen.");
   }
   if (!isTime(currentWeekLockTime)) throw httpError(400, "Der Sperrzeitpunkt ist ungültig.");
   const lockOrder = { friday: 5, saturday: 6, sunday: 7 }[currentWeekLockDay] * 1440 + timeToMinutes(currentWeekLockTime);
@@ -58879,7 +59285,7 @@ app.put("/api/settings", async (request, response) => {
   const backupChanged = !serverModeActive
     && (String(currentSettings.external_backup_enabled || "1") !== (externalBackupEnabled ? "1" : "0")
     || String(currentSettings.backup_directory || "") !== backupDirectory.stored
-    || String(currentSettings.backup_interval_hours || "2") !== String(backupIntervalHours));
+    || String(currentSettings.backup_interval_hours || "24") !== String(backupIntervalHours));
   if (backupChanged) assertRequestPermission(request, "backup:write");
   const managementViewSettingsChanged = currentSettings.remember_last_schedule_overall_plan !== (rememberLastScheduleOverallPlan ? "1" : "0")
     || currentSettings.remember_last_vacation_overall_plan !== (rememberLastVacationOverallPlan ? "1" : "0");
@@ -58900,9 +59306,6 @@ app.put("/api/settings", async (request, response) => {
     break_rule_enabled: body.breakRuleEnabled === false ? "0" : "1",
     break_after_minutes: String(breakAfterMinutes),
     break_duration_minutes: String(breakDurationMinutes),
-    saturday_bonus_enabled: body.saturdayBonusEnabled === false ? "0" : "1",
-    saturday_bonus_from: saturdayBonusFrom,
-    saturday_bonus_factor: String(saturdayBonusFactor),
     show_sunday: body.showSunday === true ? "1" : "0",
     remember_last_schedule_overall_plan: rememberLastScheduleOverallPlan ? "1" : "0",
     remember_last_vacation_overall_plan: rememberLastVacationOverallPlan ? "1" : "0",
@@ -58984,6 +59387,7 @@ app.put("/api/settings", async (request, response) => {
       pdf_schedule_matrix_time_font_bold: scheduleMatrixTimeFontBold ? "1" : "0",
       pdf_schedule_matrix_time_employee_color: scheduleMatrixTimeEmployeeColor ? "1" : "0",
       pdf_schedule_matrix_show_position: scheduleMatrixShowPosition ? "1" : "0",
+      pdf_schedule_matrix_show_duty_label: scheduleMatrixShowDutyLabel ? "1" : "0",
       pdf_schedule_matrix_detail_font_size: scheduleMatrixDetailFontSize,
       pdf_schedule_matrix_header_text: scheduleMatrixHeaderText,
     }, repository);
@@ -59058,6 +59462,7 @@ app.post("/api/shifts", async (request, response) => {
         employeeNumber: shift.employeeNumber,
         locationId: shift.locationId,
         departmentId: shift.departmentId || null,
+        dutyCode: shift.dutyCode,
         shiftDate: shift.shiftDate,
         startTime: shift.startTime,
         endTime: shift.endTime,
@@ -59102,6 +59507,7 @@ app.put("/api/shifts/:id", async (request, response) => {
   const shift = await validateShift(request.body, {
     locationId: request.body.locationId ?? request.body.location_id ?? existing.location_id,
     existingId: id,
+    existingShift: existing,
   }, request.portalSession);
   const context = await resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
   const weekStart = getMonday(shift.shiftDate);
@@ -59130,6 +59536,7 @@ app.put("/api/shifts/:id", async (request, response) => {
         employeeNumber: shift.employeeNumber,
         locationId: shift.locationId,
         departmentId: shift.departmentId || null,
+        dutyCode: shift.dutyCode,
         shiftDate: shift.shiftDate,
         startTime: shift.startTime,
         endTime: shift.endTime,
@@ -60027,14 +60434,18 @@ app.post("/api/schedule/auto", async (request, response) => {
         Math.max(0, Number(employee.contracted_hours) * 60 - (totals[employee.personnel_number] || 0)),
       ]),
     );
-    const automaticDepartmentId = (employee, window = null) => (
-      context.departmentId
-      || window?.departmentId
-      || (String(employee.home_location_id) === String(context.locationId)
-        ? employee.preferred_department_id
-        : null)
-      || null
-    );
+    const automaticDuty = (employee, window = null) => {
+      // A scoped department or a binding assignment takes precedence; an
+      // unbound FL default is independent of the employee's home department.
+      const boundDepartmentId = context.departmentId || window?.departmentId || null;
+      if (boundDepartmentId) return { departmentId: boundDepartmentId, dutyCode: "department" };
+      if (defaultScheduleDutyCode(employee) === "branch_supervision") {
+        return { departmentId: null, dutyCode: "branch_supervision" };
+      }
+      const departmentId = (String(employee.home_location_id) === String(context.locationId)
+        ? employee.preferred_department_id : null) || null;
+      return { departmentId, dutyCode: departmentId ? "department" : "general" };
+    };
 
     for (let dayIndex = 0; dayIndex < 6; dayIndex += 1) {
       const date = addDays(weekStart, dayIndex);
@@ -60084,7 +60495,7 @@ app.post("/api/schedule/auto", async (request, response) => {
         const plannedShift = {
           employeeNumber: employee.personnel_number,
           locationId: context.locationId,
-          departmentId: automaticDepartmentId(employee, candidate.window),
+          ...automaticDuty(employee, candidate.window),
           shiftDate: date,
           startTime: candidate.shift.start_time,
           endTime: candidate.shift.end_time,
@@ -60097,6 +60508,7 @@ app.post("/api/schedule/auto", async (request, response) => {
           employee_number: plannedShift.employeeNumber,
           location_id: plannedShift.locationId,
           department_id: plannedShift.departmentId,
+          duty_code: plannedShift.dutyCode,
           shift_date: plannedShift.shiftDate,
           start_time: plannedShift.startTime,
           end_time: plannedShift.endTime,
@@ -60150,7 +60562,7 @@ app.post("/api/schedule/auto", async (request, response) => {
         plannedShifts.push({
           employeeNumber: employee.personnel_number,
           locationId: context.locationId,
-          departmentId: automaticDepartmentId(employee, candidate.window),
+          ...automaticDuty(employee, candidate.window),
           shiftDate: date,
           startTime: candidate.shift.start_time,
           endTime: candidate.shift.end_time,
@@ -60484,8 +60896,34 @@ function schedulePdfAssignmentOptionAlreadyPresent(weekOptions, assignment, date
   });
 }
 
+function schedulePdfRemoveBranchCoverage(weekOptions, employeeNumber, date) {
+  const candidates = weekOptions
+    .map((option, index) => ({ option, index }))
+    .filter(({ option }) => option.option_type === "branch"
+      && !option.pdf_staff_assignment
+      && String(option.employee_number || "") === employeeNumber
+      && option.date_from <= date && option.date_to >= date);
+  if (candidates.length !== 1) return false;
+  const { option, index } = candidates[0];
+  const replacement = [];
+  if (option.date_from < date) replacement.push({ ...option, date_to: addDays(date, -1) });
+  if (option.date_to > date) replacement.push({ ...option, date_from: addDays(date, 1) });
+  weekOptions.splice(index, 1, ...replacement);
+  return true;
+}
+
+function schedulePdfAssignmentCoversShift(assignment, shift) {
+  return String(assignment.employee_number || "") === String(shift.employee_number || "")
+    && String(assignment.destination_location_id || "") === String(shift.location_id || "")
+    && assignment.date_from <= shift.shift_date && assignment.date_to >= shift.shift_date
+    && (!assignment.destination_department_id
+      || Number(assignment.destination_department_id) === Number(shift.department_id || 0))
+    && (Number(assignment.all_day ?? 1) === 1
+      || (assignment.start_time <= shift.start_time && assignment.end_time >= shift.end_time));
+}
+
 function schedulePdfWeekOptions(schedule) {
-  const weekOptions = [...(schedule.weekOptions || [])];
+  const weekOptions = (schedule.weekOptions || []).map((option) => ({ ...option }));
   const employeesByNumber = new Map((schedule.employees || []).map((employee) => [
     String(employee.personnel_number || ""),
     employee,
@@ -60502,15 +60940,79 @@ function schedulePdfWeekOptions(schedule) {
       || assignment.start_time >= assignment.end_time)) continue;
     const dateFrom = assignment.date_from < schedule.weekStart ? schedule.weekStart : assignment.date_from;
     const dateTo = assignment.date_to > schedule.weekEnd ? schedule.weekEnd : assignment.date_to;
+    const destinationLocation = String(assignment.destination_location_name || "").trim();
+    const destinationDepartment = String(assignment.destination_department_name || "").trim();
+    const destination = [
+      destinationLocation,
+      destinationDepartment,
+    ].map((value) => String(value || "").trim()).filter(Boolean).join(" · ");
+    const actualDates = new Set();
+    const actualShifts = (schedule.pdfStaffAssignmentShifts || [])
+      .filter((shift) => String(shift.employee_number || "") === employeeNumber
+        && shift.shift_date >= dateFrom && shift.shift_date <= dateTo
+        && String(shift.location_id || "") === String(assignment.destination_location_id || "")
+        && schedulePdfAssignmentCoversShift(assignment, shift))
+      .sort((left, right) => String(left.shift_date).localeCompare(String(right.shift_date))
+        || String(left.start_time).localeCompare(String(right.start_time)));
+    for (const shift of actualShifts) {
+      if (!isTime(shift.start_time) || !isTime(shift.end_time) || shift.start_time >= shift.end_time) continue;
+      const duty = resolveScheduleDuty(shift, employee, schedule.departments || []);
+      const option = {
+        id: `pdf-staff-assignment-shift-${assignment.id}-${shift.shift_date}-${shift.start_time}`,
+        group_id: null,
+        employee_number: employeeNumber,
+        nickname: employee.nickname || assignment.employee_nickname || employee.full_name || employeeNumber,
+        color: employee.color || "#9aa2a4",
+        week_start: schedule.weekStart,
+        date_from: shift.shift_date,
+        date_to: shift.shift_date,
+        option_type: "branch",
+        note: `Temporärer Filialeinsatz${destination ? ` · ${destination}` : ""}`,
+        all_day: 0,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        credited_minutes_per_day: 0,
+        pdf_staff_assignment: true,
+        pdf_time_kind: "planned",
+        pdf_destination_label: destination,
+        pdf_destination_location_label: destinationLocation,
+        pdf_duty_code: duty.code,
+        pdf_duty_label: duty.label,
+      };
+      const coveringAssignments = (schedule.staffAssignments || [])
+        .filter((candidate) => String(candidate.home_location_id || "") === String(schedule.context.locationId || "")
+          && schedulePdfAssignmentCoversShift(candidate, shift));
+      if (coveringAssignments.length === 1) schedulePdfRemoveBranchCoverage(weekOptions, employeeNumber, shift.shift_date);
+      if (!schedulePdfAssignmentOptionAlreadyPresent(weekOptions, option, shift.shift_date)) weekOptions.push(option);
+      actualDates.add(shift.shift_date);
+    }
     const uncoveredDates = [];
     for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
-      if (!schedulePdfAssignmentOptionAlreadyPresent(weekOptions, assignment, date)) uncoveredDates.push(date);
+      if (actualDates.has(date)) continue;
+      const alreadyPresent = schedulePdfAssignmentOptionAlreadyPresent(weekOptions, assignment, date);
+      if (!alreadyPresent) {
+        uncoveredDates.push(date);
+        continue;
+      }
+      const matchingAssignments = (schedule.staffAssignments || []).filter((candidate) => (
+        String(candidate.employee_number || "") === employeeNumber
+        && String(candidate.home_location_id || "") === String(schedule.context.locationId || "")
+        && candidate.date_from <= date && candidate.date_to >= date
+        && Number(candidate.all_day ?? 1) === Number(assignment.all_day ?? 1)
+        && (Number(assignment.all_day ?? 1) === 1
+          || (candidate.start_time === assignment.start_time && candidate.end_time === assignment.end_time))
+      ));
+      if (matchingAssignments.length === 1
+        && schedulePdfRemoveBranchCoverage(weekOptions, employeeNumber, date)) uncoveredDates.push(date);
     }
 
-    const destination = [
-      assignment.destination_location_name,
-      assignment.destination_department_name,
-    ].map((value) => String(value || "").trim()).filter(Boolean).join(" · ");
+    const assignmentDuty = assignment.destination_department_id
+      ? resolveScheduleDuty({
+        duty_code: assignment.duty_code || "",
+        department_id: assignment.destination_department_id,
+        department_name: assignment.destination_department_name || "",
+      }, employee, schedule.departments || [])
+      : { code: "", label: "", kind: "general", departmentId: null };
     let segmentStart = null;
     let segmentEnd = null;
     const appendSegment = () => {
@@ -60531,6 +61033,11 @@ function schedulePdfWeekOptions(schedule) {
         end_time: allDay ? null : assignment.end_time,
         credited_minutes_per_day: 0,
         pdf_staff_assignment: true,
+        pdf_time_kind: allDay ? "open" : "assignment",
+        pdf_destination_label: destination,
+        pdf_destination_location_label: destinationLocation,
+        pdf_duty_code: assignmentDuty.code,
+        pdf_duty_label: assignmentDuty.label,
       });
     };
     for (const date of uncoveredDates) {
@@ -60541,6 +61048,33 @@ function schedulePdfWeekOptions(schedule) {
       segmentEnd = date;
     }
     appendSegment();
+  }
+  const sicknessSegments = buildScheduleMatrixSicknessSegments({
+    credits: schedule.sicknessCredits || [],
+    options: weekOptions,
+    employeeNumbers: [...employeesByNumber.keys()],
+    weekStart: schedule.weekStart,
+    weekEnd: schedule.weekEnd,
+  });
+  for (const segment of sicknessSegments) {
+    const employee = employeesByNumber.get(segment.employeeNumber);
+    weekOptions.push({
+      id: `pdf-sickness-${segment.caseId}-${segment.employeeNumber}-${segment.startDay}`,
+      group_id: null,
+      employee_number: segment.employeeNumber,
+      nickname: employee?.nickname || employee?.full_name || segment.employeeNumber,
+      color: employee?.color || "#9aa2a4",
+      week_start: schedule.weekStart,
+      date_from: new Date(segment.startDay * 86400000).toISOString().slice(0, 10),
+      date_to: new Date(segment.endDay * 86400000).toISOString().slice(0, 10),
+      option_type: "sick",
+      note: "",
+      all_day: 1,
+      start_time: null,
+      end_time: null,
+      credited_minutes_per_day: 0,
+      pdf_sickness_case: true,
+    });
   }
   return weekOptions;
 }
@@ -61597,6 +62131,13 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
   doc.end();
 }
 
+const {
+  buildScheduleMatrixOptionSpans,
+  buildScheduleMatrixSicknessSegments,
+  paginateScheduleMatrixNote,
+  wrapScheduleMatrixNote,
+} = require("./lib/schedule-matrix-layout");
+
 function scheduleMatrixOptionStyle(optionType) {
   if (optionType === "team_meeting") {
     return { fill: "#eadff5", stroke: "#68448f", text: "#332044" };
@@ -61616,17 +62157,73 @@ function scheduleMatrixOptionStyle(optionType) {
   return { fill: "#e4e8ea", stroke: "#5f6c74", text: "#2d3940" };
 }
 
+function scheduleMatrixOptionCode(optionType) {
+  return ({
+    vacation: "U",
+    special_leave: "U",
+    time_off: "ZA",
+    sick: "K",
+    vocational_school: "BS",
+    school: "S",
+    branch: "A",
+  })[optionType] || "A";
+}
+
+function scheduleMatrixOptionTimeText(option) {
+  if (option.pdf_time_kind === "open") return "Dienstzeit noch offen";
+  const time = isTime(option.start_time) && isTime(option.end_time)
+    ? `${option.start_time}-${option.end_time}` : "";
+  if (option.pdf_time_kind === "planned") return time ? `Geplanter Dienst ${time}` : "Geplanter Dienst";
+  if (option.pdf_time_kind === "assignment") return time ? `Einsatzzeit ${time}` : "Einsatzzeit noch offen";
+  return optionIsAllDay(option) ? "ganztägig" : time;
+}
+
+function scheduleMatrixOptionText(option) {
+  const code = scheduleMatrixOptionCode(option.option_type);
+  const time = scheduleMatrixOptionTimeText(option);
+  if (option.option_type === "branch") {
+    const destination = String(option.pdf_destination_label || "").trim();
+    const duty = String(option.pdf_duty_code || "").trim();
+    return [code, destination || "Temporärer Filialeinsatz", duty, time].filter(Boolean).join(" · ");
+  }
+  return [code, optionLabel(option.option_type), time].filter(Boolean).join(" · ");
+}
+
+function scheduleMatrixOptionDetailLines(option, settings = {}) {
+  const time = scheduleMatrixOptionTimeText(option);
+  const safeReason = ["vacation", "special_leave", "time_off"].includes(option.option_type)
+    ? String(option.note || option.reason || "").trim() : "";
+  if (option.option_type === "vacation") return ["Urlaub", safeReason].filter(Boolean);
+  if (option.option_type === "special_leave") return ["Sonderurlaub", safeReason].filter(Boolean);
+  if (option.option_type === "time_off") return [time, safeReason].filter(Boolean);
+  if (option.option_type === "sick") return ["Krankenstand"];
+  if (option.option_type !== "branch") {
+    return [optionLabel(option.option_type), time, String(option.note || "").trim()].filter(Boolean);
+  }
+  const destination = String(option.pdf_destination_location_label
+    || option.pdf_destination_label || "Temporärer Filialeinsatz").trim();
+  const duty = [String(option.pdf_duty_code || "").trim(),
+    settings.pdf_schedule_matrix_show_duty_label === "1" ? String(option.pdf_duty_label || "").trim() : ""]
+    .filter(Boolean).join(" ");
+  return [
+    destination,
+    duty,
+    scheduleMatrixOptionTimeText(option),
+  ].filter(Boolean);
+}
+
 function scheduleMatrixDayIndex(schedule, date) {
   return Math.round(
     (new Date(`${date}T12:00:00Z`) - new Date(`${schedule.weekStart}T12:00:00Z`)) / 86400000,
   );
 }
 
-function scheduleMatrixCellData(schedule, employee, date) {
+function scheduleMatrixCellData(schedule, employee, date, hiddenOptions = new Set()) {
   const options = collapsedScheduleWeekOptions(schedule.weekOptions)
     .filter((option) => !isTeamWideMeetingOption(option))
     .filter((option) => String(option.employee_number) === String(employee.personnel_number))
-    .filter((option) => option.date_from <= date && option.date_to >= date);
+    .filter((option) => option.date_from <= date && option.date_to >= date)
+    .filter((option) => !hiddenOptions.has(option));
   const shifts = schedule.shifts
     .filter((shift) => String(shift.employee_number) === String(employee.personnel_number) && shift.shift_date === date)
     .sort((left, right) => String(left.start_time).localeCompare(String(right.start_time)));
@@ -61640,22 +62237,24 @@ function scheduleMatrixCellData(schedule, employee, date) {
     return true;
   });
   const entries = options.map((option) => {
-    const time = optionIsAllDay(option) ? "ganztägig" : `${option.start_time || ""}-${option.end_time || ""}`;
     return {
-      type: "option",
-      text: `${optionLabel(option.option_type)} · ${time}`,
+      type: "event",
+      option,
+      text: scheduleMatrixOptionText(option),
+      detailLines: scheduleMatrixOptionDetailLines(option, schedule.settings),
       color: scheduleMatrixOptionStyle(option.option_type).text,
       sortTime: optionIsAllDay(option) ? "00:00" : String(option.start_time || "00:00"),
       sortOrder: 0,
     };
   });
   for (const shift of shifts) {
-    const department = !schedule.context.departmentId && shift.department_name
-      ? String(shift.department_name) : "";
+    const duty = resolveScheduleDuty(shift, employee, schedule.departments || []);
     entries.push({
       type: "shift",
       timeText: `${shift.start_time}-${shift.end_time}`,
-      detailText: department,
+      duty,
+      dutyLabel: duty.label || duty.code || "Allgemeiner Dienst",
+      settings: schedule.settings,
       sortTime: String(shift.start_time || "00:00"),
       sortOrder: 1,
     });
@@ -61671,6 +62270,14 @@ function scheduleMatrixCellData(schedule, employee, date) {
   }
   entries.sort((left, right) => String(left.sortTime).localeCompare(String(right.sortTime))
     || left.sortOrder - right.sortOrder);
+  // A split day uses compact time/badge rows. A known destination belongs to
+  // its timed segment, not a second full-height absence card.
+  const timedDuties = entries.filter((entry) => entry.type === "shift"
+    || (entry.type === "event" && entry.option.option_type === "branch"
+      && !optionIsAllDay(entry.option) && isTime(entry.option.start_time) && isTime(entry.option.end_time)));
+  if (timedDuties.length > 1) {
+    for (const entry of timedDuties) entry.compactDuty = true;
+  }
   let lines = [...entries];
   if (entries.length > 4) {
     const prioritized = [
@@ -61713,17 +62320,28 @@ function scheduleMatrixFittedFontSize(doc, text, font, preferredSize, width, min
 
 function scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize) {
   if (timeFontSize >= 18) return 70;
-  if (timeFontSize >= 14.5) return 62;
+  if (timeFontSize >= 14.5) return 58;
   if (timeFontSize >= 11) return 52;
   if (timeFontSize >= 8.5) return 43;
   return Math.max(35, Math.ceil(timeFontSize + detailFontSize + 19));
 }
 
 function scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize) {
+  if (entry.compactDuty) return 15 + (entry.type === "event" ? 10 : 0);
   if (entry.type === "shift") {
-    return timeFontSize + 2 + (entry.detailText ? detailFontSize + 2 : 0);
+    return timeFontSize + detailFontSize + 6;
   }
-  if (["option", "meeting"].includes(entry.type)) return Math.max(9, detailFontSize + 2);
+  if (entry.type === "event") {
+    const estimatedLines = entry.detailLines.reduce(
+      // A one-day cell leaves roughly 70-90 pt beside the large event code.
+      // Sixteen average characters per line is conservative at 8 pt and keeps
+      // wrapped reasons from sharing a baseline with the preceding line.
+      (sum, value) => sum + Math.max(1, Math.ceil(String(value || "").length / 16)),
+      0,
+    );
+    return Math.max(24, estimatedLines * (detailFontSize + 2) + 6);
+  }
+  if (entry.type === "meeting") return Math.max(9, detailFontSize + 2);
   return 8;
 }
 
@@ -61776,17 +62394,271 @@ function scheduleMatrixSummaryForDate(schedule, date) {
     .join(", ");
 }
 
-function scheduleMatrixContentRowHeight(schedule, employee, dayCount, timeFontSize, detailFontSize) {
+function scheduleMatrixEmployeeSpans(schedule, employee, dayCount) {
+  return buildScheduleMatrixOptionSpans({
+    options: collapsedScheduleWeekOptions(schedule.weekOptions),
+    employeeNumber: employee.personnel_number,
+    weekStart: schedule.weekStart,
+    dayCount,
+  });
+}
+
+function scheduleMatrixSpanLayout(doc, spans, dayWidth, detailFontSize, settings) {
+  const preferredSize = Math.max(6.2, detailFontSize);
+  // Never make a multi-day card smaller than the existing K/S single-day cards.
+  const minimumHeight = Math.max(24, 2 * (detailFontSize + 2) + 6);
+  const laneHeights = [];
+  const items = spans.map((span) => {
+    const width = (span.endDay - span.startDay + 1) * dayWidth - 4;
+    const codeWidth = Math.max(20, Math.min(29, width * 0.18));
+    doc.font("Helvetica-Bold").fontSize(preferredSize);
+    const lines = scheduleMatrixOptionDetailLines(span.option, settings).flatMap(text => (
+      wrapScheduleMatrixNote(text, value => doc.widthOfString(value), width - codeWidth - 18)
+    ));
+    let height = Math.max(minimumHeight, lines.length * (preferredSize + 1.5) + 8);
+    // Taller text cards can use up to 6 pt of top/bottom padding.
+    if (height > 33) height = Math.max(height, lines.length * (preferredSize + 1.5) + 12);
+    height = Math.ceil(height);
+    laneHeights[span.lane] = Math.max(laneHeights[span.lane] || 0, height);
+    return { span, width, height };
+  });
+  const offsets = [0];
+  laneHeights.forEach(height => offsets.push(offsets.at(-1) + height + 3));
+  return { items: items.map(item => ({ ...item, offset: offsets[item.span.lane] })),
+    totalHeight: items.length ? offsets.at(-1) + 3 : 0 };
+}
+
+function scheduleMatrixContentRowHeight(schedule, employee, dayCount, timeFontSize, detailFontSize, doc, dayWidth) {
   if (!employee) return 35;
-  let required = 0;
+  const spans = scheduleMatrixEmployeeSpans(schedule, employee, dayCount);
+  const hiddenOptions = new Set(spans.flatMap((span) => span.options));
+  const spanLayout = scheduleMatrixSpanLayout(doc, spans, dayWidth, detailFontSize, schedule.settings);
+  const cells = Array.from({ length: dayCount }, (_item, dayIndex) => (
+    scheduleMatrixCellData(schedule, employee, addDays(schedule.weekStart, dayIndex), hiddenOptions)
+  ));
+  const fullHeightSpan = spans.length === 1
+    && cells.slice(spans[0].startDay, spans[0].endDay + 1)
+      .every((cell) => cell.lines.every((line) => line.type === "empty"));
+  const spanHeight = fullHeightSpan ? 0 : spanLayout.totalHeight;
+  let required = fullHeightSpan ? spanLayout.items[0].height + 8 : 0;
   for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
-    const cell = scheduleMatrixCellData(schedule, employee, addDays(schedule.weekStart, dayIndex));
+    if (fullHeightSpan && dayIndex >= spans[0].startDay && dayIndex <= spans[0].endDay) continue;
+    const cell = cells[dayIndex];
     const contentHeight = cell.lines
       .slice(0, 4)
       .reduce((sum, entry) => sum + scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize), 0);
-    required = Math.max(required, contentHeight + 8);
+    required = Math.max(required, spanHeight + contentHeight + 8);
   }
   return Math.ceil(required);
+}
+
+function scheduleMatrixNoteLayout(doc, noteText, width, mainHeight = 68) {
+  const columns = 3;
+  const gap = 12;
+  const padding = 6;
+  const fontSize = 6.2;
+  const lineHeight = 7.8;
+  const columnWidth = (width - padding * 2 - gap * (columns - 1)) / columns;
+  doc.font("Helvetica").fontSize(fontSize);
+  const lines = wrapScheduleMatrixNote(
+    noteText,
+    (value) => doc.widthOfString(String(value || "")),
+    columnWidth,
+  );
+  const mainLinesPerColumn = Math.max(4, Math.floor((mainHeight - 11 - padding * 2) / lineHeight));
+  const mainPages = paginateScheduleMatrixNote(lines, {
+    columns,
+    linesPerColumn: mainLinesPerColumn,
+  });
+  const mainColumns = mainPages[0];
+  const continuationLines = mainPages.slice(1).flat(2);
+  const continuationLinesPerColumn = 53;
+  const continuationPages = continuationLines.length
+    ? paginateScheduleMatrixNote(continuationLines, { columns, linesPerColumn: continuationLinesPerColumn })
+    : [];
+  return { columns, gap, padding, fontSize, lineHeight, columnWidth, mainColumns, continuationPages };
+}
+
+function drawScheduleMatrixNoteColumns(doc, columns, x, y, layout) {
+  columns.forEach((lines, columnIndex) => {
+    const columnX = x + layout.padding + columnIndex * (layout.columnWidth + layout.gap);
+    lines.forEach((line, lineIndex) => {
+      doc.fillColor("#35434b").font("Helvetica").fontSize(layout.fontSize).text(
+        line || " ",
+        columnX,
+        y + layout.padding + lineIndex * layout.lineHeight,
+        { width: layout.columnWidth, height: layout.lineHeight, lineBreak: false },
+      );
+    });
+  });
+}
+
+function drawScheduleMatrixNotesBox(doc, noteText, columns, x, y, width, height, layout, hint = "") {
+  doc.fillColor("#253943").font("Helvetica-Bold").fontSize(7.4).text("Bemerkungen", x, y, { width });
+  const boxY = y + 11;
+  doc.roundedRect(x, boxY, width, height - 11, 4).fillAndStroke("#f7f9f8", "#c8d1cd");
+  if (noteText && columns.some((column) => column.length)) {
+    drawScheduleMatrixNoteColumns(doc, columns, x, boxY, layout);
+  } else if (hint) {
+    doc.fillColor("#7c888d").font("Helvetica").fontSize(5.9).text(hint, x + 9, boxY + 9, { width: width - 18 });
+  }
+}
+
+function drawScheduleMatrixCompactDuty(doc, line, x, y, width, employeeColor, settings) {
+  const away = line.type === "event";
+  const option = line.option;
+  const code = String(away ? option.pdf_duty_code || "A" : line.duty?.code || "AG");
+  const timeText = away ? `${option.start_time}-${option.end_time}` : line.timeText;
+  const badgeWidth = 18;
+  const badgeHeight = 10;
+  const badgeX = x;
+  const timeX = x + badgeWidth + 5;
+  const color = scheduleDutyColor(code, settings.schedule_duty_colors);
+  const timeFont = settingEnabled(settings, "pdf_schedule_matrix_time_font_bold") ? "Helvetica-Bold" : "Helvetica";
+  const timeColor = settingEnabled(settings, "pdf_schedule_matrix_time_employee_color")
+    ? scheduleMatrixEmployeeTextColor(employeeColor) : "#172433";
+  const timeSize = scheduleMatrixFittedFontSize(doc, timeText, timeFont, 9, width - badgeWidth - 5, 6.5);
+  doc.fillColor(timeColor).font(timeFont).fontSize(timeSize)
+    .text(timeText, timeX, y + 1, { width: width - badgeWidth - 5, lineBreak: false });
+  doc.fillColor(color).roundedRect(badgeX, y, badgeWidth, badgeHeight, 2).fill();
+  doc.fillColor(scheduleDutyTextColor(color)).font("Helvetica-Bold").fontSize(6.5)
+    .text(code, badgeX, y + (badgeHeight - 6.5 * 0.718) / 2,
+      { width: badgeWidth, align: "center", lineBreak: false });
+  if (away) {
+    const destination = `A · ${option.pdf_destination_location_label || option.pdf_destination_label || "Andere Filiale"}`;
+    const detailWidth = width - badgeWidth - 5;
+    const size = scheduleMatrixFittedFontSize(doc, destination, "Helvetica-Bold", 6.8, detailWidth, 5.2);
+    doc.fillColor("#40535d").font("Helvetica-Bold").fontSize(size)
+      .text(destination, timeX, y + 12, { width: detailWidth, lineBreak: false, ellipsis: true });
+  }
+}
+
+function drawScheduleMatrixDutyLine(doc, line, x, y, width, employeeColor, detailFontSize) {
+  const code = String(line.duty?.code || "AG");
+  const badgeFill = scheduleDutyColor(code, line.settings?.schedule_duty_colors);
+  const badgeHeight = Math.max(9, detailFontSize + 3);
+  const badgeFontSize = Math.max(5.2, detailFontSize - 0.5);
+  doc.font("Helvetica-Bold").fontSize(badgeFontSize);
+  const badgeWidth = Math.max(14, Math.min(23, doc.widthOfString(code) + 7));
+  doc.fillColor(badgeFill).roundedRect(x, y, badgeWidth, badgeHeight, 2.5).fill();
+  // Helvetica-Bold's local AFM cap height is 718/1000 em. Center the visible
+  // capitals instead of PDFKit's taller ascender/descender line box.
+  const codeCapHeight = badgeFontSize * 0.718;
+  doc.fillColor(scheduleDutyTextColor(badgeFill)).text(code, x + 2, y + (badgeHeight - codeCapHeight) / 2, {
+    width: badgeWidth - 4,
+    height: badgeHeight,
+    align: "center",
+    lineBreak: false,
+  });
+  const nameX = x + badgeWidth + 4;
+  if (!settingEnabled(line.settings, "pdf_schedule_matrix_show_duty_label")) return badgeHeight;
+  const nameWidth = Math.max(8, width - badgeWidth - 4);
+  const nameSize = scheduleMatrixFittedFontSize(
+    doc,
+    line.dutyLabel,
+    "Helvetica-Bold",
+    detailFontSize,
+    nameWidth,
+    4.8,
+  );
+  doc.fillColor(scheduleMatrixEmployeeTextColor(employeeColor)).font("Helvetica-Bold").fontSize(nameSize).text(
+    line.dutyLabel,
+    nameX,
+    y + 1.2,
+    { width: nameWidth, height: badgeHeight, lineBreak: false, ellipsis: true },
+  );
+  return badgeHeight;
+}
+
+function drawScheduleMatrixEventBlock(doc, option, x, y, width, height, detailFontSize, settings = {}) {
+  const style = scheduleMatrixOptionStyle(option.option_type);
+  const code = scheduleMatrixOptionCode(option.option_type);
+  const padding = Math.max(4, Math.min(6, height * 0.12));
+  const codeWidth = Math.max(20, Math.min(29, width * 0.18));
+  const separatorX = x + padding + codeWidth;
+  doc.fillColor(style.fill).roundedRect(x, y, width, height, 3).fill();
+  doc.strokeColor(style.stroke).lineWidth(0.85).roundedRect(x, y, width, height, 3).stroke();
+  doc.strokeColor(style.stroke).lineWidth(0.7)
+    .moveTo(separatorX, y + padding).lineTo(separatorX, y + height - padding).stroke();
+  const codeSize = Math.max(11, Math.min(20, height * 0.45));
+  const codeTextWidth = codeWidth - padding;
+  const effectiveCodeSize = scheduleMatrixFittedFontSize(
+    doc,
+    code,
+    "Helvetica-Bold",
+    codeSize,
+    codeTextWidth,
+    9,
+  );
+  doc.font("Helvetica-Bold").fontSize(effectiveCodeSize);
+  const codeCapHeight = effectiveCodeSize * 0.718;
+  doc.fillColor(style.text).text(code, x + padding, y + (height - codeCapHeight) / 2, {
+    width: codeTextWidth,
+    height,
+    align: "center",
+    lineBreak: false,
+  });
+  const detailX = separatorX + 6;
+  const detailWidth = Math.max(8, x + width - padding - detailX);
+  let preferredSize = Math.max(6.2, detailFontSize);
+  const detailTexts = scheduleMatrixOptionDetailLines(option, settings);
+  doc.font("Helvetica-Bold").fontSize(preferredSize);
+  const widestWord = Math.max(0, ...detailTexts.flatMap(text => String(text).split(/\s+/u))
+    .map(word => doc.widthOfString(word)));
+  // Narrow seven-day cells should fit a whole word before splitting off its
+  // final letters onto another line (for example Krankenstand/Behördengang).
+  if (widestWord > detailWidth) preferredSize = Math.max(6.2, preferredSize * detailWidth / widestWord);
+  doc.font("Helvetica-Bold").fontSize(preferredSize);
+  const detailLines = detailTexts.flatMap((text) => (
+    wrapScheduleMatrixNote(text, (value) => doc.widthOfString(String(value || "")), detailWidth)
+  ));
+  const lineHeight = Math.min(preferredSize + 1.5, (height - padding * 2) / Math.max(1, detailLines.length));
+  const contentHeight = lineHeight * detailLines.length;
+  detailLines.forEach((text, lineIndex) => {
+    const size = scheduleMatrixFittedFontSize(doc, text, "Helvetica-Bold", preferredSize, detailWidth, 4.9);
+    doc.fillColor(style.text).font("Helvetica-Bold").fontSize(size).text(
+      text,
+      detailX,
+      y + (height - contentHeight) / 2 + lineIndex * lineHeight,
+      { width: detailWidth, height: lineHeight, lineBreak: false },
+    );
+  });
+}
+
+function scheduleMatrixPageRows(employees, availableHeight, minimumHeightFor) {
+  const pages = [];
+  let page = [];
+  let used = 0;
+  for (const employee of employees) {
+    const height = minimumHeightFor(employee);
+    if (page.length && used + height > availableHeight) {
+      pages.push(page);
+      page = [];
+      used = 0;
+    }
+    page.push(employee);
+    used += height;
+  }
+  if (page.length) pages.push(page);
+  return pages.length ? pages : [[null]];
+}
+
+function scheduleMatrixPageRowHeights(employees, availableHeight, minimumHeightFor) {
+  const heights = employees.map(minimumHeightFor);
+  let remaining = Math.max(0, availableHeight - heights.reduce((sum, height) => sum + height, 0));
+  const capacities = heights.map((height) => Math.max(0, Math.max(54, height + 10) - height));
+  while (remaining > 0.01 && capacities.some((capacity) => capacity > 0.01)) {
+    const active = capacities.filter((capacity) => capacity > 0.01).length;
+    const share = remaining / active;
+    for (let index = 0; index < heights.length && remaining > 0.01; index += 1) {
+      if (capacities[index] <= 0.01) continue;
+      const addition = Math.min(share, capacities[index], remaining);
+      heights[index] += addition;
+      capacities[index] -= addition;
+      remaining -= addition;
+    }
+  }
+  return heights;
 }
 
 function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
@@ -61806,14 +62678,16 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const pageHeight = 595.28;
   const left = 22;
   const right = 22;
-  const dayCount = settingEnabled(schedule.settings, "show_sunday") ? 7 : 6;
+  const sundayHasContent = (schedule.shifts || []).some((shift) => shift.shift_date === schedule.weekEnd)
+    || (schedule.weekOptions || []).some((option) => option.date_from <= schedule.weekEnd && option.date_to >= schedule.weekEnd);
+  const dayCount = settingEnabled(schedule.settings, "show_sunday") || sundayHasContent ? 7 : 6;
   const weekdayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const meetings = collapsedScheduleWeekOptions(schedule.weekOptions).filter(isTeamWideMeetingOption);
-  const hasScheduleNote = Boolean(schedule.scheduleNote?.note_text?.trim());
+  const scheduleNoteText = String(schedule.scheduleNote?.note_text || "").trim();
   const timeFontSize = Number(normalizeScheduleMatrixFontSize(
     schedule.settings.pdf_schedule_matrix_time_font_size,
     SCHEDULE_MATRIX_TIME_FONT_SIZES,
-    "6",
+    "14.5",
   ));
   const detailFontSize = Number(normalizeScheduleMatrixFontSize(
     schedule.settings.pdf_schedule_matrix_detail_font_size,
@@ -61824,46 +62698,46 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const timeEmployeeColor = settingEnabled(schedule.settings, "pdf_schedule_matrix_time_employee_color");
   const showEmployeePosition = settingEnabled(schedule.settings, "pdf_schedule_matrix_show_position");
   const matrixHeaderText = normalizeScheduleMatrixHeaderText(schedule.settings.pdf_schedule_matrix_header_text);
-  const tableTop = 62;
-  const postTableHeight = 18 + (meetings.length ? 33 : 0) + (hasScheduleNote ? 36 : 0);
-  const tableBottom = Math.min(510, 555 - postTableHeight);
-  const headerHeight = 31;
-  const summaryGap = (5 / 25.4) * 72;
-  const summaryHeight = 27;
+  const tableTop = 58;
+  const noteAreaHeight = 80;
+  const postTableHeight = 25 + noteAreaHeight + (meetings.length ? 33 : 0);
+  const tableBottom = 556 - postTableHeight;
+  const headerHeight = 42;
   const employees = schedule.employees.length ? schedule.employees : [null];
-  const minimumRowHeight = Math.max(
-    scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize),
-    ...employees.map((employee) => scheduleMatrixContentRowHeight(
+  const tableWidth = pageWidth - left - right;
+  const employeeColumnWidth = 148;
+  const dayWidth = (tableWidth - employeeColumnWidth) / dayCount;
+  const baseRowHeight = scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize);
+  const minimumHeightFor = (employee) => Math.max(
+    baseRowHeight,
+    scheduleMatrixContentRowHeight(
       schedule,
       employee,
       dayCount,
       timeFontSize,
       detailFontSize,
-    )),
+      doc,
+      dayWidth,
+    ),
   );
-  const maximumRowHeight = Math.max(54, minimumRowHeight + 10);
-  const rowsPerPage = Math.max(
-    1,
-    Math.floor((tableBottom - tableTop - headerHeight - summaryGap - summaryHeight) / minimumRowHeight),
-  );
-  const pageRows = [];
-  for (let index = 0; index < employees.length; index += rowsPerPage) {
-    pageRows.push(employees.slice(index, index + rowsPerPage));
-  }
+  const availableRowsHeight = tableBottom - tableTop - headerHeight;
+  const pageRows = scheduleMatrixPageRows(employees, availableRowsHeight, minimumHeightFor);
+  const firstPageRows = pageRows[0];
+  const firstPageRowHeights = scheduleMatrixPageRowHeights(firstPageRows, availableRowsHeight, minimumHeightFor);
+  const firstDataBottom = tableTop + headerHeight
+    + firstPageRowHeights.reduce((sum, height) => sum + height, 0);
+  const firstNoteY = firstDataBottom + 7 + (meetings.length ? 33 : 0) + 18;
+  const mainNoteHeight = Math.max(noteAreaHeight, 556 - firstNoteY);
+  const noteLayout = scheduleMatrixNoteLayout(doc, scheduleNoteText, tableWidth, mainNoteHeight);
 
   pageRows.forEach((employeesOnPage, pageIndex) => {
     doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
     const pageEmployeeCount = employeesOnPage.filter(Boolean).length;
-    const rowHeight = Math.min(
-      maximumRowHeight,
-      (tableBottom - tableTop - headerHeight - summaryGap - summaryHeight) / Math.max(1, employeesOnPage.length),
-    );
-    const tableWidth = pageWidth - left - right;
-    const employeeColumnWidth = 148;
-    const dayWidth = (tableWidth - employeeColumnWidth) / dayCount;
+    const rowHeights = scheduleMatrixPageRowHeights(employeesOnPage, availableRowsHeight, minimumHeightFor);
+    const rowOffsets = [0];
+    rowHeights.forEach((height) => rowOffsets.push(rowOffsets.at(-1) + height));
     const dataTop = tableTop + headerHeight;
-    const dataBottom = dataTop + rowHeight * employeesOnPage.length;
-    const summaryY = dataBottom + summaryGap;
+    const dataBottom = dataTop + rowOffsets.at(-1);
 
     doc.fillColor("#142033").font("Helvetica-Bold").fontSize(15).text(
       `${schedule.settings.pdf_title} · KW ${schedule.calendarWeek}`,
@@ -61904,22 +62778,29 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       const meetingToday = meetings.some((meeting) => meeting.date_from <= date && meeting.date_to >= date);
       doc.fillColor(dayIndex >= 5 ? "#dfe6e8" : "#e8eef1").rect(x, tableTop, dayWidth, headerHeight).fill();
       if (meetingToday) doc.fillColor("#76529a").rect(x, tableTop, dayWidth, 3).fill();
-      doc.fillColor("#162635").font("Helvetica-Bold").fontSize(dayCount === 7 ? 6.7 : 7.3).text(
+      doc.fillColor("#162635").font("Helvetica-Bold").fontSize(dayCount === 7 ? 11.3 : 12.35).text(
         weekdayNames[dayIndex],
         x + 4,
-        tableTop + 7,
+        tableTop + 3,
         { width: dayWidth - 8, align: "center", ellipsis: true },
       );
-      doc.fillColor("#5f6d77").font("Helvetica").fontSize(6.2).text(
+      doc.fillColor("#5f6d77").font("Helvetica").fontSize(8.95).text(
         formatDateGerman(date, false),
         x + 4,
-        tableTop + 18,
+        tableTop + 20,
         { width: dayWidth - 8, align: "center" },
+      );
+      doc.fillColor("#40535d").font("Helvetica").fontSize(6.2).text(
+        scheduleMatrixSummaryForDate(schedule, date),
+        x + 4,
+        tableTop + 34,
+        { width: dayWidth - 10, height: 8, align: "left", lineBreak: false, ellipsis: true },
       );
     }
 
     employeesOnPage.forEach((employee, rowIndex) => {
-      const y = dataTop + rowIndex * rowHeight;
+      const y = dataTop + rowOffsets[rowIndex];
+      const rowHeight = rowHeights[rowIndex];
       const rowFill = rowIndex % 2 ? "#f8faf9" : "#ffffff";
       doc.fillColor(rowFill).rect(left, y, tableWidth, rowHeight).fill();
       if (!employee) {
@@ -61957,19 +62838,40 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
         );
       }
 
-      for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+      const spans = scheduleMatrixEmployeeSpans(schedule, employee, dayCount);
+      const hiddenOptions = new Set(spans.flatMap((span) => span.options));
+      const spanLayout = scheduleMatrixSpanLayout(doc, spans, dayWidth, detailFontSize, schedule.settings);
+      const cells = Array.from({ length: dayCount }, (_item, dayIndex) => {
         const date = addDays(schedule.weekStart, dayIndex);
+        return { date, cell: scheduleMatrixCellData(schedule, employee, date, hiddenOptions) };
+      });
+      const fullHeightSpan = spans.length === 1
+        && cells.slice(spans[0].startDay, spans[0].endDay + 1)
+          .every(({ cell }) => cell.lines.every((line) => line.type === "empty"));
+      const spanAreaHeight = fullHeightSpan ? 0 : spanLayout.totalHeight;
+
+      cells.forEach(({ cell }, dayIndex) => {
         const x = left + employeeColumnWidth + dayIndex * dayWidth;
-        const cell = scheduleMatrixCellData(schedule, employee, date);
         if (dayIndex >= 5) {
           doc.save().fillOpacity(0.36).fillColor("#e6ebed").rect(x, y, dayWidth, rowHeight).fill().restore();
         }
-        if (cell.style) {
-          doc.fillColor(cell.style.fill).rect(x + 1, y + 1, dayWidth - 2, rowHeight - 2).fill();
-          doc.strokeColor(cell.style.stroke).lineWidth(0.85).rect(x + 1.5, y + 1.5, dayWidth - 3, rowHeight - 3).stroke();
-          doc.fillColor(cell.style.stroke).rect(x + 1.5, y + 1.5, 3, rowHeight - 3).fill();
-        }
-        const availableCellHeight = rowHeight - 8;
+      });
+
+      for (let dayIndex = 1; dayIndex < dayCount; dayIndex += 1) {
+        const x = left + employeeColumnWidth + dayIndex * dayWidth;
+        doc.strokeColor("#8b99a2").lineWidth(0.8).moveTo(x, y).lineTo(x, y + rowHeight).stroke();
+      }
+
+      for (const { span, width, height, offset } of spanLayout.items) {
+        const x = left + employeeColumnWidth + span.startDay * dayWidth + 2;
+        const spanY = fullHeightSpan ? y + (rowHeight - height) / 2 : y + 3 + offset;
+        drawScheduleMatrixEventBlock(doc, span.option, x, spanY, width, height, detailFontSize, schedule.settings);
+      }
+
+      cells.forEach(({ cell }, dayIndex) => {
+        if (fullHeightSpan && dayIndex >= spans[0].startDay && dayIndex <= spans[0].endDay) return;
+        const x = left + employeeColumnWidth + dayIndex * dayWidth;
+        const availableCellHeight = rowHeight - spanAreaHeight - 8;
         const visibleLines = [];
         let contentHeight = 0;
         for (const line of cell.lines.slice(0, 4)) {
@@ -61978,9 +62880,12 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
           visibleLines.push(line);
           contentHeight += entryHeight;
         }
-        let lineY = y + Math.max(4, (rowHeight - contentHeight) / 2);
+        let lineY = y + spanAreaHeight + Math.max(4, (rowHeight - spanAreaHeight - contentHeight) / 2);
         for (const line of visibleLines) {
-          if (line.type === "shift") {
+          if (line.compactDuty) {
+            drawScheduleMatrixCompactDuty(doc, line, x + 7, lineY, dayWidth - 14, employeeColor, schedule.settings);
+            lineY += scheduleMatrixEntryHeight(line, timeFontSize, detailFontSize);
+          } else if (line.type === "shift") {
             const timeFont = timeFontBold ? "Helvetica-Bold" : "Helvetica";
             const effectiveTimeSize = scheduleMatrixFittedFontSize(
               doc,
@@ -61996,24 +62901,12 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
               { width: dayWidth - 14, height: timeFontSize + 2, align: "left", ellipsis: true, lineBreak: false },
             );
             lineY += timeFontSize + 2;
-            if (line.detailText) {
-              const effectiveDetailSize = scheduleMatrixFittedFontSize(
-                doc,
-                line.detailText,
-                "Helvetica",
-                detailFontSize,
-                dayWidth - 14,
-                5.2,
-              );
-              doc.fillColor("#5f6d77").font("Helvetica").fontSize(effectiveDetailSize).text(
-                line.detailText,
-                x + 7,
-                lineY,
-                { width: dayWidth - 14, height: detailFontSize + 2, align: "left", ellipsis: true, lineBreak: false },
-              );
-              lineY += detailFontSize + 2;
-            }
-          } else if (["option", "meeting"].includes(line.type)) {
+            lineY += drawScheduleMatrixDutyLine(doc, line, x + 7, lineY, dayWidth - 14, employeeColor, detailFontSize) + 1;
+          } else if (line.type === "event") {
+            const eventHeight = scheduleMatrixEntryHeight(line, timeFontSize, detailFontSize);
+            drawScheduleMatrixEventBlock(doc, line.option, x + 3, lineY, dayWidth - 6, eventHeight, detailFontSize, schedule.settings);
+            lineY += eventHeight + 2;
+          } else if (line.type === "meeting") {
             const optionFontSize = Math.max(7, Math.min(9.5, detailFontSize));
             const effectiveOptionSize = scheduleMatrixFittedFontSize(
               doc,
@@ -62039,42 +62932,21 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
             lineY += 8;
           }
         }
-      }
+      });
     });
 
-    doc.fillColor("#edf2f0").rect(left, summaryY, tableWidth, summaryHeight).fill();
-    doc.fillColor("#243944").font("Helvetica-Bold").fontSize(6.5).text(
-      pageEmployeeCount ? "Besetzung" : "Übersicht",
-      left + 10,
-      summaryY + 9,
-      { width: employeeColumnWidth - 20 },
-    );
-    for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
-      const date = addDays(schedule.weekStart, dayIndex);
-      const x = left + employeeColumnWidth + dayIndex * dayWidth;
-      doc.fillColor("#40535d").font("Helvetica-Bold").fontSize(5.7).text(
-        scheduleMatrixSummaryForDate(schedule, date),
-        x + 4,
-        summaryY + 5,
-        { width: dayWidth - 8, height: summaryHeight - 8, align: "center", lineGap: 1 },
-      );
-    }
-
     doc.strokeColor("#81909a").lineWidth(0.65).rect(left, tableTop, tableWidth, dataBottom - tableTop).stroke();
-    doc.strokeColor("#81909a").lineWidth(0.65).rect(left, summaryY, tableWidth, summaryHeight).stroke();
     doc.strokeColor("#81909a").lineWidth(0.65).moveTo(left + employeeColumnWidth, tableTop).lineTo(left + employeeColumnWidth, dataBottom).stroke();
-    doc.strokeColor("#81909a").lineWidth(0.65).moveTo(left + employeeColumnWidth, summaryY).lineTo(left + employeeColumnWidth, summaryY + summaryHeight).stroke();
     for (let dayIndex = 1; dayIndex < dayCount; dayIndex += 1) {
       const x = left + employeeColumnWidth + dayIndex * dayWidth;
-      doc.strokeColor("#8b99a2").lineWidth(0.8).moveTo(x, tableTop).lineTo(x, dataBottom).stroke();
-      doc.strokeColor("#8b99a2").lineWidth(0.8).moveTo(x, summaryY).lineTo(x, summaryY + summaryHeight).stroke();
+      doc.strokeColor("#8b99a2").lineWidth(0.8).moveTo(x, tableTop).lineTo(x, dataTop).stroke();
     }
     for (let rowIndex = 0; rowIndex <= employeesOnPage.length; rowIndex += 1) {
-      const y = dataTop + rowIndex * rowHeight;
+      const y = dataTop + rowOffsets[rowIndex];
       doc.strokeColor("#c6d0d4").lineWidth(0.35).moveTo(left, y).lineTo(left + tableWidth, y).stroke();
     }
 
-    let postTableY = summaryY + summaryHeight + 7;
+    let postTableY = dataBottom + 7;
     if (meetings.length) {
       doc.roundedRect(left, postTableY, tableWidth, 26, 5).fillAndStroke("#eadff5", "#68448f");
       doc.fillColor("#332044").font("Helvetica-Bold").fontSize(7.2).text(
@@ -62109,18 +62981,47 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
     }
     postTableY += 18;
 
-    if (hasScheduleNote) {
-      const noteY = Math.min(postTableY, pageHeight - 67);
-      doc.roundedRect(left, noteY, tableWidth, 29, 4).fillAndStroke("#fff6cf", "#c6a842");
-      doc.fillColor("#4d431e").font("Helvetica-Bold").fontSize(6.2).text("Bemerkung", left + 8, noteY + 5, { width: 57 });
-      doc.fillColor("#3f3a28").font("Helvetica").fontSize(6).text(
-        schedule.scheduleNote.note_text,
-        left + 66,
-        noteY + 5,
-        { width: tableWidth - 74, height: 18, ellipsis: true },
-      );
-    }
+    const pageNoteHeight = Math.max(noteAreaHeight, 556 - postTableY);
+    drawScheduleMatrixNotesBox(
+      doc,
+      pageIndex === 0 ? scheduleNoteText : "",
+      pageIndex === 0 ? noteLayout.mainColumns : Array.from({ length: noteLayout.columns }, () => []),
+      left,
+      postTableY,
+      tableWidth,
+      pageNoteHeight,
+      noteLayout,
+      pageIndex === 0 ? "" : "Wochenbemerkung auf der ersten Matrixseite; Feld für Ergänzungen.",
+    );
 
+    doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
+      `Dienstplan erstellt mit: ${APP_NAME} ${APP_VERSION_LABEL}`,
+      left,
+      pageHeight - 24,
+    );
+    doc.fillColor("#6b7684").font("Helvetica").text(
+      pdfFooterContact(schedule.settings, createdAt),
+      pageWidth - 300,
+      pageHeight - 24,
+      { width: 278, align: "right" },
+    );
+  });
+
+  noteLayout.continuationPages.forEach((columns, index) => {
+    doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+    doc.fillColor("#142033").font("Helvetica-Bold").fontSize(15).text(
+      `Bemerkungen · Fortsetzung ${index + 1}/${noteLayout.continuationPages.length}`,
+      left,
+      18,
+      { width: tableWidth - 230 },
+    );
+    doc.fillColor("#677581").font("Helvetica").fontSize(7.2).text(
+      `${schedule.settings.pdf_title} · KW ${schedule.calendarWeek} · Woche ab ${formatDateGerman(schedule.weekStart)}`,
+      left,
+      40,
+      { width: tableWidth - 230 },
+    );
+    drawScheduleMatrixNotesBox(doc, scheduleNoteText, columns, left, 58, tableWidth, 498, noteLayout);
     doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
       `Dienstplan erstellt mit: ${APP_NAME} ${APP_VERSION_LABEL}`,
       left,
@@ -62295,6 +63196,7 @@ async function startServer() {
   const portalStatus = getPortalStatus();
   validateServerStartup(portalStatus);
   acquireInstanceLock();
+  await activateSaturdaySalesRollout();
   server = app.listen(PORT, HOST, async () => {
     const address = server.address();
     const listeningPort = typeof address === "object" && address ? address.port : PORT;
@@ -62367,9 +63269,10 @@ async function startServer() {
       }, 5 * 60 * 1000);
       scannerProbeInterval.unref();
     }
-    setTimeout(() => {
+    setTimeout(async () => {
+      if (shutdownStarted) return;
       try {
-        const backup = createDatabaseBackup("startup");
+        const backup = await createDatabaseBackup("startup");
         if (backup) console.log(`Backup erstellt: ${backup.path}`);
       } catch (error) {
         console.error("Backup konnte nicht erstellt werden:", error);
@@ -62383,6 +63286,7 @@ async function startServer() {
 function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) {
   if (shutdownStarted) return;
   shutdownStarted = true;
+  const deadlineMs = Date.now() + 1400000;
   let finished = false;
   let serverClosed = !server;
   const finish = async () => {
@@ -62390,9 +63294,19 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     finished = true;
     if (!databaseClosed) {
       try {
-        if (!skipBackup) createDatabaseBackup(`shutdown-${reason}`);
+        if (localBackupArchiveEnabled()) await require("./lib/background-backup-process").drainBackgroundBackups({ deadlineMs });
+        if (!skipBackup) await createDatabaseBackup(`shutdown-${reason}`, { deadlineMs });
       } catch (error) {
         console.error("Backup beim Dienststopp konnte nicht erstellt werden:", error);
+        if (error?.code === "BACKGROUND_BACKUP_TREE_UNVERIFIED") {
+          // Do not release the instance lock or claim a clean shutdown while an
+          // owned child tree may still run. The service supervisor/manual
+          // recovery must terminate the complete group, not restart over it.
+          console.error("Dienststopp benötigt technische Prüfung: Ende des Sicherungsprozesses ist nicht bestätigt.");
+          setInterval(() => {}, 60000);
+          return;
+        }
+        if (localBackupArchiveEnabled()) exitCode = 1;
       }
       try {
         await persistenceProvider.close();
@@ -62426,7 +63340,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   waitForUploads.unref();
   const forceExit = setTimeout(() => {
     clearInterval(waitForUploads);
-    if (amuMutationInProgress > 0) console.error("Dienststopp nach 45 Sekunden erzwungen; ein AUM-Vorgang war noch aktiv.");
+    if (amuMutationInProgress > 0) console.error("Dienststopp: Wartephase nach 45 Sekunden beendet; ein AUM-Vorgang war noch aktiv. Sicherung und Prozessabschluss stehen noch aus.");
     void finish();
   }, 45000);
   forceExit.unref();
@@ -62467,6 +63381,8 @@ module.exports = {
   timeTrackingRequestAccess,
   parseTimeEntrySequence,
   actualDayMetrics,
+  saturdayCreditService,
+  activateSaturdaySalesRollout,
   shiftMetrics,
   scheduleShiftMinuteBasis,
   vacationDayCount,
@@ -62509,6 +63425,8 @@ module.exports = {
   validateUsbFeatures,
   validateUsbEmployees,
   usbProvisioningAvailability,
+  drawSchedulePdfForTests: drawSchedulePdf,
+  scheduleForPdfForTests: scheduleForPdf,
   createDatabaseBackupToDirectory,
   latestDatabaseBackup,
   pruneDatabaseBackups,
