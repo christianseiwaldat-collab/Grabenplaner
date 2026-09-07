@@ -1,0 +1,288 @@
+{
+  "format": "grabenplaner-block4-production-acceptance",
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-07T16:18:50.589Z",
+  "release": {
+    "version": "0.92.28-beta",
+    "sourceCommit": "66c0210d90258d2d708b1177394d399c3c23ffb0",
+    "runtimeSchema": 5,
+    "offsiteModule": 7,
+    "packageSha256": "0e16909701fb7b94e9f57acae83a606adc05f706772a6bd46c249cf5c6000711"
+  },
+  "cash": {
+    "evidenceType": "personally-authenticated-production-ui-observation",
+    "appVersion": "0.92.28-beta",
+    "sourceFileSha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+    "sourceFileBytes": 330928128,
+    "sourceExportDate": "2026-09-04",
+    "label": "Kasse · Exportstand 04.09.2026",
+    "allPeriodsRetained": true,
+    "storedAndFullyComparedSourceRows": 1082167,
+    "checkedBindings": 11059,
+    "activated": true,
+    "referenceCheck": {
+      "locationId": "18",
+      "dateFrom": "2026-09-03",
+      "dateTo": "2026-09-04",
+      "checkedRows": 84,
+      "openRows": 0,
+      "currency": "EUR",
+      "gross": "3496.22",
+      "net": "2913.62",
+      "unresolvedArticleReferences": 0,
+      "unresolvedLocationReferences": 0,
+      "unresolvedLineSellerReferences": 0,
+      "unresolvedHeaderSellerReferences": 0,
+      "days": [
+        {
+          "date": "2026-09-03",
+          "rows": 47,
+          "openRows": 0,
+          "gross": "2494.51"
+        },
+        {
+          "date": "2026-09-04",
+          "rows": 37,
+          "openRows": 0,
+          "gross": "1001.71"
+        }
+      ]
+    },
+    "sellingOnlyLocationDecision": {
+      "confirmedByUser": true,
+      "locations": [
+        "77",
+        "99"
+      ],
+      "existingSellingLocations": true,
+      "showInPlanning": false,
+      "inactiveTargetOverrideMeansClosedBusiness": false
+    },
+    "coverageLimit": "No claim that every historical source reference is assigned. CRM master data, article stock and stock movements require additional TradeFoto integration.",
+    "datasetId": "68de86ba5016231767e086602231390222a36166b74569772b5720b0b129e595",
+    "publicationId": "4de7a0c7f5ae99797fedc44c8bd7b6648911f089628c8c6a36316cb08cde7142",
+    "publishedAt": "2026-09-07T16:03:01.088Z",
+    "tableCounts": {
+      "KassenJournal": 39865,
+      "Umsatz_KASSE": 219920,
+      "EigeneKonten": 0,
+      "ExportRichtTabelle": 0,
+      "KassenJournal_Details": 89584,
+      "Tagesbericht": 346921,
+      "Umsatz_Kasse_Details": 385877
+    },
+    "bindings": [
+      {
+        "kind": "ARTIKEL_STAMM",
+        "count": 11036
+      },
+      {
+        "kind": "FILIALEN",
+        "count": 6
+      },
+      {
+        "kind": "MITARBEITER",
+        "count": 17
+      }
+    ]
+  },
+  "saturday": {
+    "assignedSalesEmployees": 18,
+    "effectiveDate": "2026-09-07",
+    "minutesBefore13": {
+      "worked": 60,
+      "bonus": 0
+    },
+    "minutesAfter13": {
+      "worked": 60,
+      "bonus": 30,
+      "credited": 90
+    },
+    "minutesAfter18": {
+      "worked": 60,
+      "bonus": 30
+    },
+    "calculationOnly": true
+  },
+  "operating": {
+    "installedApplicationChecks": "passed",
+    "installedOffsiteChecks": "passed",
+    "databaseIntegrity": "ok",
+    "foreignKeyViolations": 0,
+    "internalAndPublicLiveAndReady": "HTTP 200",
+    "applicationAndCaddy": "active and enabled",
+    "appListener": "127.0.0.1:3000",
+    "applicationPid": 1701376,
+    "appUninterruptedDuringFinalBackupAndAssurance": true,
+    "historicalFailedSystemdUnits": 21,
+    "hostRebootForPreviouslyInstalledUbuntuUpdatesPending": true
+  },
+  "storage": {
+    "databaseMeasuredAt": "2026-09-07T16:07:36.842Z",
+    "databaseBytes": 1491234816,
+    "walBytes": 42860392,
+    "capacityMeasuredAt": "2026-09-07T16:16:40.227Z",
+    "vpsAvailableBytes": 76474699776,
+    "drive": {
+      "total": 214748364800,
+      "used": 1966762989,
+      "trashed": 470030259,
+      "other": 103782224812,
+      "free": 108999376999
+    }
+  },
+  "localArchives": {
+    "intervalHours": 24,
+    "retentionCalendarDays": 20,
+    "internal": {
+      "ok": true,
+      "action": "inspect",
+      "configured": true,
+      "retention": 20,
+      "retained": 1,
+      "archiveBytes": 86674728,
+      "temporaryBytes": 0,
+      "points": [
+        {
+          "snapshot": "dienstplan-2026-09-07T15-12-38-735Z-c5d974814edf",
+          "sha256": "560b9a85702e115dd44aa9784645414ce3e8558807b518a834a697d9de7f2907",
+          "bytes": 596365312,
+          "coupledBytes": 604448013,
+          "createdAt": "2026-09-07T15:12:47.609Z"
+        }
+      ]
+    },
+    "external": {
+      "ok": true,
+      "action": "inspect",
+      "configured": true,
+      "retention": 20,
+      "retained": 1,
+      "archiveBytes": 539916472,
+      "temporaryBytes": 0,
+      "points": [
+        {
+          "snapshot": "dienstplan-2026-09-07T16-03-33-775Z-58f365640cd9",
+          "sha256": "f7c7f29cc461a23f1882f1feaf0bbe1793be34073c102e58d0f5723815f0a6b9",
+          "bytes": 1420673024,
+          "coupledBytes": 1428755726,
+          "createdAt": "2026-09-07T16:03:47.305Z"
+        }
+      ]
+    },
+    "rawBackupCounts": {
+      "/var/lib/grabenplaner/backups": 5,
+      "/var/backups/grabenplaner": 36
+    },
+    "unregisteredOlderRawBackupsPreserved": true
+  },
+  "offsite": {
+    "retention": {
+      "daily": 14,
+      "weekly": 8,
+      "monthly": 12
+    },
+    "backupReceipt": {
+      "ok": true,
+      "path": "/var/backups/grabenplaner/dienstplan-2026-09-07T16-03-33-775Z-58f365640cd9.db",
+      "amuBackup": "/var/backups/grabenplaner/dienstplan-2026-09-07T16-03-33-775Z-58f365640cd9.amu",
+      "commitMarker": "/var/backups/grabenplaner/dienstplan-2026-09-07T16-03-33-775Z-58f365640cd9.complete.json",
+      "sha256": "f7c7f29cc461a23f1882f1feaf0bbe1793be34073c102e58d0f5723815f0a6b9",
+      "createdAt": "2026-09-07T16:06:39.056Z"
+    },
+    "assurance": {
+      "state": "ok",
+      "integrityVerified": true,
+      "events": [
+        {
+          "eventType": "full-assurance-passed",
+          "trigger": "manual-cli",
+          "occurredAt": "2026-09-07T16:15:23.314Z",
+          "evidence": {
+            "snapshotIdPrefix": "352768b06806",
+            "receiptSha256Prefix": "db77ec73bf89",
+            "appVersion": "0.92.28-beta"
+          },
+          "errorCode": null
+        },
+        {
+          "eventType": "application-smoke-passed",
+          "trigger": "manual-cli",
+          "occurredAt": "2026-09-07T16:15:22.447Z",
+          "evidence": {
+            "snapshotIdPrefix": "352768b06806",
+            "receiptSha256Prefix": "db77ec73bf89",
+            "appVersion": "0.92.28-beta"
+          },
+          "errorCode": null
+        },
+        {
+          "eventType": "restore-test-passed",
+          "trigger": "manual-cli",
+          "occurredAt": "2026-09-07T16:15:21.629Z",
+          "evidence": {
+            "snapshotIdPrefix": "352768b06806",
+            "receiptSha256Prefix": "db77ec73bf89",
+            "appVersion": "0.92.28-beta"
+          },
+          "errorCode": null
+        },
+        {
+          "eventType": "repository-check-passed",
+          "trigger": "manual-cli",
+          "occurredAt": "2026-09-07T16:11:21.568Z",
+          "evidence": {
+            "snapshotIdPrefix": "352768b06806",
+            "receiptSha256Prefix": null,
+            "appVersion": "0.92.28-beta"
+          },
+          "errorCode": null
+        },
+        {
+          "eventType": "backup-passed",
+          "trigger": "manual-cli",
+          "occurredAt": "2026-09-07T16:10:07.545Z",
+          "evidence": {
+            "snapshotIdPrefix": "352768b06806",
+            "receiptSha256Prefix": null,
+            "appVersion": "0.92.28-beta"
+          },
+          "errorCode": null
+        },
+        {
+          "eventType": "oauth-policy-passed",
+          "trigger": "manual-cli",
+          "occurredAt": "2026-09-07T16:07:06.389Z",
+          "evidence": {
+            "snapshotIdPrefix": null,
+            "receiptSha256Prefix": null,
+            "appVersion": "0.92.28-beta"
+          },
+          "errorCode": null
+        },
+        {
+          "eventType": "full-assurance-started",
+          "trigger": "manual-cli",
+          "occurredAt": "2026-09-07T16:07:03.948Z",
+          "evidence": {
+            "snapshotIdPrefix": null,
+            "receiptSha256Prefix": null,
+            "appVersion": "0.92.28-beta"
+          },
+          "errorCode": null
+        }
+      ]
+    }
+  },
+  "scopeLimits": {
+    "crmCustomerCount": 0,
+    "crmMasterDataIntegrationComplete": false,
+    "stockAndArticleMovementsIntegrationComplete": false,
+    "pointOfSaleDevelopment": false
+  },
+  "cleanup": {
+    "ownDeploymentStagesRemoved": true,
+    "ownPostCashProofDirectoryRemoved": true,
+    "productionDataAndBackupsPreserved": true
+  }
+}
