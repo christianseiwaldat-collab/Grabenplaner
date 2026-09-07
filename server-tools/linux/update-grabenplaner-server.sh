@@ -411,13 +411,24 @@ cleanup() {
   exit "$exit_code"
 }
 trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 
 create_exact_local_backup() {
   local backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
+  local backup_app_dir="$app_dir"
+  local -a retention_args=()
+  if [[ -n "$runtime_v5_transition" ]]; then
+    # This complete candidate tree has already passed manifest, dependency,
+    # ClamAV and permission checks. Never mix its helpers with old libraries.
+    backup_app_dir="$extract_root"
+    backup_script="$backup_app_dir/server-tools/linux/backup-grabenplaner.sh"
+    retention_args=(--preserve-existing-backups)
+  fi
   [[ -x "$backup_script" ]] || gp_die "Installiertes Linux-Backupwerkzeug fehlt: $backup_script"
-  "$backup_script" --env-file "$env_file" --app-dir "$app_dir" --data-dir "$data_dir" --database "$database" \
+  "$backup_script" --env-file "$env_file" --app-dir "$backup_app_dir" --data-dir "$data_dir" --database "$database" \
     --backup-dir "$backup_dir" --keep "$backup_keep" --service "$service" --node "$node" \
-    --service-user "$service_user" --service-group "$service_group" --lock-already-held >"$backup_result_file"
+    --service-user "$service_user" --service-group "$service_group" --lock-already-held "${retention_args[@]}" >"$backup_result_file"
   backup_database="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).path))' "$backup_result_file")"
   backup_amu="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).amuBackup))' "$backup_result_file")"
   [[ -f "$backup_database" && -d "$backup_amu" ]] || gp_die "Das Sicherheitsbackup vor dem Update ist unvollstaendig."

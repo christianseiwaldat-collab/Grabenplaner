@@ -114,6 +114,9 @@ test("Linux bulk snapshots use disk, archive mode never falls back to legacy pru
   assert.match(script, /mktemp --tmpdir="\$runtime_directory" backup-result/);
   assert.match(script, /gp_path_is_same_or_child "\$staging_directory" "\$backup_dir"/);
   assert.match(script, /\(\( keep == 20 \)\)/);
+  assert.match(script, /lock_already_held == 1 && keep == 1000 && archive_enabled == 0/);
+  assert.match(script, /readlink -f -- \/proc\/\$\$\/fd\/9/);
+  assert.ok(script.indexOf('snapshot_committed=1') < script.indexOf('elif (( preserve_existing_backups == 1 ))'));
   assert.match(script, /-e "\$backup_dir\/\.gp-local-archive" \|\| -L "\$backup_dir\/\.gp-local-archive"/);
   const publish = script.indexOf("snapshot_committed=1");
   const archive = script.indexOf('"$node" "$archive_helper" archive-as');
