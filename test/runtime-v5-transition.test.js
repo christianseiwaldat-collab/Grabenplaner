@@ -60,7 +60,7 @@ test("runtime-v5 updater trust transition rejects ordinary, unbound and non-root
   assert.throws(() => validateInvocation({ uid: 1000 }));
   assert.throws(() => validateInvocation({ uid: 0, marker: "/tmp/commit.json", transitionFile: "/tmp/transition.json", script: "/tmp/update.sh" }));
 });
-test("runtime-v5 keeps the installed backup path until commit and binds offsite afterwards", () => {
+test("runtime-v5 uses a complete verified candidate for fresh backups and binds offsite after commit", () => {
   const migration = read("server-tools/linux/migrate-grabenplaner-runtime-v5.sh");
   const updater = read("server-tools/linux/update-grabenplaner-server.sh");
   assert.match(migration, /runtime-v5-transition\.js" verify/);
@@ -69,10 +69,16 @@ test("runtime-v5 keeps the installed backup path until commit and binds offsite 
   assert.doesNotMatch(migration, /mv -T -- "\$app_dir\/server-tools\/linux"/);
   assert(migration.indexOf("if updater_commit_is_valid") < migration.indexOf('mv -T -- "$OFFSITE_MODULE"'));
   assert.match(updater, /local backup_script="\$app_dir\/server-tools\/linux\/backup-grabenplaner\.sh"/);
+  assert.match(updater, /backup_app_dir="\$extract_root"/);
+  assert.match(updater, /retention_args=\(--preserve-existing-backups\)/);
+  assert(updater.indexOf('gp_apply_app_permissions "$extract_root"') < updater.indexOf('\ncreate_exact_local_backup\n'));
   assert.match(updater, /installedOffsiteReceiptSha256/);
   assert.match(updater, /-z "\$runtime_v5_transition"/);
   assert.match(migration, /--backup-keep 1000/);
   assert.match(migration, /POST-UPDATE-ACTION-REQUIRED/);
+  assert.match(migration, /INTERRUPTED-ACTION-REQUIRED/);
+  assert.match(migration, /trap 'interrupted=1; exit 143' TERM/);
+  assert.match(updater, /trap 'exit 143' TERM/);
   assert.doesNotMatch(migration, /\bsystemctl\s+(reboot|poweroff)|\bshutdown\s+-r/);
 });
 test("runtime-v5 and offsite-v7 are the current package contracts", () => {
@@ -90,4 +96,25 @@ test("runtime-v5 verifier reads the installed runtime-v4/offsite-v6 predecessor 
   assert.equal(contract.deploymentSchemaVersion, 4);
   assert.equal(contract.offsiteModule.moduleVersion, 6);
   assert.notEqual(spawnSync(process.execPath, [verifier, old], { encoding: "utf8" }).status, 0);
+});
+
+test("an interrupted runtime migration preserves its rollback files and reports a nonzero exit", { skip: process.platform !== 'linux' }, t => {
+  const directory = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'gp-runtime-v5-interrupt-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(directory, 'rollback-proof'), 'original runtime');
+  const cleanup = read('server-tools/linux/migrate-grabenplaner-runtime-v5.sh').match(/^cleanup\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert(cleanup);
+  const result = spawnSync('bash', ['-s', '--', directory], { encoding: 'utf8', input: `
+set -Eeuo pipefail
+work_root="$1"
+interrupted=0
+gp_warn() { :; }
+${cleanup}
+trap cleanup EXIT
+trap 'interrupted=1; exit 143' TERM
+kill -TERM $$
+` });
+  assert.equal(result.status, 143, result.stderr);
+  assert.equal(fs.readFileSync(path.join(directory, 'rollback-proof'), 'utf8'), 'original runtime');
+  assert(fs.statSync(path.join(directory, 'INTERRUPTED-ACTION-REQUIRED')).isFile());
 });

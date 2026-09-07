@@ -12,10 +12,12 @@ Alle anderen verwalteten Runtime-Dateien bleiben bytegleich.
 Unter der bestehenden Wartungssperre werden die beiden Units und ihre drei
 Vertragsdateien gesichert. Der im Paket verifizierte Updater darf nur mit
 einem root-only, an Paket, Aufrufpfad und Commitmarker gebundenen
-Uebergangsbeleg die neue Paketpruefung verwenden. Die zuvor installierten
-Backup-/Restore-Werkzeuge bleiben bis zum App-Tausch erhalten. Sie erzeugen
-die lokale und externe Vorabsicherung; ihre bestehenden Sicherungspunkte
-werden bei diesem Uebergang nicht durch eine kleinere Anzahl begrenzt.
+Uebergangsbeleg die neue Paketpruefung verwenden. Neue lokale Sicherungspaare
+entstehen aus dem vollstaendig geprueften Kandidatenbaum und werden jeweils
+mit Datenbank, Dokumenten und Hashes verifiziert. Die unveraenderte Alt-Historie
+wird dabei weder erneut gelesen noch bereinigt. Der bisherige Offsite-Hook
+uebertraegt den Vorabstand; die installierten Restore-Werkzeuge bleiben fuer
+einen moeglichen Rollback erhalten.
 
 Die neue Offsite-Bindung wird erst nach dem erfolgreichen App-Commit
 installiert. Die bisherigen Timer pausieren waehrend der gesamten Migration;
@@ -24,6 +26,12 @@ behaelt die Unit-Dateien, Provider-, Repository- und Zugangskonfiguration bei
 und bringt die speicherbegrenzten Staging-/Restore-Helfer mit. Ihr neuer
 Installationsbeleg uebernimmt die zuvor gepruefte Providerbindung unveraendert.
 Danach wird die vollstaendige signierte Assurance eingeplant.
+
+Ein unterbrochener Migrationsprozess behaelt seine Ruecksicherungsartefakte
+und einen Diagnosemarker. Sein Zustand wird anhand des Updater-Commitbelegs
+geprueft, bevor ein manueller Wiederanlauf oder Rollback erfolgt. Eine aeussere
+Prozessgruppen-Zeitbegrenzung darf die verschachtelte Transaktion nicht
+abschneiden; die Start-/Healthfenster bleiben jeweils auf 1500 Sekunden begrenzt.
 
 Vor dem App-Commit stellt ein Fehler die alten Units und Runtime-Dateien
 wieder her; den App-/Datenrollback uebernimmt der vorhandene Updater. Nach

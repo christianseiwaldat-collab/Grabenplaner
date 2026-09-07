@@ -40,6 +40,7 @@ node_arg=""
 service_user="$GP_DEFAULT_SERVICE_USER"
 service_group="$GP_DEFAULT_SERVICE_GROUP"
 lock_already_held=0
+preserve_existing_backups=0
 
 while (($#)); do
   case "$1" in
@@ -54,6 +55,7 @@ while (($#)); do
     --service-user) service_user="${2:?Wert fuer --service-user fehlt}"; shift 2 ;;
     --service-group) service_group="${2:?Wert fuer --service-group fehlt}"; shift 2 ;;
     --lock-already-held) lock_already_held=1; shift ;;
+    --preserve-existing-backups) preserve_existing_backups=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -81,6 +83,13 @@ if [[ "$archive_enabled" == "1" ]]; then
   (( keep == 20 )) || gp_die "Das lokale Archiv verwendet 20 Kalendertage mit einem Sicherungsstand je Tag."
 elif [[ -e "$backup_dir/.gp-local-archive" || -L "$backup_dir/.gp-local-archive" ]]; then
   gp_die "Ein lokales Archiv ist vorhanden; die bisherige Vollkopien-Aufbewahrung darf nicht als Ersatz starten."
+fi
+if (( preserve_existing_backups == 1 )); then
+  (( lock_already_held == 1 && keep == 1000 && archive_enabled == 0 )) \
+    || gp_die "Das Beibehalten der Alt-Sicherungen ist nur fuer den gesperrten Uebergang ohne Archiv erlaubt."
+  [[ "$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)" == "$GP_DEFAULT_MAINTENANCE_LOCK" ]] \
+    || gp_die "Die uebernommene Wartungssperre fehlt."
+  flock --nonblock 9 || gp_die "Die uebernommene Wartungssperre ist nicht aktiv."
 fi
 
 if [[ -n "$node_arg" ]]; then
@@ -217,6 +226,10 @@ if [[ "$archive_enabled" == "1" ]]; then
   # als gefilterte Prozessumgebung, niemals als sichtbare Programmargumente.
   "$node" "$archive_helper" archive-as "$service_user" "$backup_dir" "$snapshot" "$keep" >/dev/null \
     || gp_die "Die lokale Archivierung ist fehlgeschlagen; der neue rohe Sicherungspunkt bleibt erhalten."
+elif (( preserve_existing_backups == 1 )); then
+  # The freshly published pair has passed its full verifier above. A runtime
+  # transition neither prunes nor needs to re-read unchanged historic pairs.
+  gp_info "Neuer Sicherungspunkt vollstaendig geprueft; bestehende Alt-Sicherungen bleiben unveraendert."
 else
   pruner="$app_dir/server-tools/linux/lib/prune-backups.js"
   [[ -f "$pruner" && ! -L "$pruner" ]] || gp_die "Das vertrauenswuerdige Aufbewahrungsmodul fehlt."

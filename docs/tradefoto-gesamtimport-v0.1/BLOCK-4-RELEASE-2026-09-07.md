@@ -26,7 +26,9 @@ erhalten. Ein erneuter vollstaendiger Trade-Aufbau gehoert nicht zu diesem Lauf.
    Branch veroeffentlichen. Absichtlich unversionierte Ausgabeordner erhalten.
 2. App, Runtime 4 -> 5 und Offsite 6 -> 7 mit dem expliziten Migrationswerkzeug
    unter gemeinsamer Wartungssperre ausliefern. Vor dem App-Tausch sichern
-   die bisherigen Werkzeuge den gekoppelten Bestand lokal und auf Drive.
+   die vollstaendig geprueften Kandidatenwerkzeuge den gekoppelten Bestand
+   lokal; der vorhandene Offsite-Hook sichert ihn auf Drive. Die unveraenderte
+   Alt-Historie wird beim Uebergang weder bereinigt noch erneut voll gelesen.
 3. Beide lokalen Sicherungsarchive mit vorhandenem Vault initialisieren und
    aktivieren. Ein Stand je Kalendertag, 20 Tage pro Bereich; kein pauschales
    Loeschen alter Rohsicherungen zur Finanzierung des Imports.

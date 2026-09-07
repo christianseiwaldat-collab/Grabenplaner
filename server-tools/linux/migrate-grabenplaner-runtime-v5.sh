@@ -3,8 +3,9 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 # Explicit transition: runtime 4 -> 5 and offsite 6 -> 7.
-# Before the app commit, backups and rollback use the unchanged installed
-# maintenance tools. Only verified runtime templates are rebound. The new
+# Fresh backup pairs use the fully verified candidate tree; a rollback uses
+# the unchanged installed restore tools. Only runtime templates are rebound.
+# Historic raw pairs are preserved without another retention scan. The new
 # offsite module is installed after the app commit while timers remain paused.
 
 readonly SCRIPT_SOURCE="${BASH_SOURCE[0]}"
@@ -161,6 +162,7 @@ runtime_swapped=0
 unit_swapped=0
 updater_succeeded=0
 migration_complete=0
+interrupted=0
 rollback_failed=0
 updater_commit_marker="$work_root/updater-commit.json"
 unit_pending=""
@@ -229,6 +231,14 @@ NODE
 cleanup() {
   local code=$?
   trap - EXIT
+  if (( interrupted == 1 )); then
+    # A signal may also have reached the nested updater. Preserve every
+    # rollback artifact until its commit/rollback result can be inspected.
+    printf '%s\n' "Unterbrochene Migration; Updaterzustand und erhaltene Ruecksicherungsdateien pruefen." >"$work_root/INTERRUPTED-ACTION-REQUIRED"
+    gp_warn "Unterbrochene Migration; Diagnose bleibt erhalten: $work_root"
+    exit "$code"
+  fi
+  if updater_commit_is_valid; then updater_succeeded=1; fi
   if [[ -n "$unit_pending" && "$unit_pending" == "${APP_UNIT}.runtime-v5.$$" \
     && -f "$unit_pending" && ! -L "$unit_pending" ]]; then
     rm -f -- "$unit_pending" || code=2
@@ -263,6 +273,8 @@ cleanup() {
   exit "$code"
 }
 trap cleanup EXIT
+trap 'interrupted=1; exit 143' TERM
+trap 'interrupted=1; exit 130' INT
 
 install -m 0600 -o root -g root -- "$package" "$staged_package"
 actual_package_sha256="$(gp_sha256 "$staged_package")"
