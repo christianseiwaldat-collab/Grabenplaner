@@ -31,6 +31,7 @@ function Resolve-SafeDirectory([string]$Path, [switch]$MustExist) {
 
 function Test-ExcludedRelativePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
+    if ($normalized -cin @('scripts/run-background-backup.js', 'scripts/manage-local-backup-archive.js')) { return $false }
     $top = ($normalized -split '/', 2)[0].ToLowerInvariant()
     if ($top -in @('.git', '.github', '.devcontainer', 'backups', 'data', 'demo', 'docs', 'node_modules', 'output', 'release', 'runtime', 'scripts', 'test', 'tmp', 'usb-backups')) { return $true }
     if ($normalized -match '(^|/)(\.env($|\.)|\.npmrc$|\.pnpm-store($|/)|__pycache__($|/))') { return $true }
@@ -42,6 +43,7 @@ function Test-ExcludedRelativePath([string]$RelativePath) {
 
 function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
+    if ($normalized -cin @('backup.js', 'scripts/run-background-backup.js', 'scripts/manage-local-backup-archive.js')) { return $true }
     if ($normalized -in @('server.js', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'README.md', 'LICENSE.md', 'SECURITY.md', 'SERVERBETRIEB.md')) { return $true }
     return $normalized.StartsWith('lib/') -or $normalized.StartsWith('public/') -or $normalized.StartsWith('server-tools/')
 }
@@ -49,6 +51,12 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
 function Assert-RequiredRuntimeFiles([string]$Root, [string]$PackageKind) {
     foreach ($required in @(
         'server.js',
+        'backup.js',
+        'scripts\run-background-backup.js',
+        'scripts\manage-local-backup-archive.js',
+        'lib\backup-workspace.js',
+        'lib\background-backup-process.js',
+        'lib\local-backup-archive.js',
         'package.json',
         'lib\database-lock.js',
         'lib\offsite-provider-policy.js',

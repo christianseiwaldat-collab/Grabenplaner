@@ -707,7 +707,7 @@ test("M6: versionierte Personalakt-Dokumente bleiben außerhalb des Legacy-Lösc
     .get(stored.id).status, "active");
 });
 
-test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokumente", async () => {
+test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokumente", async (t) => {
   insertEmployee("8720");
   const hr = session("103", "hr");
   const uploaded = await uploadDocument("8720", hr, { title: "Backup-Dokument" });
@@ -716,6 +716,7 @@ test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokume
   const blobPath = path.join(testRoot, "app-data", "private", "amu", "blobs", ...stored.storage_key.split("/"));
 
   const backupDirectory = path.join(testRoot, "verified-backup");
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() - 24 * 60 * 60 * 1000 });
   const backup = createDatabaseBackupToDirectory(backupDirectory, "test", "test");
   assert.equal(backup.verified, true);
   assert.equal(backup.committed, true);
@@ -753,6 +754,8 @@ test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokume
   ), "utf8"));
   assert.ok(manifest.files.some((entry) => entry.storageKey === stored.storage_key));
 
+  // Keep two different calendar days before corrupting the newer daily point.
+  t.mock.timers.tick(24 * 60 * 60 * 1000);
   const invalidNew = createDatabaseBackupToDirectory(backupDirectory, "test-invalid-new", "test");
   fs.appendFileSync(invalidNew.path, "tampered");
   const pruneResult = spawnSync(process.execPath, [
@@ -777,7 +780,7 @@ test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokume
   const legacy = latestDatabaseBackup(legacyDirectory);
   assert.equal(legacy.legacy, true);
   assert.equal(legacy.committed, false);
-  pruneDatabaseBackups(legacyDirectory, 0);
+  pruneDatabaseBackups(legacyDirectory, 1);
   assert.equal(fs.existsSync(legacyDatabase), true);
   assert.equal(fs.existsSync(legacyDocuments), true);
 

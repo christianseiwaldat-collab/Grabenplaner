@@ -186,7 +186,7 @@ try {
 } finally {
   database.close();
 }
-const result = readAndVerifyBackup(backupDirectory);
+const result = readAndVerifyBackup(backupDirectory, { includeContent: false });
 verifyBackupReferences({ backupDirectory, requiredStorageKeys });
 process.stdout.write(JSON.stringify({
   ok: true,

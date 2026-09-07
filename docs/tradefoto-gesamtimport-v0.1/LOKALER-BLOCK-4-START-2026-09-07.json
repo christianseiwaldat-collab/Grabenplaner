@@ -1,0 +1,80 @@
+{
+  "format": "grabenplaner.block4-local-option.v1",
+  "checkedAt": "2026-09-07T03:44:48.297Z",
+  "branch": "feature/schedule-pdf-day-separators",
+  "head": "41e6d92e5fc95c30a4ecb11d478802a930ea44e1",
+  "sourceChecks": [
+    {
+      "File": "Trade_Daten.accdb",
+      "Bytes": 188649472,
+      "Sha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+      "LastWriteTimeUtc": "2026-09-04T15:26:42.0000000Z"
+    },
+    {
+      "File": "Kassen_Umsätze.accdb",
+      "Bytes": 330928128,
+      "Sha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+      "LastWriteTimeUtc": "2026-09-04T16:55:48.0000000Z"
+    }
+  ],
+  "userPurpose": "Historical statistics; the last supplied source remains valid until the next upload, even for weeks",
+  "localPreflight": {
+    "freeBytes": 136535285760,
+    "requiredStartFreeBytes": 98247376896,
+    "remainingAboveBudgetBytes": 38287908864,
+    "scope": "isolated-local-test-only",
+    "productionCapacityApproval": false
+  },
+  "existingFullMeasurement": {
+    "status": "passed_full_import_and_backup_measurement",
+    "importImplementationUnchanged": true,
+    "measuredImplementationFileCount": 12,
+    "ephemeralDatabaseRemoved": true,
+    "persistentUsableDatabaseAvailableFromMeasurement": false
+  },
+  "vps": {
+    "format": "grabenplaner.block4-local-path-readonly.v1",
+    "checkedAt": "2026-09-07T03:41:29.788607+00:00",
+    "readOnly": true,
+    "vpsFreeBytes": 72457588736,
+    "vpsTotalBytes": 102915489792,
+    "appActive": true,
+    "caddyActive": true,
+    "restoreOrImportExecuted": false,
+    "requiredAdditionalFreeBytesUnderExistingOperatingModel": 133298160777,
+    "missingFreeBytesUnderExistingOperatingModel": 60840572041
+  },
+  "applicationActivation": {
+    "allowApply": false,
+    "allowMapping": false,
+    "salesHistoryEnabled": false
+  },
+  "options": {
+    "localImportAndAnalysis": {
+      "feasiblePreparation": true,
+      "readyForDailyUse": false,
+      "remaining": [
+        "dedicated persistent local data directory and managed recovery keys",
+        "account-bound source/rule/coverage activation and confirmed mappings",
+        "retained full import and whole-period reconciliation",
+        "local archive and restore verification"
+      ]
+    },
+    "localImportThenVps": {
+      "doesNotResolveVpsOperatingCapacity": true,
+      "readySelectiveHistoryTransferAvailable": false,
+      "currentVpsOperationalDataMustBePreserved": true
+    },
+    "separateReadOnlyHistoryArchive": {
+      "architectureOptionOnly": true,
+      "implemented": false,
+      "mayAvoidIncludingUnchangedHistoryInEveryOperationalBackup": true,
+      "smallerCapacityNotYetMeasured": true
+    }
+  },
+  "newImportStarted": false,
+  "installedServicesChanged": false,
+  "retainedBackupsDeleted": false,
+  "commitPushDeploy": false,
+  "report": "LOKALER-BLOCK-4-START-2026-09-07.md"
+}

@@ -1,0 +1,642 @@
+{
+  "format": "grabenplaner.cash.snapshot-storage-measurement.v1",
+  "measuredAt": "2026-09-07T05:55:17.357Z",
+  "productionWrites": false,
+  "sourceWrites": false,
+  "tradeReadOrChanged": false,
+  "runtimeIntegration": false,
+  "window": {
+    "months": 24,
+    "asOfDay": "2026-09-04",
+    "fromInclusive": "2024-09-04",
+    "toExclusive": "2026-09-05",
+    "anchor": "explicit_supplied_business_snapshot_day",
+    "clockDrivenExpiry": false
+  },
+  "source": {
+    "fileName": "Kassen_Umsätze.accdb",
+    "bytes": 330928128,
+    "sha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+    "rows": 1082167
+  },
+  "method": "One encrypted normalized source value array per row, source ordinals, authenticated metadata, FK parents and HMAC query indexes; no generic staging/link/undo/version copies.",
+  "variants": [
+    {
+      "mode": "full",
+      "selectedTables": [
+        {
+          "name": "KassenJournal",
+          "rows": 39865,
+          "excluded": 0
+        },
+        {
+          "name": "Umsatz_KASSE",
+          "rows": 219920,
+          "excluded": 0
+        },
+        {
+          "name": "EigeneKonten",
+          "rows": 0,
+          "excluded": 0
+        },
+        {
+          "name": "ExportRichtTabelle",
+          "rows": 0,
+          "excluded": 0
+        },
+        {
+          "name": "KassenJournal_Details",
+          "rows": 89584,
+          "excluded": 0
+        },
+        {
+          "name": "Tagesbericht",
+          "rows": 346921,
+          "excluded": 0
+        },
+        {
+          "name": "Umsatz_Kasse_Details",
+          "rows": 385877,
+          "excluded": 0
+        }
+      ],
+      "allSourceFields": 97,
+      "buildAndCompactMs": 377304,
+      "databaseBytes": 835137536,
+      "footprint": [
+        {
+          "name": "cash_6",
+          "bytes": 316903424,
+          "payloadBytes": 288156091,
+          "unusedBytes": 24751711
+        },
+        {
+          "name": "cash_5",
+          "bytes": 203513856,
+          "payloadBytes": 193605241,
+          "unusedBytes": 6655008
+        },
+        {
+          "name": "cash_1",
+          "bytes": 82362368,
+          "payloadBytes": 76274936,
+          "unusedBytes": 4224487
+        },
+        {
+          "name": "cash_4",
+          "bytes": 28295168,
+          "payloadBytes": 26823387,
+          "unusedBytes": 745130
+        },
+        {
+          "name": "cash_6_article_key",
+          "bytes": 21655552,
+          "payloadBytes": 20385691,
+          "unusedBytes": 48790
+        },
+        {
+          "name": "cash_6_location_key",
+          "bytes": 21626880,
+          "payloadBytes": 20375739,
+          "unusedBytes": 30154
+        },
+        {
+          "name": "cash_6_seller_key",
+          "bytes": 19976192,
+          "payloadBytes": 18736859,
+          "unusedBytes": 23182
+        },
+        {
+          "name": "cash_5_location_key",
+          "bytes": 19443712,
+          "payloadBytes": 18321023,
+          "unusedBytes": 24966
+        },
+        {
+          "name": "sqlite_autoindex_cash_6_1",
+          "bytes": 15966208,
+          "payloadBytes": 14630431,
+          "unusedBytes": 131374
+        },
+        {
+          "name": "sqlite_autoindex_cash_5_1",
+          "bytes": 14340096,
+          "payloadBytes": 13150103,
+          "unusedBytes": 107222
+        },
+        {
+          "name": "cash_1_location_key",
+          "bytes": 12312576,
+          "payloadBytes": 11581202,
+          "unusedBytes": 35546
+        },
+        {
+          "name": "cash_1_seller_key",
+          "bytes": 12152832,
+          "payloadBytes": 11421010,
+          "unusedBytes": 36462
+        },
+        {
+          "name": "sqlite_autoindex_cash_1_1",
+          "bytes": 9039872,
+          "payloadBytes": 8324065,
+          "unusedBytes": 29567
+        },
+        {
+          "name": "cash_6_date",
+          "bytes": 8880128,
+          "payloadBytes": 7651750,
+          "unusedBytes": 44735
+        },
+        {
+          "name": "cash_5_date",
+          "bytes": 7974912,
+          "payloadBytes": 6872630,
+          "unusedBytes": 38159
+        },
+        {
+          "name": "cash_0",
+          "bytes": 7942144,
+          "payloadBytes": 7448050,
+          "unusedBytes": 199363
+        },
+        {
+          "name": "cash_1_customer_key",
+          "bytes": 6127616,
+          "payloadBytes": 5424178,
+          "unusedBytes": 25730
+        },
+        {
+          "name": "cash_6_parent",
+          "bytes": 6037504,
+          "payloadBytes": 4842577,
+          "unusedBytes": 19612
+        },
+        {
+          "name": "cash_1_date",
+          "bytes": 5029888,
+          "payloadBytes": 4332610,
+          "unusedBytes": 22786
+        },
+        {
+          "name": "cash_4_location_key",
+          "bytes": 4964352,
+          "payloadBytes": 4655346,
+          "unusedBytes": 25714
+        },
+        {
+          "name": "sqlite_autoindex_cash_4_1",
+          "bytes": 3678208,
+          "payloadBytes": 3371297,
+          "unusedBytes": 27387
+        },
+        {
+          "name": "cash_4_date",
+          "bytes": 2015232,
+          "payloadBytes": 1725890,
+          "unusedBytes": 14690
+        },
+        {
+          "name": "sqlite_autoindex_cash_0_1",
+          "bytes": 1626112,
+          "payloadBytes": 1481975,
+          "unusedBytes": 19782
+        },
+        {
+          "name": "cash_4_parent",
+          "bytes": 1314816,
+          "payloadBytes": 1030005,
+          "unusedBytes": 12211
+        },
+        {
+          "name": "cash_0_location_key",
+          "bytes": 1261568,
+          "payloadBytes": 1121925,
+          "unusedBytes": 16356
+        },
+        {
+          "name": "cash_0_date",
+          "bytes": 634880,
+          "payloadBytes": 509580,
+          "unusedBytes": 3849
+        },
+        {
+          "name": "sqlite_schema",
+          "bytes": 12288,
+          "payloadBytes": 5596,
+          "unusedBytes": 6406
+        },
+        {
+          "name": "snapshot_meta",
+          "bytes": 12288,
+          "payloadBytes": 5218,
+          "unusedBytes": 6990
+        },
+        {
+          "name": "sqlite_autoindex_snapshot_meta_1",
+          "bytes": 4096,
+          "payloadBytes": 169,
+          "unusedBytes": 3892
+        },
+        {
+          "name": "sqlite_autoindex_cash_3_1",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_cash_2_1",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_3_location_key",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_3_date",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_3_article_key",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_3",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_2_date",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_2",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        }
+      ],
+      "tableBytes": 639037440,
+      "otherPagesAndIndexesBytes": 196100096,
+      "verification": {
+        "rows": 1082167,
+        "everyStoredValueReadAndCompared": true,
+        "authenticatedCiphertext": true,
+        "foreignKeys": true,
+        "integrity": true
+      },
+      "verifyMs": 83289,
+      "sourceSizeRatio": 2.523622095973661,
+      "durationMs": 461393
+    },
+    {
+      "mode": "window",
+      "selectedTables": [
+        {
+          "name": "KassenJournal",
+          "rows": 25740,
+          "excluded": 14125
+        },
+        {
+          "name": "Umsatz_KASSE",
+          "rows": 164052,
+          "excluded": 55868
+        },
+        {
+          "name": "EigeneKonten",
+          "rows": 0,
+          "excluded": 0
+        },
+        {
+          "name": "ExportRichtTabelle",
+          "rows": 0,
+          "excluded": 0
+        },
+        {
+          "name": "KassenJournal_Details",
+          "rows": 19477,
+          "excluded": 70107
+        },
+        {
+          "name": "Tagesbericht",
+          "rows": 87466,
+          "excluded": 259455
+        },
+        {
+          "name": "Umsatz_Kasse_Details",
+          "rows": 290795,
+          "excluded": 95082
+        }
+      ],
+      "allSourceFields": 97,
+      "buildAndCompactMs": 251210,
+      "databaseBytes": 481947648,
+      "footprint": [
+        {
+          "name": "cash_6",
+          "bytes": 238821376,
+          "payloadBytes": 217231631,
+          "unusedBytes": 18564601
+        },
+        {
+          "name": "cash_1",
+          "bytes": 61448192,
+          "payloadBytes": 56981324,
+          "unusedBytes": 3077037
+        },
+        {
+          "name": "cash_5",
+          "bytes": 51314688,
+          "payloadBytes": 48962888,
+          "unusedBytes": 1526731
+        },
+        {
+          "name": "cash_6_article_key",
+          "bytes": 16334848,
+          "payloadBytes": 15410667,
+          "unusedBytes": 3944
+        },
+        {
+          "name": "cash_6_location_key",
+          "bytes": 16326656,
+          "payloadBytes": 15403147,
+          "unusedBytes": 3296
+        },
+        {
+          "name": "cash_6_seller_key",
+          "bytes": 15089664,
+          "payloadBytes": 14168363,
+          "unusedBytes": 4712
+        },
+        {
+          "name": "sqlite_autoindex_cash_6_1",
+          "bytes": 12046336,
+          "payloadBytes": 11049476,
+          "unusedBytes": 89187
+        },
+        {
+          "name": "cash_1_location_key",
+          "bytes": 9187328,
+          "payloadBytes": 8641776,
+          "unusedBytes": 26484
+        },
+        {
+          "name": "cash_1_seller_key",
+          "bytes": 9068544,
+          "payloadBytes": 8519792,
+          "unusedBytes": 30032
+        },
+        {
+          "name": "sqlite_autoindex_cash_1_1",
+          "bytes": 6750208,
+          "payloadBytes": 6210798,
+          "unusedBytes": 27482
+        },
+        {
+          "name": "cash_6_date",
+          "bytes": 6742016,
+          "payloadBytes": 5814432,
+          "unusedBytes": 35451
+        },
+        {
+          "name": "cash_4",
+          "bytes": 6160384,
+          "payloadBytes": 5867600,
+          "unusedBytes": 134650
+        },
+        {
+          "name": "cash_5_location_key",
+          "bytes": 4919296,
+          "payloadBytes": 4635698,
+          "unusedBytes": 6792
+        },
+        {
+          "name": "cash_6_parent",
+          "bytes": 4603904,
+          "payloadBytes": 3699921,
+          "unusedBytes": 18114
+        },
+        {
+          "name": "cash_1_customer_key",
+          "bytes": 4599808,
+          "payloadBytes": 4071344,
+          "unusedBytes": 22836
+        },
+        {
+          "name": "cash_0",
+          "bytes": 4530176,
+          "payloadBytes": 4257671,
+          "unusedBytes": 86410
+        },
+        {
+          "name": "cash_1_date",
+          "bytes": 3756032,
+          "payloadBytes": 3234684,
+          "unusedBytes": 18192
+        },
+        {
+          "name": "sqlite_autoindex_cash_5_1",
+          "bytes": 3629056,
+          "payloadBytes": 3323708,
+          "unusedBytes": 32322
+        },
+        {
+          "name": "cash_5_date",
+          "bytes": 2035712,
+          "payloadBytes": 1749320,
+          "unusedBytes": 18034
+        },
+        {
+          "name": "cash_4_location_key",
+          "bytes": 1085440,
+          "payloadBytes": 1014915,
+          "unusedBytes": 8918
+        },
+        {
+          "name": "sqlite_autoindex_cash_0_1",
+          "bytes": 1052672,
+          "payloadBytes": 958992,
+          "unusedBytes": 13380
+        },
+        {
+          "name": "sqlite_autoindex_cash_4_1",
+          "bytes": 806912,
+          "payloadBytes": 733267,
+          "unusedBytes": 12854
+        },
+        {
+          "name": "cash_0_location_key",
+          "bytes": 495616,
+          "payloadBytes": 404802,
+          "unusedBytes": 12146
+        },
+        {
+          "name": "cash_4_date",
+          "bytes": 438272,
+          "payloadBytes": 375822,
+          "unusedBytes": 2739
+        },
+        {
+          "name": "cash_0_date",
+          "bytes": 339968,
+          "payloadBytes": 254614,
+          "unusedBytes": 7142
+        },
+        {
+          "name": "cash_4_parent",
+          "bytes": 303104,
+          "payloadBytes": 238893,
+          "unusedBytes": 4896
+        },
+        {
+          "name": "sqlite_schema",
+          "bytes": 12288,
+          "payloadBytes": 5596,
+          "unusedBytes": 6406
+        },
+        {
+          "name": "snapshot_meta",
+          "bytes": 12288,
+          "payloadBytes": 5366,
+          "unusedBytes": 6842
+        },
+        {
+          "name": "sqlite_autoindex_snapshot_meta_1",
+          "bytes": 4096,
+          "payloadBytes": 169,
+          "unusedBytes": 3892
+        },
+        {
+          "name": "sqlite_autoindex_cash_3_1",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_cash_2_1",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_3_location_key",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_3_date",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_3_article_key",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_3",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_2_date",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        },
+        {
+          "name": "cash_2",
+          "bytes": 4096,
+          "payloadBytes": 0,
+          "unusedBytes": 4088
+        }
+      ],
+      "tableBytes": 362295296,
+      "otherPagesAndIndexesBytes": 119652352,
+      "verification": {
+        "rows": 587530,
+        "everyStoredValueReadAndCompared": true,
+        "authenticatedCiphertext": true,
+        "foreignKeys": true,
+        "integrity": true
+      },
+      "verifyMs": 45227,
+      "sourceSizeRatio": 1.4563514165831197,
+      "archiveBytes": 267699825,
+      "archiveMs": 6954,
+      "restoreVerification": {
+        "rows": 587530,
+        "everyStoredValueReadAndCompared": true,
+        "authenticatedCiphertext": true,
+        "foreignKeys": true,
+        "integrity": true
+      },
+      "restoreMs": 48785,
+      "durationMs": 352615
+    }
+  ],
+  "limits": {
+    "databaseMaxBytes": 2147483648,
+    "sampledDirectoryMaxBytes": 4294967296,
+    "reserveBytes": 10737418240,
+    "timeMs": 900000
+  },
+  "limitations": [
+    "Storage prototype, not a deployed historical statistics feature.",
+    "No productive account/location/class authorization or Trade master binding is supplied by this prototype.",
+    "No sales-rule/turnover reconciliation or daily completeness qualification is performed here.",
+    "No atomic live dataset selection, changed-upload replay, key-vault recovery or production backup integration is implemented.",
+    "Archive uses gzip of an already encrypted SQLite file; it is not a Restic/offsite retention measurement."
+  ],
+  "peakDirectoryBytes": 1231595121,
+  "peakRssBytes": 828485632,
+  "evidence": {
+    "sourceCountReportSha256": "eab382c25d03bfc487fcdfba6d11a8fa1919a207f33dc6cabef165fa5f98edf1",
+    "implementationFiles": [
+      {
+        "file": "scripts/measure-cash-history-snapshot.mjs",
+        "sha256": "5fb121a8ce88f0ea4444e921aa156ba7a156a76956d914bc005426dd2da2295e"
+      },
+      {
+        "file": "test-support/cash-history-snapshot-prototype.js",
+        "sha256": "b66b0e927273b4d8881bbce8e10c37f55e76d93d7745fac4e3a0fe82deccac73"
+      },
+      {
+        "file": "scripts/measure-tradefoto-history-window.mjs",
+        "sha256": "1dee04f84f02ef7ac1af0a812b4b71fa5cbdfb6dfb95a5deb0d536c36ecb7d16"
+      },
+      {
+        "file": "lib/data-import-protection.js",
+        "sha256": "56611fa76ab00f94a6947be43da1c1ba9851c58c65212d11fa6a069ec8212407"
+      },
+      {
+        "file": "lib/tradefoto-history-profiles.js",
+        "sha256": "285540d783adb6fce227dad9ee489f40385c86c5430bd1510278803f97a371e6"
+      },
+      {
+        "file": "lib/data-import-contract.js",
+        "sha256": "0f8ce4206922af06be2029827b1541600a89abbac9f8353bf7eaafaf6073b128"
+      }
+    ]
+  },
+  "encryptedExperimentFilesRemoved": true,
+  "ephemeralKeyDestroyed": true,
+  "sourceUnchanged": true,
+  "durationMs": 816498,
+  "status": "passed_isolated_storage_comparison"
+}

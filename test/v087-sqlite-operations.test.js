@@ -167,6 +167,19 @@ test("v0.87 Datenbank Block 3: alte App-Backupeinstellungen bleiben atomar", () 
       backupDirectory: "",
       backupIntervalHours: 3,
     }));
+    maintenance.updateLegacyBackupSettings({
+      externalBackupEnabled: true,
+      backupDirectory: "C:\\Sicherungen",
+      backupIntervalHours: 24,
+    });
+    const dailySettings = database.prepare("SELECT key, value FROM settings ORDER BY key").all();
+    assert.equal(dailySettings.find(row => row.key === "backup_interval_hours").value, "24");
+    assert.throws(() => maintenance.updateLegacyBackupSettings({
+      externalBackupEnabled: false,
+      backupDirectory: "C:\\Unveraendert",
+      backupIntervalHours: 25,
+    }));
+    assert.deepEqual(database.prepare("SELECT key, value FROM settings ORDER BY key").all(), dailySettings);
   } finally {
     database.close();
   }

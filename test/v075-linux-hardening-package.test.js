@@ -172,9 +172,13 @@ test("hardening stays separate from the current core runtime and binds its exact
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const result = JSON.parse(verification.stdout);
-  assert.equal(result.deploymentSchemaVersion, 4);
-  assert.equal(result.fingerprint, "9457dcb880f64709e071b6645acf0ff548ce4c1c00b321d5894f47d9258b876e");
-  assert.equal(result.offsiteModule.fingerprint, "a8f7ee3d03034ffbcfcc7e4b8eddb0308f32c49e0ce2bf1f7db185dd151eb1a3");
+  assert.equal(result.deploymentSchemaVersion, 5);
+  // The explicit large-backup timeout delta changes both managed app units.
+  // Production adoption still requires the separate runtime migration gate.
+  assert.equal(result.fingerprint, "e5e8edd4e7710263ce1b89a5a1214a18a2b7f8a6d37a9248dcccaeb5ca074ef9");
+  // Bounded staging hashes, the 1500-second ready check and serialized
+  // copy work change the pinned Offsite module; Hardening remains fixed.
+  assert.equal(result.offsiteModule.fingerprint, "6aaa26d35310754c15c5d9a85aafdad4ac73dc8939d3917b3617a48879a06394");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 

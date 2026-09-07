@@ -7,6 +7,7 @@ const path = require("node:path");
 const C = require("../lib/data-import-contract");
 const { createDataImportProtection } = require("../lib/data-import-protection");
 const { createDataImportEngine } = require("../lib/data-import-engine");
+const T = require('../lib/data-import-source-tolerance');
 const { inspectTradeFotoImportInventory } = require("../lib/tradefoto-import-preflight");
 const { createDataImportRepository } = require("../lib/persistence/repositories/data-import");
 const { definePersistenceStatement } = require("../lib/persistence/contract");
@@ -87,6 +88,66 @@ async function fixture(t, { databasePath = ":memory:", withWriter = true, profil
   const targets = () => application.database.prepare("SELECT id, number, revision, data FROM import_fixture ORDER BY number").all().map(row => ({ ...row, data: JSON.parse(row.data) }));
   return { ...application, engine, composition, profile, context, repository, protection, writer, start, ready, manifest, targets, close };
 }
+
+test('Q01: trusted exact snapshot tolerance preserves evidence, idempotence, restart, revocation and undo', async t => {
+  const f = await fixture(t), manifest = f.manifest(1, { declaredRows: 2 });
+  const input = { id: 'synthetic-count-approval', recordedAt: f.context.time, approvalReference: 'synthetic-user-approval', reason: 'Synthetic test, no source correction',
+    evidenceReference: 'synthetic-evidence', sourceSystem: f.profile.sourceSystem, sourceTable: f.profile.sourceTable, profileHash: f.profile.fingerprint,
+    sourceInstance: manifest.sourceInstance, schemaSha256: manifest.schemaSha256, fileSha256: manifest.fileSha256, declaredRows: 2, expectedRows: 1 };
+  const proof = T.defineDataImportSourceTolerance(input), config = { ...f.composition, sourceTolerances: [proof] };
+  assert.throws(() => createDataImportEngine({ ...config, sourceTolerances: [{ ...proof }] }), permissionError('IMPORT_TOLERANCE_UNTRUSTED'));
+  const engine = createDataImportEngine(config), request = { profileHash: f.profile.fingerprint, manifest };
+  await assert.rejects(engine.start({ ...request, manifest: { ...manifest, acceptedDeviations: [proof] } }), permissionError('IMPORT_SHAPE_INVALID'));
+  let run = await engine.start(request);
+  assert.equal(run.revision, 2); assert.deepEqual(run.gates, []); assert.deepEqual(run.originalGates, ['SOURCE_ROW_COUNT_MISMATCH']);
+  assert.deepEqual(run.acceptedDeviations, [proof]); assert.equal(run.declaredRows, 2); assert.equal(run.expectedRows, 1);
+  assert.deepEqual(await engine.start(request), run);
+  assert.equal((await engine.events(run.id)).filter(e => e.action === 'import.source-tolerance.accepted').length, 1);
+  const strict = await f.engine.start(request);
+  assert.notEqual(strict.id, run.id);
+  const resumedStrict = await engine.start({ ...request, existingRunId: strict.id });
+  assert.deepEqual(resumedStrict.gates, ['SOURCE_ROW_COUNT_MISMATCH']); assert.equal(resumedStrict.acceptedDeviations, undefined);
+  await assert.rejects(engine.start({ ...request, manifest: { ...manifest, expectedRows: 0 }, existingRunId: run.id }), permissionError('IMPORT_RUN_INTEGRITY'));
+  for (const change of [{ fileSha256: 'b'.repeat(64) }, { expectedRows: 0 }, { declaredRows: 3 }, { sourceInstance: 'other' }, { schemaSha256: 'c'.repeat(64) }]) {
+    const blocked = await engine.start({ ...request, manifest: { ...manifest, ...change } });
+    assert.ok(blocked.gates.includes('SOURCE_ROW_COUNT_MISMATCH')); assert.equal(blocked.acceptedDeviations, undefined);
+  }
+  const otherGate = await engine.start({ ...request, manifest: { ...manifest, gates: ['OTHER_DECISION_REQUIRED'] } });
+  assert.deepEqual(otherGate.gates, ['OTHER_DECISION_REQUIRED']);
+  run = await engine.stage(run.id, { expectedRevision: run.revision, startRow: 1, rows: [sourceRow()] });
+  run = await engine.seal(run.id, run.revision); run = await engine.review(run.id, run.revision);
+  assert.equal(run.canApply, true);
+  const revoked = await f.engine.preview(run.id);
+  assert.deepEqual(revoked.acceptedDeviations, [proof]); assert.equal(revoked.canApply, false); assert.ok(revoked.gates.includes('SOURCE_TOLERANCE_UNAVAILABLE'));
+  await assert.rejects(f.engine.apply(run.id, run.revision), permissionError('IMPORT_DECISION_GATE'));
+  const restarted = createDataImportEngine(config);
+  assert.equal((await restarted.start({ ...request, existingRunId: run.id })).id, run.id);
+  run = await restarted.apply(run.id, run.revision); assert.deepEqual(run.counts, { applied: 1 });
+  assert.equal(f.targets().length, 1);
+  run = await f.engine.undo(run.id, run.revision); assert.equal(f.targets().length, 0);
+  assert.deepEqual(run.acceptedDeviations, [proof]);
+  const stored = JSON.parse(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(run.id).manifest);
+  stored.acceptedDeviations[0].reason = 'Changed after approval';
+  f.database.prepare('UPDATE data_import_runs SET manifest=? WHERE id=?').run(JSON.stringify(stored), run.id);
+  await assert.rejects(engine.checkpoint(run.id), permissionError('IMPORT_RUN_INTEGRITY'));
+});
+
+test('Q01: approved TradeFoto registry matches only two exact profiles and exposes escaped evidence', () => {
+  const { TRADEFOTO_SOURCE_TOLERANCES: proofs } = require('../lib/tradefoto-source-tolerances');
+  const { definitions } = require('../lib/tradefoto-full-import-source');
+  const registry = T.sourceToleranceRegistry(proofs);
+  assert.equal(proofs.length, 2);
+  for (const proof of proofs) {
+    const p = definitions('trade').find(t => t.name === proof.sourceTable).profile;
+    const raw = C.normalizeDataImportManifest({ sourceInstance: proof.sourceInstance, fileSha256: proof.fileSha256, schemaSha256: proof.schemaSha256,
+      expectedRows: proof.expectedRows, declaredRows: proof.declaredRows, snapshotAt: proof.recordedAt, gates: [] }, p);
+    assert.deepEqual(T.acceptSourceTolerances(raw, p, registry).acceptedDeviations, [proof]);
+    assert.deepEqual(T.acceptSourceTolerances(raw, { ...p, fingerprint: 'd'.repeat(64) }, registry), raw);
+    const html = require('../public/data-import').renderSource({ kind: 'trade', tables: [{ name: proof.sourceTable, declaredRows: proof.declaredRows,
+      run: { counts: {}, acceptedDeviations: [{ ...proof, approvalReference: '<script>bad</script>' }] } }] });
+    assert.match(html, /Bestätigte Quellzähler-Abweichung/); assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html, /<script>/);
+  }
+});
 
 test("Block 2: contract preserves string IDs, exact decimals, civil dates, nulls and source-only values", () => {
   const profile = C.defineDataImportProfile(profileInput());
@@ -238,11 +299,14 @@ test("Block 2: undo blocks manual changes and referenced targets, including an a
   await assert.rejects(f.engine.undo(run.id, run.revision), permissionError("IMPORT_UNDO_MANUAL_CHANGE")); assert.equal(f.targets().length, 2);
 });
 
-test("Block 2: cancellation, explicit payload purge, expiry and audit retention", async t => {
+test("Import evidence: cancellation and expiry never authorize payload deletion", async t => {
   const f = await fixture(t); let run = await f.ready([sourceRow()]);
-  run = await f.engine.cancel(run.id, run.revision); run = await f.engine.purge(run.id, run.revision);
-  assert.equal(run.status, "purged"); assert.equal(f.database.prepare("SELECT payload FROM data_import_rows").get().payload, "");
-  assert.equal((await f.engine.events(run.id)).at(-1).action, "import.purge");
+  const original = f.database.prepare("SELECT payload FROM data_import_rows").get().payload;
+  run = await f.engine.cancel(run.id, run.revision);
+  await assert.rejects(f.engine.purge(run.id, run.revision), permissionError("IMPORT_PURGE_DISABLED"));
+  assert.equal((await f.engine.checkpoint(run.id)).status, "cancelled");
+  assert.equal(f.database.prepare("SELECT payload FROM data_import_rows").get().payload, original);
+  assert.equal((await f.engine.events(run.id)).at(-1).action, "import.cancel");
   await assert.rejects(f.engine.detail(run.id, 1), permissionError("IMPORT_STATE_CONFLICT"));
   let expired = await f.ready([sourceRow()], { fileSha256: "b".repeat(64) }); f.context.time = "2026-11-01T00:00:00.000Z";
   assert.equal((await f.engine.preview(expired.id)).canApply, false);
@@ -326,14 +390,16 @@ test("Block 2: metadata-only source refresh can be undone without rewriting the 
   first = await f.engine.undo(first.id, first.revision); assert.equal(f.targets().length, 0);
 });
 
-test("Block 2: expired applied payloads can be explicitly purged, with target/source binding and audit retained", async t => {
+test("Import evidence: applied rows and undo evidence survive expiry byte-identically", async t => {
   const f = await fixture(t); let run = await f.ready([sourceRow()]); run = await f.engine.apply(run.id, run.revision);
-  await assert.rejects(f.engine.purge(run.id, run.revision), permissionError("IMPORT_UNDO_RETENTION_ACTIVE"));
+  const before = Object.fromEntries(["data_import_rows", "data_import_changes", "data_import_links"].map(table => [table, f.database.prepare(`SELECT * FROM ${table}`).all()]));
+  const events = await f.engine.events(run.id);
+  await assert.rejects(f.engine.purge(run.id, run.revision), permissionError("IMPORT_PURGE_DISABLED"));
   f.context.time = "2026-11-01T00:00:00.000Z";
-  run = await f.engine.purge(run.id, run.revision); assert.equal(run.status, "purged"); assert.equal(f.targets().length, 1);
-  assert.equal(f.database.prepare("SELECT COUNT(*) AS n FROM data_import_links").get().n, 1);
-  assert.equal(f.database.prepare("SELECT payload FROM data_import_changes").get().payload, "");
-  assert.equal((await f.engine.events(run.id)).at(-1).action, "import.purge");
+  await assert.rejects(f.engine.purge(run.id, run.revision), permissionError("IMPORT_PURGE_DISABLED"));
+  assert.equal((await f.engine.checkpoint(run.id)).status, "applied"); assert.equal(f.targets().length, 1);
+  for (const [table, rows] of Object.entries(before)) assert.deepEqual(f.database.prepare(`SELECT * FROM ${table}`).all(), rows);
+  assert.deepEqual(await f.engine.events(run.id), events);
 });
 
 test("Block 2: retry rejects altered payload and an explicit new attempt can follow cancellation", async t => {
@@ -385,6 +451,15 @@ test("Block 2: preview capability follows current permissions and whole-profile 
   assert.deepEqual((await f.engine.list()).items, []);
 });
 
+test('Productive Block 1: dependency recheck never clears conflicting source keys or invalid fields',async t=>{
+  const f=await fixture(t);let run=await f.ready([sourceRow('1'),sourceRow('1',{Label:'different'}),sourceRow('2',{Amount:'invalid'})]);
+  assert.equal(run.status,'needs_review');assert.equal(run.counts.conflict,2);assert.equal(run.counts.invalid,1);
+  run=await f.engine.recheck(run.id,run.revision);run=await f.engine.review(run.id,run.revision);
+  assert.equal(run.status,'needs_review');assert.equal(run.counts.conflict,2);assert.equal(run.counts.invalid,1);
+  assert.ok((await f.engine.preview(run.id)).rows.filter(row=>row.state==='conflict').every(row=>row.issue==='SOURCE_KEY_CONFLICT'));
+  assert.equal(f.targets().length,0);
+});
+
 test("Block 2: stored source-manifest mutation cannot clear an import gate", async t => {
   const f = await fixture(t); const run = await f.ready([sourceRow()], { gates: ["SOURCE_REVIEW_REQUIRED"] });
   const stored = f.database.prepare("SELECT manifest FROM data_import_runs WHERE id=?").get(run.id);
@@ -392,6 +467,18 @@ test("Block 2: stored source-manifest mutation cannot clear an import gate", asy
   f.database.prepare("UPDATE data_import_runs SET manifest=?,status='ready' WHERE id=?").run(JSON.stringify(altered), run.id);
   await assert.rejects(f.engine.apply(run.id, run.revision), permissionError("IMPORT_RUN_INTEGRITY"));
   assert.equal(f.targets().length, 0);
+});
+
+test('Block 3 performance: pending apply uses an ordered partial index, independent of the completed prefix', async t => {
+  const f = await fixture(t);
+  const index = f.database.prepare("SELECT sql FROM sqlite_master WHERE name='idx_data_import_rows_pending_apply'").get();
+  assert.match(index.sql, /WHERE state IN \('create','update','refresh'\)/);
+  const statement = require('../lib/persistence/sqlite/data-import-catalog').SQLITE_DATA_IMPORT_CATALOG.find(e => e.statement.id === DATA_IMPORT_STATEMENTS.pendingApply.id);
+  for (const limit of [1, 200]) {
+    const plan = f.database.prepare('EXPLAIN QUERY PLAN ' + statement.sql).all({ runId: HASH, limit });
+    assert.ok(plan.some(p => /idx_data_import_rows_pending_apply/.test(p.detail)), JSON.stringify(plan));
+    assert.ok(plan.every(p => !/TEMP B-TREE|sqlite_autoindex_data_import_rows_1/.test(p.detail)));
+  }
 });
 
 test("Block 2: corrupt ready state cannot bypass an incomplete or invalid preview", async t => {

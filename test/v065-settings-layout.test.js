@@ -32,7 +32,8 @@ test("v0.65: Einstellungen sind fachlich in Urlaub, Zeiterfassung und Personal g
   assert.match(vacation, /id="workflowSettingsCard"/);
   assert.match(vacation, /id="delegationSettingsCard"/);
   assert.match(timeTracking, /id="breakRuleEnabled"/);
-  assert.match(timeTracking, /id="saturdayBonusEnabled"/);
+  assert.doesNotMatch(html, /id="saturdayBonus(?:Enabled|From|Factor)"/);
+  assert.doesNotMatch(app, /saturdayBonus(?:Enabled|From|Factor):/);
   assert.doesNotMatch(html, /vacationCountSaturday|Samstag als Urlaubstag|vacation_count_saturday/);
   assert.doesNotMatch(app, /vacationCountSaturday|vacation_count_saturday/);
   assert.match(timeTracking, /id="wifiSettingsCard"/);
@@ -53,7 +54,8 @@ test("Block 7: Leihe und Branding bleiben in den Grundeinstellungen, PDF wechsel
 
   for (const id of ["loanSettingsCard", "brandingSettings"]) {
     const tag = detailsTag(id);
-    assert.match(tag, /class="[^"]*\bsettings-accordion\b[^"]*\bfull-settings-card\b[^"]*"/);
+    assert.match(tag, /class="[^"]*\bsettings-accordion\b[^"]*"/);
+    assert.doesNotMatch(tag, /\bfull-settings-card\b/, "Grundeinstellungen verwenden kompakte Halbbreiten");
     assert.doesNotMatch(tag, /\sopen(?:\s|=|>)/);
     assert.ok(general.includes(tag), `${id} muss innerhalb der Grundeinstellungen liegen`);
   }

@@ -1,0 +1,1408 @@
+{
+  "format": "grabenplaner.tradefoto.history-window-analysis.v1",
+  "measuredAt": "2026-09-07T05:35:45.965Z",
+  "productionWrites": false,
+  "sourceWrites": false,
+  "importPerformed": false,
+  "runtimeFilterImplemented": false,
+  "window": {
+    "months": 24,
+    "asOfDay": "2026-09-04",
+    "fromInclusive": "2024-09-04",
+    "toExclusive": "2026-09-05",
+    "anchor": "explicit_supplied_business_snapshot_day",
+    "clockDrivenExpiry": false
+  },
+  "sources": [
+    {
+      "kind": "trade",
+      "fileName": "Trade_Daten.accdb",
+      "bytes": 188649472,
+      "sha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+      "tables": [
+        {
+          "name": "ADANREDE",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 320,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Bemerkungen",
+          "group": "catalog.notes",
+          "master": true,
+          "rows": 1544,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_BILDER",
+          "group": "catalog.media",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_BILDER_V2",
+          "group": "catalog.media",
+          "master": true,
+          "rows": 29895,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Eigenschaften",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_GKundenPreisgruppe",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 63,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_KundenPreisgruppe",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 168,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_Kundenrabatt",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Preisgruppe",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_Provisionen",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 10,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_Set",
+          "group": "catalog.bundles_accessories",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Sortiment_Kunden_Rabattgruppen",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 32,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_Sortimente",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 231,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Sortimentsart",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 18,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_Sparten",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 18,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Stamm_StaffelPreise",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 301,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_Warengruppen",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 93,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_WKZ",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 89,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_Zubehör",
+          "group": "catalog.bundles_accessories",
+          "master": true,
+          "rows": 1947,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Zusatz",
+          "group": "catalog.bundles_accessories",
+          "master": true,
+          "rows": 38,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_ZWEITEAN",
+          "group": "catalog.identifiers",
+          "master": true,
+          "rows": 37817,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_ZWEITLIEFERANT",
+          "group": "suppliers.conditions",
+          "master": true,
+          "rows": 3938,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Batterien",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Bundle",
+          "group": "catalog.bundles_accessories",
+          "master": true,
+          "rows": 500,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Bundle_Artikel",
+          "group": "catalog.bundles_accessories",
+          "master": true,
+          "rows": 999,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Colorbild_Größe",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 9,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Eigenschaften",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Einheit",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 33,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ENTWICKLUNGSLABOR",
+          "group": "suppliers.master",
+          "master": true,
+          "rows": 2,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "FILIALEN",
+          "group": "organization.source_locations",
+          "master": true,
+          "rows": 13,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Filialen_Anlage",
+          "group": "organization.source_locations",
+          "master": true,
+          "rows": 13,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Filialen_Internet",
+          "group": "organization.source_locations",
+          "master": true,
+          "rows": 1,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "FOWIS_Lieferanten",
+          "group": "suppliers.master",
+          "master": true,
+          "rows": 81,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Gerätetyp",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 98,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "KUNDEN",
+          "group": "crm.customers",
+          "master": true,
+          "rows": 30504,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kunden_Bemerkungen",
+          "group": "crm.customer_notes",
+          "master": true,
+          "rows": 251,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kunden_Dokumente",
+          "group": "crm.customer_documents",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kunden_GPreisgruppen",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 4,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kunden_Kurznamen",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 55,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kunden_Lieferadresse",
+          "group": "crm.customer_addresses",
+          "master": true,
+          "rows": 7,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kunden_Preisgruppen",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 33,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kunden_WGR_Rabatt",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kunden_Zahlart",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 43,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kundengruppen",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 5,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "KundenKonten",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 29,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kundenrabattgruppen",
+          "group": "crm.customer_conditions",
+          "master": true,
+          "rows": 14,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Lagerplatz",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 3,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "LIEFERANTEN",
+          "group": "suppliers.master",
+          "master": true,
+          "rows": 910,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "LIEFERANTEN_Adressen",
+          "group": "suppliers.contacts",
+          "master": true,
+          "rows": 967,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Lieferanten_Bemerkungen",
+          "group": "suppliers.contacts",
+          "master": true,
+          "rows": 10,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Lieferanten_Filialen",
+          "group": "suppliers.conditions",
+          "master": true,
+          "rows": 896,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Marken",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 613,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "MITARBEITER",
+          "group": "organization.source_employees",
+          "master": true,
+          "rows": 354,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Pfahler_Verknüpfungstabelle",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 170,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Pfahler_Warengruppen",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 25,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Preis_Kennung",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 1,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Sortiment_Rabattgruppen",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 7,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "SORTIMENTSZUORDNUNG",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Verband",
+          "group": "suppliers.master",
+          "master": true,
+          "rows": 1,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Vertreter",
+          "group": "suppliers.master",
+          "master": true,
+          "rows": 1,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_PreisSpannen",
+          "group": "catalog.pricing",
+          "master": true,
+          "rows": 1,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_STAMM",
+          "group": "catalog.articles",
+          "master": true,
+          "rows": 19186,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Colorbild_Art",
+          "group": "catalog.taxonomy",
+          "master": true,
+          "rows": 9,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Hauptartikel",
+          "group": "catalog.bundles_accessories",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "KUNDEN_RLAdressen",
+          "group": "crm.customer_addresses",
+          "master": true,
+          "rows": 0,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "LIEFERANTEN_Konditionen",
+          "group": "suppliers.conditions",
+          "master": true,
+          "rows": 1363,
+          "handling": "retain_master_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_FILIALEN",
+          "group": "inventory.branch_snapshot",
+          "master": false,
+          "rows": 231351,
+          "handling": "retain_current_inventory_snapshot",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Ibestand",
+          "group": "inventory.branch_snapshot",
+          "master": false,
+          "rows": 12,
+          "handling": "retain_current_inventory_snapshot",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ARTIKEL_PlattForm",
+          "group": "commerce.channel_mapping",
+          "master": false,
+          "rows": 1729,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Artikel_Sellout",
+          "group": "inventory.legacy_aggregates",
+          "master": false,
+          "rows": 227,
+          "handling": "retain_pending_interval_semantics_review",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Default_Bank",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 1,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "EinAusZahlung",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 25,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Euro",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 1,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Export_Reparatur",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 173,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Anlegedatum",
+            "KVDatum",
+            "ReklamationDatum",
+            "RepAuftragDatum",
+            "AbzuholenDatum",
+            "AbgeholtDatum",
+            "Bezahlt_Datum",
+            "AbholNachrichtDatum"
+          ],
+          "dateCounts": {
+            "within": 0,
+            "older": 173,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 173,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Fibu_Konten",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 121,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "FiL_Umsatz",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 0,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "LDatum"
+          ],
+          "dateCounts": {
+            "within": 0,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Kostentraegercodes",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 8,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Lagerumschlag",
+          "group": "inventory.legacy_aggregates",
+          "master": false,
+          "rows": 32,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Enddatum"
+          ],
+          "dateCounts": {
+            "within": 0,
+            "older": 32,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 32,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "LAMP_Anbieter",
+          "group": "commerce.channel_mapping",
+          "master": false,
+          "rows": 1,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "LAMP_AnbieterD",
+          "group": "commerce.channel_mapping",
+          "master": false,
+          "rows": 1,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "LAMP_GeizArtikel",
+          "group": "commerce.channel_mapping",
+          "master": false,
+          "rows": 3284,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "LAMP_GeizArtikelD",
+          "group": "commerce.channel_mapping",
+          "master": false,
+          "rows": 2705,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "MWST_Sätze",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 5,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "MWST_Sätze_Fil",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 3,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "MWST_Sätze_Land",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 28,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Re_Freigabe",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 1,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Rechnung_Export",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 83,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Anlegedatum"
+          ],
+          "dateCounts": {
+            "within": 83,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Rechnungsdetails_Export",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 0,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Lieferscheindatum"
+          ],
+          "dateCounts": {
+            "within": 0,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "REPARATUR_WERKSTATT",
+          "group": "repairs.reference_data",
+          "master": false,
+          "rows": 74,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Reparatur_WerkstattArtikel",
+          "group": "repairs.reference_data",
+          "master": false,
+          "rows": 120,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ReparaturKalkulation",
+          "group": "repairs.reference_data",
+          "master": false,
+          "rows": 4,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Shopware_Artikel",
+          "group": "commerce.channel_mapping",
+          "master": false,
+          "rows": 10587,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "tblProtBestand",
+          "group": "inventory.history",
+          "master": false,
+          "rows": 406,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Aenderung"
+          ],
+          "dateCounts": {
+            "within": 406,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "tblProtBestand_comp",
+          "group": "inventory.history",
+          "master": false,
+          "rows": 10159,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Aenderung"
+          ],
+          "dateCounts": {
+            "within": 10159,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "tblProtPreis",
+          "group": "inventory.history",
+          "master": false,
+          "rows": 94,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Aenderung"
+          ],
+          "dateCounts": {
+            "within": 94,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Transfer_Alte_Umsatz_Kasse",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 0,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Bondatum"
+          ],
+          "dateCounts": {
+            "within": 0,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Transfer_Alte_Umsatz_Kasse_Details",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 0,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Bondatum"
+          ],
+          "dateCounts": {
+            "within": 0,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Verkauf_Artikel",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 0,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "vkdatum"
+          ],
+          "dateCounts": {
+            "within": 0,
+            "older": 0,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Vertraege",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 0,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Vertraege_Artikel",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 0,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "WE_Kontrolle",
+          "group": "inventory.history",
+          "master": false,
+          "rows": 165,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "WEDatum"
+          ],
+          "dateCounts": {
+            "within": 0,
+            "older": 165,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 165,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Zahlungsarten",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 30,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        }
+      ],
+      "rows": 395163,
+      "removableOlderRows": 370,
+      "retainedOrReviewRows": 394793,
+      "rowReductionPercent": 0.0936322479584374,
+      "snapshotRowsRetained": 231363,
+      "masterRowsRetained": 133733,
+      "sourceUnchanged": true,
+      "durationMs": 2073
+    },
+    {
+      "kind": "cash",
+      "fileName": "Kassen_Umsätze.accdb",
+      "bytes": 330928128,
+      "sha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+      "tables": [
+        {
+          "name": "KassenJournal",
+          "group": "finance.cash_journal",
+          "master": false,
+          "rows": 39865,
+          "handling": "complete_journal_groups_with_uncertain_groups_retained_for_review",
+          "dateFields": [
+            "Datum"
+          ],
+          "dateCounts": {
+            "within": 3543,
+            "older": 14125,
+            "unknown": 22193,
+            "future": 4
+          },
+          "removableOlderRows": 14125,
+          "reviewDateRows": 22197
+        },
+        {
+          "name": "Umsatz_KASSE",
+          "group": "sales.receipts",
+          "master": false,
+          "rows": 219920,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Bondatum"
+          ],
+          "dateCounts": {
+            "within": 164052,
+            "older": 55868,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 55868,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "EigeneKonten",
+          "group": "finance.reference_data",
+          "master": false,
+          "rows": 0,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "ExportRichtTabelle",
+          "group": "legacy.documents_exports",
+          "master": false,
+          "rows": 0,
+          "handling": "retain_reference_or_undated_data",
+          "dateFields": [],
+          "dateCounts": null,
+          "removableOlderRows": 0,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "KassenJournal_Details",
+          "group": "finance.cash_journal",
+          "master": false,
+          "rows": 89584,
+          "handling": "complete_journal_groups_with_uncertain_groups_retained_for_review",
+          "dateFields": [
+            "Datum"
+          ],
+          "dateCounts": {
+            "within": 19132,
+            "older": 70452,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 70107,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Tagesbericht",
+          "group": "sales.daily_report",
+          "master": false,
+          "rows": 346921,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Bondatum"
+          ],
+          "dateCounts": {
+            "within": 87466,
+            "older": 259455,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 259455,
+          "reviewDateRows": 0
+        },
+        {
+          "name": "Umsatz_Kasse_Details",
+          "group": "sales.lines",
+          "master": false,
+          "rows": 385877,
+          "handling": "business_activity_date_candidate",
+          "dateFields": [
+            "Bondatum"
+          ],
+          "dateCounts": {
+            "within": 290795,
+            "older": 95082,
+            "unknown": 0,
+            "future": 0
+          },
+          "removableOlderRows": 95082,
+          "reviewDateRows": 0
+        }
+      ],
+      "relations": {
+        "receiptLines": 385877,
+        "receiptOrphans": 0,
+        "selectedReceiptOrphans": 0,
+        "journalOrphans": 0,
+        "journalGroups": {
+          "within": 3546,
+          "older": 14125,
+          "review": 22194,
+          "olderSupportingHeads": 0,
+          "olderSupportingLines": 0
+        }
+      },
+      "rows": 1082167,
+      "removableOlderRows": 494637,
+      "retainedOrReviewRows": 587530,
+      "rowReductionPercent": 45.70800994670878,
+      "snapshotRowsRetained": 0,
+      "masterRowsRetained": 0,
+      "sourceUnchanged": true,
+      "durationMs": 3451
+    }
+  ],
+  "totals": {
+    "rows": 1477330,
+    "removableOlderRows": 495007,
+    "retainedOrReviewRows": 982323,
+    "rowReductionPercent": 33.50686711838249
+  },
+  "databaseBytes": null,
+  "archiveBytes": null,
+  "capacityApproved": false,
+  "limitations": [
+    "Source row reduction is not a measured storage reduction.",
+    "Master data, inventory snapshots, references and uncertain date/group semantics are conservatively retained.",
+    "Older supporting records must not be counted as turnover inside the selected period.",
+    "Source completeness and selected import coverage require separate manifests before runtime filtering."
+  ],
+  "evidence": {
+    "baselineReportSha256": "97bf362b5e2659a6e3c4ec97cad9eb567789a8075ce79580d6bddcee5242a366",
+    "scriptSha256": "1dee04f84f02ef7ac1af0a812b4b71fa5cbdfb6dfb95a5deb0d536c36ecb7d16"
+  },
+  "durationMs": 5535
+}

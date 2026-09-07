@@ -9,17 +9,21 @@ source "$SCRIPT_DIR/lib/offsite-common.sh"
 
 backup_result=""
 lock_already_held=0
+repository_lock_already_held=0
 while (($#)); do
   case "$1" in
     --backup-result) backup_result="${2:?Wert fuer --backup-result fehlt}"; shift 2 ;;
     --lock-already-held) lock_already_held=1; shift ;;
+    --repository-lock-already-held) repository_lock_already_held=1; shift ;;
     -h|--help)
-      printf '%s\n' "Verwendung: sudo grabenplaner-offsite-prepare [--backup-result PFAD --lock-already-held]"
+      printf '%s\n' "Verwendung: sudo grabenplaner-offsite-prepare [--backup-result PFAD --lock-already-held [--repository-lock-already-held]]"
       exit 0
       ;;
     *) offsite_die "Unbekannte Option: $1" ;;
   esac
 done
+(( repository_lock_already_held == 0 || lock_already_held == 1 )) \
+  || offsite_die "Die Repository-Sperre darf nur zusammen mit der uebernommenen Wartungssperre verwendet werden."
 
 offsite_require_root
 for command_name in awk basename cp curl find flock getent grep install mktemp mv readlink realpath rm runuser sha256sum stat systemctl; do offsite_require_command "$command_name"; done
@@ -35,6 +39,18 @@ env_example="$OFFSITE_APP_ROOT/server-tools/linux/grabenplaner.env.example"
 for required in "$core_common" "$backup_script" "$backup_verifier" "$amu_module" "$OFFSITE_APP_ENV" "$env_example"; do
   [[ -f "$required" && ! -L "$required" ]] || offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."
 done
+
+# Lock before inspecting or creating staging. A second preparation must see
+# the first one's committed point; upload must not remove it during this read.
+source "$core_common"
+readonly OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS=300
+(( lock_already_held == 1 )) \
+  || offsite_acquire_maintenance_lock_with_wait "$OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS"
+if (( repository_lock_already_held == 1 )); then
+  offsite_assert_inherited_repository_lock
+else
+  offsite_acquire_repository_lock
+fi
 
 if [[ -d "$OFFSITE_STAGE_CURRENT" && ! -L "$OFFSITE_STAGE_CURRENT" ]]; then
   if "$OFFSITE_NODE" "$OFFSITE_STAGE_HELPER" verify "$OFFSITE_STAGE_CURRENT" >/dev/null 2>&1; then
@@ -52,12 +68,6 @@ elif [[ -e "$OFFSITE_STAGE_CURRENT" || -L "$OFFSITE_STAGE_CURRENT" ]]; then
   offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."
 fi
 
-# Die Core-Helfer sind Bestandteil des bereits verifizierten installierten Pakets.
-# shellcheck source=server-tools/linux/lib/common.sh
-source "$core_common"
-readonly OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS=300
-(( lock_already_held == 1 )) \
-  || offsite_acquire_maintenance_lock_with_wait "$OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS"
 app_port="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" <<'NODE'
 const fs = require("node:fs");
 const matches = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter((line) => /^PORT=/.test(line));
@@ -74,28 +84,37 @@ status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
   && "$(stat --format='%u:%g:%a' -- "$OFFSITE_STATE_ROOT")" == "0:$status_gid:750" ]] \
   || offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Statuspfad ist unsicher."
 install -d -m 0750 -o root -g "$OFFSITE_GROUP" -- "$OFFSITE_STAGE_ROOT"
+"$OFFSITE_NODE" "$OFFSITE_STAGE_HELPER" assert-empty-root "$OFFSITE_STAGE_ROOT" >/dev/null \
+  || offsite_fixed_failure PREPARE_FAILED "Ein verbliebener Offsite-Arbeitsstand muss vor einer neuen Vorbereitung geprueft werden."
 temporary_stage="$(mktemp --directory --tmpdir="$OFFSITE_STAGE_ROOT" .prepare.XXXXXXXX)"
 result_owned=0
 service_was_active=0
 stage_committed=0
+workspace_held=0
 
 cleanup() {
   local cleanup_status=$?
+  # Remove an incomplete copy while its workspace lease is still held.
+  if (( stage_committed == 0 )) && [[ -d "$temporary_stage" && ! -L "$temporary_stage" ]]; then
+    if ! rm -rf --one-file-system -- "$temporary_stage"; then
+      offsite_warn "Der unvollstaendige Offsite-Arbeitsstand konnte nicht entfernt werden."
+      cleanup_status=1
+    fi
+  fi
+  # Startup/shutdown backups must never wait for a lease held by their parent.
+  if (( workspace_held == 1 )); then gp_release_backup_workspace_lock; workspace_held=0; fi
   if (( service_was_active == 1 )); then
     if ! gp_start_service "$OFFSITE_APP_SERVICE" >/dev/null 2>&1; then
       offsite_warn "Der App-Dienst konnte nach dem lokalen Staging nicht neu gestartet werden."
       offsite_status failure --code PREPARE_FAILED --summary "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden." >/dev/null 2>&1 || true
       cleanup_status=1
-    elif ! gp_wait_ready "$internal_ready_url" 120; then
+    elif ! gp_wait_ready "$internal_ready_url" 1500; then
       offsite_warn "Der App-Dienst wurde nach dem lokalen Staging nicht rechtzeitig bereit."
       offsite_status failure --code PREPARE_FAILED --summary "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden." >/dev/null 2>&1 || true
       cleanup_status=1
     fi
   fi
   if (( result_owned == 1 )) && [[ -f "$backup_result" && ! -L "$backup_result" ]]; then rm -f -- "$backup_result"; fi
-  if (( stage_committed == 0 )) && [[ -d "$temporary_stage" && ! -L "$temporary_stage" ]]; then
-    rm -rf --one-file-system -- "$temporary_stage"
-  fi
   exit "$cleanup_status"
 }
 trap cleanup EXIT
@@ -157,6 +176,18 @@ if find "$backup_documents" -xdev \( -type l -o -type f -links +1 \) -print -qui
 fi
 "$OFFSITE_NODE" "$backup_verifier" "$backup_database" "$backup_documents" "$amu_module" "$backup_marker" >/dev/null 2>&1 \
   || offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."
+
+workspace_database="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" "$OFFSITE_DATA_ROOT/data/dienstplan.db" <<'NODE'
+const fs = require("node:fs");
+const rows = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter(line => /^DB_PATH=/.test(line));
+if (rows.length > 1) process.exit(1);
+const value = rows.length ? rows[0].slice(8) : process.argv[3];
+if (!value.startsWith("/") || /[\x00-\x1f\x7f]/.test(value)) process.exit(1);
+process.stdout.write(value);
+NODE
+)" || offsite_fixed_failure PREPARE_FAILED "Der gemeinsame Backup-Arbeitsbereich ist ungueltig."
+gp_acquire_backup_workspace_lock "$workspace_database" "$OFFSITE_NODE" "$OFFSITE_APP_ROOT/lib/backup-workspace.js"
+workspace_held=1
 
 install -d -m 0700 -o root -g root -- "$temporary_stage/backup" "$temporary_stage/recovery"
 cp --reflink=never --preserve=mode,timestamps -- "$backup_database" "$backup_marker" "$temporary_stage/backup/"

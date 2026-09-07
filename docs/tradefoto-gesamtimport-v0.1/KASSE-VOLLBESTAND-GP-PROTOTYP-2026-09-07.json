@@ -1,0 +1,548 @@
+{
+  "format": "grabenplaner.cash.full-managed-prototype.v1",
+  "measuredAt": "2026-09-07T06:43:53.049Z",
+  "scope": "full",
+  "source": {
+    "bytes": 330928128,
+    "sha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+    "fileName": "Kassen_Umsätze.accdb",
+    "rows": 1082167
+  },
+  "productionWrites": false,
+  "sourceWrites": false,
+  "tradeReadOrChanged": false,
+  "runtimeIntegration": "normal-managed-upload-and-review",
+  "businessActivation": false,
+  "allSourceFields": 97,
+  "minimumFreeBytes": 133613494272,
+  "sampledPeakWorkspaceBytes": 2084586767,
+  "sampledPeakMainRssBytes": 1045516288,
+  "footprintScope": "isolated directory including database, WAL, paired backups, local archive and restores; sampled, excludes native temp files outside this directory and worker RSS",
+  "evidence": {
+    "baselineCountReportSha256": "eab382c25d03bfc487fcdfba6d11a8fa1919a207f33dc6cabef165fa5f98edf1",
+    "implementation": [
+      {
+        "file": "scripts/verify-compact-cash-full.mjs",
+        "sha256": "c97abd4ee9d7d444af9af79306babbd73af0143fd610ccd825a165b33d4da99d"
+      },
+      {
+        "file": "lib/persistence/repositories/cash-snapshots.js",
+        "sha256": "cc056e3ced672b270805c4ec34136ca6a793624015dcf29a07b17ceeab5010dc"
+      },
+      {
+        "file": "lib/persistence/repositories/data-import-runtime.js",
+        "sha256": "18f21f9ffabd5d9111fdef8bd5cbe7069581154da135a404dc6122025bbd378a"
+      },
+      {
+        "file": "lib/persistence/sqlite/cash-snapshots-catalog.js",
+        "sha256": "dd70be0920aad40a8a23a61d55fa14c88331ac19f0ae28f7eb3b4de7fd0849b9"
+      },
+      {
+        "file": "lib/persistence/sqlite/operations/cash-snapshots-schema.js",
+        "sha256": "bceb1459344fc57a28846329b3fea7442f8e422ddca6fda79dd92b712366e7f3"
+      },
+      {
+        "file": "lib/persistence/statements/cash-snapshots.js",
+        "sha256": "fbc29282d4c59d7c683e0db671bb81fb7e3f4eb2d2e6c6158d90feeeafd9ab48"
+      },
+      {
+        "file": "lib/data-import-managed-protection.js",
+        "sha256": "aec15bf4135788b3d774a3df3b016a1fe894ad143b7101d3defa08c6e614be7a"
+      },
+      {
+        "file": "lib/data-import-protection.js",
+        "sha256": "56611fa76ab00f94a6947be43da1c1ba9851c58c65212d11fa6a069ec8212407"
+      },
+      {
+        "file": "lib/local-backup-archive.js",
+        "sha256": "21d1b7c3dcd4be479194cd732f14590085499746fe8c5f246b2563be6e31ae74"
+      },
+      {
+        "file": "lib/backup-recovery-keys.js",
+        "sha256": "da21c842f0b1c42673cd9e1577710d457ea9119921c1870d79ce89bda3f01497"
+      }
+    ]
+  },
+  "limitations": [
+    "Isolated local prototype; no VPS deployment or live import.",
+    "Business mapping, sales rules, location/class views and dataset activation are not enabled.",
+    "Local Restic archive is measured; no claim about Drive quota, existing backup retention, or total VPS capacity with Trade."
+  ],
+  "uploadMs": 577694,
+  "reviewMs": 170753,
+  "tables": [
+    {
+      "name": "KassenJournal",
+      "rows": 39865,
+      "verifiedRows": 39865
+    },
+    {
+      "name": "Umsatz_KASSE",
+      "rows": 219920,
+      "verifiedRows": 219920
+    },
+    {
+      "name": "EigeneKonten",
+      "rows": 0,
+      "verifiedRows": 0
+    },
+    {
+      "name": "ExportRichtTabelle",
+      "rows": 0,
+      "verifiedRows": 0
+    },
+    {
+      "name": "KassenJournal_Details",
+      "rows": 89584,
+      "verifiedRows": 89584
+    },
+    {
+      "name": "Tagesbericht",
+      "rows": 346921,
+      "verifiedRows": 346921
+    },
+    {
+      "name": "Umsatz_Kasse_Details",
+      "rows": 385877,
+      "verifiedRows": 385877
+    }
+  ],
+  "genericCashCopies": 0,
+  "compactMs": 18654,
+  "databaseBytes": 816533504,
+  "footprint": [
+    {
+      "name": "cash_snapshot_6",
+      "bytes": 316096512
+    },
+    {
+      "name": "cash_snapshot_5",
+      "bytes": 203014144
+    },
+    {
+      "name": "cash_snapshot_1",
+      "bytes": 76775424
+    },
+    {
+      "name": "cash_snapshot_4",
+      "bytes": 26947584
+    },
+    {
+      "name": "cash_snapshot_6_article_key",
+      "bytes": 20541440
+    },
+    {
+      "name": "cash_snapshot_6_location_key",
+      "bytes": 20520960
+    },
+    {
+      "name": "cash_snapshot_6_seller_key",
+      "bytes": 18878464
+    },
+    {
+      "name": "cash_snapshot_5_location_key",
+      "bytes": 18468864
+    },
+    {
+      "name": "sqlite_autoindex_cash_snapshot_6_2",
+      "bytes": 16318464
+    },
+    {
+      "name": "sqlite_autoindex_cash_snapshot_5_2",
+      "bytes": 14671872
+    },
+    {
+      "name": "cash_snapshot_1_location_key",
+      "bytes": 11689984
+    },
+    {
+      "name": "cash_snapshot_1_seller_key",
+      "bytes": 11530240
+    },
+    {
+      "name": "sqlite_autoindex_cash_snapshot_1_2",
+      "bytes": 9302016
+    },
+    {
+      "name": "cash_snapshot_6_date",
+      "bytes": 7729152
+    },
+    {
+      "name": "cash_snapshot_0",
+      "bytes": 7229440
+    },
+    {
+      "name": "cash_snapshot_5_date",
+      "bytes": 6946816
+    },
+    {
+      "name": "cash_snapshot_1_customer_key",
+      "bytes": 5500928
+    },
+    {
+      "name": "cash_snapshot_6_parent",
+      "bytes": 4902912
+    },
+    {
+      "name": "cash_snapshot_4_location_key",
+      "bytes": 4726784
+    },
+    {
+      "name": "cash_snapshot_1_date",
+      "bytes": 4399104
+    },
+    {
+      "name": "sqlite_autoindex_cash_snapshot_4_2",
+      "bytes": 3760128
+    },
+    {
+      "name": "cash_snapshot_4_date",
+      "bytes": 1777664
+    },
+    {
+      "name": "sqlite_autoindex_cash_snapshot_0_2",
+      "bytes": 1658880
+    },
+    {
+      "name": "cash_snapshot_0_location_key",
+      "bytes": 1175552
+    },
+    {
+      "name": "cash_snapshot_4_parent",
+      "bytes": 1077248
+    },
+    {
+      "name": "cash_snapshot_0_date",
+      "bytes": 548864
+    },
+    {
+      "name": "sqlite_schema",
+      "bytes": 32768
+    },
+    {
+      "name": "sqlite_autoindex_import_master_segments_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_master_relations_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_master_records_2",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_master_records_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_master_holds_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_master_events_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_master_bindings_2",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_master_bindings_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_history_versions_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_history_segments_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_history_references_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_history_records_2",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_history_records_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_history_holds_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_import_history_epochs_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_sources_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_runtime_keys_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_runs_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_run_state_counts_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_rows_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_row_payload_refs_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_payload_blocks_2",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_payload_blocks_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_links_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_events_2",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_events_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_changes_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_data_import_change_payload_refs_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_cash_snapshot_datasets_1",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_cash_snapshot_3_2",
+      "bytes": 4096
+    },
+    {
+      "name": "sqlite_autoindex_cash_snapshot_2_2",
+      "bytes": 4096
+    },
+    {
+      "name": "import_master_segments",
+      "bytes": 4096
+    },
+    {
+      "name": "import_master_relations",
+      "bytes": 4096
+    },
+    {
+      "name": "import_master_records",
+      "bytes": 4096
+    },
+    {
+      "name": "import_master_holds",
+      "bytes": 4096
+    },
+    {
+      "name": "import_master_events",
+      "bytes": 4096
+    },
+    {
+      "name": "import_master_bindings",
+      "bytes": 4096
+    },
+    {
+      "name": "import_history_versions",
+      "bytes": 4096
+    },
+    {
+      "name": "import_history_segments",
+      "bytes": 4096
+    },
+    {
+      "name": "import_history_references",
+      "bytes": 4096
+    },
+    {
+      "name": "import_history_records",
+      "bytes": 4096
+    },
+    {
+      "name": "import_history_holds",
+      "bytes": 4096
+    },
+    {
+      "name": "import_history_epochs",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_import_master_scope",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_import_master_parent",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_import_master_events",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_import_history_snapshot",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_import_history_scope",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_import_history_reference",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_import_history_parent",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_import_history_date",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_data_import_sources_owner",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_data_import_runs_owner",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_data_import_rows_state",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_data_import_rows_pending_apply",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_data_import_rows_identity",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_data_import_links_target",
+      "bytes": 4096
+    },
+    {
+      "name": "idx_data_import_changes_undo",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_sources",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_runtime_keys",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_runs",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_run_state_counts",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_rows",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_row_payload_refs",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_payload_blocks",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_links",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_events",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_changes",
+      "bytes": 4096
+    },
+    {
+      "name": "data_import_change_payload_refs",
+      "bytes": 4096
+    },
+    {
+      "name": "cash_snapshot_datasets",
+      "bytes": 4096
+    },
+    {
+      "name": "cash_snapshot_3_location_key",
+      "bytes": 4096
+    },
+    {
+      "name": "cash_snapshot_3_date",
+      "bytes": 4096
+    },
+    {
+      "name": "cash_snapshot_3_article_key",
+      "bytes": 4096
+    },
+    {
+      "name": "cash_snapshot_3",
+      "bytes": 4096
+    },
+    {
+      "name": "cash_snapshot_2_date",
+      "bytes": 4096
+    },
+    {
+      "name": "cash_snapshot_2",
+      "bytes": 4096
+    }
+  ],
+  "sourceSizeRatio": 2.4674043543376283,
+  "archiveAndAutomaticRestoreMs": 23174,
+  "archiveBytes": 449205660,
+  "restore": {
+    "everyValueVerified": true,
+    "rows": 1082167,
+    "fileSha256Equal": true,
+    "managedKeyReopened": true,
+    "pairedDocumentsVerified": true,
+    "durationMs": 199432
+  },
+  "unchangedBackup": {
+    "addedArchiveBytes": 52534,
+    "durationMs": 18711,
+    "automaticCoupledRestorePassed": true
+  },
+  "status": "passed_full_cash_managed_prototype",
+  "durationMs": 1014333,
+  "sourceUnchanged": true,
+  "isolatedDataAndArchiveRemoved": true,
+  "testKeysPersisted": false
+}

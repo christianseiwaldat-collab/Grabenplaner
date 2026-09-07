@@ -68,6 +68,25 @@ test('Block 5: routes never expose source values, keys or SQL errors in failure 
   const result = await f.request('/api/sales-history/search', { method: 'POST' }); assert.equal(result.status, 500);
   assert.doesNotMatch(await result.text(), /secret|SELECT|protected/);
 });
+
+test('Productive Block 2: analysis continuation has the same CSRF, CRM and personal rights as search', async t => {
+  const f = await apiFixture(t); f.state.workspace = { async analyze(input, options) { f.state.calls++; return { customerId: options?.customerId || null, complete: true }; } };
+  const post = (url, csrf = true) => f.request(url, { method: 'POST', csrf, body: { query: { sourceId: 'cash' }, cursor: 'opaque' } });
+  assert.equal((await post('/api/sales-history/analyze', false)).status, 403);
+  assert.equal((await post('/api/sales-history/analyze')).status, 200);
+  const purchase = '/api/crm/customers/synthetic-customer/purchases/analyze';
+  assert.equal((await post(purchase)).status, 403);
+  f.state.session.permissions.push(H.CUSTOMER_PURCHASES, C.ACCESS, C.CUSTOMERS_READ);
+  assert.equal((await (await post(purchase)).json()).customerId, 'synthetic-customer');
+  f.state.exists = false; assert.equal((await post(purchase)).status, 404);
+  f.state.session.mustChangePassword = true; assert.equal((await post('/api/sales-history/analyze')).status, 403);
+});
+
+test('Productive Block 2: UI exposes processing progress, pause/resume and no partial amount', () => {
+  const result = { totals: null, coverage: { label: 'Synthetic', complete: false, counts: { records: 200, checked: 200, review: 0 }, unresolved: {}, issues: [] }, days: [] };
+  const markup = UI.renderSummary(result); assert.match(markup, /200 Datensätze verarbeitet/); assert.match(markup, /Keine freigegebene Umsatzsumme/);
+  const source = fs.readFileSync(path.join(__dirname,'../public/sales-history.js'),'utf8');assert.match(source,/Nach diesem Schritt pausieren/);assert.match(source,/Zeitraumsauswertung fortsetzen/);assert.match(source,/endpoint\('analyze'\)/);
+});
 test('Block 5: UI escapes imported text, labels page sorting and separates raw prices from checked sales', () => {
   const html = UI.renderTable([{ id: '1', date: '2026-09-04', receipt: '<script>x</script>', description: '<img src=x onerror=x>', article: '001', quantity: '1.000', sourcePrice: '12',
     location: { status: 'missing_source' }, articleReference: { status: 'unlinked' }, issues: ['SALES_SEMANTICS_UNCONFIRMED'], provenance: {} }], 'sales');

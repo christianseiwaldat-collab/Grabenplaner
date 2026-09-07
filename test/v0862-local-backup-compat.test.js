@@ -95,3 +95,19 @@ test("v0.86.2: Lokaler Betrieb behält Pfadkonfiguration und manuelle Sicherung 
   assert.equal(names.filter((name) => name.endsWith(".amu")).length, 1);
   assert.equal(names.filter((name) => name.endsWith(".complete.json")).length, 1);
 });
+
+test("Lokale Sicherung: 24-Stunden-Intervall wird gespeichert und ungueltige Aenderung bleibt atomar", async () => {
+  const save = hours => fetch(`${baseUrl}/api/backup/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ externalBackupEnabled: true, backupDirectory: externalBackupDirectory, backupIntervalHours: hours }),
+  });
+  const accepted = await save(24);
+  assert.equal(accepted.status, 200, await accepted.clone().text());
+  assert.equal((await responseJson(accepted)).backupIntervalHours, 24);
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key='backup_interval_hours'").get().value, "24");
+
+  const rejected = await save(25);
+  assert.equal(rejected.status, 400, await rejected.clone().text());
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key='backup_interval_hours'").get().value, "24");
+});

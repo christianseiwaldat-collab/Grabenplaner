@@ -48,6 +48,7 @@ function createFixture() {
       employee_number TEXT NOT NULL,
       location_id TEXT NOT NULL,
       department_id INTEGER,
+      duty_code TEXT NOT NULL DEFAULT '',
       shift_date TEXT NOT NULL,
       start_time TEXT NOT NULL,
       end_time TEXT NOT NULL,
@@ -229,6 +230,10 @@ test("Arbeitszeitregel-Store: Planungsmutation und Prüfbeleg teilen Commit oder
       });
     });
     assert.equal(database.prepare("SELECT COUNT(*) AS count FROM shifts").get().count, 1);
+    const shiftId = database.prepare("SELECT id FROM shifts").get().id;
+    await repository.updatePlanningShift({ ...shift, id: shiftId, dutyCode: "branch_supervision" });
+    await repository.updatePlanningShift({ ...shift, id: shiftId, note: "old internal caller" });
+    assert.equal(database.prepare("SELECT duty_code FROM shifts WHERE id=?").get(shiftId).duty_code, "branch_supervision");
     assert.equal(
       database.prepare("SELECT COUNT(*) AS count FROM work_rule_evaluation_runs").get().count,
       1,

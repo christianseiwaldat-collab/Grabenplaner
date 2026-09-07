@@ -1,0 +1,363 @@
+{
+  "format": "grabenplaner.tradefoto.productive-block3-evidence.v1",
+  "date": "2026-09-05",
+  "status": "partial_acceptance_full_target_import_not_approved",
+  "productionWrites": false,
+  "productionReady": false,
+  "sourceWrites": false,
+  "commitPushDeploy": false,
+  "branch": "feature/schedule-pdf-day-separators",
+  "head": "41e6d92e5fc95c30a4ecb11d478802a930ea44e1",
+  "version": "0.92.27-beta",
+  "privacy": "Aggregate evidence only; no private source fields, account keys or recoverable test secrets.",
+  "fullStagingAndReview": {
+    "status": "blocked_by_preserved_gates",
+    "sources": [
+      {
+        "kind": "trade",
+        "fileSha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+        "bytes": 188649472,
+        "tables": 102,
+        "rows": 395163,
+        "counts": {
+          "create": 395163
+        },
+        "gatedTables": [
+          {
+            "name": "ARTIKEL_STAMM",
+            "declared": 19187,
+            "expected": 19186,
+            "gates": [
+              "SOURCE_ROW_COUNT_MISMATCH"
+            ]
+          },
+          {
+            "name": "ARTIKEL_FILIALEN",
+            "declared": 231355,
+            "expected": 231351,
+            "gates": [
+              "SOURCE_ROW_COUNT_MISMATCH"
+            ]
+          }
+        ],
+        "phases": {
+          "stageMs": 194487,
+          "repeatMs": 232,
+          "reviewMs": 348655
+        },
+        "status": "needs_review",
+        "apply": "blocked_unresolved_source_or_preview"
+      },
+      {
+        "kind": "cash",
+        "fileSha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+        "bytes": 330928128,
+        "tables": 7,
+        "rows": 1082167,
+        "counts": {
+          "create": 606706,
+          "conflict": 475461
+        },
+        "gatedTables": [],
+        "phases": {
+          "stageMs": 747225,
+          "repeatMs": 438,
+          "reviewMs": 1613715
+        },
+        "status": "needs_review",
+        "apply": "blocked_unresolved_source_or_preview"
+      }
+    ],
+    "durationMs": 2940439,
+    "metrics": {
+      "freeBytesBefore": 36751257600,
+      "peakRssBytes": 2494885888,
+      "peakDatabaseBytes": 5810219648,
+      "freeBytesAfter": 35009302528
+    },
+    "restartReplay": "passed_same_source_and_checkpoint",
+    "repeat": "passed_both_complete_sources",
+    "undo": "not_exercised_source_gates",
+    "after": {
+      "data_import_sources": 2,
+      "data_import_runs": 109,
+      "data_import_rows": 1477330,
+      "data_import_links": 0,
+      "data_import_changes": 0,
+      "import_master_records": 0,
+      "import_history_records": 0,
+      "import_history_versions": 0,
+      "import_master_holds": 0
+    },
+    "issues": [
+      {
+        "state": "conflict",
+        "issue": "HISTORY_PARENT_REQUIRED",
+        "count": 89584,
+        "table": "KassenJournal_Details"
+      },
+      {
+        "state": "conflict",
+        "issue": "HISTORY_PARENT_REQUIRED",
+        "count": 385877,
+        "table": "Umsatz_Kasse_Details"
+      }
+    ],
+    "verification": {
+      "integrity": true,
+      "foreignKeys": true
+    },
+    "sourcesUnchanged": [
+      {
+        "kind": "trade",
+        "unchanged": true
+      },
+      {
+        "kind": "cash",
+        "unchanged": true
+      }
+    ],
+    "encryptedTestFilesRemoved": true,
+    "readerVersion": "Original whole-table reader; final paged reader verified separately over every allowed field and ordinal.",
+    "cashApplyNotAttemptedReason": "Conservative test driver stops at first-preview dependencies before applying parents; not a claim of orphan raw rows.",
+    "fullTargetImportAndUndoExercised": false
+  },
+  "q01": {
+    "status": "independent_counts_match_but_gate_not_waived",
+    "fileSha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+    "gate": "SOURCE_ROW_COUNT_MISMATCH",
+    "declaredCountersPreserved": true,
+    "causeOfMetadataDifferenceProven": false,
+    "microsoftAccessEngineExecuted": false,
+    "independentParser": "Jackcess 4.0.11",
+    "readOnly": true,
+    "linkedDatabasesForbidden": true,
+    "sourceUnchanged": true,
+    "durationMs": 1608,
+    "tables": [
+      {
+        "name": "ARTIKEL_STAMM",
+        "declared": 19187,
+        "mdbReader": 19186,
+        "jackcessEnumerated": 19186
+      },
+      {
+        "name": "ARTIKEL_FILIALEN",
+        "declared": 231355,
+        "mdbReader": 231351,
+        "jackcessEnumerated": 231351
+      }
+    ],
+    "optionalToolSha256": {
+      "jackcess-4.0.11.jar": "de4e6daafd27163ab4f8f3fdb086f9a5a5e2044d93db24d00eebe9946bf09f7d",
+      "commons-lang3-3.18.0.jar": "4eeeae8d20c078abb64b015ec158add383ac581571cddc45c68f0c9ae0230720",
+      "commons-logging-1.2.jar": "daddea1ea0be0f56978ab3006b8ac92834afeefbd9b7e4e6316fca57df0fa636"
+    },
+    "failedAlternativeNotUsedAsEvidence": "access-parser 0.0.6 did not decode the source successfully."
+  },
+  "readerEquivalence": {
+    "format": "grabenplaner.tradefoto.reader-equivalence.v1",
+    "productionWrites": false,
+    "sourceWrites": false,
+    "pagedWorkerMaxOldGenerationMb": 512,
+    "sources": [
+      {
+        "kind": "trade",
+        "fileSha256": "42a40cb19d867fcc5d6e6f3429065ba0ff77f65a7b9b7fcfaae3d0b61f8154f3",
+        "rows": 395163,
+        "tables": 102,
+        "allAllowedFieldsAndOrdinalsEqual": true,
+        "sourceUnchanged": true,
+        "countDifferences": [
+          {
+            "name": "ARTIKEL_STAMM",
+            "declared": 19187,
+            "read": 19186
+          },
+          {
+            "name": "ARTIKEL_FILIALEN",
+            "declared": 231355,
+            "read": 231351
+          }
+        ],
+        "reference": {
+          "durationMs": 16756,
+          "peakRssBytes": 1122238464
+        },
+        "paged": {
+          "durationMs": 17999,
+          "peakRssBytes": 1113497600
+        }
+      },
+      {
+        "kind": "cash",
+        "fileSha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+        "rows": 1082167,
+        "tables": 7,
+        "allAllowedFieldsAndOrdinalsEqual": true,
+        "sourceUnchanged": true,
+        "countDifferences": [],
+        "reference": {
+          "durationMs": 112609,
+          "peakRssBytes": 2055417856
+        },
+        "paged": {
+          "durationMs": 109411,
+          "peakRssBytes": 2040692736
+        }
+      }
+    ],
+    "status": "passed",
+    "durationMs": 259036,
+    "pageRows": 10000,
+    "acknowledgedBatchRows": 200,
+    "substantialTotalRssReductionProven": false
+  },
+  "confirmedReceiptSubset": {
+    "format": "grabenplaner.tradefoto.confirmed-receipts.v1",
+    "createdAt": "2026-09-05T18:34:23.178Z",
+    "productionWrites": false,
+    "fullSourceApplied": false,
+    "sourceFileSha256": "6a7e9f3cb8404299da54aef8c5ab661d7d66e1791003ebcd62c10d60a6a4e395",
+    "scope": "Explicit subset export of complete confirmed receipts; synthetic GP mapping targets only.",
+    "results": [
+      {
+        "date": "2026-08-26",
+        "receipts": 1,
+        "lines": 2,
+        "grossMinor": "52578",
+        "negativeReceipts": 0,
+        "zeroReceipts": 0,
+        "matchesConfirmedReport": true
+      },
+      {
+        "date": "2026-09-03",
+        "receipts": 35,
+        "lines": 47,
+        "grossMinor": "249451",
+        "negativeReceipts": 0,
+        "zeroReceipts": 1,
+        "matchesConfirmedReport": true
+      },
+      {
+        "date": "2026-09-04",
+        "receipts": 32,
+        "lines": 37,
+        "grossMinor": "100171",
+        "negativeReceipts": 1,
+        "zeroReceipts": 0,
+        "matchesConfirmedReport": true
+      }
+    ],
+    "status": "passed",
+    "sourceCounts": {
+      "KassenJournal": {
+        "declared": 39865,
+        "read": 39865
+      },
+      "Umsatz_KASSE": {
+        "declared": 219920,
+        "read": 219920
+      },
+      "EigeneKonten": {
+        "declared": 0,
+        "read": 0
+      },
+      "ExportRichtTabelle": {
+        "declared": 0,
+        "read": 0
+      },
+      "KassenJournal_Details": {
+        "declared": 89584,
+        "read": 89584
+      },
+      "Tagesbericht": {
+        "declared": 346921,
+        "read": 346921
+      },
+      "Umsatz_Kasse_Details": {
+        "declared": 385877,
+        "read": 385877
+      }
+    },
+    "sourceMembership": {
+      "heads": 219920,
+      "lines": 385877,
+      "orphanLines": 0
+    },
+    "zeroPriceTaxCodeZeroRows": 2,
+    "fieldExactRoundtrips": 154,
+    "beforeRefresh": {
+      "data_import_sources": 0,
+      "data_import_runs": 4,
+      "data_import_rows": 160,
+      "data_import_links": 160,
+      "data_import_changes": 160,
+      "import_master_records": 6,
+      "import_history_records": 154,
+      "import_history_versions": 154,
+      "import_master_holds": 308
+    },
+    "afterRefresh": {
+      "data_import_sources": 0,
+      "data_import_runs": 6,
+      "data_import_rows": 314,
+      "data_import_links": 160,
+      "data_import_changes": 314,
+      "import_master_records": 6,
+      "import_history_records": 154,
+      "import_history_versions": 308,
+      "import_master_holds": 616
+    },
+    "referenceRefresh": "passed_explicit_version_no_duplicates_same_amounts",
+    "undo": {
+      "status": "passed",
+      "dependencyDeferrals": 2
+    },
+    "finalCounts": {
+      "data_import_sources": 0,
+      "data_import_runs": 6,
+      "data_import_rows": 314,
+      "data_import_links": 0,
+      "data_import_changes": 314,
+      "import_master_records": 0,
+      "import_history_records": 0,
+      "import_history_versions": 0,
+      "import_master_holds": 0
+    },
+    "integrity": {
+      "integrity": true,
+      "foreignKeys": true
+    },
+    "sourceUnchanged": true,
+    "encryptedTestFilesRemoved": true,
+    "durationMs": 142217
+  },
+  "automatedTests": {
+    "fullSuite": {
+      "tests": 2880,
+      "passed": 2840,
+      "failed": 0,
+      "skipped": 40,
+      "durationMs": 801422.7188
+    },
+    "finalRuntimeSuite": {
+      "tests": 19,
+      "passed": 19,
+      "failed": 0,
+      "durationMs": 5381.4983
+    },
+    "historySuite": {
+      "tests": 42,
+      "passed": 42,
+      "failed": 0,
+      "durationMs": 250233.5
+    }
+  },
+  "remaining": [
+    "Explicit decision on narrowly fingerprint-bound acceptance of independently enumerated Q01 counts, preserving original counters and evidence.",
+    "Complete target import with deliberate mappings before dependent history; recheck expected parent prerequisites after parent application.",
+    "Whole-dataset target completeness, replay/reference refresh, dependency-safe undo and their capacity/runtime measurements.",
+    "Separate Block 4 release authority and VPS database-plus-vault recovery/capacity verification before productive activation."
+  ]
+}

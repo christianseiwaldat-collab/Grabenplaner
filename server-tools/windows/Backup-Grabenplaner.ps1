@@ -9,7 +9,7 @@ param(
     [string]$BackupDirectory,
 
     [ValidateRange(1, 1000)]
-    [int]$Keep = 30,
+    [int]$Keep = 20,
 
     [string]$ServiceName = 'GrabenplanerServer',
     [string]$NodeExecutable = 'node',
@@ -82,12 +82,13 @@ try {
     $temporaryAmuBackupTarget = Join-Path $backupRoot ".$snapshotName-$([Guid]::NewGuid().ToString('N')).partial.amu"
 
     $nodeScript = @'
-const crypto = require('node:crypto');
+const path = require('node:path');
 const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
 const [source, target, lockModulePath, amuModulePath, amuSource, amuTarget, databaseFileName] = process.argv.slice(2);
 const { acquireDatabaseLock, releaseDatabaseLock } = require(lockModulePath);
 const { syncEncryptedFilesBackup, verifyBackupReferences } = require(amuModulePath);
+const { sha256File } = require(path.join(path.dirname(amuModulePath), 'file-integrity.js'));
 const lock = acquireDatabaseLock({ databasePath: source, kind: 'backup', appVersion: 'server-maintenance' });
 try {
   const sourceDb = new DatabaseSync(source);
@@ -128,7 +129,7 @@ try {
   } finally {
     check.close();
   }
-  const databaseSha256 = crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex');
+  const databaseSha256 = sha256File(target);
   const amu = syncEncryptedFilesBackup({
     sourceDirectory: amuSource,
     targetDirectory: amuTarget,
@@ -166,18 +167,20 @@ try {
         throw
     }
 
-    $oldBackups = Get-ChildItem -LiteralPath $backupRoot -Filter 'dienstplan-*.db' -File |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -Skip $Keep
-    foreach ($oldBackup in $oldBackups) {
-        if ($PSCmdlet.ShouldProcess($oldBackup.FullName, 'Altes Backup gemaess Aufbewahrung loeschen')) {
-            Remove-Item -LiteralPath $oldBackup.FullName -Force
-            $oldAmuDirectory = Join-Path $backupRoot "$($oldBackup.BaseName).amu"
-            $resolvedOldAmu = [System.IO.Path]::GetFullPath($oldAmuDirectory)
-            if ($resolvedOldAmu.StartsWith($backupRoot + [IO.Path]::DirectorySeparatorChar) -and (Test-Path -LiteralPath $resolvedOldAmu -PathType Container)) {
-                Remove-Item -LiteralPath $resolvedOldAmu -Recurse -Force
-            }
-        }
+    $commitScript = @'
+const path = require('node:path');
+const [app, root, snapshot, hash] = process.argv.slice(2);
+const { writeBackupCommitMarker, verifyCommittedBackup } = require(path.join(app, 'lib/backup-commit.js'));
+const { verifyBackup } = require(path.join(app, 'server-tools/linux/lib/verify-backup.js'));
+const verifyPair = p => verifyBackup(p.databasePath, p.protectedDirectory, path.join(app, 'lib/amu-storage.js'));
+writeBackupCommitMarker({ backupDirectory: root, snapshot, databaseSha256: hash });
+verifyCommittedBackup(root, snapshot + '.complete.json', { verifyPair });
+'@
+    $commitScript | & $NodeExecutable - $appRoot $backupRoot $snapshotName ([string]$verification.databaseSha256)
+    if ($LASTEXITCODE -ne 0) { throw 'Der Sicherungsbeleg konnte nicht verifiziert werden. Bestehende Sicherungen bleiben erhalten.' }
+    if ($PSCmdlet.ShouldProcess($backupRoot, "Verifizierte Tagesstaende fuer $Keep Kalendertage behalten")) {
+        & $NodeExecutable (Join-Path $appRoot 'server-tools\linux\lib\prune-backups.js') $backupRoot $Keep (Join-Path $appRoot 'server-tools\linux\lib\verify-backup.js') $amuModule | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Die Aufbewahrung der Tagesstaende konnte nicht abgeschlossen werden.' }
     }
 
     [pscustomobject]@{

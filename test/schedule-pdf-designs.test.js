@@ -116,7 +116,9 @@ test("Einstellungen und Dienstplanung verdrahten Rangfolge, Direkt-Export und Au
   assert.match(server, /designId === "matrix"/);
   assert.match(server, /async function drawScheduleTimelinePdf/);
   assert.match(server, /function drawScheduleMatrixPdf/);
-  assert.match(server, /const summaryGap = \(5 \/ 25\.4\) \* 72/);
+  assert.doesNotMatch(server, /const summaryGap = \(5 \/ 25\.4\) \* 72/);
+  assert.match(server, /buildScheduleMatrixOptionSpans/);
+  assert.match(server, /drawScheduleMatrixNotesBox/);
   assert.match(server, /scheduleMatrixSummaryForDate\(schedule, date\)/);
 });
 
@@ -148,6 +150,11 @@ test("Wochenmatrix verdrahtet Punktgrößen, Hervorhebung, Kopftext und bereichs
   assert.match(server, /SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION = "schedule:pdf:settings:write"/);
   assert.match(server, /const timeFont = timeFontBold \? "Helvetica-Bold" : "Helvetica"/);
   assert.match(server, /fillColor\(timeEmployeeColor \? scheduleMatrixEmployeeTextColor\(employeeColor\) : "#172433"\)/);
+  assert.match(server, /fontSize\(dayCount === 7 \? 11\.3 : 12\.35\)/);
+  assert.match(server, /font\("Helvetica"\)\.fontSize\(8\.95\)/);
+  assert.match(server, /scheduleMatrixSummaryForDate\(schedule, date\),[\s\S]*tableTop \+ 34/);
+  assert.match(server, /function drawScheduleMatrixEventBlock/);
+  assert.match(server, /scheduleDutyColor\(code, line\.settings\?\.schedule_duty_colors\)/);
   assert.match(server, /const showEmployeePosition = settingEnabled\(schedule\.settings, "pdf_schedule_matrix_show_position"\)/);
   assert.match(server, /if \(showEmployeePosition\) \{[\s\S]*employee\.position_name/);
   assert.match(server, /contrastOnWhite\(candidate\) < 4\.5/);

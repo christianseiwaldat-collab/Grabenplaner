@@ -214,15 +214,75 @@ test('Block 5: daily/cash snapshots remain separate from sales and require finan
   assert.ok(result.coverage.issues.includes('SEPARATE_CASH_DATA_NOT_SALES'));
 });
 
-test('Block 5: analysis ceiling never releases a partial period total, even when all selected receipts reconcile', async t => {
+test('Productive Block 2: batches withhold partial totals and continue to the complete period', async t => {
   const f = await workspaceFixture(t, { analysisLimit: 1 });
   assert.throws(() => createSalesHistoryWorkspace({ access: f.provider, protection: f.protection, sources: [],
     getSession: () => f.session, getActor: () => f.context.who }), code('IMPORT_COMPOSITION_INVALID'));
   await f.receipt(head({ RechnungsBetrag: '24' }), [line(), line({ RepID: '00000000-0000-0000-0000-000000000002' })]); f.approve();
   const result = await f.workspace.search({ sourceId: 'cash' });
   assert.equal(result.items.length, 1); assert.equal(result.items[0].metric.gross, '12.00'); assert.equal(result.totals, null);
-  assert.equal(result.coverage.complete, false); assert.ok(result.coverage.issues.includes('ANALYSIS_LIMIT_NARROW_DATE_RANGE'));
+  assert.equal(result.coverage.complete, false); assert.ok(result.analysis.cursor);
   assert.equal(result.days[0].gross, null);
+  const complete = await f.workspace.analyze({ query: { sourceId: 'cash' }, cursor: result.analysis.cursor });
+  assert.equal(complete.coverage.complete, true); assert.equal(complete.totals.gross, '24.00');
+  assert.equal(complete.coverage.counts.records, 2); assert.equal(complete.analysis.cursor, null);
+  await assert.rejects(f.workspace.analyze({ query: { sourceId: 'cash' }, cursor: result.analysis.cursor }), code('IMPORT_HISTORY_ANALYSIS_CHANGED'));
+  const page = await f.workspace.search({ sourceId: 'cash', cursor: result.next });
+  assert.equal(page.items.length, 1); assert.equal(page.totals.gross, '24.00');
+});
+
+test('Productive Block 2: full year and CRM analyses process 5001 verified sales without truncation or double-counted pages', async t => {
+  const f = await workspaceFixture(t), headers = [], lines = [];
+  f.session.permissions.push(HP.SELLERS, HP.CUSTOMER_PURCHASES, CP.ACCESS, CP.CUSTOMERS_READ);
+  for (let i = 0; i < 5001; i++) {
+    const Bonnr = String(i + 1).padStart(6, '0'), Bondatum = i % 2 ? DAY : '2026-01-02T00:00:00.000';
+    headers.push(head({ Bonnr, Bondatum }));
+    lines.push(line({ Bonnr, Bondatum, RepID: '00000000-0000-0000-0000-' + String(i + 1).padStart(12, '0') }));
+  }
+  await f.ingest('cash', 'Umsatz_KASSE', headers);
+  await f.ingest('cash', 'Umsatz_Kasse_Details', lines);
+  for (let i = 0; i < headers.length; i++) {
+    const identityHash = H.historyIdentity(f.protection, { ...f.context.who, sourceInstance: 'cash-source' }, 'cash', 'Umsatz_KASSE', C.normalizeDataImportRow(H.profileFor('cash', 'Umsatz_KASSE'), headers[i]).key);
+    const record = await f.provider.queryOne(S.find, { identityHash, scopeId: 'scope' });
+    f.proofs.set(record.id, coverage(headers[i], [lines[i]], { expectedSourceRows: 5001, verifiedSourceRows: 5001 }));
+  }
+  f.approve();
+  const query = { sourceId: 'cash', sellerId: '430', limit: 100 }, options = { customerId: f.customer.targetId };
+  let result = await f.workspace.search(query, options), next = result.next;
+  assert.equal(result.items.length, 100); assert.equal(result.coverage.counts.records, 200); assert.equal(result.totals, null);
+  let steps = 1;
+  while (result.analysis.cursor) { result = await f.workspace.analyze({ query, cursor: result.analysis.cursor }, options); steps++; assert.ok(steps <= 26); }
+  assert.equal(steps, 26); assert.equal(result.coverage.counts.records, 5001); assert.equal(result.coverage.counts.checked, 5001);
+  assert.deepEqual(result.totals, { currency: 'EUR', gross: '60012.00', net: '50010.00', tax: '10002.00' });
+  assert.equal(result.days.length, 2); assert.equal(result.days.reduce((n, d) => n + d.records, 0), 5001);
+  assert.equal(result.coverage.scope, 'matching_imported_records');
+  const page = await f.workspace.search({ ...query, cursor: next }, options);
+  assert.equal(page.items.length, 100); assert.equal(page.coverage.counts.records, 5001); assert.equal(page.totals.gross, '60012.00');
+});
+
+test('Productive Block 2: analysis tokens reject account, permission, query, source and expiry changes', async t => {
+  let clock = 1000;
+  const f = await workspaceFixture(t, { analysisLimit: 1, now: () => clock });
+  await f.receipt(head({ RechnungsBetrag: '24' }), [line(), line({ RepID: '00000000-0000-0000-0000-000000000002' })]); f.approve();
+  const query = { sourceId: 'cash' }, first = await f.workspace.search(query), input = { query, cursor: first.analysis.cursor };
+  f.session.employeeNumber = 'other'; await assert.rejects(f.workspace.analyze(input), code('IMPORT_HISTORY_CURSOR')); f.session.employeeNumber = 'viewer';
+  f.session.permissions.push(HP.SELLERS); await assert.rejects(f.workspace.analyze(input), code('IMPORT_HISTORY_CURSOR')); f.session.permissions.pop();
+  await assert.rejects(f.workspace.analyze({ ...input, query: { ...query, dateFrom: '2026-09-04' } }), code('IMPORT_HISTORY_CURSOR'));
+  clock += 900001; await assert.rejects(f.workspace.analyze(input), code('IMPORT_HISTORY_CURSOR'));
+  clock = 1000; const changed = await f.workspace.search(query);
+  await f.receipt(head({ Bonnr: '999' }), [line({ Bonnr: '999', RepID: '00000000-0000-0000-0000-000000000003' })]);
+  await assert.rejects(f.workspace.analyze({ query, cursor: changed.analysis.cursor }), code('IMPORT_HISTORY_RESULTS_CHANGED'));
+});
+
+test('Productive Block 2: empty and partially unverified selections never become a zero or partial revenue total', async t => {
+  const f = await workspaceFixture(t, { analysisLimit: 1 });
+  f.approve(); const empty = await f.workspace.search({ sourceId: 'cash' });
+  assert.equal(empty.coverage.complete, true); assert.equal(empty.totals, null);
+  await f.receipt(head({ RechnungsBetrag: '24' }), [line(), line({ RepID: '00000000-0000-0000-0000-000000000002', AStorno: true })]);
+  let result = await f.workspace.search({ sourceId: 'cash' });
+  while (result.analysis.cursor) result = await f.workspace.analyze({ query: { sourceId: 'cash' }, cursor: result.analysis.cursor });
+  assert.equal(result.coverage.complete, true); assert.equal(result.totals, null); assert.equal(result.coverage.counts.review, 2);
+  assert.ok(result.days.every(day => day.gross === null));
 });
 
 test('Block 4: pinned history metadata covers 43 tables / 433 fields without legacy access activation', () => {
@@ -403,17 +463,34 @@ test('Block 4: every selected history profile writes and reads a complete synthe
   assert.equal(f.database.prepare('SELECT count(DISTINCT source_table) n FROM import_history_records').get().n, 43);
 });
 
-test('Block 4/5: schema and all 21 named statements compile portably; no production composition is activated', () => {
-  assert.equal(SQLITE_IMPORT_HISTORY_CATALOG.length, 21); assert.equal(Object.keys(S).length, 21);
+test('Productive Block 1: history statements compile portably and runtime is composed with apply disabled', () => {
+  assert.equal(SQLITE_IMPORT_HISTORY_CATALOG.length, 23); assert.equal(Object.keys(S).length, 23);
   for (const entry of SQLITE_IMPORT_HISTORY_CATALOG) assert.equal(compilePostgresqlDialectEntry(entry).strategy, 'portable-generated', entry.statement.id);
   assert.ok(!/AUTOINCREMENT|PRAGMA|rowid|json_|RAISE\(/iu.test(IMPORT_HISTORY_SCHEMA_SQL));
-  for (const file of ['server.js', 'lib/persistence/sqlite/operations/application-schema.js', 'lib/persistence/sqlite/application-catalog.js']) {
-    assert.ok(!fs.readFileSync(path.join(__dirname, '..', file), 'utf8').includes('import-history'), file);
-  }
+  const catalog=require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG;
+  assert.ok(SQLITE_IMPORT_HISTORY_CATALOG.every(e=>catalog.some(c=>c.statement===e.statement)));
+  assert.match(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8'),/createDataImportRuntime\(\{[^}]*allowApply: false/);
 });
 
 const reconcile = (heads, lines, options = {}) => R.reconcileTradeFotoReceipt({ head: heads, lines: lines.map(source => ({ source, parentRevision: 1 })),
   headRevision: 1, snapshotDate: '2026-09-05', scopeId: 'scope', sourceInstance: 'cash-source', policy: policy(), coverage: coverage(heads, lines), ...options });
+
+test('Productive Block 1: an explicitly verified placeholder head never erases signed final-price sales or zero lines',()=>{
+  const header=head({RechnungsBetrag:'0'}),rows=[line({VK_Preis:'600.78',MWST:'20',AStorno:true,Ret:false,NachlaßDM:'10'}),
+    line({RepID:'00000000-0000-0000-0000-000000000002',VK_Preis:'75',VKMenge:'-1',MWST:'20',AStorno:true,Ret:false})];
+  const rules=[{id:'sale-a',status:'sale',quantitySign:'positive',flags:{...flags,AStorno:true}},
+    {id:'return-a',status:'return',quantitySign:'negative',flags:{...flags,AStorno:true}}];
+  const verified=policy({headerZeroMeaning:'unavailable',vatRates:{20:'20'},statusRules:rules});
+  const result=reconcile(header,rows,{policy:verified});assert.equal(result.totals.gross,'525.78');assert.equal(result.totals.net,'438.15');
+  assert.equal(result.reconciliation.headerStatus,'unavailable_zero_placeholder');assert.equal(result.reconciliation.difference,null);
+  assert.equal(header.RechnungsBetrag,'0');assert.equal(rows[0].NachlaßDM,'10');
+  assert.equal(reconcile(header,rows,{policy:policy({vatRates:{20:'20'},statusRules:rules})}).totals,null);
+  assert.equal(reconcile(header,rows,{policy:verified,coverage:null}).totals,null);
+  assert.equal(reconcile(head({RechnungsBetrag:'1'}),rows,{policy:verified}).totals,null);
+  const zero=line({VK_Preis:'0',VKMenge:'5',MWST:'20',AStorno:true});const zeroResult=reconcile(header,[zero],{policy:verified});
+  assert.equal(zeroResult.totals.gross,'0.00');assert.equal(zeroResult.counts.lines,1);assert.equal(zeroResult.positions.length,1);
+  assert.throws(()=>policy({headerZeroMeaning:'ignore'}),code('IMPORT_SALES_POLICY_INVALID'));
+});
 test('Block 4: default sales gate stays closed, including heads without details', () => {
   const result = reconcile(head(), [], { policy: null }); assert.equal(result.canAggregate, false); assert.equal(result.totals, null);
   assert.ok(result.issues.includes('SALES_SEMANTICS_UNCONFIRMED')); assert.ok(result.issues.includes('RECEIPT_WITHOUT_LINES'));

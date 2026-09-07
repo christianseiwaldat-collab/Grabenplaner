@@ -20,8 +20,8 @@ ExecStartPre={{NODE_EXECUTABLE}} --check /opt/grabenplaner/app/server.js
 ExecStart={{NODE_EXECUTABLE}} /opt/grabenplaner/app/server.js
 Restart=on-failure
 RestartSec=10s
-TimeoutStartSec=120s
-TimeoutStopSec=120s
+TimeoutStartSec=1500s
+TimeoutStopSec=1500s
 KillSignal=SIGTERM
 UMask=0027
 

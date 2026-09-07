@@ -1,0 +1,1268 @@
+{
+  "format": "grabenplaner.large-backup-strategy-evidence.v1",
+  "date": "2026-09-07",
+  "branch": "feature/schedule-pdf-day-separators",
+  "head": "41e6d92e5fc95c30a4ecb11d478802a930ea44e1",
+  "version": "0.92.27-beta",
+  "status": "workspace_optimization_locally_tested_production_start_not_qualified",
+  "productionQualified": false,
+  "productionArchiveIntegration": false,
+  "localArchiveIntegration": true,
+  "productiveArchiveActivated": false,
+  "fullTradeFotoBackupMeasured": true,
+  "sourceFilesReadBySyntheticQualification": false,
+  "sourceFilesReadByIsolatedFullMeasurement": true,
+  "productionWrites": false,
+  "existingBackupsChanged": null,
+  "retentionChanged": false,
+  "storagePurchased": false,
+  "productiveKeysChanged": false,
+  "commitPushDeploy": false,
+  "eveningPreparation": {
+    "checkedAt": "2026-09-06T17:49:39.863Z",
+    "localFreeBytes": 116372238336,
+    "requiredLocalMeasurementStartFreeBytes": 98247376896,
+    "localMeasurementStartSpacePassed": true,
+    "newFullSourceMeasurementStarted": false,
+    "measurementDatabaseBudgetBytes": 21474836480,
+    "measurementBudgetIsForecast": false,
+    "compressionDeduplicationOrExistingBackupDeletionCreditBytes": 0,
+    "budgetReport": "tmp/block4-measurement-budget-20260906.json",
+    "realWriterSyntheticFirstFollowupReport": "tmp/block4-preparation-20260906.tap",
+    "realWriterSyntheticFirstFollowupPassed": true,
+    "realWriterSmallMemoFirstImportCanGrow": true,
+    "actualBusinessChangeWindow": false,
+    "budgetedResticRestoreReport": "tmp/block4-budget-restic-20260906.tap",
+    "budgetedResticRestorePassed": true,
+    "vpsReadOnlyFreeBytes": 75130363904,
+    "vpsLocalCompleteMetadataPoints": {
+      "app": 30,
+      "external": 30
+    },
+    "vpsInventoryIsFreshHashOrRestoreValidation": false,
+    "offsiteProvider": "google_drive",
+    "offsiteStatus": "ok",
+    "offsiteLastRestoreTestAt": "2026-09-06T02:16:38.541Z",
+    "offsiteLocalWorkingDirectoryBytes": 9355264,
+    "offsitePrepareUnitHasEarlierReadinessTimeout": true,
+    "remoteArchiveCountAndSizeRequeried": false,
+    "retention20DiscussedByUser": true,
+    "retention20PerAreaOrCombinedUnresolved": false,
+    "oldestPlusNewest19PerAreaRemovalPreviewBytes": 3087545874,
+    "retentionPreviewExecuted": false,
+    "localSpaceFreedByUser": true,
+    "oldestPlusNewest19PreviewSuperseded": true,
+    "retentionClarification": "20 calendar days per local area; retain the newest complete point per day; Google Drive policy remains separate"
+  },
+  "qualification": {
+    "localReport": "tmp/large-backup-qualification-XJlef6/report.json",
+    "status": "passed_synthetic_qualification",
+    "durationMs": 98280,
+    "model": "64 MiB random base, 1 MiB change per point, 32 independent points; no full-source capacity forecast",
+    "largeFileHash": {
+      "bytes": 2147483665,
+      "sha256": "d9378e43c0e666027848e63668ba0a821b4726843e366626946e3823b477299e",
+      "bufferBytes": 1048576,
+      "peakRssBytes": 49680384,
+      "passed": true
+    },
+    "snapshotsCreated": 32,
+    "independentRestoresPassed": 32,
+    "managedImportKeysRecovered": 32,
+    "wrongVaultKeysRejected": 32,
+    "protectedDocumentDecryptionPassed": 32,
+    "corruptArchiveRejected": true,
+    "archiveBytes": 166773044,
+    "equivalentDatabaseFullCopyBytes": 2158755840,
+    "retentionPreview": {
+      "retained": 30,
+      "removablePreviewOnly": 2,
+      "removed": 0
+    },
+    "syntheticFilesRemoved": true
+  },
+  "tool": {
+    "name": "restic",
+    "version": "0.18.1",
+    "platform": "windows/amd64",
+    "archiveSha256": "0c1a713440578cb400d2e76208feb24f1b339426b075a21f73b6b2132692515d",
+    "binarySha256": "034b7bf67a23049d30d58ddf4fb318239726cc74728b80bff876de824f2fc786",
+    "verifiedAgainstOfficialSHA256SUMS": true,
+    "productiveLinuxBinaryChanged": false
+  },
+  "contracts": {
+    "previousCoreRuntimeFingerprint": "9457dcb880f64709e071b6645acf0ff548ce4c1c00b321d5894f47d9258b876e",
+    "candidateCoreRuntimeFingerprint": "e5e8edd4e7710263ce1b89a5a1214a18a2b7f8a6d37a9248dcccaeb5ca074ef9",
+    "explicitCoreRuntimeMigrationRequiredBeforeRelease": true,
+    "deploymentSchemaIncremented": false,
+    "installedCoreRuntimeChanged": false,
+    "candidateServiceStartStopSeconds": 1500,
+    "sharedApplicationAndShutdownBackupSeconds": 1400,
+    "hardeningFingerprintUnchanged": "e917ee0355874ce08f8ab096335ea6b533d151a4e9ab2bc4755d4f940682f91d",
+    "candidateOffsiteFingerprint": "76d31dab7f1bcac97a6e7b91d4af0abbf4431f397458d0d63f6e9404a991e053",
+    "offsiteManagedArtifactSetChanged": false,
+    "installedOffsiteModuleChanged": false,
+    "explicitOffsiteUpdateRequiredBeforeRelease": true,
+    "postgresqlActivated": false,
+    "persistenceArchitectureAudit": "passed",
+    "previousOffsiteCandidateBeforeWorkspaceOptimization": "1bbc883adb450a77adea3f44136bff546c704fbd6f8eeaffbb298434285a95af",
+    "previousOffsiteCandidateBeforeWindowsAssuranceCorrection": "9e22b497250d9b0a74e0f30e90be771c2c7d4da57734c019916faba1f42b539c"
+  },
+  "verification": {
+    "focusedBackupAndDocumentTests": {
+      "tests": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    "policyBridgeBundleTests": {
+      "tests": 28,
+      "passed": 28,
+      "failed": 0
+    },
+    "updatedPackageContractTests": {
+      "tests": 12,
+      "passed": 12,
+      "failed": 0
+    },
+    "initialFullSuite": {
+      "localReport": "tmp/large-backup-full.tap",
+      "tests": 2890,
+      "passed": 2849,
+      "skipped": 40,
+      "failed": 1,
+      "durationMs": 694633.8916,
+      "failure": "Previous pinned Offsite fingerprint; updated to the independently verified candidate contract and package tests passed"
+    },
+    "historicalFullSuiteBeforeArchiveIntegration": {
+      "localReport": "tmp/large-backup-final-full.tap",
+      "status": "passed",
+      "tests": 2890,
+      "passed": 2850,
+      "skipped": 40,
+      "failed": 0,
+      "cancelled": 0,
+      "durationMs": 667248.8274
+    },
+    "archiveCoreBeforeLastReadonlyCacheChange": {
+      "localReport": "tmp/local-backup-archive-final-v2.tap",
+      "tests": 9,
+      "passed": 9,
+      "skipped": 0,
+      "failed": 0,
+      "durationMs": 403128.07,
+      "actualSyntheticRetention": "32 independently restored points reduced to exactly 30; latest and unregistered raw points preserved"
+    },
+    "lastReadonlyCacheChange": {
+      "localReport": "tmp/local-backup-archive-cached-readonly-final.tap",
+      "tests": 1,
+      "passed": 1,
+      "skipped": 0,
+      "failed": 0,
+      "durationMs": 21405.64,
+      "scope": "Real synthetic Restic; cached health without binary reads, writes or locks; fail-closed race detection; operational pin checks; idempotent published-receipt recovery"
+    },
+    "backgroundManagementLinuxFocusBeforeDeadlineAddition": {
+      "tests": 30,
+      "passed": 30,
+      "skipped": 0,
+      "failed": 0,
+      "durationMs": 52860,
+      "scope": "Includes real synthetic Linux and management Restic integrations and wrong document-key rejection"
+    },
+    "finalBackgroundDeadlineTests": {
+      "tests": 15,
+      "passed": 15,
+      "failed": 0
+    },
+    "serverWorkflowKeysAndArchitecture": {
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "durationMs": 10190.3672
+    },
+    "runtimeAndPackageContracts": {
+      "tests": 57,
+      "passed": 50,
+      "skipped": 7,
+      "failed": 0,
+      "durationMs": 28220
+    },
+    "immutableDocumentConcurrency": {
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "capacityPolicy": {
+      "tests": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "independentFinalReviewFocus": {
+      "tests": 39,
+      "passed": 39,
+      "failed": 0,
+      "durationMs": 50150,
+      "openCriticalCodeFindings": 0
+    },
+    "reserveWatcherSyntheticTreeStop": {
+      "passed": true,
+      "durationMs": 3180,
+      "expectedExitCode": 2,
+      "syntheticParentAndChildConfirmedStopped": true,
+      "realImportIdentityUnchangedAndRunningAfterTest": true,
+      "sourceFilesChanged": false,
+      "syntheticFilesRemoved": true
+    },
+    "futureMeasurementV2": {
+      "localReport": "tmp/full-source-backup-measurement-v2.tap",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "durationMs": 9818.33,
+      "syntheticOnly": true,
+      "scope": "VACUUM INTO independent check and atomic swap; original preserved after injected rename failure; coupled restore and existing key authentication",
+      "notLoadedByRunningFullSourceProcess": true
+    },
+    "initialIntegratedFullSuite": {
+      "localReport": "tmp/large-backup-integrated-full-20260906.tap",
+      "status": "failed_one_windows_rename_not_reproduced",
+      "tests": 2949,
+      "passed": 2908,
+      "failed": 1,
+      "skipped": 40,
+      "cancelled": 0,
+      "durationMs": 1192635.6084,
+      "failure": "Unchanged v078 assurance history test: Windows EPERM at atomic head.json rename in isolated fixture",
+      "realSyntheticResticTestsEnabled": true,
+      "testConcurrency": 1
+    },
+    "assuranceRenameFailureInvestigation": {
+      "sameTestRepetitionsPassed": 3,
+      "wholeTestFile": {
+        "tests": 25,
+        "passed": 25,
+        "skipped": 0,
+        "failed": 0,
+        "durationMs": 3450
+      },
+      "affectedSourceAndTestUnchangedAgainstHead": true,
+      "offsiteFingerprintUnchangedDuringInvestigation": true,
+      "conclusion": "Transient external Windows file lock plausible, exact cause not proven; no code or test changes"
+    },
+    "integratedFullSuite": {
+      "localReport": "tmp/large-backup-integrated-full-repeat-20260906.tap",
+      "status": "passed_before_shared_import_payload_changes",
+      "tests": 2949,
+      "passed": 2909,
+      "skipped": 40,
+      "failed": 0,
+      "cancelled": 0,
+      "durationMs": 1192641.5133,
+      "realSyntheticResticTestsEnabled": true,
+      "testConcurrency": 1
+    },
+    "sharedImportPayloadFocus": {
+      "localReport": "tmp/import-shared-payload-final-focused-20260906.tap",
+      "tests": 84,
+      "passed": 84,
+      "skipped": 0,
+      "failed": 0,
+      "cancelled": 0,
+      "durationMs": 14715.6998,
+      "sourceFilesRead": false,
+      "scope": "Codec, SQLite schema, engine, managed runtime, synthetic two-file storage comparison, exact snapshots, transaction rollback, rights, integrity, nonce collision, dual reader, whole DB restore and undo"
+    },
+    "sharedImportPayloadPersistenceContracts": {
+      "tests": 62,
+      "passed": 62,
+      "failed": 0,
+      "architectureAudit": "passed",
+      "statements": 1257,
+      "portableGeneratedStatements": 1143,
+      "sqliteOverrideStatements": 114,
+      "postgresqlProductActivation": false
+    },
+    "initialSharedImportPayloadFullSuite": {
+      "localReport": "tmp/import-shared-payload-full-20260906.tap",
+      "status": "intentionally_stopped_before_small_row_overhead_correction",
+      "qualified": false,
+      "fullSourceMeasurementAndReserveWatcherUnchanged": true
+    },
+    "sharedImportPayloadFullSuite": {
+      "localReport": "tmp/import-shared-payload-final-full-20260906.tap",
+      "status": "finished_with_failures",
+      "tests": 2975,
+      "passed": 2933,
+      "failed": 2,
+      "skipped": 40,
+      "cancelled": 0,
+      "durationMs": 1215714.7602,
+      "currentDirtyWorktreeFullyQualified": false,
+      "realSyntheticResticTestsEnabled": true,
+      "testConcurrency": 1
+    },
+    "masterHistoryRegression": {
+      "tests": 79,
+      "passed": 77,
+      "skipped": 2,
+      "failed": 0,
+      "cancelled": 0,
+      "durationMs": 250679.6936,
+      "scope": "All master/history tests including 5001 verified sales; two separate real Restic tests skipped in this focus and enabled in full regression"
+    },
+    "finalFullStockRegression": {
+      "report": "tmp/full-stock-complete-regression-final-20260907.tap",
+      "tests": 3065,
+      "passed": 3024,
+      "failed": 1,
+      "skipped": 40,
+      "cancelled": 0,
+      "durationMs": 1193681.3436,
+      "realResticEnabled": true,
+      "failure": "EPERM renaming a temporary assurance-history head on Windows",
+      "focusedRepeat": {
+        "report": "tmp/full-stock-assurance-history-rerun-20260907.tap",
+        "tests": 7,
+        "passed": 7,
+        "failed": 0,
+        "skipped": 0
+      },
+      "finalFullSuiteGreen": false,
+      "underlyingTransientFilesystemCauseEstablished": false
+    },
+    "dailyIntervalCorrection": {
+      "redReport": "tmp/full-stock-daily-interval-before-fix-20260907.tap",
+      "greenReport": "tmp/full-stock-daily-interval-fixed-20260907.tap",
+      "passed": 7,
+      "failed": 0,
+      "fullSuiteReport": "tmp/full-stock-complete-regression-final-20260907.tap",
+      "fullSuiteStatus": "one_windows_filesystem_failure_focused_repeat_passed",
+      "measuredImportImplementationUnchanged": true
+    },
+    "finalProductionOperations": {
+      "finalVpsState": "tmp/full-stock-vps-final-state-20260907.json",
+      "checkedAt": "2026-09-07T01:34:18.575Z",
+      "appReady": true,
+      "version": "0.92.27-beta",
+      "productionDatabase": {
+        "bytes": 637530112,
+        "integrity": true,
+        "foreignKeyViolations": 0,
+        "importTables": 0
+      },
+      "appSelfTest": "tmp/full-stock-vps-app-test-20260907.json",
+      "offsiteSelfTest": "tmp/full-stock-vps-offsite-test-20260907.json",
+      "normalDriveRestore": "tmp/full-stock-vps-drive-restore-20260907.json",
+      "latestRestoreReceipt": {
+        "path": "/var/lib/grabenplaner-offsite/restore-tests/receipts/restore-test-20260907T013148Z-dda0b883e7a7.json",
+        "uid": 0,
+        "gid": 0,
+        "mode": "400",
+        "format": "grabenplaner-offsite-restore-test",
+        "schemaVersion": 1,
+        "result": "verified",
+        "snapshotId": "dda0b883e7a74b56feb43d94d2efcdc457d305243b2361ec2981d864dc75a1c4",
+        "snapshotTime": "2026-09-07T00:49:01.477Z",
+        "expectedBytes": 603631325,
+        "expectedFiles": 137,
+        "sourceAppVersion": "0.92.27-beta",
+        "targetAppVersion": "0.92.27-beta",
+        "deploymentSchemaVersion": 4,
+        "protectedDocuments": 54,
+        "protectedRecords": 91,
+        "integrationCredentials": 0,
+        "frozenFiles": 72,
+        "databaseSha256": "7cbfbe76bfda3e62e56bfa7c7d86613c5350df5dcf320a79abd50834b01cfd30",
+        "stageManifestSha256": "4d123738bc5651213dcae2d8b9947d8dce3c7ff9b999a05138fc39490295bed6",
+        "repositoryBindingSha256": "d939375c37ac039ba7d6204c87b9ab3c879b68f8a6c991749def49e3d40ea885",
+        "installationBindingSha256": "364bba8200a5f79ac5e7b7088e29f2ebbdcd998fb7002664d9dd92c8ad44d2bf",
+        "sourcePathSha256": "37c451efb650d627bc943cea35c19f97bfa3bfcc87417e2daa6c3427e903d75e",
+        "startedAt": "2026-09-07T01:28:54.000Z",
+        "completedAt": "2026-09-07T01:31:48.444Z",
+        "durationMs": 174444,
+        "applicationSmoke": {
+          "status": "not-run",
+          "reasonCode": "RECOVERY_TEST_MODE_UNAVAILABLE",
+          "boundary": "Kein nachweislich nebenwirkungsfreier isolierter App-Testmodus vorhanden."
+        }
+      },
+      "fullAssurance": {
+        "startedAt": "2026-09-07T01:08:11.8818919Z",
+        "finishedAt": "2026-09-07T01:21:39.7976169Z",
+        "exitCode": 1,
+        "trigger": "manual-cli",
+        "report": "tmp/full-stock-vps-full-assurance-20260907.log",
+        "failedRunPreserved": true,
+        "failureCode": "PREPARE_FAILED",
+        "installedReadyWaitSeconds": 120,
+        "localCandidateReadyWaitSeconds": 1500,
+        "latestSignedEvent": {
+          "eventId": "e40a2512-40db-4233-9249-f179eae33079",
+          "runId": "ce1b9f4d-6e9a-4a6b-9b4f-82bc3d11fce5",
+          "eventType": "full-assurance-failed",
+          "trigger": "manual-cli",
+          "occurredAt": "2026-09-07T01:21:39.442Z",
+          "errorCode": "PREPARE_FAILED",
+          "evidence": {
+            "snapshotIdPrefix": null,
+            "receiptSha256": null,
+            "appVersion": "0.92.27-beta"
+          }
+        }
+      },
+      "independentRepositoryAndApplicationRestore": {
+        "report": "tmp/full-stock-vps-isolated-recovery-20260907.log",
+        "finishedAt": "2026-09-07T01:31:50.3611795Z",
+        "startedAt": "2026-09-07T01:27:52.2986674Z",
+        "signedFullAssuranceRun": false,
+        "exitCode": 0,
+        "result": {
+          "standaloneRecoveryVerification": true,
+          "signedFullAssuranceRun": false,
+          "snapshotIdPrefix": "dda0b883e7a7",
+          "receiptSha256": "2d643957b9502f742767d6b25bc6ab72b451c0fd851e065fc06b0d52fd09b7eb",
+          "applicationSmokePassed": true
+        },
+        "passed": true,
+        "upgradesFailedFullAssuranceToPassed": false
+      },
+      "failedUnitCount": 18,
+      "failedUnitsResetManually": false,
+      "offsiteUnresolvedFailures": {
+        "backup": true,
+        "fullCheck": false,
+        "restoreTest": false
+      },
+      "productionConfigurationChanged": false,
+      "deploymentPerformed": false,
+      "productiveImportPerformed": false,
+      "routineVerificationWroteBackupAndStatusArtifacts": true
+    },
+    "finalFullStockShellSyntax": {
+      "report": "tmp/full-stock-bash-syntax-20260906.json",
+      "passed": 35,
+      "failed": 0
+    },
+    "workspaceOptimizationCompleteSuite": {
+      "report": "tmp/backup-workspace-final-complete-regression-20260907.tap",
+      "tests": 3077,
+      "pass": 3031,
+      "fail": 2,
+      "cancelled": 0,
+      "skipped": 44,
+      "duration_ms": 1163914.8184,
+      "status": "failed"
+    }
+  },
+  "fullSourceMeasurement": {
+    "localReport": "tmp/tradefoto-block3-2Ap4l0/report.json",
+    "status": "passed_full_import_and_backup_measurement",
+    "durationMs": 19296665,
+    "sourceRows": 1477330,
+    "sourceBytes": 519577600,
+    "importEvidenceStorage": "shared-parts-v1",
+    "managedPayloadCompression": "authenticated-deflate-v2-with-v1-dual-reader",
+    "verification": {
+      "integrity": true,
+      "foreignKeys": true
+    },
+    "sourcesUnchanged": [
+      {
+        "kind": "trade",
+        "unchanged": true
+      },
+      {
+        "kind": "cash",
+        "unchanged": true
+      }
+    ],
+    "encryptedTestFilesRemoved": true,
+    "backup": {
+      "status": "passed_full_source_backup_measurement",
+      "source": "complete-import",
+      "productionQualified": false,
+      "productionKeysUsed": false,
+      "vaultKeyPersisted": false,
+      "points": [
+        {
+          "kind": "full-source",
+          "id": "ab5e56c9f2680aa37c6ee5cc27f5aa25416c56c8fee4a13269008f6bae7bfaf5",
+          "databaseSha256": "70ea3a08a859d1e15f5cc8fb0fa27220bcbb38c5cd65776f066040afc953e22e",
+          "databaseBytes": 11602071552,
+          "coupledBytes": 11602073058,
+          "archiveBytes": 5331534291,
+          "addedArchiveBytes": 5331533673,
+          "captureDurationMs": 108294,
+          "restored": true,
+          "managedImportKeyRecovered": true,
+          "documentsVerified": true,
+          "restoreDurationMs": 75252
+        },
+        {
+          "kind": "unchanged-repeat",
+          "id": "7025a025dfd1a5edfe86a4dabf33d65d72cc79256a6317ad79ff02ce447a4d50",
+          "databaseSha256": "70ea3a08a859d1e15f5cc8fb0fa27220bcbb38c5cd65776f066040afc953e22e",
+          "databaseBytes": 11602071552,
+          "coupledBytes": 11602073058,
+          "archiveBytes": 5332193001,
+          "addedArchiveBytes": 658710,
+          "captureDurationMs": 43850
+        },
+        {
+          "kind": "2000-row-stress-sample",
+          "id": "f765cd5100fa2e42344012ce2d6bdb8a4e59f313b9e84d5ec050a4443650ed12",
+          "databaseSha256": "ab78092d2011ea3085ca6a91adc3669354b80e391305f0433960d29e36caae51",
+          "databaseBytes": 11604815872,
+          "coupledBytes": 11604817378,
+          "archiveBytes": 7808643746,
+          "addedArchiveBytes": 2476450745,
+          "captureDurationMs": 74225,
+          "restored": true,
+          "managedImportKeyRecovered": true,
+          "documentsVerified": true,
+          "restoreDurationMs": 80957
+        }
+      ],
+      "sourceMutation": false,
+      "measurementImplementation": "vacuum-into-v2",
+      "compactions": [
+        {
+          "kind": "full-source",
+          "method": "VACUUM INTO",
+          "sourceBytes": 12012789760,
+          "usedPageBytes": 12012785664,
+          "candidateBytes": 11602071552,
+          "extraSpaceReservedBytes": 12079898624,
+          "independentlyVerified": true,
+          "sourceClosedBeforeReplacement": true,
+          "durationMs": 63317
+        },
+        {
+          "kind": "2000-row-stress-sample",
+          "method": "VACUUM INTO",
+          "sourceBytes": 11604815872,
+          "usedPageBytes": 11604815872,
+          "candidateBytes": 11604815872,
+          "extraSpaceReservedBytes": 11671924736,
+          "independentlyVerified": true,
+          "sourceClosedBeforeReplacement": true,
+          "durationMs": 58322
+        }
+      ],
+      "footprintScope": "entire-isolated-import-directory-including-staging-archive-and-restores",
+      "sampledPeakOnly": true,
+      "phase": "finished",
+      "peakDirectoryBytes": 28541897537,
+      "peakDatabaseFamilyBytes": 23614894080,
+      "minimumFreeBytes": 103426125824,
+      "freeBytes": 131953160192,
+      "beforeCompactionBytes": 12012789760,
+      "compactedDatabaseBytes": 11602071552,
+      "baselineArchiveBytes": 5331534291,
+      "coupledSnapshotBytes": 11602073058,
+      "changeSample": {
+        "measured": true,
+        "rows": 2000,
+        "randomBytesPerRow": 1024,
+        "addedArchiveBytes": 2476450745,
+        "actualBusinessChangeWindow": false,
+        "sourceRowsChanged": false
+      },
+      "archiveIntegrityDurationMs": 22248,
+      "archiveIntegrity": true,
+      "isolatedMeasurementFilesRemoved": true,
+      "durationMs": 535613
+    },
+    "implementationProvenance": "tmp/full-stock-implementation-verification-20260907.json",
+    "fullCompactionAndRestorePassed": true,
+    "representativeBusinessChangeWindowMeasured": false,
+    "productionQualified": false,
+    "followupAssessment": "VOLLBESTAND-BETRIEB-RESTORE-2026-09-07.md"
+  },
+  "capacityAndRecoveryLimits": {
+    "retentionPerLocalArea": 20,
+    "minimumReserveBytes": 10737418240,
+    "unverifiedCoordinatorDefaultWorkingCopies": 8,
+    "verifiedGlobalSerializationAndSingleOffsiteMinimumCopies": 5,
+    "legacyDeletionCreditBytes": 0,
+    "walCandidateArchiveOrphanAndGcDebtRequired": true,
+    "currentPruneMaxRepackSize": 0,
+    "boundedSteadyStateGcQualified": false,
+    "crossProcessAppLinuxOffsiteSerializationQualified": false,
+    "oldVaultKeyIdsRequiredForExistingRecoveryEnvelopes": true,
+    "automaticRecoveryEnvelopeResealingImplemented": false,
+    "existingOffsiteAutomaticallyIncludesAllLocalArchiveHistory": false,
+    "managementRecoveryRequiresStoppedProducers": true,
+    "retentionUnit": "calendar-days",
+    "installedVpsPointCountAtEarlierReadonlySnapshot": {
+      "app": 30,
+      "external": 30
+    }
+  },
+  "followupSourceStorageFinding": {
+    "method": "read_only_code_review_no_source_file_access",
+    "newFileShaCreatesNewSourceAndRuns": true,
+    "fullStagingAndReviewPayloadStoredForEachNewRun": true,
+    "unchangedStableBusinessTargetsExcludedFromApply": true,
+    "keylessTablesIntentionallyKeepFullFileBoundSnapshots": true,
+    "newRandomEncryptionIvPerPayload": true,
+    "automaticPurgeImplemented": false,
+    "sharedReviewPayloadStorageImplementedLocally": true,
+    "runtimePurgeAuthorizedOrExposed": false,
+    "dataPreservingImportStorageRedesignScopeApproved": true,
+    "scopeApprovalDate": "2026-09-06",
+    "importStorageRedesignStarted": true,
+    "sharedPayloadWritesEnabledInProductiveComposition": false,
+    "newStorageFocusedVerificationCompleted": true,
+    "newStorageFullQualificationCompleted": false,
+    "retentionOrUndoEvidenceRemoved": false
+  },
+  "syntheticSharedImportPayloadStorage": {
+    "scope": "Two distinct synthetic file hashes, 128 customers per file with 127 unchanged and one changed, plus eight full keyless snapshots per file",
+    "customerTargets": 128,
+    "keylessSnapshotTargets": 16,
+    "retainedBlocks": 403,
+    "retainedReferences": 1092,
+    "legacyAllImportTableBytes": 10014779,
+    "sharedAllImportTableBytes": 6414420,
+    "legacyWholeDatabasePageBytes": 11636736,
+    "sharedWholeDatabasePageBytes": 8126464,
+    "allRetainedBlocksAndReferencesIncluded": true,
+    "liveSourceLinkPayloadsIncluded": true,
+    "deletionCreditBytes": 0,
+    "productionCapacityForecast": false,
+    "smallRowAndFullSourceGrowthQualified": false,
+    "rootFormat": "gp-import-evidence-parts-v1",
+    "rootBinding": "Purpose-separated HMAC of complete source/run/row binding inside authenticated root",
+    "minimumObjectBlockBytes": 1024,
+    "minimumOpaqueLinkBlockBytes": 4096,
+    "noPartsWritesOriginalLegacyEnvelope": true,
+    "blockEncryption": "AES-256-GCM using HKDF-SHA256 purpose-derived existing import encryption key",
+    "newManagedKeysProvisioned": false,
+    "legacyReadAndWholeDatabaseRestorePassed": true,
+    "oldBinaryRollbackWithoutMatchingDatabaseAllowed": false,
+    "productiveWriterActivated": false
+  },
+  "syntheticSmallRowAndBoundaryMeasurements": {
+    "smallTwoFileCases": [
+      {
+        "noteBytes": 100,
+        "legacyAndSharedImportTableBytes": 17295,
+        "legacyAndSharedDatabasePageBytes": 139264,
+        "retainedBlocks": 0,
+        "retainedReferences": 0
+      },
+      {
+        "noteBytes": 300,
+        "legacyAndSharedImportTableBytes": 25043,
+        "legacyAndSharedDatabasePageBytes": 151552,
+        "retainedBlocks": 0,
+        "retainedReferences": 0
+      },
+      {
+        "noteBytes": 600,
+        "legacyAndSharedImportTableBytes": 36647,
+        "legacyAndSharedDatabasePageBytes": 163840,
+        "retainedBlocks": 0,
+        "retainedReferences": 0
+      }
+    ],
+    "boundaryCase": {
+      "scope": "Separate in-memory micro-measurement, 96 rows per file, two distinct synthetic hashes, unchanged follow-up review",
+      "sourceBodyBytes": 1024,
+      "targetBodyBytes": 997,
+      "legacyImportTableBytes": 1766632,
+      "sharedImportTableBytes": 1765942,
+      "legacyDatabasePageBytes": 2273280,
+      "sharedDatabasePageBytes": 2408448,
+      "wholeDatabaseGrew": true
+    },
+    "firstUseCanIncreaseStorage": true,
+    "metadataAndIndexOverheadIncluded": true,
+    "universalNoGrowthClaim": false,
+    "fullSourceAndRepresentativeChangeWindowStillRequired": true
+  },
+  "remainingGates": [
+    "Qualify bounded archive growth and garbage collection with controlled changes; assess the next user-supplied export before applying it, without requiring regular or newer uploads now",
+    "Qualify cross-process coordination, a bounded number of working copies and actual peak capacity across app, Linux and Offsite producers",
+    "Decide three local retained points in total versus per area before changing the locally implemented 20-calendar-day policy",
+    "Qualify the large candidate application, download, restore and transactional update/rollback with the imported database and its managed key in the existing productive recovery set",
+    "Coordinate explicit Core Runtime and Offsite module migration; repeat the full signed assurance flow with the longer ready deadline on the authorized deployment"
+  ],
+  "productionRetentionChanged": false,
+  "localRetentionPolicyChanged": true,
+  "localPreparationCompletion": {
+    "checkedAt": "2026-09-06T19:16:08.183Z",
+    "productionQualified": false,
+    "productionWrites": false,
+    "commitPushDeploy": false,
+    "sourceFilesReadDuringThisOptimizationPass": false,
+    "newFullSourceMeasurementStarted": false,
+    "fullSuiteRepeatedAfterLatestChanges": false,
+    "report": "ABSCHLUSS-VORBEREITUNG-2026-09-06.md",
+    "storageAndProgressMetrics": {
+      "scope": "bounded synthetic first and followup import; no full-source forecast",
+      "storage": [
+        {
+          "noteBytes": 100,
+          "legacyBytes": 1527808,
+          "optimizedBytes": 1036288,
+          "savingPercent": 32.171581769437,
+          "legacyMs": 500,
+          "optimizedMs": 746
+        },
+        {
+          "noteBytes": 1000,
+          "legacyBytes": 2154496,
+          "optimizedBytes": 1044480,
+          "savingPercent": 51.52091254752852,
+          "legacyMs": 383,
+          "optimizedMs": 764
+        },
+        {
+          "noteBytes": 4096,
+          "legacyBytes": 3874816,
+          "optimizedBytes": 1052672,
+          "savingPercent": 72.83298097251586,
+          "legacyMs": 527,
+          "optimizedMs": 779
+        }
+      ],
+      "counter": {
+        "rows": 100000,
+        "reads": 500,
+        "cachedMs": 5.174299999999903,
+        "directMs": 2351.2745000000004
+      },
+      "productionQualified": false
+    },
+    "managedImportCompressionEnabledLocally": true,
+    "sharedPayloadWriterProductionActivation": false,
+    "transactionalProgressCountersImplemented": true,
+    "localRetention": {
+      "days": 20,
+      "unit": "calendar-days",
+      "timeZone": "Europe/Vienna",
+      "policy": "daily-calendar-v1",
+      "perLocalArea": true,
+      "includesToday": true,
+      "latestCompletePerDay": true,
+      "originalAuthenticatedCommitDateUsedForArchives": true,
+      "latestCompleteSurvivesLongShutdown": true,
+      "unregisteredMaintenanceCopiesPreserved": true,
+      "routineIntervalHours": 24,
+      "environmentVariable": "GRABENPLANER_BACKUP_RETENTION_DAYS",
+      "googleDriveRetentionChanged": false,
+      "productionDeletionPerformed": false
+    },
+    "saturdayCredit": {
+      "additionalPercent": 50,
+      "startsAt": "13:00",
+      "day": "Saturday",
+      "breaksExcluded": true,
+      "oneWorkedHourValuedMinutes": 90,
+      "exampleWorkedMinutes": 390,
+      "exampleEligibleMinutes": 240,
+      "exampleBonusMinutes": 120,
+      "exampleValuedMinutes": 510,
+      "cutover": "actual Europe/Vienna date of next explicitly authorized deployment startup",
+      "existingEmployeesExplicitlyAssignedToSales": true,
+      "existingApprenticesIncluded": true,
+      "assignmentAndCutoverAtomic": true,
+      "historicalValuesOverwritten": false,
+      "planActualXoffiReviewTimeAccountsAndPayrollIntegratedLocally": true,
+      "requiredDeploymentOption": "GRABENPLANER_SATURDAY_CREDIT_ROLLOUT=existing-sales",
+      "productiveAssignmentsWritten": false,
+      "furtherBusinessInputRequired": false,
+      "report": "../SAMSTAGSGUTSCHRIFT-UMSTELLUNG-2026-09-06.md"
+    },
+    "verification": {
+      "importOptimization": {
+        "report": "tmp/import-optimized-regression-20260906.tap",
+        "passed": 65,
+        "failed": 0
+      },
+      "saturdayIntegration": {
+        "report": "tmp/saturday-final-20260906.tap",
+        "passed": 31,
+        "failed": 0
+      },
+      "legacyTimePayrollAndPersistence": {
+        "report": "tmp/saturday-legacy-inventory-20260906.tap",
+        "passed": 74,
+        "failed": 0
+      },
+      "coupledRecovery": {
+        "report": "tmp/optimized-recovery-20260906.tap",
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0
+      },
+      "backupRuntime": {
+        "report": "tmp/final-backup-runtime-regression-20260906.tap",
+        "passed": 40,
+        "failed": 0
+      },
+      "dailyRetentionAndChildren": {
+        "report": "tmp/daily-child-final-20260906.tap",
+        "passed": 35,
+        "failed": 0
+      },
+      "realLocalArchive": {
+        "report": "tmp/daily-archive-final-20260906.tap",
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0,
+        "independentlyVerifiedSyntheticPoints": 32,
+        "retainedDailyPoints": 20,
+        "durationMs": 373490.7148
+      },
+      "finalPayrollAndCatalogAudit": {
+        "report": "tmp/saturday-export-audit-verified-20260906.tap",
+        "passed": 16,
+        "failed": 0
+      },
+      "architecture": {
+        "report": "tmp/final-audit-verified-20260906.json",
+        "passed": true,
+        "checkedAt": "2026-09-06T19:14:46.617Z"
+      }
+    }
+  },
+  "historicalFullSourceMeasurements": [
+    {
+      "localReport": "tmp/tradefoto-block3-5S1S2a/report.json",
+      "status": "failed",
+      "phase": "backup-measurement",
+      "processedCashRows": 1082167,
+      "durationMs": 18213148,
+      "error": "BACKUP_MEASUREMENT_DISK_RESERVE",
+      "freeBytesAtFailure": 22565416960,
+      "beforeCompactionBytes": 19665858560,
+      "backupPointsCreated": 0,
+      "productionQualified": false,
+      "productionKeysUsed": false,
+      "vaultKeyPersisted": false,
+      "isolatedMeasurementFilesRemoved": true,
+      "processIds14168And20200AbsentOnReview": true,
+      "currentV2AndSharedPayloadImplementationQualifiedByThisRun": false,
+      "followupAssessment": "BLOCK-4-STARTPRUEFUNG-2026-09-06.md",
+      "startedAtLocal": "2026-09-06T13:32:21+02:00",
+      "processIdAtStart": 14168,
+      "loadedImplementation": "older_plain_vacuum_measurement",
+      "externalReserveGuardBytes": 16106127360,
+      "externalGuardStopsExactProcessTree": true,
+      "externalGuardDeletesFiles": false,
+      "guardIdentity": "exact PID plus start time plus executable and isolated measurement command line",
+      "sourceFilesModified": false,
+      "fullCompactionAndRestorePassed": false,
+      "representativeBusinessChangeWindowMeasured": false
+    }
+  ],
+  "existingBackupsChangeScope": "No manual deletion or retention change; installed normal verification created backup/status artifacts and may apply its existing retention",
+  "capacityAssessment": {
+    "format": "grabenplaner.full-stock-capacity-assessment.v1",
+    "checkedAt": "2026-09-07T01:34:56.052Z",
+    "sourceReport": "tmp/tradefoto-block3-2Ap4l0/report.json",
+    "vpsSnapshot": "tmp/full-stock-vps-final-state-20260907.json",
+    "preFinalAssuranceSnapshot": false,
+    "assumptions": {
+      "changeGrowthZeroIsOptimisticNotMeasured": true,
+      "orphanAndGcDebtZeroAreOptimisticNotQualified": true,
+      "walUsesEnforcedExperimentBudgetNotObservedPeak": true,
+      "candidateUsesOneBaselineArchive": true,
+      "existingProductionDatabaseAndDocumentsNotIncludedInImportFixture": true,
+      "legacyDeletionCreditBytes": 0
+    },
+    "inputs": {
+      "freeBytes": 71846055936,
+      "liveGrowthBytes": 11602071552,
+      "coupledSnapshotBytes": 11602073058,
+      "baselineArchiveBytes": 5331534291,
+      "changedBytesPerPoint": 0,
+      "walPeakBytes": 2147483648,
+      "candidateArchiveBytes": 5331534291,
+      "orphanBytes": 0,
+      "gcDebtBytes": 0,
+      "measuredFullSource": true
+    },
+    "plan": {
+      "retentionPerArea": 20,
+      "localAreas": 2,
+      "workingCopies": 8,
+      "minimumWorkingCopies": 7,
+      "workingCopyBasis": "conservative-unverified-coordinator",
+      "reserveBytes": 10737418240,
+      "archivePerAreaBytes": 5331534291,
+      "walPeakBytes": 2147483648,
+      "candidateArchiveBytes": 5331534291,
+      "orphanBytes": 0,
+      "gcDebtBytes": 0,
+      "legacyDeletionCreditBytes": 0,
+      "requiredAdditionalBytes": 133298160777,
+      "remainingBytes": -61452104841,
+      "capacityFits": false,
+      "qualified": false,
+      "evidence": {
+        "measuredFullSource": true,
+        "measuredChangeWindow": false,
+        "steadyStateGcMeasured": false,
+        "globalSerializationVerified": false,
+        "offsiteSingleStageVerified": false,
+        "peakCapacityMeasured": false
+      },
+      "destructiveActions": false
+    },
+    "fiveCopyBareFloorBytes": 91012923664,
+    "fiveCopyFloorExcludesWalCandidateChangesOrphansAndGc": true,
+    "fiveCopySerializationActuallyVerified": false,
+    "fortyPlainCoupledCopiesBytes": 464082922320,
+    "stressSample": {
+      "newTestTable": true,
+      "rows": 2000,
+      "newRandomPayloadBytes": 2048000,
+      "databaseGrowthBytes": 2744320,
+      "archiveGrowthBytes": 2476450745,
+      "compactedAgain": true,
+      "actualBusinessChangeWindow": false
+    },
+    "uncompactedSavingPercent": 38.91550819737005,
+    "driveQuota": {
+      "total": 214748364800,
+      "used": 1407123160,
+      "trashed": 364870734,
+      "other": 103776138943,
+      "free": 109565102697,
+      "source": "tmp/backup-drive-quota-20260907.json",
+      "sameBoundProductionBackupProvider": true,
+      "changeWindowQualified": false
+    },
+    "threePointScenarios": {
+      "requestedForAssessmentOnly": true,
+      "activePolicyChanged": false,
+      "existingPointsManuallyDeleted": false,
+      "threePerArea": {
+        "localAreas": 2,
+        "retainedPoints": 6,
+        "plainCopiesBytes": 69612438348,
+        "optimisticZeroGrowthRequiredBytes": 133298160777
+      },
+      "threeTotal": {
+        "retainedPoints": 3,
+        "plainCopiesBytes": 34806219174,
+        "hypotheticalSingleArchiveRequiredBytes": 127966626486,
+        "singleArchiveIntegrationImplemented": false
+      },
+      "fiveCopySingleArchiveBareFloorBytes": 85681389373,
+      "existingLocalDirectoryLogicalBytes": 21153812093,
+      "directoryBytesAreNotSafeDeletionCredit": true,
+      "eightSimultaneousCopiesActuallyMeasured": false,
+      "fiveNamedCopies": [
+        "latest-app-raw-point",
+        "latest-external-raw-point",
+        "offsite-stage",
+        "new-raw-copy",
+        "independent-restore"
+      ]
+    },
+    "requiredExtraFreeBytes": 61452104841,
+    "diskUsedBytes": 31069433856,
+    "impliedTotalDiskBytesAtCurrentUsage": 164367594633,
+    "report": "tmp/full-stock-capacity-20260907.json"
+  },
+  "sourceUploadPolicy": {
+    "confirmedAt": "2026-09-07",
+    "policy": "Only use the last files supplied by the user, even when no new exports arrive for weeks",
+    "newerExportsCurrentlyAvailable": false,
+    "newUploadRequiredToContinuePreparation": false,
+    "normalAppBackupReimportsAccessSources": false,
+    "dailyOrPeriodicSourceUploadRequired": false,
+    "changedSourceQualification": "Controlled synthetic changes until a new user-supplied export is available; assess that export and growth before applying it"
+  },
+  "workspaceOptimization": {
+    "checkedAt": "2026-09-07T03:32:49.183Z",
+    "report": "ARBEITSKOPIEN-UND-QUELLSTAENDE-2026-09-07.md",
+    "localImplementation": true,
+    "productionQualified": false,
+    "installedProductionFilesChanged": false,
+    "productionServiceChanges": false,
+    "productionImport": false,
+    "retainedBackupsDeleted": false,
+    "retentionChangedDuringThisPass": false,
+    "commitPushDeploy": false,
+    "sameVolumeExportUsesVerifiedMaterializedFiles": true,
+    "unexpectedCrossVolumeRenameFails": true,
+    "crossVolumeExportStillCopiesWithSeparateCapacityChecks": true,
+    "exportMeasurement": {
+      "syntheticOnly": true,
+      "databaseBytes": 67207168,
+      "duplicateExportDatabaseBytes": 0,
+      "sameFileIdentity": true,
+      "exportMs": 5913
+    },
+    "avoidedCoupledCopyBytesAtPreviousFullStockSizeEstimate": 11602073058,
+    "avoidedCopyIsNotAnOverallVpsCapacityCredit": true,
+    "sharedLease": {
+      "linux": "kernel flock, shared Node/Bash descriptor",
+      "windows": "existing SQLite sidecar lock adapter",
+      "noReentrantConcurrentCallerBypass": true,
+      "releaseAfterOwnedWorkerExitTested": true,
+      "automaticStaleLockDeletion": false,
+      "guarded": [
+        "app-background-backup",
+        "app-prelisten-and-sync-backup",
+        "standalone-backup-cli",
+        "database-download-through-transfer",
+        "linux-backup",
+        "offsite-stage-copy",
+        "offsite-restore-test-including-app-smoke",
+        "local-archive-management-copy-actions"
+      ],
+      "managementRequiresExistingInstallationDatabasePath": true,
+      "excludedFromGlobalQualification": [
+        "supervised-recovery-prepare-apply",
+        "updater-rollback",
+        "whole-application-import-replacement",
+        "copies-within-isolated-smoke-app",
+        "leftover-files-after-cleanup-failure",
+        "bounded-long-term-garbage-collection"
+      ]
+    },
+    "stagingInspectionUnderMaintenanceAndRepositoryLocks": true,
+    "leftoverStagingBlocksNewPreparation": true,
+    "requiredAdditionalFreeBytesModelUnchanged": 133298160777,
+    "fullStockCombinedOperatingPeakMeasuredAfterThisChange": false,
+    "finalReadOnlyVpsSnapshot": {
+      "format": "grabenplaner.backup-workspace-readonly-vps.v1",
+      "checkedAt": "2026-09-07T02:47:13.769649+00:00",
+      "readOnly": true,
+      "appActive": true,
+      "caddyActive": true,
+      "internalReadyHttpStatus": 200,
+      "internalReadyState": null,
+      "databaseAndOffsiteRestoreRechecked": false,
+      "dataFilesystemTotalBytes": 102915489792,
+      "dataFilesystemFreeBytes": 72458493952,
+      "failedUnitCount": 18,
+      "isolatedTestDirectoryAbsent": true
+    },
+    "requiredExtraFreeBytesAtFinalReadOnlySnapshot": 60839666825,
+    "baselineImplementationFilesUnchanged": 12,
+    "firstImplementationManifest": "tmp/backup-workspace-implementation-20260907.json",
+    "fullSuiteImplementationManifest": "tmp/backup-workspace-final-implementation-20260907.json",
+    "preliminaryWindowsCorrectionManifest": "tmp/backup-workspace-assurance-final-implementation-20260907.json",
+    "implementationManifest": "tmp/backup-workspace-assurance-bounded-final-implementation-20260907.json",
+    "postFullSuiteChanges": [
+      "Windows signed-head bounded atomic rename retry",
+      "two focused Windows failure-mode tests",
+      "updated offsite fingerprint pin",
+      "existing Windows package test fixture admits required backup runtime files"
+    ],
+    "packageRuntimeCorrection": {
+      "admittedEntrypoints": [
+        "backup.js",
+        "scripts/run-background-backup.js",
+        "scripts/manage-local-backup-archive.js"
+      ],
+      "arbitraryScriptsStillExcluded": true,
+      "liveDataAndSecretExclusionsPreserved": true,
+      "backgroundWorkerPassedFromIsolatedRuntimeFixture": true,
+      "redReport": "tmp/backup-package-runtime-red-20260907.tap",
+      "finalReport": {
+        "report": "tmp/backup-package-runtime-final-20260907.tap",
+        "tests": 30,
+        "pass": 27,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 3,
+        "duration_ms": 27292.3292,
+        "status": "passed"
+      },
+      "architectureClassificationPassed": {
+        "report": "tmp/backup-package-inventory-final-20260907.tap",
+        "tests": 5,
+        "pass": 5,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "duration_ms": 9035.2979,
+        "status": "passed"
+      },
+      "existingWindowsFixtureCorrected": {
+        "report": "tmp/backup-package-existing-fixture-final-20260907.tap",
+        "tests": 10,
+        "pass": 10,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "duration_ms": 3598.3368,
+        "status": "passed"
+      },
+      "correctedWindowsFixtureSha256": "67ef555bab8bdd124ab8c58b7b3cc0999a81ff3279c1bdaf7eb361674c708ebd",
+      "installedTrustedPackageVerifierCompatibilityQualified": false,
+      "packagePolicyTransitionRequiredBeforeRelease": true,
+      "existingRuntimeV4MigrationOnlySupportsSchema3To4": true,
+      "productionPackageBuiltOrDeployed": false
+    },
+    "linuxTemporaryFixtureRemoved": true,
+    "windowsAssuranceAtomicReplaceCorrection": {
+      "affected": "local Windows synthetic recovery-assurance test roots; replacing head.json returned EPERM",
+      "exactConflictingProcessKnown": false,
+      "productionIncident": false,
+      "behavior": "retry the same atomic rename only on Windows EPERM/EACCES/EBUSY; preserve the previous signed head",
+      "maximumAttempts": 11,
+      "maximumRetryDelayMs": 3000,
+      "permanentErrorStillFails": true,
+      "existingSignedPrefixRecoveryProtocolPreserved": true,
+      "linuxRuntimeBehaviorChanged": false,
+      "preCorrectionReproduction": {
+        "report": "tmp/backup-workspace-assurance-repeat-20260907.tap",
+        "tests": 7,
+        "pass": 5,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 0,
+        "duration_ms": 670.8797,
+        "status": "failed"
+      },
+      "preliminary500msFocusedVerification": {
+        "report": "tmp/backup-workspace-assurance-fixed-final-20260907.tap",
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "duration_ms": 1546.6403,
+        "status": "passed"
+      },
+      "preliminary500msBroaderFailure": {
+        "report": "tmp/backup-workspace-assurance-package-final-20260907.tap",
+        "tests": 106,
+        "pass": 100,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 5,
+        "duration_ms": 23666.9726,
+        "status": "failed"
+      },
+      "parallelNativeConflictDiagnostic": {
+        "report": "tmp/backup-workspace-assurance-head-parallel-diagnostic-20260907.json",
+        "processes": 8,
+        "syntheticAtomicReplacements": 1600,
+        "temporaryNativeConflicts": 18,
+        "minimumObservedRecoveryMs": 254.1914999999999,
+        "maximumObservedRecoveryMs": 1320.1068999999998,
+        "filesWritableAndSingleLinked": true,
+        "exactConflictingProcessKnown": false
+      },
+      "assuranceAndPackageRegression": {
+        "report": "tmp/backup-workspace-assurance-package-bounded-final-20260907.tap",
+        "tests": 106,
+        "pass": 101,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 5,
+        "duration_ms": 24558.7017,
+        "status": "passed"
+      },
+      "parallelProductVerification": {
+        "report": "tmp/backup-workspace-assurance-parallel-product-final-20260907.json",
+        "processes": 8,
+        "syntheticHistories": 800,
+        "syntheticAtomicReplacements": 1600,
+        "passed": true,
+        "diagnosticExtraRetriesDisabled": true,
+        "nativeRenameConflictsHandled": 77,
+        "allFixturesRemoved": true
+      },
+      "sourceSha256": "7fcb0e4f12ea96c049728ef63a2e002c36f56526d6fbbe46c2539c01774a5a89",
+      "testSha256": "84d787b8a2e7b5d9342316e6d8f4060aae5257cea4c9e26652c6bb0e62a9fe10",
+      "deployed": false
+    },
+    "tests": {
+      "linux": {
+        "report": "tmp/backup-workspace-linux-final-20260907.tap",
+        "tests": 5,
+        "pass": 5,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "duration_ms": 4884.772162,
+        "status": "passed"
+      },
+      "contentionAndInventory": {
+        "report": "tmp/backup-workspace-contention-20260907.tap",
+        "tests": 23,
+        "pass": 23,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "duration_ms": 12144.2393,
+        "status": "passed"
+      },
+      "contractsAndServer": {
+        "report": "tmp/backup-workspace-final-contracts-20260907.tap",
+        "tests": 29,
+        "pass": 28,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "duration_ms": 27747.0493,
+        "status": "passed"
+      },
+      "largeSyntheticExport": {
+        "report": "tmp/backup-workspace-64mib-export-20260907.tap",
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "duration_ms": 27675.8879,
+        "status": "passed"
+      },
+      "firstCompleteSuite": {
+        "report": "tmp/backup-workspace-complete-regression-20260907.tap",
+        "tests": 3074,
+        "pass": 3031,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 41,
+        "duration_ms": 1182265.7542,
+        "status": "failed",
+        "failure": "Two architecture checks required explicit classification of the new synthetic SQLite test fixtures; corrected and rechecked",
+        "includedPinnedRealRestic": true
+      },
+      "finalCompleteSuiteRepeatsPinnedRealResticArchiveCore": true,
+      "finalCompleteSuiteEnvironmentOptInResticIntegrationsEnabled": false,
+      "completeSuiteFailureResolution": {
+        "windowsPackageFixture": "Corrected and separately passed",
+        "windowsAssuranceHeadReplacement": "Bounded atomic retry implemented; transient/permanent failure and signed-prefix recovery tests passed",
+        "verification": {
+          "report": "tmp/backup-workspace-assurance-package-bounded-final-20260907.tap",
+          "tests": 106,
+          "pass": 101,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 5,
+          "duration_ms": 24558.7017,
+          "status": "passed"
+        },
+        "completeSuiteRepeatedAfterFinalCorrections": false
+      },
+      "shellSyntax": {
+        "checked": 35,
+        "failed": 0
+      },
+      "fullSuite": {
+        "report": "tmp/backup-workspace-final-complete-regression-20260907.tap",
+        "tests": 3077,
+        "pass": 3031,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 44,
+        "duration_ms": 1163914.8184,
+        "status": "failed"
+      }
+    }
+  }
+}

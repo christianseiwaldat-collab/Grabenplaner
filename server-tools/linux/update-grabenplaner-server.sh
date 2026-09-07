@@ -53,6 +53,7 @@ maximum_expanded_bytes=2147483648
 allow_downgrade=0
 lock_already_held=0
 commit_marker_arg=""
+runtime_v5_transition=""
 
 while (($#)); do
   case "$1" in
@@ -83,6 +84,7 @@ while (($#)); do
     # nochmals mit flock validiert.
     --lock-already-held) lock_already_held=1; shift ;;
     --commit-marker) commit_marker_arg="${2:?Wert fuer --commit-marker fehlt}"; shift 2 ;;
+    --runtime-v5-transition) runtime_v5_transition="${2:?Wert fuer --runtime-v5-transition fehlt}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -106,7 +108,7 @@ database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstpl
 backup_dir="$(gp_safe_absolute_path "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
 amu_dir="$(gp_existing_directory "$data_dir/private/amu" "Geschuetzter Dokumentordner")"
 public_url="${public_url_arg:-${GRABENPLANER_PUBLIC_URL:-}}"
-backup_keep="${backup_keep_arg:-${GRABENPLANER_BACKUP_KEEP:-30}}"
+backup_keep="${backup_keep_arg:-${GRABENPLANER_BACKUP_RETENTION_DAYS:-20}}"
 [[ "$backup_keep" =~ ^[0-9]+$ ]] && (( backup_keep >= 1 && backup_keep <= 1000 )) || gp_die "--backup-keep muss zwischen 1 und 1000 liegen."
 port="${PORT:-3000}"
 [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || gp_die "PORT ist ungueltig."
@@ -151,7 +153,7 @@ commit_marker=""
 if [[ -n "$commit_marker_arg" ]]; then
   commit_marker="$(gp_safe_absolute_path "$commit_marker_arg" "Updater-Commitmarker")"
   commit_marker_parent="$(dirname -- "$commit_marker")"
-  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3|4)-migration\.[A-Za-z0-9]+$ \
+  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3|4|5)-migration\.[A-Za-z0-9]+$ \
     && -d "$commit_marker_parent" && ! -L "$commit_marker_parent" \
     && "$(stat --format='%u:%g:%a' -- "$commit_marker_parent")" == "0:0:711" \
     && ! -e "$commit_marker" && ! -L "$commit_marker" ]] \
@@ -169,6 +171,16 @@ systemctl is-active --quiet "$service" || gp_die "$service muss vor dem Update a
 systemctl is-active --quiet "$caddy_service" || gp_die "$caddy_service muss vor dem Update aktiv sein."
 trusted_package_verifier="$app_dir/server-tools/linux/lib/verify-package.js"
 trusted_tree_verifier="$app_dir/server-tools/linux/lib/verify-install-tree.js"
+if [[ -n "$runtime_v5_transition" ]]; then
+  [[ "$lock_already_held" -eq 1 && -n "$commit_marker" ]] || gp_die "Runtime v5 verlangt den gebundenen Migrationsaufruf."
+  inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
+  [[ "$inherited_lock_target" == "$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")" ]] \
+    && flock --nonblock 9 || gp_die "Die Runtime-v5-Wartungssperre fehlt."
+  "$node" "$SCRIPT_DIR/lib/runtime-v5-transition.js" invocation "$runtime_v5_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
+    || gp_die "Der Runtime-v5-Vertrauensuebergang ist ungueltig."
+  trusted_package_verifier="$SCRIPT_DIR/lib/verify-package.js"
+  trusted_tree_verifier="$SCRIPT_DIR/lib/verify-install-tree.js"
+fi
 [[ -f "$trusted_package_verifier" && ! -L "$trusted_package_verifier" ]] || gp_die "Die installierte vertrauenswuerdige Paketpruefung fehlt."
 [[ -f "$trusted_tree_verifier" && ! -L "$trusted_tree_verifier" ]] || gp_die "Die installierte vertrauenswuerdige Baumpruefung fehlt."
 
@@ -491,7 +503,7 @@ esac
 installed_runtime_schema="$("$node" -e \
   'const fs=require("node:fs");process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).deploymentSchemaVersion))' \
   "$installed_runtime_result_file")"
-if [[ "$installed_runtime_schema" == "3" || "$installed_runtime_schema" == "4" ]]; then
+if [[ "$installed_runtime_schema" == "3" || "$installed_runtime_schema" == "4" || "$installed_runtime_schema" == "5" ]]; then
   host_control_group="grabenplaner-host-control"
   host_control_module="/opt/grabenplaner-host-control/module"
   host_control_socket_unit="/etc/systemd/system/grabenplaner-host-control.socket"
@@ -608,6 +620,15 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
     || gp_die "Die installierte Offsite-Kompatibilitaetspruefung hat unsichere Dateirechte."
   offsite_module_gate="$("$node" "$offsite_gate_helper" "$manifest_result_file" "$installed_offsite_receipt")" \
     || gp_die "Der Vertrag des eingerichteten Offsite-Moduls konnte nicht sicher verglichen werden."
+  if [[ -n "$runtime_v5_transition" && "$offsite_module_gate" == "migration-required:6->7" ]]; then
+    "$node" - "$runtime_v5_transition" "$installed_offsite_receipt" <<'NODE' \
+      || gp_die "Die vorab gepruefte Offsite-Bindung wurde veraendert."
+const fs=require("node:fs"),crypto=require("node:crypto"),assert=require("node:assert/strict");
+const [transition,receipt]=process.argv.slice(2),value=JSON.parse(fs.readFileSync(transition,"utf8"));
+assert.equal(crypto.createHash("sha256").update(fs.readFileSync(receipt)).digest("hex"),value.installedOffsiteReceiptSha256);
+NODE
+    offsite_module_gate="compatible"
+  fi
   case "$offsite_module_gate" in
     compatible|compatible-installer-only) ;;
     migration-required:*)
@@ -709,7 +730,7 @@ update_committed=1
 # zuerst ein signierter, fuer die App sichtbarer Queue-Beleg geschrieben und
 # danach der komplette Recovery-Assurance-Lauf asynchron eingeplant. Ein Fehler
 # an dieser Stelle darf das gesunde neue Release nicht mehr zurueckrollen.
-if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transition" ]]; then
   offsite_common="/opt/grabenplaner-offsite/module/lib/offsite-common.sh"
   if ! (
     [[ -f "$offsite_common" && ! -L "$offsite_common" ]] || exit 1

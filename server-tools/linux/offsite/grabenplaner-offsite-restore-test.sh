@@ -54,6 +54,10 @@ if [[ -n "$assurance_result" ]]; then
     || offsite_die "Der Assurance-Ergebnispfad ist nicht freigegeben."
 fi
 offsite_assert_runtime_binaries
+core_common="$OFFSITE_APP_ROOT/server-tools/linux/lib/common.sh"
+[[ -f "$core_common" && ! -L "$core_common" ]] \
+  || offsite_fixed_failure RESTORE_TEST_FAILED "Die gemeinsame Backup-Arbeitsbereichssperre fehlt."
+source "$core_common"
 for helper in "$RECOVERY_METADATA" "$RECOVERY_VERIFY" "$RECOVERY_INTEGRATION_MODULE" \
   "$RECOVERY_DATABASE_LOCK_MODULE" "$RECOVERY_TARGET_PACKAGE" "$RECOVERY_TARGET_RUNTIME"; do
   [[ -f "$helper" && ! -L "$helper" ]] \
@@ -93,6 +97,17 @@ if (( lock_already_held == 1 )); then
 else
   offsite_acquire_repository_lock
 fi
+
+workspace_database="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" "$OFFSITE_DATA_ROOT/data/dienstplan.db" <<'NODE'
+const fs = require("node:fs");
+const rows = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter(line => /^DB_PATH=/.test(line));
+if (rows.length > 1) process.exit(1);
+const value = rows.length ? rows[0].slice(8) : process.argv[3];
+if (!value.startsWith("/") || /[\x00-\x1f\x7f]/.test(value)) process.exit(1);
+process.stdout.write(value);
+NODE
+)" || offsite_fixed_failure RESTORE_TEST_FAILED "Der gemeinsame Backup-Arbeitsbereich ist ungueltig."
+gp_acquire_backup_workspace_lock "$workspace_database" "$OFFSITE_NODE" "$OFFSITE_APP_ROOT/lib/backup-workspace.js"
 
 if ! offsite_verify_repository_identity "$uploader_credentials" "$operation_root/repository-config.json"; then
   offsite_fixed_failure RESTORE_TEST_REPOSITORY_ID_MISMATCH "Die Identitaet des Offsite-Repositorys konnte fuer den Restore-Test nicht bestaetigt werden."

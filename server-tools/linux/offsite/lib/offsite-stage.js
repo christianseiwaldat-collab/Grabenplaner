@@ -5,7 +5,32 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 function fail(message) { throw new Error(message); }
-function sha256(file) { return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"); }
+// This module is installed independently of the app. Keep the bounded reader
+// local so an older/newer core installation cannot change its pinned contract.
+function sha256(file) {
+  const before = assertRegular(file);
+  const descriptor = fs.openSync(file, fs.constants.O_RDONLY
+    | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+  const unchanged = (after) => after.isFile() && after.nlink === 1
+    && before.dev === after.dev && before.ino === after.ino
+    && before.size === after.size && before.mtimeMs === after.mtimeMs
+    && before.ctimeMs === after.ctimeMs;
+  try {
+    if (!unchanged(fs.fstatSync(descriptor))) fail("Eine Staging-Datei wurde ausgetauscht.");
+    const buffer = Buffer.allocUnsafe(1024 * 1024), hash = crypto.createHash("sha256");
+    let position = 0;
+    while (position < before.size) {
+      const bytes = fs.readSync(descriptor, buffer, 0, Math.min(buffer.length, before.size - position), position);
+      if (bytes <= 0) fail("Eine Staging-Datei endete unerwartet.");
+      hash.update(buffer.subarray(0, bytes));
+      position += bytes;
+    }
+    if (!unchanged(fs.fstatSync(descriptor)) || !unchanged(assertRegular(file))) {
+      fail("Eine Staging-Datei wurde waehrend der Pruefung veraendert.");
+    }
+    return hash.digest("hex");
+  } finally { fs.closeSync(descriptor); }
+}
 function safeName(value) { return /^[A-Za-z0-9][A-Za-z0-9._-]{0,190}$/.test(value); }
 
 function assertRegular(file) {
@@ -138,7 +163,18 @@ function main() {
   const [command, stageArg, resultFile, ...metadataFiles] = process.argv.slice(2);
   const stage = path.resolve(String(stageArg || ""));
   if (!path.isAbsolute(String(stageArg || "")) || stage === path.parse(stage).root) fail("Der Stagingpfad ist ungueltig.");
-  if (command === "create") create(stage, path.resolve(String(resultFile || "")), metadataFiles.map((file) => path.resolve(file)));
+  if (command === "assert-empty-root") {
+    if (resultFile !== undefined || metadataFiles.length) fail("Unzulaessige Staging-Parameter.");
+    let current = path.parse(stage).root;
+    for (const part of path.relative(current, stage).split(path.sep)) {
+      current = path.join(current, part);
+      const stat = fs.lstatSync(current);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) fail("Der Stagingpfad ist unsicher.");
+    }
+    if (fs.readdirSync(stage).length) fail("Vorhandene Staging-Arbeitsdaten muessen zuerst geprueft werden.");
+    process.stdout.write('{"ok":true,"empty":true}\n');
+  }
+  else if (command === "create") create(stage, path.resolve(String(resultFile || "")), metadataFiles.map((file) => path.resolve(file)));
   else if (command === "verify") verify(stage);
   else if (command === "verify-result") verifyResult(stage, path.resolve(String(resultFile || "")));
   else fail("Unbekannter Staging-Vorgang.");

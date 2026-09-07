@@ -123,13 +123,13 @@ test("standalone Windows backup uses the same commit marker and committed-only r
   const source = fs.readFileSync(path.join(__dirname, "..", "backup.js"), "utf8");
   assert.match(source, /writeBackupCommitMarker/);
   assert.match(source, /verifyCommittedBackup[\s\S]*verifyPair: verifyStandaloneBackupPair/);
-  assert.match(source, /pruneCommittedBackups\(backupDirectory, 30, \{ verifyPair: verifyStandaloneBackupPair \}\)/);
+  assert.match(source, /parseBackupKeep\(process\.env\.GRABENPLANER_BACKUP_RETENTION_DAYS, 20\)/);
+  assert.match(source, /pruneCommittedBackups\(backupDirectory, retentionDays, \{ verifyPair: verifyStandaloneBackupPair \}\)/);
   assert.match(source, /marker: markerTarget/);
 });
 
 test("standalone backup paths include protected candidate and loan files through direct or canonical references", () => {
   for (const relativePath of [
-    "backup.js",
     "server-tools/windows/Backup-Grabenplaner.ps1",
     "server-tools/windows/Restore-Grabenplaner.ps1",
     "server-tools/windows/Test-GrabenplanerServer.ps1",
@@ -153,6 +153,8 @@ test("standalone backup paths include protected candidate and loan files through
   assert.match(canonicalSource, /loan_documents/);
   assert.match(canonicalSource, /loan_photos/);
   assert.match(canonicalSource, /loan_photo_attachments/);
+  assert.match(canonicalSource, /crm_customer_photos/);
+  assert.match(fs.readFileSync(path.join(__dirname, "..", "backup.js"), "utf8"), /protectedStorageReferencesFromFile/);
   for (const relativePath of [
     "server-tools/linux/lib/backup-snapshot.js",
     "server-tools/linux/lib/verify-backup.js",

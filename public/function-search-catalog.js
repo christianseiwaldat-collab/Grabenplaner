@@ -766,12 +766,12 @@
     ),
     entry(
       "settings.saturday-bonus",
-      "Samstagswertung einstellen",
-      ["Einstellungen", "Zeiterfassung", "Samstagswertung"],
-      "Öffnet Faktor und Startzeit der Samstagswertung.",
-      ["samstagsfaktor", "samstagswertung", "samstag zuschlag", "faktor 1,5", "gewichtete zeit", "saturday bonus"],
-      ["settingsTimeTrackingTab", "saturdayBonusEnabled"],
-      { view: "settings", settingsTab: "timeTracking", focusId: "saturdayBonusEnabled" },
+      "Verkaufszuordnung und Samstagsgutschrift",
+      ["Personalverwaltung", "Mitarbeitende", "Samstagsgutschrift"],
+      "Öffnet das berechtigte Mitarbeiterverzeichnis. Nach Auswahl einer Person lässt sich deren Verkaufszuordnung für die Samstagsgutschrift prüfen.",
+      ["samstagsfaktor", "samstagswertung", "samstag zuschlag", "faktor 1,5", "gewichtete zeit", "saturday bonus", "verkaufszuordnung", "samstagsgutschrift"],
+      ["personnelDirectoryNavButton"],
+      { view: "personnelAdministration", personnelAdministrationTab: "employees", focusId: "personnelDirectorySection" },
     ),
     entry(
       "settings.wifi",

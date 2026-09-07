@@ -332,13 +332,49 @@ test("Block 3/6: bound records block unsafe undo; source floating decimals retai
   assert.equal((await f.engine.detail(precise.id, 1)).source.Punkte, "0.123456789012345");
 });
 
-test("Block 3: every new SQL statement compiles portably; no app migration, route or auth activation", () => {
+test("Productive Block 1: master statements compile portably and registration does not activate an import", () => {
   assert.equal(SQLITE_IMPORT_MASTER_CATALOG.length, Object.keys(S).length);
   for (const entry of SQLITE_IMPORT_MASTER_CATALOG) assert.equal(compilePostgresqlDialectEntry(entry).strategy, "portable-generated", entry.statement.id);
   assert.ok(!/AUTOINCREMENT|PRAGMA|GLOB|json_|rowid|RAISE\(/iu.test(IMPORT_MASTER_SCHEMA_SQL));
-  for (const filename of ["server.js", "lib/persistence/sqlite/operations/application-schema.js", "lib/persistence/sqlite/application-catalog.js"]) {
-    const full = path.join(__dirname, "..", filename); if (fs.existsSync(full)) assert.ok(!fs.readFileSync(full, "utf8").includes("import-master"), filename);
-  }
+  const catalog=require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG;
+  assert.ok(SQLITE_IMPORT_MASTER_CATALOG.every(e=>catalog.some(c=>c.statement===e.statement)));
+  assert.match(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8'),/createDataImportRuntime\(\{[^}]*allowApply: false/);
+});
+
+test('Productive Block 2: mapping directory is bounded, exact-keyed, class-protected and preserves leading zeros', async t => {
+  const f = await fixture(t);
+  await f.ingest('KUNDEN', [customer(), customer({ KUND_NR: '419', VORNAME: 'Anderer', NACHNAME: 'Kunde' })]);
+  const query = { table: 'KUNDEN', sourceInstance: 'test-ledger', limit: 1 };
+  const first = await f.service.mappings(query), second = await f.service.mappings({ ...query, after: first.next });
+  assert.equal(first.items.length, 1); assert.ok(first.next); assert.equal(second.items.length, 1); assert.equal(second.next, null);
+  assert.notEqual(first.items[0].id, second.items[0].id);
+  const exact = await f.service.mappings({ ...query, key: '000419' });
+  assert.equal(exact.items[0].number, '000419'); assert.equal(exact.items[0].customer.email, 'synthetic@example.test');
+  assert.doesNotMatch(JSON.stringify(exact), /Kennwort|Passwort|Bank|Konto|conditions|Umsatz/);
+  const linked = await f.sync(exact.items[0].id);
+  const bound = await f.service.mappings({ ...query, key: '000419', status: 'linked' });
+  assert.equal(bound.items[0].binding.targetId, linked.targetId); assert.equal(bound.items[0].undoEventId, linked.eventId);
+  assert.equal((await f.service.mappings({ ...query, key: '000419', status: 'unlinked' })).items.length, 0);
+  f.context.deniedClasses.add('customer_restricted'); await assert.rejects(f.service.mappings(query), errorCode('IMPORT_FORBIDDEN'));
+});
+
+test('Productive Block 2: target choices contain only IDs, names and activation; no matching by similar name', async t => {
+  const f = await fixture(t);
+  f.database.exec("INSERT INTO employees VALUES ('419',1,'Synthetic Person','38.5','developer'),('0419',0,'Synthetic Historical','0','employee'); INSERT INTO locations VALUES ('gp-18',1,'Synthetischer Standort');");
+  const exact = await f.service.mappingTargets({ table: 'MITARBEITER', query: '419' });
+  assert.deepEqual(exact.items, [{ id: '419', label: 'Synthetic Person', active: true }]);
+  const first = await f.service.mappingTargets({ table: 'MITARBEITER', limit: 1 }); assert.equal(first.items[0].active, false); assert.ok(first.next);
+  const second = await f.service.mappingTargets({ table: 'MITARBEITER', limit: 1, after: first.next }); assert.equal(second.items[0].id, '419');
+  assert.equal((await f.service.mappingTargets({ table: 'MITARBEITER', query: 'Synthetic%' })).items.length, 0);
+  assert.equal((await f.service.mappingTargets({ table: 'FILIALEN' })).items[0].label, 'Synthetischer Standort');
+  assert.doesNotMatch(JSON.stringify(second), /developer|38.5|contracted_hours/);
+  f.context.deniedClasses.add('personnel_restricted'); await assert.rejects(f.service.mappingTargets({ table: 'MITARBEITER' }), errorCode('IMPORT_FORBIDDEN'));
+});
+
+test('Productive Block 2: trusted source namespace rejects a record transplanted from another import', async t => {
+  const f = await fixture(t), { records: [record] } = await f.ingest('KUNDEN', [customer()]);
+  const service = createImportMasterService({ access: f.provider, protection: f.protection, getActor: () => f.context.who, authorize: () => true, sourceInstance: 'different-source' });
+  await assert.rejects(service.previewCustomer({ recordId: record.id, expectedSourceRevision: 1, decision }), errorCode('IMPORT_MASTER_NOT_FOUND'));
 });
 
 test("Block 3: sales/cost source fields cannot bypass the existing split price permissions", async t => {

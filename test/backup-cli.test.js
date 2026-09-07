@@ -15,7 +15,8 @@ const powershell = process.platform === "win32"
   ? path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
   : "";
 
-test("standalone backup creates a verifiable committed pair on Windows-compatible paths", () => {
+test("standalone backup creates a verifiable committed pair on Windows-compatible paths", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-07-19T12:00:00Z") });
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-backup-cli-"));
   const dataRoot = path.join(root, "data-root");
   const protectedRoot = path.join(dataRoot, "private", "amu");
@@ -37,9 +38,9 @@ test("standalone backup creates a verifiable committed pair on Windows-compatibl
     assert.equal(fs.existsSync(result.marker), true);
     assert.equal(verifyCommittedBackup(backupDirectory, path.basename(result.marker)).committed, true);
 
+    // Retention uses the authenticated commit date, independently of file mtime.
+    t.mock.timers.tick(24 * 60 * 60 * 1000);
     const newer = createPairedBackup(database, backupDirectory, "2026-07-20T12-00-00-000Z", "Testbackup neu");
-    fs.utimesSync(result.marker, new Date("2026-07-19T12:00:00Z"), new Date("2026-07-19T12:00:00Z"));
-    fs.utimesSync(newer.marker, new Date("2026-07-20T12:00:00Z"), new Date("2026-07-20T12:00:00Z"));
     const newerManifest = JSON.parse(fs.readFileSync(path.join(newer.protectedDirectory, "manifest.json"), "utf8"));
     fs.appendFileSync(path.join(newer.protectedDirectory, newerManifest.keyCheck.fileName), "tampered");
     const retention = pruneCommittedBackups(backupDirectory, 1, { verifyPair: verifyStandaloneBackupPair });

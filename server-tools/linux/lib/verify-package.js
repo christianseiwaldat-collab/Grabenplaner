@@ -10,6 +10,10 @@ const manifestPath = path.join(root, "grabenplaner-server-manifest.json");
 const runtimeSchemaPath = path.join(root, "server-tools", "linux", "runtime-schema.json");
 const offsiteSchemaPath = path.join(root, "server-tools", "linux", "offsite", "module-schema.json");
 const hardeningSchemaPath = path.join(root, "server-tools", "linux", "hardening", "module-schema.json");
+const backupRuntimeScripts = new Set([
+  "scripts/run-background-backup.js",
+  "scripts/manage-local-backup-archive.js",
+]);
 const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
   "server-tools/linux/offsite/grabenplaner-offsite-assurance.sh",
@@ -110,16 +114,18 @@ function safeRelativePath(value) {
 
 function isAllowedRuntimePath(relative) {
   const topLevelFiles = new Set([
-    "server.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
+    "server.js", "backup.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
     "README.md", "LICENSE.md", "SECURITY.md", "SERVERBETRIEB.md",
   ]);
   return topLevelFiles.has(relative)
+    || backupRuntimeScripts.has(relative)
     || relative.startsWith("lib/")
     || relative.startsWith("public/")
     || relative.startsWith("server-tools/");
 }
 
 function isForbiddenRuntimePath(relative) {
+  if (backupRuntimeScripts.has(relative)) return false;
   const normalized = relative.toLowerCase();
   const top = normalized.split("/", 1)[0];
   if ([".git", ".github", ".devcontainer", "backups", "data", "demo", "docs", "node_modules", "output", "release", "runtime", "scripts", "test", "tmp", "usb-backups"].includes(top)) return true;
@@ -271,8 +277,8 @@ function readRuntimeContract() {
   const requiredArtifacts = contract.deploymentSchemaVersion === 1 ? requiredV1
     : contract.deploymentSchemaVersion === 2 ? requiredV2
       : contract.deploymentSchemaVersion === 3 ? requiredV3
-        : contract.deploymentSchemaVersion === 4 ? requiredV4 : null;
-  if ([3, 4].includes(contract.deploymentSchemaVersion)) assertExactHostControlTree();
+        : [4, 5].includes(contract.deploymentSchemaVersion) ? requiredV4 : null;
+  if ([3, 4, 5].includes(contract.deploymentSchemaVersion)) assertExactHostControlTree();
   if (!requiredArtifacts || artifacts.size !== requiredArtifacts.size
     || [...requiredArtifacts].some((relative) => !artifacts.has(relative))) {
     throw new Error("Der Runtimevertrag enthaelt nicht exakt die freigegebenen Deployment-Artefakte.");
@@ -294,7 +300,7 @@ function readOffsiteModuleContract() {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der optionale Offsite-Modulvertrag fehlt oder ist unzulaessig.");
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || contract?.moduleVersion !== 6 || contract?.activationPolicy !== "explicit-root-setup"
+    || contract?.moduleVersion !== 7 || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedOffsiteArtifacts.length
     || expectedOffsiteArtifacts.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");
@@ -420,6 +426,11 @@ function main() {
 
   const required = [
     "server.js",
+    "backup.js",
+    ...backupRuntimeScripts,
+    "lib/backup-workspace.js",
+    "lib/background-backup-process.js",
+    "lib/local-backup-archive.js",
     "package.json",
     "pnpm-lock.yaml",
     "lib/backup-commit.js",
@@ -431,6 +442,8 @@ function main() {
     "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
     "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
     "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
+    "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
+    "server-tools/linux/lib/runtime-v5-transition.js",
     "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
     "server-tools/linux/update-grabenplaner-server.sh",
     "server-tools/linux/uninstall-grabenplaner-server.sh",

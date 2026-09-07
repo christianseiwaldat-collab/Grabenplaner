@@ -1,5 +1,41 @@
 # Linux-Runtime-Migrationen
 
+## Deployment-Schema 5 und Offsite-Modul 7
+
+Der gekoppelte Wartungsweg `migrate-grabenplaner-runtime-v5.sh` akzeptiert
+ausschliesslich Runtime 4 -> 5 mit bereits eingerichtetem Offsite-Modul 6.
+Er prueft das per SHA-256 bereitgestellte Paket, die unveraenderten
+Host-Control-/Hardening-/Providervertraege und den exakten Unterschied der
+App- und Bootstrap-Unit: Start und Stopp erhalten jeweils 1500 Sekunden.
+Alle anderen verwalteten Runtime-Dateien bleiben bytegleich.
+
+Unter der bestehenden Wartungssperre werden die beiden Units und ihre drei
+Vertragsdateien gesichert. Der im Paket verifizierte Updater darf nur mit
+einem root-only, an Paket, Aufrufpfad und Commitmarker gebundenen
+Uebergangsbeleg die neue Paketpruefung verwenden. Die zuvor installierten
+Backup-/Restore-Werkzeuge bleiben bis zum App-Tausch erhalten. Sie erzeugen
+die lokale und externe Vorabsicherung; ihre bestehenden Sicherungspunkte
+werden bei diesem Uebergang nicht durch eine kleinere Anzahl begrenzt.
+
+Die neue Offsite-Bindung wird erst nach dem erfolgreichen App-Commit
+installiert. Die bisherigen Timer pausieren waehrend der gesamten Migration;
+ihre Aktivzustaende werden anschliessend wiederhergestellt. Modulversion 7
+behaelt die Unit-Dateien, Provider-, Repository- und Zugangskonfiguration bei
+und bringt die speicherbegrenzten Staging-/Restore-Helfer mit. Ihr neuer
+Installationsbeleg uebernimmt die zuvor gepruefte Providerbindung unveraendert.
+Danach wird die vollstaendige signierte Assurance eingeplant.
+
+Vor dem App-Commit stellt ein Fehler die alten Units und Runtime-Dateien
+wieder her; den App-/Datenrollback uebernimmt der vorhandene Updater. Nach
+einem bestaetigten App-Commit wird kein Teilrollback ausgefuehrt. Ein Fehler
+im folgenden Modul- oder Belegabschluss erhaelt den Diagnoseordner und laesst
+die Offsite-Timer bis zur gezielten Reparatur pausiert.
+
+Die Initialisierung der beiden lokalen Archive und deren ausdrueckliche
+Aktivierung erfolgen anschliessend mit den installierten Werkzeugen und der
+vorhandenen Vault-Bindung. Ein App-Update allein importiert keine Kassendaten
+und aktiviert keine fachlichen Zuordnungen.
+
 `runtime-schema.json` versioniert den ausserhalb des App-Ordners installierten
 Serververtrag. Dazu gehoeren die Vorlagen fuer systemd, Caddy, den einmaligen
 Admin-Bootstrap und die geschuetzte Env-Datei.

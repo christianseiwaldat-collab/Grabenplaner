@@ -21,7 +21,7 @@ offsite_require_root
 for command_name in awk flock runuser sha256sum stat; do offsite_require_command "$command_name"; done
 offsite_assert_runtime_binaries
 offsite_acquire_repository_lock
-"$OFFSITE_MODULE_ROOT/grabenplaner-offsite-prepare.sh" --backup-result "$backup_result" --lock-already-held
+"$OFFSITE_MODULE_ROOT/grabenplaner-offsite-prepare.sh" --backup-result "$backup_result" --lock-already-held --repository-lock-already-held
 "$OFFSITE_MODULE_ROOT/grabenplaner-offsite-upload.sh" --credentials-source "$OFFSITE_CONFIG_ROOT" --lock-already-held \
   || offsite_fixed_failure UPLOAD_FAILED "Die verschluesselte Offsite-Sicherung konnte nicht uebertragen werden."
 offsite_info "Der Sicherungspunkt vor dem Update wurde extern bestaetigt."
