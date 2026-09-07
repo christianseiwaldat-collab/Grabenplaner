@@ -1,6 +1,6 @@
 # Kassenberichte und Belegsuche
 
-Stand: 07.09.2026. Lokal implementiert und geprüft; zur ausdrücklich beauftragten Veröffentlichung als v0.92.29-beta vorbereitet. Der produktive Abschluss wird nach dem geprüften Deploy gesondert dokumentiert.
+Stand: 08.09.2026. Als v0.92.29-beta produktiv veröffentlicht; Suchmaske, Belegansicht, PDF und CRM-Schemamigration wurden auf dem VPS geprüft. Die vollständige Recovery Assurance bleibt wegen des fehlgeschlagenen isolierten App-Starttests offen. Deployment, Betriebsprüfungen, erfolgreiche Datenrücksicherung und verbleibende Einschränkungen stehen im [Release-Nachweis](BELEGSUCHE-RELEASE-v09229.md).
 
 ## Bedienung
 
@@ -20,7 +20,7 @@ Auf jeder Seite steht **Beleginformation – keine Rechnung**. Quelle, Importdat
 
 ## Daten und Berechtigungen
 
-Die Belegsuche liest den vorhandenen kompakten Kassenbestand. Sie erzeugt keine neue Geschäftstabelle, keinen Klartext-Suchindex und keine dauerhafte Datenkopie. Eine zusätzliche benannte Kopf-Suchabfrage nutzt den bestehenden Datums-/Filialindex. Textsuche erfolgt in begrenzten Schritten von höchstens 100 Belegköpfen und ungefähr 2.000 Positionen pro Anfrage; ein einzelner Beleg wird vollständig behandelt. Nicht passende Kunden-/Belegfilter werden bereits vor dem Laden der Positionen verworfen. Die Oberfläche lädt Treffer in Schritten von 50 nach. Breite Zeiträume mit seltenen Suchbegriffen benötigen entsprechend mehr Schritte. Eine Produktions-Laufzeitmessung dieser neuen Suchfunktion ist noch offen.
+Die Belegsuche liest den vorhandenen kompakten Kassenbestand. Sie erzeugt keine neue Geschäftstabelle, keinen Klartext-Suchindex und keine dauerhafte Datenkopie. Eine zusätzliche benannte Kopf-Suchabfrage nutzt den bestehenden Datums-/Filialindex. Textsuche erfolgt in begrenzten Schritten von höchstens 100 Belegköpfen und ungefähr 2.000 Positionen pro Anfrage; ein einzelner Beleg wird vollständig behandelt. Nicht passende Kunden-/Belegfilter werden bereits vor dem Laden der Positionen verworfen. Die Oberfläche lädt Treffer in Schritten von 50 nach. Breite Zeiträume mit seltenen Suchbegriffen benötigen entsprechend mehr Schritte. Die erste kurze Produktivprüfung lieferte zwar korrekte Treffer, zeigte aber auch nach Ende der Sicherungsarbeiten mehr als zwölf Sekunden Wartezeit. Eine gezielte Leistungsverbesserung bleibt offen; Umfang und Messgrenzen stehen im Release-Nachweis.
 
 Für die globale Spaltensortierung bleiben ausschließlich verschlüsselte Ergebniszusammenfassungen vorübergehend im Arbeitsspeicher: höchstens 10.000 Treffer beziehungsweise 16 MiB je Suche, 64 MiB insgesamt, vier Suchstände pro Konto und 16 insgesamt. Nach 15 Minuten werden Suchstände ungültig und beim nächsten Zugriff entfernt. Bei Überschreiten der Grenze muss die Suche eingegrenzt werden; eine unvollständige Auswahl wird nicht als vollständige Sortierung ausgegeben. Suchstände und Seiten sind an Konto, Rechte, Filter und aktivierte Quelle gebunden. Es entstehen keine zusätzlichen SQLite-Dateien, Sicherungskopien oder dauerhaften Belegindizes.
 
