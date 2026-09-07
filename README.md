@@ -2,7 +2,7 @@
 
 Grabenplaner bündelt Dienstplanung, Abwesenheiten, Personalorganisation, Zeiterfassung und ein mobiles Mitarbeiterportal in einer Anwendung.
 
-**v0.92.28 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
+**v0.92.29 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
 
 [Letzter GitHub-Server-Release v0.92.0 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.92.0-beta) · [Serverbetrieb](SERVERBETRIEB.md) · [Sicherheit](SECURITY.md)
 
@@ -24,7 +24,7 @@ Die frühere Windows-Portable-/LAN-Auslieferung ist als [v0.87.0-beta.legacy.1](
 | Portal | Eigener Dienstplan, Anträge, Zeiterfassung, Krankmeldung und AUM |
 | Organisation | Rollen, fachliche Einzelrechte und datensparsame Bereichssichten |
 | Leihe | Ausgabe, Rücknahme, Gegenbestätigung, Belege und geschützte Fotoanhänge |
-| Verkauf | Desktop-Verkaufsanalysen mit geprüftem TradeFoto-PDF-Import, Berichtsarchiv und Serienanalyse |
+| Verkauf | Verkaufsanalysen, Kassenberichte und Belegsuche mit PDF-Beleginformationen, Artikelstamm und CRM |
 | Betrieb | System-Center, Backups, beaufsichtigte Wiederherstellung und Recovery-Nachweise |
 | Integration | CSV/XLSX sowie kontrollierte SQL-/API-Adapter |
 

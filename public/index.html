@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/sales-history.css" />
+    <link rel="stylesheet" href="/receipt-search.css" />
     <link rel="stylesheet" href="/data-import.css" />
   </head>
   <body>
@@ -36,7 +37,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.28 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.29 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -184,6 +185,7 @@
               <button class="nav-item nav-module-route hidden" data-view="salesAnalytics" id="salesAnalyticsNavButton">
                 <span class="nav-symbol" aria-hidden="true">⌁</span><span>Verkaufsanalysen</span>
               </button>
+              <button class="nav-item nav-module-route hidden" data-view="receiptSearch" id="receiptSearchNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>Kassenberichte &amp; Belegsuche</span></button>
               <button class="nav-item nav-module-route hidden" data-view="articleCatalog" id="salesArticleCatalogNavButton">
                 <span class="nav-symbol article-catalog-nav-symbol" aria-hidden="true">Art</span><span>Artikelstamm</span>
               </button>
@@ -1510,6 +1512,7 @@
                 <span class="personnel-dashboard-card-copy"><small>Berichte &amp; Kennzahlen</small><strong>Verkaufsanalysen</strong><span>TradeFoto-Berichte sicher importieren, vergleichen und auswerten.</span></span>
                 <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
               </button>
+              <button class="personnel-dashboard-card hidden" id="receiptSearchDashboardCard" type="button" data-sales-dashboard-view="receiptSearch"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▤</span><span class="personnel-dashboard-card-copy"><small>Belege &amp; Kassenbuchungen</small><strong>Kassenberichte &amp; Belegsuche</strong><span>Belege suchen, Spalten anpassen und Beleginformationen als PDF speichern.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="crmDashboardCard" type="button" data-sales-dashboard-view="crm">
                 <span class="personnel-dashboard-card-symbol" aria-hidden="true">CRM</span>
                 <span class="personnel-dashboard-card-copy"><small>Kunden &amp; Kontakte</small><strong>CRM</strong><span>Kunden gezielt suchen und die freigegebene Kundenkartei öffnen.</span></span>
@@ -1518,6 +1521,8 @@
             </div>
           </section>
         </section>
+
+        <section id="receiptSearchView" class="view" aria-labelledby="receiptSearchTitle"><header class="topbar"><div><span class="eyebrow">Verkauf</span><h1 id="receiptSearchTitle">Kassenberichte &amp; Belegsuche</h1><p class="subtitle">Belege und Buchungen im gespeicherten Kassenstand finden und als Beleginfo ausgeben.</p></div></header><section class="card receipt-workspace" id="receiptSearchWorkspace"></section></section>
 
         <section id="salesArticleCatalogView" class="view sales-article-catalog-view" aria-labelledby="salesArticleCatalogTitle">
           <header class="topbar sales-article-catalog-topbar">
@@ -1535,11 +1540,12 @@
                 <div><span class="eyebrow">Artikelsuche</span><h2 id="salesArticleSearchTitle">Artikel finden</h2><p>Die Liste wird erst nach einer ausdrücklichen Suche geladen.</p></div>
               </div>
               <form class="sales-article-search-form" id="salesArticleSearchForm">
-                <label class="field sales-article-search-query"><span>Artikelnummer oder Bezeichnung</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="z. B. 010152 oder Canon EF-S" /></label>
+                <label class="field sales-article-search-query"><span>Artikelnummer oder Bezeichnung</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="z. B. Sony A7* 24-105mm" /></label>
                 <div class="sales-article-search-actions"><button class="secondary-button" id="salesArticleSearchReset" type="button">Zurücksetzen</button><button class="primary-button" id="salesArticleSearchSubmit" type="submit">Artikel suchen</button></div>
               </form>
               <details class="sales-article-advanced-search" id="salesArticleAdvancedSearch">
                 <summary><span>Erweiterte Suche</span><small>EAN/GTIN, Status und Quelle</small></summary>
+                <p class="settings-note">Alle Begriffe werden unabhängig von der Reihenfolge gesucht. * ist ein Joker, ? steht für ein Zeichen. Leerzeichen und Trennzeichen werden tolerant behandelt.</p>
                 <div class="sales-article-advanced-fields">
                   <label class="field"><span>EAN / GTIN oder Teil davon</span><input id="salesArticleSearchIdentifier" form="salesArticleSearchForm" type="search" inputmode="numeric" pattern="[0-9]{1,14}" maxlength="14" autocomplete="off" placeholder="Bis zu 14 Ziffern" /></label>
                   <label class="field"><span>Status</span><select id="salesArticleSearchStatusFilter" form="salesArticleSearchForm"><option value="active">Nur aktive Artikel</option><option value="all">Aktive und inaktive</option><option value="inactive">Nur inaktive Artikel</option></select></label>
@@ -1611,8 +1617,8 @@
             <div class="crm-search-shell">
               <div class="crm-search-heading"><div><span class="eyebrow">Kundensuche</span><h2 id="crmSearchTitle">Kundenkartei finden</h2><p>Ergebnisse werden erst nach einer ausdrücklichen Suche geladen. Damit bleibt die Ansicht auch bei mehreren tausend Kunden schnell und übersichtlich.</p></div></div>
               <form class="crm-search-form" id="crmSearchForm">
-                <label class="field crm-search-query"><span>Suchbegriff</span><input id="crmSearchQuery" type="search" minlength="2" maxlength="120" autocomplete="off" aria-describedby="crmSearchStatus" placeholder="Kundennummer, Name, Adresse, Telefon, E-Mail oder Website" required /></label>
-                <label class="field"><span>Kundentyp</span><select id="crmSearchCustomerType"><option value="">Privat und gewerblich</option><option value="private">Privat</option><option value="business">Gewerblich</option></select></label>
+                <label class="field crm-search-query"><span>Suchbegriff</span><input id="crmSearchQuery" type="search" minlength="2" maxlength="120" autocomplete="off" aria-describedby="crmSearchStatus" placeholder="Kundennummer, Name, Kontakt – auch mit * und ?" required /></label>
+                <label class="field"><span>Kundentyp</span><select id="crmSearchCustomerType"><option value="">Alle Kundentypen</option><option value="private">Privat</option><option value="business">Gewerblich</option><option value="unknown">Nicht angegeben</option></select></label>
                 <div class="crm-search-actions"><button class="secondary-button" id="crmSearchReset" type="button">Zurücksetzen</button><button class="primary-button" id="crmSearchSubmit" type="submit">Kunden suchen</button></div>
               </form>
               <p class="crm-search-status" id="crmSearchStatus" role="status" aria-live="polite">Suchbegriff eingeben und „Kunden suchen“ wählen. Der Kundentyp ist ein zusätzlicher Filter.</p>
@@ -2868,7 +2874,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.28 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.29 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -4168,6 +4174,7 @@
     <script src="/vendor/quill/quill.js"></script>
     <script src="/date-range-calendar.js"></script>
     <script src="/sales-history.js"></script>
+    <script src="/receipt-search.js"></script>
     <script src="/data-import.js"></script>
     <script src="/cash-publication.js"></script>
     <script src="/import-mappings.js"></script>

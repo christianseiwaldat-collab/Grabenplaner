@@ -155,6 +155,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/saturday-credit.js",
   // Read-only route bridge, composed without a production import source.
   "lib/sales-history-routes.js",
+  "lib/receipt-search-routes.js",
   "scripts/verify-tradefoto-test-import.mjs",
   "lib/persistence/repositories/sales-history-workspace.js",
   "lib/persistence/repositories/import-history.js",
@@ -465,10 +466,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1324;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1325;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 34;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1290;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1217;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1291;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1218;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -594,7 +595,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1210;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1211;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 114;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

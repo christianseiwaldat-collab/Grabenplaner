@@ -111,6 +111,68 @@ function repositoryFixture() {
   };
 }
 
+test('CRM-Kontonummer und optionale Kundennummer sind unabhängig eindeutig; namenlose Konten bleiben suchbar', async () => {
+  const f = repositoryFixture(), write = customer => f.repository.create({ customer, actor: 'tester', timestamp: '2026-09-07T09:00:00.000Z' });
+  try {
+    const first = await write({ accountNumber: 'AC-00419' });
+    assert.equal(first.accountNumber, 'AC-00419'); assert.equal(first.lastName, ''); assert.equal(first.phone, '');
+    await write({ accountNumber: 'AC-00420', customerNumber: 'C-12' });
+    await write({ accountNumber: 'AC-00421' });
+    await assert.rejects(write({ accountNumber: 'ac-00419' }), e => e.code === 'PERSISTENCE_UNIQUE_VIOLATION');
+    await assert.rejects(write({ accountNumber: 'AC-00422', customerNumber: 'c-12' }), e => e.code === 'PERSISTENCE_UNIQUE_VIOLATION');
+    const result = await f.repository.search({ query: 'AC004*', sort: 'accountNumber', direction: 'desc' });
+    assert.deepEqual(result.items.map(r => r.accountNumber), ['AC-00421', 'AC-00420', 'AC-00419']);
+    assert.equal(result.total, 3);
+  } finally { await f.close(); }
+});
+
+test('Migration des bisherigen CRM-Schemas erhält Karten, eigene Felder, Fotos und Fremdschlüssel', () => {
+  const database = openSqliteLegacyDatabase(':memory:');
+  try {
+    database.exec('PRAGMA foreign_keys=ON');
+    database.exec(fs.readFileSync(path.join(__dirname, 'fixtures/crm-before-account-number.sql'), 'utf8'));
+    insertCustomer(database, { id: 'legacy-customer', customerNumber: '419' });
+    const stamp = '2026-09-07T09:00:00.000Z';
+    database.prepare("INSERT INTO crm_customer_custom_fields VALUES ('note', 'legacy-customer', 'Hinweis', 'Bewahren', 0, 1, 'tester', ?, 'tester', ?)").run(stamp, stamp);
+    database.prepare("INSERT INTO crm_customer_photos VALUES ('legacy-customer', ?, ?, 10, 'image/jpeg', 'test.jpg', 1, 'tester', ?, 'tester', ?)").run('ab/00000000-0000-0000-0000-000000000001.amu', 'a'.repeat(64), stamp, stamp);
+    const before = { ...database.prepare("SELECT * FROM crm_customers WHERE id='legacy-customer'").get() };
+    ensureSqliteCrmSchema(database); ensureSqliteCrmSchema(database);
+    const after = { ...database.prepare("SELECT * FROM crm_customers WHERE id='legacy-customer'").get() };
+    assert.equal(after.account_number, null); delete after.account_number; assert.deepEqual(after, before);
+    assert.equal(database.prepare('SELECT value FROM crm_customer_custom_fields').get().value, 'Bewahren');
+    assert.equal(database.prepare('SELECT original_filename FROM crm_customer_photos').get().original_filename, 'test.jpg');
+    assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), []);
+    assert.equal(database.prepare('PRAGMA foreign_keys').get().foreign_keys, 1);
+    database.exec("UPDATE crm_customers SET account_number='A419', first_name='', last_name='', customer_type='unknown' WHERE id='legacy-customer'");
+    assert.throws(() => database.exec("DELETE FROM crm_customers WHERE id='legacy-customer'"), /FOREIGN KEY/);
+  } finally { database.close(); }
+});
+
+test('Lückenhafte CRM-Änderungen erhalten nicht mitgesendete Namen, Kontonummern und eigene Textfelder', async () => {
+  const f = repositoryFixture(), timestamp = '2026-09-07T09:00:00.000Z';
+  try {
+    const first = await f.repository.create({ customer: repositoryCustomer({ accountNumber: '419' }), actor: 'tester', timestamp });
+    const next = await f.repository.update({ id: first.id, customer: { phone: '' }, expectedRevision: 1, actor: 'tester', timestamp });
+    assert.equal(next.phone, ''); assert.equal(next.accountNumber, '419'); assert.equal(next.firstName, 'Ada'); assert.deepEqual(next.customFields, first.customFields);
+    await assert.rejects(f.repository.update({ id: first.id, customer: { accountNumber: null, firstName: '', lastName: '' }, expectedRevision: 2, actor: 'tester', timestamp }));
+    assert.equal((await f.repository.get(first.id)).revision, 2);
+  } finally { await f.close(); }
+});
+
+test("CRM-Suche unterscheidet eine leere Kartei von fehlenden Treffern und toleriert Joker und Trennzeichen", async () => {
+  const f = repositoryFixture();
+  try {
+    assert.equal((await f.repository.search({ query: 'Muster' })).directoryEmpty, true);
+    insertCustomer(f.database, { id: 'crm-search', customerNumber: 'K-00042', firstName: 'Jürgen', lastName: 'Müller' });
+    for (const query of ['mu?ler Jur*', '00042  Muller', '  Jürgen  K00042 ']) {
+      const result = await f.repository.search({ query });
+      assert.equal(result.items.length, 1, query); assert.equal(result.directoryEmpty, false);
+    }
+    const missing = await f.repository.search({ query: 'KeinTreffer' });
+    assert.equal(missing.items.length, 0); assert.equal(missing.directoryEmpty, false);
+  } finally { await f.close(); }
+});
+
 test("CRM-Schema ist idempotent und trennt Kunden, freie Textfelder und Fotometadaten", () => {
   const database = fixture();
   try {

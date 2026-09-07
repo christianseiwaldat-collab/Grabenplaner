@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.29 Beta · Belegsuche und flexible Kundenkartei
+
+- Unter Verkauf ergänzt „Kassenberichte & Belegsuche“ eine Suchmaske für Belege, Kassenbuchungen, Zeiträume, Filialen, Personalnummern und freigegebene Kundenangaben. Vollständige Belege bleiben mit Quelle und Datenstand nachvollziehbar.
+- Belegsuche, Artikelstamm und CRM unterstützen gemeinsame Suchbegriffe mit `*` und `?` sowie toleranter Behandlung von Leerzeichen, Trennzeichen und Akzenten. Ergebnislisten bieten persönliche Spaltenauswahl und Reihenfolge; Belegspalten sortieren den vollständigen, begrenzten Suchstand mit dezimalgenauen Beträgen.
+- Einzelne oder mehrere ausgewählte Belege lassen sich als PDF ausgeben. Jede Seite trägt den Hinweis „Beleginformation – keine Rechnung“. Kunden- und Finanzangaben bleiben an ihre gesonderten Leserechte gebunden.
+- Die Kundenkartei trennt die eindeutige Kunden-Kontonummer von der optionalen eindeutigen Kundennummer. Eine Kontonummer genügt auch ohne Namen oder Kontakte. Der TradeFoto-Adapter verwendet dafür `KUND_NR`; fehlende Quellangaben überschreiben keine vorhandenen manuellen Ergänzungen.
+- Die Startmigration erhält bestehende Kundenkarten, eigene Felder, Fotos und Revisionen. Die Suche liest die vorhandene kompakte Kassenhistorie ohne neue dauerhafte Datenkopie. Tatsächliche Kundenübernahmen benötigen weiterhin den kontrollierten Import mit bestätigter Verknüpfung.
+
 ## v0.92.28 Beta · Kompakte Kassenhistorie und verlässliche Sicherungen
 
 - Die vollständige Kassenhistorie wird in kompakten, verschlüsselten Tabellen gespeichert. Die bestehenden Verkaufsansichten verwenden diesen Bestand direkt; Zuordnung, Vorschau und Aktivierung sind persönlich berechtigt und nachvollziehbar. Ein bestätigter Datenstandswechsel kann auf den vorherigen Stand zurückgeführt werden.

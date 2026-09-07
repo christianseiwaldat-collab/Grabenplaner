@@ -97,6 +97,7 @@
       const cursor = dateFromIso(state.month);
       title.textContent = new Intl.DateTimeFormat("de-AT", { month: "long", year: "numeric" }).format(cursor);
       const currentMonth = state.month.slice(0, 7);
+      if (options.monthInput) options.monthInput.value = currentMonth;
       const today = isoDate(new Date());
       const maximum = selectionMaximum(state);
       grid.innerHTML = calendarDays(state.month).map((date) => {
@@ -161,6 +162,13 @@
     });
     options.previousButton?.addEventListener("click", () => { if (state) { state.month = shiftMonth(state.month, -1); render(); } });
     options.nextButton?.addEventListener("click", () => { if (state) { state.month = shiftMonth(state.month, 1); render(); } });
+    options.monthInput?.addEventListener("change", () => {
+      const value = options.monthInput.value;
+      if (!state || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return;
+      if (state.min && value < state.min.slice(0, 7)) return;
+      if (state.max && value > state.max.slice(0, 7)) return;
+      state.month = value + '-01'; render();
+    });
     openEndButton?.addEventListener("click", () => {
       if (!state?.start) return;
       state.end = "";

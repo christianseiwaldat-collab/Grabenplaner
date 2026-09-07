@@ -25,7 +25,7 @@
       + '<p>Es wird nichts anhand gleicher Namen oder Nummern automatisch verbunden. Eine Zuordnung ändert keine Personalrechte, Sollstunden, Standorteinstellungen oder aktuellen Artikelpreise.</p>'
       + (editable ? '<form data-m="edit"><div class="import-mapping-fields">'
         + (customer
-          ? '<label>Kundentyp (bewusst wählen)<select data-m="type" required>' + option('', 'Bitte wählen') + option('private', 'Privat') + option('business', 'Gewerblich') + '</select></label><label>Firmenname<input data-m="company" maxlength="160"></label>'
+          ? '<p class="import-mapping-wide">Kunden-Kontonummer: ' + esc(row.number) + '. Name, Kundenart und Kontaktdaten dürfen fehlen.</p><label>Kundentyp (optional)<select data-m="type">' + option('unknown', 'Nicht angegeben') + option('private', 'Privat') + option('business', 'Gewerblich') + '</select></label><label>Firmenname<input data-m="company" maxlength="160"></label>'
             + Object.entries(fields).map(([key, label]) => '<label>' + label + '<input data-m-field="' + key + '" value="' + esc(row.customer?.[key] || '') + '" maxlength="500"></label>').join('')
             + (!bound && row.candidate ? '<label class="import-mapping-wide"><input type="checkbox" data-m="existing"> Vorhandene CRM-Karte ausdrücklich verbinden: ' + esc(row.candidate.label) + ' · ' + esc(row.candidate.id) + '</label>' : '')
             + '<p class="import-mapping-wide">Korrekturen gelten nur für die CRM-Karte; die Originalwerte bleiben erhalten. Manuelle Website, Fotos und eigene Textfelder bleiben unberührt.</p>'

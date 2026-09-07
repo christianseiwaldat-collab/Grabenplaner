@@ -1,21 +1,9 @@
-"use strict";
 
-function assertSqliteOperationsDatabase(database) {
-  if (!database || typeof database.exec !== "function") {
-    throw new TypeError("Eine SQLite-Operationsdatenbank wird benoetigt.");
-  }
-  return database;
-}
-
-function customerTableSql(name) {
-  if (!['crm_customers', 'crm_customers_next'].includes(name)) throw new TypeError('Unbekannte CRM-Tabelle.');
-  return `CREATE TABLE IF NOT EXISTS ${name} (
+    CREATE TABLE IF NOT EXISTS crm_customers (
       id TEXT PRIMARY KEY CHECK(length(id) BETWEEN 1 AND 80),
-      account_number TEXT COLLATE NOCASE UNIQUE
-        CHECK(account_number IS NULL OR length(trim(account_number)) BETWEEN 1 AND 80),
       customer_number TEXT COLLATE NOCASE UNIQUE
         CHECK(customer_number IS NULL OR length(trim(customer_number)) BETWEEN 1 AND 80),
-      customer_type TEXT NOT NULL DEFAULT 'unknown' CHECK(customer_type IN ('private', 'business', 'unknown')),
+      customer_type TEXT NOT NULL CHECK(customer_type IN ('private', 'business')),
       company_name TEXT NOT NULL DEFAULT '' CHECK(length(company_name) <= 200),
       first_name TEXT NOT NULL DEFAULT '' CHECK(length(first_name) <= 120),
       last_name TEXT NOT NULL DEFAULT '' CHECK(length(last_name) <= 120),
@@ -34,43 +22,8 @@ function customerTableSql(name) {
       created_at TEXT NOT NULL CHECK(length(created_at) = 24),
       updated_by TEXT NOT NULL CHECK(length(updated_by) BETWEEN 1 AND 120),
       updated_at TEXT NOT NULL CHECK(length(updated_at) = 24),
-      CHECK(account_number IS NOT NULL OR length(trim(company_name)) > 0 OR length(trim(first_name)) > 0 OR length(trim(last_name)) > 0)
-    );`;
-}
-
-function migrateCustomerIdentity(database) {
-  const columns = database.prepare('PRAGMA table_info(crm_customers)').all().map(c => c.name);
-  if (!columns.length || columns.includes('account_number')) return;
-  const expected = ['id', 'customer_number', 'customer_type', 'company_name', 'first_name', 'last_name', 'street', 'address_supplement',
-    'postal_code', 'city', 'country', 'phone', 'email', 'website', 'vat_id', 'birth_date', 'revision', 'created_by', 'created_at', 'updated_by', 'updated_at'];
-  if (columns.length !== expected.length || expected.some(c => !columns.includes(c))) throw new Error('Unbekanntes CRM-Schema; Kundenmigration abgebrochen.');
-  if (database.prepare("SELECT 1 FROM sqlite_master WHERE name='crm_customers_next'").get()) throw new Error('Unvollständige CRM-Migration erkannt.');
-  const dependentSql = database.prepare("SELECT sql FROM sqlite_master WHERE tbl_name='crm_customers' AND type IN ('index', 'trigger') AND sql IS NOT NULL").all();
-  const foreignKeys = Number(database.prepare('PRAGMA foreign_keys').get()?.foreign_keys) === 1;
-  let started = false;
-  try {
-    if (foreignKeys) database.exec('PRAGMA foreign_keys = OFF');
-    if (Number(database.prepare('PRAGMA foreign_keys').get()?.foreign_keys) === 1) throw new Error('CRM-Migration benötigt eine eigene Starttransaktion.');
-    database.exec('BEGIN IMMEDIATE'); started = true;
-    database.exec(customerTableSql('crm_customers_next'));
-    database.exec(`INSERT INTO crm_customers_next (${expected.join(', ')}) SELECT ${expected.join(', ')} FROM crm_customers`);
-    database.exec('DROP TABLE crm_customers; ALTER TABLE crm_customers_next RENAME TO crm_customers');
-    for (const entry of dependentSql) database.exec(entry.sql);
-    for (const table of ['crm_customer_custom_fields', 'crm_customer_photos']) {
-      if (database.prepare('SELECT 1 FROM sqlite_master WHERE name=?').get(table) && database.prepare(`PRAGMA foreign_key_check(${table})`).get()) throw new Error('Kundenmigration verletzt bestehende Verknüpfungen.');
-    }
-    database.exec('COMMIT'); started = false;
-  } catch (error) {
-    if (started) database.exec('ROLLBACK');
-    throw error;
-  } finally { if (foreignKeys) database.exec('PRAGMA foreign_keys = ON'); }
-}
-
-function ensureSqliteCrmSchema(database) {
-  const target = assertSqliteOperationsDatabase(database);
-  migrateCustomerIdentity(target);
-  target.exec(`
-    ${customerTableSql('crm_customers')}
+      CHECK(length(trim(company_name)) > 0 OR length(trim(first_name)) > 0 OR length(trim(last_name)) > 0)
+    );
 
     CREATE INDEX IF NOT EXISTS idx_crm_customers_name
       ON crm_customers(last_name COLLATE NOCASE, first_name COLLATE NOCASE, company_name COLLATE NOCASE);
@@ -117,9 +70,3 @@ function ensureSqliteCrmSchema(database) {
       FOREIGN KEY (customer_id) REFERENCES crm_customers(id)
         ON UPDATE CASCADE ON DELETE RESTRICT
     );
-  `);
-}
-
-module.exports = {
-  ensureSqliteCrmSchema,
-};

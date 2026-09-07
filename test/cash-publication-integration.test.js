@@ -219,6 +219,17 @@ test('daily reports and cash journal use the compact source and remain separate 
     const result = await f.history().run(f.get, w => w.search(f.query({ kind, snapshot: C.fingerprint(data) })));
     assert.equal(result.items.length, 1); assert.equal(result.items[0].description, description);
     assert.equal(result.totals, null); assert.ok(result.coverage.issues.includes('SEPARATE_CASH_DATA_NOT_SALES'));
+    const documents = await f.history().run(f.get, async w => {
+      const search = await w.receipts.search({ sourceId: 'compact-cash', kind, dateFrom: '2010-01-01', dateTo: '2010-12-31', query: 'Synthe*' });
+      assert.equal(search.items.length, 1); assert.equal(search.items[0].description, description); assert.equal(search.items[0].gross, null);
+      assert.equal(search.items[0].personnel, undefined);
+      return w.receipts.documents({ ids: [search.items[0].id] });
+    });
+    assert.equal(documents.items[0].inflow, kind === 'daily' ? '12.000000000000' : '5');
+    assert.equal(documents.items[0].outflow, kind === 'daily' ? '0.000000000000' : '3');
+    f.session.permissions = f.session.permissions.filter(p => p !== 'sales:history:finance:read');
+    await assert.rejects(f.history().run(f.get, w => w.receipts.documents({ ids: [documents.items[0].id] })), e => e.code.startsWith('IMPORT_'));
+    f.session.permissions.push('sales:history:finance:read');
   }
 });
 test('existing verified article bindings are captured without creating or changing the article catalogue', async t => {
@@ -231,4 +242,93 @@ test('existing verified article bindings are captured without creating or changi
   f.app.database.exec("UPDATE sales_article_source_links SET product_id='later-article'");
   result = await f.history().run(f.get, w => w.search(f.query())); assert.equal(result.items[0].articleReference.targetId, 'article-42');
   assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM sales_articles').get().n, 1);
+});
+
+
+test('receipt search groups complete receipts, tolerates wildcards and exports only authorized fields', async t => {
+  const f = await fixture(t, { count: 3 }); await f.activate(); const runtime = f.history();
+  const q = { sourceId: 'compact-cash', dateFrom: '2010-01-01', dateTo: '2010-12-31', query: 'Synthe*   arti?le', kind: 'receipts' };
+  const result = await runtime.run(f.get, w => w.receipts.search(q));
+  assert.equal(result.items.length, 1); assert.equal(result.items[0].positions, 3); assert.equal(result.items[0].gross, '36.00');
+  assert.equal(result.items[0].personnel, 'person-b');
+  const docs = await runtime.run(f.get, w => w.receipts.documents({ ids: [result.items[0].id] }));
+  assert.equal(docs.items[0].lines.length, 3); assert.equal(docs.items[0].lines[0].personnel, 'person-a');
+  assert.doesNotMatch(JSON.stringify(docs), /00031|KUND_NR|Rohertrag|Provision/);
+  assert.equal((await runtime.run(f.get, w => w.receipts.search({ ...q, seller: 'person-a', sellerRole: 'line_seller' }))).items.length, 1);
+  assert.equal((await runtime.run(f.get, w => w.receipts.search({ ...q, seller: 'person-a' }))).items.length, 0);
+  const { createReceiptInfoPdf } = require('../lib/receipt-info-pdf'); const pdf = await createReceiptInfoPdf(docs);
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  f.session.permissions = f.session.permissions.filter(p => p !== 'sales:history:sellers:read');
+  const safe = await runtime.run(f.get, w => w.receipts.documents({ ids: [result.items[0].id] }));
+  assert.doesNotMatch(JSON.stringify(safe), /personnel|person-a|person-b|Verkäufer/);
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, seller: 'person-a' })), code('IMPORT_FORBIDDEN'));
+  f.session.permissions = f.session.permissions.filter(p => p !== 'sales:history:read');
+  await assert.rejects(runtime.run(f.get, w => w.receipts.documents({ ids: [result.items[0].id] })), code('IMPORT_FORBIDDEN'));
+});
+
+test('receipt paging distinguishes same-number receipts and binds filters, active publication and personal scope', async t => {
+  const f = await fixture(t), data = rows();
+  data.Umsatz_KASSE.push({ ...data.Umsatz_KASSE[0], Kassenid: '02' });
+  data.Umsatz_Kasse_Details.push({ ...data.Umsatz_Kasse_Details[0], Kassenid: '02', RepID: '00000000-0000-0000-0000-000000000099' });
+  const source = await f.build(data); await f.activate(f.request(source)); const runtime = f.history();
+  const q = { sourceId: 'compact-cash', dateFrom: '2010-01-01', dateTo: '2010-12-31', receipt: '*001', limit: 1 };
+  const first = await runtime.run(f.get, w => w.receipts.search(q)); assert.equal(first.items.length, 1); assert.ok(first.next);
+  const second = await runtime.run(f.get, w => w.receipts.search({ ...q, limit: 50, cursor: first.next }));
+  assert.equal(second.items.length, 1); assert.notEqual(first.items[0].id, second.items[0].id); assert.equal(second.complete, true);
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, query: 'changed', cursor: first.next })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, locationId: 'branch-b' })), code('IMPORT_FORBIDDEN'));
+  const replacement = await f.build(rows({ price: '24' })); await f.activate(f.request(replacement, 1));
+  await assert.rejects(runtime.run(f.get, w => w.receipts.documents({ ids: [first.items[0].id] })), e => e.code.startsWith('IMPORT_'));
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, cursor: first.next })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
+});
+
+test('receipt customer search covers account, optional number, name, address, telephone and email with cumulative rights', async t => {
+  const f = await fixture(t);
+  const { ensureSqliteCrmSchema } = require('../lib/persistence/sqlite/operations/crm-schema');
+  const { normalizeCrmCustomerInput } = require('../lib/crm-customers');
+  const { IMPORT_MASTER_STATEMENTS: M, IMPORT_MASTER_COLUMNS: cols } = require('../lib/persistence/statements/import-master-data');
+  ensureSqliteCrmSchema(f.app.database);
+  const customer = normalizeCrmCustomerInput({ accountNumber: '00031', customerNumber: 'C-009', firstName: 'Änne', lastName: 'Müller',
+    street: 'Testgasse 4', postalCode: '6020', city: 'Innsbruck', phone: '+43 512 123456', email: 'anne@example.test' });
+  await f.app.provider.execute(M.crmInsert, { id: 'crm-31', ...Object.fromEntries(Object.keys(cols.CRM_DATA).map(k => [k, customer[k]])), actor: f.actor.ownerId, timestamp: TIME });
+  f.session.permissions.push('crm:access', 'crm:customers:read', 'crm:customers:write', 'crm:purchases:read');
+  await f.activate(); const runtime = f.history(), q = f.query();
+  assert.equal((await runtime.run(f.get, w => w.receipts.search({ ...q, customer: '00031' }))).items.length, 1);
+  // A matching text number alone does not merge two identities.
+  assert.equal((await runtime.run(f.get, w => w.receipts.search({ ...q, customer: 'Muller' }))).items.length, 0);
+  const request = f.request(f.id, 1); request.mappings.push({ kind: 'KUNDEN', sourceId: '00031', targetId: 'crm-31', historical: false }); await f.activate(request);
+  for (const customer of ['00031', 'C009', 'Muller Ann*', '6020 Testgasse', '512 123*', 'anne@example.test']) {
+    const result = await runtime.run(f.get, w => w.receipts.search({ ...q, customer }));
+    assert.equal(result.items.length, 1, customer); assert.equal(result.items[0].customerAccount, '00031'); assert.equal(result.items[0].customerNumber, 'C-009');
+  }
+  const result = await runtime.run(f.get, w => w.receipts.search({ ...q, customer: 'anne', sort: 'customerEmail', direction: 'asc' }));
+  const documents = await runtime.run(f.get, w => w.receipts.documents({ ids: [result.items[0].id] }));
+  assert.equal(documents.items[0].customerName, 'Änne Müller');
+  f.session.permissions = f.session.permissions.filter(p => p !== 'crm:purchases:read');
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, customer: '00031' })), code('IMPORT_FORBIDDEN'));
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, sort: 'customerName', direction: 'asc' })), code('IMPORT_FORBIDDEN'));
+  const safe = await runtime.run(f.get, w => w.receipts.documents({ ids: [result.items[0].id] }));
+  assert.doesNotMatch(JSON.stringify(safe), /customerAccount|customerName|anne@example|00031|C-009/);
+});
+
+test('global receipt sorting finds late matches, pages without rescanning and binds the result set to filters and permissions', async t => {
+  const f = await fixture(t), data = { Umsatz_KASSE: [], Umsatz_Kasse_Details: [] };
+  for (let i = 1; i <= 205; i++) {
+    const source = rows({ price: String(i) });
+    data.Umsatz_KASSE.push({ ...source.Umsatz_KASSE[0], Bonnr: String(i) });
+    data.Umsatz_Kasse_Details.push({ ...source.Umsatz_Kasse_Details[0], Bonnr: String(i), RepID: '00000000-0000-0000-0000-' + String(i).padStart(12, '0') });
+  }
+  const id = await f.build(data); await f.activate(f.request(id)); const runtime = f.history();
+  const q = { ...f.query(), sort: 'gross', direction: 'asc', limit: 10 };
+  let result = await runtime.run(f.get, w => w.receipts.search(q));
+  assert.equal(result.sorting, true); assert.equal(result.items.length, 0);
+  while (result.sorting) result = await runtime.run(f.get, w => w.receipts.search({ ...q, cursor: result.next }));
+  assert.equal(result.total, 205); assert.deepEqual(result.items.map(r => r.gross), Array.from({ length: 10 }, (_, i) => (i + 1) + '.00'));
+  const second = await runtime.run(f.get, w => w.receipts.search({ ...q, cursor: result.next, resultSet: result.resultSet }));
+  assert.equal(second.processed, 0); assert.equal(second.items[0].gross, '11.00');
+  const descending = await runtime.run(f.get, w => w.receipts.search({ ...q, direction: 'desc', resultSet: result.resultSet }));
+  assert.equal(descending.processed, 0); assert.equal(descending.items[0].gross, '205.00');
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, receipt: 'different', resultSet: result.resultSet })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
+  f.session.permissions = f.session.permissions.filter(p => p !== 'sales:history:sellers:read');
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, resultSet: result.resultSet })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
 });

@@ -21,6 +21,7 @@
     "personnelAdministration",
     "salesAdministration",
     "salesAnalytics",
+    "receiptSearch",
     "articleCatalog",
     "crm",
     "rightsDashboard",
@@ -545,6 +546,15 @@
       ["verkaufsanalyse", "umsatzanalyse", "statistik", "kennzahlen", "tradefoto", "warengruppen", "sales analytics"],
       ["salesAnalyticsNavButton"],
       { view: "salesAnalytics", focusId: "salesAnalyticsView" },
+    ),
+    entry(
+      "sales.receipt-search",
+      "Kassenberichte & Belegsuche öffnen",
+      ["Verkauf", "Kassenberichte & Belegsuche"],
+      "Belege und Kassenbuchungen mit Joker-Suche finden, Spalten ordnen und Beleginfos als PDF ausgeben.",
+      ["kassenbericht", "belegsuche", "rechnungssuche", "buchungssuche", "bon", "beleginfo", "personalnummer", "kassenjournal", "tagesbericht"],
+      ["receiptSearchNavButton"],
+      { view: "receiptSearch", focusId: "receiptSearchWorkspace" },
     ),
     entry(
       "sales.article-catalog",
