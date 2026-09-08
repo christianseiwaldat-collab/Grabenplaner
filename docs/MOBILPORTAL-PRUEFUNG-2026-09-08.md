@@ -1,7 +1,9 @@
 # Mitarbeiterportal und mobile Dienstplanung – Prüfung vom 8. September 2026
 
-Stand: lokal umgesetzt und geprüft; VPS-Veröffentlichung als v0.92.30-beta
-freigegeben und in Vorbereitung. Ausgangspunkt ist
+Stand: lokal umgesetzt und geprüft; als v0.92.30-beta auf dem VPS installiert.
+Die Betriebs- und vollständige Wiederherstellungsprüfung sind abgeschlossen;
+der während der Prüfung pausierte Monitor wurde gezielt erfolgreich nachgeprüft. Siehe
+[Releasebericht](MOBILPORTAL-RELEASE-v09230.md). Ausgangspunkt ist
 `694b7093a0cfa6b96e2f731e5aba570857c58d03` auf
 `feature/schedule-pdf-day-separators` (v0.92.29-beta).
 
@@ -70,6 +72,9 @@ ohne Leihfreigabe. Die Veröffentlichung verändert keine Standortfreigaben
 oder Nachschlageeinstellungen. Eine Browseranmeldung zur Aktivierung von
 Standort 11 ist nicht mehr erforderlich.
 
-Die Programmänderungen werden über den bestehenden Releaseweg mit Paket-
-und VPS-Prüfung veröffentlicht. Der Abschluss wird getrennt belegt.
-Ein produktiver Datenimport ist nicht Bestandteil dieser Veröffentlichung.
+Die Programmänderungen wurden über den bestehenden Releaseweg mit Paket-
+und VPS-Prüfung installiert. Die vollständige automatische Wiederherstellung
+einschließlich isoliertem App-Start hat bestanden. Der Abschlussbericht trennt
+die erfolgreiche Veröffentlichung vom weiterhin bestehenden Verbesserungsbedarf
+bei Sicherungslaufzeiten und nächtlichem Zeitlimit. Ein produktiver Datenimport
+ist nicht Bestandteil dieser Veröffentlichung.
