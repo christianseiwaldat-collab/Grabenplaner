@@ -8,6 +8,9 @@ const portalState = {
   absenceHistory: [],
   notifications: [],
   unreadNotifications: 0,
+  candidateEvaluations: [],
+  candidateEvaluationsLoadPromise: null,
+  candidateEvaluationsRequestGeneration: 0,
   processTasks: [],
   processTaskSummary: null,
   processTasksLoading: false,
@@ -206,6 +209,7 @@ applyDeviceMode();
 window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
+  "pendingCandidateEvaluationNotice", "pendingCandidateEvaluationSummary", "pendingCandidateEvaluationLink",
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "forgotPasswordButton", "passwordResetRequestDialog", "passwordResetRequestForm", "passwordResetEmail", "passwordResetRequestMessage", "passwordResetRequestSubmit", "passwordResetConfirmDialog", "passwordResetConfirmForm", "passwordResetToken", "passwordResetNewPassword", "passwordResetRepeatPassword", "passwordResetConfirmMessage", "passwordResetConfirmSubmit", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "personalActionsButton", "personalActionsDialog", "personalActionsTitle", "personalActionsMessage", "personalActionsList", "personalActionsLoadMore", "logoutButton", "portalLogoutStatus", "notificationsButton", "notificationBadge", "mobileHomeTab", "mobileHomeView", "mobileHomeTiles", "mobileSettingsHome", "settingsView", "passwordSettingsCard", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
@@ -1564,12 +1568,77 @@ function defaultPortalTab(user = portalUser()) {
   return "settings";
 }
 
+function clearCandidateEvaluationState() {
+  portalState.candidateEvaluationsRequestGeneration += 1;
+  portalState.candidateEvaluationsLoadPromise = null;
+  portalState.candidateEvaluations = [];
+  renderPendingCandidateEvaluationNotice();
+}
+
+function candidateEvaluationAvailable(user = portalUser()) {
+  return Boolean(user && !isOrganizationAccount(user) && !user.mustChangePassword);
+}
+
+function renderPendingCandidateEvaluationNotice() {
+  const notice = el.pendingCandidateEvaluationNotice;
+  if (!notice) return;
+  const evaluations = candidateEvaluationAvailable() ? portalState.candidateEvaluations : [];
+  const evaluation = evaluations[0];
+  notice.classList.toggle("hidden", !evaluation);
+  if (!evaluation) {
+    el.pendingCandidateEvaluationSummary.textContent = "";
+    el.pendingCandidateEvaluationLink.removeAttribute("href");
+    return;
+  }
+  const summary = evaluations.length === 1
+    ? "Eine offene Bewerbungsbewertung wartet auf deine Rückmeldung."
+    : `${evaluations.length} offene Bewerbungsbewertungen warten auf deine Rückmeldung.`;
+  if (el.pendingCandidateEvaluationSummary.textContent !== summary) {
+    el.pendingCandidateEvaluationSummary.textContent = summary;
+  }
+  el.pendingCandidateEvaluationLink.href = `/candidate-evaluation.html?id=${encodeURIComponent(evaluation.id)}`;
+}
+
+async function loadPendingCandidateEvaluations() {
+  if (!candidateEvaluationAvailable()) {
+    clearCandidateEvaluationState();
+    return [];
+  }
+  if (portalState.candidateEvaluationsLoadPromise) return portalState.candidateEvaluationsLoadPromise;
+  const session = portalState.session;
+  const generation = ++portalState.candidateEvaluationsRequestGeneration;
+  const isCurrent = () => portalState.session === session
+    && portalState.candidateEvaluationsRequestGeneration === generation;
+  const pending = (async () => {
+    try {
+      const result = await api("/api/portal/v1/me/candidate-evaluations");
+      if (!isCurrent()) return [];
+      portalState.candidateEvaluations = (Array.isArray(result?.evaluations) ? result.evaluations : [])
+        .filter((entry) => typeof entry?.id === "string" && entry.id.trim())
+        .map((entry) => ({ id: entry.id }));
+      renderPendingCandidateEvaluationNotice();
+      return portalState.candidateEvaluations;
+    } catch (error) {
+      if (isCurrent() && [401, 403, 404, 428].includes(error?.status)) {
+        portalState.candidateEvaluations = [];
+        renderPendingCandidateEvaluationNotice();
+      }
+      throw error;
+    } finally {
+      if (isCurrent()) portalState.candidateEvaluationsLoadPromise = null;
+    }
+  })();
+  portalState.candidateEvaluationsLoadPromise = pending;
+  return pending;
+}
+
 async function redirectToPendingCandidateEvaluation(user = portalUser()) {
-  if (!user || user.isEmployee === false || isOrganizationAccount(user)
-    || user.mustChangePassword === true) return false;
+  if (!candidateEvaluationAvailable(user)) return false;
+  const session = portalState.session;
   try {
-    const result = await api("/api/portal/v1/me/candidate-evaluations");
-    const evaluation = Array.isArray(result?.evaluations) ? result.evaluations[0] : null;
+    const evaluations = await loadPendingCandidateEvaluations();
+    if (portalState.session !== session) return false;
+    const evaluation = evaluations[0];
     if (!evaluation?.id) return false;
     window.location.replace(`/candidate-evaluation.html?id=${encodeURIComponent(evaluation.id)}`);
     return true;
@@ -2143,6 +2212,7 @@ function showLogin(error = "") {
   neutralizeBirthdayPresentationTheme();
   resetPersonalActionsState("");
   portalState.session = null;
+  clearCandidateEvaluationState();
   portalState.personnelLearningDashboard = null;
   portalState.personnelLearningDashboardAvailable = false;
   portalState.personnelLearningProgressAssignment = null;
@@ -2245,6 +2315,7 @@ function showPortal(session) {
     neutralizeBirthdayPresentationTheme();
   }
   portalState.session = session;
+  clearCandidateEvaluationState();
   document.body.classList.toggle(
     "branch-organization-account",
     isOrganizationAccount(session?.user) && session?.user?.accountType === "branch",
@@ -7863,8 +7934,7 @@ el.amuReportList.addEventListener("click", (event) => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && portalState.session) {
     refreshBirthdayPresentationTheme();
-    loadNotifications();
-    loadProcessTasks();
+    Promise.allSettled([loadNotifications(), loadProcessTasks(), loadPendingCandidateEvaluations()]);
     if (portalState.activeTab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking()]);
     if (portalState.activeTab === "settings") {
       const settingsRefreshes = [loadWifiAutomation()];
@@ -7883,7 +7953,9 @@ setInterval(() => {
   }
 }, 5000);
 setInterval(() => {
-  if (!document.hidden && portalState.session) Promise.allSettled([loadNotifications(), loadProcessTasks()]);
+  if (!document.hidden && portalState.session) {
+    Promise.allSettled([loadNotifications(), loadProcessTasks(), loadPendingCandidateEvaluations()]);
+  }
 }, 45000);
 setInterval(() => {
   if (!document.hidden && portalState.session && portalState.activeTab === "timeTracking") loadTimeTracking();
