@@ -1,10 +1,12 @@
 # Bewerbungsbewertungen im mobilen Mitarbeiterportal
 
-Stand: 8. September 2026. Prüfung abgeschlossen; die nachfolgend beschriebenen
-Korrekturen sind für v0.92.31-beta vorbereitet. Die ausdrücklich angeforderte
-Veröffentlichung wird separat nachgewiesen; die Installation steht noch aus.
-Ausgangspunkt: `e4b40f96460e8aae826fb09d6ca461b4301b564a`,
-`feature/schedule-pdf-day-separators`, Produktivversion v0.92.30-beta.
+Stand: 8. September 2026. Fachliche Prüfung abgeschlossen. Die beschriebenen
+Korrekturen sind als v0.92.31-beta auf dem VPS installiert; der Updater
+bestätigte den Versionswechsel um 15:15:33.830 UTC. Den erfolgreichen Abschluss
+der Betriebs- und Wiederherstellungsprüfung enthält der
+[Veröffentlichungsnachweis](PREBOARDING-RELEASE-v09231.md).
+Ausgangspunkt der fachlichen Prüfung: `e4b40f96460e8aae826fb09d6ca461b4301b564a`,
+`feature/schedule-pdf-day-separators`, damals produktiv v0.92.30-beta.
 
 ## Ergebnis
 
@@ -32,13 +34,13 @@ Zwei Fehler wurden im tatsächlichen Browserablauf reproduziert und korrigiert:
    beim Neuladen wird sichtbar behandelt. Eine inzwischen leere Zuweisungsliste
    meldet keine erfolgreiche Abgabe, wenn tatsächlich nichts abgegeben wurde.
 
-## Produktive Gegenprüfung
+## Lesende Ausgangsprüfung auf dem VPS
 
 Die VPS-Prüfung war ausschließlich lesend. Das Personalmodul ist aktiviert;
 es bestehen zwei Bewerberdatensätze. Die installierten Bewertungsdateien und
-das Portal stimmen mit dem geprüften v0.92.30-Quellstand überein. Die abweichende
-lokale Portal-Dateiprüfsumme erklärt sich durch Windows-Zeilenenden; der
-unveränderte Git-Quellinhalt stimmt mit der installierten Datei überein.
+das Portal stimmten mit dem geprüften v0.92.30-Quellstand überein. Die abweichende
+lokale Portal-Dateiprüfsumme erklärte sich durch Windows-Zeilenenden; der
+unveränderte Git-Quellinhalt stimmte mit der installierten Datei überein.
 
 Im vorhandenen Audit-Protokoll finden sich 73 Listenabrufe und zwölf PDF-Abrufe,
 aber keine protokollierte Aktion `personnel-lifecycle.team-evaluation.assign`
@@ -71,17 +73,19 @@ Bewerbung oder eines Schnuppertermins ersetzt diese persönliche Zuweisung nicht
 - Gleichzeitige Bewerbungsänderung: zunächst reproduzierter Verlust aller
   Eingaben, nach Korrektur beide Sterneauswahlen und Kommentare erhalten;
   anschließende Speicherung erfolgreich.
-- Abschließender fokussierter Lauf: 19 Tests bestanden. Ergänzende
+- Fachlich fokussierter Lauf: 19 Tests bestanden. Ergänzende
   Mobilnavigation: vier Tests; Sitzungs-/Abmelde-/Formularregressionen:
   27 Tests bestanden. Die fokussierte tatsächliche API-Prüfung bestand ebenfalls.
+- Abschließende Release-Prüfung für v0.92.31-beta: 57 Tests bestanden,
+  einschließlich Bewertungsformular, Portalnavigation und Sitzungsgrenzen.
 - JavaScript-Syntax, `git diff --check` und Persistenz-Kopplungsinventar bestanden.
   Keine Server-, Schema-, Rechte- oder Speicherstrukturänderung.
 
 Die Browserprüfung emuliert Handygrößen und Touch in Chrome; sie ist keine
 Abnahme auf physischer Handy-Hardware. Die neue Hinweisfunktion und der Erhalt
-bei Versionskonflikten werden mit der anschließend angeforderten
-Veröffentlichung v0.92.31-beta ausgeliefert. Der Prüfbericht allein ist kein
-Nachweis der produktiven Installation.
+bei Versionskonflikten sind mit v0.92.31-beta installiert. Der separate
+Veröffentlichungsnachweis dokumentiert Paket, Quellcommit, VPS-Beleg und die
+weiteren Betriebsprüfungen.
 
 Lokale Arbeitsbelege: `tmp/preboarding-mobile-review/`,
 `tmp/preboarding-mobile-browser-baseline.log`,
