@@ -7,6 +7,7 @@
     <title>Grabenplaner · Mitarbeiterportal</title>
     <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/portal.css" />
+    <link rel="stylesheet" href="/mobile-refinements.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="portalDeploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
@@ -49,9 +50,9 @@
           <button class="hidden leadership-tab" id="leadershipApprovalsTab" data-tab="leadershipApprovals" data-mobile-module="approvals" type="button" role="tab" aria-selected="false" aria-controls="leadershipApprovalsView" tabindex="-1">Freigaben</button>
           <button id="processTasksTab" data-tab="processTasks" type="button" role="tab" aria-selected="false" aria-controls="processTasksView" tabindex="-1">Aufgaben <span class="portal-tab-count hidden" id="processTasksTabCount">0</span></button>
           <button class="hidden" id="personnelLearningDashboardTab" data-tab="learningDashboard" type="button" role="tab" aria-selected="false" aria-controls="personnelLearningDashboardView" tabindex="-1">Schulungen</button>
-          <button id="timeOffTab" data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">ZA</button>
+          <button id="timeOffTab" data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">Zeitausgleich</button>
           <button id="vacationTab" data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
-          <button id="historyTab" data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
+          <button id="historyTab" data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Anträge</button>
           <button class="hidden" id="loanTab" data-tab="loan" type="button" role="tab" aria-selected="false" aria-controls="loanView" tabindex="-1">Leihe</button>
           <button class="hidden" id="branchOrdersTab" data-tab="branchOrders" type="button" role="tab" aria-selected="false" aria-controls="branchOrdersView" tabindex="-1">Filialbestellung</button>
           <button class="hidden" id="branchOrderSettingsTab" data-tab="settings" data-settings-focus="branch-orders" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Bestellverwaltung</button>
@@ -231,10 +232,18 @@
         <section class="portal-view active" id="scheduleView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
           <div class="schedule-grid" id="scheduleGrid"></div>
+          <nav class="portal-request-shortcuts" aria-label="Abwesenheit beantragen">
+            <button class="hidden" type="button" data-request-tab="timeOff"><strong>Zeitausgleich</strong><span>beantragen</span></button>
+            <button class="hidden" type="button" data-request-tab="vacation"><strong>Urlaub</strong><span>beantragen</span></button>
+          </nav>
         </section>
 
         <section class="portal-view mobile-home-view" id="mobileHomeView" role="tabpanel" aria-labelledby="mobileHomeTab">
           <div class="mobile-home-heading"><span class="eyebrow">Mitarbeiterportal</span><h1>Startseite</h1><p>Wähle einen Bereich aus.</p></div>
+          <nav class="portal-request-shortcuts" aria-label="Direkt beantragen">
+            <button class="hidden" type="button" data-request-tab="timeOff"><strong>Zeitausgleich</strong><span>beantragen</span></button>
+            <button class="hidden" type="button" data-request-tab="vacation"><strong>Urlaub</strong><span>beantragen</span></button>
+          </nav>
           <nav class="mobile-home-tiles" id="mobileHomeTiles" aria-label="Portalbereiche"><p class="empty-state">Bereiche werden geladen.</p></nav>
         </section>
 
@@ -340,7 +349,7 @@
             <button class="hidden" id="mobileMoreTeamShortcut" type="button" data-more-tab="leadershipTeam"><strong>Team</strong><span>Anwesenheit im zuständigen Bereich</span></button>
             <button class="hidden" id="mobileMoreApprovalsShortcut" type="button" data-more-tab="leadershipApprovals"><strong>Freigaben</strong><span>Offene Entscheidungen bearbeiten</span></button>
             <button class="hidden" id="mobileMoreRequestsShortcut" type="button" data-more-tab="history"><strong>Meine Anträge</strong><span>Status und Verlauf ansehen</span></button>
-            <button id="leadershipTimeOffShortcut" type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
+            <button id="leadershipTimeOffShortcut" type="button" data-more-tab="timeOff"><strong>Zeitausgleich beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
             <button id="leadershipVacationShortcut" type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
             <button id="leadershipAmuShortcut" type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument senden</span></button>
             <button class="hidden" id="leadershipLoanShortcut" type="button" data-more-tab="loan"><strong>Leihe</strong><span>Artikel ausgeben, offene Leihen prüfen oder zurücknehmen</span></button>
@@ -351,13 +360,14 @@
         </section>
 
         <section class="portal-view" id="timeOffView" role="tabpanel">
+          <button class="text-button request-back-button hidden" type="button" data-request-tab="history">← Meine Anträge</button>
           <div class="view-heading"><div><span class="eyebrow">Selbstverwaltung</span><h1>Zeitausgleich beantragen</h1><p>Die Ampel prüft den aktuellen Dienstplan und zeigt sofort, ob der Zeitraum möglich ist.</p></div></div>
           <div class="vacation-layout">
             <form class="portal-card request-form" id="timeOffRequestForm">
               <h2 id="timeOffFormTitle">Neuer ZA-Antrag</h2>
               <fieldset class="request-mode"><legend>Zeitraum</legend><label><input type="radio" name="timeOffMode" value="hours" checked /> Stundenweise</label><label><input type="radio" name="timeOffMode" value="day" /> Ganztägig</label><label><input type="radio" name="timeOffMode" value="range" /> Mehrtägig</label></fieldset>
               <div class="date-fields"><label><span id="timeOffDateLabel">Datum</span><input id="timeOffDate" type="date" required /></label><label class="hidden" id="timeOffDateToField"><span>Bis</span><input id="timeOffDateTo" type="date" /></label></div>
-              <div class="date-fields" id="timeOffTimeFields"><label><span>Von</span><select id="timeOffStart" required disabled><option value="">Datum wählen</option></select></label><label><span>Bis</span><select id="timeOffEnd" required disabled><option value="">Zuerst Von wählen</option></select></label></div>
+              <div class="date-fields" id="timeOffTimeFields"><label><span>Von</span><select id="timeOffStart" required disabled><option value="">Datum wählen</option></select></label><label><span>Bis</span><select id="timeOffEnd" required disabled><option value="">Beginn wählen</option></select></label></div>
               <fieldset class="approval-type"><legend>Art des Zeitausgleichs</legend><label><input type="radio" name="timeOffApprovalType" value="local" checked /><span><strong>Filialinterner ZA</strong><small>Genehmigung durch Filial- oder vertretende Abteilungsleitung.</small></span></label><label><input type="radio" name="timeOffApprovalType" value="hr" /><span><strong>Verbindlicher PL-ZA</strong><small>Zusätzliche endgültige Genehmigung durch die Personalleitung; schützt vor einer Einteilung in einer anderen Filiale.</small></span></label></fieldset>
               <label><span>Bemerkung</span><textarea id="timeOffNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
               <div class="traffic-check neutral" id="timeOffCheck"><span class="traffic-light"></span><div><strong>Zeitraum eingeben</strong><small>Danach wird die aktuelle Planung geprüft.</small></div></div>
@@ -370,6 +380,7 @@
         </section>
 
         <section class="portal-view" id="vacationView" role="tabpanel">
+          <button class="text-button request-back-button hidden" type="button" data-request-tab="history">← Meine Anträge</button>
           <div class="view-heading"><div><span class="eyebrow">Selbstverwaltung</span><h1>Urlaub beantragen</h1><p>Der Antrag wird erst nach Genehmigung in die Urlaubsplanung übernommen.</p></div></div>
           <section class="portal-card vacation-account-card hidden" id="vacationAccountCard" aria-live="polite">
             <div class="vacation-account-heading"><div><span class="eyebrow">Urlaubsstand</span><h2>Mein Urlaubskonto</h2></div><label><span>Urlaubsjahr</span><select id="vacationAccountYear"></select></label></div>
@@ -392,6 +403,10 @@
 
         <section class="portal-view" id="historyView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Persönliche Übersicht</span><h1>Meine Anträge</h1><p>Alle Urlaubs- und ZA-Anträge mit Bearbeitungsverlauf an einem Ort.</p></div></div>
+          <nav class="portal-request-shortcuts" aria-label="Neuen Antrag stellen">
+            <button class="hidden" type="button" data-request-tab="timeOff"><strong>Zeitausgleich</strong><span>beantragen</span></button>
+            <button class="hidden" type="button" data-request-tab="vacation"><strong>Urlaub</strong><span>beantragen</span></button>
+          </nav>
           <section class="portal-card history-card">
             <div class="request-history-tabs"><button class="active" data-history-kind="time_off" type="button">ZA-Anträge</button><button data-history-kind="vacation" type="button">Urlaubsanträge</button></div>
             <div class="history-toolbar">
@@ -406,7 +421,7 @@
 
         <section class="portal-view loan-view" id="loanView" role="tabpanel" aria-labelledby="loanTab">
           <div class="view-heading loan-heading">
-            <div><span class="eyebrow">Portal</span><h1>Leihe</h1><p>Offene Geräte direkt erkennen; persönliche Ausgabe-, Rückgabe- und Leitungsfunktionen erscheinen nur mit entsprechender Berechtigung.</p></div>
+            <div><span class="eyebrow">Portal</span><h1>Leihe</h1><p>Eigene Leihen verwalten und offene Geräte am Standort ansehen.</p></div>
             <button class="text-button" id="loanRefresh" type="button">Aktualisieren</button>
           </div>
           <p class="message hidden" id="loanAvailabilityMessage"></p>
@@ -424,6 +439,8 @@
               </div>
             </section>
 
+            <details class="loan-issue-section hidden" id="loanIssueSection" open>
+              <summary>＋ Neue Leihe erfassen <span aria-hidden="true">⌄</span></summary>
             <form class="portal-card request-form loan-issue-form" id="loanIssueForm">
               <div class="loan-card-heading"><div><span class="eyebrow">Neue Ausgabe</span><h2>Artikel ausleihen</h2></div><span class="loan-limit-badge">max. 5</span></div>
               <div class="loan-item-editor" id="loanItemEditor"></div>
@@ -444,6 +461,7 @@
               <p class="message hidden" id="loanIssueMessage"></p>
               <button class="primary" id="loanIssueSubmit" type="submit">Leihe erfassen</button>
             </form>
+            </details>
 
             <section class="portal-card loan-overview-card" id="loanPersonalOverview">
               <div class="loan-list-heading">

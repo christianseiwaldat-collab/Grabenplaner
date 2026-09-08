@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.30 Beta · Mobiles Mitarbeiterportal und persönliche Leihrechte
+
+- Zeitausgleich und Urlaub sind auf der mobilen Startseite, unter Anträge und beim eigenen Dienstplan direkt erreichbar. Kompakte Kacheln, eine übersichtliche Navigation und angepasste Formulare erleichtern die Bedienung in Hoch- und Querformat.
+- Persönliche Leihe ist als gemeinsames Standardrecht verwaltbar. Filialleitungen können es für Mitarbeitende im eigenen Standort entziehen und wiederherstellen; höhere Rollen behalten ihre bestehenden Verwaltungsgrenzen. Entzug, Protokollierung und Sitzungswiderruf werden serverseitig durchgesetzt. Standortfreigaben bleiben gesondert konfiguriert.
+- Eigene Leihen erscheinen vor dem aufklappbaren Ausgabeformular. Die offene Geräteübersicht verwendet mobil durchsuchbare Karten mit den bereits berechtigten Informationen.
+- Der gelbe Hinweis zur Bildschirmgröße entfällt. Planaktionen, PDF-Funktionen und Wochenübersicht sind mobil einklappbar; die Wochenauswahl bleibt direkt erreichbar. Das Hauptmenü ist kompakter und auch auf niedrigen Displays vollständig scrollbar. Vergrößerte Schrift und Touch-Geräte mit Desktop-Browserkennung werden berücksichtigt.
+
 ## v0.92.29 Beta · Belegsuche und flexible Kundenkartei
 
 - Unter Verkauf ergänzt „Kassenberichte & Belegsuche“ eine Suchmaske für Belege, Kassenbuchungen, Zeiträume, Filialen, Personalnummern und freigegebene Kundenangaben. Vollständige Belege bleiben mit Quelle und Datenstand nachvollziehbar.

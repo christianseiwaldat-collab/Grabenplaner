@@ -12,10 +12,10 @@
     <link rel="stylesheet" href="/sales-history.css" />
     <link rel="stylesheet" href="/receipt-search.css" />
     <link rel="stylesheet" href="/data-import.css" />
+    <link rel="stylesheet" href="/mobile-refinements.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="deploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
-    <div class="compact-admin-notice hidden" id="compactAdminNotice">Die Verwaltungsplanung ist für einen großen Bildschirm optimiert. Das Mitarbeiterportal ist auf dem Handy besser bedienbar.</div>
     <section class="login-gate hidden" id="loginGate" aria-live="polite">
       <form class="login-card" id="adminLoginForm">
         <img id="loginBrandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
@@ -37,7 +37,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.29 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.30 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -139,7 +139,7 @@
                 <span class="nav-symbol">◉</span><span>Mitarbeitende</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="positions" id="positionManagementNavButton">
-                <span class="nav-symbol">Pos</span><span>Positionsverwaltung</span>
+                <span class="nav-symbol text-nav-symbol" aria-hidden="true">Pos</span><span>Positionsverwaltung</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="applications" id="candidatePreboardingNavButton">
                 <span class="nav-symbol">✦</span><span>Bewerbungen &amp; Preboarding</span>
@@ -369,13 +369,18 @@
               <h1>Dienstplanung</h1>
               <p class="subtitle">Woche auswählen, Dienste planen und PDF exportieren.</p>
             </div>
-            <div class="topbar-actions">
+            <div class="topbar-actions planning-controls">
+              <div class="planning-week-controls">
               <div class="week-navigation" aria-label="Wochennavigation">
                 <button class="nav-button" id="previousWeek" aria-label="Vorherige Woche">←</button>
                 <button class="today-button" id="todayButton">Heute</button>
                 <button class="nav-button" id="nextWeek" aria-label="Nächste Woche">→</button>
               </div>
               <label class="week-jump"><span>Springe zu Woche</span><input id="weekJumpDate" type="date" /></label>
+              </div>
+              <details class="planning-tools" id="planningTools" open>
+                <summary>Planaktionen &amp; PDF <span aria-hidden="true">⌄</span></summary>
+                <div class="planning-tools-actions">
               <button class="primary-button" id="autoPlanButton"><span>✦</span> Dienstplan automatisch erstellen</button>
               <button class="secondary-button" id="optionsButton"><span>✦</span> Planungsoptionen</button>
               <button class="secondary-button hidden" id="employeeLendingButton" type="button"><span>⇄</span> Filialeinsatz zuweisen</button>
@@ -389,6 +394,8 @@
                 <div class="schedule-pdf-design-menu hidden" id="schedulePdfDesignMenu" role="menu" aria-label="Dienstplan-PDF-Design auswählen"></div>
               </div>
               <div class="page-theme-switch" role="group" aria-label="Darstellung der Dienstplanung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+                </div>
+              </details>
             </div>
           </header>
 
@@ -483,6 +490,8 @@
             </form>
           </dialog>
 
+          <details class="planning-summary" id="planningSummary" open>
+            <summary>Wochenübersicht <span aria-hidden="true">⌄</span></summary>
           <section class="summary-grid">
             <article class="summary-card week-context-card"><span>Zeitraum</span><strong id="weekTitle">Diese Woche</strong><small id="calendarWeek">Kalenderwoche</small></article>
             <article class="summary-card"><span>Dienste</span><strong id="shiftCount">0</strong><small>in dieser Woche</small></article>
@@ -493,6 +502,8 @@
             <article class="summary-card"><span>Sonderfälle</span><strong id="optionCount">0</strong><small>Urlaub, krank, Filiale</small></article>
             <article class="summary-card"><span>Team</span><strong id="employeeCount">0</strong><small>aktive Teammitglieder</small></article>
           </section>
+
+          </details>
 
           <details class="work-rule-assessment branch-supervision-assessment hidden" id="branchSupervisionAssessmentPanel">
             <summary>
@@ -2471,7 +2482,7 @@
           <section id="rightsSettings" class="settings-section settings-two-column">
             <div class="settings-card">
               <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Grundrechte persönlich einschränken und zusätzliche Rechte gezielt vergeben.</p></div></div>
-              <p class="settings-note security-note">Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. Filialleitungen dürfen ausschließlich Grundrechte aktiver Abteilungsleitungen im eigenen Standort einschränken; IT-Admin und Personalleitung behalten ihre getrennten Verwaltungsgrenzen. Der Developer-Zugang bleibt geschützt.</p>
+              <p class="settings-note security-note">Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. Filialleitungen verwalten die persönliche Leihe ihrer Mitarbeitenden sowie Grundrechte aktiver Abteilungsleitungen im eigenen Standort. IT-Admin und Personalleitung behalten ihre getrennten Verwaltungsgrenzen. Der Developer-Zugang bleibt geschützt.</p>
               <label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
               <p class="settings-note" id="rightsManagementHint">Rechte werden geladen.</p>
               <div class="rights-user-list" id="rightsUserList"></div>
@@ -2874,7 +2885,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.29 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.30 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

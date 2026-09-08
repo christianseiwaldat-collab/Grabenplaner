@@ -1,0 +1,175 @@
+/* Shared responsive refinements for the personal portal and planning workspace. */
+.planning-week-controls,.planning-tools-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px; min-width:0; }
+.planning-tools,.planning-summary { display:contents; }
+.planning-tools > summary,.planning-summary > summary { display:none; }
+.portal-request-shortcuts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin:16px 0; }
+.portal-request-shortcuts button { display:grid; justify-content:start; gap:2px; min-width:0; min-height:64px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; color:var(--green); background:color-mix(in srgb,var(--green) 9%,white); text-align:left; }
+.portal-request-shortcuts strong { font-size:14px; line-height:1.3; overflow-wrap:anywhere; }
+.portal-request-shortcuts span { font-size:12px; }
+.portal-request-shortcuts button:hover { border-color:var(--green); }
+.portal-request-shortcuts button:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.request-back-button { margin-bottom:12px; }
+.loan-cell-label,.loan-issue-section > summary { display:none; }
+.loan-issue-section { display:contents; }
+.portal-view h1[tabindex="-1"]:focus { outline:none; }
+.rights-editor-modal.compact-rights-editor { width:min(540px,calc(100vw - 32px)); }
+.rights-editor-modal.compact-rights-editor form { height:auto; overflow:auto; }
+.compact-rights-editor .rights-editor-permissions { flex:0 0 auto; align-content:start; overflow:visible; padding-right:0; }
+
+@media (max-width:820px), (max-width:1100px) and (pointer:coarse) {
+  .app-shell { display:block; }
+  .app-shell .mobile-navigation-toggle { position:sticky; top:var(--mobile-navigation-top); left:auto; z-index:940; display:flex; align-items:center; gap:8px; width:max-content; min-height:44px; margin:10px 14px 8px; padding:0 13px; border:1px solid var(--line); border-radius:10px; color:white; background:var(--green-dark); box-shadow:0 5px 16px rgba(18,42,34,.16); font-size:13px; font-weight:800; cursor:pointer; }
+  .mobile-navigation-toggle > span:first-child { position:relative; width:17px; height:12px; border-top:2px solid currentColor; border-bottom:2px solid currentColor; }
+  .mobile-navigation-toggle > span:first-child::after { content:""; position:absolute; top:4px; left:0; width:17px; border-top:2px solid currentColor; }
+  .app-shell .main-content { min-width:0; padding:8px 14px 28px; }
+  .app-shell .topbar { position:static; display:block; margin:0 0 14px; padding:0 0 12px; }
+  .app-shell .topbar h1 { font-size:26px; line-height:1.15; }
+  .app-shell .topbar .subtitle { margin:6px 0 0; font-size:12px; line-height:1.4; }
+  .app-shell .topbar-actions { justify-content:flex-start; margin-top:12px; }
+  .app-shell .planning-controls { display:grid; grid-template-columns:minmax(0,1fr); width:100%; gap:9px; }
+  .planning-week-controls { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:stretch; gap:8px; }
+  .planning-week-controls .week-navigation { display:flex; flex:1 1 135px; align-items:stretch; min-width:0; height:44px; }
+  .planning-week-controls .nav-button { flex:0 0 34px; width:34px; min-width:0; height:44px; }
+  .planning-week-controls .today-button { flex:1 1 auto; min-width:0; padding:0 5px; font-size:12px; }
+  .planning-week-controls .week-jump { flex:1 1 145px; min-width:0; }
+  .planning-week-controls .week-jump > span { font-size:10px; }
+  .planning-week-controls .week-jump input { min-width:0; width:100%; height:44px; padding:6px; font-size:14px; }
+  .planning-tools { display:block; min-width:0; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+  .planning-tools > summary { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:44px; padding:10px 12px; color:var(--green); font-size:13px; font-weight:800; list-style:none; cursor:pointer; }
+  .planning-tools > summary::-webkit-details-marker { display:none; }
+  .planning-tools > summary:focus-visible { outline:3px solid var(--green); outline-offset:2px; border-radius:10px; }
+  .planning-tools > summary span { font-size:18px; transition:transform .15s; }
+  .planning-tools[open] > summary span { transform:rotate(180deg); }
+  .planning-tools-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:0 10px 10px; }
+  .planning-tools-actions > * { min-width:0; max-width:100%; }
+  .planning-tools-actions :is(.primary-button,.secondary-button) { justify-content:center; width:100%; min-height:44px; margin:0; padding:9px 8px; border-radius:9px; font-size:12px; line-height:1.3; text-align:center; white-space:normal; }
+  .planning-tools-actions #autoPlanButton,.planning-tools-actions .department-pdf-control,.planning-tools-actions .page-theme-switch { grid-column:1 / -1; }
+  .planning-tools-actions .department-pdf-control { grid-template-columns:minmax(0,1fr) 44px; width:100%; }
+  .planning-tools-actions .department-pdf-control select { min-width:0; width:100%; min-height:44px; font-size:14px; }
+  .planning-tools-actions .schedule-pdf-design-menu { left:0; right:auto; width:min(270px,calc(100vw - 50px)); max-width:100%; }
+  .planning-summary { display:block; margin-bottom:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+  .planning-summary > summary { display:flex; justify-content:space-between; align-items:center; min-height:44px; padding:10px 12px; color:var(--green); font-size:13px; font-weight:800; list-style:none; cursor:pointer; }
+  .planning-summary > summary::-webkit-details-marker { display:none; }
+  .planning-summary > summary:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+  .planning-summary[open] > summary span { transform:rotate(180deg); }
+  .planning-summary .summary-grid { margin:0; padding:0 10px 10px; gap:8px; }
+  .planning-summary .summary-card { min-height:0; padding:12px; }
+  .app-shell .sidebar { position:fixed; z-index:960; top:var(--deployment-banner-height); bottom:0; left:0; width:min(320px,calc((100vw - 24px) * var(--app-font-scale-inverse))); height:calc((100dvh - var(--deployment-banner-height)) * var(--app-font-scale-inverse)); padding:12px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; visibility:hidden; transform:translateX(-105%); transition:transform .2s ease,visibility 0s linear .2s; }
+  body.mobile-navigation-open { overflow:hidden; }
+  body.mobile-navigation-open .sidebar { visibility:visible; transform:translateX(0); transition-delay:0s; box-shadow:18px 0 55px rgba(8,25,19,.34); }
+  .sidebar-backdrop { position:fixed; z-index:950; inset:0; display:block; border:0; visibility:hidden; opacity:0; background:rgba(9,20,16,.54); }
+  body.mobile-navigation-open .sidebar-backdrop { visibility:visible; opacity:1; }
+  .sidebar .brand { flex:none; min-height:54px; padding:0 46px 10px 0; }
+  .sidebar .brand-home-button { display:grid; grid-template-columns:76px minmax(0,1fr); align-items:center; gap:8px; }
+  .sidebar .brand-logo { width:76px; }
+  .sidebar .brand-app { margin:0; padding:0; }
+  .sidebar .brand-app strong { font-size:13px; }
+  .sidebar .brand-app span { font-size:10px; }
+  .sidebar .brand-app .sidebar-developer-text { display:none; }
+  .sidebar-mobile-close { position:absolute; top:0; right:0; display:none; place-items:center; width:44px; height:44px; padding:0; border:1px solid rgba(255,255,255,.25); border-radius:9px; color:white; background:rgba(255,255,255,.08); font-size:24px; cursor:pointer; }
+  body.mobile-navigation-open .sidebar-mobile-close { display:grid; }
+  .sidebar .sidebar-session { flex:none; gap:8px; margin-bottom:8px; padding:8px; }
+  .sidebar .sidebar-session-copy { grid-template-columns:repeat(2,minmax(0,1fr)); gap:2px 8px; }
+  .sidebar-session-copy :is(strong,span) { grid-column:1 / -1; }
+  .sidebar .sidebar-session-copy strong,.sidebar .sidebar-session-copy span { font-size:11px; }
+  .sidebar #sidebarSessionPosition { display:none; }
+  .sidebar .sidebar-session-copy button { min-height:36px; margin:0; font-size:11px; }
+  .sidebar .sidebar-darkmode-toggle { min-height:44px; }
+  .sidebar .sidebar-darkmode-toggle > span { font-size:9px; }
+  .sidebar .function-search { flex:none; }
+  .sidebar .function-search input { height:44px; font-size:14px; }
+  .sidebar .function-search-field { min-height:44px; }
+  .sidebar .main-nav { flex:1 0 auto; display:grid; align-content:start; align-items:start; gap:2px; min-height:0; width:100%; padding:8px 0; overflow:visible; }
+  .sidebar .nav-module-toggle { min-height:44px; gap:8px; font-size:13px; }
+  .sidebar .nav-branch { grid-template-columns:36px minmax(0,1fr); column-gap:4px; }
+  .sidebar .nav-disclosure { width:36px; min-height:40px; }
+  .sidebar .nav-item.nav-module-route { grid-template-columns:36px 22px minmax(0,1fr) auto; column-gap:4px; }
+  .sidebar .nav-symbol { white-space:nowrap; overflow-wrap:normal; font-size:13px; }
+  .sidebar .nav-symbol:is(.text-nav-symbol,.crm-nav-symbol,.article-catalog-nav-symbol) { font-size:9px; }
+  .sidebar .nav-module-children { gap:2px; margin:0 0 4px; padding:0; }
+  .sidebar .nav-item { min-height:40px; padding-top:8px; padding-bottom:8px; font-size:12px; line-height:1.25; overflow-wrap:anywhere; }
+  .sidebar .nav-submodule > .nav-children { padding-left:42px; }
+  .sidebar .nav-children .nav-item { min-height:36px; font-size:11px; }
+  .sidebar .sidebar-settings-shortcut { flex:none; width:100%; min-height:44px; margin-top:4px; }
+}
+
+@media (max-width:720px), (max-width:1100px) and (pointer:coarse) {
+  body:has(#portalApp) { padding-bottom:calc(76px + env(safe-area-inset-bottom)); }
+  body.portal-settings-active { padding-bottom:24px; }
+  #portalApp .portal-header { min-height:58px; padding:7px 8px; gap:8px; }
+  #portalApp .portal-brand { flex:1 1 auto; min-width:0; }
+  #portalApp .portal-brand img { width:84px; height:36px; }
+  #portalApp .portal-brand > div,#portalApp .portal-user-copy,#portalApp #adminAppLink { display:none; }
+  #portalApp .portal-user { flex:none; flex-wrap:nowrap; gap:4px; }
+  #portalApp .portal-user .portal-settings-shortcut-label,#portalApp .personal-actions-shortcut span { display:none; }
+  #portalApp :is(.notification-button,.portal-settings-shortcut,.personal-actions-shortcut) { display:inline-grid; place-items:center; flex:0 0 44px; width:44px; height:44px; min-height:44px; padding:0; }
+  #portalApp #logoutButton { min-height:44px; padding:8px; font-size:11px; white-space:nowrap; }
+  #portalApp main { width:calc(100% - 20px); margin-top:14px; margin-bottom:28px; }
+  #portalApp .view-heading { min-width:0; gap:10px; margin-bottom:14px; }
+  #portalApp h1 { font-size:26px; }
+  #portalApp .portal-tabs { position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:30; margin:0; padding:4px; border:1px solid var(--line); border-radius:13px; overflow-x:auto; overflow-y:hidden; background:rgba(255,253,250,.98); box-shadow:0 6px 20px rgba(25,53,43,.18); }
+  #portalApp .portal-tabs.mobile-personal { display:flex; flex-wrap:nowrap; gap:2px; scrollbar-width:none; }
+  #portalApp .portal-tabs.mobile-personal button { flex:1 0 60px; min-width:60px; min-height:48px; padding:6px 3px; font-size:11px; line-height:1.2; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
+  #portalApp .portal-tabs.mobile-personal #leadershipMoreTab { position:sticky; right:0; z-index:1; flex:0 0 60px; color:var(--green); background:#f0f4ef; box-shadow:-5px 0 8px rgba(25,53,43,.12); }
+  #portalApp .portal-tabs.mobile-personal #leadershipMoreTab.active { color:white; background:var(--green); }
+  #portalApp .portal-tabs.mobile-personal #historyTab.active { color:white; background:var(--green); }
+  #portalApp .mobile-home-heading { margin-bottom:12px; }
+  #portalApp .mobile-home-heading p { margin-bottom:0; }
+  #portalApp .mobile-home-tiles { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  #portalApp .mobile-home-tiles button { min-width:0; min-height:86px; padding:11px; gap:7px; }
+  #portalApp .mobile-home-tiles button > span { min-width:0; }
+  #portalApp .mobile-home-tiles strong { font-size:14px; overflow-wrap:anywhere; }
+  #portalApp .mobile-home-tiles small { font-size:11px; line-height:1.35; overflow-wrap:anywhere; }
+  #portalApp .mobile-home-tiles button > b { font-size:20px; }
+  #portalApp .leadership-more-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  #portalApp .leadership-more-grid :is(button,a) { min-width:0; min-height:86px; padding:12px; overflow-wrap:anywhere; }
+  #portalApp .leadership-more-grid strong { font-size:14px; }
+  #portalApp .leadership-more-grid span { font-size:11px; }
+  #portalApp .portal-request-shortcuts { margin:12px 0; }
+  #portalApp :is(.primary,.text-button,.week-controls button) { min-height:44px; }
+  #portalApp :is(input,select,textarea) { min-width:0; max-width:100%; font-size:16px; }
+  #portalApp .date-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #portalApp .date-fields > label { min-width:0; }
+  #portalApp input[type="date"] { min-width:0; width:100%; }
+  #portalApp .request-form :is(.primary,.request-back-button) { width:100%; }
+  #portalApp .request-mode { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #portalApp .request-mode label { min-width:0; min-height:44px; font-size:12px; }
+  #portalApp .request-mode label:first-of-type { grid-column:1 / -1; }
+  #portalApp input:is([type="radio"],[type="checkbox"]) { flex:none; width:18px; min-height:18px; height:18px; padding:0; }
+  #portalApp .loan-layout { display:flex; flex-direction:column; gap:12px; }
+  #portalApp #loanPersonalOverview { order:0; }
+  #portalApp #loanIssueSection { order:1; display:block; min-width:0; }
+  #portalApp #loanOpenOverview { order:2; }
+  #portalApp .loan-issue-section > summary { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:48px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; color:var(--green); background:color-mix(in srgb,var(--green) 9%,white); font-size:14px; font-weight:800; list-style:none; cursor:pointer; }
+  #portalApp .loan-issue-section > summary::-webkit-details-marker { display:none; }
+  #portalApp .loan-issue-section > summary:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+  #portalApp .loan-issue-section[open] > summary { border-radius:12px 12px 0 0; }
+  #portalApp .loan-issue-section[open] > summary span { transform:rotate(180deg); }
+  #portalApp .loan-issue-section .loan-issue-form { border-radius:0 0 12px 12px; }
+  #portalApp .loan-overview-table-wrap { border:0; overflow:visible; }
+  #portalApp .loan-overview-table { display:block; min-width:0; width:100%; background:transparent; }
+  #portalApp .loan-overview-table thead { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  #portalApp .loan-overview-table tbody { display:grid; gap:8px; }
+  #portalApp .loan-overview-table tbody tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; padding:12px; border:1px solid var(--line); border-radius:10px; }
+  #portalApp .loan-overview-table td { display:grid; align-content:start; min-width:0; padding:0; border:0; font-size:12px; overflow-wrap:anywhere; }
+  #portalApp .loan-cell-label { display:block; margin-bottom:3px; color:var(--muted); font-size:10px; font-weight:600; }
+  #portalApp .loan-overview-table :is([data-loan-column="description"],[data-loan-column="borrowerName"],.loan-overview-empty) { grid-column:1 / -1; }
+  #portalApp .portal-settings-summary { min-height:64px; padding:12px 14px; }
+  #portalApp .portal-settings-summary small { max-width:100%; }
+  #portalApp dialog { max-width:calc(100vw - 20px); max-height:calc(100dvh - 20px); padding:16px; overflow:auto; }
+}
+
+@media (orientation:landscape) and (max-height:550px) and (pointer:coarse) {
+  #portalApp .portal-header { position:static; }
+  #portalApp .view-heading { align-items:center; }
+  #portalApp .mobile-home-tiles { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  #portalApp .portal-request-shortcuts { max-width:600px; }
+  .app-shell .sidebar { padding-top:8px; }
+  .app-shell .sidebar .brand { min-height:48px; }
+  .app-shell #planningView > .topbar { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); align-items:end; gap:16px; }
+  .app-shell #planningView > .topbar .planning-controls { margin-top:0; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .planning-tools > summary span,.app-shell .sidebar { transition:none; }
+}

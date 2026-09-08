@@ -196,8 +196,9 @@ function amuReportStatusText(report) {
 function applyDeviceMode() {
   const compact = window.matchMedia("(max-width: 720px)").matches;
   const touch = window.matchMedia("(pointer: coarse)").matches;
+  const compactTouchScreen = window.matchMedia("(max-width: 1100px)").matches;
   const mobileHint = navigator.userAgentData?.mobile === true || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  document.documentElement.dataset.uiMode = compact || (touch && mobileHint) ? "mobile" : "desktop";
+  document.documentElement.dataset.uiMode = compact || (touch && (mobileHint || compactTouchScreen)) ? "mobile" : "desktop";
   document.documentElement.dataset.inputMode = touch ? "touch" : "pointer";
   if (portalState.session) applyMobileLeadershipLayout();
 }
@@ -755,7 +756,7 @@ const mobileModuleCatalog = Object.freeze([
   { id: "team", tab: "leadershipTeam", label: "Team", description: "Anwesenheit im zuständigen Bereich" },
   { id: "approvals", tab: "leadershipApprovals", label: "Freigaben", description: "Offene Entscheidungen" },
   { id: "schedule", tab: "schedule", label: "Dienstplan", description: "Meine geplanten Dienste" },
-  { id: "requests", tab: "history", label: "Anträge", description: "Status und Verlauf meiner Anträge" },
+  { id: "requests", tab: "history", label: "Anträge", description: "Zeitausgleich, Urlaub und Verlauf" },
   { id: "loan", tab: "loan", label: "Leihe", description: "Ausgaben und Rücknahmen" },
   { id: "sickness", tab: "amu", label: "Krank & AUM", description: "Krankmeldung und Dokumente" },
   { id: "learning", tab: "learningDashboard", label: "Schulungen", description: "Fortschritte und Fähigkeiten" },
@@ -966,8 +967,8 @@ function defaultPersonalMobileSelection() {
   const available = new Set(availablePersonalMobileModules());
   const roleDefault = isLeadershipUser()
     ? normalizedMobileModules(portalState.mobileLayout?.modules)
-    : ["time", "tasks", "schedule", "requests", "sickness", "loan"];
-  const selected = roleDefault.filter((id) => id !== "more" && available.has(id)).slice(0, 5);
+    : ["time", "schedule", "requests", "loan", "tasks", "sickness"];
+  const selected = roleDefault.filter((id) => id !== "more" && available.has(id)).slice(0, 3);
   if (!selected.length) selected.push(...[...available].slice(0, 1));
   return selected;
 }
@@ -1002,14 +1003,15 @@ function effectiveMobileModules() {
 
 function syncPortalTabButtons(tab) {
   const modules = portalState.mobileLeadership ? effectiveMobileModules() : [];
-  const directModule = mobileModuleByTab.get(tab);
+  const navigationTab = portalState.mobileLeadership && ["timeOff", "vacation"].includes(tab) ? "history" : tab;
+  const directModule = mobileModuleByTab.get(navigationTab);
   const representedByMore = portalState.mobileLeadership
     && ((mobileMoreSecondaryTabs.has(tab) && (!directModule || !modules.includes(directModule)))
       || (directModule && !modules.includes(directModule)));
   document.querySelectorAll("[data-tab]").forEach((button) => {
     const active = representedByMore
       ? button.dataset.tab === "leadershipMore"
-      : button.dataset.tab === tab;
+      : button.dataset.tab === navigationTab;
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
     button.tabIndex = active ? 0 : -1;
@@ -1040,6 +1042,20 @@ function isBranchMobileAccount(user = portalUser()) {
 function applyMobileLeadershipLayout() {
   const navigation = document.querySelector(".portal-tabs");
   if (!navigation) return;
+  const loanIssueSection = document.querySelector("#loanIssueSection");
+  const loanDisplayMode = isMobileUi() ? "mobile" : "desktop";
+  if (loanIssueSection && loanIssueSection.dataset.displayMode !== loanDisplayMode) {
+    loanIssueSection.open = loanDisplayMode === "desktop";
+    loanIssueSection.dataset.displayMode = loanDisplayMode;
+  }
+  document.querySelectorAll("[data-request-tab]").forEach((button) => {
+    const tab = button.dataset.requestTab;
+    const canRequest = tab === "history" || (portalUser()?.permissions || []).includes("own_vacation:request");
+    button.classList.toggle("hidden", !canRequest || !portalTabAllowed(tab));
+  });
+  document.querySelectorAll(".portal-request-shortcuts").forEach((group) => {
+    group.classList.toggle("hidden", !group.querySelector("button:not(.hidden)"));
+  });
   const branchMobile = isBranchMobileAccount();
   const compactMobile = isMobileUi() && !isOrganizationAccount();
   const mobilePortal = branchMobile || compactMobile;
@@ -2453,6 +2469,7 @@ function setTab(tab) {
   if (portalUser() && !portalTabAllowed(tab)) tab = defaultPortalTab();
   if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = defaultPortalTab();
   if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
+  const tabChanged = portalState.activeTab !== tab;
   portalState.activeTab = tab;
   rememberPortalTab(tab);
   document.body.classList.toggle("portal-settings-active", tab === "settings" && isMobileUi());
@@ -2505,6 +2522,14 @@ function setTab(tab) {
   renderMobileHome();
   renderBranchMobileActionBar();
   if (portalState.session) applyMobileLeadershipLayout();
+  if (tabChanged && isMobileUi()) {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      const heading = document.querySelector(".portal-view.active h1");
+      heading?.setAttribute("tabindex", "-1");
+      heading?.focus({ preventScroll: true });
+    });
+  }
 }
 
 function branchOrderStatusText(status) {
@@ -4394,7 +4419,7 @@ async function loadTimeOffSlots() {
   el.timeOffStart.disabled = true;
   el.timeOffEnd.disabled = true;
   el.timeOffStart.innerHTML = '<option value="">Zeiten werden geladen</option>';
-  el.timeOffEnd.innerHTML = '<option value="">Zuerst Von wählen</option>';
+  el.timeOffEnd.innerHTML = '<option value="">Beginn wählen</option>';
   if (!date) return;
   try {
     const data = await api(`/api/portal/v1/me/time-off-slots?date=${encodeURIComponent(date)}`);
@@ -6620,7 +6645,7 @@ function renderLoanOverview() {
     .some((columnId) => String(item[columnId] || "").toLocaleLowerCase("de-AT").includes(query)));
   el.loanOverviewTableHeader.innerHTML = columns.map((columnId) => {
     const column = loanOverviewColumnById.get(columnId);
-    return `<th>${esc(column?.label || "")}</th>`;
+    return `<th scope="col">${esc(column?.label || "")}</th>`;
   }).join("");
   if (el.loanOverviewDescription) {
     el.loanOverviewDescription.textContent = columns.includes("borrowerName")
@@ -6634,7 +6659,7 @@ function renderLoanOverview() {
         const value = columnId === "dueDate" && item.dueDate
           ? dateText(item.dueDate)
           : item[columnId] || column?.fallback || "–";
-        return `<td>${esc(value)}</td>`;
+        return `<td data-loan-column="${esc(columnId)}"><span class="loan-cell-label" aria-hidden="true">${esc(column?.label || "")}</span><span>${esc(value)}</span></td>`;
       }).join("")}
     </tr>
   `).join("") : `<tr><td class="loan-overview-empty" colspan="${columns.length}">${
@@ -6758,6 +6783,7 @@ async function loadLoanModule() {
       || portalState.loanStatus.permissions?.locationRead === true
       || canManage;
     el.loanIssueForm?.classList.toggle("hidden", !canCreate);
+    document.querySelector("#loanIssueSection")?.classList.toggle("hidden", !canCreate);
     el.loanPersonalOverview?.classList.toggle("hidden", !canReadDetails);
     el.loanScopeField?.classList.toggle(
       "hidden",
@@ -7347,6 +7373,7 @@ el.leadershipCorrectionEntries.addEventListener("click", (event) => {
 });
 document.querySelectorAll("[data-close-leadership-request]").forEach((button) => button.addEventListener("click", () => el.leadershipRequestDialog.close()));
 document.querySelectorAll("[data-more-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.moreTab)));
+document.querySelectorAll("[data-request-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.requestTab)));
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
