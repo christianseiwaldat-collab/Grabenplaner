@@ -696,6 +696,7 @@ const PERSONNEL_DOCUMENT_CATEGORIES = new Set([
 const PERSONNEL_DOCUMENT_VISIBILITY = "hr_confidential";
 const PORTAL_API_VERSION = 1;
 const LOAN_OVERVIEW_PERMISSION = "loans:overview:read";
+const LOAN_SELF_SERVICE_PERMISSION = "loans:self:use";
 const LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION = "loans:branch-overview:manage";
 const branchLoanOverviewColumnIds = Object.freeze([
   "borrowerName",
@@ -850,6 +851,7 @@ const SALES_ARTICLE_IMPORT_SNAPSHOT_MAX_BYTES = 128 * 1024 * 1024;
 let salesArticleImportHeavyOperation = null;
 
 const delegablePortalPermissionCatalog = Object.freeze([
+  { id: LOAN_SELF_SERVICE_PERMISSION, label: "Persönliche Leihe nutzen", description: "Standardrecht für eigene Leihen, Ausgaben und Rücknahmen am freigeschalteten Standort. Filialleitung und höhere Rollen können es persönlich entziehen und wiederherstellen.", group: "Leihe", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["employee", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
   { id: "schedule:write", label: "Dienstpläne bearbeiten", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
   { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.READ, label: "Fremde Dienstpläne eingeschränkt lesen", description: "Aktuelle und nächste Dienstplanwoche anderer Filialen rein lesend und ohne Wochenstunden, Regelprüfungen, Zeitkonten oder Abwesenheitsgründe ansehen.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
@@ -1878,6 +1880,7 @@ for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, [LOAN_
 for (const role of builtinPortalRoles) {
   if (role.id === "location_planner") continue;
   addBuiltinRolePermissions(role.id, [
+    LOAN_SELF_SERVICE_PERMISSION,
     "loans:self:read",
     "loans:self:create",
     "loans:self:return",
@@ -9561,6 +9564,8 @@ function effectivePortalPermissionState(
   const denied = new Set(deniedPermissions);
   const effectivePermissions = [...new Set([...rolePermissions, ...grantedPermissions])]
     .filter((permission) => !denied.has(permission))
+    .filter((permission) => !denied.has(LOAN_SELF_SERVICE_PERMISSION)
+      || (!permission.startsWith("loans:self:") && permission !== LOAN_OVERVIEW_PERMISSION))
     .filter((permission) => permission !== "amu:local:manage"
       || managerAmuAccessEffective(employeeNumber, role, amuLocalAccessMode));
   return { rolePermissions, grantedPermissions, deniedPermissions, effectivePermissions };
@@ -9691,14 +9696,14 @@ function manageablePortalPermissionsForActor(actor) {
   if (actor.role === "manager") {
     const departmentManagerBasePermissions = builtinPortalRoles
       .find((role) => role.id === "department_manager")?.permissions || [];
-    return new Set(departmentManagerBasePermissions.filter((permission) => (
+    return new Set([...departmentManagerBasePermissions.filter((permission) => (
       actor.permissions?.includes(permission)
       && delegablePortalPermissions.has(permission)
       && !portalGlobalPermissionIds.has(permission)
       && !PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission)
       && !CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission)
       && !PORTAL_BIRTHDAY_PRESENTATION_PERMISSION_IDS.includes(permission)
-    )));
+    )), LOAN_SELF_SERVICE_PERMISSION]);
   }
   return new Set();
 }
@@ -9716,14 +9721,24 @@ function portalPermissionCatalogForActor(actor) {
     : catalog;
 }
 
+function manageablePortalPermissionsForTarget(actor, target) {
+  const manageable = manageablePortalPermissionsForActor(actor);
+  if (actor?.role === "manager" && target?.role === "employee") {
+    return new Set([...manageable].filter((permission) => permission === LOAN_SELF_SERVICE_PERMISSION));
+  }
+  return manageable;
+}
+
 function actorCanManagePermissionGrants(actor, target) {
   if (!actor || !target || target.role === "developer" || target.roleLocked || !target.configured || !target.active) return false;
   if (isLocalSystemSession(actor) || actor.role === "developer") return true;
   if (actor.role === "it_admin") return target.role !== "hr";
   if (actor.role === "admin") return target.role !== "it_admin";
   if (actor.role === "hr") return ["employee", "location_planner", "department_manager", "manager"].includes(target.role);
-  if (actor.role !== "manager" || target.role !== "department_manager") return false;
-  const managedLocations = new Set((actor.scopes || []).map((scope) => String(scope.locationId || "")));
+  if (actor.role !== "manager" || !["department_manager", "employee"].includes(target.role)) return false;
+  const managedLocations = new Set((actor.scopes || [])
+    .filter((scope) => !scope.departmentId)
+    .map((scope) => String(scope.locationId || "")));
   return managedLocations.has(String(target.homeLocationId || ""));
 }
 
@@ -36190,14 +36205,19 @@ async function rightsDashboardPayload(actor) {
 }
 
 async function rightsManagementPayload(actor) {
-  const [roleRows, adminUsers] = await Promise.all([getPortalRoles(), portalUsersForActor(actor)]);
+  const [roleRows, adminUsers] = await Promise.all([
+    getPortalRoles(),
+    actor?.role === "manager"
+      ? portalUsersForAdmin().then((users) => users.filter((user) => actorCanManagePermissionGrants(actor, user)))
+      : portalUsersForActor(actor),
+  ]);
   const roles = new Map(roleRows.map((role) => [role.id, role]));
   const visiblePermission = (permission) => portalPermissionVisibleToActor(permission, actor);
   const managerDenialOnly = actor?.role === "manager";
-  const managerPermissions = managerDenialOnly ? manageablePortalPermissionsForActor(actor) : null;
   const users = adminUsers
     .filter((user) => user.employeeActive)
     .map((user) => {
+      const managerPermissions = managerDenialOnly ? manageablePortalPermissionsForTarget(actor, user) : null;
       const {
         personnelLearningDenialAuthority: _personnelLearningDenialAuthority,
         ...publicUser
@@ -39033,7 +39053,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   if (actor.role === "manager" && submitted.length) {
     throw httpError(
       403,
-      "Filialleitungen können hier ausschließlich Grundrechte einer Abteilungsleitung entziehen oder wiederherstellen.",
+      "Filialleitungen können hier ausschließlich die persönliche Leihe ihrer Mitarbeitenden und Grundrechte ihrer Abteilungsleitungen entziehen oder wiederherstellen.",
       "MANAGER_DEPARTMENT_RIGHTS_DENIAL_ONLY",
     );
   }
@@ -39044,7 +39064,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   const submittedDenialsInput = denialInputProvided
     ? [...new Set(request.body.deniedPermissions.map((value) => String(value || "").trim()).filter(Boolean))]
     : null;
-  const manageablePermissions = manageablePortalPermissionsForActor(actor);
+  const manageablePermissions = manageablePortalPermissionsForTarget(actor, target);
   const [
     currentGrantRows,
     currentDenialRows,
@@ -39308,7 +39328,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
       ...permissionScopeDelta.added.map((scope) => scope.permission),
       ...permissionScopeDelta.removed.map((scope) => scope.permission),
     ].filter((permission) => PERSONNEL_LEARNING_PERMISSION_IDS.includes(permission));
-    const liveManageablePermissions = manageablePortalPermissionsForActor(liveLearningActor);
+    const liveManageablePermissions = manageablePortalPermissionsForTarget(liveLearningActor, liveTargetAccess);
     const actualPermissionDelta = [
       ...grantDelta.added,
       ...grantDelta.removed,

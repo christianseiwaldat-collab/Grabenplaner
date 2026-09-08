@@ -236,8 +236,9 @@ test("Block 5: Tastatur-, Screenreader-, Mobile- und Bewegungsreduktion sind vol
 
 test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenzfrei klassifiziert", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.92.29-beta");
-  assert.match(read("README.md"), /v0\.92\.29 Beta/);
+  assert.equal(packageJson.version, "0.92.30-beta");
+  assert.match(read("README.md"), /v0\.92\.30 Beta/);
+  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.30 Beta · Mobiles Mitarbeiterportal und persönliche Leihrechte/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.29 Beta · Belegsuche und flexible Kundenkartei/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.27 Beta · Geschütztes Importfundament und Verkaufs-\/Kassenhistorie/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.26 Beta · Direkter TradeFoto-Datenbankimport/);

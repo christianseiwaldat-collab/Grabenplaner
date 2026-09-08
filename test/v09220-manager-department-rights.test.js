@@ -150,7 +150,7 @@ test("v0.92.20: FL entzieht nur AL-Grundrechte im eigenen Standort", async () =>
   assert.equal(overview.response.status, 200, overview.text);
   assert.ok(overview.payload.users.some((user) => user.employeeNumber === LOCAL_DEPARTMENT_MANAGER));
   assert.ok(overview.payload.users.every((user) => (
-    user.role === "department_manager" && user.homeLocationId === localLocation
+    ["department_manager", "employee"].includes(user.role) && user.homeLocationId === localLocation
   )));
   assert.equal(overview.payload.users.some((user) => user.employeeNumber === REMOTE_DEPARTMENT_MANAGER), false);
   assert.ok(overview.payload.catalog.some((permission) => permission.id === "time:review" && permission.editable));
@@ -196,7 +196,7 @@ test("v0.92.20: FL entzieht nur AL-Grundrechte im eigenen Standort", async () =>
   assert.equal(protectedDenial.response.status, 403, protectedDenial.text);
   assert.equal(protectedDenial.payload.code, "PORTAL_PERMISSION_NOT_DELEGABLE");
 
-  for (const target of [REMOTE_DEPARTMENT_MANAGER, LOCAL_EMPLOYEE]) {
+  for (const target of [REMOTE_DEPARTMENT_MANAGER]) {
     const outsideHierarchy = await request(`/api/portal/v1/rights/${target}`, {
       method: "PUT",
       body: { grantedPermissions: [], deniedPermissions: ["time:review"] },
@@ -204,6 +204,11 @@ test("v0.92.20: FL entzieht nur AL-Grundrechte im eigenen Standort", async () =>
     assert.equal(outsideHierarchy.response.status, 403, outsideHierarchy.text);
     assert.equal(outsideHierarchy.payload.code, "PORTAL_ROLE_HIERARCHY_DENIED");
   }
+  const employeeOtherRight = await request(`/api/portal/v1/rights/${LOCAL_EMPLOYEE}`, {
+    method: "PUT", body: { grantedPermissions: [], deniedPermissions: ["time:review"] },
+  });
+  assert.equal(employeeOtherRight.response.status, 403, employeeOtherRight.text);
+  assert.equal(employeeOtherRight.payload.code, "PORTAL_PERMISSION_NOT_DELEGABLE");
 
   const restored = await request(`/api/portal/v1/rights/${LOCAL_DEPARTMENT_MANAGER}`, {
     method: "PUT",
@@ -237,5 +242,5 @@ test("v0.92.20: FL-Rechteoberfläche ist auf AL-Grundrechtsentzug beschränkt", 
   assert.match(appSource, /globalAdministration \|\| role === "manager"/);
   assert.match(appSource, /managerDenialOnly[\s\S]*Zusatzrechte, Rollen und Geltungsbereiche bleiben unverändert/);
   assert.match(appSource, /managerDenialOnly[\s\S]*JSON\.stringify\(\{ grantedPermissions, deniedPermissions \}\)[\s\S]*JSON\.stringify\(\{ grantedPermissions, deniedPermissions, scopes \}\)/);
-  assert.match(html, /Filialleitungen dürfen ausschließlich Grundrechte aktiver Abteilungsleitungen im eigenen Standort einschränken/);
+  assert.match(html, /Filialleitungen verwalten die persönliche Leihe ihrer Mitarbeitenden sowie Grundrechte aktiver Abteilungsleitungen im eigenen Standort/);
 });
