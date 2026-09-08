@@ -311,7 +311,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // Block 5 adds a named query repository; raw test DB access stays in test-support.
   // The CRM identity startup migration now reads its existing table schema
   // through the already classified SQLite operations adapter.
-  assert.equal(report.summary.productionDirectFiles, 76);
+  // The explicitly authorized customer maintenance CLI adds only connection
+  // PRAGMAs; business writes use the existing audited repositories.
+  assert.equal(report.summary.productionDirectFiles, 77);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.

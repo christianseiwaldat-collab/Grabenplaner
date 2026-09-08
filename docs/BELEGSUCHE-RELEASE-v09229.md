@@ -2,7 +2,9 @@
 
 Stand: 08.09.2026. **App-Deploy erfolgreich; vollständige Recovery Assurance nicht bestanden.** Betrieb, Datenrücksicherung und Oberflächenprüfung werden unten getrennt von dem noch offenen isolierten App-Starttest ausgewiesen. Alle Zeitangaben im technischen Ablauf sind UTC.
 
-Der Nutzer hat den Deploy am 07.09.2026 ausdrücklich beauftragt. Umfang sind die Belegsuche mit Kundenfiltern, persönlicher Spaltenauswahl und globaler Sortierung, PDF-Beleginformationen, die gemeinsame tolerante Suche sowie die CRM-Kunden-Kontonummer mit Startmigration. Die tatsächliche Kundenübernahme ist davon getrennt und wurde nicht durch den Deploy freigegeben oder ausgeführt.
+Der Nutzer hat den Deploy am 07.09.2026 ausdrücklich beauftragt. Umfang sind die Belegsuche mit Kundenfiltern, persönlicher Spaltenauswahl und globaler Sortierung, PDF-Beleginformationen, die gemeinsame tolerante Suche sowie die CRM-Kunden-Kontonummer mit Startmigration. Die tatsächliche Kundenübernahme wurde bei diesem Deploy noch nicht ausgeführt, obwohl die fachliche Freigabe zu `KUND_NR` vorlag.
+
+**Nachtrag 08.09.2026:** Die [Kundenübernahme](CRM-KUNDENUEBERNAHME-2026-09-08.md) ist inzwischen ohne erneuten App-Deploy abgeschlossen: 30.503 Karten sind produktiv angelegt und vollständig geprüft. Die nachfolgenden Nullbestände dokumentieren den historischen Stand unmittelbar nach dem ursprünglichen Deploy. Die offene vollständige Recovery Assurance und die Suchleistung bleiben davon getrennte Punkte.
 
 ## Releaseartefakt
 
