@@ -320,6 +320,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/tradefoto-history.test.js",
   "test/tradefoto-storage-comparison.test.js",
   "test/tradefoto-master-data.test.js",
+  "test/tradefoto-crm-maintenance-import.test.js",
   "test/data-import-foundation.test.js",
   "test/data-import-payload-storage.test.js",
   "test/data-import-payload-reuse.test.js",
@@ -696,6 +697,17 @@ const PHASE_6_CLASSIFICATION = Object.freeze({
 });
 
 const PRODUCTION_DIRECT_GROUPS = Object.freeze([
+  Object.freeze({
+    id: "scoped-crm-maintenance-import",
+    files: Object.freeze(["scripts/import-tradefoto-crm.cjs"]),
+    scope: "explicit-customer-import-maintenance",
+    owner: "crm-and-import",
+    targetLayer: "existing SQLite provider and audited source/CRM repositories",
+    risk: "high",
+    transactionContext: "bounded source apply and atomic CRM/source-binding writes; resumable review notes",
+    transitionException: "only connection PRAGMAs are raw; customer writes use existing named statements, source hash and confirmed plan",
+    laterPhase: "customer-import-ui",
+  }),
   Object.freeze({
     id: "application-monolith",
     files: Object.freeze(["server.js"]),
