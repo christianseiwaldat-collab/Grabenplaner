@@ -40,6 +40,10 @@
       <p class="portal-logout-status message error hidden" id="portalLogoutStatus" role="alert"></p>
 
       <main>
+        <aside class="portal-candidate-evaluation-notice hidden" id="pendingCandidateEvaluationNotice" aria-labelledby="pendingCandidateEvaluationTitle">
+          <div><strong id="pendingCandidateEvaluationTitle">Bewerbung bewerten</strong><p id="pendingCandidateEvaluationSummary" role="status" aria-live="polite"></p></div>
+          <a class="primary" id="pendingCandidateEvaluationLink">Bewertung öffnen</a>
+        </aside>
         <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
           <button class="hidden mobile-home-tab" id="mobileHomeTab" data-tab="home" type="button" role="tab" aria-selected="false" aria-controls="mobileHomeView" tabindex="-1">Start</button>
           <button data-tab="settings" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Einstellungen</button>

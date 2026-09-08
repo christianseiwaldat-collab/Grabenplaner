@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.31 Beta · Sichtbare Bewerbungsbewertungen im Mitarbeiterportal
+
+- Neue persönliche Bewerbungs- und Preboarding-Bewertungen erscheinen auch im bereits geöffneten Portal als Hinweis mit direktem Einstieg. Beim Zurückkehren ins Portal und während der sichtbaren Nutzung wird der Stand aktualisiert; laufende Eingaben bleiben erhalten. Anmelden und Neuladen öffnen weiterhin direkt die persönliche Bewertungsfläche.
+- Bei zwischenzeitlichen Bewerbungsänderungen bleiben die bereits eingegebenen Sterne und Kommentare für dieselbe Bewertung erhalten. Die aktualisierte Fassung kann ausdrücklich erneut abgesendet werden. Entwürfe werden nicht auf andere Bewertungen übertragen; eine leere Aufgabenliste wird nicht als erfolgreiche Abgabe ausgegeben.
+- Persönliche Zuordnung, Pflicht-Passwortwechsel und Ausschluss von Filial- und Terminalkonten bleiben wirksam. Verspätete Antworten nach Sitzungswechsel werden verworfen. Mehrere Bewertungen lassen sich nacheinander in Hoch- und Querformat abgeben.
+
 ## v0.92.30 Beta · Mobiles Mitarbeiterportal und persönliche Leihrechte
 
 - Zeitausgleich und Urlaub sind auf der mobilen Startseite, unter Anträge und beim eigenen Dienstplan direkt erreichbar. Kompakte Kacheln, eine übersichtliche Navigation und angepasste Formulare erleichtern die Bedienung in Hoch- und Querformat.

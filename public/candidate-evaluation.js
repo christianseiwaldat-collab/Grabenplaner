@@ -57,17 +57,19 @@ function trialLabel(appointment) {
   return times ? `${dates} · ${times} Uhr` : dates;
 }
 
-function renderComplete() {
+function renderComplete(submitted = false) {
   status.classList.remove("error");
-  status.textContent = "Die Rückmeldung wurde vollständig und revisionsgebunden übermittelt.";
-  content.innerHTML = '<div class="evaluation-complete"><div><strong>Vielen Dank für die Bewertung.</strong><p>Diese Bewertungsfläche wird geschlossen. Danach steht das Mitarbeiterportal wieder regulär zur Verfügung.</p></div></div>';
+  status.textContent = submitted
+    ? "Die Rückmeldung wurde vollständig und revisionsgebunden übermittelt."
+    : "Dir ist derzeit keine offene Bewerbungsbewertung zugewiesen.";
+  content.innerHTML = `<div class="evaluation-complete"><div><strong>${submitted ? "Vielen Dank für die Bewertung." : "Keine offene Bewertung."}</strong><p>Diese Bewertungsfläche wird geschlossen. Danach steht das Mitarbeiterportal wieder regulär zur Verfügung.</p></div></div>`;
   setTimeout(() => window.location.replace("/portal.html"), 1800);
 }
 
-function renderEvaluation() {
+function renderEvaluation({ submitted = false } = {}) {
   const evaluation = state.active;
   if (!evaluation) {
-    renderComplete();
+    renderComplete(submitted);
     return;
   }
   const activeIndex = Math.max(0, state.evaluations.findIndex((entry) => entry.id === evaluation.id));
@@ -91,11 +93,26 @@ function renderEvaluation() {
   document.getElementById("candidateEvaluationForm")?.addEventListener("submit", submitEvaluation);
 }
 
-async function loadEvaluations({ preferredId = "" } = {}) {
+async function loadEvaluations({ preferredId = "", submitted = false } = {}) {
   const result = await api("/api/portal/v1/me/candidate-evaluations");
   state.evaluations = Array.isArray(result?.evaluations) ? result.evaluations : [];
   state.active = state.evaluations.find((entry) => entry.id === preferredId) || state.evaluations[0] || null;
-  renderEvaluation();
+  renderEvaluation({ submitted });
+}
+
+function restoreEvaluationDraft(evaluationId, criteria) {
+  if (state.active?.id !== evaluationId) return false;
+  const draft = new Map(criteria.map((criterion) => [criterion.id, criterion]));
+  document.querySelectorAll("#candidateEvaluationForm [data-criterion-id]").forEach((row) => {
+    const criterion = draft.get(row.dataset.criterionId);
+    if (!criterion) return;
+    const rating = [...row.querySelectorAll('input[type="radio"]')]
+      .find((input) => Number(input.value) === criterion.rating);
+    if (rating) rating.checked = true;
+    const comment = row.querySelector("textarea");
+    if (comment) comment.value = criterion.comment;
+  });
+  return true;
 }
 
 async function submitEvaluation(event) {
@@ -118,14 +135,27 @@ async function submitEvaluation(event) {
       method: "POST",
       body: JSON.stringify({ revision: state.active.applicationRevision, criteria }),
     });
-    await loadEvaluations();
+    await loadEvaluations({ submitted: true });
   } catch (error) {
     status.classList.add("error");
     status.textContent = error.message;
     if ([401, 403, 428].includes(error.status)) {
       setTimeout(() => window.location.replace("/portal.html"), 1200);
     } else if (error.status === 409) {
-      await loadEvaluations({ preferredId: state.active?.id || "" });
+      const evaluationId = state.active?.id || "";
+      try {
+        await loadEvaluations({ preferredId: evaluationId });
+        if (restoreEvaluationDraft(evaluationId, criteria)) {
+          status.classList.add("error");
+          status.textContent = "Die Bewerbung wurde zwischenzeitlich aktualisiert. Deine Sterne und Kommentare sind erhalten geblieben. Bitte die Bewertung erneut absenden.";
+        }
+      } catch (refreshError) {
+        status.classList.add("error");
+        status.textContent = refreshError.message;
+        if ([401, 403, 428].includes(refreshError.status)) {
+          setTimeout(() => window.location.replace("/portal.html"), 1200);
+        }
+      }
     }
   } finally {
     state.submitting = false;
