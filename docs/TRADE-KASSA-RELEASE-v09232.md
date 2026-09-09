@@ -1,6 +1,6 @@
 # VPS-Veröffentlichung v0.92.32-beta
 
-Datum: 9. September 2026. Status: v0.92.32-beta installiert und vom Updater bestätigt; vollständige Recovery Assurance fehlgeschlagen. Der Release-Abschluss wird mit der Korrektur v0.92.33-beta fortgeführt.
+Datum: 9. September 2026. Status: v0.92.32-beta installiert und vom Updater bestätigt; vollständige Recovery Assurance fehlgeschlagen. Der erfolgreiche Abschluss der Veröffentlichung mit der Korrektur v0.92.33-beta ist im [anschließenden Prüfbericht](TRADE-KASSA-RELEASE-v09233.md) dokumentiert.
 
 ## Umfang
 
