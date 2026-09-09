@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.92.33 Beta · Verlässliche Wiederherstellung der Rechtestandards
+
+- Die Rechtemigration speichert eine gültige Versionsnummer. Der genaue Platzhalter aus v0.92.32 wird beim Start berichtigt; bereits vergebene Rechte, persönliche Ausnahmen und der ursprüngliche Migrationszeitpunkt bleiben erhalten.
+- Vorhandene Sicherungen aus v0.92.32 bleiben mit dem korrigierten Recovery-Werkzeug prüfbar. Die Ausnahme gilt ausschließlich für den bekannten Migrationseintrag dieser Version. Unbekannte Versionsangaben und neuere Datenbankstände werden weiterhin abgewiesen.
+
 ## v0.92.32 Beta · Schnellere Verkaufsdaten und persönliche Hintergrundberichte
 
 - Artikelstammsuche und Kassenhistorie verwenden vorbereitete Suchwerte, gezielte Abfragen und überprüfte Bestandsnachweise. Verschlüsselte Belegzusammenfassungen verkürzen wiederholte Suchläufe; vollständige Belege werden bei Bedarf geladen. Quellen-, Filial-, Kunden- und Personalrechte bleiben bei jedem Zugriff wirksam.
