@@ -23,7 +23,7 @@ test("Sales-Artikelstamm liefert einen reproduzierbaren, deaktivierten PostgreSQ
     schemaName: "gp_sales_article_contract",
   });
 
-  assert.equal(POSTGRESQL_SALES_ARTICLE_CATALOG_SCHEMA_CONTRACT_VERSION, 5);
+  assert.equal(POSTGRESQL_SALES_ARTICLE_CATALOG_SCHEMA_CONTRACT_VERSION, 6);
   assert.deepEqual(POSTGRESQL_SALES_ARTICLE_UUID_CONTRACT, {
     applicationType: "canonical-uuid-string",
     storageType: "UUID",
@@ -62,12 +62,12 @@ test("Sales-Artikelstamm liefert einen reproduzierbaren, deaktivierten PostgreSQ
   });
   assert.equal(first.consumerReferenceContract,
     POSTGRESQL_SALES_ARTICLE_CONSUMER_REFERENCE_CONTRACT);
-  assert.equal(first.contractVersion, 5);
+  assert.equal(first.contractVersion, 6);
   assert.equal(first.status, "development-contract");
   assert.equal(first.executable, true);
   assert.equal(first.applicationExecutable, false);
   assert.equal(first.productActivation, false);
-  assert.equal(first.statements.length, 31);
+  assert.equal(first.statements.length, 39);
   assert.equal(first.fingerprint, second.fingerprint);
   assert.equal(Object.isFrozen(first), true);
   assert.equal(Object.isFrozen(first.statements), true);

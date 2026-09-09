@@ -112,6 +112,21 @@ async function fixture() {
   };
 }
 
+test('empty article listing actually uses the ordered covering index and simple count', async t => {
+  const f = await fixture();
+  try {
+    const calls = [], prepare = f.database.prepare.bind(f.database);
+    const { StatementSync } = require('node:sqlite'), all = StatementSync.prototype.all;
+    t.mock.method(StatementSync.prototype, 'all', function (...args) { calls.push(this.sourceSQL); return all.apply(this, args); });
+    const result = await f.repository.search({});
+    assert.ok(result);
+    const sql = SQLITE_SALES_ARTICLE_CATALOG.find(e => e.statement === SALES_ARTICLE_CATALOG_STATEMENTS.listActiveByNumber).sql;
+    assert.ok(calls.includes(sql), 'normal default filters must select the optimized statement');
+    const plan = prepare('EXPLAIN QUERY PLAN ' + sql).all({ active: 1, limit: 50, offset: 0 }).map(r => r.detail).join('\n');
+    assert.match(plan, /idx_sales_article_search_number/); assert.doesNotMatch(plan, /TEMP B-TREE/);
+  } finally { await f.close(); }
+});
+
 test("Artikelstammsuche normalisiert nur freigegebene Filter und harte Seitenlimits", () => {
   assert.deepEqual(normalizeSalesArticleSearch({}), {
     query: "",
@@ -274,16 +289,12 @@ test("Suchstatements bleiben PostgreSQL-portabel und geben keine Preis- oder Kos
       (candidate) => candidate.statement === SALES_ARTICLE_CATALOG_STATEMENTS.search,
     ),
   );
-  assert.match(searchSql, /gp_unicode_casefold\(article\.article_number\)/);
-  assert.match(searchSql, /gp_unicode_casefold\(revision\.description\)/);
+  assert.match(searchSql, /article\.article_number_sort/);
+  assert.match(searchSql, /article\.description_sort/);
   assert.doesNotMatch(compiledSearch.compiledSql, /gp_unicode_casefold/i);
-  assert.match(compiledSearch.compiledSql, /LOWER\(article\.article_number\)/);
-  assert.equal(
-    compiledSearch.coveredFeatures.includes("postgresql.sqlite-unicode-casefold"),
-    true,
-  );
-  assert.match(searchSql, /CASE WHEN identifier\.source_rank IS NULL THEN 1 ELSE 0 END/);
-  assert.match(searchSql, /\$sort = 'primaryIdentifier'[\s\S]*PRIMARY_IDENTIFIER|\$sort = 'primaryIdentifier'[\s\S]*\) IS NULL/);
+  assert.match(compiledSearch.compiledSql, /LOWER\(article\.search_text\)/);
+  assert.doesNotMatch(searchSql, /REPLACE\(|SELECT identifier\.identifier_value/);
+  assert.match(searchSql, /\$sort = 'primaryIdentifier' AND article\.primary_identifier IS NULL/);
   assert.match(searchSql, /searched_identifier\.canonical_gtin14/);
   assert.deepEqual(Object.keys(SALES_ARTICLE_CATALOG_STATEMENTS.search.columns), [
     "productId", "articleNumber", "description", "primaryIdentifier",
@@ -300,4 +311,68 @@ test('Artikelstamm findet ungenaue Sony-Suche mit Joker, umgestellter Wortfolge 
     }
     assert.equal((await f.repository.search({ query: 'Sony A9 24', status: 'all' })).total, 0);
   } finally { await f.close(); }
+});
+
+test('Vorbereitete Artikelsuche liefert dieselben Treffer, Zahlen und Sortierungen wie die bisherige SQL-Abfrage', async () => {
+  const context = await fixture();
+  try {
+    const baseline = require('./fixtures/article-search-before-optimization.json');
+    const list = context.database.prepare(baseline['sales-article-catalog.articles.search']);
+    const count = context.database.prepare(baseline['sales-article-catalog.articles.search.count']);
+    const { parameters } = require('../lib/flexible-search');
+    for (const query of ['', 'kamera', 'KAM* Name', 'Art/01?', 'ÄRMEL Ösen', 'uebergroessen', 'ÜBERGRÖSSEN', 'CAFÉ étui', '%', '_', '!', 'Name Kamera', 'unauffindbar', '&#xC4;rmel']) {
+      for (const sort of ['articleNumber','description','primaryIdentifier','status','sourceSystem']) {
+        for (const direction of ['asc','desc']) {
+          const input = normalizeSalesArticleSearch({ query, sort, direction, status:'all', limit:5, offset:1 });
+          const bindings = {...parameters(query),active:null,sourceSystem:null,identifierLike:input.identifierLike};
+          const expected = list.all({...bindings,sort,direction,limit:5,offset:1}).map(row=>({...row,active:Boolean(row.active)}));
+          const actual = await context.repository.search({query,sort,direction,status:'all',limit:5,offset:1});
+          assert.deepEqual(actual.items,expected,`${query}/${sort}/${direction}`);
+          assert.equal(actual.total,count.get(bindings).total);
+        }
+      }
+    }
+    assert.equal(context.database.prepare('SELECT count(*) AS n FROM sales_article_search_dirty').get().n,0);
+  } finally { await context.close(); }
+});
+
+test('Suchprojektion wird nachgetragen, bleibt idempotent und sperrt unvollständig aktualisierte Suchstände', async () => {
+  const context = await fixture();
+  try {
+    const ensure = require('../lib/persistence/sqlite/operations/sales-article-search-projection-schema').ensureSqliteArticleSearchProjection;
+    const before = await context.repository.search({status:'all'});
+    context.database.exec('DELETE FROM sales_article_search_projection');
+    assert.equal(ensure(context.database),14);
+    assert.equal(ensure(context.database),0);
+    assert.deepEqual(await context.repository.search({status:'all'}),before);
+    context.database.exec('INSERT INTO sales_article_search_dirty SELECT product_id FROM sales_articles LIMIT 1');
+    await assert.rejects(context.repository.search({}),error=>error.operation==='sales-article-search-projection-not-current');
+    assert.equal(ensure(context.database),1);
+    assert.deepEqual(await context.repository.search({status:'all'}),before);
+  } finally { await context.close(); }
+});
+
+test('Suchstand folgt Bearbeitung, Archiv, Wiederherstellung und Import-Undo atomar', async () => {
+  const context = await fixture(), stamp='2026-09-09T02:00:00.000Z';
+  const mutation = input => ({input,actor:'tester',timestamp:stamp,mutationId:crypto.randomUUID()});
+  try {
+    const created=await context.repository.createManual(mutation({articleNumber:'Projection-new',description:'Original Übung',identifiers:[]}));
+    const updated=await context.repository.updateManual(mutation({currentArticleNumber:'Projection-new',expectedRevision:1,articleNumber:'Projection-renamed',description:'Geänderter Suchstand',identifiers:[{identifierValue:gtin13(800000000001),isPrimary:true}]}));
+    assert.equal((await context.repository.search({query:'Original Übung'})).total,0);
+    assert.equal((await context.repository.search({query:'GEAND* Suchstand'})).items[0].primaryIdentifier,gtin13(800000000001));
+    await context.repository.archiveManual(mutation({articleNumber:'Projection-renamed',expectedRevision:updated.revision}));
+    assert.equal((await context.repository.search({query:'Projection-renamed'})).total,0);
+    await context.repository.restoreManual({productId:created.article.productId,expectedRevision:3,restoreRevision:1,actor:'tester',timestamp:stamp,mutationId:crypto.randomUUID()});
+    assert.equal((await context.repository.search({query:'Original Übung'})).total,1);
+    assert.equal((await context.repository.search({query:'Projection-renamed',status:'all'})).total,0);
+    const imported=await context.repository.importSnapshot({snapshot:snapshot('tradefoto.artikel_stamm',[article(31,{description:'Rücknahme Suchstand'})],3),actor:'tester',timestamp:stamp});
+    assert.equal((await context.repository.search({query:'Rücknahme Suchstand'})).total,1);
+    await context.repository.undoImport({snapshotId:imported.snapshot.id,expectedImpactSha256:imported.impactSha256,actor:'tester',timestamp:stamp,undoId:crypto.randomUUID()});
+    assert.equal((await context.repository.search({query:'Rücknahme Suchstand'})).total,0);
+    const before=await context.repository.search({status:'all'});
+    context.database.exec(`CREATE TEMP TRIGGER fail_search_projection_audit BEFORE INSERT ON audit_log
+      WHEN NEW.action='sales.article-catalog.create' BEGIN SELECT RAISE(ABORT,'injected-after-projection'); END`);
+    await assert.rejects(context.repository.createManual(mutation({articleNumber:'Rollback-only',description:'Must roll back',identifiers:[]})));
+    assert.deepEqual(await context.repository.search({status:'all'}),before);
+  } finally { await context.close(); }
 });

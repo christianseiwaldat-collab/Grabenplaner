@@ -349,6 +349,8 @@ const state = {
   selectedAmuReport: null,
   salesAnalytics: {
     actorKey: "",
+    tab: "create",
+    loaded: false,
     context: null,
     reports: [],
     selectedReportId: "",
@@ -897,7 +899,13 @@ function timeToMinutes(value) {
 function operatingHours(date, settings = state.data.settings) {
   const day = new Date(`${date}T12:00:00`).getDay();
   const key = dayKeyByNumber[day];
-  return key && settings[`${key}_open`] !== "0" ? { start: settings[`${key}_start_time`], end: settings[`${key}_end_time`], key } : null;
+  if (!key || settings[`${key}_open`] === "0") return null;
+  const start = settings[`${key}_start_time`];
+  const end = settings[`${key}_end_time`];
+  // Einträge können den Sonntag einblenden, obwohl keine Öffnung hinterlegt ist.
+  const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+  if (!timePattern.test(start) || !timePattern.test(end) || end <= start) return null;
+  return { start, end, key };
 }
 
 function dayConfig(date, settings = state.data.settings) {
@@ -1676,6 +1684,7 @@ function applyFunctionSearchNavigationState(target) {
   if (target.personnelAdministrationTab) state.personnelAdministrationTab = target.personnelAdministrationTab;
   if (target.dashboardMode) state.rightsDashboardMode = target.dashboardMode;
   if (target.requestKind) state.requestKindTab = target.requestKind;
+  if (target.salesAnalyticsTab) state.salesAnalytics.tab = target.salesAnalyticsTab;
 
   const contextChanged = restoreRememberedOverallContext(target.view);
   setView(target.view);
@@ -2495,6 +2504,7 @@ function applyRoleVisibility() {
   syncCrmActorState();
   syncSalesArticleCatalogActorState();
   syncSalesAnalyticsActorState();
+  elements.salesReportImportPanel?.classList.toggle("hidden", !canManageSalesReportImports());
   syncAdminPersonalActionsActorState();
   const serverActive = state.portalStatus?.operationMode === "server";
   const role = state.portalSession?.user?.role || "admin";
@@ -3258,6 +3268,7 @@ async function loadAll({ restoreContext = true } = {}) {
     state.positions = positions;
     state.portalStatus = portalStatus;
     state.portalRoles = roleData.roles || [];
+    state.portalPositionPermissionDefaults = roleData.positionDefaults || [];
     state.portalPermissionCatalog = roleData.catalog || [];
     setDefaultContext(state.locations);
     if (restoreContext) restoreRememberedOverallContext(state.currentView, state.locations);
@@ -6202,7 +6213,7 @@ const serverMonitorCheckLabels = {
 const hostSecurityCheckLabels = {
   ssh: "SSH-Schlüsselzugang",
   firewall: "UFW-Firewall",
-  publicPorts: "Öffentliche Ports",
+  publicPorts: "Trennung öffentlicher und interner Ports",
   automaticUpdates: "Sicherheitsaktualisierungen",
   sysctl: "Kernel-Schutzwerte",
   journald: "Systemprotokolle",
@@ -6282,7 +6293,7 @@ const vpsRebootUnavailableMessages = Object.freeze({
   VPS_REBOOT_PERMISSION_REQUIRED: "Für den kontrollierten VPS-Neustart fehlen die erforderlichen Developer-Berechtigungen.",
   VPS_REBOOT_CONTROL_UNAVAILABLE: "Die geschützte VPS-Neustartsteuerung ist derzeit nicht verfügbar.",
   VPS_REBOOT_IN_PROGRESS: "Ein kontrollierter VPS-Neustart wird bereits vorbereitet.",
-  VPS_REBOOT_STATUS_UNVERIFIED: "Der geschützte Ubuntu-Hoststatus ist noch nicht vollständig bestätigt.",
+  VPS_REBOOT_STATUS_UNVERIFIED: "Vor einem VPS-Neustart ist ein aktueller, sicher lesbarer Ubuntu-Host-Audit erforderlich.",
   VPS_REBOOT_SECURITY_CONFIRMATION_PENDING: "Eine offene Host-Sicherheitstransaktion muss zuerst bestätigt werden.",
   VPS_REBOOT_NOT_REQUIRED: "Der Ubuntu-Host meldet derzeit keinen Neustartbedarf.",
 });
@@ -6298,15 +6309,21 @@ function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
   if (!hostSecurity?.configured && !hostSecurity?.statusAvailable && !vpsRebootVisible) return "";
   hostSecurity = hostSecurity || {};
   const failed = Array.isArray(hostSecurity.failedChecks) ? hostSecurity.failedChecks : [];
-  const failedText = failed.length
-    ? failed.map((id) => hostSecurityCheckLabels[id] || id).join(", ")
-    : "keine offenen Prüfpunkte";
+  const unknown = Array.isArray(hostSecurity.unknownChecks) ? hostSecurity.unknownChecks : [];
+  const checkLabels = (checks) => checks.map((id) => hostSecurityCheckLabels[id] || id).join(", ");
+  const failedText = !hostSecurity.statusAvailable ? "Prüfergebnis nicht verfügbar"
+    : [failed.length ? `Abweichungen: ${checkLabels(failed)}` : "",
+      unknown.length ? `Nicht bestätigt: ${checkLabels(unknown)}` : ""].filter(Boolean).join(" · ")
+      || "Einzelprüfungen beim letzten Audit bestanden";
+  const maintenanceOnly = hostSecurity.rebootRequired && hostSecurity.statusAvailable
+    && !hostSecurity.lastErrorCode && !hostSecurity.pendingConfirmation && !failed.length && !unknown.length;
   const stateLabel = !hostSecurity.configured ? "Nicht aktiviert"
-    : hostSecurity.state === "ok" ? "Geschützt" : hostSecurity.state === "error" ? "Fehler" : "Prüfen";
-  const transactionText = hostSecurity.pendingConfirmation
+    : hostSecurity.state === "ok" ? "Geschützt" : hostSecurity.state === "error" ? "Fehler"
+      : maintenanceOnly ? "Wartung nötig" : "Prüfen";
+  const transactionText = !hostSecurity.statusAvailable ? "nicht geprüft" : hostSecurity.pendingConfirmation
     ? "Bestätigung aus zweiter SSH-Sitzung ausständig"
     : "keine offene Sicherheitstransaktion";
-  const rebootText = hostSecurity.rebootRequired
+  const rebootText = !hostSecurity.statusAvailable ? "nicht geprüft" : hostSecurity.rebootRequired
     ? "vollständiger Ubuntu-VPS-Neustart erforderlich"
     : "derzeit nicht erforderlich";
   const rebootGuidance = hostSecurity.rebootRequired
@@ -6335,8 +6352,9 @@ function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
         <span><small>Letzte Prüfung</small><strong>${escapeHtml(diagnosticTimestamp(hostSecurity.checkedAt))}${escapeHtml(diagnosticAge(hostSecurity.ageHours))}</strong></span>
         <span><small>Sicherheitstransaktion</small><strong>${escapeHtml(transactionText)}</strong></span>
         <span><small>Neustart</small><strong>${escapeHtml(rebootText)}</strong></span>
-        <span><small>Statusdatei</small><strong>${hostSecurity.statusAvailable ? "geschützt verfügbar" : "nicht verfügbar"}</strong></span>
+        <span><small>Statusdatei</small><strong>${hostSecurity.statusAvailable ? (hostSecurity.lastErrorCode ? "geschützt verfügbar · Prüfung aktualisieren" : "geschützt verfügbar") : "nicht verfügbar"}</strong></span>
       </div>
+      ${unknown.includes("publicPorts") ? '<p class="monitor-action-feedback">Die Trennung des internen App-Ports ist noch nicht bestätigt. Dienstzustand klären und danach erneut prüfen.</p>' : ""}
       ${hostSecurity.lastErrorCode ? `<p class="offsite-diagnostic-error"><strong>Fehlercode:</strong> ${escapeHtml(hostSecurity.lastErrorCode)}</p>` : ""}
       ${rebootGuidance}
       ${vpsRebootButton}
@@ -21734,6 +21752,7 @@ function portalUserManageableInUi(actorRole, user) {
 }
 
 function permissionEligibleForRole(permission, role) {
+  if (state.portalSession?.user?.role === "developer") return Boolean(permission);
   if (!permission || !role) return false;
   return !Array.isArray(permission.eligibleRoles) || permission.eligibleRoles.includes(role);
 }
@@ -22840,10 +22859,12 @@ function openRightsEditor(employeeNumber) {
       const editable = Boolean(user.manageable && permission.editable && roleEligible);
       const lockedRight = !editable;
       const warningLevel = permission.warningLevel || "normal";
-      const statusText = !roleEligible
+      const personallyDenied = (user.deniedPermissions || []).includes(permission.id);
+      const statusText = personallyDenied ? "Persönlich entzogen"
+        : !roleEligible
         ? "Für diese Rolle nicht verfügbar"
         : baseRight
-        ? effectiveRight ? "Grundrecht der Rolle" : "Individuell entzogen"
+        ? effectiveRight ? "Standardrecht" : "Individuell entzogen"
         : effectiveRight ? "Individuell hinzugefügt" : "Nicht vergeben";
       const stateClass = baseRight
         ? effectiveRight ? "base-right" : "revoked-right"
@@ -22962,6 +22983,7 @@ async function loadRightsManagement() {
     renderRightsManagement();
     renderMobileLeadershipSettings();
     renderPersonnelFieldRights();
+    await permissionDefaultsUI.load(state.portalSession?.user?.role === "developer");
   } catch (error) {
     elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist für diesen Zugang nicht verfügbar." : error.message;
     elements.rightsUserList.innerHTML = "";
@@ -23009,6 +23031,12 @@ async function saveUserRights(event) {
   const deniedPermissions = inputs
     .filter((input) => input.dataset.rolePermission === "true" && !input.checked)
     .map((input) => input.value);
+  // Preserve an explicit denial when a later default no longer includes that
+  // right. Checking the right is the explicit decision to restore it.
+  for (const permission of user.deniedPermissions || []) {
+    const input = inputs.find(input => input.value === permission);
+    if (input && !input.checked && !deniedPermissions.includes(permission)) deniedPermissions.push(permission);
+  }
   const managerDenialOnly = state.portalSession?.user?.role === "manager";
   const scopes = managerDenialOnly ? undefined : rightsEditorSelectedScope();
   if (!managerDenialOnly && scopes === null) {
@@ -33467,7 +33495,34 @@ function renderSalesAnalyticsReport() {
   renderSalesAnalyticsGraph(detail, horizon, metricDefinitions);
 }
 
+let salesReportJobUi = null;
+function renderSalesAnalyticsTabs() {
+  if (!salesReportJobUi && window.createSalesReportJobUi) salesReportJobUi = window.createSalesReportJobUi({ api,
+    visible: () => state.currentView === 'salesAnalytics' && ['create', 'reports'].includes(state.salesAnalytics.tab) && canAccessSalesAnalytics() });
+  void salesReportJobUi?.refresh();
+  const tab = state.salesAnalytics.tab;
+  document.getElementById("salesAnalyticsTabs")?.querySelectorAll("[data-sales-analytics-tab]").forEach((button) => {
+    const selected = button.dataset.salesAnalyticsTab === tab;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    const panel = document.getElementById(button.getAttribute("aria-controls"));
+    if (panel) panel.hidden = !selected;
+  });
+}
+
+function setSalesAnalyticsTab(tab, { moveFocus = false } = {}) {
+  if (!canAccessSalesAnalytics()) return;
+  state.salesAnalytics.tab = ["create", "pdf", "reports"].includes(tab) ? tab : "create";
+  renderSalesAnalyticsTabs();
+  if (moveFocus) document.querySelector('#salesAnalyticsTabs [aria-selected="true"]')?.focus();
+  if (state.currentView === "salesAnalytics" && state.salesAnalytics.tab === "pdf" && !state.salesAnalytics.loaded) {
+    void loadSalesAnalytics();
+  }
+}
+
 function renderSalesAnalytics() {
+  renderSalesAnalyticsTabs();
   const reportCount = state.salesAnalytics.reports.length;
   elements.salesReportImportPanel?.classList.toggle("hidden", !canManageSalesReportImports());
   if (elements.salesAnalyticsStatusBadge) {
@@ -33531,6 +33586,8 @@ function salesAnalyticsActorIsCurrent(actorKey) {
 function resetSalesAnalyticsActorState(actorKey) {
   Object.assign(state.salesAnalytics, {
     actorKey,
+    tab: "create",
+    loaded: false,
     context: null,
     reports: [],
     selectedReportId: "",
@@ -33561,6 +33618,10 @@ function resetSalesAnalyticsActorState(actorKey) {
   state.salesAnalytics.preferencesRequestId += 1;
   state.salesAnalytics.seriesRequestId += 1;
   if (elements.salesReportPdfOptionsModal?.open) elements.salesReportPdfOptionsModal.close();
+  const requestQuery = document.getElementById("salesAnalyticsRequestQuery");
+  salesReportJobUi?.reset();
+  if (requestQuery) requestQuery.value = "";
+  renderSalesAnalyticsTabs();
 }
 
 function syncSalesAnalyticsActorState() {
@@ -33688,6 +33749,7 @@ async function loadSalesAnalytics({ selectReportId = "" } = {}) {
     if (!salesAnalyticsActorIsCurrent(actorKey)) return;
     state.salesAnalytics.reports = reportPayload.reports || [];
     state.salesAnalytics.context = context;
+    state.salesAnalytics.loaded = true;
     const knownReportIds = new Set(state.salesAnalytics.reports.map((report) => report.id));
     state.salesAnalytics.archiveSelection = selectReportId
       ? []
@@ -34032,7 +34094,7 @@ function setView(view) {
   if (view === "loans") loadLoanManagement();
   if (view === "branchOrders") loadBranchOrdersManagement();
   if (view === "startDashboard") loadStartDashboard();
-  if (view === "salesAnalytics") loadSalesAnalytics();
+  if (view === "salesAnalytics") setSalesAnalyticsTab(state.salesAnalytics.tab);
   if (view === "articleCatalog") {
     renderSalesArticleCatalogResults();
     void loadSalesArticleLastImport({ force: true });
@@ -34061,6 +34123,10 @@ function applyRequestedView() {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
+  }
+  if (requestedView === "salesAnalytics") {
+    const requestedSection = parameters.get("section");
+    if (["create", "pdf", "reports"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
@@ -34315,12 +34381,24 @@ function permissionDisplayLabel(permissionId) {
     || permissionId.replaceAll(":", " · ");
 }
 
+function employeeAccessCurrentEmployee() {
+  const number = document.querySelector("#employeeNumber").value.trim();
+  return state.allEmployees.find(employee => employee.personnel_number === number)
+    || state.personnelDirectory.find(employee => employee.personnel_number === number) || null;
+}
+
+function employeeAccessBasePermissions(roleId) {
+  const positionDefault = roleId === "developer" ? null : (state.portalPositionPermissionDefaults || [])
+    .find(entry => entry.id === elements.employeePosition.value);
+  return new Set(positionDefault?.permissions ?? state.portalRoles.find(role => role.id === roleId)?.permissions ?? []);
+}
+
 function normalizeEmployeeAccessDraftForRole(roleId, changedPermissionId = "", changedChecked = null) {
   const catalogById = new Map(state.portalPermissionCatalog.map((permission) => [permission.id, permission]));
-  const rolePermissions = new Set(state.portalRoles.find((role) => role.id === roleId)?.permissions || []);
+  const rolePermissions = employeeAccessBasePermissions(roleId);
   state.employeeAccessDraft = new Set([...state.employeeAccessDraft].filter((permissionId) => {
     const permission = catalogById.get(permissionId);
-    return permissionEligibleForRole(permission, roleId) && !rolePermissions.has(permissionId);
+    return permissionEligibleForRole(permission, roleId);
   }));
   let dependencyMessage = "";
   for (const dependency of permissionDependencyRules) {
@@ -34378,7 +34456,8 @@ function renderEmployeeAccessProfile(employee = null) {
   elements.employeeAppRole.disabled = !editable;
   const role = state.portalRoles.find((entry) => entry.id === elements.employeeAppRole.value)
     || state.portalRoles.find((entry) => entry.id === access.role);
-  const rolePermissions = new Set(role?.permissions || access.rolePermissions || []);
+  const rolePermissions = employeeAccessBasePermissions(role?.id || elements.employeeAppRole.value);
+  const deniedPermissions = new Set(access.deniedPermissions || []);
   normalizeEmployeeAccessDraftForRole(role?.id || elements.employeeAppRole.value);
   elements.employeeAppRoleDescription.textContent = role?.description || "Grundrechte werden durch die ausgewählte App-Rolle vorgegeben.";
   const basePermissionLabels = [...rolePermissions].map(permissionDisplayLabel);
@@ -34395,15 +34474,17 @@ function renderEmployeeAccessProfile(employee = null) {
   elements.employeeAdditionalRights.innerHTML = [...groups.entries()].map(([group, permissions]) => {
     const entries = permissions.map((permission) => {
       const baseRight = rolePermissions.has(permission.id);
+      const personallyDenied = deniedPermissions.has(permission.id);
       const roleEligible = permissionEligibleForRole(permission, role?.id || elements.employeeAppRole.value);
-      const additionalRight = roleEligible && state.employeeAccessDraft.has(permission.id) && !baseRight;
+      const additionalRight = roleEligible && state.employeeAccessDraft.has(permission.id) && !baseRight && !personallyDenied;
       if (additionalRight) additionalCount += 1;
-      const detail = baseRight
-        ? "Grundrecht der Rolle"
+      const detail = personallyDenied ? "Persönlich entzogen · Änderungen unter Einstellungen → Rechte"
+        : baseRight
+        ? "Standardrecht der Rolle oder Position"
         : !roleEligible
           ? "Für diese App-Rolle nicht verfügbar"
           : permission.description || "Individuelles Zusatzrecht";
-      return `<label class="employee-access-right ${baseRight ? "base-right" : ""} ${additionalRight ? "additional-right" : ""}"><input type="checkbox" data-employee-access-permission value="${escapeHtml(permission.id)}" ${baseRight || additionalRight ? "checked" : ""} ${editable && roleEligible && !baseRight ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${escapeHtml(detail)}</small></span></label>`;
+      return `<label class="employee-access-right ${baseRight ? "base-right" : ""} ${additionalRight ? "additional-right" : ""}"><input type="checkbox" data-employee-access-permission value="${escapeHtml(permission.id)}" ${!personallyDenied && (baseRight || additionalRight) ? "checked" : ""} ${editable && roleEligible && !baseRight && !personallyDenied ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${escapeHtml(detail)}</small></span></label>`;
     }).join("");
     return `<section><h4>${escapeHtml(group)}</h4><div>${entries}</div></section>`;
   }).join("");
@@ -34711,6 +34792,7 @@ function openEmployeeModal(employee = null) {
   });
   document.querySelector("#employeeActive").checked = employee?.active ?? true;
   state.employeeAccessDraft = new Set(employee?.portal_access?.grantedPermissions || []);
+  state.employeeAccessDirty = false;
   elements.employeeAppRole.value = employee?.portal_access?.role || "employee";
   renderEmployeeAccessProfile(employee);
   updateColorPicker(employee?.color || "#0b84c6");
@@ -35601,15 +35683,14 @@ async function saveEmployee(event) {
   const editedEmployee = state.allEmployees.find((employee) => employee.personnel_number === number)
     || state.personnelDirectory.find((employee) => employee.personnel_number === number)
     || null;
-  if (canEditEmployeeAccessProfile(editedEmployee)) {
+  if (canEditEmployeeAccessProfile(editedEmployee) && (state.employeeAccessDirty || !editedEmployee?.portal_access?.configured)) {
     const role = elements.employeeAppRole.value || "employee";
-    const basePermissions = new Set(state.portalRoles.find((entry) => entry.id === role)?.permissions || []);
     normalizeEmployeeAccessDraftForRole(role);
     const catalogById = new Map(state.portalPermissionCatalog.map((permission) => [permission.id, permission]));
     body.accessProfile = {
       role,
       permissions: [...state.employeeAccessDraft]
-        .filter((permissionId) => permissionEligibleForRole(catalogById.get(permissionId), role) && !basePermissions.has(permissionId)),
+        .filter((permissionId) => permissionEligibleForRole(catalogById.get(permissionId), role)),
     };
   }
   try {
@@ -37633,6 +37714,21 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   if (contextChanged) loadAll();
   closeMobileNavigation({ restoreFocus: false });
 }));
+document.getElementById("salesAnalyticsTabs")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-sales-analytics-tab]");
+  if (button) setSalesAnalyticsTab(button.dataset.salesAnalyticsTab);
+});
+document.getElementById("salesAnalyticsTabs")?.addEventListener("keydown", (event) => {
+  const button = event.target.closest("[data-sales-analytics-tab]");
+  if (!button || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const buttons = [...event.currentTarget.querySelectorAll("[data-sales-analytics-tab]")];
+  const index = buttons.indexOf(button);
+  const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+    : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+  setSalesAnalyticsTab(buttons[nextIndex].dataset.salesAnalyticsTab, { moveFocus: true });
+});
+
 elements.salesReportImportFile?.addEventListener("change", () => {
   const file = elements.salesReportImportFile.files?.[0];
   elements.salesReportInspectButton.disabled = !file;
@@ -37804,6 +37900,17 @@ document.addEventListener("keydown", (event) => {
 syncMobileNavigationMode();
 integrateLegacyUsbProvisioning();
 integrateSchedulePdfSettings();
+const permissionDefaultsUI = initializePermissionDefaults({
+  api, toast: showToast, dependencyRules: permissionDependencyRules,
+  refreshRights: async () => {
+    const [rights, roleData] = await Promise.all([api("/api/portal/v1/rights"), api("/api/portal/v1/roles")]);
+    state.rightsManagement = rights;
+    state.portalRoles = roleData.roles || [];
+    state.portalPositionPermissionDefaults = roleData.positionDefaults || [];
+    state.portalPermissionCatalog = roleData.catalog || [];
+    renderRightsManagement();
+  },
+});
 initializeSettingsCardDisclosures();
 initializeFunctionSearchUi();
 elements.functionSearch?.addEventListener("grabenplaner:function-search-result-selected", handleFunctionSearchResultSelection);
@@ -40147,24 +40254,28 @@ elements.positionDeleteModal?.addEventListener("close", resetPositionDeleteDialo
 elements.cancelLocationEditButton.addEventListener("click", resetLocationForm);
 elements.cancelDepartmentEditButton.addEventListener("click", resetDepartmentForm);
 elements.cancelPositionEditButton?.addEventListener("click", resetPositionForm);
-elements.employeeCostCenter.addEventListener("change", () => updateEmployeeAssignmentOptions());
+elements.employeeCostCenter.addEventListener("change", () => {
+  updateEmployeeAssignmentOptions();
+  renderEmployeeAccessProfile(employeeAccessCurrentEmployee());
+});
+elements.employeePosition.addEventListener("change", () => renderEmployeeAccessProfile(employeeAccessCurrentEmployee()));
 elements.employeeForm.addEventListener("invalid", (event) => {
   event.target.closest("details")?.setAttribute("open", "");
 }, true);
 elements.employeeTimeConfirmationLevel?.addEventListener("change", syncEmployeeSicknessAllowanceField);
 elements.employeeAppRole?.addEventListener("change", () => {
-  const employeeNumber = document.querySelector("#employeeNumber").value.trim();
-  renderEmployeeAccessProfile(state.allEmployees.find((employee) => employee.personnel_number === employeeNumber) || null);
+  state.employeeAccessDirty = true;
+  renderEmployeeAccessProfile(employeeAccessCurrentEmployee());
 });
 elements.employeeAdditionalRights?.addEventListener("change", (event) => {
   const input = event.target.closest("[data-employee-access-permission]");
   if (!input || input.disabled) return;
+  state.employeeAccessDirty = true;
   if (input.checked) state.employeeAccessDraft.add(input.value);
   else state.employeeAccessDraft.delete(input.value);
   const role = elements.employeeAppRole.value || "employee";
   const dependencyMessage = normalizeEmployeeAccessDraftForRole(role, input.value, input.checked);
-  const employeeNumber = document.querySelector("#employeeNumber").value.trim();
-  renderEmployeeAccessProfile(state.allEmployees.find((employee) => employee.personnel_number === employeeNumber) || null);
+  renderEmployeeAccessProfile(employeeAccessCurrentEmployee());
   if (dependencyMessage) showToast(dependencyMessage);
 });
 elements.schedulePdfPreviewButton.addEventListener("click", generateSchedulePdfPreview);

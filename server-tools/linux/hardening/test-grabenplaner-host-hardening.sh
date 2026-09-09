@@ -79,6 +79,19 @@ record_error() {
   printf 'FEHLER: %s\n' "$*"
 }
 
+record_unknown() {
+  local key="$1" severity="$2"
+  shift 2
+  CHECK_VALUE["$key"]=null
+  if [[ "$severity" == error ]]; then
+    ERROR_COUNT=$((ERROR_COUNT + 1))
+    printf 'FEHLER: %s\n' "$*"
+  else
+    WARNING_COUNT=$((WARNING_COUNT + 1))
+    printf 'WARN: %s\n' "$*"
+  fi
+}
+
 record_general_warning() {
   WARNING_COUNT=$((WARNING_COUNT + 1))
   printf 'WARN: %s\n' "$*"
@@ -309,9 +322,11 @@ try {
 
 internal_port_is_loopback_only() {
   local output=""
-  command -v ss >/dev/null 2>&1 || return 1
-  output="$(LC_ALL=C ss -H -ltn 2>/dev/null)" || return 1
+  # 0: loopback only; 1: unsafe listener; 2: no listener; 3: query unavailable.
+  command -v ss >/dev/null 2>&1 || return 3
+  output="$(LC_ALL=C ss -H -ltn 2>/dev/null)" || return 3
   awk '
+    NF > 0 && ($1 != "LISTEN" || NF < 5) { malformed = 1 }
     $1 == "LISTEN" {
       localAddress = $4
       if (localAddress ~ /:3000$/) {
@@ -319,35 +334,44 @@ internal_port_is_loopback_only() {
         if (localAddress != "127.0.0.1:3000" && localAddress != "[::1]:3000") unsafe = 1
       }
     }
-    END { exit (found && !unsafe) ? 0 : 1 }
+    END { exit unsafe ? 1 : malformed ? 3 : found ? 0 : 2 }
   ' <<<"$output"
 }
 
 check_firewall() {
-  local output="" added="" firewall_ok=false ports_ok=false
+  local output="" added="" firewall_ok=false firewall_available=true listener_state=3 attempt
   if ! command -v ufw >/dev/null 2>&1 \
     || ! added="$(LC_ALL=C ufw show added 2>/dev/null)" \
     || ! output="$(LC_ALL=C ufw status verbose 2>/dev/null)"; then
-    record_error firewall "Der Firewall-Status konnte nicht gelesen werden."
-    record_error publicPorts "Die oeffentlichen und internen Portregeln konnten nicht geprueft werden."
-    return
-  fi
-  if validate_transaction_ufw_policy "$added" "$output"; then
+    firewall_available=false
+    record_unknown firewall error "Der Firewall-Status konnte nicht gelesen werden."
+  elif validate_transaction_ufw_policy "$added" "$output"; then
     firewall_ok=true
-  fi
-  if [[ "$firewall_ok" == true ]]; then
     record_ok firewall "Die Host-Firewall ist aktiv."
   else
     record_error firewall "Die Host-Firewall oder eine transaktionsgebundene SSH-Regel weicht ab."
   fi
-  if [[ "$firewall_ok" == true ]] && internal_port_is_loopback_only; then
-    ports_ok=true
-  fi
-  if [[ "$ports_ok" == true ]]; then
-    record_ok publicPorts "Die Webports sind freigegeben und der interne App-Port bleibt geschlossen."
-  else
-    record_error publicPorts "Firewall oder Listener verletzen die Trennung zwischen Web- und internem App-Port."
-  fi
+  # A concurrent app start may not have bound its listener yet. Retry only that
+  # case for at most 30 seconds; never defer a detected unsafe binding.
+  for attempt in 1 2 3 4 5 6 7; do
+    if internal_port_is_loopback_only; then listener_state=0; else listener_state=$?; fi
+    [[ "$listener_state" == 2 && "$attempt" -lt 7 ]] || break
+    sleep 5
+  done
+  case "$listener_state" in
+    0)
+      if [[ "$firewall_ok" == true ]]; then
+        record_ok publicPorts "Die Webports sind freigegeben und der interne App-Port bleibt geschlossen."
+      elif [[ "$firewall_available" == true ]]; then
+        record_error publicPorts "Der interne App-Listener ist lokal gebunden, aber die Firewall-Regeln weichen ab."
+      else
+        record_unknown publicPorts warning "Der interne App-Listener ist lokal gebunden; die Firewall-Regeln sind nicht bestaetigt."
+      fi
+      ;;
+    1) record_error publicPorts "Der interne App-Port lauscht auf einer unzulaessigen Adresse." ;;
+    2) record_unknown publicPorts warning "Kein App-Listener gefunden. Dienststart oder Wartung klaeren und erneut pruefen; eine oeffentliche Bindung wurde nicht festgestellt." ;;
+    *) record_unknown publicPorts error "Die App-Listener konnten nicht sicher abgefragt werden." ;;
+  esac
 }
 
 check_automatic_updates() {
@@ -513,7 +537,7 @@ check_secret_files() {
 check_failed_units() {
   local failed=""
   if ! failed="$(LC_ALL=C systemctl --failed --no-legend --plain 2>/dev/null)"; then
-    record_warn failedUnits "Fehlgeschlagene Systemdienste konnten nicht abgefragt werden."
+    record_unknown failedUnits warning "Fehlgeschlagene Systemdienste konnten nicht abgefragt werden."
   elif [[ -z "$failed" ]]; then
     record_ok failedUnits "Keine fehlgeschlagenen Systemdienste erkannt."
   else

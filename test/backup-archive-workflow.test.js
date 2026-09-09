@@ -154,7 +154,8 @@ test("server forwards existing recovery keys and the shared deadline only to the
 test("shutdown shares one deadline with drain and does not release the instance when child termination is unverified", async () => {
   for (const code of [null, "BACKGROUND_BACKUP_TREE_UNVERIFIED", "BACKGROUND_BACKUP_ARCHIVE_RECOVERY_REQUIRED"]) {
     const events = [], deadlines = [];
-    const dependencies = { shutdownStarted: false, server: null, databaseClosed: false,
+    const dependencies = { shutdownStarted: false, server: null, databaseClosed: false, maintenanceOwnsLifecycleBackup: () => false,
+      salesReportJobs: { stop: async () => {} },
       backupInterval: null, retentionInterval: null, scannerProbeInterval: null, sicknessSweepInterval: null,
       notificationDispatchInterval: null, rateLimitCleanupInterval: null, systemCenterHealthInterval: null,
       localBackupArchiveEnabled: () => true, console: { error() {} }, setInterval: () => events.push("recovery-wait"),

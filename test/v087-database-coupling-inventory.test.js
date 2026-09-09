@@ -313,13 +313,15 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // through the already classified SQLite operations adapter.
   // The explicitly authorized customer maintenance CLI adds only connection
   // PRAGMAs; business writes use the existing audited repositories.
-  assert.equal(report.summary.productionDirectFiles, 77);
+  // Search projection, cash inventory and role-default schema adapters are
+  // explicit SQLite operations; the synthetic benchmark is a test entrypoint.
+  assert.equal(report.summary.productionDirectFiles, 81);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
   // The workspace lease reuses the existing lock adapter; Offsite staging
   // reads only the configured database path, not business records.
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 14);
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 15);
   assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 4);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
@@ -432,7 +434,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1325);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1348);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -449,7 +451,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1325,
+    requiredReceiptCount: 1348,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -636,7 +638,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   assert.match(phase5, /nicht produktiven Status/i);
   assert.match(phase5, /`development-contract`/);
   assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1325/);
+  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1348/);
   assert.match(phase5, /`applicationExecutable: false`/);
   assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
   assert.match(strategy, /Block 3[\s\S]{0,100}abgeschlossen/i);
@@ -648,7 +650,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   );
   assert.match(
     strategy,
-    /1325 Anwendungsstatements:[\s\S]{0,60}1211[\s\S]{0,100}`portable-generated`[\s\S]{0,60}114[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1325[\s\S]{0,100}Vollanwendungskatalog/i,
+    /1348 Anwendungsstatements:[\s\S]{0,60}1233[\s\S]{0,100}`portable-generated`[\s\S]{0,60}115[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1348[\s\S]{0,100}Vollanwendungskatalog/i,
   );
   assert.match(
     strategy,

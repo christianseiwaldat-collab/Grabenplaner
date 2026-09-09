@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.32 Beta · Schnellere Verkaufsdaten und persönliche Hintergrundberichte
+
+- Artikelstammsuche und Kassenhistorie verwenden vorbereitete Suchwerte, gezielte Abfragen und überprüfte Bestandsnachweise. Verschlüsselte Belegzusammenfassungen verkürzen wiederholte Suchläufe; vollständige Belege werden bei Bedarf geladen. Quellen-, Filial-, Kunden- und Personalrechte bleiben bei jedem Zugriff wirksam.
+- Verkaufsanalysen gliedern sich in „Bericht erstellen“, „PDF-Analysen“ und „Berichte“. Persönliche Umsatzauswertungen nach Zeitraum und Filiale entstehen im Hintergrund, mit Fortschritt, Abbruch, Wiederanlauf und geschütztem Download. Einzelverkäufe und Kassenhistorie sind bei „Kassenberichte & Belegsuche“ eingeordnet.
+- Der Developer kann alle bekannten Rechte anderer persönlicher Zugänge vergeben und entziehen. Standardrechte je Rolle und Position sind zentral konfigurierbar; persönliche Ausnahmen bleiben erhalten. Der Developer behält garantierten Vollzugriff. Kompaktere Einstellungen lassen Beschriftungen und Inhalte umbrechen.
+- Der Dienstplan-Wochenwechsel behandelt fehlende oder ungültige Sonntagsöffnungszeiten zuverlässig. Host-Sicherheitsmeldungen unterscheiden Wartungsbedarf, Sicherheitsfehler und unbestätigte Prüfungen; die geschützte Neustartsteuerung prüft den vorgesehenen Socket korrekt.
+- Der Sicherungsablauf vermeidet redundante vollständige Archivprüfungen und Wiederherstellungen. Bestätigte Sicherungen, Aufbewahrung und automatische Recovery Assurance bleiben erforderlich. Die Update-Koordination schützt laufende Sicherungsprozesse und unterdrückt zusätzliche App-Sicherungen nur bei gültiger verwalteter Wartungsreservierung.
+- SQLite bleibt der freigegebene Datenbankprovider. Dieses Release startet keinen erneuten Quelldatenimport und keinen vollständigen Ubuntu-Neustart.
+
 ## v0.92.31 Beta · Sichtbare Bewerbungsbewertungen im Mitarbeiterportal
 
 - Neue persönliche Bewerbungs- und Preboarding-Bewertungen erscheinen auch im bereits geöffneten Portal als Hinweis mit direktem Einstieg. Beim Zurückkehren ins Portal und während der sichtbaren Nutzung wird der Stand aktualisiert; laufende Eingaben bleiben erhalten. Anmelden und Neuladen öffnen weiterhin direkt die persönliche Bewertungsfläche.

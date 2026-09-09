@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
@@ -30,7 +31,7 @@ test("VPS-Reboot ist als eigener Developer-Dialog vom Dienstneustart getrennt", 
 
 test("offener Sicherheitsneustart wird eindeutig vom Dienstneustart abgegrenzt", () => {
   assert.match(
-    server,
+    fs.readFileSync(path.join(root, "lib", "host-security-status.js"), "utf8"),
     /vollständiger kontrollierter Neustart des Ubuntu-VPS[^.]*\. Ein Neustart des Grabenplaner-Dienstes genügt nicht\./,
   );
   assert.match(app, /vollständiger Ubuntu-VPS-Neustart erforderlich/);
@@ -89,5 +90,51 @@ test("Serverpfad verlangt Developer, Reauth und Backup vor dem Root-Broker", () 
   assert.ok(endpoint.indexOf('createDatabaseBackup("vps-reboot")')
     < endpoint.indexOf("requestControl: requestHostReboot"));
   assert.match(endpoint, /prepareControlledHostReboot/);
+  assert.ok(endpoint.indexOf("hostSecurity.lastErrorCode") < endpoint.indexOf('createDatabaseBackup("vps-reboot")'));
   assert.match(endpoint, /response\.status\(202\)\.json/);
+});
+
+test("reboot capabilities require a current audit and preserve role and pending-operation gates", () => {
+  const start = server.indexOf("function serverMonitorActionCapabilities(");
+  const end = server.indexOf("function serverStatusForActor(", start);
+  const capabilities = vm.runInNewContext(`${server.slice(start, end)}; serverMonitorActionCapabilities`, {
+    serverManagedRestartAvailable: true,
+    currentServerMonitorRestartCooldownSeconds: () => 0,
+    currentHostManagedRebootAvailable: () => true,
+    hostManagedRebootRequested: false,
+    SERVER_MONITOR_CONTROL_ROLES: new Set(["developer"]),
+  });
+  const actor = { role: "developer", permissions: ["system:write", "system:diagnostics:technical"] };
+  const verified = { hostSecurityConfigured: true, hostSecurityStatusAvailable: true, hostRebootRequired: true };
+  assert.equal(capabilities(actor, verified).canVpsReboot, true);
+  for (const code of ["HOST_SECURITY_STATUS_STALE", "HOST_SECURITY_STATUS_TIMESTAMP_FUTURE"]) {
+    const result = capabilities(actor, { ...verified, hostSecurityStatusErrorCode: code });
+    assert.equal(result.canVpsReboot, false);
+    assert.equal(result.vpsRebootUnavailableReason, "VPS_REBOOT_STATUS_UNVERIFIED");
+  }
+  for (const condition of [
+    { managedHostRebootAvailable: false }, { hostSecurityStatusAvailable: false },
+    { hostSecurityPendingConfirmation: true }, { hostRebootInProgress: true }, { hostRebootRequired: false },
+  ]) assert.equal(capabilities(actor, { ...verified, ...condition }).canVpsReboot, false);
+  assert.equal(capabilities({ ...actor, role: "admin" }, verified).canVpsReboot, false);
+  assert.equal(capabilities({ ...actor, permissions: [] }, verified).canVpsReboot, false);
+  assert.match(server.slice(end, server.indexOf("function assertServerRestartConfirmation", end)), /hostSecurityStatusErrorCode: diagnostics\?\.hostSecurity\?\.lastErrorCode/);
+});
+
+test("host card distinguishes maintenance, unknown checks and unavailable status", () => {
+  const start = app.indexOf("function renderHostSecurityDiagnostics(");
+  const end = app.indexOf("function canManageOffsiteFolders(", start);
+  const render = vm.runInNewContext(`${app.slice(start, end)}; renderHostSecurityDiagnostics`, {
+    state: {}, escapeHtml: value => String(value), diagnosticTimestamp: value => String(value), diagnosticAge: () => "",
+    hostSecurityCheckLabels: { publicPorts: "Trennung öffentlicher und interner Ports" },
+    vpsRebootUnavailableMessage: () => "Gesperrt",
+  });
+  const reboot = { configured: true, statusAvailable: true, state: "warning", rebootRequired: true, failedChecks: [], unknownChecks: [] };
+  assert.match(render(reboot), /Wartung nötig/);
+  const incomplete = render({ ...reboot, unknownChecks: ["publicPorts"] });
+  assert.match(incomplete, /Nicht bestätigt: Trennung öffentlicher und interner Ports/);
+  assert.doesNotMatch(incomplete, /Einzelprüfungen beim letzten Audit bestanden|Wartung nötig/);
+  const missing = render({ configured: true, statusAvailable: false, state: "error" });
+  assert.match(missing, /Prüfergebnis nicht verfügbar/);
+  assert.doesNotMatch(missing, /keine offene Sicherheitstransaktion|derzeit nicht erforderlich/);
 });

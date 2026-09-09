@@ -429,6 +429,7 @@ function main() {
     "backup.js",
     ...backupRuntimeScripts,
     "lib/backup-workspace.js",
+    "lib/backup-maintenance.js",
     "lib/background-backup-process.js",
     "lib/local-backup-archive.js",
     "package.json",

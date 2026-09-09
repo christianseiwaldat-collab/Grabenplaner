@@ -21,6 +21,8 @@ const { DATA_IMPORT_PERMISSION_CATALOG, buildDataImportProjection, dataImportPer
 const { createDataImportRuntime } = require("./lib/persistence/repositories/data-import-runtime");
 const { createDataImportMappingRuntime } = require("./lib/persistence/repositories/data-import-mapping-runtime");
 const { createManagedSalesHistoryRuntime } = require("./lib/persistence/repositories/sales-history-runtime");
+const { createSalesReportJobs } = require('./lib/persistence/repositories/sales-report-jobs');
+const { registerSalesReportJobRoutes } = require('./lib/sales-report-jobs-routes');
 const { createCashPublicationRuntime } = require("./lib/persistence/repositories/cash-publication-runtime");
 const { CASH_SOURCE_POLICIES } = require("./lib/cash-source-policies");
 const { registerDataImportRoutes } = require("./lib/data-import-routes");
@@ -156,6 +158,7 @@ const {
 } = require("./lib/server-monitor-status");
 const {
   DEFAULT_STATUS_PATH: DEFAULT_HOST_SECURITY_STATUS_PATH,
+  buildHostSecurityAlerts,
   readHostSecurityStatus,
 } = require("./lib/host-security-status");
 const {
@@ -1998,6 +2001,13 @@ addBuiltinRolePermissions("developer", [
   ...delegablePortalPermissionCatalog.map((permission) => permission.id),
   ...portalGlobalPermissionIds,
 ]);
+
+const allPortalPermissionCatalog = [...new Map([
+  ...builtinPortalRoles.flatMap(role => role.permissions).map(id => ({ id, label: id, group: "Weitere Rechte" })),
+  ...portalDashboardPermissionDetails,
+  ...delegablePortalPermissionCatalog,
+].map(entry => [entry.id, entry])).values()];
+const allPortalPermissions = new Set(allPortalPermissionCatalog.map(entry => entry.id));
 
 const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
 const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
@@ -4961,6 +4971,19 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
     mustChangePassword: false,
     expiresAt: organizationSession.expires_at,
   };
+}
+
+async function resolveSalesReportPrincipal(employeeNumber) {
+  if (isReservedEmployeePrincipal(employeeNumber)) return null;
+  const row = await portalAccessRepository.getReportPrincipal({ employeeNumber, businessDate: viennaTodayIso(new Date()) });
+  if (!row) return null;
+  const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(row);
+  const permissionState = effectivePortalPermissionState(row.employee_number, row.role, row.permissions,
+    row.granted_permissions, row.denied_permissions, row.amu_local_access_mode);
+  return { sessionKind: 'employee', isEmployee: true, employeeNumber: row.employee_number, accountId: null,
+    role: row.role, homeLocationId: row.home_location_id, permissions: permissionState.effectivePermissions,
+    permissionScopes: parsePortalPermissionScopes(row.permission_scopes), explicitScopes, scopes,
+    mustChangePassword: Boolean(row.must_change_password) };
 }
 
 function portalSessionFromRequest(request) {
@@ -8601,29 +8624,25 @@ function actorCanReadAmuSensitiveMetadata(session) {
 function actorCanReadPersonnelSensitiveData(session) {
   if (!session) return false;
   if (isLocalSystemSession(session)) return true;
-  return portalPermissionAllowedForRole("personnel:sensitive:read", session.role)
-    && session.permissions?.includes("personnel:sensitive:read");
+  return session.permissions?.includes("personnel:sensitive:read");
 }
 
 function actorCanWritePersonnelSensitiveData(session) {
   if (!session) return false;
   if (isLocalSystemSession(session)) return true;
-  return portalPermissionAllowedForRole("personnel:sensitive:write", session.role)
-    && session.permissions?.includes("personnel:sensitive:write");
+  return session.permissions?.includes("personnel:sensitive:write");
 }
 
 function actorCanReadPersonnelPhone(session) {
   if (!session) return false;
   if (isLocalSystemSession(session)) return true;
-  return portalPermissionAllowedForRole("personnel:phone:read", session.role)
-    && session.permissions?.includes("personnel:phone:read");
+  return session.permissions?.includes("personnel:phone:read");
 }
 
 function actorCanWritePersonnelPhone(session) {
   if (!session) return false;
   if (isLocalSystemSession(session)) return true;
-  if (!portalPermissionAllowedForRole("personnel:phone:write", session.role)
-    || !session.permissions?.includes("personnel:phone:write")) return false;
+  if (!session.permissions?.includes("personnel:phone:write")) return false;
   if (!["location_planner", "manager", "department_manager"].includes(session.role)) return true;
   return getTrustLevelPolicy().enabled
     && normalizeTimeConfirmationLevel(session.timeConfirmationLevel) === "A";
@@ -9523,12 +9542,8 @@ async function portalPermissionGrantsForEmployee(
   repository = organizationPersonnelRepository,
 ) {
   if (!employeeNumber) return [];
-  const resolvedRole = role
-    || (await repository.getPortalAccessProjection(employeeNumber))?.role
-    || "employee";
   return (await repository.listPortalPermissionGrants(employeeNumber))
-    .filter((permission) => delegablePortalPermissions.has(permission)
-      && portalPermissionAllowedForRole(permission, resolvedRole));
+    .filter((permission) => allPortalPermissions.has(permission));
 }
 
 async function portalPermissionDenialsForEmployee(
@@ -9537,7 +9552,7 @@ async function portalPermissionDenialsForEmployee(
 ) {
   if (!employeeNumber) return [];
   return (await repository.listPortalPermissionDenials(employeeNumber))
-    .filter((permission) => delegablePortalPermissions.has(permission));
+    .filter((permission) => allPortalPermissions.has(permission));
 }
 
 function effectivePortalPermissionState(
@@ -9548,19 +9563,21 @@ function effectivePortalPermissionState(
   deniedPermissionsValue = [],
   amuLocalAccessMode = "inherit",
 ) {
+  if (role === "developer") {
+    return { rolePermissions: [...allPortalPermissions], grantedPermissions: [], deniedPermissions: [], effectivePermissions: [...allPortalPermissions] };
+  }
   const rolePermissions = (Array.isArray(rolePermissionsValue)
     ? rolePermissionsValue
     : parsePortalPermissions(rolePermissionsValue))
-    .filter((permission) => portalPermissionAllowedForRole(permission, role));
+    .filter((permission) => allPortalPermissions.has(permission));
   const grantedPermissions = (Array.isArray(grantedPermissionsValue)
     ? grantedPermissionsValue
     : parsePortalPermissions(grantedPermissionsValue))
-    .filter((permission) => delegablePortalPermissions.has(permission)
-      && portalPermissionAllowedForRole(permission, role));
+    .filter((permission) => allPortalPermissions.has(permission));
   const deniedPermissions = (Array.isArray(deniedPermissionsValue)
     ? deniedPermissionsValue
     : parsePortalPermissions(deniedPermissionsValue))
-    .filter((permission) => delegablePortalPermissions.has(permission));
+    .filter((permission) => allPortalPermissions.has(permission));
   const denied = new Set(deniedPermissions);
   const effectivePermissions = [...new Set([...rolePermissions, ...grantedPermissions])]
     .filter((permission) => !denied.has(permission))
@@ -9610,6 +9627,7 @@ function portalAccessScopesForPrincipal({
 }
 
 function manageablePortalPermissionsForActor(actor) {
+  if (actor?.role === "developer") return new Set(allPortalPermissions);
   if (!actor) return new Set();
   if (isLocalSystemSession(actor)) {
     return new Set(delegablePortalPermissions);
@@ -9710,7 +9728,7 @@ function manageablePortalPermissionsForActor(actor) {
 
 function portalPermissionCatalogForActor(actor) {
   const manageable = manageablePortalPermissionsForActor(actor);
-  const catalog = delegablePortalPermissionCatalog
+  const catalog = (actor?.role === "developer" || isLocalSystemSession(actor) ? allPortalPermissionCatalog : delegablePortalPermissionCatalog)
     .filter((permission) => portalPermissionVisibleToActor(permission.id, actor))
     .map(({ hrDelegable: _hrDelegable, ...permission }) => ({
       ...permission,
@@ -9753,7 +9771,7 @@ async function getPortalRoles() {
       description: role.description || "",
       builtin: Boolean(role.builtin),
       permissions: parsePortalPermissions(role.permissions)
-        .filter((permission) => portalPermissionAllowedForRole(permission, role.id)),
+        .filter((permission) => allPortalPermissions.has(permission)),
       sortOrder: Number(role.sort_order || 0),
       protected: protectedRole,
       assignable: !protectedRole,
@@ -10077,7 +10095,7 @@ async function portalAccessProfileForEmployee(
     ? effectivePortalPermissionState(
       employeeNumber,
       roleId,
-      role?.permissions || user?.permissions,
+      user?.permissions || role?.permissions,
       grantedPermissions,
       deniedPermissions,
       user?.amu_local_access_mode,
@@ -10287,9 +10305,6 @@ function personnelAccessProfileChanged(profile, before = {}) {
       profile.permissions || [],
       (permission) => String(permission || ""),
     ).removed.length > 0
-    || (before.deniedPermissions || []).some(
-      (permission) => permission !== PERSONNEL_LEARNING_PERMISSIONS.CROSS_LOCATION_ASSIGN,
-    )
     || setDifference(before.scopes || [], desiredScopes, portalAccessScopeKey).added.length > 0
     || setDifference(before.scopes || [], desiredScopes, portalAccessScopeKey).removed.length > 0;
 }
@@ -10317,7 +10332,7 @@ async function validatePersonnelAccessProfile(
     }
   }
   const role = String(payload.role || existing?.role || "employee").trim();
-  const roleProjection = await repository.getPortalRoleProjection(role);
+  const roleProjection = await repository.getPortalRoleProjection(role, employee.positionId ?? employee.position_id ?? "");
   if (!roleProjection) {
     throw httpError(400, "Die ausgewählte App-Rolle ist ungültig.", "PORTAL_ROLE_INVALID");
   }
@@ -10371,12 +10386,15 @@ async function validatePersonnelAccessProfile(
       role,
     });
   }
+  let retainedDenials = [], retainedGrants = [];
   if (existing) {
     const [existingGrants, existingDenials, existingPermissionScopes] = await Promise.all([
       portalPermissionGrantsForEmployee(employeeNumber, existing.role, repository),
       portalPermissionDenialsForEmployee(employeeNumber, repository),
       repository.listPortalPermissionScopeGrants(employeeNumber),
     ]);
+    retainedDenials = existingDenials;
+    retainedGrants = existingGrants;
     if (existingGrants.some((permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission))
       || existingDenials.some((permission) => CROSS_LOCATION_SCHEDULE_PERMISSION_IDS.includes(permission))) {
       throw httpError(
@@ -10406,18 +10424,18 @@ async function validatePersonnelAccessProfile(
       );
     }
   }
-  const invalidPermissions = submittedPermissions.filter((permission) => !delegablePortalPermissions.has(permission));
+  const invalidPermissions = submittedPermissions.filter((permission) => !(actor.role === "developer" ? allPortalPermissions : delegablePortalPermissions).has(permission));
   if (invalidPermissions.length) {
     throw httpError(403, `Diese Rechte dürfen nicht vergeben werden: ${invalidPermissions.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
   }
-  const roleRestrictedPermissions = submittedPermissions.filter((permission) => !portalPermissionAllowedForRole(permission, role));
+  const roleRestrictedPermissions = submittedPermissions.filter((permission) => actor.role !== "developer" && !portalPermissionAllowedForRole(permission, role));
   if (roleRestrictedPermissions.length) {
     throw portalPermissionRoleRestrictionError(roleRestrictedPermissions);
   }
   const rolePermissions = new Set(parsePortalPermissions(roleProjection.permissions)
-    .filter((permission) => portalPermissionAllowedForRole(permission, role)));
-  const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission));
-  assertPortalPermissionDependencies([...rolePermissions, ...permissions]);
+    .filter((permission) => allPortalPermissions.has(permission)));
+  const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission) || retainedGrants.includes(permission));
+  assertPortalPermissionDependencies([...rolePermissions, ...permissions].filter(permission => !retainedDenials.includes(permission)));
   const homeLocationId = String(employee.homeLocationId || employee.home_location_id || "").trim();
   const preferredDepartmentId = Number(employee.preferredDepartmentId || employee.preferred_department_id || 0) || null;
   if (["location_planner", "manager", "department_manager"].includes(role) && !homeLocationId) {
@@ -10866,7 +10884,7 @@ async function personnelLearningPortalUser(
   ] = await Promise.all([
     repository.getEmployeeForUpdate(employeeNumber),
     repository.getEmployeeScopeProjection(employeeNumber),
-    repository.getPortalRoleProjection(role),
+    repository.getPortalAccessProjection(employeeNumber),
     portalPermissionGrantsForEmployee(employeeNumber, role, repository),
     portalPermissionDenialsForEmployee(employeeNumber, repository),
     repository.listPortalAccessScopes(employeeNumber),
@@ -23324,13 +23342,8 @@ function serverDiagnostics() {
   if (monitor.configured && monitor.state !== "ok") {
     addAlert("SERVER_MONITOR_ATTENTION", monitor.state === "error" ? "critical" : "warning", "Automatische Serverprüfung meldet ein Problem", "Mindestens eine automatische Serverprüfung ist fehlgeschlagen, unvollständig oder überfällig.", "monitoring");
   }
-  if (hostSecurity.configured && hostSecurity.state !== "ok") {
-    const message = hostSecurity.pendingConfirmation
-      ? "Eine Host-Sicherheitstransaktion wartet auf die Bestätigung aus einer zweiten SSH-Sitzung oder wird automatisch zurückgesetzt."
-      : hostSecurity.rebootRequired
-        ? "Für eingespielte Ubuntu-Sicherheitsaktualisierungen ist ein vollständiger kontrollierter Neustart des Ubuntu-VPS im Wartungsfenster erforderlich. Ein Neustart des Grabenplaner-Dienstes genügt nicht."
-        : "Mindestens eine redigierte Ubuntu-Host-Sicherheitsprüfung benötigt Aufmerksamkeit.";
-    addAlert("HOST_SECURITY_ATTENTION", hostSecurity.state === "error" ? "critical" : "warning", "Ubuntu-Host-Sicherheit prüfen", message, "security");
+  for (const alert of buildHostSecurityAlerts(hostSecurity)) {
+    addAlert(alert.id, alert.severity, alert.title, alert.message, alert.category);
   }
   if (serverModeActive && serviceControlToken.length < 32) addAlert("SERVICE_CONTROL_TOKEN_MISSING", "critical", "Dienststeuerung nicht abgesichert", "Der sichere Token für die Dienststeuerung fehlt.", "security");
   const lockedAccounts = sqliteSystemDiagnosticsOperations.lockedPortalAccountCount();
@@ -23559,6 +23572,7 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
       pendingConfirmation: hostSecurity.pendingConfirmation === true,
       rebootRequired: hostSecurity.rebootRequired === true,
       failedChecks: Array.isArray(hostSecurity.failedChecks) ? hostSecurity.failedChecks.map(String) : [],
+      unknownChecks: Array.isArray(hostSecurity.unknownChecks) ? hostSecurity.unknownChecks.map(String) : [],
       lastErrorCode: hostSecurity.lastErrorCode || null,
     },
     recoveryAssurance: {
@@ -25506,6 +25520,12 @@ registerDataImportRoutes(app, {
   assertCsrf: assertPortalCsrf,
 });
 const managedSalesHistoryRuntime = createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true });
+const salesReportJobs = createSalesReportJobs({ access: persistenceProvider, vault: integrationSecretVault,
+  runtime: createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, cashEnabled: true, retainCompletedAnalyses: false }),
+  resolvePrincipal: resolveSalesReportPrincipal,
+  onError: code => console.error('Berichtswarteschlange derzeit nicht verfügbar:', code) });
+registerSalesReportJobRoutes(app, { jobs: salesReportJobs, requireSession: requireEmployeePortalSession,
+  refreshSession: request => loadPortalSessionFromRequest(request, { touch: false }), assertCsrf: assertPortalCsrf });
 require("./lib/receipt-search-routes").registerReceiptSearchRoutes(app, {
   runtime: managedSalesHistoryRuntime, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }), preferences: uiPreferencesRepository,
@@ -28084,6 +28104,7 @@ function serverMonitorActionCapabilities(
     managedHostRebootAvailable = currentHostManagedRebootAvailable(),
     hostSecurityConfigured = false,
     hostSecurityStatusAvailable = false,
+    hostSecurityStatusErrorCode = null,
     hostRebootRequired = false,
     hostSecurityPendingConfirmation = false,
     hostRebootInProgress = hostManagedRebootRequested,
@@ -28097,7 +28118,7 @@ function serverMonitorActionCapabilities(
       vpsRebootUnavailableReason = "VPS_REBOOT_PERMISSION_REQUIRED";
     } else if (hostRebootInProgress) {
       vpsRebootUnavailableReason = "VPS_REBOOT_IN_PROGRESS";
-    } else if (!hostSecurityConfigured || !hostSecurityStatusAvailable) {
+    } else if (!hostSecurityConfigured || !hostSecurityStatusAvailable || hostSecurityStatusErrorCode) {
       vpsRebootUnavailableReason = "VPS_REBOOT_STATUS_UNVERIFIED";
     } else if (hostSecurityPendingConfirmation) {
       vpsRebootUnavailableReason = "VPS_REBOOT_SECURITY_CONFIRMATION_PENDING";
@@ -28129,6 +28150,7 @@ function serverStatusForActor(diagnostics, actor) {
     monitorActions: serverMonitorActionCapabilities(actor, {
       hostSecurityConfigured: diagnostics?.hostSecurity?.configured === true,
       hostSecurityStatusAvailable: diagnostics?.hostSecurity?.statusAvailable === true,
+      hostSecurityStatusErrorCode: diagnostics?.hostSecurity?.lastErrorCode || null,
       hostRebootRequired: diagnostics?.hostSecurity?.rebootRequired === true,
       hostSecurityPendingConfirmation: diagnostics?.hostSecurity?.pendingConfirmation === true,
     }),
@@ -28317,7 +28339,14 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
   const hostSecurity = currentHostSecurityStatus();
   if (hostSecurity.configured !== true
     || hostSecurity.statusAvailable !== true
-    || hostSecurity.rebootRequired !== true
+    || hostSecurity.lastErrorCode) {
+    throw httpError(
+      409,
+      "Vor einem VPS-Neustart ist ein aktueller, sicher lesbarer Ubuntu-Host-Audit erforderlich.",
+      "VPS_REBOOT_STATUS_UNVERIFIED",
+    );
+  }
+  if (hostSecurity.rebootRequired !== true
     || hostSecurity.pendingConfirmation === true) {
     throw httpError(
       409,
@@ -32810,8 +32839,12 @@ app.get("/api/portal/v1/roles", async (request, response) => {
   response.json({
     apiVersion: PORTAL_API_VERSION,
     roles: projectPortalRolesForActor(await getPortalRoles(), actor),
+    positionDefaults: actorCanEditPersonnelAccessProfile(actor)
+      ? (await organizationPersonnelRepository.listPositionPermissionDefaults()).map(row => ({
+        id: row.id, permissions: parsePortalPermissions(row.permissions).filter(permission => portalPermissionVisibleToActor(permission, actor)),
+      })) : [],
     catalog: projectPortalPermissionCatalogForActor(
-      delegablePortalPermissionCatalog.map(
+      (actor?.role === "developer" ? allPortalPermissionCatalog : delegablePortalPermissionCatalog).map(
         ({ hrDelegable: _hrDelegable, ...permission }) => permission,
       ),
       actor,
@@ -36222,7 +36255,7 @@ async function rightsManagementPayload(actor) {
         personnelLearningDenialAuthority: _personnelLearningDenialAuthority,
         ...publicUser
       } = user;
-      const rolePermissions = (roles.get(user.role)?.permissions || [])
+      const rolePermissions = (user.rolePermissions || roles.get(user.role)?.permissions || [])
         .filter(visiblePermission)
         .filter((permission) => !managerDenialOnly || managerPermissions.has(permission));
       const grantedPermissions = managerDenialOnly
@@ -39037,6 +39070,18 @@ async function rightsMutationSnapshot(
   };
 }
 
+require("./lib/portal-permission-defaults-routes").registerPortalPermissionDefaultsRoutes(app, {
+  requireActor: request => requireRightsEditorOrLocal(request, "rights:write"),
+  repository: organizationPersonnelRepository,
+  transaction: work => personnelLifecycleSerializableTransaction(work),
+  catalog: allPortalPermissionCatalog,
+  builtinRoles: builtinPortalRoles,
+  knownPermissions: allPortalPermissions,
+  validateDependencies: permissions => assertPortalPermissionDependencies([...permissions]),
+  effectiveState: effectivePortalPermissionState,
+  error: httpError,
+});
+
 app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   const actor = requireRightsEditorOrLocal(request, "rights:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
@@ -39074,7 +39119,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   ] = await Promise.all([
     portalPermissionGrantsForEmployee(employeeNumber, target.role),
     portalPermissionDenialsForEmployee(employeeNumber),
-    organizationPersonnelRepository.getPortalRoleProjection(target.role),
+    organizationPersonnelRepository.getPortalAccessProjection(employeeNumber),
     organizationPersonnelRepository.listPortalPermissionScopeGrants(employeeNumber),
     explicitPortalAccessScopesForEmployee(employeeNumber),
   ]);
@@ -39088,14 +39133,16 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   if (invalid.length) {
     throw httpError(403, `Diese Rechte dürfen durch den aktuellen Zugang nicht vergeben werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
   }
-  const roleRestricted = submitted.filter((permission) => !portalPermissionAllowedForRole(permission, target.role));
+  const roleRestricted = submitted.filter((permission) => actor.role !== "developer" && !currentGrants.has(permission) && !portalPermissionAllowedForRole(permission, target.role));
   if (roleRestricted.length) {
     throw portalPermissionRoleRestrictionError(roleRestricted);
   }
   const rolePermissions = parsePortalPermissions(roleProjection?.permissions)
-    .filter((permission) => portalPermissionAllowedForRole(permission, target.role));
+    .filter((permission) => allPortalPermissions.has(permission));
   const rolePermissionSet = new Set(rolePermissions);
-  const invalidDenials = submittedDenials.filter((permission) => !rolePermissionSet.has(permission));
+  const invalidDenials = submittedDenials.filter((permission) => !rolePermissionSet.has(permission)
+    && !(actor.role === "developer" && allPortalPermissions.has(permission))
+    && !currentDenials.has(permission));
   if (invalidDenials.length) {
     throw httpError(400,
       `Nur Grundrechte der aktuellen Rolle können entzogen werden: ${invalidDenials.join(", ")}`,
@@ -39236,7 +39283,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   await personnelLifecycleSerializableTransaction(async (organization) => {
     const [liveTarget, liveRoleProjection, liveBefore, liveLearningActor, liveTargetScope] = await Promise.all([
       organization.getPortalUserAccountProjection(employeeNumber),
-      organization.getPortalRoleProjection(target.role),
+      organization.getPortalAccessProjection(employeeNumber),
       rightsMutationSnapshot(
         employeeNumber,
         target.role,
@@ -39260,7 +39307,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
       homeLocationId: String(liveTargetScope?.home_location_id || ""),
     };
     const liveRolePermissions = parsePortalPermissions(liveRoleProjection?.permissions)
-      .filter((permission) => portalPermissionAllowedForRole(permission, target.role));
+      .filter((permission) => allPortalPermissions.has(permission));
     assertRightsMutationSnapshotCurrent(
       expectedConcurrencySignature,
       rightsConcurrencySignature({
@@ -58184,7 +58231,7 @@ async function verifyUsbCreator(request, employeeNumber, password) {
   }
   usbCreatorAuthRateLimits.clear(rateKey);
   const [roleProjection, grantedPermissions, deniedPermissions] = await Promise.all([
-    organizationPersonnelRepository.getPortalRoleProjection(row.role),
+    organizationPersonnelRepository.getPortalAccessProjection(row.employee_number),
     portalPermissionGrantsForEmployee(row.employee_number, row.role),
     portalPermissionDenialsForEmployee(row.employee_number),
   ]);
@@ -63232,6 +63279,7 @@ async function startServer() {
       for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
     }
     scheduleAutomaticBackups();
+    salesReportJobs.start();
     try { await reconcileInterruptedIntegrationDeliveries(); } catch (error) { console.error("Unterbrochene Lohnübergaben konnten nicht abgeglichen werden:", error); }
     try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
     try { await runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
@@ -63294,8 +63342,13 @@ async function startServer() {
       }, 5 * 60 * 1000);
       scannerProbeInterval.unref();
     }
+    const maintenanceOwnsStartupBackup = maintenanceOwnsLifecycleBackup();
     setTimeout(async () => {
       if (shutdownStarted) return;
+      if (maintenanceOwnsStartupBackup) {
+        console.log("Startsicherung: Der Linux-Updater verantwortet den gekoppelten Sicherungspunkt.");
+        return;
+      }
       try {
         const backup = await createDatabaseBackup("startup");
         if (backup) console.log(`Backup erstellt: ${backup.path}`);
@@ -63308,6 +63361,10 @@ async function startServer() {
   return server;
 }
 
+function maintenanceOwnsLifecycleBackup() {
+  return serverModeActive && require("./lib/backup-maintenance").ownsLifecycleBackup(databasePath);
+}
+
 function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) {
   if (shutdownStarted) return;
   shutdownStarted = true;
@@ -63317,10 +63374,11 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   const finish = async () => {
     if (finished) return;
     finished = true;
+    await salesReportJobs.stop().catch(() => {});
     if (!databaseClosed) {
       try {
         if (localBackupArchiveEnabled()) await require("./lib/background-backup-process").drainBackgroundBackups({ deadlineMs });
-        if (!skipBackup) await createDatabaseBackup(`shutdown-${reason}`, { deadlineMs });
+        if (!skipBackup && !maintenanceOwnsLifecycleBackup()) await createDatabaseBackup(`shutdown-${reason}`, { deadlineMs });
       } catch (error) {
         console.error("Backup beim Dienststopp konnte nicht erstellt werden:", error);
         if (error?.code === "BACKGROUND_BACKUP_TREE_UNVERIFIED") {

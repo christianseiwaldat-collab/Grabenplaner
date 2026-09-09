@@ -1,0 +1,40 @@
+{
+  "fixture": "synthetic; in-memory; one revision and barcode per article",
+  "articles": 19024,
+  "node": "v24.19.0",
+  "sqlite": "3.53.3",
+  "projectionBuild": {
+    "rows": 19024,
+    "milliseconds": 469.217
+  },
+  "runs": "one warmup + three measured repetitions; median; list and count together; implemented includes transaction and dirty check",
+  "results": [
+    {
+      "query": "(leer)",
+      "hits": 19024,
+      "beforeMedianMs": 40.695,
+      "implementedMedianMs": 0.415,
+      "prototypeMedianMs": 0.14,
+      "ftsPrototypeMedianMs": null,
+      "equalResults": true
+    },
+    {
+      "query": "Testkamera 17001",
+      "hits": 1,
+      "beforeMedianMs": 1495.643,
+      "implementedMedianMs": 18.494,
+      "prototypeMedianMs": 6.523,
+      "ftsPrototypeMedianMs": 0.534,
+      "equalResults": true
+    },
+    {
+      "query": "unauffindbar",
+      "hits": 0,
+      "beforeMedianMs": 751.772,
+      "implementedMedianMs": 10.317,
+      "prototypeMedianMs": 3.978,
+      "ftsPrototypeMedianMs": 0.014,
+      "equalResults": true
+    }
+  ]
+}

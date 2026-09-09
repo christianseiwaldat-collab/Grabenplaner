@@ -282,6 +282,7 @@ async function fixture() {
       ('employee', 'Mitarbeiter', '[]', 10),
       ('manager', 'Leitung', '["sickness:read"]', 20);
   `);
+  require("../lib/persistence/sqlite/operations/portal-permission-defaults-schema").ensureSqlitePortalPermissionDefaultsSchema(application.database);
   return {
     ...application,
     repository: createOrganizationPersonnelRepository(application.provider),
@@ -649,7 +650,7 @@ test("Block 3/7: Organisations- und Rechteprojektionen werden providerbasiert ge
       FROM portal_permission_grants
       WHERE employee_number = 'E1' AND permission = 'employees:read'
     `).get().updated_at, "2026-01-02T03:04:05.000Z");
-    assert.deepEqual(await context.repository.listPortalPermissionDenials("E1"), []);
+    assert.deepEqual(await context.repository.listPortalPermissionDenials("E1"), ["sickness:read"]);
   } finally {
     await context.close();
   }

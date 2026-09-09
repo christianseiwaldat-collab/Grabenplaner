@@ -127,7 +127,7 @@ function persistenceCode(code) {
 
 test("Statementkatalog ist vollständig und PostgreSQL-portabel kompilierbar", () => {
   const statements = Object.values(SALES_ARTICLE_CATALOG_STATEMENTS);
-  assert.equal(statements.length, 28);
+  assert.equal(statements.length, 34);
   assert.equal(SQLITE_SALES_ARTICLE_CATALOG.length, statements.length);
   assert.equal(new Set(statements).size, statements.length);
   assert.deepEqual(

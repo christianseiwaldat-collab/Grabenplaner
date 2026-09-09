@@ -23,6 +23,7 @@
     "nav-module-children",
     "nav-children",
     "settings-field-disclosure-body",
+    "sales-analytics-panel",
   ]);
 
   function hasClass(element, className) {

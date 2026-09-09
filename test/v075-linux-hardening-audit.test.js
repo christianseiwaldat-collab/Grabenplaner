@@ -128,7 +128,7 @@ test("v0.75 firewall audit combines UFW transaction rules with listener isolatio
   assert.match(audit, /TRANSACTION_SOURCES/);
   assert.match(audit, /127\.0\.0\.1:3000/);
   assert.match(audit, /\[::1\]:3000/);
-  assert.match(audit, /found && !unsafe/);
+  assert.match(audit, /exit unsafe \? 1 : malformed \? 3 : found \? 0 : 2/);
   assert.match(audit, /internal_port_is_loopback_only/);
   assert.doesNotMatch(audit, /transaction_ssh_rules_present/);
 });
