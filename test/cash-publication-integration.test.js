@@ -61,17 +61,31 @@ async function fixture(t, options = {}) {
   t.after(async () => { protection.destroy(); await app.provider.close(); app.database.close(); });
   return f;
 }
-test('durable report jobs complete multiple batches and encrypt results, with personal ownership and fresh download rights', async t => {
+async function reportPdfText(buffer) {
+  assert.ok(Buffer.isBuffer(buffer)); assert.equal(buffer.subarray(0, 5).toString(), '%PDF-');
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const loading = getDocument({ data: new Uint8Array(buffer), isEvalSupported: false });
+  const document = await loading.promise;
+  try {
+    const pages = [];
+    for (let i = 1; i <= document.numPages; i++) pages.push((await (await document.getPage(i)).getTextContent()).items.map(t => t.str).join(' '));
+    return pages.join('\n');
+  } finally { await loading.destroy(); }
+}
+
+test('durable report jobs complete both periods and encrypt PDF results, with personal ownership and fresh download rights', async t => {
   const f = await fixture(t, { count: 205 }); await f.activate();
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
   const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId });
   const job = await jobs.create(f.session, { title: '<Private report>', query: f.query() });
   assert.equal(job.status, 'queued'); await jobs.tick();
   assert.equal((await jobs.list(f.session))[0].processed, 200);
+  await jobs.tick(); assert.equal((await jobs.list(f.session))[0].phase, 'comparison');
   await jobs.tick(); const done = (await jobs.list(f.session))[0];
   assert.equal(done.status, 'completed'); assert.equal(done.processed, 205);
-  const html = await jobs.download(f.session, job.id);
-  assert.match(html, /2460.00 EUR/); assert.match(html, /&lt;Private report&gt;/); assert.doesNotMatch(html, /KUND_NR|00031|Synthetic article/);
+  const text = await reportPdfText(await jobs.download(f.session, job.id));
+  assert.match(text, /2[.\s]?050,00/); assert.match(text, /<Private report>/); assert.doesNotMatch(text, /KUND_NR|00031|Synthetic article/);
+  assert.equal(done.format, 'pdf'); assert.match(text, /Nicht verfügbar/);
   assert.doesNotMatch(JSON.stringify(f.app.database.prepare('SELECT * FROM sales_report_jobs').all()), /Private report|2460.00|admin-1/);
   const other = { ...f.session, employeeNumber: 'admin-2' };
   assert.equal((await jobs.list(other)).length, 0);
@@ -89,7 +103,7 @@ test('report job lease recovery restarts exactly once without duplicate totals a
   await first.tick(); await second.tick(); assert.equal((await second.list(f.session))[0].restarts, 0);
   await first.stop(); time += 31000; await second.tick();
   assert.equal((await second.list(f.session))[0].restarts, 1); assert.equal((await second.list(f.session))[0].processed, 200);
-  await second.tick(); assert.match(await second.download(f.session, job.id), /2460.00 EUR/);
+  await second.tick(); await second.tick(); assert.match(await reportPdfText(await second.download(f.session, job.id)), /2[.\s]?050,00/);
 });
 
 test('report jobs enforce queue bounds, cancellation, revoked rights and pinned publication', async t => {
@@ -118,7 +132,7 @@ test('cancellation during report completion wins the revision race and corrupt j
   assert.equal((await jobs.list(f.session))[0].status, 'cancelled'); await assert.rejects(jobs.download(f.session, job.id), code('IMPORT_HISTORY_NOT_FOUND'));
   const bad = await jobs.create(f.session, { query: f.query() }), good = await jobs.create(f.session, { query: f.query() });
   f.app.database.prepare("UPDATE sales_report_jobs SET payload='invalid',updated='2000-01-01T00:00:00.000Z' WHERE id=?").run(bad.id);
-  await jobs.tick(); await jobs.tick(); const rows = await jobs.list(f.session);
+  await jobs.tick(); await jobs.tick(); await jobs.tick(); const rows = await jobs.list(f.session);
   assert.equal(rows.find(r => r.id === bad.id).status, 'failed'); assert.equal(rows.find(r => r.id === good.id).status, 'completed');
 });
 
@@ -128,9 +142,77 @@ test('completed background reports release checkpoints before the global analysi
   const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history({ retainCompletedAnalyses: false }), resolvePrincipal: f.get, scope: f.actor.scopeId });
   for (let i = 0; i < 66; i++) {
     f.session = { ...f.session, employeeNumber: 'report-owner-' + i };
-    const job = await jobs.create(f.session, { query: f.query() }); await jobs.tick();
-    assert.match(await jobs.download(f.session, job.id), /12.00 EUR/);
+    const job = await jobs.create(f.session, { query: f.query() }); await jobs.tick(); await jobs.tick();
+    assert.equal((await jobs.download(f.session, job.id)).subarray(0, 5).toString(), '%PDF-');
   }
+});
+
+test('legacy queued HTML reports retain their original authority and source contract', async t => {
+  const f = await fixture(t); await f.activate();
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const { SALES_REPORT_JOB_STATEMENTS: S } = require('../lib/persistence/statements/sales-report-jobs');
+  const { buildSalesHistoryProjection } = require('../lib/sales-history-access');
+  const runtime = f.history(), jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: 'Früherer Bericht', query: f.query() });
+  const row = await f.app.provider.queryOne(S.get, { id: job.id, scope: f.actor.scopeId }), context = ['sales-report-job-v1', row.scope, row.owner, row.id];
+  const data = f.protection.open(row.payload, context);
+  data.query = f.query(); data.format = 'html'; delete data.metadata;
+  data.authority = f.protection.digest({ employeeNumber: f.session.employeeNumber, projection: buildSalesHistoryProjection(f.session) });
+  data.sourceRevision = await runtime.run(f.get, w => w.legacyReportSourceRevision);
+  f.app.database.prepare('UPDATE sales_report_jobs SET payload=? WHERE id=?').run(f.protection.seal(data, context), job.id);
+  await jobs.tick(); const html = await jobs.download(f.session, job.id);
+  assert.equal(typeof html, 'string'); assert.match(html, /12.00 EUR/);
+});
+
+test('confirmed cash unit margin is multiplied by the sold quantity and requires margin rights', async t => {
+  const f = await fixture(t), data = rows({ price: '19.54' });
+  data.Umsatz_KASSE[0].RechnungsBetrag = '39.08';
+  Object.assign(data.Umsatz_Kasse_Details[0], { VKMenge: '2', RohertragDM: '8.141666666666667', KalkRohertrag: '16.283333333333335' });
+  const id = await f.build(data); await f.activate(f.request(id)); f.session.permissions.push('sales:analytics:margin:read');
+  const runtime = f.history(), input = f.query({ metrics: ['grossMargin','netRevenue','marginRate'] });
+  const context = await runtime.run(f.get, w => w.reports.metadata()); assert.equal(context.marginStatus, 'confirmed');
+  let result = await runtime.run(f.get, w => w.reports.step(input, context));
+  result = await runtime.run(f.get, w => w.reports.step(input, context, result.analysis.cursor));
+  assert.equal(result.report.total.metrics.grossMargin.current, '16.28');
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: 'Bestätigter Kassenrohertrag (synthetischer Test)', query: input });
+  await jobs.tick(); await jobs.tick();
+  assert.equal((await jobs.list(f.session))[0].status, 'completed');
+  const pdf = await jobs.download(f.session, job.id), pdfText = await reportPdfText(pdf);
+  assert.match(pdfText, /16,28/); assert.match(pdfText, /historischer Kassen-Rohertrag je Stück/);
+  assert.doesNotMatch(pdfText, /Bedeutung des historischen Kassenfelds ist noch nicht bestätigt/);
+  if (process.env.SALES_REPORT_PDF_PREVIEW_DIR) {
+    const fs = require('node:fs'), path = require('node:path');
+    fs.mkdirSync(process.env.SALES_REPORT_PDF_PREVIEW_DIR, { recursive: true });
+    fs.writeFileSync(path.join(process.env.SALES_REPORT_PDF_PREVIEW_DIR, 'sales-analysis-confirmed-margin.pdf'), pdf);
+  }
+  f.session.permissions = f.session.permissions.filter(p => p !== 'sales:analytics:margin:read');
+  await assert.rejects(runtime.run(f.get, w => w.reports.step(input, context)), code('IMPORT_FORBIDDEN'));
+});
+
+test('report aggregation uses historical WGR and manufacturers, complete receipts and cumulative branch/MA filters in both periods', async t => {
+  const f = await fixture(t), current = rows({ count: 2 }), previous = rows({ count: 2, price: '9.6' }), other = rows({ price: '24', location: '019' });
+  for (const [dataset, suffix, date] of [[current, '1', '2010-01-02'], [previous, '2', '2009-01-02'], [other, '3', '2010-01-02']]) {
+    dataset.Umsatz_KASSE[0].Bonnr = suffix; dataset.Umsatz_KASSE[0].Bondatum = date + 'T00:00:00.000';
+    dataset.Umsatz_Kasse_Details.forEach((line, i) => Object.assign(line, { Bonnr: suffix, Bondatum: dataset.Umsatz_KASSE[0].Bondatum,
+      RepID: `00000000-0000-0000-0000-${String(Number(suffix) * 100 + i).padStart(12, '0')}`, Sortiment: 130, UMarke: i ? 'Sony' : 'Canon' }));
+  }
+  const combined = { Umsatz_KASSE: [current, previous, other].flatMap(d => d.Umsatz_KASSE), Umsatz_Kasse_Details: [current, previous, other].flatMap(d => d.Umsatz_Kasse_Details) };
+  const id = await f.build(combined), request = f.request(id); request.mappings.push({ kind: 'FILIALEN', sourceId: '019', targetId: 'branch-b', historical: false }); await f.activate(request);
+  f.session.permissions.push('sales:analytics:margin:read');
+  const input = f.query({ locationIds: ['branch-a'], manufacturerIds: ['CANON'], productGroupIds: ['130'], sellerIds: ['person-a'], metrics: ['netRevenue','receiptCount','grossMargin'] });
+  const runtime = f.history(), context = await runtime.run(f.get, w => w.reports.metadata());
+  let result = await runtime.run(f.get, w => w.reports.step(input, context));
+  assert.equal(result.analysis.complete, false);
+  result = await runtime.run(f.get, w => w.reports.step(input, context, result.analysis.cursor));
+  assert.equal(result.analysis.complete, true);
+  assert.deepEqual(result.report.total.metrics.netRevenue, { current: '10.00', previous: '8.00', absolute: '2.00', percent: '25.00' });
+  assert.equal(result.report.total.metrics.receiptCount.current, '1'); assert.equal(result.report.total.metrics.grossMargin.current, null);
+  assert.equal(result.report.rows.length, 1); assert.equal(result.report.rows[0].dimensions[1].label, 'Canon');
+  f.session = { ...f.session, permissions: f.session.permissions.filter(p => p !== 'sales:analytics:company:read').concat('sales:analytics:location:read'), scopes: [{ locationId: 'branch-a', departmentId: 0 }] };
+  const scoped = await runtime.run(f.get, w => w.reports.metadata()); assert.deepEqual(scoped.locations.map(l => l.id), ['branch-a']); assert.deepEqual(scoped.source.locations, scoped.locations);
+  await assert.rejects(runtime.run(f.get, w => w.reports.step({ ...input, locationIds: ['branch-b'] }, scoped)), code('IMPORT_FORBIDDEN'));
 });
 
 test('compact cash becomes usable through the normal history runtime with exact totals and no duplicate history', async t => {
@@ -462,8 +544,8 @@ test('optimized cash reads work beside an uncommitted writer and survive file re
   const page = await fresh.run(f.get, w => w.receipts.search(f.query()));
   assert.equal(page.items[0].gross, '2460.00'); assert.equal(page.items[0].positions, 205);
   const recovered = createSalesReportJobs({ access: restored.provider, vault: f.vault, runtime: fresh, resolvePrincipal: f.get, scope: f.actor.scopeId });
-  await recovered.tick(); await recovered.tick();
-  assert.match(await recovered.download(f.session, queued.id), /2460.00 EUR/);
+  await recovered.tick(); await recovered.tick(); await recovered.tick();
+  assert.match(await reportPdfText(await recovered.download(f.session, queued.id)), /2[.\s]?050,00/);
   assert.equal((await queue.list(f.session))[0].status, 'queued');
 });
 

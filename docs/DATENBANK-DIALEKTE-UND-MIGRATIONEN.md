@@ -37,7 +37,7 @@ Die Verantwortungsgrenzen sind verbindlich:
   bindet jedes Anwendungsstatement genau einmal an sein SQLite-SQL und erzeugt
   die deckungsgleiche PostgreSQL-Plan-Fixture.
 
-Der Stand umfasst 1348 Statementverträge, einschließlich 97 zuvor in den
+Der Stand umfasst 1352 Statementverträge, einschließlich 97 zuvor in den
 Anwendungskatalog aufgenommenen Importverträgen und 46 kompakten Kassenverträgen. Die
 Klassifikation beschreibt ausschließlich die bekannte SQLite-Syntax und ist
 kein Nachweis, dass unverändertes SQL auf einem anderen Provider ausführbar
@@ -46,19 +46,19 @@ wäre:
 | Klassifikation | Anzahl | Bedeutung |
 | --- | ---: | --- |
 | geprüfte SQLite-Baseline | 37 | keine vom aktuellen, konservativen Scanner erkannte SQLite-Besonderheit; kein Portabilitätsversprechen |
-| benannte SQLite-Dialektvariante | 1311 | mindestens ein explizites SQLite-Merkmal |
+| benannte SQLite-Dialektvariante | 1315 | mindestens ein explizites SQLite-Merkmal |
 | ungebundene oder doppelte Statements | 0 | Block-4-Gate |
 
 Als Dialektmerkmale werden unter anderem Upserts, `INSERT OR IGNORE`,
 `COLLATE NOCASE`, SQLite-Datums- und JSON-Funktionen, `julianday()`,
 `RETURNING`, `GLOB`, `AUTOINCREMENT`, SQLite-Katalogzugriffe und
-`RAISE(ABORT)` geführt. 1238 der 1311 Varianten verwenden die in der
+`RAISE(ABORT)` geführt. 1242 der 1315 Varianten verwenden die in der
 SQLite-Anbindung benannten Dollar-Parameter wie `$employeeNumber`; sie sind ein
 explizites Dialektmerkmal und werden deshalb nie als SQLite-Baseline
 ausgewiesen. Neue Merkmale müssen vor ihrer Aufnahme eindeutig klassifiziert
 werden.
 
-Die PostgreSQL-Fixture besitzt für alle 1348 Statement-IDs denselben Eigentümer
+Die PostgreSQL-Fixture besitzt für alle 1352 Statement-IDs denselben Eigentümer
 und dieselbe SQLite-Ausgangsklassifikation. Das ist lediglich eine
 deckungsgleiche Arbeitsliste, keine Aussage über PostgreSQL-Kompatibilität. Sie
 enthält absichtlich kein SQL, keinen ausführbaren Handler und keinen Treiber.
@@ -132,7 +132,7 @@ behauptet diese Aktivierung nicht.
 
 Die Block-4-Tests prüfen:
 
-- vollständige und eindeutige Bindung aller 1348 Statements;
+- vollständige und eindeutige Bindung aller 1352 Statements;
 - strikte Trennung zwischen konservativer SQLite-Baseline und erkannten
   SQLite-Dialektvarianten;
 - vollständige, nicht ausführbare PostgreSQL-Statement-Fixture;
@@ -169,18 +169,18 @@ Nonprod-Live-Tests gegen PostgreSQL wurden erfolgreich ausgeführt. PostgreSQL
 bleibt dennoch in Produkt- und Serverkonfiguration deaktiviert; der
 produktive Datenbankpfad ist weiterhin ausschließlich SQLite.
 
-Der ergänzte PostgreSQL-Dialektplan ist nicht ausführbar und umfasst alle 1348
+Der ergänzte PostgreSQL-Dialektplan ist nicht ausführbar und umfasst alle 1352
 Anwendungsstatements:
 
-- Compiler v2 erzeugt 1233 Syntaxkandidaten (`portable-generated`);
+- Compiler v2 erzeugt 1237 Syntaxkandidaten (`portable-generated`);
 - 115 Einträge bleiben `requires-override`;
-- 0 von 1348 bilden einen ausführbaren Vollanwendungskatalog.
+- 0 von 1352 bilden einen ausführbaren Vollanwendungskatalog.
 
 Die generierten Einträge bleiben Kandidaten mit nachvollziehbarer Provenienz,
 Parameterbindung und SQL-Fingerprint; sie sind nicht pauschal live geprüft.
 Der Katalogvertrag fordert für einen für die Vollanwendung ausführbaren
-Katalog 1348 akzeptierte Live- und Paritätsnachweise. Der aktuelle Stand ist
-0/1348; deshalb bleiben selbst 1348 strukturell vollständige Deklarationen ohne
+Katalog 1352 akzeptierte Live- und Paritätsnachweise. Der aktuelle Stand ist
+0/1352; deshalb bleiben selbst 1352 strukturell vollständige Deklarationen ohne
 diese Receipts geschlossen und können nicht `applicationExecutable: true`
 werden.
 
@@ -205,7 +205,7 @@ Die vier Slices umfassen zusammen genau neun fachlich live geprüfte
 Statements. Alle vier tragen `development-contract`, deklarieren
 `fullApplicationCatalog: false` und bleiben
 `applicationExecutable: false` sowie `productActivation: false`. Diese
-Teilnachweise verändern den Vollanwendungsstand 0/1348 nicht und sind keine
+Teilnachweise verändern den Vollanwendungsstand 0/1352 nicht und sind keine
 Produkt- oder Supportfreigabe. Ihre Quellvertrags-Fingerprints binden den
 kanonischen SQLite-SQL-Text an ID, Operation, Parameterarten,
 Nullability/Optionalität sowie Ergebnisarten und -reihenfolge. SQL- oder
@@ -352,9 +352,9 @@ Ohne akzeptierte Live- und Paritätsreceipts blieb der PostgreSQL-Stand
 0/1015; die PostgreSQL-Anwendungsmigrationen blieben unverändert bei 0/10.
 
 Die danach ergänzten, weiterhin additiven Fachslices erhöhen den aktuellen
-geschlossenen Vollanwendungsplan auf 1348 Statements. Compiler v2 klassifiziert
-1233 davon als `portable-generated`; 115 benötigen `requires-override`. Ohne
-akzeptierte Live- und Paritätsreceipts bleibt der PostgreSQL-Stand 0/1348; die
+geschlossenen Vollanwendungsplan auf 1352 Statements. Compiler v2 klassifiziert
+1237 davon als `portable-generated`; 115 benötigen `requires-override`. Ohne
+akzeptierte Live- und Paritätsreceipts bleibt der PostgreSQL-Stand 0/1352; die
 PostgreSQL-Anwendungsmigrationen bleiben unverändert bei 0/10. Dies ist keine
 Produkt- oder PostgreSQL-Freigabe.
 

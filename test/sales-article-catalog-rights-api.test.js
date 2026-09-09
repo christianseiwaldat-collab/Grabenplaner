@@ -150,7 +150,9 @@ test("GET-API ist persönlich, privat, read-only und validiert eine feste Query-
   assert.match(route, /normalizeSalesArticleSearch/);
   assert.match(route, /salesArticleCatalogRepository\.search/);
   assert.match(route, /"query", "identifier", "status", "sourceSystem", "sort", "direction", "limit", "offset"/);
-  assert.doesNotMatch(route, /assertPortalCsrf|\.importSnapshot|\.execute\(|price|cost/i);
+  assert.doesNotMatch(route, /assertPortalCsrf|\.importSnapshot|\.execute\(/i);
+  assert.match(route, /projection\[priceSort.permission\]/);
+  assert.match(route, /assertFreshSalesArticleRead/);
 
   const headers = between(
     "function setSalesArticleCatalogPrivateHeaders",
@@ -202,7 +204,8 @@ test("Detail-API projiziert nur freigegebene Felder und trennt Preise serverseit
   assert.match(route, /salesArticleCatalogRepository\.getByArticleNumber/);
   assert.match(route, /salesArticleCatalogRepository\.listRevisions/);
   assert.match(route, /SALES_ARTICLE_NOT_FOUND/);
-  assert.match(route, /response\.json\(projectSalesArticleDetail/);
+  assert.match(route, /const result = await projectSalesArticleDetail/);
+  assert.match(route, /assertFreshSalesArticleRead/);
   assert.doesNotMatch(route, /assertPortalCsrf|\.importSnapshot|\.execute\(/);
 });
 
@@ -218,6 +221,6 @@ test("Admin-API-Middleware verlangt für die Artikelsuche kein Dienstplanrecht",
   );
   assert.match(
     middleware,
-    /if \(salesArticleCatalogRoute\) \{\s*permission = salesArticleImportRoute\s*\? SALES_ARTICLE_CATALOG_PERMISSIONS\.IMPORT\s*: \["GET", "HEAD", "OPTIONS"\]\.includes\(method\)\s*\? SALES_ARTICLE_CATALOG_PERMISSIONS\.READ\s*: SALES_ARTICLE_CATALOG_PERMISSIONS\.WRITE;/,
+    /if \(salesArticleCatalogRoute\) \{\s*permission = salesArticleImportRoute\s*\? SALES_ARTICLE_CATALOG_PERMISSIONS\.IMPORT\s*: request.path === '\/sales\/articles\/preferences' \|\| \["GET", "HEAD", "OPTIONS"\]\.includes\(method\)\s*\? SALES_ARTICLE_CATALOG_PERMISSIONS\.READ\s*: SALES_ARTICLE_CATALOG_PERMISSIONS\.WRITE;/,
   );
 });

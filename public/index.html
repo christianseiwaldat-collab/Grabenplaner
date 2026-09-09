@@ -1546,6 +1546,11 @@
           <header class="topbar sales-article-catalog-topbar">
             <div class="sales-article-catalog-heading"><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p><p class="sales-article-last-import" id="salesArticleLastImport" aria-live="polite"><span>Letzter TradeFoto-Import</span><time id="salesArticleLastImportValue">Wird geladen …</time></p></div>
             <div class="topbar-actions sales-article-topbar-actions">
+              <form class="sales-article-search-form sales-article-header-search" id="salesArticleSearchForm">
+                <label class="field sales-article-search-query"><span>Artikelnummer oder Bezeichnung</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="z. B. Sony A7* 24-105mm" /></label>
+                <button class="primary-button" id="salesArticleSearchSubmit" type="submit">Suchen</button>
+                <button class="text-button" id="salesArticleSearchReset" type="button" title="Suche zurücksetzen" aria-label="Suche zurücksetzen">↺</button>
+              </form>
               <button class="secondary-button hidden" id="salesArticleActionsLogButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog">Meine Aktionen</button>
               <button class="secondary-button hidden" id="salesArticleImportButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleImportDialog">TradeFoto-Import</button>
               <button class="primary-button hidden" id="salesArticleCreateButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">+ Artikel anlegen</button>
@@ -1554,13 +1559,9 @@
 
           <div class="sales-article-catalog-workspace">
             <section class="sales-article-search-shell" aria-labelledby="salesArticleSearchTitle">
-              <div class="sales-article-search-heading">
+              <div class="sales-article-search-heading visually-hidden">
                 <div><span class="eyebrow">Artikelsuche</span><h2 id="salesArticleSearchTitle">Artikel finden</h2><p>Die Liste wird erst nach einer ausdrücklichen Suche geladen.</p></div>
               </div>
-              <form class="sales-article-search-form" id="salesArticleSearchForm">
-                <label class="field sales-article-search-query"><span>Artikelnummer oder Bezeichnung</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="z. B. Sony A7* 24-105mm" /></label>
-                <div class="sales-article-search-actions"><button class="secondary-button" id="salesArticleSearchReset" type="button">Zurücksetzen</button><button class="primary-button" id="salesArticleSearchSubmit" type="submit">Artikel suchen</button></div>
-              </form>
               <details class="sales-article-advanced-search" id="salesArticleAdvancedSearch">
                 <summary><span>Erweiterte Suche</span><small>EAN/GTIN, Status und Quelle</small></summary>
                 <p class="settings-note">Alle Begriffe werden unabhängig von der Reihenfolge gesucht. * ist ein Joker, ? steht für ein Zeichen. Leerzeichen und Trennzeichen werden tolerant behandelt.</p>
@@ -1576,6 +1577,7 @@
             <section class="sales-article-results" id="salesArticleResults" aria-labelledby="salesArticleResultCount" aria-busy="false">
               <div class="sales-article-results-heading">
                 <div><span class="eyebrow">Suchergebnisse</span><strong id="salesArticleResultCount">Noch keine Suche</strong><small id="salesArticleResultRange">Die Ergebnisliste bleibt bis zur Suche leer.</small></div>
+                <details class="sales-article-columns" id="salesArticleColumns"><summary>Spalten auswählen &amp; anordnen</summary><div id="salesArticleColumnOptions"></div></details>
                 <button class="sales-article-results-toggle" id="salesArticleResultsToggle" type="button" aria-controls="salesArticleResultsBody" aria-expanded="true"><span>Ergebnisse einklappen</span><i aria-hidden="true"></i></button>
               </div>
               <div class="sales-article-results-body" id="salesArticleResultsBody">
@@ -1586,13 +1588,13 @@
                     <tbody id="salesArticleTableBody"></tbody>
                   </table>
                 </div>
-                <p class="sales-article-load-status" id="salesArticleLoadStatus">Noch keine Artikel geladen.</p>
+                <div class="sales-article-results-footer"><p class="sales-article-load-status" id="salesArticleLoadStatus">Noch keine Artikel geladen.</p><span id="salesArticleVisibleRowsLabel">10 Artikel sichtbar</span><button type="button" id="salesArticleResizeHandle" class="sales-article-resize-handle" role="slider" aria-label="Höhe der Artikelliste, ziehen oder Pfeiltasten verwenden" aria-valuemin="5" aria-valuemax="20" aria-valuenow="10" aria-orientation="vertical" title="Ziehen: 5 bis 20 Artikel sichtbar">◢</button></div>
               </div>
             </section>
 
             <section class="sales-article-detail" id="salesArticleDetail" aria-labelledby="salesArticleDetailTitle" aria-busy="false">
               <header class="sales-article-detail-heading">
-                <span class="sales-article-detail-symbol" aria-hidden="true">Art</span>
+                <button type="button" class="sales-article-detail-symbol sales-article-image-button" id="salesArticleImageButton" aria-label="Eigenes Artikelbild hinzufügen" aria-haspopup="dialog" aria-controls="salesArticleImageDialog" disabled><span aria-hidden="true">▧</span></button>
                 <div class="sales-article-detail-heading-copy">
                   <span class="eyebrow">Artikelansicht</span>
                   <h2 id="salesArticleDetailTitle" tabindex="-1">Artikelstamm im Detail</h2>
@@ -1677,13 +1679,18 @@
           </div>
 
           <section class="sales-analytics-panel sales-analytics-intro-card" id="salesAnalyticsCreatePanel" role="tabpanel" aria-labelledby="salesAnalyticsCreateTab" tabindex="0">
-            <div class="sales-analytics-section-heading"><div><h2>Bericht erstellen</h2><p>Umsatz nach Zeitraum und Filiale auswerten.</p></div></div>
+            <div class="sales-analytics-section-heading"><div><h2>Bericht erstellen</h2><p>Verkäufe nach Warengruppe, Hersteller, Filiale und MA als PDF auswerten.</p></div></div>
             <form class="sales-analytics-request-form" id="salesAnalyticsRequestForm" aria-describedby="salesAnalyticsRequestHint">
-              <label for="salesAnalyticsRequestQuery">Berichtstitel<input id="salesAnalyticsRequestQuery" type="text" maxlength="120" autocomplete="off" placeholder="Umsatzauswertung" /></label>
-              <label for="salesReportJobFrom">Von<input id="salesReportJobFrom" type="date" required /></label>
-              <label for="salesReportJobTo">Bis<input id="salesReportJobTo" type="date" required /></label>
-              <label for="salesReportJobLocation">Filiale<select id="salesReportJobLocation"><option value="">Alle freigegebenen Filialen</option></select></label>
-              <button class="primary-button" id="salesReportJobSubmit" type="submit" disabled>Bericht beauftragen</button>
+              <label class="sales-report-title-field" for="salesAnalyticsRequestQuery">Berichtstitel<input id="salesAnalyticsRequestQuery" type="text" maxlength="120" autocomplete="off" placeholder="z. B. Systemkameras nach Hersteller" /></label>
+              <fieldset class="sales-report-period"><legend>Auswertungszeitraum</legend><label for="salesReportJobFrom">Von<input id="salesReportJobFrom" type="date" required /></label><label for="salesReportJobTo">Bis<input id="salesReportJobTo" type="date" required /></label></fieldset>
+              <fieldset class="sales-report-period"><legend>Vergleichszeitraum</legend><label for="salesReportJobComparisonFrom">Von<input id="salesReportJobComparisonFrom" type="date" required /></label><label for="salesReportJobComparisonTo">Bis<input id="salesReportJobComparisonTo" type="date" required /></label><button id="salesReportJobPreviousYear" type="button" class="text-button">Vorjahr übernehmen</button><small id="salesReportComparisonMode">Automatisch ein Jahr zuvor</small></fieldset>
+              <fieldset class="sales-report-selection"><legend>Filialen</legend><div id="salesReportJobLocations"></div></fieldset>
+              <fieldset class="sales-report-selection"><legend>WGR / Sortiment</legend><div id="salesReportJobProductGroups"></div><small>Ohne Auswahl: alle Warengruppen. Bezeichnungen aus dem TradeFoto-Stand.</small></fieldset>
+              <fieldset class="sales-report-selection"><legend>Hersteller / Marke</legend><div id="salesReportJobManufacturers"></div><label>Weitere historische Marken<input id="salesReportJobManufacturerExtra" type="text" maxlength="400" placeholder="Mit Komma trennen" /></label><small>Ohne Auswahl: alle Hersteller. Auswertung nach der Marke am Verkaufsdatum.</small></fieldset>
+              <fieldset class="sales-report-selection" id="salesReportSellerField"><legend>MA (Positionsverkäufer)</legend><div id="salesReportJobSellers"></div><label>Weitere Personalnummern<input id="salesReportJobSellerExtra" type="text" maxlength="400" placeholder="z. B. 426, 123" /></label><small>Ohne Auswahl: alle MA im gewählten Filialumfang.</small></fieldset>
+              <fieldset class="sales-report-selection sales-report-metrics"><legend>Kennzahlen · Mehrfachauswahl</legend><div id="salesReportJobMetrics"></div><p id="salesReportMarginHint" class="sales-report-quality-hint" hidden></p></fieldset>
+              <fieldset class="sales-report-grouping"><legend>Darstellung</legend><label>Aufschlüsselung<select id="salesReportJobGroupPrimary"></select></label><label>Darunter<select id="salesReportJobGroupSecondary"></select></label><label>Zusätzlich<select id="salesReportJobGroupThird"></select></label><label>Diagramm für<select id="salesReportJobChartMetric"></select></label><div class="sales-report-checks"><label><input type="checkbox" id="salesReportJobAbsolute" checked /> Veränderung absolut</label><label><input type="checkbox" id="salesReportJobPercent" checked /> Veränderung in Prozent</label></div></fieldset>
+              <div class="sales-report-submit"><button class="primary-button" id="salesReportJobSubmit" type="submit" disabled>PDF-Bericht beauftragen</button><small>Bis zu 366 Tage je Zeitraum. Die Erstellung läuft am Server weiter.</small></div>
             </form>
             <p class="sales-analytics-request-hint" id="salesAnalyticsRequestHint" role="status">Die Verfügbarkeit der Kassendaten wird geprüft.</p>
           </section>
@@ -2966,6 +2973,22 @@
       </form>
     </dialog>
 
+    <dialog class="modal sales-article-image-dialog" id="salesArticleImageDialog" aria-labelledby="salesArticleImageTitle" aria-describedby="salesArticleImageArticle">
+      <form id="salesArticleImageForm">
+        <header class="sales-article-image-heading"><div><h2 id="salesArticleImageTitle">Artikelbild festlegen</h2><p id="salesArticleImageArticle"></p></div><button type="button" class="text-button" data-close-article-image aria-label="Bilddialog schließen">×</button></header>
+        <img id="salesArticleImagePreview" class="sales-article-image-preview hidden" alt="Vorschau des Artikelbildes" />
+        <div id="salesArticleImageEditor">
+          <p>Das eigene Bild bleibt bei TradeFoto-Updates erhalten.</p>
+          <label class="field"><span>Bild auswählen</span><select id="salesArticleImageSource"><option value="local">Datei vom Computer</option><option value="url">Bild aus Webadresse</option></select></label>
+          <label class="field" id="salesArticleImageLocalField"><span>JPG, PNG oder WebP · bis 10 MB</span><input type="file" id="salesArticleImageFile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" /></label>
+          <label class="field hidden" id="salesArticleImageUrlField"><span>Direkte HTTPS-Bildadresse</span><input type="url" id="salesArticleImageUrl" maxlength="4000" placeholder="https://beispiel.at/produkt.jpg" /><small>Das Bild wird einmalig übernommen und bei uns gespeichert.</small></label>
+        </div>
+        <p id="salesArticleImageMessage" role="status" aria-live="polite"></p>
+        <div id="salesArticleImageRemoveConfirm" class="sales-article-image-confirm hidden"><p>Das eigene Bild dieses Artikels entfernen?</p><button type="button" class="secondary-button danger" id="salesArticleImageRemoveYes">Bild entfernen</button><button type="button" class="secondary-button" id="salesArticleImageRemoveNo">Behalten</button></div>
+        <footer class="sales-article-image-actions"><button type="button" class="text-button danger" id="salesArticleImageRemove">Bild entfernen</button><button type="button" class="secondary-button" data-close-article-image>Schließen</button><button type="submit" class="primary-button" id="salesArticleImageSave">Bild übernehmen</button></footer>
+      </form>
+    </dialog>
+
     <dialog class="modal sales-article-editor-dialog" id="salesArticleEditorDialog" aria-labelledby="salesArticleEditorTitle" aria-describedby="salesArticleEditorDescription">
       <form id="salesArticleEditorForm">
         <div class="modal-header">
@@ -4234,6 +4257,7 @@
     <script src="/schedule-duty.js"></script>
     <script src="/permission-defaults.js"></script>
     <script src="/sales-report-jobs.js"></script>
+    <script src="/sales-article-image.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

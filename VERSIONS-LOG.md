@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.34 Beta · PDF-Verkaufsanalysen und eigene Artikelbilder
+
+- Verkaufsberichte entstehen als persönliche PDF-Dateien im Hintergrund. Warengruppen, Hersteller, Filialen, Mitarbeitende und Kennzahlen sind mehrfach auswählbar; der Vergleichszeitraum liegt standardmäßig ein Kalenderjahr davor und bleibt bearbeitbar. Historischer Rohertrag stammt aus den Kassenpositionen, mit Diagrammen und vollständigen Gruppentabellen.
+- Der Artikelstamm erhält kompakte Register und Preiskarten, die Suche im Seitenkopf sowie wählbare, anordenbare Ergebnisspalten mit Sortierung über alle Treffer. Die Listenhöhe lässt sich zwischen fünf und zwanzig Zeilen anpassen.
+- Eigene Artikelbilder lassen sich aus lokalen Dateien oder direkten HTTPS-Adressen übernehmen. Sie bleiben unabhängig von Trade-Updates über die Artikelnummer gespeichert. Vorhandene Produktlinks werden angezeigt; automatische Geizhals-Bildabrufe sind nicht enthalten.
+- Bestehende Lese-, Kosten-, Filial- und Personalrechte gelten auch für die neuen Auswertungen und Bildzugriffe. Ältere Hintergrundberichte bleiben zugänglich. SQLite und die bestehende Datenbankaufteilung bleiben erhalten.
+
 ## v0.92.33 Beta · Verlässliche Wiederherstellung der Rechtestandards
 
 - Die Rechtemigration speichert eine gültige Versionsnummer. Der genaue Platzhalter aus v0.92.32 wird beim Start berichtigt; bereits vergebene Rechte, persönliche Ausnahmen und der ursprüngliche Migrationszeitpunkt bleiben erhalten.

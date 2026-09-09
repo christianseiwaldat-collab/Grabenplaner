@@ -49,6 +49,12 @@ test("Lokaler Einzelplatz öffnet die Artikelsuche ohne künstliches Mitarbeiter
   assert.equal(Number.isInteger(payload.total), true);
 });
 
+test('Lokale Tabellendarstellung lässt sich ohne Portal-CSRF anpassen', async () => {
+  const response = await fetch(`${baseUrl}/api/sales/articles/preferences`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ columns: ['articleNumber','description'], visibleRows: 7, sort: 'description', direction: 'asc' }) });
+  assert.equal(response.status, 200, await response.text());
+});
+
 test("Lokaler Einzelplatz erreicht auch die Detailroute ohne künstliches Mitarbeiterkonto", async () => {
   const response = await fetch(
     `${baseUrl}/api/sales/articles/detail?articleNumber=NICHT-VORHANDEN`,
@@ -57,4 +63,17 @@ test("Lokaler Einzelplatz erreicht auch die Detailroute ohne künstliches Mitarb
   const payload = await response.json();
   assert.equal(response.status, 404, JSON.stringify(payload));
   assert.equal(payload.code, "SALES_ARTICLE_NOT_FOUND");
+});
+
+test('Lokaler Einzelplatz speichert und liest ein eigenes Artikelbild ohne Portal-CSRF', async () => {
+  const created = await fetch(`${baseUrl}/api/sales/articles`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ articleNumber: 'LOCAL-IMAGE-1', description: 'Lokales Testbild', identifiers: [] }) });
+  assert.equal(created.status, 201, await created.text());
+  const input = await require('sharp')({ create: { width: 24, height: 12, channels: 3, background: '#287c64' } }).png().toBuffer();
+  const saved = await fetch(`${baseUrl}/api/sales/articles/image?articleNumber=LOCAL-IMAGE-1`, { method: 'PUT', headers: {
+    'Content-Type': 'image/png', 'X-Article-Image-Revision': 'none',
+  }, body: input });
+  const payload = await saved.json(); assert.equal(saved.status, 200, JSON.stringify(payload)); assert.equal(payload.image.present, true);
+  const download = await fetch(`${baseUrl}/api/sales/articles/image?articleNumber=LOCAL-IMAGE-1`);
+  assert.equal(download.status, 200); assert.equal((await download.arrayBuffer()).byteLength, payload.image.byteSize);
 });

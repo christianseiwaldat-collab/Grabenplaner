@@ -5851,7 +5851,7 @@ function enforceAdminApiAccess(request, _response, next) {
     if (salesArticleCatalogRoute) {
       permission = salesArticleImportRoute
         ? SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT
-        : ["GET", "HEAD", "OPTIONS"].includes(method)
+        : request.path === '/sales/articles/preferences' || ["GET", "HEAD", "OPTIONS"].includes(method)
           ? SALES_ARTICLE_CATALOG_PERMISSIONS.READ
           : SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE;
     } else if (offsiteFolderRoute) {
@@ -37189,7 +37189,8 @@ app.delete("/api/sales/articles/import/previews/:id", (request, response) => {
 });
 
 app.get("/api/sales/articles", async (request, response) => {
-  salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  const session = salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  const projection = salesArticleCatalogProjectionForSession(session);
   setSalesArticleCatalogPrivateHeaders(response);
   try {
     const allowedQueryKeys = new Set([
@@ -37211,7 +37212,9 @@ app.get("/api/sales/articles", async (request, response) => {
       limit: request.query?.limit,
       offset: request.query?.offset,
     });
-    response.json(await salesArticleCatalogRepository.search({
+    const priceSort = require('./lib/sales-article-table').PRICE_SEARCH_FIELDS.find(p => p.id === search.sort);
+    if (priceSort && !projection[priceSort.permission]) throw httpError(403, 'Für diese Preisspalte fehlt die Berechtigung.', 'SALES_ARTICLE_CATALOG_PERMISSION_DENIED');
+    const result = await salesArticleCatalogRepository.search({
       query: search.query,
       identifier: search.identifier,
       status: search.status,
@@ -37220,7 +37223,9 @@ app.get("/api/sales/articles", async (request, response) => {
       direction: search.direction,
       limit: search.limit,
       offset: search.offset,
-    }));
+    }, projection);
+    await assertFreshSalesArticleRead(request, session, projection);
+    response.json(result);
   } catch (error) {
     if (error instanceof SalesArticleCatalogError) {
       throw httpError(400, error.message, error.code);
@@ -37230,6 +37235,42 @@ app.get("/api/sales/articles", async (request, response) => {
 });
 
 const SALES_ARTICLE_USABLE_PRICE_QUALITY_STATUSES = new Set(["confirmed", "inferred"]);
+async function assertFreshSalesArticleRead(request, session, projection) {
+  if (isLocalSystemSession(session)) return;
+  const fresh = await loadPortalSessionFromRequest(request, { touch: false });
+  if (!fresh || fresh.employeeNumber !== session.employeeNumber || fresh.accountId !== session.accountId
+    || JSON.stringify(salesArticleCatalogProjectionForSession(fresh)) !== JSON.stringify(projection)) {
+    throw httpError(403, 'Die Artikelberechtigung hat sich geändert. Bitte erneut laden.', 'SALES_ARTICLE_CATALOG_PERMISSION_DENIED');
+  }
+}
+app.get('/api/sales/articles/preferences', async (request, response) => {
+  const session = salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ), projection = salesArticleCatalogProjectionForSession(session);
+  setSalesArticleCatalogPrivateHeaders(response);
+  const model = require('./lib/sales-article-table');
+  const stored = isLocalSystemSession(session) ? null : await uiPreferencesRepository.get(session.employeeNumber, model.PREFERENCE_KEY);
+  let value = null; try { value = JSON.parse(stored?.value || 'null'); } catch { /* Fall back to defaults. */ }
+  await assertFreshSalesArticleRead(request, session, projection);
+  response.json({ ...model.articleTablePreferences(value, projection), columnsAvailable: model.ARTICLE_TABLE_COLUMNS.filter(c => !c.permission || projection[c.permission]) });
+});
+app.put('/api/sales/articles/preferences', async (request, response) => {
+  const session = salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ), projection = salesArticleCatalogProjectionForSession(session);
+  if (!isLocalSystemSession(session)) assertPortalCsrf(request);
+  setSalesArticleCatalogPrivateHeaders(response);
+  const model = require('./lib/sales-article-table'), input = request.body;
+  if (!input || !Array.isArray(input.columns) || input.columns.length > model.ARTICLE_TABLE_COLUMNS.length
+    || Object.keys(input).some(k => !['columns','visibleRows','sort','direction'].includes(k))
+    || !Number.isInteger(input.visibleRows) || input.visibleRows < 5 || input.visibleRows > 20
+    || input.columns.some(id => !model.ARTICLE_TABLE_COLUMNS.some(c => c.id === id))) {
+    throw httpError(400, 'Die Tabelleneinstellungen sind ungültig.', 'SALES_ARTICLE_SEARCH_INVALID');
+  }
+  if (input.columns.some(id => { const c = model.ARTICLE_TABLE_COLUMNS.find(c => c.id === id); return c.permission && !projection[c.permission]; })) {
+    throw httpError(403, 'Diese Preisspalte ist nicht freigegeben.', 'SALES_ARTICLE_CATALOG_PERMISSION_DENIED');
+  }
+  const value = model.articleTablePreferences(input, projection);
+  await assertFreshSalesArticleRead(request, session, projection);
+  if (!isLocalSystemSession(session)) await uiPreferencesRepository.upsert(session.employeeNumber, model.PREFERENCE_KEY, JSON.stringify(value));
+  response.json(value);
+});
 const SALES_ARTICLE_PRICE_DISPLAY_LABELS_BY_SOURCE_FIELD = new Map([
   ["UPE", "UVP"],
   ["Verkaufspreis", "Verkaufspreis"],
@@ -37317,7 +37358,7 @@ function projectSalesArticlePrice(price) {
   };
 }
 
-function projectSalesArticleDetail(article, revisions, projection) {
+async function projectSalesArticleDetail(article, revisions, projection, access = persistenceProvider) {
   const groupedPrices = { prices: [], costs: [] };
   for (const price of article?.prices || []) {
     const group = salesArticlePriceGroup(price.priceType);
@@ -37329,6 +37370,8 @@ function projectSalesArticleDetail(article, revisions, projection) {
       description: article.description,
       active: article.active === true,
       currentRevision: article.currentRevision,
+      image: await require('./lib/persistence/repositories/sales-article-images')
+        .createSalesArticleImagesRepository(access).metadata(article.articleNumber),
       identifiers: projectSalesArticleIdentifiers(article),
       provenance: {
         originSourceSystem: article.sourceSystem,
@@ -37359,6 +37402,15 @@ function projectSalesArticleDetail(article, revisions, projection) {
   };
 }
 
+const salesArticleImagesRepository = require('./lib/persistence/repositories/sales-article-images').createSalesArticleImagesRepository(persistenceProvider);
+require('./lib/sales-article-image-routes').registerSalesArticleImageRoutes(app, {
+  catalog: salesArticleCatalogRepository, images: salesArticleImagesRepository,
+  sessionFor: (request, write) => salesArticleCatalogSession(request, write ? SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE : SALES_ARTICLE_CATALOG_PERMISSIONS.READ),
+  assertFresh: (request, session) => assertFreshSalesArticleRead(request, session, salesArticleCatalogProjectionForSession(session)),
+  assertCsrf: (request, session) => { if (!isLocalSystemSession(session)) assertPortalCsrf(request); },
+  privateHeaders: setSalesArticleCatalogPrivateHeaders,
+});
+
 app.get("/api/sales/articles/detail", async (request, response) => {
   const session = salesArticleCatalogSession(
     request,
@@ -37379,11 +37431,11 @@ app.get("/api/sales/articles/detail", async (request, response) => {
       throw httpError(404, "Der Artikel wurde nicht gefunden.", "SALES_ARTICLE_NOT_FOUND");
     }
     const revisions = await salesArticleCatalogRepository.listRevisions(article.productId);
-    response.json(projectSalesArticleDetail(
-      article,
-      revisions,
-      salesArticleCatalogProjectionForSession(session),
-    ));
+    const projection = salesArticleCatalogProjectionForSession(session);
+    const result = await projectSalesArticleDetail(article, revisions, projection);
+    result.article.sourceSections = await require('./lib/sales-article-detail-source').loadSalesArticleSourceSections({ access: persistenceProvider, vault: integrationSecretVault, article, projection });
+    await assertFreshSalesArticleRead(request, session, projection);
+    response.json(result);
   } catch (error) {
     if (error instanceof SalesArticleCatalogError) {
       throw httpError(400, error.message, error.code);
@@ -37552,6 +37604,7 @@ async function runSalesArticleManualMutation(
       outcome.article,
       revisions,
       salesArticleCatalogProjectionForSession(session),
+      executor,
     );
   }, { isolation: "serializable" });
 }
@@ -47933,7 +47986,7 @@ app.post("/api/portal/v1/me/actions/:actionId/undo", async (request, response) =
     response.json({
       undone: true,
       alreadyUndone: outcome.alreadyUndone,
-      salesArticle: projectSalesArticleDetail(
+      salesArticle: await projectSalesArticleDetail(
         article,
         await salesArticleCatalogRepository.listRevisions(article.productId),
         salesArticleCatalogProjectionForSession(outcome.liveSession),

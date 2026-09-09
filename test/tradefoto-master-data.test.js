@@ -436,6 +436,20 @@ test("Block 3: declared taxonomy links use checked candidate keys while unproven
   assert.equal(relationship.reviewOnly, true);
 });
 
+test('Report and article metadata read only explicit source fields and reject missing encrypted segments', async t => {
+  const f = await fixture(t);
+  const { records: [record] } = await f.ingest('ARTIKEL_STAMM', [raw('ARTIKEL_STAMM', {
+    EAN: '0000000000123', Marke: 'Canon', Sortiment: 130, Suchname: 'Testlieferant', DurchschnittEK: '49', ABild: 'not-opened.jpg',
+  })]);
+  const { createSalesMasterReader } = require('../lib/persistence/repositories/sales-master-data');
+  const reader = createSalesMasterReader({ protection: f.protection, scopeId: f.context.who.scopeId, sourceInstance: 'test-ledger' });
+  const read = () => f.provider.transaction(tx => reader.byKey(tx, 'ARTIKEL_STAMM', ['0000000000123'], ['Marke','Sortiment','Suchname']), { readOnly: true });
+  assert.deepEqual(await read(), { Marke: 'Canon', Sortiment: '130', Suchname: 'Testlieferant' });
+  assert.equal(await f.provider.transaction(tx => reader.byKey(tx, 'ARTIKEL_STAMM', ['not-present'], ['Marke'])), null);
+  f.database.prepare('DELETE FROM import_master_segments WHERE record_id=? AND data_class=?').run(record.id, 'catalog_costs');
+  await assert.rejects(read(), errorCode('IMPORT_MASTER_INTEGRITY'));
+});
+
 test("Block 3: resolving a mapped target rechecks scope permissions and current activation", async t => {
   const f = await fixture(t); f.database.exec("INSERT INTO employees VALUES('gp-person',1,'Synthetic','38.5','employee')");
   const { records: [record] } = await f.ingest("MITARBEITER", [raw("MITARBEITER", { "Verkäufer_ID": 123 })]);

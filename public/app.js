@@ -2998,6 +2998,7 @@ function applyRoleVisibility() {
   if (!salesArticleCatalogAccess && state.currentView === "articleCatalog") setView("startDashboard");
   if (salesArticleCatalogReadAccess && state.currentView === "articleCatalog") {
     void loadSalesArticleLastImport();
+    void loadSalesArticleTablePreferences();
   }
   if (!crmAccess && state.currentView === "crm") setView("startDashboard");
   if (!salesArticleCatalogReadAccess && (state.salesArticleCatalog.searchStarted || state.salesArticleCatalog.items.length)) {
@@ -29188,6 +29189,12 @@ function canManageSalesReportImports() {
 const SALES_ARTICLE_CATALOG_COLUMNS = Object.freeze([
   Object.freeze({ id: "articleNumber", label: "Artikelnummer" }),
   Object.freeze({ id: "description", label: "Bezeichnung" }),
+  Object.freeze({ id: "retailGross", label: "VK brutto EH", price: "sales" }),
+  Object.freeze({ id: "internetGross", label: "Preis Internet brutto", price: "sales" }),
+  Object.freeze({ id: "retailNet", label: "VK netto EH", price: "sales" }),
+  Object.freeze({ id: "internetNet", label: "Preis Internet netto", price: "sales" }),
+  Object.freeze({ id: "purchaseNet", label: "Ø EK netto", price: "costs" }),
+  Object.freeze({ id: "purchaseGross", label: "Ø EK brutto", price: "costs" }),
   Object.freeze({ id: "primaryIdentifier", label: "EAN / GTIN" }),
   Object.freeze({ id: "status", label: "Status" }),
   Object.freeze({ id: "sourceSystem", label: "Quellsystem" }),
@@ -29248,6 +29255,88 @@ const SALES_ARTICLE_IMPORT_ERROR_LABELS = Object.freeze({
 const SALES_ARTICLE_CATALOG_HEADER_HEIGHT = 42;
 const SALES_ARTICLE_CATALOG_ROW_HEIGHT = 39;
 const SALES_ARTICLE_CATALOG_RENDER_OVERSCAN = 8;
+let salesArticlePreferencesTimer = null;
+let salesArticlePreferencesSaveChain = Promise.resolve();
+function availableSalesArticleColumns() {
+  return SALES_ARTICLE_CATALOG_COLUMNS.filter(c => !c.price || (c.price === 'costs' ? canReadSalesArticleCosts() : canReadSalesArticlePrices()));
+}
+function selectedSalesArticleColumns() {
+  const ids = state.salesArticleCatalog.tableColumns || ['articleNumber','description','retailGross','internetGross','primaryIdentifier','status'];
+  const available = availableSalesArticleColumns();
+  return ids.map(id => available.find(c => c.id === id)).filter(Boolean);
+}
+function applySalesArticleTableHeight() {
+  const scroll = elements.salesArticleTableScroll; if (!scroll) return;
+  const rows = Math.min(20, Math.max(5, Number(state.salesArticleCatalog.visibleRows) || 10));
+  const header = elements.salesArticleTableHead?.getBoundingClientRect().height || SALES_ARTICLE_CATALOG_HEADER_HEIGHT;
+  const bar = Math.max(1, scroll.offsetHeight - scroll.clientHeight);
+  scroll.style.height = `${header + rows * SALES_ARTICLE_CATALOG_ROW_HEIGHT + bar}px`;
+  const handle = document.getElementById('salesArticleResizeHandle'); handle?.setAttribute('aria-valuenow', String(rows)); handle?.setAttribute('aria-valuetext', `${rows} Artikel sichtbar`);
+  const label = document.getElementById('salesArticleVisibleRowsLabel'); if (label) label.textContent = `${rows} Artikel sichtbar`;
+}
+function renderSalesArticleColumnOptions() {
+  const host = document.getElementById('salesArticleColumnOptions'); if (!host) return;
+  const selected = selectedSalesArticleColumns().map(c => c.id), available = availableSalesArticleColumns();
+  const columns = [...selected, ...available.map(c => c.id).filter(id => !selected.includes(id))];
+  host.innerHTML = columns.map(id => { const c = available.find(c => c.id === id), index = selected.indexOf(id);
+    return `<div class="sales-article-column-option"><label><input type="checkbox" data-sales-article-column="${id}" ${index >= 0 ? 'checked' : ''} ${id === 'articleNumber' ? 'disabled' : ''} /><span>${escapeHtml(c.label)}</span></label><button type="button" data-sales-article-column-move="${id}" data-direction="-1" aria-label="${escapeHtmlAttribute(c.label)} nach links" ${index <= 0 ? 'disabled' : ''}>←</button><button type="button" data-sales-article-column-move="${id}" data-direction="1" aria-label="${escapeHtmlAttribute(c.label)} nach rechts" ${index < 0 || index >= selected.length - 1 ? 'disabled' : ''}>→</button></div>`;
+  }).join('') + '<small>EH = Einzelhandel. EK = durchschnittlicher Einkaufspreis. Fehlende oder ungeklärte Brutto-/Nettowerte bleiben leer.</small>';
+}
+async function loadSalesArticleTablePreferences() {
+  if (!canReadSalesArticles()) return;
+  const catalog = state.salesArticleCatalog, key = currentSalesArticleCatalogDetailAccessKey();
+  if (catalog.tablePreferencesKey === key || catalog.tablePreferencesPending) return;
+  const request = (catalog.tablePreferencesRequest || 0) + 1; catalog.tablePreferencesRequest = request; catalog.tablePreferencesPending = true;
+  try {
+    const result = await api('/api/sales/articles/preferences');
+    if (request !== catalog.tablePreferencesRequest || key !== currentSalesArticleCatalogDetailAccessKey()) return;
+    const available = availableSalesArticleColumns().map(c => c.id);
+    catalog.tableColumns = Array.isArray(result.columns) ? result.columns.filter(id => available.includes(id)) : null;
+    if (catalog.tableColumns && !catalog.tableColumns.includes('articleNumber')) catalog.tableColumns.unshift('articleNumber');
+    catalog.visibleRows = Math.min(20, Math.max(5, Number(result.visibleRows) || 10));
+    if (!catalog.searchStarted && selectedSalesArticleColumns().some(c => c.id === result.sort)) { catalog.sort = result.sort; catalog.direction = result.direction === 'desc' ? 'desc' : 'asc'; }
+    catalog.tablePreferencesKey = key; renderSalesArticleColumnOptions(); renderSalesArticleCatalogResults();
+  } catch (error) { if (request === catalog.tablePreferencesRequest) { catalog.tablePreferencesKey = key; renderSalesArticleColumnOptions(); setSalesArticleCatalogStatus(`Tabelleneinstellungen konnten nicht geladen werden: ${error.message}`, true); } }
+  finally { if (request === catalog.tablePreferencesRequest) catalog.tablePreferencesPending = false; }
+}
+function queueSalesArticlePreferencesSave() {
+  clearTimeout(salesArticlePreferencesTimer);
+  const key = currentSalesArticleCatalogDetailAccessKey();
+  const catalog = state.salesArticleCatalog;
+  catalog.tablePreferencesKey = key;
+  catalog.tablePreferencesRequest = (catalog.tablePreferencesRequest || 0) + 1;
+  catalog.tablePreferencesPending = false;
+  salesArticlePreferencesTimer = setTimeout(() => {
+    if (key !== currentSalesArticleCatalogDetailAccessKey() || !canReadSalesArticles()) return;
+    const body = JSON.stringify({ columns: selectedSalesArticleColumns().map(c => c.id), visibleRows: catalog.visibleRows || 10, sort: catalog.sort, direction: catalog.direction });
+    salesArticlePreferencesSaveChain = salesArticlePreferencesSaveChain.catch(() => {}).then(async () => {
+      if (key !== currentSalesArticleCatalogDetailAccessKey() || !canReadSalesArticles()) return;
+      try { await api('/api/sales/articles/preferences', { method: 'PUT', body }); }
+      catch (error) { if (key === currentSalesArticleCatalogDetailAccessKey()) setSalesArticleCatalogStatus(`Tabelleneinstellungen nicht gespeichert: ${error.message}`, true); }
+    });
+  }, 450);
+}
+function changeSalesArticleColumns(id, move = 0) {
+  const catalog = state.salesArticleCatalog, columns = selectedSalesArticleColumns().map(c => c.id), index = columns.indexOf(id);
+  if (!availableSalesArticleColumns().some(c => c.id === id)) return;
+  if (move && index >= 0 && columns[index + move]) [columns[index], columns[index + move]] = [columns[index + move], columns[index]];
+  else if (!move) { if (index < 0) columns.push(id); else if (id !== 'articleNumber') columns.splice(index, 1); }
+  catalog.tableColumns = columns; catalog.tablePreferencesRequest = (catalog.tablePreferencesRequest || 0) + 1;
+  const sortChanged = !columns.includes(catalog.sort);
+  if (sortChanged) { catalog.sort = 'articleNumber'; catalog.direction = 'asc'; }
+  renderSalesArticleColumnOptions(); renderSalesArticleCatalogHead(); renderSalesArticleCatalogRows(); applySalesArticleTableHeight(); queueSalesArticlePreferencesSave();
+  if (sortChanged && catalog.searchStarted) void loadSalesArticleCatalog({ reset: true, preserveDetail: true });
+}
+function applySalesArticleDetailTabs() {
+  const panels = ['salesArticleOverviewPanel','salesArticleIdentifiersSection','salesArticlePricesSection','salesArticleHistorySection'];
+  const active = panels.includes(state.salesArticleCatalog.detailTab) ? state.salesArticleCatalog.detailTab : panels[0];
+  const nav = elements.salesArticleDetailNavigation; if (!nav) return;
+  nav.setAttribute('role', 'tablist');
+  [...nav.querySelectorAll('a')].forEach((a, i) => { const id = panels[i], selected = id === active;
+    a.id = `salesArticleDetailTab${i}`; a.href = '#' + id; a.setAttribute('role','tab'); a.setAttribute('aria-controls',id); a.setAttribute('aria-selected',String(selected)); a.tabIndex = selected ? 0 : -1;
+    const panel = document.getElementById(id); if (panel) { panel.hidden = !selected; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',a.id); if (panel.tagName === 'DETAILS' && selected) panel.open = true; }
+  });
+}
 
 function normalizeSalesArticleCatalogItem(article = {}) {
   return {
@@ -29258,6 +29347,8 @@ function normalizeSalesArticleCatalogItem(article = {}) {
     active: article.active === true,
     sourceSystem: String(article.sourceSystem || ""),
     currentRevision: Math.max(0, Number(article.currentRevision || 0)),
+    ...Object.fromEntries(SALES_ARTICLE_CATALOG_COLUMNS.filter(c => c.price && (c.price === 'costs' ? canReadSalesArticleCosts() : canReadSalesArticlePrices()))
+      .map(c => [c.id, typeof article[c.id] === 'string' ? article[c.id] : null])),
   };
 }
 
@@ -29489,6 +29580,8 @@ function normalizeSalesArticleDetailPayload(payload = {}) {
     article: {
       articleNumber: String(articleValue.articleNumber || ""),
       description: String(articleValue.description || ""),
+      sourceSections: Array.isArray(articleValue.sourceSections) ? articleValue.sourceSections : [],
+      image: articleValue.image && typeof articleValue.image === 'object' ? articleValue.image : null,
       active: articleValue.active === true,
       currentRevision: Math.max(0, Number(articleValue.currentRevision || 0)),
       identifiers: Array.isArray(articleValue.identifiers)
@@ -29558,21 +29651,14 @@ function renderSalesArticleDetailPriceGroup(prices, { title, description, protec
   } else if (!prices.length) {
     content = '<p class="sales-article-detail-message">Für diesen Artikel sind in diesem Preisbereich keine Werte hinterlegt.</p>';
   } else {
-    content = `<div class="sales-article-detail-table-wrap"><table class="sales-article-detail-table prices">
-      <caption class="visually-hidden">${escapeHtml(title)} des ausgewählten Artikels</caption>
-      <thead><tr><th scope="col">Preisart</th><th scope="col">Betrag</th><th scope="col">Basis</th><th scope="col">Datenstatus</th></tr></thead>
-      <tbody>${prices.map((price) => {
+    content = `<dl class="sales-article-price-cards" aria-label="${escapeHtmlAttribute(title)}">${prices.map((price) => {
     const quality = Object.hasOwn(SALES_ARTICLE_PRICE_QUALITY_LABELS, price.qualityStatus)
       ? price.qualityStatus
       : "unresolved";
-    return `<tr>
-        <td><strong>${escapeHtml(price.displayLabel || SALES_ARTICLE_PRICE_TYPE_LABELS[price.priceType] || price.priceType || "Preis")}</strong></td>
-        <td class="numeric">${price.usable ? escapeHtml(salesArticleCatalogMoney(price.amount, price.currency)) : "–"}</td>
-        <td>${escapeHtml(SALES_ARTICLE_PRICE_BASIS_LABELS[price.priceBasis] || price.priceBasis || "Basis ungeklärt")}</td>
-        <td><span class="sales-article-detail-quality ${escapeHtmlAttribute(quality)}">${escapeHtml(SALES_ARTICLE_PRICE_QUALITY_LABELS[quality])}</span></td>
-      </tr>`;
-  }).join("")}</tbody>
-    </table></div>`;
+    return `<div><dt>${escapeHtml(price.displayLabel || SALES_ARTICLE_PRICE_TYPE_LABELS[price.priceType] || price.priceType || "Preis")}</dt>
+        <dd><strong>${price.usable ? escapeHtml(salesArticleCatalogMoney(price.amount, price.currency)) : "–"}</strong><span>${escapeHtml(SALES_ARTICLE_PRICE_BASIS_LABELS[price.priceBasis] || price.priceBasis || "Basis ungeklärt")}</span></dd>
+        <dd><span class="sales-article-detail-quality ${escapeHtmlAttribute(quality)}">${escapeHtml(SALES_ARTICLE_PRICE_QUALITY_LABELS[quality])}</span></dd></div>`;
+  }).join("")}</dl>`;
   }
   return `<section class="sales-article-detail-card">
     <header><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p></div>${prices === null ? "" : `<span class="sales-article-detail-count">${prices.length}</span>`}</header>
@@ -30406,6 +30492,7 @@ async function applySalesArticleImport(event) {
 }
 
 function closeSalesArticleManagementDialogs({ restoreFocus = false } = {}) {
+  state.salesArticleCatalog.imageUi?.reset();
   closeSalesArticleEditor({ restoreFocus, force: true });
   closeSalesArticleArchive({ restoreFocus, force: true });
   closeSalesArticleImport({ restoreFocus, force: true });
@@ -30552,6 +30639,12 @@ async function refreshSalesArticleAfterMutation(payload, message, {
   }
   const detail = normalizeSalesArticleDetailPayload(payload);
   const catalog = state.salesArticleCatalog;
+  // Mutation replies update the editable article fields; import-only sections are unchanged.
+  if (!Array.isArray(payload?.article?.sourceSections)
+    && catalog.detail?.article?.articleNumber === detail.article.articleNumber
+    && catalog.detail.article.provenance?.originSourceSystem === detail.article.provenance.originSourceSystem) {
+    detail.article.sourceSections = catalog.detail.article.sourceSections;
+  }
   catalog.detailRequestId += 1;
   catalog.selectedArticleNumber = detail.article.articleNumber;
   catalog.detail = detail;
@@ -30694,6 +30787,18 @@ function resetSalesArticleCatalogDetailState() {
   catalog.detailMoveFocus = false;
 }
 
+function renderSalesArticleSourceFieldValue(field) {
+  const text = escapeHtml(field.value);
+  if (typeof field.href !== 'string') return text;
+  try {
+    const url = new URL(field.href);
+    if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) {
+      return `<a href="${escapeHtmlAttribute(url.href)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${text}</a>`;
+    }
+  } catch {}
+  return text;
+}
+
 function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
   if (!elements.salesArticleDetail || !elements.salesArticleDetailBody) return;
@@ -30701,6 +30806,16 @@ function renderSalesArticleCatalogDetail() {
   elements.salesArticleDetailMeta?.classList.add("hidden");
   elements.salesArticleDetailNavigation?.classList.add("hidden");
   renderSalesArticleManagementActions();
+  if (window.createSalesArticleImageUi && document.getElementById('salesArticleImageButton')) {
+    catalog.imageUi ||= window.createSalesArticleImageUi({ api, accessKey: currentSalesArticleCatalogDetailAccessKey,
+      onSaved(articleNumber, image) {
+        if (catalog.detail?.article.articleNumber !== articleNumber || !canReadSalesArticles()) return;
+        catalog.detail.article.image = image; renderSalesArticleCatalogDetail();
+        setSalesArticleCatalogDetailStatus(image.present ? 'Eigenes Artikelbild gespeichert.' : 'Eigenes Artikelbild entfernt.');
+      } });
+    const article = !catalog.detailLoading && !catalog.detailError ? catalog.detail?.article : null;
+    catalog.imageUi.render({ articleNumber: article?.articleNumber || '', image: article?.image, read: canReadSalesArticles(), write: salesArticleDetailCanWrite() });
+  }
 
   if (catalog.detailLoading) {
     if (elements.salesArticleDetailTitle) elements.salesArticleDetailTitle.textContent = `Artikel ${catalog.selectedArticleNumber}`;
@@ -30741,6 +30856,7 @@ function renderSalesArticleCatalogDetail() {
   renderSalesArticleManagementActions();
   const provenance = article.provenance;
   elements.salesArticleDetailBody.innerHTML = `<div class="sales-article-detail-content">
+    <section id="salesArticleOverviewPanel" class="sales-article-detail-tab-panel">
     <div class="sales-article-detail-overview">
       <section class="sales-article-detail-card" id="salesArticleMasterDataSection" aria-labelledby="salesArticleMasterDataTitle">
         <header><div><h3 id="salesArticleMasterDataTitle">Stammdaten</h3><p>Aktuelle, revisionssicher gespeicherte Fassung.</p></div></header>
@@ -30762,6 +30878,8 @@ function renderSalesArticleCatalogDetail() {
         </dl>
       </section>
     </div>
+    ${(article.sourceSections || []).length ? `<div class="sales-article-source-sections">${article.sourceSections.map(section => `<section class="sales-article-detail-card sales-article-source-${escapeHtmlAttribute(section.id)}"><header><h3>${escapeHtml(section.title)}</h3></header><dl class="sales-article-detail-data">${section.fields.map(field => `<div><dt>${escapeHtml(field.label)}</dt><dd>${renderSalesArticleSourceFieldValue(field)}</dd></div>`).join('')}</dl></section>`).join('')}</div>` : ''}
+    </section>
     <section class="sales-article-detail-card" id="salesArticleIdentifiersSection" aria-labelledby="salesArticleIdentifiersTitle">
       <header><div><h3 id="salesArticleIdentifiersTitle">EAN / GTIN</h3><p>Primäre und weitere bestätigte Artikelkennungen.</p></div><span class="sales-article-detail-count">${article.identifiers.length}</span></header>
       ${renderSalesArticleDetailIdentifiers(article.identifiers)}
@@ -30784,6 +30902,7 @@ function renderSalesArticleCatalogDetail() {
     </details>
   </div>`;
 
+  applySalesArticleDetailTabs();
   if (catalog.detailMoveFocus) {
     catalog.detailMoveFocus = false;
     requestAnimationFrame(() => elements.salesArticleDetailTitle?.focus());
@@ -30835,6 +30954,11 @@ async function loadSalesArticleCatalogDetail(articleNumber, { moveFocus = false 
 }
 
 function salesArticleCatalogCell(article, columnId) {
+  const priceColumn = SALES_ARTICLE_CATALOG_COLUMNS.find(c => c.id === columnId && c.price);
+  if (priceColumn) {
+    if (!(priceColumn.price === 'costs' ? canReadSalesArticleCosts() : canReadSalesArticlePrices())) return '–';
+    return article[columnId] == null ? '<span class="sales-article-cell-muted" title="Kein eindeutiger bestätigter EUR-Preis mit dieser Brutto-/Nettobasis hinterlegt">–</span>' : `<span class="sales-article-price-value">${escapeHtml(salesArticleCatalogMoney(article[columnId], 'EUR'))}</span>`;
+  }
   if (columnId === "articleNumber") {
     const selected = state.salesArticleCatalog.selectedArticleNumber === article.articleNumber;
     const accessibleName = `Artikel ${article.articleNumber || "ohne Nummer"}${article.description ? `, ${article.description}` : ""} öffnen`;
@@ -30865,13 +30989,14 @@ function setSalesArticleCatalogStatus(message, isError = false) {
 
 function renderSalesArticleCatalogHead() {
   if (!elements.salesArticleTableHead) return;
+  const columns = selectedSalesArticleColumns();
   const sort = salesArticleCatalogSort(
     state.salesArticleCatalog.sort,
     state.salesArticleCatalog.direction,
   );
   let buttons = [...elements.salesArticleTableHead.querySelectorAll("[data-sales-article-sort]")];
-  if (buttons.length !== SALES_ARTICLE_CATALOG_COLUMNS.length) {
-    elements.salesArticleTableHead.innerHTML = `<tr>${SALES_ARTICLE_CATALOG_COLUMNS.map((column) => (
+  if (buttons.map(b => b.dataset.salesArticleSort).join('|') !== columns.map(c => c.id).join('|')) {
+    elements.salesArticleTableHead.innerHTML = `<tr>${columns.map((column) => (
       `<th scope="col" aria-sort="none"><button type="button" class="sales-article-sort-button" data-sales-article-sort="${column.id}">${escapeHtml(column.label)}</button></th>`
     )).join("")}</tr>`;
     buttons = [...elements.salesArticleTableHead.querySelectorAll("[data-sales-article-sort]")];
@@ -30894,7 +31019,7 @@ function salesArticleCatalogVisibleWindow(itemCount) {
   const scrollArea = elements.salesArticleTableScroll;
   const scrollTop = Math.max(0, Number(scrollArea?.scrollTop || 0) - SALES_ARTICLE_CATALOG_HEADER_HEIGHT);
   const viewportHeight = Math.max(
-    SALES_ARTICLE_CATALOG_ROW_HEIGHT * 10,
+    SALES_ARTICLE_CATALOG_ROW_HEIGHT * 5,
     Number(scrollArea?.clientHeight || 0) - SALES_ARTICLE_CATALOG_HEADER_HEIGHT,
   );
   const firstVisible = Math.floor(scrollTop / SALES_ARTICLE_CATALOG_ROW_HEIGHT);
@@ -30915,7 +31040,7 @@ function salesArticleCatalogSpacerRow(height, columnCount) {
 function renderSalesArticleCatalogRows() {
   const catalog = state.salesArticleCatalog;
   if (!elements.salesArticleTableBody) return;
-  const columnCount = SALES_ARTICLE_CATALOG_COLUMNS.length;
+  const columns = selectedSalesArticleColumns(), columnCount = columns.length;
   if (!catalog.searchStarted) {
     elements.salesArticleTableBody.innerHTML = `<tr class="sales-article-empty-row"><td colspan="${columnCount}"><strong>Noch keine Suche ausgeführt</strong><span>Artikelnummer oder Bezeichnung eingeben und „Artikel suchen“ wählen.</span></td></tr>`;
     return;
@@ -30934,7 +31059,7 @@ function renderSalesArticleCatalogRows() {
   }
   const { start, end } = salesArticleCatalogVisibleWindow(catalog.items.length);
   const rows = catalog.items.slice(start, end).map((article, index) => `<tr class="${catalog.selectedArticleNumber === article.articleNumber ? "is-selected" : ""}" data-sales-article-id="${escapeHtmlAttribute(article.productId)}" data-sales-article-number="${escapeHtmlAttribute(article.articleNumber)}" aria-rowindex="${start + index + 2}">
-      ${SALES_ARTICLE_CATALOG_COLUMNS.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${salesArticleCatalogCell(article, column.id)}</td>`).join("")}
+      ${columns.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${salesArticleCatalogCell(article, column.id)}</td>`).join("")}
     </tr>`).join("");
   elements.salesArticleTableBody.innerHTML = `${salesArticleCatalogSpacerRow(start * SALES_ARTICLE_CATALOG_ROW_HEIGHT, columnCount)}${rows}${salesArticleCatalogSpacerRow((catalog.items.length - end) * SALES_ARTICLE_CATALOG_ROW_HEIGHT, columnCount)}${catalog.loading && end === catalog.items.length ? `<tr class="sales-article-loading-row"><td colspan="${columnCount}">Weitere Artikel werden geladen …</td></tr>` : ""}`;
 }
@@ -30946,6 +31071,7 @@ function renderSalesArticleCatalogResults() {
   if (!elements.salesArticleResults || !elements.salesArticleTableBody) return;
   renderSalesArticleCatalogHead();
   renderSalesArticleCatalogRows();
+  applySalesArticleTableHeight();
   elements.salesArticleResults.setAttribute("aria-busy", String(catalog.loading));
   elements.salesArticleTable?.setAttribute("aria-rowcount", String(catalog.searchStarted ? catalog.total + 1 : 1));
   elements.salesArticleResultsBody?.classList.toggle("hidden", !catalog.resultsExpanded);
@@ -31084,6 +31210,7 @@ function changeSalesArticleCatalogSort(sort) {
   if (!catalog.searchStarted) return;
   catalog.direction = catalog.sort === sort && catalog.direction === "asc" ? "desc" : "asc";
   catalog.sort = sort;
+  queueSalesArticlePreferencesSave();
   loadSalesArticleCatalog({ reset: true, preserveDetail: true });
 }
 
@@ -31143,6 +31270,15 @@ function syncSalesArticleCatalogActorState() {
     && catalog.detailAccessKey !== detailAccessKey;
   catalog.actorKey = actorKey;
   catalog.detailAccessKey = detailAccessKey;
+  if (actorChanged || detailAccessChanged) {
+    catalog.tablePreferencesKey = ''; catalog.tableColumns = null; catalog.visibleRows = 10;
+    catalog.tablePreferencesPending = false;
+    catalog.tablePreferencesRequest = (catalog.tablePreferencesRequest || 0) + 1;
+    if (!selectedSalesArticleColumns().some(c => c.id === catalog.sort)) { catalog.sort = 'articleNumber'; catalog.direction = 'asc'; }
+    catalog.items = catalog.items.map(item => normalizeSalesArticleCatalogItem(item));
+    renderSalesArticleColumnOptions();
+    renderSalesArticleCatalogHead(); renderSalesArticleCatalogRows();
+  }
   if (actorChanged) {
     closeSalesArticleManagementDialogs({ restoreFocus: false });
     resetSalesArticleLastImportState();
@@ -31158,11 +31294,13 @@ function syncSalesArticleCatalogActorState() {
         { error: true },
       );
     } else {
+      catalog.requestId += 1; catalog.loading = false;
       resetSalesArticleCatalogDetailState();
       renderSalesArticleCatalogDetail();
       setSalesArticleCatalogDetailStatus(
         "Artikeldetails wurden wegen geänderter Artikelrechte aus der Ansicht entfernt.",
       );
+      if (catalog.searchStarted) void loadSalesArticleCatalog({ reset: true, preserveDetail: true });
     }
   }
 }
@@ -31616,6 +31754,8 @@ function syncSalesHistoryAccess() {
   const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
+  salesReportJobUi?.reset();
+  void salesReportJobUi?.refresh();
   receiptSearchWorkspace?.destroy(); receiptSearchWorkspace = null;
   document.getElementById("receiptSearchNavButton")?.classList.toggle("hidden", !user?.salesHistory?.read);
   document.getElementById("receiptSearchDashboardCard")?.classList.toggle("hidden", !user?.salesHistory?.read);
@@ -34097,6 +34237,7 @@ function setView(view) {
   if (view === "salesAnalytics") setSalesAnalyticsTab(state.salesAnalytics.tab);
   if (view === "articleCatalog") {
     renderSalesArticleCatalogResults();
+    void loadSalesArticleTablePreferences();
     void loadSalesArticleLastImport({ force: true });
   }
   if (view === "crm") {
@@ -40258,6 +40399,25 @@ elements.employeeCostCenter.addEventListener("change", () => {
   updateEmployeeAssignmentOptions();
   renderEmployeeAccessProfile(employeeAccessCurrentEmployee());
 });
+document.getElementById('salesArticleColumns')?.addEventListener('toggle', () => { if (document.getElementById('salesArticleColumns').open) renderSalesArticleColumnOptions(); });
+document.getElementById('salesArticleColumnOptions')?.addEventListener('change', event => { const input = event.target.closest('[data-sales-article-column]'); if (input) changeSalesArticleColumns(input.dataset.salesArticleColumn); });
+document.getElementById('salesArticleColumnOptions')?.addEventListener('click', event => { const button = event.target.closest('[data-sales-article-column-move]'); if (button) changeSalesArticleColumns(button.dataset.salesArticleColumnMove, Number(button.dataset.direction)); });
+elements.salesArticleDetailNavigation?.addEventListener('click', event => { const a = event.target.closest('a'); if (!a) return; event.preventDefault(); state.salesArticleCatalog.detailTab = a.getAttribute('aria-controls'); applySalesArticleDetailTabs(); });
+elements.salesArticleDetailNavigation?.addEventListener('keydown', event => {
+  const links = [...elements.salesArticleDetailNavigation.querySelectorAll('a')], i = links.indexOf(document.activeElement);
+  if (i < 0 || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? links.length - 1 : (i + (event.key === 'ArrowRight' ? 1 : -1) + links.length) % links.length;
+  links[next].click(); links[next].focus();
+});
+{
+  const handle = document.getElementById('salesArticleResizeHandle'); let drag = null;
+  const resize = rows => { state.salesArticleCatalog.visibleRows = Math.min(20, Math.max(5, Math.round(rows))); applySalesArticleTableHeight(); renderSalesArticleCatalogRows(); };
+  handle?.addEventListener('pointerdown', event => { if (event.button !== 0 || !canReadSalesArticles()) return; event.preventDefault(); drag = { id: event.pointerId, y: event.clientY, rows: state.salesArticleCatalog.visibleRows || 10 }; handle.setPointerCapture(event.pointerId); });
+  handle?.addEventListener('pointermove', event => { if (drag?.id === event.pointerId) resize(drag.rows + (event.clientY - drag.y) / SALES_ARTICLE_CATALOG_ROW_HEIGHT); });
+  const end = () => { if (drag) { drag = null; queueSalesArticlePreferencesSave(); } };
+  handle?.addEventListener('pointerup', end); handle?.addEventListener('pointercancel', end); handle?.addEventListener('lostpointercapture', end);
+  handle?.addEventListener('keydown', event => { if (!['ArrowUp','ArrowDown','Home','End'].includes(event.key)) return; event.preventDefault(); resize(event.key === 'Home' ? 5 : event.key === 'End' ? 20 : (state.salesArticleCatalog.visibleRows || 10) + (event.key === 'ArrowDown' ? 1 : -1)); queueSalesArticlePreferencesSave(); });
+}
 elements.employeePosition.addEventListener("change", () => renderEmployeeAccessProfile(employeeAccessCurrentEmployee()));
 elements.employeeForm.addEventListener("invalid", (event) => {
   event.target.closest("details")?.setAttribute("open", "");
