@@ -1533,7 +1533,14 @@
           </section>
         </section>
 
-        <section id="receiptSearchView" class="view" aria-labelledby="receiptSearchTitle"><header class="topbar"><div><span class="eyebrow">Verkauf</span><h1 id="receiptSearchTitle">Kassenberichte &amp; Belegsuche</h1><p class="subtitle">Belege und Buchungen im gespeicherten Kassenstand finden und als Beleginfo ausgeben.</p></div></header><section class="card receipt-workspace" id="receiptSearchWorkspace"></section></section>
+        <section id="receiptSearchView" class="view" aria-labelledby="receiptSearchTitle">
+          <header class="topbar"><div><span class="eyebrow">Verkauf</span><h1 id="receiptSearchTitle">Kassenberichte &amp; Belegsuche</h1><p class="subtitle">Belege, Einzelverkäufe und Kassenbuchungen im gespeicherten Datenstand finden und prüfen.</p></div></header>
+          <section class="card receipt-workspace" id="receiptSearchWorkspace"></section>
+          <details id="salesHistoryPanel" class="sales-history-panel hidden">
+            <summary>Einzelverkäufe &amp; Kassenhistorie</summary>
+            <div data-history-body>Zeitraum-, Mitarbeiteranalysen und Quellenprüfung</div>
+          </details>
+        </section>
 
         <section id="salesArticleCatalogView" class="view sales-article-catalog-view" aria-labelledby="salesArticleCatalogTitle">
           <header class="topbar sales-article-catalog-topbar">
@@ -1660,15 +1667,29 @@
 
         <section id="salesAnalyticsView" class="view sales-analytics-view" aria-labelledby="salesAnalyticsTitle">
           <header class="topbar sales-analytics-topbar">
-            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAnalyticsTitle">Verkaufsanalysen</h1><p class="subtitle">TradeFoto-PDF-Statistiken sicher erkennen und auswerten – optimiert als Desktop für Tabellen und Grafiken. Der Warengruppenvergleich wird als strukturierter Statistikbericht übernommen. GP erkennt Filiale, Zeiträume, Warengruppen und Kennzahlen; Filialzuordnung und Währung müssen bestätigt werden. Die Original-PDF wird nicht gespeichert, Einzelbons oder Kundenbezüge werden daraus nicht erzeugt.</p></div>
-            <span class="status-badge inactive" id="salesAnalyticsStatusBadge">Berichtsdaten werden geladen</span>
+            <div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesAnalyticsTitle">Verkaufsanalysen</h1><p class="subtitle">Verkaufsdaten auswerten, PDF-Analysen vergleichen und beauftragte Berichte wiederfinden.</p></div>
           </header>
 
-          <div class="sales-analytics-desktop-workspace">
-            <details id="salesHistoryPanel" class="sales-history-panel hidden">
-              <summary>Einzelverkäufe &amp; Kassenhistorie</summary>
-              <div data-history-body>Zeitraum-, Mitarbeiteranalysen und Quellenprüfung</div>
-            </details>
+          <div class="settings-tabs sales-analytics-tabs" id="salesAnalyticsTabs" role="tablist" aria-label="Verkaufsanalysen">
+            <button class="settings-tab active" id="salesAnalyticsCreateTab" type="button" role="tab" data-sales-analytics-tab="create" aria-controls="salesAnalyticsCreatePanel" aria-selected="true">Bericht erstellen</button>
+            <button class="settings-tab" id="salesAnalyticsPdfTab" type="button" role="tab" data-sales-analytics-tab="pdf" aria-controls="salesAnalyticsPdfPanel" aria-selected="false" tabindex="-1">PDF-Analysen</button>
+            <button class="settings-tab" id="salesAnalyticsReportsTab" type="button" role="tab" data-sales-analytics-tab="reports" aria-controls="salesAnalyticsReportsPanel" aria-selected="false" tabindex="-1">Berichte</button>
+          </div>
+
+          <section class="sales-analytics-panel sales-analytics-intro-card" id="salesAnalyticsCreatePanel" role="tabpanel" aria-labelledby="salesAnalyticsCreateTab" tabindex="0">
+            <div class="sales-analytics-section-heading"><div><h2>Bericht erstellen</h2><p>Umsatz nach Zeitraum und Filiale auswerten.</p></div></div>
+            <form class="sales-analytics-request-form" id="salesAnalyticsRequestForm" aria-describedby="salesAnalyticsRequestHint">
+              <label for="salesAnalyticsRequestQuery">Berichtstitel<input id="salesAnalyticsRequestQuery" type="text" maxlength="120" autocomplete="off" placeholder="Umsatzauswertung" /></label>
+              <label for="salesReportJobFrom">Von<input id="salesReportJobFrom" type="date" required /></label>
+              <label for="salesReportJobTo">Bis<input id="salesReportJobTo" type="date" required /></label>
+              <label for="salesReportJobLocation">Filiale<select id="salesReportJobLocation"><option value="">Alle freigegebenen Filialen</option></select></label>
+              <button class="primary-button" id="salesReportJobSubmit" type="submit" disabled>Bericht beauftragen</button>
+            </form>
+            <p class="sales-analytics-request-hint" id="salesAnalyticsRequestHint" role="status">Die Verfügbarkeit der Kassendaten wird geprüft.</p>
+          </section>
+
+          <section class="sales-analytics-panel sales-analytics-desktop-workspace" id="salesAnalyticsPdfPanel" role="tabpanel" aria-labelledby="salesAnalyticsPdfTab" tabindex="0" hidden>
+            <div class="sales-analytics-section-heading sales-analytics-pdf-heading"><div><h2>PDF-Analysen</h2><p>TradeFoto-PDF-Statistiken sicher erkennen und auswerten – Desktop für Tabellen und Grafiken. Die Original-PDF wird nicht gespeichert; Einzelbons oder Kundenbezüge werden daraus nicht erzeugt.</p></div><span class="status-badge inactive" id="salesAnalyticsStatusBadge">PDF-Berichte</span></div>
             <section class="sales-analytics-import-card hidden" id="salesReportImportPanel" aria-labelledby="salesReportImportTitle">
               <div class="sales-analytics-section-heading">
                 <div><span class="eyebrow">PDF-Berichtsimport</span><h2 id="salesReportImportTitle">TradeFoto-Statistik prüfen</h2><p>Geeignet ist der Bericht „Warengruppenvergleich netto“. Eine vorhandene Textschicht wird direkt gelesen; reine Raster-PDFs werden lokal erkannt und anschließend als vollständig bearbeitbarer OCR-Vorschlag angezeigt.</p></div>
@@ -1769,7 +1790,13 @@
                 </div>
               </div>
             </details>
-          </div>
+          </section>
+          <section class="sales-analytics-panel sales-analytics-intro-card" id="salesAnalyticsReportsPanel" role="tabpanel" aria-labelledby="salesAnalyticsReportsTab" tabindex="0" hidden>
+            <div class="sales-analytics-section-heading"><div><h2>Berichte</h2><p>Deine Aufträge und fertigen Ergebnisse.</p></div><button type="button" id="salesReportJobRefresh" class="secondary-button">Aktualisieren</button></div>
+            <label for="salesReportJobFilter">Berichte suchen<input id="salesReportJobFilter" type="search" placeholder="Berichtstitel" /></label>
+            <p id="salesReportJobError" role="status" hidden></p>
+            <div id="salesReportJobList" aria-live="polite"></div>
+          </section>
         </section>
 
         <section id="personnelView" class="view">
@@ -2486,6 +2513,16 @@
               <label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
               <p class="settings-note" id="rightsManagementHint">Rechte werden geladen.</p>
               <div class="rights-user-list" id="rightsUserList"></div>
+            </div>
+            <div class="settings-card hidden" id="permissionDefaultsCard">
+              <div class="card-heading"><div class="card-icon">Rolle</div><div><h2>Standardrechte je Rolle und Position</h2><p>Rollenstandards und abweichende Positionsstandards durch den Developer festlegen.</p></div></div>
+              <p class="settings-note">Ohne Positionsstandard gelten die Rechte der App-Rolle. Ein eigener Positionsstandard ersetzt diese Grundrechte für alle zugeordneten Zugänge. Persönliche Zusatzrechte und Entzüge bleiben erhalten. Der Developer behält immer Vollzugriff.</p>
+              <label class="field"><span>Rolle oder Position</span><select id="permissionDefaultsTarget"></select></label>
+              <label class="switch-row hidden" id="permissionDefaultsInheritanceRow"><span><strong>Standard der jeweiligen App-Rolle verwenden</strong><small>Deaktivieren legt einen eigenen Standard für diese Position fest.</small></span><input type="checkbox" id="permissionDefaultsInheritance" /></label>
+              <label class="field"><span>Recht suchen</span><input type="search" id="permissionDefaultsSearch" placeholder="Bezeichnung oder Berechtigung" /></label>
+              <div id="permissionDefaultsPermissions" class="permission-defaults-list"></div>
+              <p class="settings-note" id="permissionDefaultsHint" role="status" aria-live="polite"></p>
+              <div class="form-actions-inline"><button class="secondary-button" id="permissionDefaultsReset" type="button">Eingebauten Standard laden</button><button class="primary-button" id="permissionDefaultsSave" type="button">Standardrechte speichern</button></div>
             </div>
             <div class="settings-card">
               <div class="card-heading"><div class="card-icon">Mobil</div><div><h2>Mobile Leitungsansicht</h2><p>Legt fest, welche kompakten Funktionen Leitungen unterwegs im Mitarbeiterportal sehen.</p></div></div>
@@ -4195,6 +4232,8 @@
     <script src="/function-search-navigation.js"></script>
     <script src="/credential-boundaries.js"></script>
     <script src="/schedule-duty.js"></script>
+    <script src="/permission-defaults.js"></script>
+    <script src="/sales-report-jobs.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

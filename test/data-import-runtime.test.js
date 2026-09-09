@@ -133,7 +133,8 @@ test('Productive Block 2: managed mapping previews keep activation closed and de
   assert.equal(f.database.prepare('SELECT COUNT(*) n FROM crm_customers').get().n,0);
   const active=createDataImportMappingRuntime({...config,allowMapping:true});
   const saved=await active.operation(f.getSession,'apply',{...input,planHash:preview.planHash});
-  assert.equal(f.database.prepare('SELECT customer_number FROM crm_customers').get().customer_number,'000419');
+  assert.equal(f.database.prepare('SELECT account_number FROM crm_customers').get().account_number,'000419');
+  assert.equal(f.database.prepare('SELECT customer_number FROM crm_customers').get().customer_number,null);
   await assert.rejects(active.operation(f.getSession,'apply',{...input,planHash:preview.planHash}),code('IMPORT_PREVIEW_CHANGED'));
   await assert.rejects(active.operation(f.getSession,'search',{table:'MITARBEITER'}),code('IMPORT_FORBIDDEN'));
   await assert.rejects(active.operation(f.getSession,'search',{table:'KUNDEN',sourceInstance:'foreign'}),code('IMPORT_SHAPE_INVALID'));

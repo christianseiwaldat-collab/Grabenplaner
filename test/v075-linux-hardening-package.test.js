@@ -177,7 +177,7 @@ test("hardening stays separate from the current core runtime and binds its exact
   // Production adoption still requires the separate runtime migration gate.
   assert.equal(result.fingerprint, "e5e8edd4e7710263ce1b89a5a1214a18a2b7f8a6d37a9248dcccaeb5ca074ef9");
   // Bounded staging hashes, the 1500-second ready check and serialized
-  // copy work change the pinned Offsite module; Hardening remains fixed.
+  // copy work change the pinned Offsite module independently of Hardening.
   assert.equal(result.offsiteModule.fingerprint, "6aaa26d35310754c15c5d9a85aafdad4ac73dc8939d3917b3617a48879a06394");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
@@ -185,7 +185,9 @@ test("hardening stays separate from the current core runtime and binds its exact
   const { moduleContract } = require(path.join(root, "server-tools/linux/hardening/lib/hardening-contract.js"));
   const expected = moduleContract(hardeningRoot);
   assert.deepEqual(result.hardeningModule, expected);
-  assert.equal(result.hardeningModule.fingerprint, "e917ee0355874ce08f8ab096335ea6b533d151a4e9ab2bc4755d4f940682f91d");
+  // The bounded listener retry and unknown audit results require an explicit
+  // Hardening module transition; an app update must not silently adopt it.
+  assert.equal(result.hardeningModule.fingerprint, "dc42a15ed03fe6f10eae2fbc38754fb9c44d14377a1a6989ee27527564140a50");
   assert.equal(result.hardeningModule.format, "grabenplaner-linux-hardening-installed-contract");
   assert.equal(result.hardeningModule.schemaVersion, schema.schemaVersion);
   assert.equal(result.hardeningModule.moduleVersion, schema.moduleVersion);

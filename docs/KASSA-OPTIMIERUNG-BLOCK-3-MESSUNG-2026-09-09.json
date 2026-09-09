@@ -1,0 +1,19 @@
+{
+  "scope": "Local synthetic in-memory measurement of implemented receipt search after blocks 2 and 3. Not a production timing or an old/new production benchmark.",
+  "method": "Median of three complete cold searches with separate runtime caches, followed by three warm searches through the last runtime. Actual SQLite statement executions observed. Same 30 receipts and 600 positions; identical result summaries.",
+  "receipts": 30,
+  "positionsPerReceipt": 20,
+  "sourcePositions": 600,
+  "node": "v24.19.0",
+  "sqlite": "3.53.3",
+  "runs": 3,
+  "synthetic": true,
+  "coldMedianMs": 361.785,
+  "warmMedianMs": 16.614,
+  "coldQueries": 83,
+  "warmQueries": 50,
+  "coldChildReads": 30,
+  "warmChildReads": 0,
+  "fullTableCounts": 0,
+  "equalResults": true
+}

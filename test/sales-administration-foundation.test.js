@@ -108,7 +108,7 @@ test("Fest integrierter Verkaufsbereich bleibt eine klar gekennzeichnete Desktop
   assert.match(view, /<table\b/);
   assert.doesNotMatch(view, /sales.*mobile|mobile.*sales/i);
 
-  assert.match(styles, /\.sales-analytics-topbar,\.sales-analytics-desktop-workspace \{ min-width:1120px; \}/);
+  assert.match(styles, /\.sales-analytics-desktop-workspace > \* \{ min-width:1120px; \}/);
   assert.match(contract, /nicht als optionales Installationsmerkmal/);
   assert.match(contract, /keine[\s\S]*mobile Fachansicht oder mobile Abnahme/);
   assert.match(contract, /keine[\s\S]*API-Endpunkte, Migrationen oder Hintergrundverarbeitung/);

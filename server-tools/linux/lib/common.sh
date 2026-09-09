@@ -188,20 +188,48 @@ gp_release_backup_workspace_lock() {
   exec 5<&-
 }
 
+gp_begin_update_backup_ownership() {
+  local database="$1" node="$2" helper="$3" owner_file
+  gp_require_root
+  [[ -f "$helper" && ! -L "$helper" ]] || gp_die "Das Modul fuer die Sicherungsverantwortung fehlt."
+  owner_file="$("$node" "$helper" prepare)" || gp_die "Die Sicherungsverantwortung konnte nicht vorbereitet werden."
+  [[ "$owner_file" == "/run/grabenplaner/update-backup-owner.json" && ! -L "$owner_file" ]] \
+    || gp_die "Die Sicherungsverantwortung hat keinen gueltigen Pfad."
+  exec 8<>"$owner_file"
+  flock --exclusive --nonblock 8 || gp_die "Ein anderer Updateprozess besitzt bereits den Sicherungsauftrag."
+  "$node" "$helper" publish "$database" || gp_die "Die Sicherungsverantwortung konnte nicht uebernommen werden."
+}
+
 gp_stop_service() {
   local service="$1"
-  local timeout_seconds="${2:-120}"
+  local timeout_seconds="${2:-120}" initial_pid current_pid state
   gp_require_systemd_unit "$service"
   if systemctl is-active --quiet "$service"; then
-    gp_info "Beende $service kontrolliert ueber systemd (SIGTERM)."
-    systemctl stop "$service"
+    initial_pid="$(systemctl show --property=MainPID --value "$service")"
+    [[ "$initial_pid" =~ ^[1-9][0-9]*$ ]] || gp_die "$service hat keinen eindeutigen Hauptprozess."
+    gp_info "Beende $service kontrolliert; laufende Sicherungsprozesse duerfen zuerst abschliessen."
+    # A direct stop with KillMode=control-group also terminates the archive
+    # workers the application is trying to drain. Signal only the main process
+    # first; the existing shutdown owns and verifies its children until exit.
+    systemctl kill --kill-whom=main --signal=SIGTERM "$service" \
+      || gp_die "$service konnte nicht zum kontrollierten Dienststopp aufgefordert werden."
+    local drain_deadline=$((SECONDS + 1500))
+    while :; do
+      current_pid="$(systemctl show --property=MainPID --value "$service")"
+      [[ "$current_pid" == "0" ]] && break
+      [[ "$current_pid" == "$initial_pid" ]] || gp_die "$service wurde waehrend des Dienststopps unerwartet neu gestartet."
+      (( SECONDS < drain_deadline )) || gp_die "Die laufende Sicherung von $service wurde nicht rechtzeitig beendet; keine Prozesse werden zwangsweise abgebrochen."
+      sleep 1
+    done
   fi
+  # Main has exited and drained its children. Cancel a queued failure restart
+  # and let systemd finish the unit without sending SIGTERM to live backups.
+  systemctl stop "$service"
   local deadline=$((SECONDS + timeout_seconds))
   while systemctl is-active --quiet "$service"; do
     (( SECONDS < deadline )) || gp_die "$service wurde nicht innerhalb von ${timeout_seconds}s beendet."
     sleep 1
   done
-  local state
   state="$(systemctl is-active "$service" 2>/dev/null || true)"
   [[ "$state" == "inactive" || "$state" == "failed" ]] || gp_die "$service meldet nach dem Stopp den unerwarteten Zustand: $state"
 }

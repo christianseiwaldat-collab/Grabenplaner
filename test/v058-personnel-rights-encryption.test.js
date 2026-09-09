@@ -255,7 +255,8 @@ test("v0.58: Developer legt Personalstammdaten und freigegebene Leitungsrolle at
 });
 
 test("Live-Entzug von employees:write stoppt POST und PUT ohne Seiteneffekte", async () => {
-  const developer = session("101", "developer");
+  // The Developer has guaranteed full access; revocation is tested on Admin.
+  const developer = session("101", "admin");
   const createAuditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
   const deniedCreate = await withPermissionRevokedAtNextPersonnelTransaction(
     developer,
@@ -1229,7 +1230,7 @@ test("v0.58: ungültiges Rechteprofil rollt die komplette Neuanlage zurück", as
     method: "POST",
     auth: developer,
     body: employeePayload("881", {
-      accessProfile: { role: "manager", permissions: ["developer:system"] },
+      accessProfile: { role: "manager", permissions: ["unknown:permission"] },
     }),
   });
   assert.equal(result.response.status, 403, JSON.stringify(result.payload));

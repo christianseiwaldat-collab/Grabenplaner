@@ -1,5 +1,6 @@
 .sales-history-panel { grid-column:1 / -1; min-width:0; padding:14px 16px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--surface); }
 .sales-history-panel > summary { cursor:pointer; font-size:13px; font-weight:800; }
+#receiptSearchView > .sales-history-panel { margin-top:16px; }
 .sales-history-panel [data-history-body] { min-width:0; padding-top:12px; font-size:11px; line-height:1.5; }
 .sales-history-panel p { margin:6px 0; }
 .sales-history-filters { display:flex; flex-wrap:wrap; align-items:end; gap:10px; margin:12px 0; }

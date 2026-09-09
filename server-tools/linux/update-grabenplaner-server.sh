@@ -337,7 +337,7 @@ rollback_update() {
   set +e
   gp_warn "Das Update ist fehlgeschlagen; automatischer Rollback wird ausgefuehrt."
   rollback_stop_ok=0
-  systemctl stop "$service" >/dev/null 2>&1
+  (gp_stop_service "$service" 150) >/dev/null 2>&1
   rollback_service_state="$(systemctl is-active "$service" 2>/dev/null || true)"
   if [[ "$rollback_service_state" == "inactive" || "$rollback_service_state" == "failed" ]]; then
     rollback_stop_ok=1
@@ -693,6 +693,10 @@ if (( lock_already_held == 1 )); then
 else
   gp_acquire_maintenance_lock
 fi
+# The updater still creates and verifies both exact coupled rollback points.
+# Its live lease suppresses only redundant app startup/shutdown copies. Older
+# applications that do not understand the lease retain their existing backups.
+gp_begin_update_backup_ownership "$database" "$node" "$SCRIPT_DIR/../../lib/backup-maintenance.js"
 services_touched=1
 gp_stop_service "$service" 150
 create_exact_local_backup

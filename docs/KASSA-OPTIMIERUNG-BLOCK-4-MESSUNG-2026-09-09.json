@@ -1,0 +1,89 @@
+{
+  "fixture": "synthetic in-memory SQL only; 30000 receipts, 120000 positions, 20 branches; ANALYZE; no encryption or network costs",
+  "node": "v24.19.0",
+  "sqlite": "3.53.3",
+  "results": [
+    {
+      "table": "Umsatz_KASSE",
+      "dateFrom": "2020-01-01",
+      "resultCount": 50,
+      "beforeMedianMs": 0.752,
+      "afterMedianMs": 0.445,
+      "equalResults": true,
+      "afterPlan": [
+        "SEARCH r USING INDEX cash_snapshot_1_date (dataset_slot=? AND business_date>? AND business_date<?)",
+        "LIST SUBQUERY 1",
+        "SEARCH cash_publication_bindings USING COVERING INDEX cash_publication_binding_target (publication_id=? AND kind=? AND target_id=?)",
+        "CREATE BLOOM FILTER",
+        "BLOOM FILTER ON s (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH s USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "BLOOM FILTER ON hs (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH hs USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "BLOOM FILTER ON c (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH c USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN"
+      ]
+    },
+    {
+      "table": "Umsatz_KASSE",
+      "dateFrom": "2020-12-01",
+      "resultCount": 50,
+      "beforeMedianMs": 0.692,
+      "afterMedianMs": 0.411,
+      "equalResults": true,
+      "afterPlan": [
+        "SEARCH r USING INDEX cash_snapshot_1_date (dataset_slot=? AND business_date>? AND business_date<?)",
+        "LIST SUBQUERY 1",
+        "SEARCH cash_publication_bindings USING COVERING INDEX cash_publication_binding_target (publication_id=? AND kind=? AND target_id=?)",
+        "CREATE BLOOM FILTER",
+        "BLOOM FILTER ON s (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH s USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "BLOOM FILTER ON hs (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH hs USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "BLOOM FILTER ON c (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH c USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN"
+      ]
+    },
+    {
+      "table": "Umsatz_Kasse_Details",
+      "dateFrom": "2020-01-01",
+      "resultCount": 50,
+      "beforeMedianMs": 0.789,
+      "afterMedianMs": 0.593,
+      "equalResults": true,
+      "afterPlan": [
+        "SEARCH r USING INDEX cash_snapshot_6_date (dataset_slot=? AND business_date>? AND business_date<?)",
+        "LIST SUBQUERY 1",
+        "SEARCH cash_publication_bindings USING COVERING INDEX cash_publication_binding_target (publication_id=? AND kind=? AND target_id=?)",
+        "CREATE BLOOM FILTER",
+        "SEARCH h USING PRIMARY KEY (dataset_slot=? AND source_row=?)",
+        "BLOOM FILTER ON s (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH s USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "BLOOM FILTER ON hs (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH hs USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "BLOOM FILTER ON c (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH c USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN"
+      ]
+    },
+    {
+      "table": "Umsatz_Kasse_Details",
+      "dateFrom": "2020-12-01",
+      "resultCount": 50,
+      "beforeMedianMs": 0.771,
+      "afterMedianMs": 0.381,
+      "equalResults": true,
+      "afterPlan": [
+        "SEARCH r USING INDEX cash_snapshot_6_date (dataset_slot=? AND business_date>? AND business_date<?)",
+        "LIST SUBQUERY 1",
+        "SEARCH cash_publication_bindings USING COVERING INDEX cash_publication_binding_target (publication_id=? AND kind=? AND target_id=?)",
+        "CREATE BLOOM FILTER",
+        "SEARCH h USING PRIMARY KEY (dataset_slot=? AND source_row=?)",
+        "BLOOM FILTER ON s (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH s USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "BLOOM FILTER ON hs (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH hs USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "BLOOM FILTER ON c (publication_id=? AND kind=? AND source_key=?)",
+        "SEARCH c USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN"
+      ]
+    }
+  ]
+}

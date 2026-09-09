@@ -10,7 +10,7 @@ const test = require("node:test");
 const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 const { createAmuStorage } = require("../lib/amu-storage");
 const root = path.resolve(__dirname, "..");
-const runtimeEntries = ["backup.js", "scripts/run-background-backup.js", "scripts/manage-local-backup-archive.js"];
+const runtimeEntries = ["backup.js", "lib/backup-maintenance.js", "scripts/run-background-backup.js", "scripts/manage-local-backup-archive.js"];
 const excluded = ["scripts/verify-tradefoto-full-import.mjs", "scripts/unapproved.js", "scripts/run-background-backup.js/extra",
   "scripts/run-background-backup.js.env", ".env", "data/private.db", "tmp/report.json"];
 function verifierPolicy() {
@@ -64,7 +64,7 @@ test("background worker creates a verified backup using only files admitted to t
     }
   }
   collect("lib");
-  for (const file of files) {
+  for (const file of new Set(files)) {
     if (!policy.accepts(file)) continue;
     const target = path.join(packageRoot, file);
     fs.mkdirSync(path.dirname(target), { recursive: true }); fs.copyFileSync(path.join(root, file), target, fs.constants.COPYFILE_EXCL);

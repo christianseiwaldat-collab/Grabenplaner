@@ -334,9 +334,9 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
   .start-dashboard-scope-controls { grid-template-columns:1fr; }
 }
 
-.sales-analytics-view { overflow-x:auto; }
-.sales-analytics-topbar,.sales-analytics-desktop-workspace { min-width:1120px; }
-.sales-analytics-desktop-workspace { display:grid; gap:16px; }
+.sales-analytics-view { min-width:0; }
+.sales-analytics-desktop-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; min-width:0; overflow-x:auto; }
+.sales-analytics-desktop-workspace > * { min-width:1120px; }
 .sales-article-catalog-view,.crm-view { min-width:0; }
 .article-catalog-dashboard-symbol { font-size:10px; font-weight:950; letter-spacing:-.04em; }
 .sales-article-catalog-heading { min-width:0; }
@@ -844,6 +844,23 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .sales-analytics-empty-surface strong { font-size:12px; }
 .sales-analytics-empty-surface p { max-width:360px; margin:7px auto 0; }
 .sales-analytics-import-card { display:grid; gap:16px; padding:20px; border:1px solid var(--line); border-radius:17px; background:rgba(255,255,255,.76); box-shadow:var(--shadow); }
+.settings-tabs.sales-analytics-tabs { width:fit-content; box-sizing:border-box; margin-bottom:18px; }
+.settings-tabs.sales-analytics-tabs .settings-tab { flex:0 0 auto; }
+.sales-analytics-panel[hidden] { display:none !important; }
+.sales-analytics-intro-card { width:min(100%,820px); box-sizing:border-box; padding:20px; border:1px solid var(--line); border-radius:15px; background:var(--surface); }
+.sales-analytics-intro-card h2,.sales-analytics-pdf-heading h2 { margin:0; font:800 18px/1.25 "Manrope","DM Sans","Segoe UI",sans-serif; }
+.sales-analytics-request-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin:18px 0 0; }
+.sales-analytics-request-form label { display:grid; flex:0 1 240px; min-width:0; max-width:100%; gap:6px; color:var(--ink); font-size:11px; font-weight:700; }
+.sales-analytics-request-form input { box-sizing:border-box; width:100%; min-height:40px; background:var(--surface); color:var(--ink); }
+.sales-analytics-request-form button { min-height:40px; }
+.sales-analytics-request-form select { width:100%; min-width:0; min-height:40px; }
+.sales-report-job { padding:12px 0; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
+.sales-report-job h3,.sales-report-job p { margin:0 0 8px; }
+.sales-report-job-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.sales-report-job-actions .secondary-button { white-space:normal; max-width:100%; }
+#salesReportJobFilter { box-sizing:border-box; width:100%; max-width:28rem; }
+.sales-analytics-request-hint { margin:14px 0 0; color:var(--muted); font-size:11px; line-height:1.55; }
+.sales-analytics-tabs [role="tab"]:focus-visible,.sales-analytics-panel:focus-visible { outline:2px solid var(--green); outline-offset:3px; }
 .sales-analytics-section-heading,.sales-report-preview-head,.sales-report-preview-actions { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
 .sales-analytics-section-heading h2,.sales-report-preview-head h3 { margin:0; font:800 18px/1.25 "Manrope","DM Sans","Segoe UI",sans-serif; letter-spacing:-.025em; }
 .sales-analytics-section-heading p { max-width:760px; margin:7px 0 0; color:var(--muted); font-size:9.5px; line-height:1.55; }
@@ -4036,6 +4053,37 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 .schedule-settings-section > .settings-field-disclosure > .settings-field-disclosure-summary .settings-field-disclosure-chevron { width:26px; height:26px; border-radius:8px; font-size:19px; }
 .schedule-settings-section > .settings-field-disclosure > .settings-field-disclosure-body { gap:11px; padding:13px 14px 14px; }
 .legacy-usb-provisioning { order:99; }
+/* All settings tabs share the compact, expanding layout. Text keeps its natural
+   height; wide data tables scroll inside their existing table containers. */
+#settingsView :is(.settings-field-disclosure-summary,.settings-accordion > summary) { grid-template-columns:30px minmax(0,1fr) 24px; gap:9px; min-height:56px; padding:10px 12px; }
+#settingsView :is(.settings-field-disclosure-summary,.settings-accordion > summary) .card-icon { flex-basis:30px; width:30px; height:30px; border-radius:9px; font-size:8px; }
+#settingsView .settings-field-disclosure-summary h2 { font-size:12px; line-height:1.35; }
+#settingsView .settings-field-disclosure-summary p { margin-top:3px; font-size:8.5px; line-height:1.45; }
+#settingsView .settings-accordion-copy strong { font-size:12px; line-height:1.35; }
+#settingsView .settings-accordion-copy small { font-size:8.5px; line-height:1.45; }
+#settingsView .settings-field-disclosure-chevron { width:24px; height:24px; font-size:19px; }
+#settingsView :is(.settings-field-disclosure-body,.settings-accordion-body) { min-width:0; gap:11px; padding:12px; }
+#settingsView :is(.settings-field-disclosure,.settings-accordion) { overflow:visible; }
+#settingsView :is(.settings-card,.settings-field-disclosure-body,.settings-accordion-body) > * { min-width:0; max-width:100%; }
+#settingsView :is(h2,h3,p,small,strong,.settings-note,.field > span,.form-actions-inline) { overflow-wrap:anywhere; white-space:normal; text-overflow:clip; }
+#settingsView .field { margin:0; }
+#settingsView .field > span { color:var(--ink); font-size:9px; line-height:1.4; }
+#settingsView .field :is(input:not([type="checkbox"]):not([type="color"]),select,textarea) { min-width:0; max-width:100%; min-height:30px; padding:6px 8px; font-size:10px; }
+#settingsView .switch-row { gap:8px; padding:8px 10px; }
+#settingsView .switch-row strong { font-size:10px; line-height:1.4; }
+#settingsView .switch-row small { font-size:9px; line-height:1.45; }
+#settingsView .form-actions-inline { flex-wrap:wrap; gap:8px; }
+#settingsView .form-actions-inline > :is(button,.settings-note) { min-width:0; max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.permission-defaults-list { display:grid; gap:7px; }
+.permission-defaults-list details { border:1px solid var(--line); border-radius:9px; background:var(--surface); min-width:0; }
+.permission-defaults-list summary { cursor:pointer; padding:9px 10px; font-size:11px; font-weight:750; overflow-wrap:anywhere; }
+.permission-defaults-rows { display:grid; padding:0 10px 8px; }
+.permission-defaults-rows label { display:grid; grid-template-columns:18px minmax(0,1fr); align-items:start; gap:8px; border-top:1px solid var(--line); padding:8px 0; cursor:pointer; }
+.permission-defaults-rows label[hidden],.permission-defaults-list details[hidden] { display:none; }
+#settingsView .permission-defaults-rows input[type="checkbox"] { width:16px; min-width:16px; height:16px; min-height:16px; padding:0; margin:2px 0 0; }
+.permission-defaults-rows strong,.permission-defaults-rows small { display:block; overflow-wrap:anywhere; }
+.permission-defaults-rows strong { font-size:10px; line-height:1.4; }
+.permission-defaults-rows small { font-size:9px; line-height:1.5; color:var(--muted); margin-top:3px; }
 /* Compact settings keep the same two-column structure when disclosures are open. */
 #generalSettings > :is(.settings-card,.settings-accordion) { min-width:0; grid-column:auto; }
 #generalSettings :is(.settings-field-disclosure-summary,.settings-accordion > summary),

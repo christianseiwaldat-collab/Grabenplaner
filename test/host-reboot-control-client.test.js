@@ -7,12 +7,88 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const client = require(path.join(root, "lib", "host-reboot-control-client.js"));
 
 const requestId = "af24b6d2-a935-4af0-a738-69a99d106897";
 const backupMarkerFileName = "dienstplan-2026-07-30T12-00-00-000Z-a1b2c3.complete.json";
+
+test("actual server availability guard checks the default protected socket without sending a reboot", () => {
+  const safeDirectory = {
+    uid: 0, gid: 0, nlink: 2, mode: 0o40755,
+    isDirectory: () => true, isSymbolicLink: () => false,
+  };
+  const safeSocket = {
+    uid: 0, gid: 1001, nlink: 1, mode: 0o140660,
+    isSocket: () => true, isSymbolicLink: () => false,
+  };
+  let directory = safeDirectory;
+  let socket = safeSocket;
+  let missing = false;
+  const paths = [];
+  const sandbox = {
+    module: { exports: {} },
+    process: { platform: "linux", getgroups: () => [1001], env: {} },
+    require(id) {
+      if (id === "node:path") return path.posix;
+      if (id === "node:fs") return { lstatSync(file) {
+        paths.push(file);
+        if (missing) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        if (file === path.posix.dirname(client.DEFAULT_SOCKET_PATH)) return directory;
+        assert.equal(file, client.DEFAULT_SOCKET_PATH);
+        return socket;
+      } };
+      if (id === "node:net") return { createConnection() { assert.fail("availability must not contact the broker"); } };
+      return require(id);
+    },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(root, "lib/host-reboot-control-client.js"), "utf8"), sandbox);
+  const protectedClient = sandbox.module.exports;
+  const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
+  const start = server.indexOf("function currentHostManagedRebootAvailable()");
+  const end = server.indexOf("const hostBootGeneration =", start);
+  const context = {
+    process: { platform: "linux" }, serverModeActive: true, hostBootGeneration: "verified-boot",
+    assertSafeHostRebootSocket: protectedClient.assertSafeSocket,
+  };
+  const available = vm.runInNewContext(`${server.slice(start, end)}; currentHostManagedRebootAvailable`, context);
+  assert.equal(available(), true);
+  assert.deepEqual(paths, [path.posix.dirname(client.DEFAULT_SOCKET_PATH), client.DEFAULT_SOCKET_PATH]);
+  for (const change of [
+    { directory: { ...safeDirectory, mode: 0o40777 } },
+    { directory: { ...safeDirectory, uid: 1000 } },
+    { directory: { ...safeDirectory, isSymbolicLink: () => true } },
+    { socket: { ...safeSocket, mode: 0o140666 } },
+    { socket: { ...safeSocket, uid: 1000 } },
+    { socket: { ...safeSocket, gid: 0 } },
+    { socket: { ...safeSocket, gid: 1002 } },
+    { socket: { ...safeSocket, nlink: 2 } },
+    { socket: { ...safeSocket, isSocket: () => false } },
+    { socket: { ...safeSocket, isSymbolicLink: () => true } },
+  ]) {
+    directory = change.directory || safeDirectory;
+    socket = change.socket || safeSocket;
+    assert.equal(available(), false);
+  }
+  directory = safeDirectory;
+  socket = safeSocket;
+  missing = true;
+  assert.equal(available(), false);
+  missing = false;
+  for (const invalid of [null, "", "/", "/tmp/wrong.sock"]) {
+    assert.throws(() => protectedClient.assertSafeSocket(invalid), { code: "HOST_REBOOT_CONTROL_SOCKET_UNSAFE" });
+  }
+  context.hostBootGeneration = null;
+  assert.equal(available(), false);
+  context.hostBootGeneration = "verified-boot";
+  context.serverModeActive = false;
+  assert.equal(available(), false);
+  context.serverModeActive = true;
+  context.process.platform = "win32";
+  assert.equal(available(), false);
+});
 
 function protocolResponse(code, options = {}) {
   const accepted = options.accepted === true;

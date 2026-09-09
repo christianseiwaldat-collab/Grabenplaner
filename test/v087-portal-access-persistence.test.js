@@ -76,6 +76,20 @@ test("Block 3/7: Portal-Access-Katalog deckt jedes typisierte Statement genau ei
   );
 });
 
+test('report principal reads the same current rights without a browser session and rejects disabled accounts', async () => {
+  const f = fixture();
+  try {
+    const session = { ...await f.repository.getEmployeeSessionByToken({ tokenHash: 'token-hash', now: '2026-09-09T12:00:00.000Z', businessDate: '2026-09-09' }) };
+    for (const key of ['id', 'expires_at', 'revoked_at']) delete session[key];
+    const input = { employeeNumber: 'E18', businessDate: '2026-09-09' };
+    assert.deepEqual(await f.repository.getReportPrincipal(input), session);
+    f.database.exec("DELETE FROM portal_sessions; INSERT INTO portal_permission_denials(employee_number,permission,denied_by) VALUES('E18','sales:history:read','tester');");
+    assert.deepEqual((await f.repository.getReportPrincipal(input)).denied_permissions, ['sales:history:read']);
+    f.database.exec("UPDATE portal_users SET active=0 WHERE employee_number='E18'");
+    assert.equal(await f.repository.getReportPrincipal(input), null);
+  } finally { await f.close(); }
+});
+
 test("Block 3/7: Browser-Sitzung wird über den Provider vollständig projiziert", async () => {
   const context = fixture();
   try {

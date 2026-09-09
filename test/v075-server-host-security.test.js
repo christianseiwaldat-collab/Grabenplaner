@@ -19,8 +19,8 @@ test("v0.75 exposes only the redacted host-security status in server diagnostics
 });
 
 test("v0.75 host-security findings are visible but never become a readiness dependency", () => {
-  assert.match(server, /HOST_SECURITY_ATTENTION/);
-  assert.match(server, /Ubuntu-Host-Sicherheit prüfen/);
+  assert.match(server, /for \(const alert of buildHostSecurityAlerts\(hostSecurity\)\)/);
+  assert.match(server, /addAlert\(alert\.id, alert\.severity, alert\.title, alert\.message, alert\.category\)/);
   const readinessStart = server.indexOf("ready: startupIntegrity");
   const readinessEnd = server.indexOf("\n    mode:", readinessStart);
   assert.ok(readinessStart > 0 && readinessEnd > readinessStart);

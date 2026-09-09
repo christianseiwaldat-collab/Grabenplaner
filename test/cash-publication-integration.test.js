@@ -24,7 +24,7 @@ function rows({ count = 1, price = '12', seller = '07', location = '018', unknow
     MWST: '20', Verkäuferid: seller, Artikelbezeichnung: 'Synthetic article', ...flags, ...(unknown ? { Beratung: true } : {}) })) };
 }
 async function fixture(t, options = {}) {
-  const app = openSqliteApplicationPersistence({ databasePath: ':memory:', catalog: SQLITE_APPLICATION_CATALOG });
+  const app = openSqliteApplicationPersistence({ databasePath: options.databasePath || ':memory:', catalog: SQLITE_APPLICATION_CATALOG });
   ensureSqliteDataImportRuntimeSchema(app.database); app.database.exec('PRAGMA foreign_keys=ON');
   app.database.exec("CREATE TABLE locations(id TEXT PRIMARY KEY,name TEXT,active INTEGER); INSERT INTO locations VALUES ('branch-a','Branch A',1),('branch-b','Branch B',1); CREATE TABLE employees(personnel_number TEXT PRIMARY KEY,full_name TEXT,active INTEGER); INSERT INTO employees VALUES ('person-a','Person A',1),('person-b','Person B',1);");
   const vault = createIntegrationSecretVault({ activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 12) } });
@@ -37,7 +37,7 @@ async function fixture(t, options = {}) {
   const f = { app, vault, protection, actor, policies, session };
   f.get = async () => f.session;
   f.publish = createCashPublicationRuntime({ access: app.provider, vault, policies, scopeId: actor.scopeId, enabled: true, clock: () => TIME });
-  f.history = () => createManagedSalesHistoryRuntime({ access: app.provider, vault, scopeId: actor.scopeId, cashEnabled: true, today: () => '2026-09-07' });
+  f.history = (options = {}) => createManagedSalesHistoryRuntime({ access: app.provider, vault, scopeId: actor.scopeId, cashEnabled: true, today: () => '2026-09-07', ...options });
   f.build = async (data = rows(options), { ready = true } = {}) => {
     const fileSha256 = C.fingerprint(data), id = protection.digest(['source', actor, 'cash', fileSha256]);
     const store = createCashSnapshotStore({ access: app.provider, protection, actor, clock: () => TIME });
@@ -61,6 +61,78 @@ async function fixture(t, options = {}) {
   t.after(async () => { protection.destroy(); await app.provider.close(); app.database.close(); });
   return f;
 }
+test('durable report jobs complete multiple batches and encrypt results, with personal ownership and fresh download rights', async t => {
+  const f = await fixture(t, { count: 205 }); await f.activate();
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: '<Private report>', query: f.query() });
+  assert.equal(job.status, 'queued'); await jobs.tick();
+  assert.equal((await jobs.list(f.session))[0].processed, 200);
+  await jobs.tick(); const done = (await jobs.list(f.session))[0];
+  assert.equal(done.status, 'completed'); assert.equal(done.processed, 205);
+  const html = await jobs.download(f.session, job.id);
+  assert.match(html, /2460.00 EUR/); assert.match(html, /&lt;Private report&gt;/); assert.doesNotMatch(html, /KUND_NR|00031|Synthetic article/);
+  assert.doesNotMatch(JSON.stringify(f.app.database.prepare('SELECT * FROM sales_report_jobs').all()), /Private report|2460.00|admin-1/);
+  const other = { ...f.session, employeeNumber: 'admin-2' };
+  assert.equal((await jobs.list(other)).length, 0);
+  for (const action of ['download', 'cancel', 'remove']) await assert.rejects(jobs[action](other, job.id), code('IMPORT_HISTORY_NOT_FOUND'));
+  const reduced = { ...f.session, permissions: f.session.permissions.filter(p => p !== 'sales:history:sellers:read') };
+  await assert.rejects(jobs.download(reduced, job.id), code('IMPORT_FORBIDDEN'));
+  await jobs.remove(f.session, job.id); assert.equal((await jobs.list(f.session)).length, 0);
+});
+
+test('report job lease recovery restarts exactly once without duplicate totals and isolates concurrent workers', async t => {
+  const f = await fixture(t, { count: 205 }); await f.activate(); let time = Date.parse(TIME);
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const make = () => createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId, now: () => time });
+  const first = make(), second = make(); const job = await first.create(f.session, { query: f.query() });
+  await first.tick(); await second.tick(); assert.equal((await second.list(f.session))[0].restarts, 0);
+  await first.stop(); time += 31000; await second.tick();
+  assert.equal((await second.list(f.session))[0].restarts, 1); assert.equal((await second.list(f.session))[0].processed, 200);
+  await second.tick(); assert.match(await second.download(f.session, job.id), /2460.00 EUR/);
+});
+
+test('report jobs enforce queue bounds, cancellation, revoked rights and pinned publication', async t => {
+  const f = await fixture(t, { count: 205 }); await f.activate();
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const a = await jobs.create(f.session, { query: f.query() }), b = await jobs.create(f.session, { query: f.query() }), c = await jobs.create(f.session, { query: f.query() });
+  await assert.rejects(jobs.create(f.session, { query: f.query() }), code('IMPORT_HISTORY_ANALYSIS_BUSY'));
+  await jobs.cancel(f.session, a.id); await jobs.cancel(f.session, b.id); await jobs.cancel(f.session, c.id);
+  await jobs.tick(); assert.ok((await jobs.list(f.session)).every(r => r.status === 'cancelled'));
+  const d = await jobs.create(f.session, { query: f.query() }); const original = f.session;
+  f.session = { ...original, permissions: [] }; await jobs.tick(); f.session = original;
+  assert.equal((await jobs.list(f.session)).find(r => r.id === d.id).error, 'IMPORT_FORBIDDEN');
+  const e = await jobs.create(f.session, { query: f.query() });
+  const id = await f.build(rows({ price: '24' })); await f.activate(f.request(id, 1)); await jobs.tick();
+  assert.equal((await jobs.list(f.session)).find(r => r.id === e.id).error, 'IMPORT_HISTORY_ANALYSIS_CHANGED');
+});
+
+test('cancellation during report completion wins the revision race and corrupt jobs do not block the queue', async t => {
+  const f = await fixture(t); await f.activate();
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const base = f.history(); let cancelId = null;
+  const runtime = { async run(get, work) { const result = await base.run(get, work); if (cancelId) { const id = cancelId; cancelId = null; await jobs.cancel(f.session, id); } return result; } };
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { query: f.query() }); cancelId = job.id; await jobs.tick();
+  assert.equal((await jobs.list(f.session))[0].status, 'cancelled'); await assert.rejects(jobs.download(f.session, job.id), code('IMPORT_HISTORY_NOT_FOUND'));
+  const bad = await jobs.create(f.session, { query: f.query() }), good = await jobs.create(f.session, { query: f.query() });
+  f.app.database.prepare("UPDATE sales_report_jobs SET payload='invalid',updated='2000-01-01T00:00:00.000Z' WHERE id=?").run(bad.id);
+  await jobs.tick(); await jobs.tick(); const rows = await jobs.list(f.session);
+  assert.equal(rows.find(r => r.id === bad.id).status, 'failed'); assert.equal(rows.find(r => r.id === good.id).status, 'completed');
+});
+
+test('completed background reports release checkpoints before the global analysis limit is reached', async t => {
+  const f = await fixture(t); await f.activate();
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history({ retainCompletedAnalyses: false }), resolvePrincipal: f.get, scope: f.actor.scopeId });
+  for (let i = 0; i < 66; i++) {
+    f.session = { ...f.session, employeeNumber: 'report-owner-' + i };
+    const job = await jobs.create(f.session, { query: f.query() }); await jobs.tick();
+    assert.match(await jobs.download(f.session, job.id), /12.00 EUR/);
+  }
+});
+
 test('compact cash becomes usable through the normal history runtime with exact totals and no duplicate history', async t => {
   const f = await fixture(t); assert.equal(await f.history().run(f.get, w => w), null);
   const context = await f.publish.operation(f.get, 'context', { sourceId: f.id }); assert.equal(context.state.revision, 0);
@@ -304,6 +376,9 @@ test('receipt customer search covers account, optional number, name, address, te
   const result = await runtime.run(f.get, w => w.receipts.search({ ...q, customer: 'anne', sort: 'customerEmail', direction: 'asc' }));
   const documents = await runtime.run(f.get, w => w.receipts.documents({ ids: [result.items[0].id] }));
   assert.equal(documents.items[0].customerName, 'Änne Müller');
+  f.app.database.exec("UPDATE crm_customers SET email='fresh@example.test',revision=revision+1 WHERE id='crm-31'");
+  assert.equal((await runtime.run(f.get, w => w.receipts.search({ ...q, customer: 'fresh@example.test' }))).items.length, 1);
+  assert.equal((await runtime.run(f.get, w => w.receipts.search({ ...q, customer: 'anne@example.test' }))).items.length, 0);
   f.session.permissions = f.session.permissions.filter(p => p !== 'crm:purchases:read');
   await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, customer: '00031' })), code('IMPORT_FORBIDDEN'));
   await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, sort: 'customerName', direction: 'asc' })), code('IMPORT_FORBIDDEN'));
@@ -331,4 +406,187 @@ test('global receipt sorting finds late matches, pages without rescanning and bi
   await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, receipt: 'different', resultSet: result.resultSet })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
   f.session.permissions = f.session.permissions.filter(p => p !== 'sales:history:sellers:read');
   await assert.rejects(runtime.run(f.get, w => w.receipts.search({ ...q, resultSet: result.resultSet })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
+});
+
+function observeSqlite(t) {
+  const { DatabaseSync, StatementSync } = require('node:sqlite'), calls = [];
+  for (const method of ['all', 'get', 'run']) {
+    const original = StatementSync.prototype[method];
+    t.mock.method(StatementSync.prototype, method, function (...args) {
+      calls.push({ method, sql: this.sourceSQL }); return original.apply(this, args);
+    });
+  }
+  const original = DatabaseSync.prototype.exec;
+  t.mock.method(DatabaseSync.prototype, 'exec', function (sql) { calls.push({ method: 'exec', sql }); return original.call(this, sql); });
+  return calls;
+}
+
+test('assigned cash search has an indexed binding lookup and equals the general path', async t => {
+  const f = await fixture(t, { count: 60 }), active = await f.activate();
+  const { SQLITE_CASH_PUBLICATIONS_CATALOG: catalog } = require('../lib/persistence/sqlite/cash-publications-catalog');
+  const { CASH_PUBLICATION_STATEMENTS: S } = require('../lib/persistence/statements/cash-publications');
+  const p = { publicationId: active.active, datasetSlot: 1, dateFrom: '2010-01-01', dateTo: '2010-12-31', afterDate: '9999-12-31', afterRow: 2000001,
+    locationId: 'branch-a', unassigned: 0, sellerId: null, sellerMode: 'none', sellerRole: 'line_seller', customerId: null, limit: 50 };
+  for (const name of Object.keys(S.search)) {
+    const general = catalog.find(e => e.statement === S.search[name]).sql, assigned = catalog.find(e => e.statement === S.searchAssigned[name]).sql;
+    assert.deepEqual(f.app.database.prepare(assigned).all(p), f.app.database.prepare(general).all(p));
+    const plan = f.app.database.prepare('EXPLAIN QUERY PLAN ' + assigned).all(p).map(r => r.detail);
+    assert.ok(plan.some(s => s.includes('cash_publication_binding_target')), JSON.stringify(plan));
+    assert.ok(plan.some(s => /SEARCH r USING INDEX cash_snapshot_\d+_(date|location_key)/.test(s)), JSON.stringify(plan));
+  }
+});
+
+test('optimized cash reads work beside an uncommitted writer and survive file restore with fresh runtime', async t => {
+  const fs = require('node:fs'), path = require('node:path'), { DatabaseSync } = require('node:sqlite');
+  const root = fs.realpathSync(path.resolve(__dirname, '../tmp')), dir = fs.mkdtempSync(path.join(root, 'cash-block5-'));
+  const databasePath = path.join(dir, 'source.db'), f = await fixture(t, { databasePath, count: 205 });
+  await f.activate(); const writer = new DatabaseSync(databasePath); let restored;
+  t.after(async () => { writer.close(); if (restored) { await restored.provider.close(); restored.database.close(); }
+    assert.equal(fs.realpathSync(path.dirname(dir)), root); fs.rmSync(dir, { recursive: true }); });
+  writer.exec("BEGIN IMMEDIATE; UPDATE locations SET name='Pending synthetic label' WHERE id='branch-a'");
+  const runtime = f.history();
+  let result;
+  try { result = await runtime.run(f.get, w => w.search(f.query())); assert.equal(result.analysis.processed, 200); }
+  finally { writer.exec('ROLLBACK'); }
+  result = await runtime.run(f.get, w => w.analyze({ query: f.query(), cursor: result.analysis.cursor }));
+  assert.equal(result.totals.gross, '2460.00');
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const queue = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const queued = await queue.create(f.session, { query: f.query() });
+  const restoredPath = path.join(dir, 'restored.db'); f.app.database.prepare('VACUUM INTO ?').run(restoredPath);
+  restored = openSqliteApplicationPersistence({ databasePath: restoredPath, catalog: SQLITE_APPLICATION_CATALOG });
+  ensureSqliteDataImportRuntimeSchema(restored.database);
+  assert.equal(restored.database.prepare('PRAGMA quick_check').get().quick_check, 'ok');
+  assert.equal(restored.database.prepare('PRAGMA foreign_key_check').all().length, 0);
+  const fresh = createManagedSalesHistoryRuntime({ access: restored.provider, vault: f.vault, scopeId: f.actor.scopeId, cashEnabled: true, today: () => '2026-09-07' });
+  const page = await fresh.run(f.get, w => w.receipts.search(f.query()));
+  assert.equal(page.items[0].gross, '2460.00'); assert.equal(page.items[0].positions, 205);
+  const recovered = createSalesReportJobs({ access: restored.provider, vault: f.vault, runtime: fresh, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  await recovered.tick(); await recovered.tick();
+  assert.match(await recovered.download(f.session, queued.id), /2460.00 EUR/);
+  assert.equal((await queue.list(f.session))[0].status, 'queued');
+});
+
+test('cash reads take no writer reservation or full-table count, and a receipt reads each source segment once', async t => {
+  const f = await fixture(t, { count: 60 }), active = await f.activate(), runtime = f.history();
+  const headIndex = TABLES.findIndex(t => t.name === 'Umsatz_KASSE');
+  const calls = observeSqlite(t);
+  const result = await runtime.run(f.get, w => w.receipts.documents({ ids: [`c${headIndex}-${active.active}-0000000001`] }));
+  assert.equal(result.items[0].positions, 60); assert.equal(result.items[0].gross, '720.00');
+  assert.ok(calls.some(c => c.sql === 'BEGIN'));
+  assert.equal(calls.filter(c => /BEGIN\s+(IMMEDIATE|EXCLUSIVE)/i.test(c.sql)).length, 0);
+  assert.equal(calls.filter(c => /COUNT\(\*\).*FROM cash_(snapshot_\d|publication_bindings)/i.test(c.sql)).length, 0);
+  assert.equal(calls.filter(c => /FROM cash_snapshot_6 WHERE.*parent_row=/.test(c.sql)).length, 1);
+  assert.equal(calls.filter(c => new RegExp(`FROM cash_snapshot_${headIndex} WHERE.*source_row=`).test(c.sql)).length, 1);
+  assert.ok(calls.filter(c => /FROM cash_publication_bindings WHERE.*source_key=/.test(c.sql)).length <= 5);
+  calls.length = 0;
+  await runtime.run(f.get, w => w.receipts.search(f.query()));
+  const candidates = calls.find(c => c.sql.includes(`FROM cash_snapshot_${headIndex} r`));
+  assert.ok(candidates); assert.doesNotMatch(candidates.sql.split('FROM')[0], /payload|source_key|seller_key|customer_key/);
+});
+
+test('cash verification generations reject same-count changes, survive schema reopen, and roll back atomically', async t => {
+  const f = await fixture(t); await f.activate(); const runtime = f.history();
+  assert.equal((await runtime.run(f.get, w => w.search(f.query()))).totals.gross, '12.00');
+  f.app.database.exec("BEGIN; UPDATE cash_snapshot_6 SET business_date='2020-01-01'; ROLLBACK;");
+  assert.equal((await runtime.run(f.get, w => w.search(f.query()))).totals.gross, '12.00');
+  f.app.database.exec("UPDATE cash_snapshot_6 SET business_date='2010-01-02'");
+  ensureSqliteDataImportRuntimeSchema(f.app.database);
+  await assert.rejects(f.history().run(f.get, w => w.search(f.query())), code('IMPORT_HISTORY_INTEGRITY'));
+  const store = createCashSnapshotStore({ access: f.app.provider, protection: f.protection, actor: f.actor });
+  let state = await store.reverify(f.id); while (state.status === 'reviewing') state = await store.review(f.id);
+  assert.equal((await f.history().run(f.get, w => w.search(f.query()))).totals.gross, '12.00');
+  f.app.database.exec('DELETE FROM cash_snapshot_inventory WHERE table_index=6');
+  ensureSqliteDataImportRuntimeSchema(f.app.database);
+  await assert.rejects(f.history().run(f.get, w => w.search(f.query())), code('IMPORT_HISTORY_INTEGRITY'));
+});
+
+test('legacy verified cash receives one migration baseline and cannot silently regain trust after mutation', async t => {
+  const f = await fixture(t); await f.activate();
+  // Construct the previous encrypted metadata format and schema on this tiny
+  // synthetic database; no source values are reimported or re-normalized.
+  const dataset = f.app.database.prepare('SELECT * FROM cash_snapshot_datasets').get();
+  const context = ['cash-compact-v1', 'dataset', dataset.slot, dataset.id, dataset.scope_id, dataset.owner_id, dataset.revision, dataset.created_at];
+  const source = f.protection.open(dataset.payload, context);
+  for (const table of source.tables) delete table.verifiedGeneration;
+  f.app.database.prepare('UPDATE cash_snapshot_datasets SET payload=? WHERE slot=?').run(f.protection.seal(source, context), dataset.slot);
+  const publication = f.app.database.prepare('SELECT * FROM cash_publications').get();
+  const publicationContext = ['cash-publication-v1', publication.id, publication.scope_id, publication.dataset_id, publication.owner_id, publication.created_at];
+  const data = f.protection.open(publication.payload, publicationContext); delete data.bindingGeneration;
+  f.app.database.prepare('UPDATE cash_publications SET payload=? WHERE id=?').run(f.protection.seal(data, publicationContext), publication.id);
+  const triggers = f.app.database.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE '%inventory%'").all();
+  for (const { name } of triggers) { assert.match(name, /^[a-z0-9_]+$/); f.app.database.exec(`DROP TRIGGER ${name}`); }
+  f.app.database.exec('DROP TABLE cash_snapshot_inventory; DROP TABLE cash_binding_inventory;');
+  ensureSqliteDataImportRuntimeSchema(f.app.database);
+  assert.deepEqual(f.app.database.prepare('SELECT DISTINCT generation FROM cash_snapshot_inventory').all().map(r => r.generation), [0]);
+  assert.equal((await f.history().run(f.get, w => w.search(f.query()))).totals.gross, '12.00');
+  ensureSqliteDataImportRuntimeSchema(f.app.database);
+  assert.equal((await f.history().run(f.get, w => w.search(f.query()))).totals.gross, '12.00');
+  f.app.database.exec("UPDATE cash_publication_bindings SET target_id=target_id WHERE kind='FILIALEN'");
+  ensureSqliteDataImportRuntimeSchema(f.app.database);
+  await assert.rejects(f.history().run(f.get, w => w.search(f.query())), code('IMPORT_HISTORY_INTEGRITY'));
+});
+
+test('a source changed between runtime activation and the query is rejected in the query snapshot', async t => {
+  const f = await fixture(t); await f.activate();
+  await assert.rejects(f.history().run(f.get, async w => {
+    f.app.database.exec('DELETE FROM cash_snapshot_6');
+    return w.receipts.search(f.query());
+  }), code('IMPORT_HISTORY_INTEGRITY'));
+});
+
+test('verified receipt summaries preserve every line filter, lazy details and rights with bounded cold/warm measurements', async t => {
+  const f = await fixture(t), data = { Umsatz_KASSE: [], Umsatz_Kasse_Details: [] };
+  const receiptCount = 30, positionsPerReceipt = 20;
+  for (let i = 1; i <= receiptCount; i++) {
+    const source = rows({ count: positionsPerReceipt }), number = String(i).padStart(6, '0');
+    data.Umsatz_KASSE.push({ ...source.Umsatz_KASSE[0], Bonnr: number });
+    source.Umsatz_Kasse_Details.forEach((line, j) => data.Umsatz_Kasse_Details.push({ ...line, Bonnr: number,
+      RepID: '00000000-0000-0000-0000-' + String(i * positionsPerReceipt + j).padStart(12, '0'),
+      ...(j === positionsPerReceipt - 1 ? { EAN: 'BOUNDARYLEFT', Artikelbezeichnung: 'BoundaryRight Ärmeltasche Ösen letzte Position' } : {}) }));
+  }
+  const source = await f.build(data); await f.activate(f.request(source));
+  const calls = observeSqlite(t), cold = [], warm = [], q = { ...f.query(), limit: 50 };
+  let runtime, result;
+  const stats = () => ({ queries: calls.filter(c => c.method !== 'exec').length,
+    childReads: calls.filter(c => /FROM cash_snapshot_6 WHERE.*parent_row=/.test(c.sql)).length,
+    fullCounts: calls.filter(c => /COUNT\(\*\).*FROM cash_(snapshot_\d|publication_bindings)/i.test(c.sql)).length });
+  for (let i = 0; i < 3; i++) {
+    runtime = f.history(); calls.length = 0; const start = performance.now();
+    result = await runtime.run(f.get, w => w.receipts.search(q)); cold.push({ milliseconds: performance.now() - start, ...stats() });
+    assert.equal(result.items.length, receiptCount); assert.equal(result.complete, true);
+    assert.equal(cold[i].childReads, receiptCount);
+  }
+  const expected = result.items;
+  for (let i = 0; i < 3; i++) {
+    calls.length = 0; const start = performance.now();
+    result = await runtime.run(f.get, w => w.receipts.search(q)); warm.push({ milliseconds: performance.now() - start, ...stats() });
+    assert.deepEqual(result.items, expected); assert.equal(warm[i].childReads, 0); assert.equal(warm[i].fullCounts, 0);
+  }
+  assert.ok(warm[0].queries < cold[0].queries);
+  assert.doesNotMatch(JSON.stringify(result), /sourcePrice|linePersonnel|lineSearch|"lines"|BOUNDARYLEFT|BoundaryRight/);
+  for (const query of ['Ärmeltasche Ösen', 'letz* Posit?on', 'BOUNDARYLEFT', 'BoundaryRight']) {
+    calls.length = 0;
+    const found = await runtime.run(f.get, w => w.receipts.search({ ...q, query }));
+    assert.equal(found.items.length, receiptCount, query); assert.equal(stats().childReads, 0);
+  }
+  // Separate fields must not turn into a new joined identifier in the cache.
+  assert.equal((await runtime.run(f.get, w => w.receipts.search({ ...q, query: 'boundaryleftboundaryright' }))).items.length, 0);
+  assert.equal((await runtime.run(f.get, w => w.receipts.search({ ...q, seller: 'person-a', sellerRole: 'line_seller' }))).items.length, receiptCount);
+  calls.length = 0;
+  const opened = await runtime.run(f.get, w => w.receipts.documents({ ids: [result.items[0].id] }));
+  assert.equal(opened.items[0].lines.length, positionsPerReceipt); assert.equal(opened.items[0].gross, result.items[0].gross);
+  assert.equal(stats().childReads, 1);
+  f.session.permissions = f.session.permissions.filter(p => p !== 'sales:history:sellers:read'); calls.length = 0;
+  const safe = await runtime.run(f.get, w => w.receipts.search(q));
+  assert.doesNotMatch(JSON.stringify(safe), /personnel|person-a|person-b|linePersonnel/);
+  assert.equal(stats().childReads, receiptCount);
+  f.app.database.exec('UPDATE cash_snapshot_6 SET payload=payload WHERE source_row=1');
+  await assert.rejects(runtime.run(f.get, w => w.receipts.search(q)), code('IMPORT_HISTORY_INTEGRITY'));
+  const median = values => +[...values].sort((a, b) => a - b)[1].toFixed(3);
+  t.diagnostic('CASH_BLOCK3_MEASUREMENT ' + JSON.stringify({ receipts: receiptCount, positionsPerReceipt, sourcePositions: receiptCount * positionsPerReceipt,
+    node: process.version, sqlite: f.app.database.prepare('SELECT sqlite_version() version').get().version,
+    runs: 3, synthetic: true, coldMedianMs: median(cold.map(r => r.milliseconds)), warmMedianMs: median(warm.map(r => r.milliseconds)),
+    coldQueries: cold[0].queries, warmQueries: warm[0].queries, coldChildReads: cold[0].childReads, warmChildReads: warm[0].childReads,
+    fullTableCounts: 0, equalResults: true }));
 });

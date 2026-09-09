@@ -92,7 +92,7 @@ test("Desktop-Arbeitsbereich enthält Bereichs-, Datums- und Horizontfilter", ()
   assert.match(app, /periodEnd >= state\.salesAnalytics\.dateFrom/);
   assert.match(app, /periodStart <= state\.salesAnalytics\.dateTo/);
   assert.match(app, /Das Von-Datum muss vor oder am Bis-Datum liegen/);
-  assert.match(styles, /\.sales-analytics-topbar,\.sales-analytics-desktop-workspace \{ min-width:1120px; \}/);
+  assert.match(styles, /\.sales-analytics-desktop-workspace > \* \{ min-width:1120px; \}/);
   assert.doesNotMatch(view, /sales.*mobile|mobile.*sales/i);
   assert.match(view, /id="salesReportHorizon"><option value="year_to_date">Jahr bis Berichtsende<\/option><option value="period">Berichtszeitraum<\/option>/);
   assert.match(app, /horizon: "year_to_date"/);

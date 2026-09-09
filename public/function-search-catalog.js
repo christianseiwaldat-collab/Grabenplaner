@@ -42,6 +42,7 @@
     "dataRequests",
   ]);
   const SUPPORTED_PERSONNEL_TABS = new Set(["employees", "locations"]);
+  const SUPPORTED_SALES_ANALYTICS_TABS = new Set(["create", "pdf", "reports"]);
   const SUPPORTED_SETTINGS_TABS = new Set([
     "general",
     "schedule",
@@ -63,6 +64,7 @@
     "personnelAdministrationTab",
     "personnelTab",
     "settingsTab",
+    "salesAnalyticsTab",
     "dashboardMode",
     "requestKind",
     "revealIds",
@@ -545,7 +547,34 @@
       "Öffnet den geschützten Desktop-Arbeitsbereich für Verkaufsberichte und Kennzahlen.",
       ["verkaufsanalyse", "umsatzanalyse", "statistik", "kennzahlen", "tradefoto", "warengruppen", "sales analytics"],
       ["salesAnalyticsNavButton"],
-      { view: "salesAnalytics", focusId: "salesAnalyticsView" },
+      { view: "salesAnalytics", salesAnalyticsTab: "create", focusId: "salesAnalyticsCreatePanel" },
+    ),
+    entry(
+      "sales.report-create",
+      "Bericht erstellen öffnen",
+      ["Verkaufsverwaltung", "Verkaufsanalysen", "Bericht erstellen"],
+      "Öffnet die vorbereitete Suchmaske für künftige Datenbankberichte. Es wird kein Auftrag gestartet.",
+      ["bericht erstellen", "berichtgenerierung", "bericht beauftragen", "auswertung erstellen", "datenbankbericht"],
+      ["salesAnalyticsNavButton"],
+      { view: "salesAnalytics", salesAnalyticsTab: "create", focusId: "salesAnalyticsRequestQuery" },
+    ),
+    entry(
+      "sales.pdf-analytics",
+      "PDF-Analysen öffnen",
+      ["Verkaufsverwaltung", "Verkaufsanalysen", "PDF-Analysen"],
+      "Öffnet die bestehenden Analysen importierter TradeFoto-PDF-Statistiken.",
+      ["pdf analyse", "pdf-analysen", "pdf statistik", "tradefoto auswertung"],
+      ["salesAnalyticsNavButton"],
+      { view: "salesAnalytics", salesAnalyticsTab: "pdf", focusId: "salesAnalyticsPdfPanel" },
+    ),
+    entry(
+      "sales.generated-reports",
+      "Berichte öffnen",
+      ["Verkaufsverwaltung", "Verkaufsanalysen", "Berichte"],
+      "Öffnet die vorbereitete Ablage für künftig beauftragte Berichte.",
+      ["meine berichte", "beauftragte berichte", "berichtstatus", "fertige berichte", "hintergrundberichte"],
+      ["salesAnalyticsNavButton"],
+      { view: "salesAnalytics", salesAnalyticsTab: "reports", focusId: "salesAnalyticsReportsPanel" },
     ),
     entry(
       "sales.receipt-search",
@@ -555,6 +584,15 @@
       ["kassenbericht", "belegsuche", "rechnungssuche", "buchungssuche", "bon", "beleginfo", "personalnummer", "kassenjournal", "tagesbericht"],
       ["receiptSearchNavButton"],
       { view: "receiptSearch", focusId: "receiptSearchWorkspace" },
+    ),
+    entry(
+      "sales.history",
+      "Einzelverkäufe & Kassenhistorie öffnen",
+      ["Verkauf", "Kassenberichte & Belegsuche", "Einzelverkäufe & Kassenhistorie"],
+      "Öffnet die bestehende Zeitraum- und Quellenprüfung für Einzelverkäufe, Tagesberichte und Kassenjournal.",
+      ["einzelverkäufe", "kassenhistorie", "historische verkäufe", "mitarbeiteranalyse", "quellenprüfung"],
+      ["receiptSearchNavButton"],
+      { view: "receiptSearch", revealIds: ["salesHistoryPanel"], focusId: "salesHistoryPanel" },
     ),
     entry(
       "sales.article-catalog",
@@ -577,29 +615,29 @@
     entry(
       "sales.report-import",
       "TradeFoto-Bericht importieren",
-      ["Verkaufsverwaltung", "Verkaufsanalysen", "PDF-Berichtsimport"],
+      ["Verkaufsverwaltung", "Verkaufsanalysen", "PDF-Analysen", "PDF-Berichtsimport"],
       "Navigiert zum berechtigten TradeFoto-PDF-Import, ohne eine Datei auszuwählen oder zu übernehmen.",
       ["tradefoto import", "pdf import", "warengruppenvergleich", "statistikbericht", "ocr bericht", "umsatzbericht einlesen"],
       ["salesAnalyticsNavButton", "salesReportImportPanel"],
-      { view: "salesAnalytics", focusId: "salesReportImportPanel" },
+      { view: "salesAnalytics", salesAnalyticsTab: "pdf", focusId: "salesReportImportPanel" },
     ),
     entry(
       "sales.report-archive",
       "Verkaufsberichtsarchiv anzeigen",
-      ["Verkaufsverwaltung", "Verkaufsanalysen", "Berichtsarchiv"],
+      ["Verkaufsverwaltung", "Verkaufsanalysen", "PDF-Analysen", "PDF-Berichtsarchiv"],
       "Springt zum Archiv der importierten Verkaufsberichte und Zeiträume.",
       ["berichtsarchiv", "pdf archiv", "verkaufsberichte", "zeiträume", "historie", "tradefoto berichte", "statistikarchiv"],
       ["salesAnalyticsNavButton"],
-      { view: "salesAnalytics", focusId: "salesReportArchive" },
+      { view: "salesAnalytics", salesAnalyticsTab: "pdf", focusId: "salesReportArchive" },
     ),
     entry(
       "sales.report-details",
       "Warengruppen im Detail anzeigen",
-      ["Verkaufsverwaltung", "Verkaufsanalysen", "Warengruppen"],
+      ["Verkaufsverwaltung", "Verkaufsanalysen", "PDF-Analysen", "Warengruppen"],
       "Springt zur detaillierten Tabelle der freigegebenen Verkaufskennzahlen.",
       ["warengruppe", "umsatz netto", "menge", "kunden", "vergleich", "detailtabelle", "verkaufszahlen"],
       ["salesAnalyticsNavButton"],
-      { view: "salesAnalytics", focusId: "salesAnalyticsTableTitle" },
+      { view: "salesAnalytics", salesAnalyticsTab: "pdf", focusId: "salesAnalyticsTableTitle" },
     ),
 
     entry(
@@ -1068,6 +1106,9 @@
     if (target.settingsTab && (
       target.view !== "settings" || !SUPPORTED_SETTINGS_TABS.has(target.settingsTab)
     )) errors.push(`${entryId}: settingsTab passt nicht zum Ziel.`);
+    if (target.salesAnalyticsTab && (
+      target.view !== "salesAnalytics" || !SUPPORTED_SALES_ANALYTICS_TABS.has(target.salesAnalyticsTab)
+    )) errors.push(`${entryId}: salesAnalyticsTab passt nicht zum Ziel.`);
     if (target.dashboardMode && (
       target.view !== "rightsDashboard" || !SUPPORTED_DASHBOARD_MODES.has(target.dashboardMode)
     )) errors.push(`${entryId}: dashboardMode passt nicht zum Ziel.`);

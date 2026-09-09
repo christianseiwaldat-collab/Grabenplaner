@@ -1,0 +1,286 @@
+{
+  "at": "2026-09-08T22:53:25.130Z",
+  "node": "v22.22.1",
+  "sqlite": "3.46.1",
+  "sizeBytes": 2653732864,
+  "walBytes": 5145912,
+  "journalMode": {
+    "journal_mode": "wal"
+  },
+  "pageSize": {
+    "page_size": 4096
+  },
+  "pageCount": {
+    "page_count": 647884
+  },
+  "freePages": {
+    "freelist_count": 0
+  },
+  "hasStats": false,
+  "counts": {
+    "sales_articles": 19024,
+    "sales_article_identifiers": 18420,
+    "sales_article_revisions": 19031,
+    "sales_article_import_snapshots": 2,
+    "cash_snapshot_datasets": 1
+  },
+  "indexes": [
+    {
+      "name": "cash_publication_binding_target",
+      "sql": "CREATE INDEX cash_publication_binding_target ON cash_publication_bindings(publication_id,kind,target_id,source_key)"
+    },
+    {
+      "name": "cash_snapshot_0_date",
+      "sql": "CREATE INDEX cash_snapshot_0_date ON cash_snapshot_0(dataset_slot,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_0_location_key",
+      "sql": "CREATE INDEX cash_snapshot_0_location_key ON cash_snapshot_0(dataset_slot,location_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_1_customer_key",
+      "sql": "CREATE INDEX cash_snapshot_1_customer_key ON cash_snapshot_1(dataset_slot,customer_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_1_date",
+      "sql": "CREATE INDEX cash_snapshot_1_date ON cash_snapshot_1(dataset_slot,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_1_location_key",
+      "sql": "CREATE INDEX cash_snapshot_1_location_key ON cash_snapshot_1(dataset_slot,location_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_1_seller_key",
+      "sql": "CREATE INDEX cash_snapshot_1_seller_key ON cash_snapshot_1(dataset_slot,seller_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_2_date",
+      "sql": "CREATE INDEX cash_snapshot_2_date ON cash_snapshot_2(dataset_slot,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_3_article_key",
+      "sql": "CREATE INDEX cash_snapshot_3_article_key ON cash_snapshot_3(dataset_slot,article_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_3_date",
+      "sql": "CREATE INDEX cash_snapshot_3_date ON cash_snapshot_3(dataset_slot,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_3_location_key",
+      "sql": "CREATE INDEX cash_snapshot_3_location_key ON cash_snapshot_3(dataset_slot,location_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_4_date",
+      "sql": "CREATE INDEX cash_snapshot_4_date ON cash_snapshot_4(dataset_slot,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_4_location_key",
+      "sql": "CREATE INDEX cash_snapshot_4_location_key ON cash_snapshot_4(dataset_slot,location_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_4_parent",
+      "sql": "CREATE INDEX cash_snapshot_4_parent ON cash_snapshot_4(dataset_slot,parent_row,source_row)"
+    },
+    {
+      "name": "cash_snapshot_5_date",
+      "sql": "CREATE INDEX cash_snapshot_5_date ON cash_snapshot_5(dataset_slot,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_5_location_key",
+      "sql": "CREATE INDEX cash_snapshot_5_location_key ON cash_snapshot_5(dataset_slot,location_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_6_article_key",
+      "sql": "CREATE INDEX cash_snapshot_6_article_key ON cash_snapshot_6(dataset_slot,article_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_6_date",
+      "sql": "CREATE INDEX cash_snapshot_6_date ON cash_snapshot_6(dataset_slot,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_6_location_key",
+      "sql": "CREATE INDEX cash_snapshot_6_location_key ON cash_snapshot_6(dataset_slot,location_key,business_date,source_row)"
+    },
+    {
+      "name": "cash_snapshot_6_parent",
+      "sql": "CREATE INDEX cash_snapshot_6_parent ON cash_snapshot_6(dataset_slot,parent_row,source_row)"
+    },
+    {
+      "name": "cash_snapshot_6_seller_key",
+      "sql": "CREATE INDEX cash_snapshot_6_seller_key ON cash_snapshot_6(dataset_slot,seller_key,business_date,source_row)"
+    },
+    {
+      "name": "idx_sales_article_identifier_owners_product",
+      "sql": "CREATE INDEX idx_sales_article_identifier_owners_product\n      ON sales_article_identifier_owners(product_id, canonical_gtin14)"
+    },
+    {
+      "name": "idx_sales_article_identifiers_lookup",
+      "sql": "CREATE INDEX idx_sales_article_identifiers_lookup\n      ON sales_article_identifiers(canonical_gtin14, product_id)"
+    },
+    {
+      "name": "idx_sales_article_identifiers_primary",
+      "sql": "CREATE UNIQUE INDEX idx_sales_article_identifiers_primary\n      ON sales_article_identifiers(product_id, source_snapshot_id)\n      WHERE is_primary = 1"
+    },
+    {
+      "name": "idx_sales_article_identifiers_product",
+      "sql": "CREATE INDEX idx_sales_article_identifiers_product\n      ON sales_article_identifiers(product_id, source_snapshot_id)"
+    },
+    {
+      "name": "idx_sales_article_import_findings_code",
+      "sql": "CREATE INDEX idx_sales_article_import_findings_code\n      ON sales_article_import_findings(snapshot_id, code, source_row)"
+    },
+    {
+      "name": "idx_sales_article_import_impacts_product",
+      "sql": "CREATE INDEX idx_sales_article_import_impacts_product\n      ON sales_article_import_impacts(product_id, imported_revision)"
+    },
+    {
+      "name": "idx_sales_article_prices_product",
+      "sql": "CREATE INDEX idx_sales_article_prices_product\n      ON sales_article_price_snapshots(product_id, price_type, created_at DESC)"
+    },
+    {
+      "name": "idx_sales_article_revisions_snapshot",
+      "sql": "CREATE INDEX idx_sales_article_revisions_snapshot\n      ON sales_article_revisions(source_snapshot_id, product_id)"
+    },
+    {
+      "name": "idx_sales_article_source_links_product",
+      "sql": "CREATE INDEX idx_sales_article_source_links_product\n      ON sales_article_source_links(product_id, source_system)"
+    }
+  ],
+  "stats": [],
+  "plans": [
+    {
+      "statement": "sales-article-catalog.articles.search",
+      "plan": [
+        "SCAN revision",
+        "SEARCH article USING INDEX sqlite_autoindex_sales_articles_4 (product_id=? AND current_revision=?)",
+        "CORRELATED SCALAR SUBQUERY 2",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 3",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 4",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 5",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 6",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 7",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 8",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 9",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 10",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 11",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 12",
+        "SEARCH searched_identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "SEARCH revision_snapshot USING INDEX sqlite_autoindex_sales_article_import_snapshots_1 (id=?)",
+        "CORRELATED SCALAR SUBQUERY 13",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 14",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 15",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 1",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "USE TEMP B-TREE FOR ORDER BY"
+      ]
+    },
+    {
+      "statement": "sales-article-catalog.articles.search.count",
+      "plan": [
+        "SCAN article",
+        "SEARCH revision USING INDEX sqlite_autoindex_sales_article_revisions_1 (product_id=? AND revision=?)",
+        "CORRELATED SCALAR SUBQUERY 1",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 2",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 3",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 4",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 5",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 6",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 7",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 8",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 9",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 10",
+        "SEARCH identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "USE TEMP B-TREE FOR ORDER BY",
+        "CORRELATED SCALAR SUBQUERY 11",
+        "SEARCH searched_identifier USING INDEX idx_sales_article_identifiers_product (product_id=? AND source_snapshot_id=?)",
+        "SEARCH revision_snapshot USING INDEX sqlite_autoindex_sales_article_import_snapshots_1 (id=?)"
+      ]
+    },
+    {
+      "statement": "cash-publications.search.6",
+      "plan": [
+        "SEARCH r USING INDEX cash_snapshot_6_date (dataset_slot=? AND business_date>? AND business_date<?)",
+        "SEARCH h USING PRIMARY KEY (dataset_slot=? AND source_row=?)",
+        "SEARCH l USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH s USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH hs USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH c USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN"
+      ]
+    },
+    {
+      "statement": "cash-publications.search.5",
+      "plan": [
+        "SEARCH r USING INDEX cash_snapshot_5_date (dataset_slot=? AND business_date>? AND business_date<?)",
+        "SEARCH l USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH s USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH hs USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH c USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN"
+      ]
+    },
+    {
+      "statement": "cash-publications.search.4",
+      "plan": [
+        "SEARCH r USING INDEX cash_snapshot_4_date (dataset_slot=? AND business_date>? AND business_date<?)",
+        "SEARCH l USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH s USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH hs USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH c USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN"
+      ]
+    },
+    {
+      "statement": "cash-publications.search.1",
+      "plan": [
+        "SEARCH r USING INDEX cash_snapshot_1_date (dataset_slot=? AND business_date>? AND business_date<?)",
+        "SEARCH l USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH s USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH hs USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN",
+        "SEARCH c USING PRIMARY KEY (publication_id=? AND kind=? AND source_key=?) LEFT-JOIN"
+      ]
+    }
+  ]
+}

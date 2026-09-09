@@ -5,6 +5,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const vm = require("node:vm");
+const { createRequire } = require("node:module");
 const { createLocalBackupArchive, TIMEOUT_MS } = require("../lib/local-backup-archive");
 const { createIntegrationSecretVault } = require("../lib/integration-secret-vault");
 const { writeBackupCommitMarker } = require("../lib/backup-commit");
@@ -42,6 +44,59 @@ function pair(directory, index) {
 const verifyPair = metadata => {
   assert.match(fs.readFileSync(metadata.databasePath).subarray(0, 25).toString(), /^synthetic-point-/);
 };
+
+function observedArchive(options, beforeCommand) {
+  const file = path.join(project, "lib/local-backup-archive.js"), localRequire = createRequire(file), exported = { exports: {} };
+  const childProcess = require("node:child_process");
+  vm.runInThisContext(`(function(require, module, exports) { ${fs.readFileSync(file, "utf8")}\n})`, { filename: file })(
+    name => name === "node:child_process" ? { ...childProcess, spawnSync(binary, args, config) {
+      const result = beforeCommand(args.slice(7));
+      return result || childProcess.spawnSync(binary, args, config);
+    } } : localRequire(name), exported, exported.exports);
+  return exported.exports.createLocalBackupArchive(options);
+}
+
+test("real optimized backup proves recovery once, reads all archive data once, and keeps the exact rollback pair", { skip: !available, timeout: 90000 }, t => {
+  const f = fixture(t), commands = [];
+  const archive = observedArchive(f.options, command => { commands.push(command); });
+  archive.initialize({ host: "gp-synthetic-test", stream: "app", confirmation: "initialize-local-archive" });
+  const first = pair(f.directory, 30);
+  archive.archivePair(first.snapshot, { verifyPair });
+  archive.maintainRetention(first.snapshot, { verifyPair });
+  const latest = pair(f.directory, 31);
+  commands.length = 0;
+  archive.preflightBackup();
+  archive.archivePair(latest.snapshot, { verifyPair });
+  const retention = archive.maintainRetention(latest.snapshot, { verifyPair });
+  assert.equal(commands.filter(c => c[0] === "restore").length, 1);
+  assert.equal(commands.filter(c => c[0] === "check" && c.includes("--read-data")).length, 1);
+  assert.equal(commands.filter(c => c[0] === "check" && !c.includes("--read-data")).length, 2);
+  assert.equal(retention.removedRaw, 1);
+  assert.equal(fs.existsSync(first.databasePath), false);
+  assert.equal(sha256File(latest.databasePath), latest.hash);
+  const recovered = archive.materialize(first.snapshot, { verifyPair });
+  assert.equal(sha256File(recovered.databasePath), first.hash);
+  recovered.cleanup();
+});
+
+test("a post-prune structure failure preserves every raw fallback and blocks new backup retries", { skip: !available, timeout: 90000 }, t => {
+  const f = fixture(t); let rejectAfterPrune = false, pruned = false;
+  const archive = observedArchive(f.options, command => {
+    if (command[0] === "prune") pruned = true;
+    if (rejectAfterPrune && pruned && command[0] === "check") return { status: 1, stdout: "", stderr: "synthetic failure" };
+  });
+  archive.initialize({ host: "gp-synthetic-test", stream: "app", confirmation: "initialize-local-archive" });
+  const first = pair(f.directory, 30), latest = pair(f.directory, 31);
+  archive.archivePair(first.snapshot, { verifyPair }); archive.archivePair(latest.snapshot, { verifyPair });
+  rejectAfterPrune = true;
+  assert.throws(() => archive.maintainRetention(latest.snapshot, { verifyPair }), /CHECK_FAILED/);
+  assert.equal(fs.existsSync(first.databasePath), true); assert.equal(fs.existsSync(latest.databasePath), true);
+  assert.throws(() => archive.preflightBackup(), /PENDING_RECONCILIATION_REQUIRED/);
+  rejectAfterPrune = false;
+  archive.reconcile({ confirmation: "reconcile-local-archive", verifyPair });
+  const retention = archive.maintainRetention(latest.snapshot, { verifyPair });
+  assert.equal(retention.removedRaw, 1);
+});
 
 test("local archive fixed subprocess and independent verification contracts", () => {
   assert.equal(TIMEOUT_MS, 1500000);
@@ -105,10 +160,13 @@ test("real local archive: 32 independently verified points, exactly 20 retained,
   const reconciled = archive.reconcile({ confirmation: "reconcile-local-archive", verifyPair });
   assert.equal(reconciled.retiredReceipts, 12); assert.equal(reconciled.removedRaw, 0); assert.equal(reconciled.removedArchives, 0);
   assert.ok(points.every(p => fs.existsSync(p.databasePath)), "reconciliation never removes raw pairs");
-  let restorePasses = 0;
+  let rawPasses = 0;
   assert.throws(() => archive.maintainRetention(points[31].snapshot, { verifyPair(metadata) {
     verifyPair(metadata);
-    if (metadata.databasePath.startsWith(path.join(state, "temporary") + path.sep) && ++restorePasses === 2) throw new Error("synthetic-post-prune-rejection");
+    // Active receipts are visited before retired ones. Reject the first raw
+    // deletion candidate; the independent test above rejects the post-prune
+    // structural proof itself before any candidate can be deleted.
+    if (metadata.databasePath === points[12].databasePath && ++rawPasses === 2) throw new Error("synthetic-post-prune-rejection");
   } }), /synthetic-post-prune-rejection/);
   assert.ok(points.every(p => fs.existsSync(p.databasePath)), "post-prune proof failure must preserve every raw fallback");
   assert.equal(archive.reconcile({ confirmation: "reconcile-local-archive", verifyPair }).removedRaw, 0);
@@ -173,16 +231,26 @@ test("real local archive: 32 independently verified points, exactly 20 retained,
     assert.deepEqual(archive.inspect({ auditRetired: true }).retiredAudit, { verified: true, receipts: 12 });
   });
 
-  await t.test("corrupt repository pack rejects restore and retention without removing newest raw pair", () => {
-    const data = path.join(state, "repository", "data");
-    const sub = fs.readdirSync(data).find(p => fs.readdirSync(path.join(data, p)).length);
-    const file = path.join(data, sub, fs.readdirSync(path.join(data, sub))[0]);
-    const fd = fs.openSync(file, "r+"), byte = Buffer.alloc(1);
-    try { fs.readSync(fd, byte, 0, 1, 0); byte[0] ^= 1; fs.writeSync(fd, byte, 0, 1, 0); } finally { fs.closeSync(fd); }
-    assert.throws(() => archive.maintainRetention(points[31].snapshot, { verifyPair }), /CHECK_FAILED/);
-    assert.throws(() => archive.preflightBackup(), /CHECK_FAILED/);
-    assert.ok(fs.existsSync(points[31].databasePath)); assert.ok(fs.existsSync(legacy.databasePath));
-  });
+});
+
+// This needs its own fixture. The retired-name test above deliberately leaves
+// a changed raw pair, which must not mask the repository-corruption failure.
+test("corrupt repository data blocks pruning and future retries without deleting either raw pair", { skip: !available, timeout: 60000 }, t => {
+  const f = fixture(t), archive = f.archive;
+  archive.initialize({ host: "gp-synthetic-test", stream: "app", confirmation: "initialize-local-archive" });
+  const first = pair(f.directory, 0), latest = pair(f.directory, 31);
+  archive.archivePair(first.snapshot, { verifyPair }); archive.archivePair(latest.snapshot, { verifyPair });
+  const data = path.join(f.directory, ".gp-local-archive", "repository", "data");
+  const sub = fs.readdirSync(data).find(p => fs.readdirSync(path.join(data, p)).length);
+  const file = path.join(data, sub, fs.readdirSync(path.join(data, sub))[0]);
+  const fd = fs.openSync(file, "r+"), byte = Buffer.alloc(1);
+  try { fs.readSync(fd, byte, 0, 1, 0); byte[0] ^= 1; fs.writeSync(fd, byte, 0, 1, 0); } finally { fs.closeSync(fd); }
+  assert.throws(() => archive.maintainRetention(latest.snapshot, { verifyPair }), /CHECK_FAILED/);
+  assert.throws(() => archive.preflightBackup(), /PENDING_RECONCILIATION_REQUIRED/);
+  assert.equal(fs.existsSync(first.databasePath), true); assert.equal(fs.existsSync(latest.databasePath), true);
+  const state = path.join(f.directory, ".gp-local-archive");
+  assert.equal(fs.readdirSync(path.join(state, "receipts")).length, 2, "full-read failure precedes forgetting the expired point");
+  assert.equal(fs.readdirSync(path.join(state, "retired")).length, 0);
 });
 
 test("local archive refuses untrusted executable, hardlinked input and incomplete publication", { skip: !available, timeout: 60000 }, t => {

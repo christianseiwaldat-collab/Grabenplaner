@@ -7,6 +7,7 @@ const path = require("node:path");
 const test = require("node:test");
 const {
   CHECK_IDS,
+  buildHostSecurityAlerts,
   parseHostSecurityStatus,
   readHostSecurityStatus,
 } = require("../lib/host-security-status");
@@ -60,6 +61,10 @@ test("v0.75 degrades stale or unavailable host-security status without blocking 
   const stale = readHostSecurityStatus({ statusPath, configured: true, requireRootOwner: false, now: Date.parse("2026-07-22T10:00:00Z") });
   assert.equal(stale.state, "warning");
   assert.equal(stale.lastErrorCode, "HOST_SECURITY_STATUS_STALE");
+  const justExpired = readHostSecurityStatus({ statusPath, configured: true, requireRootOwner: false,
+    now: Date.parse(validStatus().checkedAt) + 36 * 60 * 60 * 1000 + 1 });
+  assert.equal(justExpired.ageHours, 36, "the display rounds independently of the expiry gate");
+  assert.equal(justExpired.lastErrorCode, "HOST_SECURITY_STATUS_STALE");
   const missing = readHostSecurityStatus({ statusPath: path.join(root, "missing.json"), configured: true, requireRootOwner: false });
   assert.equal(missing.state, "error");
   assert.equal(missing.statusAvailable, false);
@@ -81,4 +86,61 @@ test("v0.75 never downgrades an error status when its timestamp is in the future
   assert.equal(status.state, "error");
   assert.equal(status.lastErrorCode, "HOST_SECURITY_STATUS_TIMESTAMP_FUTURE");
   assert.deepEqual(status.failedChecks, ["firewall"]);
+});
+
+function auditedStatus(overrides = {}) {
+  const parsed = parseHostSecurityStatus(validStatus(overrides));
+  return {
+    ...parsed, statusAvailable: true, lastErrorCode: null,
+    failedChecks: CHECK_IDS.filter(id => parsed.checks[id] === false),
+    unknownChecks: CHECK_IDS.filter(id => parsed.checks[id] === null),
+  };
+}
+
+test("maintenance stays one stable warning while new audit errors remain separate", () => {
+  const reboot = auditedStatus({ state: "warning", rebootRequired: true });
+  const alerts = buildHostSecurityAlerts(reboot);
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].id, "HOST_REBOOT_REQUIRED");
+  assert.equal(alerts[0].severity, "warning");
+  assert.deepEqual(buildHostSecurityAlerts({ ...reboot, checkedAt: "2026-07-21T10:00:00.000Z", ageHours: 1 }), alerts);
+  const mixed = buildHostSecurityAlerts(auditedStatus({
+    state: "error", rebootRequired: true,
+    checks: { ...validStatus().checks, publicPorts: false, failedUnits: false },
+  }));
+  assert.deepEqual(mixed.map(alert => [alert.id, alert.severity]), [
+    ["HOST_SECURITY_ATTENTION", "critical"], ["HOST_SERVICES_ATTENTION", "warning"], ["HOST_REBOOT_REQUIRED", "warning"],
+  ]);
+  assert.match(mixed[0].message, /Ports/);
+  assert.doesNotMatch(mixed[0].message, /Neustart/);
+  assert.equal(buildHostSecurityAlerts(auditedStatus()).length, 0);
+});
+
+test("unconfirmed checks retain the existing nullable schema and never imply successful isolation", (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "gp-host-unknown-"));
+  context.after(() => {
+    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const statusPath = path.join(directory, "status.json");
+  const value = validStatus({ state: "warning", checks: { ...validStatus().checks, publicPorts: null } });
+  fs.writeFileSync(statusPath, JSON.stringify(value), { mode: 0o640 });
+  const status = readHostSecurityStatus({ statusPath, configured: true, requireRootOwner: false, now: Date.parse(value.checkedAt) });
+  assert.deepEqual(status.unknownChecks, ["publicPorts"]);
+  assert.deepEqual(status.failedChecks, []);
+  assert.equal(buildHostSecurityAlerts(status)[0].id, "HOST_SECURITY_CHECK_INCOMPLETE");
+  assert.throws(() => parseHostSecurityStatus({ ...value, state: "ok" }), /widerspruechlich/);
+});
+
+test("unavailable, stale, pending and unexplained audit errors stay actionable", () => {
+  assert.equal(buildHostSecurityAlerts({ configured: false }).length, 0);
+  const unavailable = buildHostSecurityAlerts({ configured: true, statusAvailable: false, rebootRequired: true });
+  assert.deepEqual(unavailable.map(alert => alert.id), ["HOST_SECURITY_ATTENTION"]);
+  assert.equal(unavailable[0].severity, "critical");
+  const stale = buildHostSecurityAlerts({ ...auditedStatus({ state: "warning", rebootRequired: true }), lastErrorCode: "HOST_SECURITY_STATUS_STALE" });
+  assert.deepEqual(stale.map(alert => alert.id), ["HOST_SECURITY_STATUS_UNVERIFIED", "HOST_REBOOT_REQUIRED"]);
+  const pending = buildHostSecurityAlerts(auditedStatus({ state: "warning", pendingConfirmation: true, rebootRequired: true }));
+  assert.equal(pending[0].id, "HOST_SECURITY_CONFIRMATION_PENDING");
+  const unexplained = buildHostSecurityAlerts(auditedStatus({ state: "error", rebootRequired: true }));
+  assert.equal(unexplained[0].severity, "critical");
 });

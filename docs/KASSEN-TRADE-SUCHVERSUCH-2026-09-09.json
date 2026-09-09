@@ -1,0 +1,33 @@
+{
+  "fixture": "synthetic; in-memory; one revision and barcode per article",
+  "articles": 19024,
+  "node": "v24.19.0",
+  "sqlite": "3.53.3",
+  "runs": "one warmup + three measured repetitions; median; list and count together",
+  "results": [
+    {
+      "query": "(leer)",
+      "hits": 19024,
+      "existingMedianMs": 33.94,
+      "projectionMedianMs": 0.14,
+      "ftsMedianMs": null,
+      "equalResults": true
+    },
+    {
+      "query": "Testkamera 17001",
+      "hits": 1,
+      "existingMedianMs": 1503.653,
+      "projectionMedianMs": 7.051,
+      "ftsMedianMs": 0.603,
+      "equalResults": true
+    },
+    {
+      "query": "unauffindbar",
+      "hits": 0,
+      "existingMedianMs": 766.59,
+      "projectionMedianMs": 3.921,
+      "ftsMedianMs": 0.016,
+      "equalResults": true
+    }
+  ]
+}
