@@ -114,6 +114,7 @@ test("SQLite-Sales-Artikelstamm ist idempotent und trennt Katalog und GTIN-Besit
       "sales_article_price_snapshots",
       "sales_article_search_projection",
       "sales_article_search_dirty",
+      "sales_article_own_images",
     ]);
     const actual = database.prepare(`
       SELECT name FROM sqlite_master

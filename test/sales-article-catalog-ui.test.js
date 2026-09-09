@@ -73,7 +73,7 @@ test("Artikelsuche verwendet nur bestätigte Listenfelder und den serverseitigen
   assert.match(app, /"sourceSystem", label: "Quellsystem"/);
 });
 
-test("Ergebnisfeld zeigt zehn kompakte Zeilen, bleibt fest und behält sortierbare Köpfe", () => {
+test("Ergebnisfeld startet mit zehn Zeilen, erlaubt 5 bis 20 und behält wählbare sortierbare Köpfe", () => {
   const view = between(html, '<section id="salesArticleCatalogView"', '<section id="crmView"');
   assert.match(view, /id="salesArticleResultsToggle"[^>]*aria-controls="salesArticleResultsBody"[^>]*aria-expanded="true"/);
   assert.match(view, /id="salesArticleTableScroll"[^>]*role="region"/);
@@ -91,7 +91,11 @@ test("Ergebnisfeld zeigt zehn kompakte Zeilen, bleibt fest und behält sortierba
   assert.match(app, /resultsExpanded = !state\.salesArticleCatalog\.resultsExpanded/);
   const headRenderer = between(app, "function renderSalesArticleCatalogHead", "function salesArticleCatalogVisibleWindow");
   assert.match(headRenderer, /querySelectorAll\("\[data-sales-article-sort\]"\)/);
-  assert.match(headRenderer, /buttons\.length !== SALES_ARTICLE_CATALOG_COLUMNS\.length/);
+  assert.match(headRenderer, /const columns = selectedSalesArticleColumns\(\)/);
+  assert.match(headRenderer, /buttons\.map\(b => b\.dataset\.salesArticleSort\)\.join/);
+  assert.match(view, /id="salesArticleResizeHandle"[^>]*aria-valuemin="5"[^>]*aria-valuemax="20"/);
+  assert.match(styles, /\.sales-article-table-scroll\s*\{ min-height:0; max-height:none;/);
+  assert.ok(view.indexOf('id="salesArticleSearchForm"') < view.indexOf('id="salesArticleActionsLogButton"'));
   assert.match(headRenderer, /button\.closest\("th"\)\?\.setAttribute/);
 });
 
@@ -252,7 +256,7 @@ test("Preisgruppen unterscheiden serverseitig gesperrt von freigegeben aber leer
   );
   assert.match(priceRenderer, /if \(prices === null\)/);
   assert.match(priceRenderer, /else if \(!prices\.length\)/);
-  assert.match(priceRenderer, /Datenstatus/);
+  assert.match(priceRenderer, /sales-article-price-cards/);
   assert.match(priceRenderer, /price\.usable \? escapeHtml\(salesArticleCatalogMoney/);
   assert.match(priceRenderer, /price\.displayLabel \|\| SALES_ARTICLE_PRICE_TYPE_LABELS\[price\.priceType\]/);
   assert.match(priceRenderer, /sales-article-detail-quality/);

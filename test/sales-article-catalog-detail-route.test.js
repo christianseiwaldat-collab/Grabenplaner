@@ -219,13 +219,30 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
+test('Eigene Tabelleneinstellungen benötigen nur Leserecht, prüfen CSRF und filtern geschützte Spalten', async () => {
+  const route = '/api/sales/articles/preferences';
+  const initial = await requestJson(route); assert.equal(initial.response.status, 200);
+  assert.equal(initial.payload.visibleRows, 10); assert.ok(!initial.payload.columnsAvailable.some(c => c.id === 'purchaseNet'));
+  const body = { columns: ['description','articleNumber','purchaseNet'], visibleRows: 20, sort: 'purchaseNet', direction: 'desc' };
+  assert.equal((await requestMutationJson(route, { method: 'PUT', body, includeCsrf: false })).response.status, 403);
+  assert.equal((await requestMutationJson(route, { method: 'PUT', body })).response.status, 403);
+  body.columns.pop(); body.sort = 'articleNumber';
+  const saved = await requestMutationJson(route, { method: 'PUT', body }); assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+  assert.deepEqual(saved.payload.columns, ['description','articleNumber']); assert.equal(saved.payload.sort, 'articleNumber');
+  const reloaded = await requestJson(route); assert.equal(reloaded.payload.visibleRows, 20); assert.deepEqual(reloaded.payload.columns, saved.payload.columns);
+  for (const invalid of [{ ...body, visibleRows: 4 }, { ...body, visibleRows: 21 }, { ...body, employeeNumber: 'another-user' }]) {
+    assert.equal((await requestMutationJson(route, { method: 'PUT', body: invalid })).response.status, 400);
+  }
+  assert.equal((await requestJson('/api/sales/articles?sort=purchaseNet')).response.status, 403);
+});
+
 test("Detailroute hält Stammdaten, Verkaufs- und Kostenpreise serverseitig getrennt", async () => {
   const base = await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}`);
   assert.equal(base.response.status, 200, JSON.stringify(base.payload));
   assert.match(base.response.headers.get("cache-control") || "", /private/);
   assert.deepEqual(Object.keys(base.payload).sort(), ["article", "capabilities", "revisions"]);
   assert.deepEqual(Object.keys(base.payload.article).sort(), [
-    "active", "articleNumber", "currentRevision", "description", "identifiers", "prices", "provenance",
+    "active", "articleNumber", "currentRevision", "description", "identifiers", "image", "prices", "provenance", "sourceSections",
   ]);
   assert.equal(base.payload.article.articleNumber, ARTICLE_NUMBER);
   assert.deepEqual(base.payload.article.identifiers, [{
@@ -688,4 +705,62 @@ test("Artikelmutationen sind CSRF-, Rechte-, Revisions-, Audit- und Undo-gesiche
     DELETE FROM portal_permission_denials
     WHERE employee_number = ? AND permission = ?
   `).run(EMPLOYEE_NUMBER, SALES_ARTICLE_CATALOG_PERMISSIONS.COSTS_READ);
+});
+
+test('Eigene Bilder folgen echten Portalrechten und bleiben nach Artikelbearbeitung sowie Undo sichtbar', async () => {
+  // Explicit grants keep this case independent of earlier permission changes.
+  for (const permission of [SALES_ARTICLE_CATALOG_PERMISSIONS.ACCESS, SALES_ARTICLE_CATALOG_PERMISSIONS.READ, SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE]) {
+    db.prepare('INSERT OR IGNORE INTO portal_permission_grants (employee_number, permission, granted_by) VALUES (?, ?, ?)')
+      .run(EMPLOYEE_NUMBER, permission, EMPLOYEE_NUMBER);
+  }
+  const articleNumber = 'IMAGE-007';
+  const created = await requestMutationJson('/api/sales/articles', { method: 'POST', body: { articleNumber, description: 'Bildprüfung', identifiers: [] } });
+  assert.equal(created.response.status, 201, created.text);
+  assert.equal(created.payload.article.image.present, false);
+  const input = await require('sharp')({ create: { width: 32, height: 16, channels: 3, background: '#287c64' } }).png().toBuffer();
+  const upload = async (csrf = true) => {
+    const token = crypto.randomBytes(24).toString('hex');
+    return fetch(`${baseUrl}/api/sales/articles/image?articleNumber=${articleNumber}`, { method: 'PUT', body: input, headers: {
+      'Content-Type': 'image/png', Cookie: `${createSession()}; grabenplaner_csrf=${token}`,
+      'X-Article-Image-Revision': 'none', ...(csrf ? { 'X-CSRF-Token': token } : {}),
+    } });
+  };
+  const deny = permission => db.prepare('INSERT INTO portal_permission_denials (employee_number, permission, denied_by) VALUES (?, ?, ?)').run(EMPLOYEE_NUMBER, permission, EMPLOYEE_NUMBER);
+  const allow = permission => db.prepare('DELETE FROM portal_permission_denials WHERE employee_number=? AND permission=?').run(EMPLOYEE_NUMBER, permission);
+  assert.equal((await upload(false)).status, 403);
+  deny(SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE);
+  assert.equal((await upload()).status, 403);
+  allow(SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE);
+  const saved = await upload(); const image = (await saved.json()).image;
+  assert.equal(saved.status, 200); assert.equal(image.present, true);
+  const route = `/api/sales/articles/image?articleNumber=${articleNumber}`;
+  const download = await fetch(baseUrl + route, { headers: { Cookie: createSession() } });
+  assert.equal(download.status, 200); assert.equal(download.headers.get('content-type'), 'image/webp');
+  assert.match(download.headers.get('cache-control'), /private.*no-store/);
+  assert.equal((await download.arrayBuffer()).byteLength, image.byteSize);
+  assert.equal((await fetch(baseUrl + route)).status, 401);
+  const detail = await requestJson(`/api/sales/articles/detail?articleNumber=${articleNumber}`);
+  assert.deepEqual(detail.payload.article.image, image);
+  assert.equal(JSON.stringify(detail.payload).includes('content'), false);
+  const edited = await requestMutationJson('/api/sales/articles', { method: 'PUT', body: {
+    currentArticleNumber: articleNumber, articleNumber, expectedRevision: 1, description: 'Bildprüfung geändert', identifiers: [],
+  } });
+  assert.equal(edited.response.status, 200, edited.text); assert.deepEqual(edited.payload.article.image, image);
+  const archived = await requestMutationJson('/api/sales/articles/archive', { method: 'POST', body: { articleNumber, expectedRevision: 2 } });
+  assert.equal(archived.response.status, 200, archived.text); assert.deepEqual(archived.payload.article.image, image);
+  const actions = await requestMutationJson('/api/portal/v1/me/actions?limit=50');
+  const action = actions.payload.actions.find(a => a.actionType === 'sales.article-catalog.archive' && a.summary === `Artikel ${articleNumber}`);
+  assert.ok(action);
+  const undone = await requestMutationJson(`/api/portal/v1/me/actions/${action.id}/undo`, { method: 'POST', body: {} });
+  assert.equal(undone.response.status, 200, undone.text); assert.deepEqual(undone.payload.salesArticle.article.image, image);
+  const copied = await requestMutationJson('/api/sales/articles/copy', { method: 'POST', body: { sourceArticleNumber: articleNumber, expectedRevision: 4, articleNumber: 'IMAGE-008' } });
+  assert.equal(copied.response.status, 201, copied.text); assert.equal(copied.payload.article.image.present, false);
+  const invalid = await requestMutationJson('/api/sales/articles/image/from-url', { method: 'POST', body: { articleNumber, expectedRevision: image.revision, url: 'https://127.0.0.1/secret.png' } });
+  assert.equal(invalid.response.status, 400, invalid.text);
+  assert.equal((await requestJson(`/api/sales/articles/detail?articleNumber=${articleNumber}`)).payload.article.image.revision, image.revision);
+  deny(SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  assert.equal((await requestJson(route)).response.status, 403);
+  allow(SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  // Restore the initial read-only grant baseline.
+  db.prepare('DELETE FROM portal_permission_grants WHERE employee_number=? AND permission=?').run(EMPLOYEE_NUMBER, SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE);
 });

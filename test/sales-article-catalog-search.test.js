@@ -271,7 +271,7 @@ test("Artikelstammsuche paginiert stabil, zählt getrennt und filtert nur modell
   }
 });
 
-test("Suchstatements bleiben PostgreSQL-portabel und geben keine Preis- oder Kostenspalten frei", () => {
+test("Suchstatements bleiben PostgreSQL-portabel und lesen Preise nur aus der vorbereiteten Suchprojektion", () => {
   for (const statement of [
     SALES_ARTICLE_CATALOG_STATEMENTS.search,
     SALES_ARTICLE_CATALOG_STATEMENTS.countSearch,
@@ -299,9 +299,48 @@ test("Suchstatements bleiben PostgreSQL-portabel und geben keine Preis- oder Kos
   assert.deepEqual(Object.keys(SALES_ARTICLE_CATALOG_STATEMENTS.search.columns), [
     "productId", "articleNumber", "description", "primaryIdentifier",
     "active", "sourceSystem", "currentRevision",
+    "retailGross", "internetGross", "retailNet", "internetNet", "purchaseNet", "purchaseGross",
   ]);
 });
 
+
+test('Preis-Spalten sortieren den gesamten Trefferbestand exakt, mit leeren Werten zuletzt und getrennten Leserechten', async () => {
+  const f = await fixture();
+  const price = (amount, options = {}) => ({ priceType: 'sales', amount, currency: 'EUR', priceBasis: 'gross', qualityStatus: 'confirmed', sourceField: 'VK', ...options });
+  try {
+    const values = ['9.9', '100', '2.000000000002', '2.000000000001', '0'];
+    const articles = Array.from({ length: 60 }, (_, i) => article(100 + i, { description: 'Preisprobe', prices: [price(values[i % values.length]),
+      price(String(i), { priceType: 'internet_1', sourceField: 'Internet' }), price('1.2', { priceType: 'average_purchase', priceBasis: 'net', sourceField: 'EK' })] }));
+    articles.push(article(999, { description: 'Preisprobe', prices: [price(null, { qualityStatus: 'unresolved' })] }));
+    await f.repository.importSnapshot({ snapshot: snapshot('tradefoto.artikel_stamm', articles, 4), actor: 'tester', timestamp: '2026-09-07T11:00:00.000Z' });
+    const query = { query: 'Preisprobe', sort: 'retailGross', limit: 7 }, access = { pricesRead: true, costsRead: false };
+    const found = [];
+    for (let offset = 0; offset < 61; offset += 7) found.push(...(await f.repository.search({ ...query, offset }, access)).items);
+    assert.equal(found.length, 61); assert.equal(new Set(found.map(r => r.productId)).size, 61);
+    const scaled = require('../lib/sales-report-model').scaled;
+    const expected = [...articles].sort((a, b) => {
+      const x = a.prices[0].amount, y = b.prices[0].amount;
+      if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+      const delta = scaled(x, 12) - scaled(y, 12); return delta < 0n ? -1 : delta > 0n ? 1 : a.articleNumber.localeCompare(b.articleNumber);
+    });
+    assert.deepEqual(found.map(r => r.articleNumber), expected.map(r => r.articleNumber));
+    assert.equal(found.at(-1).retailGross, null);
+    assert.ok(found.every(r => !Object.hasOwn(r, 'purchaseNet')));
+    const descending = await f.repository.search({ ...query, direction: 'desc', limit: 100 }, access);
+    assert.equal(descending.items[0].retailGross, '100.000000000000'); assert.equal(descending.items.at(-1).retailGross, null);
+    const costs = await f.repository.search({ query: 'Preisprobe', sort: 'purchaseNet' }, { pricesRead: false, costsRead: true });
+    assert.equal(costs.items[0].purchaseNet, '1.200000000000'); assert.ok(costs.items.every(r => !Object.hasOwn(r, 'retailGross')));
+    for (const sort of ['retailGross', 'internetGross', 'purchaseGross']) await assert.rejects(f.repository.search({ sort }), e => e.code === 'PERSISTENCE_STATEMENT_INVALID');
+    assert.ok((await f.repository.search({ query: 'Preisprobe' })).items.every(r => !Object.hasOwn(r, 'retailGross') && !Object.hasOwn(r, 'purchaseNet')));
+    const { PRICE_SEARCH_FIELDS } = require('../lib/sales-article-table');
+    // Simulate the previously deployed projection, then run the actual additive startup migration.
+    for (const p of PRICE_SEARCH_FIELDS) for (const column of [p.column, p.column + '_sort']) f.database.exec(`ALTER TABLE sales_article_search_projection DROP COLUMN ${column}`);
+    const { ensureSqliteArticleSearchProjection } = require('../lib/persistence/sqlite/operations/sales-article-search-projection-schema');
+    assert.equal(ensureSqliteArticleSearchProjection(f.database), 75);
+    assert.equal(ensureSqliteArticleSearchProjection(f.database), 0);
+    assert.deepEqual((await f.repository.search({ ...query, limit: 100 }, access)).items.map(r => r.articleNumber), expected.map(r => r.articleNumber));
+  } finally { await f.close(); }
+});
 
 test('Artikelstamm findet ungenaue Sony-Suche mit Joker, umgestellter Wortfolge und Kennung', async () => {
   const f = await fixture(); try {
