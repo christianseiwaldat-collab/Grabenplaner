@@ -401,9 +401,14 @@ function assertCompatibility(database, sourcePackage, targetPackage, sourceRunti
   }
   if (tableExists(database, "schema_migrations")) {
     const available = columns(database, "schema_migrations");
-    if (!available.has("app_version")) fail("Die Migrationshistorie ist nicht kompatibel.");
-    for (const row of database.prepare("SELECT DISTINCT app_version FROM schema_migrations WHERE TRIM(app_version) <> ''").all()) {
-      if (compareSemver(String(row.app_version), targetVersion) > 0) fail("Die Datenbank benoetigt eine neuere App-Version.");
+    if (!available.has("id") || !available.has("app_version")) fail("Die Migrationshistorie ist nicht kompatibel.");
+    for (const row of database.prepare("SELECT id, app_version FROM schema_migrations WHERE TRIM(app_version) <> ''").all()) {
+      // Preserve immutable v0.92.32 backups that contain this exact historical
+      // placeholder. Every other unknown version remains a recovery failure.
+      const migrationVersion = sourceVersion === "0.92.32-beta"
+        && row.id === "developer-permission-defaults-v1" && row.app_version === "local"
+        ? "0.92.32-beta" : String(row.app_version);
+      if (compareSemver(migrationVersion, targetVersion) > 0) fail("Die Datenbank benoetigt eine neuere App-Version.");
     }
   }
   return { sourceVersion, targetVersion, deploymentSchemaVersion: sourceRuntime.deploymentSchemaVersion };

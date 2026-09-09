@@ -33,6 +33,26 @@ test("v0.74 compatibility rejects newer runtime schemas and newer database migra
   } finally { database.close(); }
 });
 
+test("v0.92.32 recovery resolves only its exact historical permission-migration placeholder", () => {
+  const database = new DatabaseSync(":memory:");
+  const runtime = { format: "grabenplaner-linux-runtime-contract", schemaVersion: 1, deploymentSchemaVersion: 1 };
+  try {
+    database.exec("CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, app_version TEXT NOT NULL)");
+    database.prepare("INSERT INTO schema_migrations VALUES (?, ?)").run("developer-permission-defaults-v1", "local");
+    assert.equal(assertCompatibility(database, {version:"0.92.32-beta"}, {version:"0.92.33-beta"}, runtime, runtime).sourceVersion, "0.92.32-beta");
+    assert.equal(database.prepare("SELECT app_version FROM schema_migrations").get().app_version, "local");
+    for (const source of ["0.92.31-beta", "0.92.33-beta"]) {
+      assert.throws(() => assertCompatibility(database, {version:source}, {version:"0.92.33-beta"}, runtime, runtime), /nicht vergleichbar/);
+    }
+    assert.throws(() => assertCompatibility(database, {version:"0.92.32-beta"}, {version:"0.92.31-beta"}, runtime, runtime), /neueren App-Version/);
+    database.prepare("INSERT INTO schema_migrations VALUES (?, ?)").run("unrelated-placeholder", "local");
+    assert.throws(() => assertCompatibility(database, {version:"0.92.32-beta"}, {version:"0.92.33-beta"}, runtime, runtime), /nicht vergleichbar/);
+    database.prepare("DELETE FROM schema_migrations WHERE id='unrelated-placeholder'").run();
+    database.prepare("UPDATE schema_migrations SET app_version='unknown'").run();
+    assert.throws(() => assertCompatibility(database, {version:"0.92.32-beta"}, {version:"0.92.33-beta"}, runtime, runtime), /nicht vergleichbar/);
+  } finally { database.close(); }
+});
+
 test("v0.74 reads recovery keys without evaluating shell content and rejects duplicate values", () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-recovery-env-"));
   const environment = path.join(temporary, "grabenplaner.env");

@@ -148,12 +148,16 @@ test('Developer rights, role/position defaults and persistence use the real auth
    assert(db.prepare("SELECT sql FROM sqlite_master WHERE name=?").get(definition.name).sql.includes('unrelated drift'));
    db.exec(`DROP TRIGGER "${definition.name}"`);db.exec(definition.sql);
   });
-  await t.test('built-in seeding preserves customized rights and Developer grants',async()=>{
+  await t.test('seeding repairs the exact legacy version marker and preserves customized rights and Developer grants',async()=>{
    const seeding=require('../lib/persistence/sqlite/operations/application-seeding').createSqliteApplicationSeedingOperations(db);
    const rows=db.prepare('SELECT id,name,description,permissions,sort_order FROM portal_roles').all();
    db.prepare("UPDATE portal_roles SET permissions='[]',permissions_customized=1 WHERE id='employee'").run();
    db.prepare("INSERT INTO portal_permission_grants(employee_number,permission,granted_by) VALUES ('defaults-ma','amu:file:read','defaults-dev')").run();
+   db.prepare("UPDATE schema_migrations SET app_version='local',applied_at='2026-09-08 14:00:00' WHERE id='developer-permission-defaults-v1'").run();
+   db.prepare("INSERT INTO schema_migrations(id,app_version) VALUES ('unrelated-placeholder','local')").run();
    seeding.seedApplicationDefaults({defaultSettings:{},planningDays:[],builtinPortalRoles:rows.map(r=>({...r,permissions:JSON.parse(r.permissions),sortOrder:r.sort_order}))});
+   assert.deepEqual({...db.prepare("SELECT app_version,applied_at FROM schema_migrations WHERE id='developer-permission-defaults-v1'").get()}, {app_version:'0.92.32-beta',applied_at:'2026-09-08 14:00:00'});
+   assert.equal(db.prepare("SELECT app_version FROM schema_migrations WHERE id='unrelated-placeholder'").get().app_version,'local');
    assert.equal(db.prepare("SELECT permissions FROM portal_roles WHERE id='employee'").get().permissions,'[]');
    assert(db.prepare("SELECT 1 FROM portal_permission_grants WHERE employee_number='defaults-ma' AND permission='amu:file:read'").get());
   });

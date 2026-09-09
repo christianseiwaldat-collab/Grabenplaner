@@ -102,6 +102,10 @@ test("Block 3/7: Default-, Positions- und Rollen-Seeding ist idempotent", () => 
       JSON.stringify(["system:read"]),
     );
     assert.deepEqual(second.legacyDaySettingsSnapshot(), first.legacyDaySettingsSnapshot());
+    assert.equal(database.prepare("SELECT app_version FROM schema_migrations WHERE id='developer-permission-defaults-v1'").get().app_version, "0.92.32-beta");
+    const runtime = { format: "grabenplaner-linux-runtime-contract", schemaVersion: 1, deploymentSchemaVersion: 1 };
+    const current = require("../package.json");
+    assert.equal(require("../server-tools/linux/recovery/lib/recovery-verify").assertCompatibility(database, current, current, runtime, runtime).targetVersion, current.version);
     assert.equal(
       JSON.parse(database.prepare("SELECT day_settings_json FROM locations WHERE id = '01'").get().day_settings_json)
         .saturday.end,
