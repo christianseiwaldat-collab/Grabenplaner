@@ -6,6 +6,10 @@ window.createSalesReportJobUi = function ({ api, visible }) {
   const errors = { IMPORT_HISTORY_DATE_RANGE: 'Bitte gültige Zeiträume mit höchstens 366 Tagen und ohne zukünftige Tage wählen.',
     IMPORT_REPORT_SELECTION: 'Bitte Kennzahlen, Filialen und Aufschlüsselung prüfen.', IMPORT_REPORT_GROUP_LIMIT: 'Zu viele Gruppen. Bitte nach WGR, Hersteller, Filiale oder MA eingrenzen.',
     IMPORT_REPORT_PDF_LIMIT: 'Der Bericht ist zu umfangreich. Bitte weniger Kennzahlen oder Gruppen auswählen.',
+    IMPORT_REPORT_DATA_LIMIT: 'Der Bericht umfasst zu viele Daten. Bitte den Zeitraum oder die Auswahl eingrenzen.',
+    IMPORT_HISTORY_ANALYSIS_EXPIRED: 'Der Zwischenstand ist abgelaufen. Bitte den Bericht erneut beauftragen.',
+    IMPORT_REPORT_WORKER_FAILED: 'Die Hintergrundberechnung wurde beendet. Bitte den Bericht erneut beauftragen.',
+    IMPORT_REPORT_WORKER_TIMEOUT: 'Ein Berechnungsschritt hat zu lange gedauert. Bitte die Auswahl eingrenzen und erneut beauftragen.',
     IMPORT_FORBIDDEN: 'Die Berechtigung hat sich geändert. Bitte die Freigaben prüfen.',
     IMPORT_HISTORY_ANALYSIS_CHANGED: 'Der Datenstand hat sich geändert. Bitte einen neuen Auftrag erteilen.' };
   function showError(error) { const message = errors[error.code] || error.message; hint.textContent = message; const target = el('salesReportJobError'); target.hidden = false; target.textContent = message; }

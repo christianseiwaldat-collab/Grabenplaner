@@ -144,6 +144,8 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/sales-report-jobs-catalog.js",
   "lib/persistence/sqlite/operations/sales-report-jobs-schema.js",
   "lib/sales-report-jobs-routes.js",
+  "lib/sales-report-batch-worker.js",
+  "lib/sales-report-worker.js",
   "lib/persistence/sqlite/operations/cash-inventory-schema.js",
   "lib/persistence/sqlite/operations/sales-article-search-projection-schema.js",
   "lib/persistence/sqlite/operations/portal-permission-defaults-schema.js",
