@@ -41,3 +41,45 @@ for (const [count, negative] of [[5, false], [65, true]]) test(`PDF with ${count
     }
   } finally { await loading.destroy(); }
 });
+
+test('939 seller/product-group combinations and six metrics fit without losing values or reducing font size', async () => {
+  const input = fixture(0);
+  input.metadata.marginStatus = 'confirmed';
+  input.query.groupBy = ['seller', 'productGroup'];
+  input.query.metrics = ['netRevenue', 'quantity', 'receiptCount', 'grossMargin', 'revenuePerReceipt', 'marginRate'];
+  const state = M.accumulator();
+  for (let i = 0; i < 939; i++) for (const phase of ['current', 'comparison']) M.accumulate(state, phase, input.query, {
+    metric: { status: 'sale', net: phase === 'current' ? '12345.67' : '9876.54', gross: '14814.80' },
+    margin: i % 11 ? '2345.67' : null, quantity: '123.000001', receiptKey: `r${i}`, customerKey: null,
+    manufacturer: { id: 'm1', label: 'Testmarke' }, location: input.metadata.locations[0],
+    seller: { id: `s${Math.floor(i / 100)}`, label: `MA ${String(Math.floor(i / 100)).padStart(3, '0')}` },
+    productGroup: { id: `g${i}`, label: `WGR / Sortiment ${String(i).padStart(4, '0')} - Testartikel` }
+  });
+  input.report = M.finishReport(state, input.query);
+  const buffer = await createSalesAnalysisPdf(input);
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const loading = getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }), pdf = await loading.promise;
+  try {
+    assert.ok(pdf.numPages <= 250);
+    const text = []; let fullSizeValues = 0;
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n), content = await page.getTextContent();
+      text.push(content.items.map(t => t.str).join(' '));
+      for (const item of content.items.filter(i => i.str?.trim())) {
+        assert.ok(item.transform[4] >= 39 && item.transform[4] + item.width <= 557, `horizontal overflow page ${n}`);
+        assert.ok(item.transform[5] >= 39 && item.transform[5] <= 809, `vertical overflow page ${n}`);
+        if (/12345,67/.test(item.str.replace(/[.\s]/g, '')) && item.transform[0] === 8.5) fullSizeValues++;
+      }
+      assert.match(text.at(-1), new RegExp(`Seite ${n} / ${pdf.numPages}`)); page.cleanup();
+    }
+    const all = text.join('\n');
+    assert.ok(fullSizeValues >= 939, 'all detail values retain the original 8.5 point font');
+    for (let i = 0; i < 939; i++) assert.ok(all.split(`WGR / Sortiment ${String(i).padStart(4, '0')}`).length >= 7, `missing metric group ${i}`);
+    const compact = all.replace(/[.\s]/g, '');
+    for (const value of ['12345,67', '9876,54', '2469,13', '123,000001', 'Nichtverfügbar']) assert.ok(compact.includes(value), `missing value ${value}`);
+    if (process.env.SALES_REPORT_PDF_PREVIEW_DIR) {
+      const fs = require('node:fs'), path = require('node:path'); fs.mkdirSync(process.env.SALES_REPORT_PDF_PREVIEW_DIR, { recursive: true });
+      fs.writeFileSync(path.join(process.env.SALES_REPORT_PDF_PREVIEW_DIR, 'sales-analysis-939.pdf'), buffer);
+    }
+  } finally { await loading.destroy(); }
+});
