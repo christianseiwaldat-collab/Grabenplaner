@@ -95,6 +95,43 @@ test('durable report jobs complete both periods and encrypt PDF results, with pe
   await jobs.remove(f.session, job.id); assert.equal((await jobs.list(f.session)).length, 0);
 });
 
+test('the real background worker reads a separate file connection and produces the same PDF totals', async t => {
+  const fs = require('node:fs'), path = require('node:path');
+  const root = fs.realpathSync(path.resolve(__dirname, '../tmp')), dir = fs.mkdtempSync(path.join(root, 'report-worker-'));
+  const databasePath = path.join(dir, 'source.db'), f = await fixture(t, { databasePath, count: 205 });
+  await f.activate();
+  const { createSalesReportBatchWorker } = require('../lib/sales-report-batch-worker');
+  const batchWorker = createSalesReportBatchWorker({ databasePath, scopeId: f.actor.scopeId, today: '2026-09-07',
+    keyConfiguration: { activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 12).toString('base64') } } });
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId, batchWorker });
+  t.after(async () => { await jobs.stop(); assert.equal(fs.realpathSync(path.dirname(dir)), root); fs.rmSync(dir, { recursive: true }); });
+  const before = f.app.database.prepare('SELECT * FROM cash_snapshot_inventory ORDER BY dataset_slot,table_index').all();
+  const job = await jobs.create(f.session, { query: f.query() });
+  await jobs.tick(); assert.equal((await jobs.list(f.session))[0].processed, 200);
+  await jobs.tick(); await jobs.tick();
+  assert.equal((await jobs.list(f.session))[0].status, 'completed');
+  assert.match(await reportPdfText(await jobs.download(f.session, job.id)), /2[.\s]?050,00/);
+  assert.deepEqual(f.app.database.prepare('SELECT * FROM cash_snapshot_inventory ORDER BY dataset_slot,table_index').all(), before);
+});
+
+test('background results cannot survive mid-batch rights revocation or cancellation', async t => {
+  const f = await fixture(t); await f.activate(); const original = f.session;
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  let cancelId = null;
+  const batchWorker = { async run() {
+    if (cancelId) await jobs.cancel(original, cancelId); else f.session = { ...original, permissions: [] };
+    return { analysis: { complete: true, processed: 1 }, artifact: Buffer.from('%PDF-Synthetic').toString('base64') };
+  }, async stop() {} };
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId, batchWorker });
+  const revoked = await jobs.create(original, { query: f.query() }); await jobs.tick(); f.session = original;
+  assert.equal((await jobs.list(original))[0].error, 'IMPORT_FORBIDDEN');
+  await assert.rejects(jobs.download(original, revoked.id), code('IMPORT_HISTORY_NOT_FOUND'));
+  const cancelled = await jobs.create(original, { query: f.query() }); cancelId = cancelled.id; await jobs.tick();
+  assert.equal((await jobs.list(original)).find(row => row.id === cancelled.id).status, 'cancelled');
+  await assert.rejects(jobs.download(original, cancelled.id), code('IMPORT_HISTORY_NOT_FOUND'));
+});
+
 test('report job lease recovery restarts exactly once without duplicate totals and isolates concurrent workers', async t => {
   const f = await fixture(t, { count: 205 }); await f.activate(); let time = Date.parse(TIME);
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
@@ -558,13 +595,25 @@ test('cash reads take no writer reservation or full-table count, and a receipt r
   assert.ok(calls.some(c => c.sql === 'BEGIN'));
   assert.equal(calls.filter(c => /BEGIN\s+(IMMEDIATE|EXCLUSIVE)/i.test(c.sql)).length, 0);
   assert.equal(calls.filter(c => /COUNT\(\*\).*FROM cash_(snapshot_\d|publication_bindings)/i.test(c.sql)).length, 0);
-  assert.equal(calls.filter(c => /FROM cash_snapshot_6 WHERE.*parent_row=/.test(c.sql)).length, 1);
+  assert.equal(calls.filter(c => /FROM cash_snapshot_6(?: INDEXED BY \w+)? WHERE.*parent_row=/.test(c.sql)).length, 1);
   assert.equal(calls.filter(c => new RegExp(`FROM cash_snapshot_${headIndex} WHERE.*source_row=`).test(c.sql)).length, 1);
   assert.ok(calls.filter(c => /FROM cash_publication_bindings WHERE.*source_key=/.test(c.sql)).length <= 5);
   calls.length = 0;
   await runtime.run(f.get, w => w.receipts.search(f.query()));
   const candidates = calls.find(c => c.sql.includes(`FROM cash_snapshot_${headIndex} r`));
   assert.ok(candidates); assert.doesNotMatch(candidates.sql.split('FROM')[0], /payload|source_key|seller_key|customer_key/);
+});
+
+test('receipt positions use the parent index without requiring pre-existing planner statistics', async t => {
+  const f = await fixture(t); await f.activate();
+  const { SQLITE_CASH_SNAPSHOTS_CATALOG } = require('../lib/persistence/sqlite/cash-snapshots-catalog');
+  for (const table of TABLES.filter(row => ['Umsatz_Kasse_Details', 'KassenJournal_Details'].includes(row.name))) {
+    const sql = SQLITE_CASH_SNAPSHOTS_CATALOG.find(entry => entry.statement === table.statements.children).sql;
+    const args = { datasetSlot: 1, parentRow: 1, limit: 1001 };
+    const plan = f.app.database.prepare('EXPLAIN QUERY PLAN ' + sql).all(args).map(row => row.detail).join(' ');
+    assert.match(plan, new RegExp(`USING INDEX ${table.sqlName}_parent \\(dataset_slot=\\? AND parent_row=\\?\\)`));
+    assert.deepEqual(f.app.database.prepare(sql).all(args), f.app.database.prepare(sql.replace(` INDEXED BY ${table.sqlName}_parent`, '')).all(args));
+  }
 });
 
 test('cash verification generations reject same-count changes, survive schema reopen, and roll back atomically', async t => {
@@ -631,7 +680,7 @@ test('verified receipt summaries preserve every line filter, lazy details and ri
   const calls = observeSqlite(t), cold = [], warm = [], q = { ...f.query(), limit: 50 };
   let runtime, result;
   const stats = () => ({ queries: calls.filter(c => c.method !== 'exec').length,
-    childReads: calls.filter(c => /FROM cash_snapshot_6 WHERE.*parent_row=/.test(c.sql)).length,
+    childReads: calls.filter(c => /FROM cash_snapshot_6(?: INDEXED BY \w+)? WHERE.*parent_row=/.test(c.sql)).length,
     fullCounts: calls.filter(c => /COUNT\(\*\).*FROM cash_(snapshot_\d|publication_bindings)/i.test(c.sql)).length });
   for (let i = 0; i < 3; i++) {
     runtime = f.history(); calls.length = 0; const start = performance.now();

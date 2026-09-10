@@ -25522,6 +25522,8 @@ registerDataImportRoutes(app, {
 const managedSalesHistoryRuntime = createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true });
 const salesReportJobs = createSalesReportJobs({ access: persistenceProvider, vault: integrationSecretVault,
   runtime: createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, cashEnabled: true, retainCompletedAnalyses: false }),
+  batchWorker: require('./lib/sales-report-batch-worker').createSalesReportBatchWorker({ databasePath,
+    keyConfiguration: integrationEncryptionConfiguration ? { activeKeyId: integrationEncryptionConfiguration.keyId, keys: integrationEncryptionConfiguration.keys } : null }),
   resolvePrincipal: resolveSalesReportPrincipal,
   onError: code => console.error('Berichtswarteschlange derzeit nicht verfügbar:', code) });
 registerSalesReportJobRoutes(app, { jobs: salesReportJobs, requireSession: requireEmployeePortalSession,
@@ -63332,7 +63334,7 @@ async function startServer() {
       for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
     }
     scheduleAutomaticBackups();
-    salesReportJobs.start();
+    if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== 'recovery-smoke') salesReportJobs.start();
     try { await reconcileInterruptedIntegrationDeliveries(); } catch (error) { console.error("Unterbrochene Lohnübergaben konnten nicht abgeglichen werden:", error); }
     try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
     try { await runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
