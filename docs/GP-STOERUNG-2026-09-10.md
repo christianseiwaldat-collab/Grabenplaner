@@ -110,7 +110,22 @@ wurden zusätzlich gerendert und visuell kontrolliert.
 
 Die aktuelle kombinierte Prüfung bestand mit 56/56 Tests, einschließlich des
 echten Workers, Rechteentzug, Abbruch, Pausen-/Wiederaufnahmevertrag und des großen
-PDFs. Der vollständige erneute Test des korrigierten Workers mit dem tatsächlichen
-Auftrag und anschließendem Verschlüsselungsnachweis steht noch aus. Die Anwendung
-antwortete bei den bisherigen getrennten Testläufen weiterhin normal; der echte
-Monitor vom 10. September um 10:36:56 UTC bestand mit 24/24 Prüfungen.
+PDFs.
+
+Der abschließende Test des tatsächlichen Auftrags startete um 10:47:41 UTC mit
+dem unabhängig geprüften Paketstand `2177276519400674cee7efc30ff35746f1849ae2`.
+Der echte Worker verarbeitete 18.954 Positionen in 96 Schritten und insgesamt
+97,929 Sekunden. Das PDF hatte 195 Seiten und 539.230 Bytes; der verschlüsselte
+Auftrag blieb mit 653.594 Bytes innerhalb der vorhandenen Grenze. Alle 19
+Bereitschaftsprüfungen während des Laufs antworteten mit HTTP 200, maximal nach
+626 Millisekunden. Quellbestand und ursprünglicher Auftrag blieben identisch.
+Das Test-PDF wurde ausschließlich im Arbeitsspeicher erzeugt und nicht gespeichert.
+Beide privaten Diagnosestände wurden anschließend anhand ihrer exakten Pakete
+und Dateihashes geprüft und vom Server entfernt.
+
+Das Paket `Grabenplaner-Server-v0.92.35-beta-linux-x64.zip` im Verzeichnis
+`release/server-linux-2177276` hat den SHA-256-Wert
+`53dbee5b99b6c1b3fe43b417218e3800cbcfc1472b72115c6cd7da748307a521`.
+Es enthält 551 geprüfte Laufzeitdateien und keine Änderungen an den Serverwerkzeugen.
+Der Hotfix ist damit vorbereitet und mit dem tatsächlichen Auftrag geprüft,
+aber noch nicht installiert. Die produktive Berichtspause bleibt aktiv.
