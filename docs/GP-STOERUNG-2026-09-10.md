@@ -72,3 +72,45 @@ Der gescheiterte isolierte App-Smoke des vorherigen Deployments bleibt offen.
 Die Datenwiederherstellung und die Bereitschaft der daraus gestarteten Anwendung
 sind getrennte Nachweise. Ein wieder grüner Betriebsmonitor ersetzt den fehlenden
 App-Smoke-Nachweis nicht.
+
+## Erneute Störung und sichere Pause am Vormittag
+
+Ein neuer Auftrag vom 10. September um 10:16:42 UTC scheiterte um 10:17:35 UTC
+wieder bei 5.800 Positionen. Die produktive Version war weiterhin v0.92.34-beta;
+der vorbereitete Worker war noch nicht installiert.
+
+Um 10:24:47 UTC wurde unter der vorhandenen Wartungssperre die Berichtverarbeitung
+pausiert. Ein temporärer SQLite-Trigger verhindert ausschließlich den Übergang
+eines Auftrags zu `running`. Die bestehende Warteschlange prüft die tatsächliche
+Änderungszahl und beginnt deshalb keine weitere Berechnung. Neue Aufträge bleiben
+wartend, fertige Ergebnisse und Abbruch bleiben verfügbar. Alle Auftragszeilen
+und der Quellenbestand wurden vor und nach der kurzen Transaktion verglichen.
+Eine anschließende Probe mit Rollback bestätigte den unveränderten Job und null
+geänderte Zeilen. Kein App- oder Host-Neustart wurde ausgelöst.
+
+Der Trigger `gp_incident_20260910_pause_sales_reports` bleibt bis zur verifizierten
+Bereitstellung der Korrektur aktiv. Er muss danach unter der Wartungssperre anhand
+seiner exakten Definition entfernt werden. Eine Installation allein hebt diese
+Pause nicht auf. Fehlgeschlagene Aufträge wurden weder gelöscht noch automatisch
+neu beauftragt.
+
+Ein separater, ausschließlich lesender Test mit dem tatsächlichen Auftrag und
+identischer Berechtigungsprojektion überwand die Zwischenstandsgrenze, zeigte
+jedoch einen weiteren Abbruch: 939 Kombinationen aus MA und Warengruppe mit sechs
+Kennzahlen überschritten die Grenze von 250 PDF-Seiten. Die Seitenzahlgrenze
+funktionierte; die ursprüngliche Tabellendarstellung benötigte zu viel Platz.
+
+Die Korrektur verringert den Zellinnenabstand und verbreitert die Gruppenspalte
+der Detailtabellen. Schriftgröße, sämtliche Gruppen und Kennzahlen sowie die
+Seiten- und Dateigrößengrenzen bleiben erhalten. Ein synthetischer Bericht mit
+939 Gruppen und denselben sechs Kennzahlen umfasst jetzt 195 Seiten. Die Prüfung
+liest jede Seite, verifiziert alle Gruppen in sämtlichen Kennzahlen, Werte,
+Schriftgröße, Seitenränder und Fußzeilen. Repräsentative Tabellen und Umbrüche
+wurden zusätzlich gerendert und visuell kontrolliert.
+
+Die aktuelle kombinierte Prüfung bestand mit 56/56 Tests, einschließlich des
+echten Workers, Rechteentzug, Abbruch, Pausen-/Wiederaufnahmevertrag und des großen
+PDFs. Der vollständige erneute Test des korrigierten Workers mit dem tatsächlichen
+Auftrag und anschließendem Verschlüsselungsnachweis steht noch aus. Die Anwendung
+antwortete bei den bisherigen getrennten Testläufen weiterhin normal; der echte
+Monitor vom 10. September um 10:36:56 UTC bestand mit 24/24 Prüfungen.

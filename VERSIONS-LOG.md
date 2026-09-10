@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.35 Beta · Stabilere Berichtserstellung (vorbereitet)
+
+- Berechnung und PDF-Erstellung laufen in einem begrenzten Hintergrund-Worker mit einer nur lesenden Datenbankverbindung. Größere verschlüsselte Zwischenstände werden in begrenzte Blöcke aufgeteilt; bestehende Rechte- und Abbruchprüfungen bleiben wirksam.
+- Kassenpositionen verwenden ihren vorhandenen Elternindex auch ohne vorbereitete Planungsstatistiken. Kompaktere PDF-Tabellen behalten alle Inhalte und die bisherige Schriftgröße bei.
+- Der Stand ist vorbereitet und geprüft, aber noch nicht produktiv bereitgestellt. Die Berichtverarbeitung ist während der Störungsbehebung vorübergehend pausiert; fertige Ergebnisse bleiben verfügbar.
+
 ## v0.92.34 Beta · PDF-Verkaufsanalysen und eigene Artikelbilder
 
 - Verkaufsberichte entstehen als persönliche PDF-Dateien im Hintergrund. Warengruppen, Hersteller, Filialen, Mitarbeitende und Kennzahlen sind mehrfach auswählbar; der Vergleichszeitraum liegt standardmäßig ein Kalenderjahr davor und bleibt bearbeitbar. Historischer Rohertrag stammt aus den Kassenpositionen, mit Diagrammen und vollständigen Gruppentabellen.

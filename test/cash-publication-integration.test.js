@@ -143,6 +143,32 @@ test('report job lease recovery restarts exactly once without duplicate totals a
   await second.tick(); await second.tick(); assert.match(await reportPdfText(await second.download(f.session, job.id)), /2[.\s]?050,00/);
 });
 
+test('an incident pause prevents background claims while retaining queued jobs, cancellation and completed downloads', async t => {
+  const f = await fixture(t); await f.activate();
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const runtime = f.history(); let runs = 0;
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault,
+    runtime: { async run(get, work) { runs++; return runtime.run(get, work); } }, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const completed = await jobs.create(f.session, { query: f.query() }); await jobs.tick(); await jobs.tick();
+  const pdf = await jobs.download(f.session, completed.id);
+  f.app.database.exec(`CREATE TRIGGER gp_incident_20260910_pause_sales_reports
+    BEFORE UPDATE OF status ON sales_report_jobs WHEN NEW.status='running'
+    BEGIN SELECT RAISE(IGNORE); END`);
+  const queued = await jobs.create(f.session, { query: f.query() });
+  const cancelled = await jobs.create(f.session, { query: f.query() });
+  const before = f.app.database.prepare('SELECT id,status,revision,payload FROM sales_report_jobs WHERE id=?').get(queued.id);
+  const beforeRuns = runs;
+  for (let i = 0; i < 3; i++) await jobs.tick();
+  assert.equal(runs, beforeRuns, 'paused claim must never reach report calculation');
+  assert.deepEqual(f.app.database.prepare('SELECT id,status,revision,payload FROM sales_report_jobs WHERE id=?').get(queued.id), before);
+  assert.deepEqual(await jobs.download(f.session, completed.id), pdf);
+  await jobs.cancel(f.session, cancelled.id);
+  assert.equal((await jobs.list(f.session)).find(row => row.id === cancelled.id).status, 'cancelled');
+  f.app.database.exec('DROP TRIGGER gp_incident_20260910_pause_sales_reports');
+  await jobs.tick(); await jobs.tick();
+  assert.equal((await jobs.list(f.session)).find(row => row.id === queued.id).status, 'completed');
+});
+
 test('report jobs enforce queue bounds, cancellation, revoked rights and pinned publication', async t => {
   const f = await fixture(t, { count: 205 }); await f.activate();
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
