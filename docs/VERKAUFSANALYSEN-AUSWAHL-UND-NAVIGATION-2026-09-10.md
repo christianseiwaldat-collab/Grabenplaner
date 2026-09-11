@@ -1,9 +1,10 @@
 # Verkaufsberichte und Browsernavigation
 
-Stand: 10.09.2026. Lokal umgesetzt und geprüft, noch nicht veröffentlicht.
-Diese Änderungen ergänzen den vorbereiteten Hotfix aus
-[GP-STOERUNG-2026-09-10.md](GP-STOERUNG-2026-09-10.md). Für eine gemeinsame
-Bereitstellung ist ein neues Paket aus dem abschließenden Stand erforderlich.
+Stand: 11.09.2026. Gemeinsam mit dem Hotfix in v0.92.36-beta veröffentlicht.
+Die Berichterstellung ist wieder freigegeben. Paket, Funktionsnachweise und
+getrennt offene Betriebsprüfungen stehen im
+[Releasebericht](VERKAUFSBERICHTE-RELEASE-v09236.md). Die folgenden lokalen
+Prüfungen dokumentieren die Entwicklung vor dieser Bereitstellung.
 
 ## Berichtsauswahl
 
@@ -118,11 +119,10 @@ synthetisch unter `tmp/pdfs/sales-form-20260910-final/` abgelegt.
 
 ## Veröffentlichungsstand
 
-In diesem Arbeitsabschnitt wurden weder die produktive App noch der VPS neu gestartet, kein
-Produktivimport angewendet und kein Deployment ausgeführt. Die aktive
-Berichtspause aus dem Incident bleibt bestehen. Das frühere Paket unter
-`release/server-linux-2177276` enthält diese Erweiterungen noch nicht und darf
-nicht als gemeinsamer aktueller Stand verwendet werden. Nach der späteren
-Bereitstellung müssen Worker, Warteschlange, PDF-Ergebnis und Bereitschaft
-geprüft werden, bevor die dokumentierte Berichtspause kontrolliert aufgehoben
-wird.
+Die gemeinsame Bereitstellung erfolgte am 11.09.2026 aus Quellcommit `2df6dfe`
+als v0.92.36-beta. Der installierte Worker erzeugte die beiden geprüften
+Originalabfragen vollständig; alle begleitenden Bereitschaftsproben bestanden.
+Die Berichtspause wurde anschließend kontrolliert aufgehoben. Es gab keinen
+Produktivimport und keinen vollständigen Ubuntu-Neustart. Das frühere Paket
+`release/server-linux-2177276` bleibt ausschließlich ein historischer Hotfix-Nachweis.
+Für die geänderten Regeln sind neue Berichtsaufträge erforderlich.

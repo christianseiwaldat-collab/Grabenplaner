@@ -1,6 +1,9 @@
 # Geprüfte Teilwerte in Verkaufsberichten
 
-Stand: 10.09.2026. Lokal umgesetzt und geprüft, noch nicht veröffentlicht.
+Stand: 11.09.2026. In v0.92.36-beta veröffentlicht; die Berichterstellung ist
+wieder freigegeben. Die folgenden Abschnitte dokumentieren die schrittweisen
+fachlichen Klärungen mit ihrem jeweiligen damaligen Prüfstand. Der aktuelle
+Bereitstellungsnachweis steht im [Releasebericht](VERKAUFSBERICHTE-RELEASE-v09236.md).
 
 ## Ursache und Darstellung
 
@@ -464,8 +467,8 @@ eine belegte Ergänzung der Auswertungsregeln. „Prüfung offen“ bedeutet fü
 noch nicht, dass der Originalbeleg falsch gebucht wurde.
 
 Gespeicherte PDFs bleiben unveränderte Ergebnisse ihres Erstellungszeitpunkts.
-Nach der späteren Veröffentlichung muss eine entsprechende neue Abfrage
-gestartet werden. Die gemeinsame Veröffentlichung mit dem vorbereiteten Hotfix,
-den [Berichtsfiltern und der Browsernavigation](VERKAUFSANALYSEN-AUSWAHL-UND-NAVIGATION-2026-09-10.md)
-benötigt weiterhin ein neues, abschließend geprüftes Paket. Die produktive
-Berichtspause wurde in diesem Arbeitsabschnitt nicht aufgehoben.
+Für die veröffentlichten Regeln muss eine entsprechende neue Abfrage gestartet
+werden. Die gemeinsame Bereitstellung mit dem Hotfix, den
+[Berichtsfiltern und der Browsernavigation](VERKAUFSANALYSEN-AUSWAHL-UND-NAVIGATION-2026-09-10.md)
+erfolgte am 11.09.2026 mit v0.92.36-beta. Nach den erfolgreichen installierten
+Worker-/PDF-Prüfungen wurde die produktive Berichtspause aufgehoben.
