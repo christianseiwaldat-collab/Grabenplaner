@@ -5,6 +5,7 @@
   if (root) root.GrabenplanerReceiptSearch = api;
 }(typeof globalThis !== 'undefined' ? globalThis : this, function receiptSearchModule() {
   'use strict';
+  const Lines = typeof module === 'object' && module.exports ? require('./receipt-line-format') : globalThis.GrabenplanerReceiptLineFormat;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const number = value => value == null ? '–' : String(value).replace(/(\.\d*?[1-9])0+$|\.0+$/u, '$1').replace('.', ',');
   const date = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value.split('-').reverse().join('.') : value || '–';
@@ -36,15 +37,16 @@
   function renderDetail(row) {
     return `<p class="receipt-info-note"><strong>Beleginformation – keine Rechnung</strong><br>Informationsauszug aus dem importierten Kassenstand. Kein Ersatz für den Originalbeleg.</p>
       <dl class="receipt-meta"><dt>Beleg / Tag</dt><dd>${escape(row.receipt)} · ${escape(date(row.date))}</dd><dt>Filiale / Kasse</dt><dd>${escape(row.location)} · ${escape(row.register || '–')}</dd>
-      ${Object.hasOwn(row, 'personnel') ? `<dt>Personalnummer (Beleg)</dt><dd>${escape(row.personnel || 'Zuordnung offen')}</dd>` : ''}
+      ${Object.hasOwn(row, 'personnel') ? `<dt>Personalnummer (Beleg)</dt><dd><strong>${escape(row.personnel || 'Zuordnung offen')}</strong></dd>` : ''}
       ${Object.hasOwn(row, 'customerNumber') ? `<dt>Kunden-Kontonummer</dt><dd>${escape(row.customerAccount || 'Kein Kundenkonto am Beleg')}</dd>
       ${row.customerNumber ? `<dt>Kundennummer</dt><dd>${escape(row.customerNumber)}</dd>` : ''}${row.customerName ? `<dt>Kunde</dt><dd>${escape(row.customerName)}</dd>` : ''}
       ${row.customerAddress ? `<dt>Adresse</dt><dd>${escape(row.customerAddress)}</dd>` : ''}${row.customerPhone ? `<dt>Telefon</dt><dd>${escape(row.customerPhone)}</dd>` : ''}${row.customerEmail ? `<dt>E-Mail</dt><dd>${escape(row.customerEmail)}</dd>` : ''}
       <dt>Kundenzuordnung</dt><dd>${escape(row.customerStatus)}</dd>` : ''}
       ${row.customerSourceAccount ? `<dt>TradeFoto-KontoNr</dt><dd>${escape(row.customerSourceAccount)}</dd>` : ''}
       ${row.invoice ? `<dt>Rechnungsreferenz</dt><dd>${escape(row.invoice)}</dd>` : ''}<dt>Datenstand</dt><dd>${escape(row.provenance.sourceLabel)}</dd><dt>Importiert</dt><dd>${escape(date(row.provenance.importedAt?.slice(0, 10)))}</dd></dl>
-      ${row.kind === 'receipts' ? `<p>${row.positions} vollständige Belegpositionen · ${escape(row.state)}</p><div class="receipt-table-scroll"><table><thead><tr><th>Artikel</th><th>Bezeichnung</th><th>Menge</th>${Object.hasOwn(row, 'personnel') ? '<th>Personalnummer (Position)</th>' : ''}<th>Quellpreis</th><th>Brutto</th><th>Status</th></tr></thead><tbody>
-      ${row.lines.map(l => `<tr><td>${escape(l.article)}</td><td>${escape(l.description)}</td><td>${escape(number(l.quantity))}</td>${Object.hasOwn(row, 'personnel') ? `<td>${escape(l.personnel || '–')}</td>` : ''}<td>${escape(number(l.sourcePrice))}</td><td>${l.gross == null ? 'Prüfung offen' : escape(number(l.gross))}</td><td>${escape({ sale: 'Verkauf', return: 'Rückgabe', excluded: 'Ausgeschlossen', review: 'Prüfung offen' }[l.status])}</td></tr>`).join('')}</tbody></table></div><p><strong>${row.gross == null ? 'Quellbetrag' : 'Geprüfter Betrag'}: ${escape(number(row.gross ?? row.sourceAmount))} ${escape(row.gross == null ? '' : row.currency)}</strong></p>`
+      ${row.kind === 'receipts' ? `<p>${row.positions} vollständige Belegpositionen · ${escape(row.state)}</p><div class="receipt-table-scroll receipt-lines" role="region" tabindex="0" aria-label="Belegpositionen"><table><thead><tr><th scope="col">Menge</th><th scope="col">Artikelnr.</th><th scope="col">Bezeichnung</th><th scope="col" class="receipt-number">Einzelpreis</th><th scope="col" class="receipt-number">Gesamtpreis</th></tr></thead>
+      ${Lines.groups(row).map(group => `<tbody>${group.personnel !== null ? `<tr class="receipt-personnel-group"><th colspan="5" scope="rowgroup"><strong>Personalnr.: ${escape(group.personnel || 'nicht zugeordnet')}</strong></th></tr>` : ''}
+      ${group.lines.map(l => `<tr><td class="receipt-number">${escape(number(l.quantity))}</td><td>${escape(l.article)}</td><td>${escape(l.description)}${Lines.note(l.status) ? `<small class="receipt-line-note">${escape(Lines.note(l.status))}</small>` : ''}</td><td class="receipt-number">${escape(Lines.money(l.sourcePrice))}</td><td class="receipt-number">${escape(Lines.money(Lines.total(l.sourcePrice, l.quantity)))}</td></tr>`).join('')}</tbody>`).join('')}</table></div><p class="settings-note">Gesamtpreis = Menge × Einzelpreis, je Position auf Cent gerundet. Gutscheinausgaben, Zahlungsmittel und UID-Zwischenbuchungen sind kein Warenumsatz.</p><p><strong>${row.gross == null ? 'Quellbetrag des Belegkopfs' : 'Geprüfter Warenumsatz'}: ${escape(Lines.money(row.gross ?? row.sourceAmount))} ${escape(row.currency || '')}</strong></p>${row.gross == null ? '<p class="settings-note">Belegabgleich offen. Die angezeigten Positionsbeträge sind noch keine freigegebene Umsatzsumme.</p>' : ''}`
         : `<p>${escape(row.description)} · Konto ${escape(row.account)}</p><p>Einzahlung ${escape(number(row.inflow))} · Auszahlung ${escape(number(row.outflow))}</p><p>Separate Kassenbuchung; kein zusätzlicher Verkauf.</p>`}`;
   }
   function mount(root, { api, rawApi, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar } = {}) {

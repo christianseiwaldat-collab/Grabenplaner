@@ -449,7 +449,7 @@ test("O8 entfernt Entwurf und DOM bei Navigation, Logout sowie Identitäts- oder
   assert.match(logout, /clearPersonnelLifecycleEditorState/);
   const navigation = between(app, "function setPersonnelAdministrationTab(tab)", "function populateCostCenterTypeSelect");
   assert.match(navigation, /normalized !== "workflows"[\s\S]*?clearPersonnelLifecycleEditorState/);
-  const view = between(app, "function setView(view)", "function applyRequestedView()");
+  const view = between(app, "function setView(view)", "function applyRequestedView(");
   assert.match(view, /view !== "personnelAdministration"[\s\S]*?clearPersonnelLifecycleEditorState/);
   const purge = between(
     app,

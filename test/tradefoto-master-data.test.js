@@ -450,6 +450,18 @@ test('Report and article metadata read only explicit source fields and reject mi
   await assert.rejects(read(), errorCode('IMPORT_MASTER_INTEGRITY'));
 });
 
+test('report dictionaries read reviewed labels without applying master rows and reject source tampering', async t => {
+  const f = await fixture(t), run = await f.ready('ARTIKEL_Sortimente', [raw('ARTIKEL_Sortimente', { Sortiment: 130, Bezeichnung: 'Systemkameras', Warengruppe: 13 })]);
+  const { createSalesMasterReader } = require('../lib/persistence/repositories/sales-master-data');
+  const reader = createSalesMasterReader({ protection: f.protection, scopeId: f.context.who.scopeId, sourceInstance: 'test-ledger' });
+  const read = () => f.provider.transaction(tx => reader.dictionary(tx, 'ARTIKEL_Sortimente', ['Sortiment', 'Bezeichnung', 'Warengruppe']), { readOnly: true });
+  assert.deepEqual(await read(), [{ Sortiment: '130', Bezeichnung: 'Systemkameras', Warengruppe: '13' }]);
+  assert.equal(f.records('ARTIKEL_Sortimente').length, 0);
+  await assert.rejects(f.provider.transaction(tx => reader.dictionary(tx, 'KUNDEN', ['NACHNAME']), { readOnly: true }), errorCode('IMPORT_FORBIDDEN'));
+  f.database.prepare("UPDATE data_import_rows SET content_hash=? WHERE run_id=?").run('0'.repeat(64), run.id);
+  await assert.rejects(read());
+});
+
 test("Block 3: resolving a mapped target rechecks scope permissions and current activation", async t => {
   const f = await fixture(t); f.database.exec("INSERT INTO employees VALUES('gp-person',1,'Synthetic','38.5','employee')");
   const { records: [record] } = await f.ingest("MITARBEITER", [raw("MITARBEITER", { "Verkäufer_ID": 123 })]);

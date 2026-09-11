@@ -1480,7 +1480,7 @@ function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
   if (["leadershipTeam", "leadershipApprovals"].includes(tab) && !isLeadershipUser()) return "";
-  return ["home", "settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "loan", "branchOrders", "branchVacation", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+  return ["home", "settings", "schedule", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "loan", "branchOrders", "branchVacation", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
 const portalTabStorageKey = "grabenplaner.portal.active-tab";
@@ -1516,23 +1516,15 @@ function rememberPortalTab(tab) {
   try {
     sessionStorage.setItem(portalTabStorageKey, normalized);
   } catch {}
-  try {
-    const url = new URL(location.href);
-    url.searchParams.set("tab", normalized);
-    if (normalized === "processTasks") {
-      if (portalState.processTaskRequestedRunId) url.searchParams.set("run", portalState.processTaskRequestedRunId);
-      if (portalState.processTaskRequestedStepId) url.searchParams.set("step", portalState.processTaskRequestedStepId);
-    } else {
-      portalState.processTaskRequestedRunId = "";
-      portalState.processTaskRequestedStepId = "";
-      url.searchParams.delete("run");
-      url.searchParams.delete("step");
-    }
-    history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
-  } catch {}
+  if (normalized !== "processTasks") {
+    portalState.processTaskRequestedRunId = "";
+    portalState.processTaskRequestedStepId = "";
+  }
+  globalThis.grabenplanerNavigation?.record();
 }
 
 function clearRememberedPortalTab() {
+  globalThis.grabenplanerNavigation?.stop();
   try {
     sessionStorage.removeItem(portalTabStorageKey);
   } catch {}
@@ -1540,6 +1532,7 @@ function clearRememberedPortalTab() {
     const url = new URL(location.href);
     url.searchParams.delete("tab");
     url.searchParams.delete("kind");
+    url.searchParams.delete("section");
     url.searchParams.delete("run");
     url.searchParams.delete("step");
     history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
@@ -1555,7 +1548,28 @@ function chooseInitialPortalTab() {
   portalState.processTaskRequestedStepId = String(parameters.get("step") || "").slice(0, 120);
   if (["absence", "sickness", "amu", "time_correction"].includes(requestedKind)) portalState.leadershipKind = requestedKind;
   setTab(explicitTab || (isMobileUi() ? "home" : requested || defaultPortalTab()));
+  globalThis.grabenplanerNavigation?.start();
   return requested;
+}
+
+function currentPortalRoute() {
+  const tab = portalState.activeTab, route = { tab };
+  if (tab === "settings") route.section = requestedPortalSettingsSection();
+  if (tab === "leadershipApprovals") route.kind = portalState.leadershipKind;
+  if (tab === "processTasks") {
+    route.run = portalState.processTaskRequestedRunId;
+    route.step = portalState.processTaskRequestedStepId;
+  }
+  return route;
+}
+
+function restorePortalRoute() {
+  const parameters = new URLSearchParams(location.search);
+  const kind = parameters.get("kind");
+  if (["absence", "sickness", "amu", "time_correction"].includes(kind)) portalState.leadershipKind = kind;
+  portalState.processTaskRequestedRunId = String(parameters.get("run") || "").slice(0, 120);
+  portalState.processTaskRequestedStepId = String(parameters.get("step") || "").slice(0, 120);
+  setTab(normalizedPortalTab(parameters.get("tab")) || defaultPortalTab());
 }
 
 function defaultPortalTab(user = portalUser()) {
@@ -2205,6 +2219,7 @@ function neutralizeCredentialDialogsForLogin() {
 }
 
 function showLogin(error = "") {
+  globalThis.grabenplanerNavigation?.stop();
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
@@ -5321,6 +5336,7 @@ function clearProcessTaskRequest() {
     url.searchParams.delete("step");
     history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
   } catch {}
+  globalThis.grabenplanerNavigation?.replace();
 }
 
 function openProcessTaskCount() {
@@ -7428,6 +7444,7 @@ document.querySelectorAll("[data-leadership-kind]").forEach((button) => button.a
   portalState.leadershipKind = button.dataset.leadershipKind;
   document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item === button));
   renderLeadershipApprovals();
+  globalThis.grabenplanerNavigation?.record();
 }));
 el.leadershipApprovalList.addEventListener("click", (event) => {
   const row = event.target.closest("[data-leadership-request-id]");
@@ -7965,5 +7982,11 @@ setInterval(() => {
   if (!document.hidden && portalState.session && portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
 }, 30000);
 
+globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create({
+  window, app: "portal", keys: ["tab", "section", "kind", "run", "step"],
+  read: currentPortalRoute, apply: restorePortalRoute,
+  enabled: () => portalState.session?.authenticated === true && !portalUser()?.mustChangePassword,
+  onError: () => message(el.portalLogoutStatus, "Die Seitennavigation konnte nicht wiederhergestellt werden.", true),
+});
 initializeDateRangeCalendar();
 initialize();

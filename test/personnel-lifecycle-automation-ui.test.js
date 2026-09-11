@@ -467,7 +467,7 @@ test("O7 entfernt Zustand und DOM bei Fehler, Rechteverlust, Logout und Bereichs
   assert.match(logout, /clearPersonnelLifecycleAutomationState\(\)/);
   const navigation = between(app, "function setPersonnelAdministrationTab(tab)", "function populateCostCenterTypeSelect");
   assert.match(navigation, /normalized !== "tasks"[\s\S]*?clearPersonnelLifecycleAutomationState\(\)/);
-  const view = between(app, "function setView(view)", "function applyRequestedView()");
+  const view = between(app, "function setView(view)", "function applyRequestedView(");
   assert.match(view, /view !== "personnelAdministration"[\s\S]*?clearPersonnelLifecycleAutomationState\(\)/);
 });
 

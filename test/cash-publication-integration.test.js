@@ -107,7 +107,7 @@ test('the real background worker reads a separate file connection and produces t
   const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId, batchWorker });
   t.after(async () => { await jobs.stop(); assert.equal(fs.realpathSync(path.dirname(dir)), root); fs.rmSync(dir, { recursive: true }); });
   const before = f.app.database.prepare('SELECT * FROM cash_snapshot_inventory ORDER BY dataset_slot,table_index').all();
-  const job = await jobs.create(f.session, { query: f.query() });
+  const job = await jobs.create(f.session, { query: f.query({ reportVersion: 3, orientation: 'landscape', chartType: 'bars' }) });
   await jobs.tick(); assert.equal((await jobs.list(f.session))[0].processed, 200);
   await jobs.tick(); await jobs.tick();
   assert.equal((await jobs.list(f.session))[0].status, 'completed');
@@ -254,6 +254,245 @@ test('confirmed cash unit margin is multiplied by the sold quantity and requires
   await assert.rejects(runtime.run(f.get, w => w.reports.step(input, context)), code('IMPORT_FORBIDDEN'));
 });
 
+test('reviewed cash rules flow from an unchanged sealed publication through receipts and encrypted report PDFs', async t => {
+  const f = await fixture(t), data = rows({ count: 5 });
+  data.Umsatz_KASSE[0].RechnungsBetrag = '0';
+  const [camera, discount, book, voucher, issue] = data.Umsatz_Kasse_Details;
+  Object.assign(camera, { VK_Preis: '1369', Sortiment: 130, UMarke: 'Sony', RohertragDM: '137.94907831964053', DEK_A: null });
+  Object.assign(discount, { VKMenge: '-1', VK_Preis: '95.82', Sortiment: 170201, UMarke: 'Separate discounts', SonderartikelS: true, RohertragDM: '0' });
+  Object.assign(book, { VK_Preis: '0', MWST: '10', Sortiment: 50901, UMarke: 'Books', RohertragDM: '0' });
+  Object.assign(voucher, { VKMenge: '-4', VK_Preis: '100', MWST: '0', Sortiment: 170101, UMarke: 'Vouchers', AStorno: true, RohertragDM: '0' });
+  Object.assign(issue, { VKMenge: '2', VK_Preis: '10', MWST: '0', Sortiment: 170101, UMarke: 'Vouchers', RohertragDM: null, KalkRohertrag: '999', DEK_A: null });
+  const id = await f.build(data); await f.activate(f.request(id));
+  f.session.permissions.push('sales:analytics:margin:read');
+  const { createCashPublications } = require('../lib/persistence/repositories/cash-publications');
+  const publications = createCashPublications({ access: f.app.provider, protection: f.protection, scopeId: f.actor.scopeId });
+  const publication = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
+  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 8);
+  const before = C.canonical(publication.row), runtime = f.history();
+  const history = await runtime.run(f.get, w => w.search(f.query()));
+  assert.equal(history.totals.gross, '1273.18'); assert.equal(history.coverage.counts.review, 0);
+  assert.equal(history.coverage.counts.adjustments, 1); assert.equal(history.coverage.counts.payments, 1);
+  assert.equal(history.coverage.counts.voucherIssues, 1);
+  const search = await runtime.run(f.get, w => w.receipts.search({ ...f.query(), kind: 'receipts' }));
+  assert.equal(search.items.length, 1); assert.equal(search.items[0].gross, '1273.18');
+  const docs = await runtime.run(f.get, w => w.receipts.documents({ ids: [search.items[0].id] }));
+  assert.equal(docs.items[0].lines.find(l => l.status === 'payment').sourcePrice, '100.000000000000');
+  const issuance = docs.items[0].lines.find(l => l.status === 'voucher_issue');
+  assert.equal(issuance.sourcePrice, '10.000000000000'); assert.equal(issuance.gross, '0.00');
+  assert.match(require('../public/receipt-search').renderDetail(docs.items[0]), /Zahlungsmittel/);
+  assert.match(require('../public/receipt-search').renderDetail(docs.items[0]), /Gutscheinausgabe · kein Warenumsatz/);
+  const receiptPdf = await require('../lib/receipt-info-pdf').createReceiptInfoPdf(docs);
+  assert.match(await reportPdfText(receiptPdf), /Zahlungsmittel/);
+  assert.match(await reportPdfText(receiptPdf), /Gutscheinausgabe · kein Warenumsatz/);
+  const input = f.query({ reportVersion: 3, orientation: 'landscape', groupBy: ['manufacturer'],
+    metrics: ['grossRevenue', 'netRevenue', 'grossMargin', 'quantity', 'receiptCount'], chartType: 'bars' });
+  const metadata = await runtime.run(f.get, w => w.reports.metadata());
+  let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
+  result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
+  for (const [metric, expected] of Object.entries({ grossRevenue: '1273.18', netRevenue: '1060.98', grossMargin: '137.95', quantity: '2.000000', receiptCount: '1' })) {
+    assert.equal(result.report.total.metrics[metric].current, expected, metric);
+  }
+  const sony = result.report.rows.find(r => r.dimensions[0].id === 'sony');
+  assert.equal(sony.metrics.grossMargin.current, '137.95'); assert.equal(sony.metrics.grossRevenue.current, '1369.00');
+  assert.equal(result.report.coverage.current.review, 0); assert.equal(result.report.coverage.current.excluded, 2);
+  assert.equal(result.report.rows.find(r => r.dimensions[0].id === 'vouchers').metrics.grossMargin.current, '0.00');
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: 'Bestätigte Kassenregeln (synthetischer Test)', query: input });
+  await jobs.tick(); await jobs.tick();
+  const pdf = await jobs.download(f.session, job.id), text = await reportPdfText(pdf);
+  assert.match(text, /1[.\s]?273,18/); assert.match(text, /137,95/); assert.match(text, /Gutscheineinlösungen/); assert.match(text, /Gutscheinausgaben/);
+  assert.doesNotMatch(text, /Offene Belegprüfungen/);
+  if (process.env.SALES_REPORT_PDF_PREVIEW_DIR) {
+    const fs = require('node:fs'), path = require('node:path');
+    fs.mkdirSync(process.env.SALES_REPORT_PDF_PREVIEW_DIR, { recursive: true });
+    fs.writeFileSync(path.join(process.env.SALES_REPORT_PDF_PREVIEW_DIR, 'sales-analysis-reviewed-cash.pdf'), pdf);
+    fs.writeFileSync(path.join(process.env.SALES_REPORT_PDF_PREVIEW_DIR, 'receipt-reviewed-cash.pdf'), receiptPdf);
+  }
+  // A queued job pinned to the previous effective rules must not silently mix
+  // old checkpoints/metadata with the newly confirmed cash interpretation.
+  const oldPolicy = require('../lib/tradefoto-sales-rules').defineTradeFotoSalesPolicy(publication.data.policy);
+  const backend = require('../lib/persistence/repositories/cash-history-backend').createCashHistoryBackend({ publication, publications, scopeId: f.actor.scopeId });
+  const oldRevision = f.protection.digest([backend.source, oldPolicy, require('../lib/sales-report-margin').reportMarginPolicyFor(oldPolicy)]);
+  assert.notEqual(await runtime.run(f.get, w => w.reportSourceRevision), oldRevision);
+  const pending = await jobs.create(f.session, { query: input });
+  const row = f.app.database.prepare('SELECT * FROM sales_report_jobs WHERE id=?').get(pending.id);
+  const context = ['sales-report-job-v1', row.scope, row.owner, row.id], payload = f.protection.open(row.payload, context);
+  f.app.database.prepare('UPDATE sales_report_jobs SET payload=? WHERE id=?').run(f.protection.seal({ ...payload, sourceRevision: oldRevision }, context), row.id);
+  await jobs.tick();
+  assert.equal((await jobs.list(f.session)).find(r => r.id === pending.id).error, 'IMPORT_HISTORY_ANALYSIS_CHANGED');
+  assert.deepEqual(await jobs.download(f.session, job.id), pdf);
+  const after = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
+  assert.equal(C.canonical(after.row), before); assert.equal(after.data.policy.version, 1);
+});
+
+test('voucher issuance followed by a goods purchase and redemption counts the actual goods sale exactly once', async t => {
+  const f = await fixture(t), issued = rows(), redeemed = rows({ count: 2 });
+  Object.assign(issued.Umsatz_KASSE[0], { RechnungsBetrag: '0' });
+  Object.assign(issued.Umsatz_Kasse_Details[0], { VKMenge: '2', VK_Preis: '10', MWST: '0', Sortiment: 170101, RohertragDM: '999', DEK_A: null });
+  Object.assign(redeemed.Umsatz_KASSE[0], { Bonnr: '2', Bondatum: '2010-02-02T00:00:00.000', RechnungsBetrag: '0' });
+  redeemed.Umsatz_Kasse_Details.forEach((line, i) => Object.assign(line, { Bonnr: '2', Bondatum: redeemed.Umsatz_KASSE[0].Bondatum,
+    RepID: '00000000-0000-0000-0000-' + String(i + 2).padStart(12, '0') }));
+  Object.assign(redeemed.Umsatz_Kasse_Details[0], { VK_Preis: '120', Sortiment: 130, RohertragDM: '25.55', DEK_A: null });
+  Object.assign(redeemed.Umsatz_Kasse_Details[1], { VKMenge: '-2', VK_Preis: '10', MWST: '0', Sortiment: 170101, AStorno: true, RohertragDM: null });
+  const data = { Umsatz_KASSE: [issued, redeemed].flatMap(d => d.Umsatz_KASSE), Umsatz_Kasse_Details: [issued, redeemed].flatMap(d => d.Umsatz_Kasse_Details) };
+  const id = await f.build(data); await f.activate(f.request(id)); f.session.permissions.push('sales:analytics:margin:read');
+  const runtime = f.history(), metadata = await runtime.run(f.get, w => w.reports.metadata());
+  async function report(dateTo) {
+    const input = f.query({ dateTo, groupBy: ['productGroup'], metrics: ['grossRevenue', 'netRevenue', 'grossMargin', 'quantity', 'receiptCount'] });
+    let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
+    result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
+    return result.report;
+  }
+  const initial = await report('2010-01-31'), complete = await report('2010-12-31');
+  for (const [metric, zero, later] of [['grossRevenue', '0.00', '120.00'], ['netRevenue', '0.00', '100.00'],
+    ['grossMargin', '0.00', '25.55'], ['quantity', '0.000000', '1.000000'], ['receiptCount', '0', '1']]) {
+    assert.equal(initial.total.metrics[metric].current, zero, metric); assert.equal(complete.total.metrics[metric].current, later, metric);
+  }
+  assert.equal(initial.coverage.current.review, 0); assert.equal(initial.coverage.current.excluded, 1);
+  assert.equal(complete.coverage.current.review, 0); assert.equal(complete.coverage.current.excluded, 2);
+  assert.equal(complete.coverage.current.marginMissing, 0);
+});
+
+test('UID payment clearing stays separate from later goods sales and negative-quantity returns across receipt dates', async t => {
+  const f = await fixture(t), clearing = { EAN: '0000000058204', Sortiment: 170102, MWST: '0', AStorno: true,
+    SonderartikelS: true, VK_Preis: '100', RohertragDM: null, DEK_A: null };
+  const specifications = [['0', clearing], ['0', { ...clearing, VKMenge: '-1', RohertragDM: '999' }],
+    ['120', { VK_Preis: '120', Sortiment: 130, RohertragDM: '25.55', DEK_A: null }],
+    ['-13.99', { VKMenge: '-1', VK_Preis: '13.99', Sortiment: 60303, AStorno: true, RohertragDM: '3.408333333333333', DEK_A: null }]];
+  const data = { Umsatz_KASSE: [], Umsatz_Kasse_Details: [] };
+  specifications.forEach(([amount, fields], i) => {
+    const receipt = rows(), head = receipt.Umsatz_KASSE[0];
+    Object.assign(head, { Bonnr: String(i + 1), Bondatum: '2010-01-0' + (i + 2) + 'T00:00:00.000', RechnungsBetrag: amount });
+    Object.assign(receipt.Umsatz_Kasse_Details[0], fields, { Bonnr: head.Bonnr, Bondatum: head.Bondatum,
+      RepID: '00000000-0000-0000-0000-' + String(i + 1).padStart(12, '0') });
+    data.Umsatz_KASSE.push(head); data.Umsatz_Kasse_Details.push(...receipt.Umsatz_Kasse_Details);
+  });
+  const id = await f.build(data); await f.activate(f.request(id)); f.session.permissions.push('sales:analytics:margin:read');
+  const runtime = f.history(), metadata = await runtime.run(f.get, w => w.reports.metadata());
+  const search = await runtime.run(f.get, w => w.search(f.query()));
+  assert.equal(search.totals.gross, '106.01'); assert.equal(search.coverage.counts.uidClearings, 2);
+  assert.equal(search.coverage.counts.returns, 1); assert.equal(search.coverage.counts.review, 0);
+  for (const [dateTo, gross, net, margin, quantity, receipts] of [
+    ['2010-01-02', '0.00', '0.00', '0.00', '0.000000', '0'],
+    ['2010-01-03', '0.00', '0.00', '0.00', '0.000000', '0'],
+    ['2010-01-04', '120.00', '100.00', '25.55', '1.000000', '1'],
+    ['2010-01-05', '106.01', '88.34', '22.14', '0.000000', '2']
+  ]) {
+    const input = f.query({ dateTo, groupBy: ['productGroup'], metrics: ['grossRevenue', 'netRevenue', 'grossMargin', 'quantity', 'receiptCount'] });
+    let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
+    result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
+    for (const [metric, expected] of Object.entries({ grossRevenue: gross, netRevenue: net, grossMargin: margin, quantity, receiptCount: receipts })) {
+      assert.equal(result.report.total.metrics[metric].current, expected, dateTo + ' ' + metric);
+    }
+    assert.equal(result.report.coverage.current.review, 0); assert.equal(result.report.coverage.current.marginMissing, 0);
+  }
+  const receipts = await runtime.run(f.get, w => w.receipts.search({ ...f.query(), kind: 'receipts' }));
+  const docs = await runtime.run(f.get, w => w.receipts.documents({ ids: receipts.items.map(item => item.id) }));
+  const payments = docs.items.filter(item => item.lines[0].status === 'uid_clearing');
+  assert.equal(payments.length, 2);
+  const UI = require('../public/receipt-search');
+  for (const item of payments) { assert.equal(item.gross, '0.00'); assert.match(UI.renderDetail(item), /UID-Zwischenbuchung · kein Warenumsatz/); }
+  assert.match(UI.renderDetail(payments.find(item => item.lines[0].quantity.startsWith('-'))), /-100,00/);
+  const pdf = await require('../lib/receipt-info-pdf').createReceiptInfoPdf(docs);
+  const text = await reportPdfText(pdf); assert.match(text, /UID-Zwischenbuchung · kein Warenumsatz/); assert.match(text, /-100,00/); assert.match(text, /Rückgabe/);
+  if (process.env.SALES_REPORT_PDF_PREVIEW_DIR) {
+    const fs = require('node:fs'), path = require('node:path');
+    fs.mkdirSync(process.env.SALES_REPORT_PDF_PREVIEW_DIR, { recursive: true });
+    fs.writeFileSync(path.join(process.env.SALES_REPORT_PDF_PREVIEW_DIR, 'receipt-uid-clearing.pdf'), pdf);
+  }
+});
+
+test('used goods retain the stored zero VAT and per-position cash margin in receipts, reports and encrypted PDFs', async t => {
+  const f = await fixture(t), data = { Umsatz_KASSE: [], Umsatz_Kasse_Details: [] };
+  [['149', '39.485'], ['349', '92.485'], ['159', '42.135']].forEach(([price, margin], i) => {
+    const receipt = rows(), head = receipt.Umsatz_KASSE[0];
+    Object.assign(head, { Bonnr: String(i + 1), Bondatum: '2010-01-0' + (i + 2) + 'T00:00:00.000', RechnungsBetrag: '0' });
+    Object.assign(receipt.Umsatz_Kasse_Details[0], { Bonnr: head.Bonnr, Bondatum: head.Bondatum,
+      RepID: '00000000-0000-0000-0000-' + String(i + 1).padStart(12, '0'), EAN: '0000000069877', Sortiment: 130101,
+      Artikelbezeichnung: 'Gebrauchtware (synthetischer Test)', UMarke: 'Second Hand', MWST: '0', AStorno: true, SonderartikelS: true,
+      VK_Preis: price, RohertragDM: margin, KalkRohertrag: '9999', DEK_A: null });
+    data.Umsatz_KASSE.push(head); data.Umsatz_Kasse_Details.push(...receipt.Umsatz_Kasse_Details);
+  });
+  const id = await f.build(data); await f.activate(f.request(id)); f.session.permissions.push('sales:analytics:margin:read');
+  const publications = require('../lib/persistence/repositories/cash-publications').createCashPublications({ access: f.app.provider, protection: f.protection, scopeId: f.actor.scopeId });
+  const before = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
+  const runtime = f.history(), history = await runtime.run(f.get, w => w.search(f.query()));
+  assert.equal(history.totals.gross, '657.00'); assert.equal(history.totals.net, '657.00');
+  assert.equal(history.coverage.counts.sales, 3); assert.equal(history.coverage.counts.review, 0);
+  const receipts = await runtime.run(f.get, w => w.receipts.search({ ...f.query(), kind: 'receipts' }));
+  const docs = await runtime.run(f.get, w => w.receipts.documents({ ids: receipts.items.map(item => item.id) }));
+  assert.equal(docs.items.length, 3); assert.ok(docs.items.every(item => item.state === 'Geprüft' && item.lines[0].status === 'sale'));
+  const input = f.query({ reportVersion: 3, groupBy: ['manufacturer'], metrics: ['grossRevenue', 'netRevenue', 'grossMargin', 'quantity', 'receiptCount'], chartType: 'bars' });
+  const metadata = await runtime.run(f.get, w => w.reports.metadata());
+  let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
+  result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
+  for (const [metric, expected] of Object.entries({ grossRevenue: '657.00', netRevenue: '657.00', grossMargin: '174.12', quantity: '3.000000', receiptCount: '3' })) {
+    assert.equal(result.report.total.metrics[metric].current, expected, metric);
+    assert.equal(result.report.rows[0].metrics[metric].current, expected, metric + ' group');
+  }
+  assert.equal(result.report.coverage.current.review, 0); assert.equal(result.report.coverage.current.marginMissing, 0);
+  const jobs = require('../lib/persistence/repositories/sales-report-jobs').createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: 'Gebrauchtware mit 0 % MwSt. (synthetischer Test)', query: input });
+  await jobs.tick(); await jobs.tick();
+  const pdf = await jobs.download(f.session, job.id), text = await reportPdfText(pdf);
+  assert.match(text, /657,00/); assert.match(text, /174,12/); assert.doesNotMatch(text, /Offene Belegprüfungen/);
+  if (process.env.SALES_REPORT_PDF_PREVIEW_DIR) {
+    const fs = require('node:fs'), path = require('node:path'); fs.mkdirSync(process.env.SALES_REPORT_PDF_PREVIEW_DIR, { recursive: true });
+    fs.writeFileSync(path.join(process.env.SALES_REPORT_PDF_PREVIEW_DIR, 'sales-analysis-used-goods.pdf'), pdf);
+  }
+  const after = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
+  assert.equal(C.canonical(after.row), C.canonical(before.row)); assert.equal(after.data.policy.version, 1);
+});
+
+test('confirmed prints, HD processing and repair estimate charges flow through receipts and reports without invented offsets', async t => {
+  const f = await fixture(t);
+  const fee = { EAN: '0000000049742', Sortiment: 110201, SonderartikelS: true, VK_Preis: '75', RohertragDM: '18.75', DEK_A: null };
+  const specifications = [
+    ['75', [fee]],
+    ['37.79', [{ EAN: '0000000000022', Sortiment: 110201, VK_Preis: '112.79', RohertragDM: '23.25' }, { ...fee, VKMenge: '-1' }]],
+    ['38.06', [
+      { EAN: '0000000081619', Sortiment: 60401, SonderartikelS: true, VKMenge: '4', VK_Preis: '0.89', RohertragDM: '0.5191666666666667' },
+      { EAN: '0000000081619', Sortiment: 60401, SonderartikelS: true, VKMenge: '50', VK_Preis: '0.69', RohertragDM: '0.3191666666666667', Rabatt: '20', Rabatt_DM: '1' }
+    ]],
+    ['75', [fee]], // Repair not performed: this fee has no offset and remains charged.
+    ['86.99', [{ EAN: '0000000000011', Sortiment: 60203, SonderartikelS: true, VK_Preis: '86.99', RohertragDM: '36.24583333333333', DEK_A: null }]]
+  ];
+  const data = { Umsatz_KASSE: [], Umsatz_Kasse_Details: [] };
+  specifications.forEach(([amount, lines], index) => {
+    const receipt = rows({ count: lines.length }), head = receipt.Umsatz_KASSE[0];
+    Object.assign(head, { Bonnr: String(index + 1), Bondatum: '2010-01-0' + (index + 2) + 'T00:00:00.000', RechnungsBetrag: amount });
+    receipt.Umsatz_Kasse_Details.forEach((row, i) => Object.assign(row, lines[i], { Bonnr: head.Bonnr, Bondatum: head.Bondatum,
+      RepID: '00000000-0000-0000-0000-' + String(index * 10 + i + 1).padStart(12, '0') }));
+    data.Umsatz_KASSE.push(head); data.Umsatz_Kasse_Details.push(...receipt.Umsatz_Kasse_Details);
+  });
+  const id = await f.build(data); await f.activate(f.request(id)); f.session.permissions.push('sales:analytics:margin:read');
+  const publications = require('../lib/persistence/repositories/cash-publications').createCashPublications({ access: f.app.provider, protection: f.protection, scopeId: f.actor.scopeId });
+  const before = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
+  const runtime = f.history(), history = await runtime.run(f.get, w => w.search(f.query()));
+  assert.equal(history.totals.gross, '312.84'); assert.equal(history.coverage.counts.review, 0);
+  const receipts = await runtime.run(f.get, w => w.receipts.search({ ...f.query(), kind: 'receipts' }));
+  assert.equal(receipts.items.length, 5);
+  const docs = await runtime.run(f.get, w => w.receipts.documents({ ids: receipts.items.map(r => r.id) }));
+  assert.equal(docs.items.reduce((sum, r) => sum + r.lines.length, 0), 7);
+  assert.equal(docs.items.flatMap(r => r.lines).filter(l => l.status === 'return').length, 1);
+  const input = f.query({ reportVersion: 3, groupBy: ['productGroup'], metrics: ['grossRevenue', 'netRevenue', 'grossMargin', 'quantity', 'receiptCount'] });
+  const metadata = await runtime.run(f.get, w => w.reports.metadata());
+  let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
+  result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
+  for (const [metric, expected] of Object.entries({ grossRevenue: '312.84', netRevenue: '260.70', grossMargin: '96.29', quantity: '57.000000', receiptCount: '5' })) {
+    assert.equal(result.report.total.metrics[metric].current, expected, metric);
+  }
+  const jobs = require('../lib/persistence/repositories/sales-report-jobs').createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: 'Sofortdruck, HD und Reparaturpauschale (synthetisch)', query: input });
+  await jobs.tick(); await jobs.tick();
+  const text = await reportPdfText(await jobs.download(f.session, job.id));
+  assert.match(text, /312,84/); assert.match(text, /96,29/); assert.doesNotMatch(text, /Offene Belegprüfungen/);
+  const after = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
+  assert.equal(C.canonical(after.row), C.canonical(before.row)); assert.equal(after.data.policy.version, 1);
+});
+
 test('report aggregation uses historical WGR and manufacturers, complete receipts and cumulative branch/MA filters in both periods', async t => {
   const f = await fixture(t), current = rows({ count: 2 }), previous = rows({ count: 2, price: '9.6' }), other = rows({ price: '24', location: '019' });
   for (const [dataset, suffix, date] of [[current, '1', '2010-01-02'], [previous, '2', '2009-01-02'], [other, '3', '2010-01-02']]) {
@@ -276,6 +515,81 @@ test('report aggregation uses historical WGR and manufacturers, complete receipt
   f.session = { ...f.session, permissions: f.session.permissions.filter(p => p !== 'sales:analytics:company:read').concat('sales:analytics:location:read'), scopes: [{ locationId: 'branch-a', departmentId: 0 }] };
   const scoped = await runtime.run(f.get, w => w.reports.metadata()); assert.deepEqual(scoped.locations.map(l => l.id), ['branch-a']); assert.deepEqual(scoped.source.locations, scoped.locations);
   await assert.rejects(runtime.run(f.get, w => w.reports.step({ ...input, locationIds: ['branch-b'] }, scoped)), code('IMPORT_FORBIDDEN'));
+});
+
+test('an open companion line preserves Sony revenue and confirmed cash margin without purchase prices or a false comparison', async t => {
+  const f = await fixture(t), good = rows({ price: '120' }), open = rows({ count: 2, price: '120' }), previous = rows({ price: '60' });
+  for (const [dataset, number, date] of [[good, '1', '2010-01-02'], [open, '2', '2010-01-02'], [previous, '3', '2009-01-02']]) {
+    dataset.Umsatz_KASSE[0].Bonnr = number; dataset.Umsatz_KASSE[0].Bondatum = date + 'T00:00:00.000';
+    dataset.Umsatz_Kasse_Details.forEach((line, i) => Object.assign(line, { Bonnr: number, Bondatum: dataset.Umsatz_KASSE[0].Bondatum,
+      RepID: `00000000-0000-0000-0000-${String(Number(number) * 100 + i).padStart(12, '0')}`, Sortiment: 130, UMarke: 'Sony' }));
+  }
+  open.Umsatz_KASSE[0].RechnungsBetrag = '0';
+  Object.assign(open.Umsatz_Kasse_Details[1], { UMarke: 'Companion line', MWST: '0' });
+  Object.assign(good.Umsatz_Kasse_Details[0], { RohertragDM: '20.123456789', KalkRohertrag: '20.123456789', DEK_A: null });
+  Object.assign(open.Umsatz_Kasse_Details[0], { RohertragDM: '60', KalkRohertrag: '60', DEK_A: null });
+  Object.assign(previous.Umsatz_Kasse_Details[0], { RohertragDM: '10', KalkRohertrag: '10', DEK_A: null });
+  const data = { Umsatz_KASSE: [good, open, previous].flatMap(d => d.Umsatz_KASSE), Umsatz_Kasse_Details: [good, open, previous].flatMap(d => d.Umsatz_Kasse_Details) };
+  const id = await f.build(data); await f.activate(f.request(id));
+  f.session.permissions.push('sales:analytics:margin:read');
+  const input = f.query({ reportVersion: 3, manufacturerIds: ['SONY'], sellerIds: ['person-a'], groupBy: ['manufacturer'], metrics: ['netRevenue', 'quantity', 'receiptCount', 'grossMargin', 'marginRate'], chartType: 'shares' });
+  const runtime = f.history(), metadata = await runtime.run(f.get, w => w.reports.metadata());
+  assert.equal(metadata.marginStatus, 'confirmed');
+  let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
+  result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
+  const sony = result.report.rows[0]; assert.equal(result.report.rows.length, 1); assert.equal(sony.dimensions[0].id, 'sony');
+  assert.deepEqual(sony.metrics.netRevenue, { current: null, previous: '50.00', absolute: null, percent: null, verifiedCurrent: '100.00' });
+  assert.deepEqual(sony.metrics.grossMargin, { current: null, previous: '10.00', absolute: null, percent: null, verifiedCurrent: '20.12' });
+  assert.deepEqual(sony.metrics.marginRate, { current: null, previous: '20.00', absolute: null, percent: null, verifiedCurrent: '20.12' });
+  assert.equal(sony.quality.current.records, 2); assert.equal(sony.quality.current.checked, 1); assert.equal(sony.quality.current.review, 1);
+  assert.deepEqual(sony.quality.current.issues, { VAT_CODE_UNKNOWN: 1 });
+  const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: 'Sony mit offener Belegprüfung (synthetisch)', query: input });
+  await jobs.tick(); await jobs.tick(); assert.equal((await jobs.list(f.session))[0].status, 'completed');
+  const pdf = await jobs.download(f.session, job.id), text = await reportPdfText(pdf);
+  assert.match(text, /100,00\s*€\s*\*/); assert.match(text, /Sony · aktuell \*/);
+  assert.match(text, /20,12\s*€\s*\*/); assert.match(text, /20,12\s*%\s*\*/);
+  assert.match(text, /historischer Kassen-Rohertrag je Stück/);
+  assert.doesNotMatch(text, /Bedeutung des historischen Kassenfelds ist noch nicht bestätigt/);
+  assert.match(text, /Offene Belegprüfungen/); assert.match(text, /MwSt.-Zuordnung/);
+  assert.doesNotMatch(text, /Anteile im Auswertungszeitraum|100,00\s*%/);
+});
+
+test('Online includes 0/00/70/90 across batches once, excludes unassigned sources and remains restricted to company readers', async t => {
+  const f = await fixture(t);
+  const datasets = ['0', '00', '70', '90', '018', '99'].map((location, index) => {
+    const data = rows({ count: location === '70' ? 205 : 1, location });
+    const number = String(index + 10);
+    data.Umsatz_KASSE[0].Bonnr = number;
+    data.Umsatz_Kasse_Details.forEach((line, i) => Object.assign(line, { Bonnr: number,
+      RepID: `00000000-0000-0000-0000-${String(index * 1000 + i + 1).padStart(12, '0')}` }));
+    return data;
+  });
+  const data = { Umsatz_KASSE: datasets.flatMap(d => d.Umsatz_KASSE), Umsatz_Kasse_Details: datasets.flatMap(d => d.Umsatz_Kasse_Details) };
+  const id = await f.build(data), request = f.request(id);
+  request.mappings.push({ kind: 'FILIALEN', sourceId: '70', targetId: 'branch-a', historical: false }); await f.activate(request);
+  const runtime = f.history(), context = await runtime.run(f.get, w => w.reports.metadata());
+  assert.ok(context.locations.some(l => l.id === 'tradefoto-online'));
+  async function calculate(locationIds) {
+    const input = f.query({ reportVersion: 3, locationIds, groupBy: ['location'], metrics: ['netRevenue', 'receiptCount'] });
+    let result, batches = 0;
+    do { result = await runtime.run(f.get, w => w.reports.step(input, context, result?.analysis.cursor)); assert.ok(++batches <= 5); } while (!result.analysis.complete);
+    return result.report;
+  }
+  const online = await calculate(['tradefoto-online']);
+  assert.equal(online.total.metrics.netRevenue.current, '2080.00'); assert.equal(online.total.metrics.receiptCount.current, '4');
+  assert.equal(online.rows[0].dimensions[0].id, 'tradefoto-online');
+  for (const locationIds of [context.locations.map(l => l.id), context.locations.map(l => l.id).reverse()]) {
+    const all = await calculate(locationIds);
+    assert.equal(all.total.metrics.netRevenue.current, '2090.00'); assert.equal(all.total.metrics.receiptCount.current, '5');
+    assert.equal(all.rows.find(r => r.dimensions[0].id === 'tradefoto-online').metrics.netRevenue.current, '2080.00');
+  }
+  const physical = await calculate(['branch-a']); assert.equal(physical.total.metrics.netRevenue.current, '2060.00');
+  f.session = { ...f.session, permissions: f.session.permissions.filter(p => p !== 'sales:analytics:company:read').concat('sales:analytics:location:read'), scopes: [{ locationId: 'branch-a', departmentId: 0 }] };
+  const scoped = await runtime.run(f.get, w => w.reports.metadata());
+  assert.equal(scoped.locations.some(l => l.id === 'tradefoto-online'), false);
+  await assert.rejects(calculate(['tradefoto-online']), code('IMPORT_FORBIDDEN'));
 });
 
 test('compact cash becomes usable through the normal history runtime with exact totals and no duplicate history', async t => {

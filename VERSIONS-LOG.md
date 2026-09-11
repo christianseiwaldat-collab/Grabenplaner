@@ -1,6 +1,15 @@
 # Grabenplaner Versions-Log
 
-## v0.92.35 Beta · Stabilere Berichtserstellung (vorbereitet)
+## v0.92.36 Beta · Verkaufsberichte, Kassenklärung und Browsernavigation (vorbereitet)
+
+- Das gemeinsame Paket enthält den vorbereiteten Hotfix für die Berichtserstellung: begrenzte Hintergrund-Worker, nur lesende Datenbankverbindungen, aufgeteilte verschlüsselte Zwischenstände und gezielte Kassenindizes.
+- Verkaufsberichte bieten genaue Daten sowie Monats-, Quartals- und Jahresauswahl für beide Zeiträume, durchsuchbare WGR-/Herstellerauswahl mit jeweils bis zu zehn Einträgen, die zusammengefasste Online-Filiale sowie PDF-Hoch-/Querformat und erste Diagramme.
+- Bestätigte Kassenregeln unterscheiden Warenverkäufe, Rücknahmen, Rabatte, Gutscheine und UID-Zwischenbuchungen. Der historische Rohertrag stammt aus der Kassa und berücksichtigt die signierte Menge; fehlende Quellwerte bleiben erkennbar. Bestätigte Gebrauchtware übernimmt gespeicherte 0 % MwSt. und den unveränderten Nettobetrag.
+- Unvollständige Gruppen zeigen ausdrücklich geprüfte Teilwerte ohne ungesicherte Vergleichsänderungen. Belegansicht und PDF ordnen Menge, Artikelnummer, Bezeichnung, Einzel- und Gesamtpreis unter den zugehörigen Personalnummern an.
+- Browser-Zurück und -Vorwärts funktionieren innerhalb der Verwaltungsoberfläche und des Mitarbeiterportals, einschließlich Untermenüs und berechtigter Filialkontexte. Formulare und Aktionen werden dabei nicht erneut ausgeführt.
+- Die Bereitstellung wird erst nach erfolgreicher Paket-, Betriebs- und Wiederherstellungsprüfung bestätigt. Bestehende PDFs bleiben unverändert; Auswertungen mit den neuen Regeln müssen neu erstellt werden.
+
+## v0.92.35 Beta · Stabilere Berichtserstellung (Kandidat, ersetzt durch v0.92.36)
 
 - Berechnung und PDF-Erstellung laufen in einem begrenzten Hintergrund-Worker mit einer nur lesenden Datenbankverbindung. Größere verschlüsselte Zwischenstände werden in begrenzte Blöcke aufgeteilt; bestehende Rechte- und Abbruchprüfungen bleiben wirksam.
 - Kassenpositionen verwenden ihren vorhandenen Elternindex auch ohne vorbereitete Planungsstatistiken. Kompaktere PDF-Tabellen behalten alle Inhalte und die bisherige Schriftgröße bei.

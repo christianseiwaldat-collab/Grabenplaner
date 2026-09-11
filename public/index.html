@@ -37,7 +37,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.30 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.36 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1682,14 +1682,14 @@
             <div class="sales-analytics-section-heading"><div><h2>Bericht erstellen</h2><p>Verkäufe nach Warengruppe, Hersteller, Filiale und MA als PDF auswerten.</p></div></div>
             <form class="sales-analytics-request-form" id="salesAnalyticsRequestForm" aria-describedby="salesAnalyticsRequestHint">
               <label class="sales-report-title-field" for="salesAnalyticsRequestQuery">Berichtstitel<input id="salesAnalyticsRequestQuery" type="text" maxlength="120" autocomplete="off" placeholder="z. B. Systemkameras nach Hersteller" /></label>
-              <fieldset class="sales-report-period"><legend>Auswertungszeitraum</legend><label for="salesReportJobFrom">Von<input id="salesReportJobFrom" type="date" required /></label><label for="salesReportJobTo">Bis<input id="salesReportJobTo" type="date" required /></label></fieldset>
-              <fieldset class="sales-report-period"><legend>Vergleichszeitraum</legend><label for="salesReportJobComparisonFrom">Von<input id="salesReportJobComparisonFrom" type="date" required /></label><label for="salesReportJobComparisonTo">Bis<input id="salesReportJobComparisonTo" type="date" required /></label><button id="salesReportJobPreviousYear" type="button" class="text-button">Vorjahr übernehmen</button><small id="salesReportComparisonMode">Automatisch ein Jahr zuvor</small></fieldset>
-              <fieldset class="sales-report-selection"><legend>Filialen</legend><div id="salesReportJobLocations"></div></fieldset>
-              <fieldset class="sales-report-selection"><legend>WGR / Sortiment</legend><div id="salesReportJobProductGroups"></div><small>Ohne Auswahl: alle Warengruppen. Bezeichnungen aus dem TradeFoto-Stand.</small></fieldset>
-              <fieldset class="sales-report-selection"><legend>Hersteller / Marke</legend><div id="salesReportJobManufacturers"></div><label>Weitere historische Marken<input id="salesReportJobManufacturerExtra" type="text" maxlength="400" placeholder="Mit Komma trennen" /></label><small>Ohne Auswahl: alle Hersteller. Auswertung nach der Marke am Verkaufsdatum.</small></fieldset>
+              <fieldset class="sales-report-period"><legend>Auswertungszeitraum</legend><div id="salesReportJobPeriod" class="sales-report-period-presets"></div><label for="salesReportJobFrom">Von<input id="salesReportJobFrom" type="date" required /></label><label for="salesReportJobTo">Bis<input id="salesReportJobTo" type="date" required /></label></fieldset>
+              <fieldset class="sales-report-period"><legend>Vergleichszeitraum</legend><div id="salesReportJobComparisonPeriod" class="sales-report-period-presets"></div><label for="salesReportJobComparisonFrom">Von<input id="salesReportJobComparisonFrom" type="date" required /></label><label for="salesReportJobComparisonTo">Bis<input id="salesReportJobComparisonTo" type="date" required /></label><button id="salesReportJobPreviousYear" type="button" class="text-button">Vorjahr übernehmen</button><small id="salesReportComparisonMode">Automatisch ein Jahr zuvor</small></fieldset>
+              <fieldset class="sales-report-selection"><legend>Filialen</legend><div id="salesReportJobLocations"></div><small id="salesReportOnlineHint" hidden>Online umfasst 00, 70 und 90. 0 / 00 ist gleichzeitig das Zentrallager. Verkäufe werden bei gemeinsamer Auswahl nur einmal gezählt.</small></fieldset>
               <fieldset class="sales-report-selection" id="salesReportSellerField"><legend>MA (Positionsverkäufer)</legend><div id="salesReportJobSellers"></div><label>Weitere Personalnummern<input id="salesReportJobSellerExtra" type="text" maxlength="400" placeholder="z. B. 426, 123" /></label><small>Ohne Auswahl: alle MA im gewählten Filialumfang.</small></fieldset>
+              <fieldset class="sales-report-selection sales-report-transfer-field"><legend>WGR / Sortiment</legend><div id="salesReportJobProductGroups"></div><small>Links suchen und markieren, dann nach rechts übernehmen. Höchstens 10 Sortimente; ohne Auswahl keine Eingrenzung.</small></fieldset>
+              <fieldset class="sales-report-selection sales-report-transfer-field"><legend>Hersteller / Marke</legend><div id="salesReportJobManufacturers"></div><small>Höchstens 10 Hersteller; ohne Auswahl keine Eingrenzung. Maßgeblich ist die Marke am Verkaufsdatum.</small></fieldset>
               <fieldset class="sales-report-selection sales-report-metrics"><legend>Kennzahlen · Mehrfachauswahl</legend><div id="salesReportJobMetrics"></div><p id="salesReportMarginHint" class="sales-report-quality-hint" hidden></p></fieldset>
-              <fieldset class="sales-report-grouping"><legend>Darstellung</legend><label>Aufschlüsselung<select id="salesReportJobGroupPrimary"></select></label><label>Darunter<select id="salesReportJobGroupSecondary"></select></label><label>Zusätzlich<select id="salesReportJobGroupThird"></select></label><label>Diagramm für<select id="salesReportJobChartMetric"></select></label><div class="sales-report-checks"><label><input type="checkbox" id="salesReportJobAbsolute" checked /> Veränderung absolut</label><label><input type="checkbox" id="salesReportJobPercent" checked /> Veränderung in Prozent</label></div></fieldset>
+              <fieldset class="sales-report-grouping"><legend>Darstellung</legend><label>Aufschlüsselung<select id="salesReportJobGroupPrimary"></select></label><label>Darunter<select id="salesReportJobGroupSecondary"></select></label><label>Zusätzlich<select id="salesReportJobGroupThird"></select></label><label>PDF-Format<select id="salesReportJobOrientation"><option value="portrait">Hochformat</option><option value="landscape">Querformat</option></select></label><label>Diagramm<select id="salesReportJobChartType"><option value="auto">Automatisch passend</option><option value="bars">Balken · mit Vergleich</option><option value="shares">Anteile · Ringdiagramm</option><option value="none">Ohne Diagramm</option></select></label><label>Diagramm für<select id="salesReportJobChartMetric"></select></label><div class="sales-report-checks"><label><input type="checkbox" id="salesReportJobAbsolute" checked /> Veränderung absolut</label><label><input type="checkbox" id="salesReportJobPercent" checked /> Veränderung in Prozent</label></div><small>Bei ungeeigneten Anteilen, z. B. negativen Werten, verwendet der Bericht ein Balkendiagramm. Alle Gruppen stehen zusätzlich in den Tabellen.</small></fieldset>
               <div class="sales-report-submit"><button class="primary-button" id="salesReportJobSubmit" type="submit" disabled>PDF-Bericht beauftragen</button><small>Bis zu 366 Tage je Zeitraum. Die Erstellung läuft am Server weiter.</small></div>
             </form>
             <p class="sales-analytics-request-hint" id="salesAnalyticsRequestHint" role="status">Die Verfügbarkeit der Kassendaten wird geprüft.</p>
@@ -4245,6 +4245,7 @@
     <script src="/vendor/quill/quill.js"></script>
     <script src="/date-range-calendar.js"></script>
     <script src="/sales-history.js"></script>
+    <script src="/receipt-line-format.js"></script>
     <script src="/receipt-search.js"></script>
     <script src="/data-import.js"></script>
     <script src="/cash-publication.js"></script>
@@ -4256,8 +4257,10 @@
     <script src="/credential-boundaries.js"></script>
     <script src="/schedule-duty.js"></script>
     <script src="/permission-defaults.js"></script>
+    <script src="/sales-report-controls.js"></script>
     <script src="/sales-report-jobs.js"></script>
     <script src="/sales-article-image.js"></script>
+    <script src="/navigation-history.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

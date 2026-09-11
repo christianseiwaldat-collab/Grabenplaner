@@ -943,6 +943,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .settings-tabs.sales-analytics-tabs .settings-tab { flex:0 0 auto; }
 .sales-analytics-panel[hidden] { display:none !important; }
 .sales-analytics-intro-card { width:min(100%,820px); box-sizing:border-box; padding:20px; border:1px solid var(--line); border-radius:15px; background:var(--surface); }
+#salesAnalyticsCreatePanel { width:100%; container:sales-report-create / inline-size; }
 .sales-analytics-intro-card h2,.sales-analytics-pdf-heading h2 { margin:0; font:800 18px/1.25 "Manrope","DM Sans","Segoe UI",sans-serif; }
 .sales-analytics-request-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin:18px 0 0; }
 .sales-analytics-request-form label { display:grid; flex:0 1 240px; min-width:0; max-width:100%; gap:6px; color:var(--ink); font-size:11px; font-weight:700; }
@@ -963,6 +964,28 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .sales-report-title-field,.sales-report-metrics,.sales-report-grouping,.sales-report-submit { grid-column:1 / -1; }
 .sales-report-title-field { width:min(100%,480px); }
 .sales-report-period,.sales-report-grouping { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; align-content:start; }
+.sales-report-period-presets { grid-column:1 / -1; display:grid; grid-template-columns:minmax(130px,1.2fr) minmax(85px,.7fr) minmax(120px,1fr); gap:10px; align-items:end; }
+.sales-report-period-presets small { grid-column:1 / -1; margin:0; }
+.sales-analytics-request-form [hidden] { display:none !important; }
+.sales-report-transfer-field { grid-column:1 / -1; }
+.sales-report-transfer { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:12px; align-items:end; }
+.sales-report-transfer > div { min-width:0; }
+.sales-report-transfer strong { display:block; margin:8px 0 5px; font-size:11px; }
+.sales-report-transfer-scroll { height:210px; overflow:auto; overscroll-behavior:contain; border:1px solid var(--line); border-radius:6px; background:var(--surface); }
+.sales-report-transfer table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.sales-report-transfer td { padding:0; border-bottom:1px solid var(--line); text-align:left; }
+.sales-report-transfer td label { display:flex; align-items:flex-start; gap:8px; padding:6px 9px; font-weight:500; line-height:1.4; cursor:pointer; }
+.sales-report-transfer td label:has(input:checked) { background:color-mix(in srgb,var(--green) 13%,var(--surface)); color:var(--ink); }
+.sales-report-transfer td span { min-width:0; overflow-wrap:anywhere; }
+.sales-report-transfer input[type="checkbox"] { width:16px; min-height:16px; height:16px; flex:0 0 16px; margin:1px 0; }
+.sales-report-transfer .sales-report-transfer-empty { padding:10px; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.sales-report-transfer-actions { display:flex; flex-direction:column; gap:8px; align-self:center; }
+.sales-report-transfer-actions button { max-width:145px; white-space:normal; }
+.sales-report-transfer-status { min-height:15px; }
+@container sales-report-create (min-width:1200px) { .sales-report-transfer-field { grid-column:auto; } }
+@container sales-report-create (max-width:800px) { .sales-analytics-request-form { grid-template-columns:1fr; } }
+@container sales-report-create (max-width:540px) { .sales-report-transfer { grid-template-columns:minmax(0,1fr); } .sales-report-transfer-actions { flex-direction:row; flex-wrap:wrap; } .sales-report-period-presets { grid-template-columns:minmax(0,1fr) minmax(80px,.7fr); } .sales-report-grouping { grid-template-columns:1fr; } }
+@media(max-width:650px) { .sales-report-transfer { grid-template-columns:minmax(0,1fr); } .sales-report-transfer-actions { flex-direction:row; flex-wrap:wrap; } .sales-report-period-presets { grid-template-columns:minmax(0,1fr) minmax(80px,.7fr); } }
 .sales-report-period button { justify-self:start; min-height:30px; padding:4px 8px; }
 .sales-report-selection .sales-report-checks { max-height:156px; overflow-y:auto; overscroll-behavior:contain; margin:8px 0; }
 .sales-report-checks label { display:flex; align-items:flex-start; gap:7px; padding:5px 2px; font-weight:500; line-height:1.5; overflow-wrap:anywhere; }
