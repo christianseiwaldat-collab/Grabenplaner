@@ -1,8 +1,24 @@
 # GP-Antwortaussetzer am 10. September 2026
 
-## Produktiver Zustand
+## Stand nach der Bereitstellung am 11. September
 
-v0.92.34-beta ist installiert. Während Berichtsläufen bestätigten die Monitor-
+v0.92.36-beta enthält den Hotfix und die anschließenden Kassenklärungen,
+Berichtsfilter und Browsernavigation. Der installierte Worker bestand beide
+Originalabfragen mit jeweils 18.954 Positionen; die PDFs umfassen 203 und 31
+Seiten. Alle 40 begleitenden Bereitschaftsproben waren erfolgreich. Die
+Berichtspause wurde um 20:39:22 UTC aufgehoben. Für korrigierte Werte müssen
+neue Berichte erstellt werden; Originalaufträge und gespeicherte PDFs bleiben
+unverändert. Der [Releasebericht](VERKAUFSBERICHTE-RELEASE-v09236.md) enthält
+Paket-, Betriebs-, Daten- und Funktionsnachweise.
+
+Der vorbestehende 90-Sekunden-Timeout beim isolierten Recovery-Anwendungsstart
+bleibt gesondert offen, obwohl Datenwiederherstellung und Berichte geprüft sind.
+Die signierte Fehlerhistorie wird nicht zurückgesetzt. Die nachstehenden
+Abschnitte beschreiben die Störung und Arbeitsschritte vor der Bereitstellung.
+
+## Ausgangszustand unter v0.92.34
+
+v0.92.34-beta war installiert. Während Berichtsläufen bestätigten die Monitor-
 Protokolle wiederholte Antwortaussetzer; zwischen den Läufen antwortete die
 Anwendung wieder normal. Drei PDF-Aufträge brachen jeweils nach 5.800 verarbeiteten
 Positionen ab. Die fehlgeschlagenen Aufträge und vorhandenen Ergebnisse wurden
@@ -50,13 +66,13 @@ Abbruch wachsender Zwischenstände; der alte Jobstatus enthielt nur einen allgem
 Fehlercode. Eine direkte nachträgliche Entschlüsselung des verlorenen Zwischenstands
 ist nicht möglich, da dieser nur im Arbeitsspeicher existierte.
 
-## Prüfungen und offene Bereitstellung
+## Prüfungen vor der Bereitstellung
 
 Gezielte Tests prüfen PDF-Summen mit dem tatsächlichen Worker, HTTP-Antworten bei
 CPU-Last, Worker-Zeitlimit und Austausch, Rechteentzug während der Berechnung,
 Abbruchkonflikte sowie 10.000 verschiedene Belege über mehrere verschlüsselte
 Blöcke. Bestehende Kassen-, Import-, Rechte- und Wiederherstellungsverträge werden
-zusätzlich geprüft. Die Codekorrektur ist noch nicht produktiv bereitgestellt.
+zusätzlich geprüft. Zu diesem Zeitpunkt war die Codekorrektur noch nicht produktiv bereitgestellt.
 Die erste kombinierte Funktionsprüfung bestand mit 67/67 Tests, die nachfolgende
 erweiterte Prüfung mit 85/85 ausführbaren Tests. Drei unveränderte Linux-
 Installationsfixtures waren unter Windows plattformbedingt übersprungen.
@@ -127,8 +143,8 @@ Das Paket `Grabenplaner-Server-v0.92.35-beta-linux-x64.zip` im Verzeichnis
 `release/server-linux-2177276` hat den SHA-256-Wert
 `53dbee5b99b6c1b3fe43b417218e3800cbcfc1472b72115c6cd7da748307a521`.
 Es enthält 551 geprüfte Laufzeitdateien und keine Änderungen an den Serverwerkzeugen.
-Der Hotfix ist damit vorbereitet und mit dem tatsächlichen Auftrag geprüft,
-aber noch nicht installiert. Die produktive Berichtspause bleibt aktiv.
+Der Hotfix war damit vorbereitet und mit dem tatsächlichen Auftrag geprüft,
+aber noch nicht installiert. Die produktive Berichtspause blieb zu diesem Zeitpunkt aktiv.
 
 ## Anschließende Erweiterungen vor der Bereitstellung
 
@@ -138,6 +154,7 @@ Diese lokal geprüften Änderungen sind in
 [VERKAUFSANALYSEN-AUSWAHL-UND-NAVIGATION-2026-09-10.md](VERKAUFSANALYSEN-AUSWAHL-UND-NAVIGATION-2026-09-10.md)
 beschrieben. Das oben nachgewiesene Paket `2177276` bleibt ein Beleg für den
 getesteten Hotfix, enthält die anschließenden Erweiterungen aber noch nicht.
-Für die gemeinsame Bereitstellung ist ein neu gebautes und geprüftes Paket
-erforderlich. Die produktive Berichtspause wurde in diesem Arbeitsabschnitt
-nicht aufgehoben; es gab keinen App- oder VPS-Neustart.
+Für die gemeinsame Bereitstellung war ein neu gebautes und geprüftes Paket
+erforderlich. Die produktive Berichtspause wurde in diesem damaligen
+Arbeitsabschnitt nicht aufgehoben. Der spätere gemeinsame Release ist oben
+unter dem Stand vom 11. September nachgewiesen.
