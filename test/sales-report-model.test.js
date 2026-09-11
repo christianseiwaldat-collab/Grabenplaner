@@ -5,6 +5,18 @@ const context = { today: '2026-09-09', projection: { read: true, company: true, 
 const query = extra => M.normalizeReportQuery({ sourceId: 'compact-cash', dateFrom: '2026-02-01', dateTo: '2026-02-28', metrics: M.METRICS.map(m => m.id), ...extra }, context);
 function line(extra = {}) { return { metric: { status: 'sale', gross: '120.00', net: '100.00' }, quantity: '1', margin: '20.00',
   receiptKey: 'receipt-1', customerKey: 'customer-1', productGroup: { id: '1', label: 'Systemkameras' }, manufacturer: { id: 'canon', label: 'Canon' }, location: { id: 'a', label: 'A' }, seller: { id: '42', label: 'MA 42' }, ...extra }; }
+test('new PDF presentation choices and ten-item limits are validated without changing saved version-two queries', () => {
+  const ten = Array.from({ length: 10 }, (_, i) => String(i));
+  const input = { reportVersion: 3, orientation: 'landscape', chartType: 'shares', productGroupIds: ten, manufacturerIds: ten };
+  const normalized = query(input);
+  assert.equal(normalized.orientation, 'landscape'); assert.equal(normalized.chartType, 'shares');
+  assert.deepEqual(query(normalized), normalized); assert.equal(M.isPdfReportQuery(normalized), true);
+  for (const bad of [{ orientation: 'square' }, { chartType: 'timeline' }, { productGroupIds: [...ten, '11'] }, { manufacturerIds: [...ten, '11'] }])
+    assert.throws(() => query({ ...input, ...bad }), { code: 'IMPORT_REPORT_SELECTION' });
+  const old = query({ productGroupIds: [...ten, '11'], manufacturerIds: [...ten, '11'] });
+  assert.equal(old.reportVersion, 2); assert.equal(Object.hasOwn(old, 'orientation'), false);
+  assert.deepEqual(query(old), old); assert.throws(() => query({ chartType: 'bars' }), { code: 'IMPORT_REPORT_SELECTION' });
+});
 test('confirmed cash margin multiplies unit margin by quantity before rounding, preserving return signs and precision', () => {
   assert.equal(M.positionMargin('8.141666666666667', '2'), '16.28');
   assert.equal(M.positionMargin('17.86844166666667', '1'), '17.87');
@@ -43,6 +55,32 @@ test('unknown source periods, unverified receipts and missing margin never produ
   assert.equal(result.total.metrics.grossMargin.current, null); assert.equal(result.total.metrics.marginRate.current, null);
   M.accumulate(state, 'current', q, line({ metric: null })); result = M.finishReport(state, q);
   assert.equal(result.total.metrics.netRevenue.current, null); assert.equal(result.total.metrics.customerCount.current, null);
+});
+test('one unreconciled receipt retains explicitly separate verified subtotals, never full totals or changes', () => {
+  const state = M.accumulator(), q = query({ groupBy: ['manufacturer'] });
+  M.accumulate(state, 'current', q, line());
+  M.accumulate(state, 'current', q, line({ metric: null, reviewIssues: ['STATUS_REVIEW_REQUIRED', 'RECEIPT_AMOUNT_MISMATCH'], receiptKey: 'open' }));
+  M.accumulate(state, 'comparison', q, line({ metric: { status: 'sale', gross: '60.00', net: '50.00' } }));
+  const r = M.finishReport(JSON.parse(JSON.stringify(state)), q), money = r.rows[0].metrics.netRevenue;
+  assert.equal(money.current, null); assert.equal(money.verifiedCurrent, '100.00'); assert.equal(money.previous, '50.00');
+  assert.equal(money.absolute, null); assert.equal(money.percent, null); assert.equal(money.verifiedPrevious, undefined);
+  assert.equal(r.total.metrics.netRevenue.current, null); assert.equal(r.total.metrics.netRevenue.verifiedCurrent, '100.00');
+  assert.equal(r.rows[0].metrics.quantity.verifiedCurrent, '1.000000'); assert.equal(r.rows[0].metrics.receiptCount.verifiedCurrent, '1');
+  assert.deepEqual(r.rows[0].quality.current, { records: 2, checked: 1, review: 1, excluded: 0, marginMissing: 0,
+    issues: { STATUS_REVIEW_REQUIRED: 1, RECEIPT_AMOUNT_MISMATCH: 1 } });
+});
+test('verified subtotals preserve returns, incomplete margins and the absence of checked positions', () => {
+  const state = M.accumulator(), q = query({ groupBy: ['manufacturer'] });
+  M.accumulate(state, 'current', q, line({ metric: { status: 'return', gross: '-120.00', net: '-100.00' }, quantity: '-1', margin: null }));
+  M.accumulate(state, 'current', q, line({ metric: null }));
+  M.accumulate(state, 'comparison', q, line({ metric: null }));
+  const r = M.finishReport(state, q), money = r.rows[0].metrics.netRevenue;
+  assert.equal(money.verifiedCurrent, '-100.00'); assert.equal(money.verifiedPrevious, undefined);
+  assert.equal(r.rows[0].metrics.quantity.verifiedCurrent, '-1.000000');
+  assert.equal(r.rows[0].metrics.grossMargin.verifiedCurrent, undefined);
+  assert.equal(r.rows[0].metrics.customerCount.previous, null);
+  assert.equal(r.rows[0].metrics.receiptCount.verifiedPrevious, undefined);
+  assert.equal(money.percent, null); assert.equal(money.absolute, null);
 });
 test('manufacturer/WGR/MA multiselect applies jointly; returns and decimals keep exact signs', () => {
   const state = M.accumulator(), q = query({ manufacturerIds: [' CANON '], productGroupIds: ['1'], sellerIds: ['42'], locationIds: ['a'] });

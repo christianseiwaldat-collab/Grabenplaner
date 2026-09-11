@@ -1313,6 +1313,8 @@ function closeAdminCredentialDialogsForLogin() {
 }
 
 function showLoginGate(message = "") {
+  globalThis.grabenplanerNavigation?.stop();
+  loadAllGeneration++;
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
@@ -1991,6 +1993,7 @@ function setManagerRequestKindTab(kind) {
     button.classList.toggle("active", button.dataset.requestKindTab === kind);
   });
   renderManagerRequests();
+  globalThis.grabenplanerNavigation?.record();
   return true;
 }
 
@@ -3056,6 +3059,7 @@ async function bootstrapApplication() {
     await loadUiPreferences();
     await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
     applyRequestedView();
+    globalThis.grabenplanerNavigation?.start();
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
     showLoginGate(error.message);
@@ -3087,6 +3091,7 @@ async function loginToAdministration(event) {
     await loadUiPreferences();
     await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
     applyRequestedView();
+    globalThis.grabenplanerNavigation?.start();
   } catch (error) {
     showLoginGate(error.message);
   }
@@ -3257,7 +3262,9 @@ function scheduleAdminLoginBrandingPreview() {
   adminLoginBrandingTimer = setTimeout(previewAdminLoginBranding, 300);
 }
 
+let loadAllGeneration = 0;
 async function loadAll({ restoreContext = true } = {}) {
+  const generation = ++loadAllGeneration;
   try {
     const [locations, positions, portalStatus, roleData] = await Promise.all([
       api("/api/locations"),
@@ -3265,6 +3272,7 @@ async function loadAll({ restoreContext = true } = {}) {
       api("/api/portal/v1/status").catch(() => null),
       api("/api/portal/v1/roles").catch(() => ({ roles: [], catalog: [] })),
     ]);
+    if (generation !== loadAllGeneration) return;
     state.locations = locations;
     state.positions = positions;
     state.portalStatus = portalStatus;
@@ -3284,6 +3292,7 @@ async function loadAll({ restoreContext = true } = {}) {
         : Promise.resolve({ year: state.vacationYear, vacations: [], entitlements: [], publicHolidays: [] }),
       api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
     ]);
+    if (generation !== loadAllGeneration) return;
     state.data = schedule;
     state.allowPastWeekEditing = schedule.settings?.allow_past_week_editing === "1";
     state.locations = schedule.locations || state.locations;
@@ -3302,7 +3311,7 @@ async function loadAll({ restoreContext = true } = {}) {
     if (canReadLoanManagement()) loadLoanManagement();
     if (canManageBranchOrders() && state.currentView === "branchOrders") loadBranchOrdersManagement();
   } catch (error) {
-    showToast(error.message, true);
+    if (generation === loadAllGeneration) showToast(error.message, true);
   }
 }
 
@@ -21081,6 +21090,7 @@ function setPersonnelAdministrationTab(tab) {
   if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
   if (normalized === "dataRequests") loadDataSubjectRequests().catch((error) => showToast(error.message, true));
+  globalThis.grabenplanerNavigation?.record();
 }
 
 function populateCostCenterTypeSelect(selectedId = "") {
@@ -23210,6 +23220,7 @@ function pageViewElement(view) {
     salesAnalytics: elements.salesAnalyticsView,
     receiptSearch: elements.receiptSearchView,
     articleCatalog: elements.salesArticleCatalogView,
+    crm: elements.crmView,
     loans: elements.loansView,
     branchOrders: elements.branchOrdersView,
     rightsDashboard: elements.rightsDashboardView,
@@ -24687,6 +24698,7 @@ function setRightsDashboardMode(mode, { load = true } = {}) {
   elements.rightsDashboardProcessesPanel?.classList.toggle("hidden", normalized !== "processes");
   if (normalized === "personnelRules") renderPersonnelRulesDashboard();
   if (normalized === "processes") renderRightsProcessDashboard();
+  globalThis.grabenplanerNavigation?.record();
   if (!load) return;
   if (normalized === "systemCenter") loadSystemCenter();
   else if (normalized === "personnelRules") loadPersonnelRulesDashboard();
@@ -33659,6 +33671,7 @@ function setSalesAnalyticsTab(tab, { moveFocus = false } = {}) {
   if (state.currentView === "salesAnalytics" && state.salesAnalytics.tab === "pdf" && !state.salesAnalytics.loaded) {
     void loadSalesAnalytics();
   }
+  globalThis.grabenplanerNavigation?.record();
 }
 
 function renderSalesAnalytics() {
@@ -34161,6 +34174,7 @@ async function submitSalesAnalyticsPdfOptions(event) {
 }
 
 function setView(view) {
+  if (!pageViewElement(view)) view = "startDashboard";
   const features = state.portalStatus?.installationFeatures || {};
   if ((view === "vacations" && features.vacation === false)
     || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
@@ -34173,6 +34187,7 @@ function setView(view) {
     || (view === "crm" && !canAccessCrm())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "branchOrders" && !canManageBranchOrders())
+    || (view === "settings" && !document.querySelector('[data-settings-tab]:not(.hidden)'))
     || (view === "rightsDashboard" && accessibleDashboardModes().length === 0)) view = "startDashboard";
   const profileView = state.employeeProfileHost === "team" ? "personnel" : "personnelAdministration";
   if (employeeProfileIsOpen() && view !== profileView) closeEmployeeProfile({ restoreFocus: false });
@@ -34251,9 +34266,10 @@ function setView(view) {
     Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
     timePresenceRefreshTimer = setInterval(() => { if (!document.hidden && state.currentView === "timeTracking") loadTimePresence(); }, 30000);
   }
+  globalThis.grabenplanerNavigation?.record();
 }
 
-function applyRequestedView() {
+function applyRequestedView({ fromHistory = false } = {}) {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
   if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
@@ -34280,11 +34296,49 @@ function applyRequestedView() {
     const dashboardMode = parameters.get("dashboard");
     if (["locations", "rights", "personnelRules", "processes", "systemCenter"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
     const processId = parameters.get("process");
-    if (processId) state.rightsDashboardSelectedProcessId = processId.slice(0, 120);
+    state.rightsDashboardSelectedProcessId = String(processId || "").slice(0, 120);
+    state.rightsProcessCategoryId = "all";
+    state.rightsDashboardSelectedProcessStepId = "";
   }
-  const contextChanged = restoreRememberedOverallContext(requestedView);
+  let contextChanged = fromHistory ? false : restoreRememberedOverallContext(requestedView);
+  if (["planning", "vacations"].includes(requestedView)) {
+    const location = activeLocations().find(item => item.id === parameters.get("location"));
+    if (location) {
+      const department = (location.departments || []).find(item => item.active && String(item.id) === parameters.get("department"));
+      const departmentId = department ? String(department.id) : "";
+      contextChanged = contextChanged || state.locationId !== location.id || String(state.departmentId || "") !== departmentId;
+      state.locationId = location.id; state.departmentId = departmentId;
+      setDefaultContext(state.locations);
+    }
+  }
   setView(requestedView);
-  if (contextChanged) loadAll();
+  if (state.currentView === "settings") {
+    const tab = functionSearchSettingsTabButton(parameters.get("section"));
+    if (tab && !tab.classList.contains("hidden")) setSettingsTab(tab.dataset.settingsTab);
+  }
+  if (state.currentView === "personnel") {
+    const section = parameters.get("section");
+    const tab = [...document.querySelectorAll('[data-personnel-tab]:not(.hidden)')].find(button => button.dataset.personnelTab === section);
+    if (tab) setPersonnelTab(section);
+  }
+  if (state.currentView === "rightsDashboard") setRightsDashboardMode(state.rightsDashboardMode);
+  if (fromHistory) closeMobileNavigation({ restoreFocus: false });
+  if (contextChanged) loadAll({ restoreContext: false });
+}
+
+function currentAdministrationRoute() {
+  const view = state.currentView, route = { view };
+  if (view === "settings") route.section = document.querySelector('[data-settings-tab].active:not(.hidden)')?.dataset.settingsTab || "general";
+  if (view === "personnelAdministration") route.section = state.personnelAdministrationTab;
+  if (view === "personnel") route.section = state.personnelTab;
+  if (view === "salesAnalytics") route.section = state.salesAnalytics.tab;
+  if (view === "requests") route.kind = state.requestKindTab;
+  if (view === "rightsDashboard") {
+    route.dashboard = state.rightsDashboardMode;
+    if (route.dashboard === "processes") route.process = state.rightsDashboardSelectedProcessId;
+  }
+  if (["planning", "vacations"].includes(view)) { route.location = String(state.locationId || ""); route.department = String(state.departmentId || ""); }
+  return route;
 }
 
 function setSettingsTab(tab) {
@@ -34371,6 +34425,7 @@ function setSettingsTab(tab) {
     }
   }
   scheduleAllSettingsPackedGrids();
+  globalThis.grabenplanerNavigation?.record();
 }
 
 function setPersonnelTab(tab) {
@@ -34382,6 +34437,7 @@ function setPersonnelTab(tab) {
   elements.employeeSettings.classList.toggle("active", tab === "employees");
   elements.locationSettings.classList.toggle("active", tab === "locations");
   elements.teamDisplayColumnsButton?.classList.toggle("hidden", tab !== "employees");
+  globalThis.grabenplanerNavigation?.record();
 }
 
 function updateColorPicker(color) {
@@ -38779,6 +38835,7 @@ elements.rightsProcessValidationList?.addEventListener("click", (event) => {
   state.rightsProcessCategoryId = selectedProcess ? rightsProcessCategoryFor(selectedProcess).id : "all";
   state.rightsDashboardSelectedProcessStepId = button.dataset.rightsValidationStep || "";
   renderRightsProcessDashboard();
+  globalThis.grabenplanerNavigation?.record();
   elements.rightsProcessTitle?.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 elements.rightsProcessList?.addEventListener("click", (event) => {
@@ -38787,6 +38844,7 @@ elements.rightsProcessList?.addEventListener("click", (event) => {
   state.rightsDashboardSelectedProcessId = button.dataset.rightsProcess;
   state.rightsDashboardSelectedProcessStepId = "";
   renderRightsProcessDashboard();
+  globalThis.grabenplanerNavigation?.record();
 });
 elements.rightsProcessTimeline?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-rights-process-step]");
@@ -40755,6 +40813,13 @@ initializeRequestBlackoutDateRangeCalendar();
 initializeStaffAssignmentRequestDateRangeCalendar();
 initializeScheduleSearchDateRangeCalendar();
 initializePersonnelCandidateTrialDateRangeCalendar();
+globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create({
+  window, app: "administration", keys: ["view", "section", "kind", "dashboard", "process", "location", "department"],
+  read: currentAdministrationRoute, apply: () => applyRequestedView({ fromHistory: true }),
+  enabled: () => !document.body.classList.contains("portal-locked")
+    && Boolean(state.portalStatus) && (!state.portalStatus.portalEnabled || state.portalSession?.authenticated === true),
+  onError: () => showToast("Die Seitennavigation konnte nicht wiederhergestellt werden.", true),
+});
 bootstrapApplication();
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked")) loadSystemInfo();

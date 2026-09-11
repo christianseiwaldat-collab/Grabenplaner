@@ -27,6 +27,14 @@
 .receipt-table-scroll th:first-child, .receipt-table-scroll td:first-child { min-width: 34px; }
 .receipt-table-scroll button { color: inherit; background: transparent; border: 1px solid var(--line, #cedbd7); border-radius: 6px; padding: 5px 8px; cursor: pointer; }
 .receipt-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.receipt-lines table { min-width: 620px; }
+.receipt-lines td, .receipt-lines th { padding: 8px 10px; }
+.receipt-lines thead th { white-space: nowrap; }
+.receipt-lines td:nth-child(2) { white-space: nowrap; }
+.receipt-lines td:nth-child(3) { width: 100%; min-width: 190px; }
+.receipt-lines .receipt-personnel-group th { padding-top: 12px; background: var(--surface-muted, #eef4f1); }
+.receipt-line-note { display: block; margin-top: 4px; color: var(--muted, #52665f); font-size: .85em; }
+.receipt-lines:focus-visible { outline: 3px solid var(--accent, #32826a); outline-offset: 2px; }
 .receipt-detail { width: min(1040px, calc(100vw - 32px)); max-height: calc(100vh - 40px); padding: 24px; overflow: auto; color: var(--ink); background: var(--surface, #fff); }
 .receipt-info-note { background: var(--surface-muted, #eef4f1); padding: 12px 16px; border-radius: 8px; }
 .receipt-meta { display: grid; grid-template-columns: minmax(130px, auto) 1fr; gap: 8px 20px; }

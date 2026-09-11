@@ -129,3 +129,15 @@ Das Paket `Grabenplaner-Server-v0.92.35-beta-linux-x64.zip` im Verzeichnis
 Es enthält 551 geprüfte Laufzeitdateien und keine Änderungen an den Serverwerkzeugen.
 Der Hotfix ist damit vorbereitet und mit dem tatsächlichen Auftrag geprüft,
 aber noch nicht installiert. Die produktive Berichtspause bleibt aktiv.
+
+## Anschließende Erweiterungen vor der Bereitstellung
+
+Der Benutzer hat anschließend weitere Änderungen an der Berichtsauswahl und
+eine allgemeine Browsernavigation beauftragt; der Hotfix soll daran anschließen.
+Diese lokal geprüften Änderungen sind in
+[VERKAUFSANALYSEN-AUSWAHL-UND-NAVIGATION-2026-09-10.md](VERKAUFSANALYSEN-AUSWAHL-UND-NAVIGATION-2026-09-10.md)
+beschrieben. Das oben nachgewiesene Paket `2177276` bleibt ein Beleg für den
+getesteten Hotfix, enthält die anschließenden Erweiterungen aber noch nicht.
+Für die gemeinsame Bereitstellung ist ein neu gebautes und geprüftes Paket
+erforderlich. Die produktive Berichtspause wurde in diesem Arbeitsabschnitt
+nicht aufgehoben; es gab keinen App- oder VPS-Neustart.

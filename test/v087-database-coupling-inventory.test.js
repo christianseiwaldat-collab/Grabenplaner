@@ -434,7 +434,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1352);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1354);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -451,7 +451,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1352,
+    requiredReceiptCount: 1354,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -638,7 +638,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   assert.match(phase5, /nicht produktiven Status/i);
   assert.match(phase5, /`development-contract`/);
   assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1352/);
+  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1354/);
   assert.match(phase5, /`applicationExecutable: false`/);
   assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
   assert.match(strategy, /Block 3[\s\S]{0,100}abgeschlossen/i);
@@ -650,7 +650,7 @@ test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven
   );
   assert.match(
     strategy,
-    /1352 Anwendungsstatements:[\s\S]{0,60}1237[\s\S]{0,100}`portable-generated`[\s\S]{0,60}115[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1352[\s\S]{0,100}Vollanwendungskatalog/i,
+    /1354 Anwendungsstatements:[\s\S]{0,60}1239[\s\S]{0,100}`portable-generated`[\s\S]{0,60}115[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1354[\s\S]{0,100}Vollanwendungskatalog/i,
   );
   assert.match(
     strategy,

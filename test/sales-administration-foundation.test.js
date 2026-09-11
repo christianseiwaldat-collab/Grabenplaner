@@ -76,7 +76,7 @@ test("Navigation und Direktaufruf bleiben ohne Zugangsrecht fail-closed", () => 
   const groups = between(app, "function navigationGroups()", "function setNavigationCurrent");
   assert.match(groups, /salesAdministration:\s*\{\s*toggle:\s*elements\.salesAdministrationToggle,\s*children:\s*elements\.salesAdministrationNavChildren\s*\}/);
 
-  const viewSwitch = between(app, "function setView(view)", "function applyRequestedView()");
+  const viewSwitch = between(app, "function setView(view)", "function applyRequestedView(");
   assert.match(viewSwitch, /view === "salesAdministration" && !canOpenSalesAdministrationModule\(\)/);
   assert.match(viewSwitch, /view === "salesAnalytics" && !canAccessSalesAnalytics\(\)/);
   assert.match(viewSwitch, /view === "crm" && !canAccessCrm\(\)/);
@@ -84,7 +84,7 @@ test("Navigation und Direktaufruf bleiben ohne Zugangsrecht fail-closed", () => 
   assert.match(viewSwitch, /salesAnalyticsView\?\.classList\.toggle\("active", view === "salesAnalytics"\)/);
   assert.match(viewSwitch, /crmView\?\.classList\.toggle\("active", view === "crm"\)/);
 
-  const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
+  const requestedView = between(app, "function applyRequestedView(", "function setSettingsTab");
   assert.match(requestedView, /"salesAnalytics"/);
   assert.match(requestedView, /"crm"/);
 });

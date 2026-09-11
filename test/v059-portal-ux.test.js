@@ -148,7 +148,7 @@ test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () =>
 
   assert.match(source, /const portalTabStorageKey = "grabenplaner\.portal\.active-tab"/);
   assert.match(source, /function requestedPortalTab\(\) \{[\s\S]*?storedPortalTab\(\)/);
-  assert.match(source, /function rememberPortalTab\(tab\) \{[\s\S]*?history\.replaceState/);
+  assert.match(source, /function rememberPortalTab\(tab\) \{[\s\S]*?grabenplanerNavigation\?\.record\(\)/);
   assert.match(source, /portalState\.activeTab = tab;\s+rememberPortalTab\(tab\);/);
   assert.ok(selectionBlock, "Dateiauswahl-Behandlung fehlt");
   assert.match(selectionBlock[0], /portalState\.activeTab !== "amu"\) setTab\("amu"\)/);

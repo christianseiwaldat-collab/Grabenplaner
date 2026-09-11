@@ -1,10 +1,11 @@
 'use strict';
 window.createSalesReportJobUi = function ({ api, visible }) {
+  const controls = window.SalesReportControls;
   const el = id => document.getElementById(id), form = el('salesAnalyticsRequestForm'), hint = el('salesAnalyticsRequestHint'), list = el('salesReportJobList');
   let generation = 0, context = null, loading = false, busy = false, rows = [], comparisonCustom = false;
   const selectors = new Map();
   const errors = { IMPORT_HISTORY_DATE_RANGE: 'Bitte gültige Zeiträume mit höchstens 366 Tagen und ohne zukünftige Tage wählen.',
-    IMPORT_REPORT_SELECTION: 'Bitte Kennzahlen, Filialen und Aufschlüsselung prüfen.', IMPORT_REPORT_GROUP_LIMIT: 'Zu viele Gruppen. Bitte nach WGR, Hersteller, Filiale oder MA eingrenzen.',
+    IMPORT_REPORT_SELECTION: 'Bitte Kennzahlen, Filialen und Aufschlüsselung prüfen. Höchstens 10 WGR und 10 Hersteller auswählen.', IMPORT_REPORT_GROUP_LIMIT: 'Zu viele Gruppen. Bitte nach WGR, Hersteller, Filiale oder MA eingrenzen.',
     IMPORT_REPORT_PDF_LIMIT: 'Der Bericht ist zu umfangreich. Bitte weniger Kennzahlen oder Gruppen auswählen.',
     IMPORT_REPORT_DATA_LIMIT: 'Der Bericht umfasst zu viele Daten. Bitte den Zeitraum oder die Auswahl eingrenzen.',
     IMPORT_HISTORY_ANALYSIS_EXPIRED: 'Der Zwischenstand ist abgelaufen. Bitte den Bericht erneut beauftragen.',
@@ -36,14 +37,13 @@ window.createSalesReportJobUi = function ({ api, visible }) {
   }
   const selected = id => [...(selectors.get(id) || [])];
   const extras = id => el(id).value.split(',').map(s => s.trim()).filter(Boolean);
-  function priorYear(value) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
-    const [year, month, day] = value.split('-').map(Number), max = new Date(Date.UTC(year - 1, month, 0)).getUTCDate();
-    return `${year - 1}-${String(month).padStart(2, '0')}-${String(Math.min(day, max)).padStart(2, '0')}`;
-  }
   function comparisonDates(force = false) {
     if (force) comparisonCustom = false;
-    if (!comparisonCustom) { el('salesReportJobComparisonFrom').value = priorYear(el('salesReportJobFrom').value); el('salesReportJobComparisonTo').value = priorYear(el('salesReportJobTo').value); }
+    if (!comparisonCustom) {
+      el('salesReportJobComparisonFrom').value = controls.previousYear(el('salesReportJobFrom').value);
+      el('salesReportJobComparisonTo').value = controls.previousYear(el('salesReportJobTo').value);
+      comparisonPeriod.sync(currentPeriod.mode());
+    }
     el('salesReportComparisonMode').textContent = comparisonCustom ? 'Vergleichszeitraum individuell gewählt' : 'Automatisch ein Jahr zuvor';
   }
   function chartOptions() {
@@ -51,11 +51,14 @@ window.createSalesReportJobUi = function ({ api, visible }) {
     const select = el('salesReportJobChartMetric'), previous = select.value;
     select.replaceChildren(...context.metrics.filter(m => selected('salesReportJobMetrics').includes(m.id)).map(m => new Option(m.label, m.id)));
     if ([...select.options].some(o => o.value === previous)) select.value = previous;
+    select.disabled = el('salesReportJobChartType').value === 'none';
   }
   function configure(next) {
     context = next;
     multi('salesReportJobLocations', next.locations, next.locations.map(l => l.id), { all: true });
-    multi('salesReportJobProductGroups', next.productGroups, [], { all: true, emptyAll: true }); multi('salesReportJobManufacturers', next.manufacturers, [], { all: true, emptyAll: true });
+    el('salesReportOnlineHint').hidden = !next.locations.some(l => l.id === 'tradefoto-online');
+    selectors.set('salesReportJobProductGroups', controls.transferPicker(el('salesReportJobProductGroups'), next.productGroups));
+    selectors.set('salesReportJobManufacturers', controls.transferPicker(el('salesReportJobManufacturers'), next.manufacturers));
     multi('salesReportJobSellers', next.sellers, [], { all: true, emptyAll: true }); el('salesReportSellerField').hidden = !next.projection.sellers;
     multi('salesReportJobMetrics', next.metrics, ['netRevenue', 'quantity', 'receiptCount'], { searchable: false });
     for (const [id, initial, optional] of [['salesReportJobGroupPrimary', 'productGroup', false], ['salesReportJobGroupSecondary', 'manufacturer', true], ['salesReportJobGroupThird', '', true]]) {
@@ -64,7 +67,7 @@ window.createSalesReportJobUi = function ({ api, visible }) {
     if (!el('salesReportJobFrom').value) el('salesReportJobFrom').value = next.today.slice(0, 4) + '-01-01';
     if (!el('salesReportJobTo').value) el('salesReportJobTo').value = next.today;
     for (const id of ['salesReportJobFrom', 'salesReportJobTo', 'salesReportJobComparisonFrom', 'salesReportJobComparisonTo']) el(id).max = next.today;
-    comparisonDates();
+    currentPeriod.sync(); comparisonDates();
     const marginHint = el('salesReportMarginHint'); marginHint.hidden = !next.projection.margin || next.marginStatus === 'confirmed';
     marginHint.textContent = 'Historischer Kassen-Rohertrag: Berechnungsbasis noch offen. Betroffene Kennzahlen werden im PDF als nicht verfügbar gekennzeichnet.';
     el('salesReportJobSubmit').disabled = !next.projection.read || !next.locations.length;
@@ -108,23 +111,26 @@ window.createSalesReportJobUi = function ({ api, visible }) {
     const g = generation; busy = true; el('salesReportJobSubmit').disabled = true;
     try {
       await api('/api/sales-report-jobs', { method: 'POST', body: JSON.stringify({ title: el('salesAnalyticsRequestQuery').value.trim() || 'Verkaufsanalyse', query: {
-        reportVersion: 2, sourceId: 'compact-cash', dateFrom: el('salesReportJobFrom').value, dateTo: el('salesReportJobTo').value,
+        reportVersion: 3, sourceId: 'compact-cash', dateFrom: el('salesReportJobFrom').value, dateTo: el('salesReportJobTo').value,
         comparisonFrom: el('salesReportJobComparisonFrom').value, comparisonTo: el('salesReportJobComparisonTo').value,
         locationIds: selected('salesReportJobLocations'), productGroupIds: selected('salesReportJobProductGroups'),
-        manufacturerIds: [...selected('salesReportJobManufacturers'), ...extras('salesReportJobManufacturerExtra')],
+        manufacturerIds: selected('salesReportJobManufacturers'),
         sellerIds: context.projection.sellers ? [...selected('salesReportJobSellers'), ...extras('salesReportJobSellerExtra')] : [],
         metrics: selected('salesReportJobMetrics'), groupBy: [...new Set(['salesReportJobGroupPrimary', 'salesReportJobGroupSecondary', 'salesReportJobGroupThird'].map(id => el(id).value).filter(Boolean))],
+        orientation: el('salesReportJobOrientation').value, chartType: el('salesReportJobChartType').value,
         chartMetric: el('salesReportJobChartMetric').value, changes: [...(el('salesReportJobAbsolute').checked ? ['absolute'] : []), ...(el('salesReportJobPercent').checked ? ['percent'] : [])] } }) });
       if (g === generation) { hint.textContent = 'PDF-Auftrag angenommen. Den Fortschritt und fertigen Download findest du unter „Berichte“.'; await refresh(); }
     } catch (error) { if (g === generation) showError(error); }
     finally { if (g === generation) { busy = false; el('salesReportJobSubmit').disabled = !context?.projection.read; } }
   });
-  for (const id of ['salesReportJobFrom', 'salesReportJobTo']) el(id).addEventListener('change', () => comparisonDates());
-  for (const id of ['salesReportJobComparisonFrom', 'salesReportJobComparisonTo']) el(id).addEventListener('input', () => { comparisonCustom = true; comparisonDates(); });
+  const today = () => context?.today || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Vienna' }).format(new Date());
+  const currentPeriod = controls.periodPicker(el('salesReportJobPeriod'), { from: el('salesReportJobFrom'), to: el('salesReportJobTo'), today, onChange: () => comparisonDates() });
+  const comparisonPeriod = controls.periodPicker(el('salesReportJobComparisonPeriod'), { from: el('salesReportJobComparisonFrom'), to: el('salesReportJobComparisonTo'), today, onChange: () => { comparisonCustom = true; comparisonDates(); } });
+  el('salesReportJobChartType').addEventListener('change', chartOptions);
   el('salesReportJobPreviousYear').addEventListener('click', () => comparisonDates(true)); el('salesReportJobFilter').addEventListener('input', render);
   el('salesReportJobRefresh').addEventListener('click', () => { void refresh(); });
   setInterval(() => { if (visible() && !document.hidden) void refresh(); }, 4000);
-  function reset() { generation++; context = null; loading = false; busy = false; rows = []; comparisonCustom = false; selectors.clear(); list.replaceChildren(); form.reset();
+  function reset() { generation++; context = null; loading = false; busy = false; rows = []; comparisonCustom = false; selectors.clear(); list.replaceChildren(); form.reset(); currentPeriod.sync('custom'); comparisonPeriod.sync('custom');
     for (const id of ['salesReportJobLocations', 'salesReportJobProductGroups', 'salesReportJobManufacturers', 'salesReportJobSellers', 'salesReportJobMetrics']) el(id).replaceChildren();
     el('salesReportJobFilter').value = ''; el('salesReportJobSubmit').disabled = true; hint.textContent = ''; el('salesReportJobError').hidden = true; el('salesReportJobError').textContent = ''; }
   return { refresh, reset };

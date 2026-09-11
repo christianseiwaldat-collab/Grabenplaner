@@ -73,7 +73,7 @@ test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "ruleDrafts"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "collectiveAgreements"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "vacations"/);
-  const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
+  const requestedView = between(app, "function applyRequestedView(", "function setSettingsTab");
   assert.match(requestedView, /parameters\.get\("section"\)/);
   assert.match(requestedView, /\["dashboard", "employees", "positions", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
 });
