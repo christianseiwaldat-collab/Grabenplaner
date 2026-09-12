@@ -6211,7 +6211,7 @@ const serverMonitorCheckLabels = {
   tlsCertificate: "TLS-Zertifikat",
   sqlite: "SQLite",
   backupFresh: "Sicherungsalter",
-  backupIntegrity: "Sicherungsintegrität",
+  backupIntegrity: "Sicherungsbeleg und Dokumentzuordnung",
   amuScanner: "AUM-Virenscanner",
   caddyConfiguration: "Caddy-Konfiguration",
   offsite: "Offsite-Sicherung",

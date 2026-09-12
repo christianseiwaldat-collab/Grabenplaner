@@ -165,6 +165,31 @@ else
   record_event application-smoke-failed --snapshot-prefix "$snapshot_prefix" --receipt-sha256 "$receipt_sha256"
   offsite_die "Der isolierte Recovery-App-Smoke-Test ist fehlgeschlagen."
 fi
+failure_code="MONITOR_CHECK_FAILED"
+deploy_workflow="$(offsite_core_deploy_workflow)" || offsite_die "Der installierte App-Vertrag ist ungueltig."
+if [[ "$deploy_workflow" == current ]]; then
+  "$OFFSITE_APP_ROOT/server-tools/linux/test-grabenplaner-server.sh" --node "$OFFSITE_NODE" --nightly-mode
+else
+  "$OFFSITE_APP_ROOT/server-tools/linux/test-grabenplaner-server.sh" --node "$OFFSITE_NODE" --monitor-mode
+fi
 record_event full-assurance-passed --snapshot-prefix "$snapshot_prefix" --receipt-sha256 "$receipt_sha256"
 completed=1
+
+# Only a complete successful run renews the proof for short ordinary deploys.
+# Root-only metadata is bound to the signed event, source schema, configuration
+# and recovery code; an unsuccessful run cannot renew it.
+if [[ "$deploy_workflow" == current ]]; then
+database_path="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" "$OFFSITE_DATA_ROOT/data/dienstplan.db" <<'NODE'
+const fs = require("node:fs");
+const rows = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter(line => /^DB_PATH=/.test(line));
+if (rows.length > 1) process.exit(1);
+const value = rows.length ? rows[0].slice(8) : process.argv[3];
+if (!value.startsWith("/") || /[\x00-\x1f\x7f]/.test(value)) process.exit(1);
+process.stdout.write(value);
+NODE
+)" || offsite_die "Die Datenbankbindung fuer den Deploy-Nachweis ist ungueltig."
+"$OFFSITE_NODE" "$OFFSITE_APP_ROOT/server-tools/linux/lib/deploy-policy.js" record \
+  "$OFFSITE_APP_ROOT" "$database_path" "$OFFSITE_APP_ENV" "$run_id" >/dev/null \
+  || offsite_die "Der vollstaendige Test ist bestanden; der kurze Deploy bleibt ohne aktuellen gebundenen Nachweis gesperrt."
+fi
 offsite_info "Der signierte Recovery-Assurance-Lauf wurde erfolgreich abgeschlossen."

@@ -1,8 +1,9 @@
 # Kürzere Bereitstellung und nächtliche Wiederherstellungsprüfung
 
-Stand: 11.09.2026. Die Aufteilung ist fachlich freigegeben. Die technische
-Umstellung des Wartungsablaufs folgt getrennt vom Funktionsrelease v0.92.36.
-Diese Beschreibung ist kein Nachweis einer bereits installierten Änderung.
+Stand: 11.09.2026. Die freigegebene Aufteilung ist lokal umgesetzt und gezielt
+geprüft. **Noch nicht installiert:** Der produktive GP bleibt auf v0.92.36.
+Die Änderung benötigt beim nächsten freigegebenen Release das passende
+Kernpaket und den ausdrücklichen Wechsel auf Offsite-Modul 8.
 
 ## Beobachtete Dauer
 
@@ -79,24 +80,99 @@ benötigen weiterhin eine umfassende Prüfung vor Freigabe. Fehlende, veraltete
 oder fehlgeschlagene nächtliche Nachweise benötigen einen definierten Rückfall
 auf den umfassenden Ablauf. Ein alter grüner Test darf nicht unbegrenzt gelten.
 
-## Nächste technische Schritte
+## Umgesetzter Ablauf
 
-1. Jede Phase messen und Datenvolumen, Prozesszeit, Plattenwartezeit sowie
-   tatsächliche Ausfallzeit erfassen. Bereits geprüfte unveränderte Quellen
-   nicht ohne sachlichen Grund erneut vollständig lesen.
-2. Die Zuständigkeit für Start-, Stopp- und Updatesicherungen vereinheitlichen.
-   Unterbrechungen müssen weiterhin eine nachvollziehbare Wiederaufnahme erlauben.
-3. Den langsamen Anwendungsstart messen. Kandidaten sind insbesondere die
-   wiederholten globalen Datenbankprüfungen nach den Organisationsmigrationen.
-   Ihr genauer Zeitanteil ist noch zu bestimmen; ein höheres Zeitlimit allein
-   behebt die Ursache nicht.
-4. Kurzen Deploy und vollständigen Recoverylauf als getrennte, belegbare Abläufe
-   implementieren. Die Freigabebedingungen für Alter, Version und Quellenstand
-   der nächtlichen Nachweise werden dabei ausdrücklich festgelegt.
-5. Das Verhalten bei normalem Update, Datenbankmigration, unterbrochener
-   Sicherung und fehlgeschlagenem Nachtlauf prüfen. Danach neue Zeitbudgets
-   aus den tatsächlichen Messungen ableiten.
+| Anlass | Prüfung und Sicherung |
+| --- | --- |
+| Gewöhnliches kompatibles Update | Ein frischer, vollständig verifizierter DB-/Dokumentpunkt; Paketprüfung, Versionswechsel, kurze Betriebsprüfungen; signierter Auftrag für die nächste Nacht |
+| Fehlender, veralteter oder unpassender Gesamtnachweis | Bisheriger vollständiger Ablauf mit externer Vorabsicherung und sofort anschließendem Recovery-Auftrag |
+| Geänderter Server-, Datenbank-, Migrations-, Sicherungs- oder Laufzeitcode | Vollständiger Ablauf; keine Übernahme des alten Gesamtnachweises |
+| Nachtlauf | Vorgemerkte Archivabschlüsse, neue externe Sicherung, vollständiges Lesen des Repositorys, isolierte Wiederherstellung samt App-Start, volle Datenbank-/Dokumentprüfung |
+| Regelmäßiger Monitor | Erreichbarkeit, Dienste, TLS, freier Speicher, kurzer SQLite-Lesezugriff und gebundene Sicherungsmetadaten |
 
-Die unveränderten Produktivskripte und signierten Prüfereignisse des Releases
-v0.92.36 bilden die Ausgangsbasis. Bis zur gesonderten Umsetzung gilt weiterhin
-der installierte Wartungsablauf.
+`grabenplaner-update --verification auto` ist der Standard. `--verification full`
+erzwingt den vollständigen Ablauf; eine Option zum Erzwingen des kurzen Ablaufs
+gibt es nicht. Im Updatebeleg stehen Auswahlgrund, Beginn und einzelne Phasenzeiten.
+Das ist noch keine neue Messung der produktiven Gesamtdauer oder Ausfallzeit.
+
+Der kurze Ablauf verlangt einen höchstens **36 Stunden** alten erfolgreichen
+Gesamtlauf. Der root-geschützte Nachweis wird mit der signierten Historie sowie
+mit Wiederherstellungscode, Abhängigkeiten, Datenbankschema, Migrationskennungen,
+Datenbankpfad, Konfiguration und Node-Binary abgeglichen. Der nächtliche Timer
+muss aktiviert und aktiv sein. Spätere Fehler, unvollständige Prüfungen und
+Konfigurationsänderungen entwerten den Nachweis. Gewöhnliche vorgemerkte App-Updates
+dürfen bis zum Nachtlauf folgen. Änderungen allein an Oberfläche und Version
+bleiben möglich; Änderungen an `server.js` erzwingen vorsorglich den vollen Ablauf.
+
+Archivaufträge liegen unter `maintenance/deferred-backups` im geschützten
+Datenverzeichnis, gebunden an den exakten Sicherungsmarker. Höchstens zehn
+Punkte dürfen ausstehen. Archivierung erfolgt zeitlich geordnet vor einem neuen
+externen Archiv; Unterbrechungen behalten den offenen Auftrag und Rohpunkt.
+Unbekannte alte Rohsicherungen werden nicht automatisch übernommen. Die
+Offsite-Vorbereitung schließt diese Archive ab, während die App noch läuft.
+Andere vollständige externe Sicherungsläufe dürfen die Aufträge ebenfalls erledigen.
+
+Updater und Offsite-Vorbereitung übernehmen nun dieselbe Lebenszyklus-Sicherung.
+Die Sperren für Wartung, Repository und Sicherungsdateien bleiben getrennt.
+Beim Stoppen und Wiederanlauf wird dadurch keine zusätzliche native Sicherung
+ausgelöst, solange der verantwortliche Wartungsprozess seine Sperre hält.
+
+Die Organisationsmigration speichert einen Prüfbeleg erst nach erfolgreicher
+globaler Fremdschlüssel- und `quick_check`-Prüfung. Ein unveränderter, bereits
+geprüfter Migrationsstand benötigt diese Vollprüfung nicht bei jedem Start.
+Nach Fehler oder Unterbrechung wird sie erneut ausgeführt. Fachliche
+Beziehungsprüfungen laufen weiterhin; der Nachtlauf prüft die gesamte Datenbank.
+Das behebt eine wiederholte Startarbeit, beweist aber noch nicht, dass die
+produktive isolierte Startprobe nun innerhalb von 90 Sekunden erfolgreich ist.
+
+## Betriebsprüfung und Aktivierung
+
+`grabenplaner-test` ohne Modus bleibt die vollständige manuelle Prüfung.
+`--monitor-mode` und `--deploy-mode` verwenden kurze Prüfungen. Dabei wird
+ausdrücklich nur ein Sicherungsbeleg kontrolliert, nicht die Integrität aller
+Dateiinhalte behauptet. `--nightly-mode` führt die vollständigen Datenbank- und
+Sicherungsprüfungen im bereits laufenden Recovery-Auftrag aus.
+
+Der Wechsel von installiertem Offsite-Modul 7 auf 8 ist ausdrücklich:
+
+1. Neues Release samt Manifest und Hash prüfen. Der neue Paketprüfer akzeptiert
+   den bisherigen Vertrag nur als installierten Vorgänger. Der alte Updater
+   wird nicht durch Abschalten seiner Vertragsprüfung übergangen.
+2. Den Installer aus dem geprüften Modul 8 mit den vorhandenen geprüften
+   Binaries, geschützten Konfigurationsdateien und derselben Repository-Bindung
+   verwenden. Kein `--initialize-repository`, kein Zielwechsel. Das Modul kann
+   mit dem exakten Vorgänger Runtime 5/Modul 7 im bisherigen vollständigen
+   Ablauf arbeiten; dabei wird kein Nachweis für kurze Deploys erzeugt.
+3. Den geprüften neuen Updater aus dem bereitgestellten Paket mit
+   `--verification full` ausführen. Seine Helfer müssen die regulären
+   root-/Dienstgruppenrechte besitzen. Installierte Module, Paket, frischer
+   Rückkehrpunkt und Bereitschaft werden weiterhin geprüft. Bei gescheitertem
+   Kernupdate bleibt Modul 8 mit dem alten Kern kompatibel.
+4. Nach dem Kernupdate den vollständigen Recovery-Lauf einschließlich
+   isolierter Startprobe bestehen lassen. Erst dieser erfolgreiche, signierte
+   Lauf erzeugt die neue Prüfbasis. Ein früherer Startzeitlimitfehler bleibt
+   sichtbar und wird nicht manuell auf Erfolg gesetzt.
+5. Timer, Monitor, Updatebeleg und Berichterstellung prüfen. Beim folgenden
+   geeigneten Release die reale Gesamtdauer und Erreichbarkeit messen.
+
+Es gibt bei dieser Umstellung keinen Host-Neustart. Der bisherige historische
+Runtime-Wechsel 4 → 5 bleibt auf Offsite 6 → 7 begrenzt und autorisiert Modul 8
+nicht. Die einmalige Einführung selbst wird deshalb noch umfassend geprüft.
+
+## Nachweise der lokalen Umsetzung
+
+- 95 bestandene Tests in der abschließenden Auswahl, vier plattformabhängige
+  Überspringungen. Sie prüfen Auswahlregeln, Archivunterbrechung, tatsächliche
+  Updater-Verzweigungen, Start nach fehlgeschlagener Integritätsprüfung,
+  Monitor-Ausgabe und Assurance-/Modulverträge.
+- Linux-Sperrübergabe mit beiden Descriptor-Paaren bestanden. Der separate
+  Linux-Test für den Modul-7-Vorgänger und fehlende oder unsichere Modul-8-Helfer
+  ist ebenfalls bestanden. Beide Läufe verwendeten isolierte temporäre Dateien;
+  GP-Prozess, Version und Bootkennung blieben unverändert.
+- Persistenzgrenzenprüfung bestanden; die Schemaabfrage verwendet den vorhandenen
+  SQLite-Wartungsadapter. Kein neuer Datenbanktreiber außerhalb dieser Grenze.
+- Weitere 16 Paket- und Runtime-Prüfungen bestanden, vier plattformabhängige
+  Überspringungen. Der historische Übergang verweigert ausdrücklich Modul 8.
+
+Diese Nachweise ersetzen nicht die erste produktive Recovery-Prüfung des neuen
+Pakets. Die spätere Zeitersparnis wird erst nach dieser Aktivierung gemessen.

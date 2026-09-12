@@ -28,6 +28,8 @@ maximum_backup_age_hours=6
 maximum_backup_age_explicit=0
 minimum_certificate_days=14
 monitor_mode=0
+short_checks=0
+deploy_checks=0
 monitor_timer="grabenplaner-monitor.timer"
 monitor_status_file="/var/lib/grabenplaner-monitor/status.json"
 monitor_status_group="grabenplaner-monitor-status"
@@ -46,9 +48,15 @@ while (($#)); do
     --caddyfile) caddyfile="${2:?Wert fuer --caddyfile fehlt}"; shift 2 ;;
     --maximum-backup-age-hours) maximum_backup_age_hours="${2:?Wert fehlt}"; maximum_backup_age_explicit=1; shift 2 ;;
     --minimum-certificate-days) minimum_certificate_days="${2:?Wert fehlt}"; shift 2 ;;
-    --monitor-mode) monitor_mode=1; shift ;;
+    --monitor-mode) monitor_mode=1; short_checks=1; shift ;;
+    --deploy-mode) monitor_mode=1; short_checks=1; deploy_checks=1; shift ;;
+    --nightly-mode) monitor_mode=1; short_checks=0; shift ;;
     -h|--help)
       printf '%s\n' "Verwendung: sudo ./test-grabenplaner-server.sh [--public-url https://...] [weitere Optionen]"
+      printf '%s\n' "Standard: vollstaendige Datenbank- und Backuppruefung." \
+        "--monitor-mode: kurze laufende Betriebspruefung, nur Backup-Metadaten." \
+        "--deploy-mode: kurze Betriebspruefung; aktivierter Monitor-Timer darf pausiert sein." \
+        "--nightly-mode: vollstaendige Datenbank- und Backuppruefung im Recovery-Lauf."
       exit 0
       ;;
     *) gp_die "Unbekannte Option: $1" ;;
@@ -100,7 +108,9 @@ csp_has_exact_directive() {
 }
 
 for unit in "$service" "$caddy_service" "$monitor_timer"; do
-  if gp_systemd_unit_exists "$unit" && systemctl is-active --quiet "$unit"; then
+  if (( deploy_checks == 1 )) && [[ "$unit" == "$monitor_timer" ]] && systemctl is-enabled --quiet "$unit"; then
+    check_ok "Dienst $unit" "aktiviert; darf waehrend des kontrollierten Deploys pausieren"
+  elif gp_systemd_unit_exists "$unit" && systemctl is-active --quiet "$unit"; then
     check_ok "Dienst $unit" "aktiv"
   else
     check_fail "Dienst $unit" "nicht aktiv oder nicht installiert"
@@ -172,18 +182,29 @@ else
   check_fail "TLS-Zertifikat" "ungueltig, nicht erreichbar oder laeuft zu frueh ab"
 fi
 
-database_check="$(NODE_NO_WARNINGS=1 "$node" - "$database" <<'NODE' 2>&1
+database_label="SQLite quick_check"
+if [[ "${short_checks:-0}" == 1 ]]; then database_label="SQLite Lesetest"; fi
+database_check="$(NODE_NO_WARNINGS=1 "$node" - "$database" "${short_checks:-0}" <<'NODE' 2>&1
 const { DatabaseSync } = require("node:sqlite");
 const db = new DatabaseSync(process.argv[2], { readOnly: true });
 try {
-  const result = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
-  if (result.length !== 1 || result[0] !== "ok") throw new Error(result.join("; "));
+  db.exec("PRAGMA busy_timeout=3000");
+  if (process.argv[3] === "1") {
+    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'").get()) throw new Error("SCHEMA_UNAVAILABLE");
+    db.prepare("SELECT id FROM schema_migrations LIMIT 1").all();
+  } else {
+    const result = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
+    if (result.length !== 1 || result[0] !== "ok") throw new Error(result.join("; "));
+    if (db.prepare("PRAGMA foreign_key_check").all().length) throw new Error("FOREIGN_KEY_CHECK_FAILED");
+  }
   process.stdout.write("ok");
 } finally { db.close(); }
 NODE
 )" || true
-if [[ "$database_check" == "ok" ]]; then check_ok "SQLite quick_check" "ok"; else check_fail "SQLite quick_check" "fehlgeschlagen"; fi
+if [[ "$database_check" == "ok" ]]; then check_ok "$database_label" "ok"; else check_fail "$database_label" "fehlgeschlagen"; fi
 
+backup_check_label="Backup DB-/Dokumentkopplung"
+if [[ "${short_checks:-0}" == 1 ]]; then backup_check_label="Backup DB-/Dokumentbeleg"; fi
 latest_marker="$(find "$backup_dir" -maxdepth 1 -type f -name 'dienstplan-*.complete.json' -printf '%T@ %p\n' | sort --numeric-sort --reverse | head --lines 1 | cut --delimiter=' ' --fields=2-)"
 if [[ -n "$latest_marker" ]]; then
   latest_snapshot="$(basename -- "$latest_marker" .complete.json)"
@@ -200,7 +221,15 @@ if [[ -n "$latest_marker" ]]; then
   fi
   verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
   amu_module="$app_dir/lib/amu-storage.js"
-  if [[ -f "$verifier" && -f "$amu_module" && -f "$latest_backup" && -d "$paired_amu" ]] \
+  if [[ "${short_checks:-0}" == 1 ]]; then
+    metadata_verifier="$app_dir/server-tools/linux/lib/backup-metadata.js"
+    if [[ -f "$metadata_verifier" && ! -L "$metadata_verifier" ]] \
+      && "$node" "$metadata_verifier" "$latest_backup" "$paired_amu" "$latest_marker" >/dev/null; then
+      check_ok "$backup_check_label" "Beleg, Manifest und Dateigroessen stimmen; vollstaendige Inhaltspruefung im Nachtlauf"
+    else
+      check_fail "$backup_check_label" "Belegpruefung fehlgeschlagen"
+    fi
+  elif [[ -f "$verifier" && -f "$amu_module" && -f "$latest_backup" && -d "$paired_amu" ]] \
     && "$node" "$verifier" "$latest_backup" "$paired_amu" "$amu_module" "$latest_marker" >/dev/null; then
     check_ok "Backup DB-/Dokumentkopplung" "Manifest, Hashes und Referenzen stimmen"
   else
@@ -208,6 +237,7 @@ if [[ -n "$latest_marker" ]]; then
   fi
 else
   check_fail "Backup-Aktualitaet" "kein lokaler Sicherungspunkt vorhanden"
+  check_fail "$backup_check_label" "kein gekoppelter Sicherungspunkt vorhanden"
 fi
 
 printf 'Grabenplaner scanner readiness probe\n' >"$scanner_probe"

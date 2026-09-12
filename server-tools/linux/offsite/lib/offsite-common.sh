@@ -523,6 +523,32 @@ offsite_record_assurance_queue() {
     --trigger "$trigger" --app-version "$app_version" >/dev/null
 }
 
+# Module 8 may be installed before the matching app package. Only the exact
+# runtime-5/module-7 predecessor uses the unchanged full workflow in that
+# interval. Missing tools in an app claiming module 8 are an error.
+offsite_core_deploy_workflow() {
+  "$OFFSITE_NODE" - "$OFFSITE_APP_ROOT" <<'NODE'
+const fs = require("node:fs"), path = require("node:path");
+const root = process.argv[2];
+const read = name => {
+  const file = path.join(root, name), info = fs.lstatSync(file);
+  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.uid !== 0 || (info.mode & 0o022)) process.exit(1);
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+};
+const runtime = read("server-tools/linux/runtime-schema.json");
+const moduleVersion = read("server-tools/linux/offsite/module-schema.json").moduleVersion;
+if (runtime.deploymentSchemaVersion !== 5 || ![7, 8].includes(moduleVersion)) process.exit(1);
+if (moduleVersion === 8) {
+  for (const name of ["lib/backup-maintenance.js", "server-tools/linux/lib/deploy-policy.js",
+    "server-tools/linux/lib/deferred-backups.js", "server-tools/linux/lib/backup-metadata.js"]) {
+    const info = fs.lstatSync(path.join(root, name));
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.uid !== 0 || (info.mode & 0o022)) process.exit(1);
+  }
+}
+process.stdout.write(moduleVersion === 8 ? "current" : "legacy-full");
+NODE
+}
+
 offsite_fixed_failure() {
   local code="$1"
   local summary="$2"

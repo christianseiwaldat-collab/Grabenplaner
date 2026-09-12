@@ -120,57 +120,57 @@ test("v0.75.4 offsite bridge requires migration when another managed artifact ch
 
   assert.equal(
     classify(candidateContract(candidateFiles), installedContract(installedFiles)),
-    "migration-required:6->6",
+    `migration-required:${schema.moduleVersion}->${schema.moduleVersion}`,
   );
 });
 
-test("offsite bridge recognizes the exact v1 contract as an explicit v1 to v6 migration", () => {
+test("offsite bridge recognizes the exact v1 contract as an explicit migration to the current module", () => {
   const installedV1Files = baseFiles(legacyV1Artifacts);
   const candidateV2Files = baseFiles();
   assert.equal(
     classify(candidateContract(candidateV2Files), installedContract(installedV1Files, 1)),
-    "migration-required:1->6",
+    `migration-required:1->${schema.moduleVersion}`,
   );
 
   const forgedV1Files = installedV1Files.with(0, ["lib/not-a-v1-artifact.js", sha256("forged")]);
   assert.equal(classify(candidateContract(candidateV2Files), installedContract(forgedV1Files, 1)), "invalid");
 });
 
-test("offsite bridge recognizes the exact v2 contract as an explicit v2 to v6 migration", () => {
+test("offsite bridge recognizes the exact v2 contract as an explicit migration to the current module", () => {
   const installedV2Files = baseFiles(legacyV2Artifacts);
   assert.equal(
     classify(candidateContract(baseFiles()), installedContract(installedV2Files, 2)),
-    "migration-required:2->6",
+    `migration-required:2->${schema.moduleVersion}`,
   );
 
   const forgedV2Files = installedV2Files.with(0, ["lib/not-a-v2-artifact.js", sha256("forged")]);
   assert.equal(classify(candidateContract(baseFiles()), installedContract(forgedV2Files, 2)), "invalid");
 });
 
-test("offsite bridge recognizes only the exact v3 contract for a v3 to v6 migration", () => {
+test("offsite bridge recognizes only the exact v3 contract for migration to the current module", () => {
   const installedV3Files = baseFiles(legacyV3Artifacts);
   assert.equal(
     classify(candidateContract(baseFiles()), installedContract(installedV3Files, 3)),
-    "migration-required:3->6",
+    `migration-required:3->${schema.moduleVersion}`,
   );
 
   const forgedV3Files = installedV3Files.with(0, ["lib/not-a-v3-artifact.js", sha256("forged")]);
   assert.equal(classify(candidateContract(baseFiles()), installedContract(forgedV3Files, 3)), "invalid");
 });
 
-test("offsite bridge requires the explicit v4 to v6 migration", () => {
+test("offsite bridge requires an explicit migration from v4", () => {
   const installedV4Files = baseFiles(legacyV5Artifacts);
   assert.equal(
     classify(candidateContract(baseFiles()), installedContract(installedV4Files, 4)),
-    "migration-required:4->6",
+    `migration-required:4->${schema.moduleVersion}`,
   );
 });
 
-test("offsite bridge requires the explicit v5 to v6 target-control migration", () => {
+test("offsite bridge requires an explicit migration from v5", () => {
   const installedV5Files = baseFiles(legacyV5Artifacts);
   assert.equal(
     classify(candidateContract(baseFiles()), installedContract(installedV5Files, 5)),
-    "migration-required:5->6",
+    `migration-required:5->${schema.moduleVersion}`,
   );
 });
 
@@ -229,6 +229,12 @@ test("v0.75.4 updater uses the installed root-protected helper and accepts both 
   assert.match(updater, /8#\$offsite_gate_helper_mode & 022/);
   assert.match(updater, /"\$node" "\$offsite_gate_helper" "\$manifest_result_file" "\$installed_offsite_receipt"/);
   assert.match(updater, /compatible\|compatible-installer-only\)\s*;;/);
+});
+
+test("module 6 and 7 require explicit migration to the current module", () => {
+  for (const previous of [6, 7]) {
+    assert.equal(classify(candidateContract(), installedContract(baseFiles(), previous)), `migration-required:${previous}->${schema.moduleVersion}`);
+  }
 });
 
 test("v0.75.4 package verifier emits the candidate installer SHA-256", () => {

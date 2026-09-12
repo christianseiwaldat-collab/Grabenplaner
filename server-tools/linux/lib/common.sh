@@ -189,15 +189,21 @@ gp_release_backup_workspace_lock() {
 }
 
 gp_begin_update_backup_ownership() {
-  local database="$1" node="$2" helper="$3" owner_file
+  gp_begin_backup_ownership "$1" "$2" "$3" 9 8
+}
+
+gp_begin_backup_ownership() {
+  local database="$1" node="$2" helper="$3" maintenance_fd="$4" owner_fd="$5" owner_file
   gp_require_root
+  [[ "$maintenance_fd" == 6 || "$maintenance_fd" == 9 ]] && [[ "$owner_fd" == 4 || "$owner_fd" == 8 ]] \
+    || gp_die "Die Sicherungsverantwortung hat ungueltige Sperrdeskriptoren."
   [[ -f "$helper" && ! -L "$helper" ]] || gp_die "Das Modul fuer die Sicherungsverantwortung fehlt."
-  owner_file="$("$node" "$helper" prepare)" || gp_die "Die Sicherungsverantwortung konnte nicht vorbereitet werden."
+  owner_file="$("$node" "$helper" prepare "$maintenance_fd")" || gp_die "Die Sicherungsverantwortung konnte nicht vorbereitet werden."
   [[ "$owner_file" == "/run/grabenplaner/update-backup-owner.json" && ! -L "$owner_file" ]] \
     || gp_die "Die Sicherungsverantwortung hat keinen gueltigen Pfad."
-  exec 8<>"$owner_file"
-  flock --exclusive --nonblock 8 || gp_die "Ein anderer Updateprozess besitzt bereits den Sicherungsauftrag."
-  "$node" "$helper" publish "$database" || gp_die "Die Sicherungsverantwortung konnte nicht uebernommen werden."
+  if [[ "$owner_fd" == 4 ]]; then exec 4<>"$owner_file"; else exec 8<>"$owner_file"; fi
+  flock --exclusive --nonblock "$owner_fd" || gp_die "Ein anderer Wartungsprozess besitzt bereits den Sicherungsauftrag."
+  "$node" "$helper" publish "$database" "$maintenance_fd" "$owner_fd" || gp_die "Die Sicherungsverantwortung konnte nicht uebernommen werden."
 }
 
 gp_stop_service() {

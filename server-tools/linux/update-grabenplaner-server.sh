@@ -26,6 +26,12 @@ vor dem Austausch ein gekoppeltes DB-/Dokumentbackup und rollt bei einem
 fehlgeschlagenen Healthcheck automatisch zurueck. Aendert ein Paket den
 versionierten systemd-/Caddy-/Bootstrap-/Env-Runtimevertrag, wird es vor jeder
 Aenderung mit dem Hinweis auf eine explizite Servermigration abgelehnt.
+
+  --verification auto|full       Standard auto: kurzer Ablauf nur mit aktuellem,
+                                 gebundenem vollstaendigem Recovery-Nachweis.
+                                 full erzwingt den umfassenden Ablauf.
+Archivabschluss und vollstaendiger Restore folgen beim kurzen Ablauf nachts.
+Ein frischer, vollstaendig gepruefter Rueckkehrpunkt bleibt immer erforderlich.
 EOF
 }
 
@@ -54,6 +60,12 @@ allow_downgrade=0
 lock_already_held=0
 commit_marker_arg=""
 runtime_v5_transition=""
+verification_policy="auto"
+deploy_mode="full"
+deploy_decision='{"mode":"full","reason":"VERIFICATION_UNAVAILABLE"}'
+deploy_started_at="$(date --utc '+%Y-%m-%dT%H:%M:%S.%3NZ')"
+deploy_phase="package-verification"
+deploy_phase_started=$SECONDS
 
 while (($#)); do
   case "$1" in
@@ -85,6 +97,7 @@ while (($#)); do
     --lock-already-held) lock_already_held=1; shift ;;
     --commit-marker) commit_marker_arg="${2:?Wert fuer --commit-marker fehlt}"; shift 2 ;;
     --runtime-v5-transition) runtime_v5_transition="${2:?Wert fuer --runtime-v5-transition fehlt}"; shift 2 ;;
+    --verification) verification_policy="${2:?Wert fuer --verification fehlt}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -94,6 +107,7 @@ gp_require_root
 for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
 [[ "$(uname -m)" == "x86_64" ]] || gp_die "Das Serverpaket wird derzeit nur auf Linux x86_64 unterstuetzt."
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
+[[ "$verification_policy" == auto || "$verification_policy" == full ]] || gp_die "--verification erlaubt auto oder full."
 [[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 1500 )) || gp_die "--health-timeout muss zwischen 30 und 1500 liegen."
 [[ "$maximum_expanded_bytes" =~ ^[0-9]+$ ]] && (( maximum_expanded_bytes >= 1048576 && maximum_expanded_bytes <= 4294967296 )) \
   || gp_die "--maximum-expanded-bytes liegt ausserhalb des erlaubten Bereichs."
@@ -206,6 +220,21 @@ entries_file="$maintenance_root/archive-entries.txt"
 manifest_result_file="$maintenance_root/manifest-result.json"
 installed_runtime_result_file="$maintenance_root/installed-runtime-result.json"
 backup_result_file="$maintenance_root/backup-result.json"
+deploy_phases_file="$maintenance_root/deploy-phases.tsv"
+install -m 0600 -o root -g root /dev/null "$deploy_phases_file"
+
+finish_deploy_phase() {
+  [[ -n "$deploy_phase" ]] || return 0
+  local duration=$((SECONDS - deploy_phase_started))
+  printf '%s\t%s\n' "$deploy_phase" "$duration" >>"$deploy_phases_file"
+  gp_info "Deploy-Phase $deploy_phase: ${duration}s."
+  deploy_phase=""
+}
+begin_deploy_phase() {
+  finish_deploy_phase
+  deploy_phase="$1"
+  deploy_phase_started=$SECONDS
+}
 database_lock_state="$maintenance_root/database-lock"
 install -d -m 0700 -o "$service_user" -g "$service_group" -- "$database_lock_state"
 database_lock_ready="$database_lock_state/ready"
@@ -235,11 +264,20 @@ write_receipt() {
   install -d -m 0750 -o root -g "$service_group" -- "$history_dir"
   local receipt="$history_dir/update-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
   "$node" - "$receipt" "$status" "$old_version" "$candidate_version" "$(basename -- "$package")" "$actual_package_sha256" \
-    "$backup_database" "$error_text" "$rollback_stop_ok" "$rollback_app_ok" "$rollback_data_ok" "$rollback_public_ok" <<'NODE'
+    "$backup_database" "$error_text" "$rollback_stop_ok" "$rollback_app_ok" "$rollback_data_ok" "$rollback_public_ok" \
+    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" <<'NODE'
 const fs = require("node:fs");
-const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic] = process.argv.slice(2);
+const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile] = process.argv.slice(2);
+const phases = fs.readFileSync(phasesFile, "utf8").trim().split("\n").filter(Boolean).map(line => {
+  const [phase, seconds] = line.split("\t");
+  if (!/^[a-z-]+$/.test(phase) || !/^\d+$/.test(seconds)) throw new Error("UPDATE_TIMING_INVALID");
+  return { phase, seconds: Number(seconds) };
+});
 fs.writeFileSync(file, `${JSON.stringify({
   status,
+  startedAt,
+  verification: JSON.parse(decision),
+  phases,
   completedAt: new Date().toISOString(),
   previousVersion,
   requestedVersion: requestedVersion || null,
@@ -401,6 +439,7 @@ cleanup() {
   local exit_code=$?
   trap - EXIT
   release_database_lock
+  finish_deploy_phase
   if (( update_committed == 0 )) && commit_marker_is_valid; then update_committed=1; fi
   if (( exit_code != 0 && services_touched == 1 && update_committed == 0 )); then
     rollback_update "$exit_code"
@@ -424,6 +463,8 @@ create_exact_local_backup() {
     backup_app_dir="$extract_root"
     backup_script="$backup_app_dir/server-tools/linux/backup-grabenplaner.sh"
     retention_args=(--preserve-existing-backups)
+  elif [[ "$deploy_mode" == short ]]; then
+    retention_args=(--defer-archive)
   fi
   [[ -x "$backup_script" ]] || gp_die "Installiertes Linux-Backupwerkzeug fehlt: $backup_script"
   "$backup_script" --env-file "$env_file" --app-dir "$backup_app_dir" --data-dir "$data_dir" --database "$database" \
@@ -661,6 +702,7 @@ actual_pnpm="$(cd -- "$build_cache" && runuser --user "$build_user" -- env -i \
 [[ "$actual_pnpm" == "$required_pnpm" ]] || gp_die "Das Paket erfordert pnpm $required_pnpm; installiert ist $actual_pnpm."
 
 gp_info "Installiere eingefrorene Produktionsabhaengigkeiten im isolierten Stagingordner."
+begin_deploy_phase dependencies
 chown -R "$build_user:$build_group" -- "$extract_root"
 chmod 0750 -- "$extract_root"
 (cd -- "$build_cache" && runuser --user "$build_user" -- env -i \
@@ -680,10 +722,12 @@ for (const dependency of ["express", "sharp", "pdfkit"]) require(require.resolve
 NODE
 )
 gp_info "Pruefe den vollstaendigen Stagingordner mit ClamAV."
+begin_deploy_phase package-scan
 clamscan --recursive --infected --no-summary -- "$extract_root" >/dev/null \
   || gp_die "ClamAV hat das Updatepaket abgelehnt oder konnte es nicht vollstaendig pruefen."
 gp_apply_app_permissions "$extract_root" "$service_group"
 
+begin_deploy_phase maintenance-lock
 if (( lock_already_held == 1 )); then
   inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
   expected_lock_target="$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")"
@@ -693,19 +737,39 @@ if (( lock_already_held == 1 )); then
 else
   gp_acquire_maintenance_lock
 fi
-# The updater still creates and verifies both exact coupled rollback points.
-# Its live lease suppresses only redundant app startup/shutdown copies. Older
-# applications that do not understand the lease retain their existing backups.
+begin_deploy_phase verification-policy
+if [[ "$verification_policy" == full || -n "$runtime_v5_transition" ]]; then
+  deploy_decision='{"mode":"full","reason":"EXPLICIT_FULL_VERIFICATION"}'
+elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
+  nightly_timer_active=0
+  if systemctl is-enabled --quiet grabenplaner-offsite-assurance.timer \
+    && systemctl is-active --quiet grabenplaner-offsite-assurance.timer; then nightly_timer_active=1; fi
+  deploy_decision="$("$node" "$SCRIPT_DIR/lib/deploy-policy.js" decide \
+    "$app_dir" "$extract_root" "$database" "$env_file" "$nightly_timer_active")" \
+    || gp_die "Die Deploy-Pruefstrategie konnte nicht bestimmt werden."
+fi
+deploy_mode="$("$node" -e 'const value=JSON.parse(process.argv[1]); if(!["short","full"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
+if [[ "$deploy_mode" == short ]] \
+  && ! "$node" "$SCRIPT_DIR/lib/deferred-backups.js" preflight "$data_dir" "$backup_dir" >/dev/null; then
+  deploy_mode=full
+  deploy_decision='{"mode":"full","reason":"DEFERRED_ARCHIVE_REQUIRES_COMPLETION"}'
+fi
+gp_info "Deploy-Pruefstrategie: $deploy_mode. Der frische gekoppelte Rueckkehrpunkt bleibt verpflichtend."
+# A live lease suppresses redundant lifecycle copies only. The short path
+# makes one fully verified fresh rollback point; the full fallback retains
+# the pre-update offsite transfer and its second current rollback point.
 gp_begin_update_backup_ownership "$database" "$node" "$SCRIPT_DIR/../../lib/backup-maintenance.js"
 services_touched=1
+begin_deploy_phase service-stop
 gp_stop_service "$service" 150
+begin_deploy_phase rollback-backup
 create_exact_local_backup
 
 # Das Offsite-Modul wird ausschliesslich durch seine root-only Einrichtung
 # aktiviert. Der Hook bekommt nur den bereits verifizierten lokalen
 # Sicherungsbeleg; ein fehlgeschlagener Upload bricht das Update vor dem
 # App-Tausch ab und loest damit den normalen Rollback aus.
-if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$deploy_mode" == full ]]; then
   [[ "${GRABENPLANER_OFFSITE_STATUS_FILE:-}" == "/var/lib/grabenplaner-offsite/status.json" ]] \
     || gp_die "Die Offsite-Konfiguration ist unvollstaendig oder unzulaessig."
   offsite_pre_update_hook="/usr/local/sbin/grabenplaner-offsite-pre-update"
@@ -715,17 +779,22 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
     && -f "$offsite_pre_update_target" && ! -L "$offsite_pre_update_target" ]] \
     || gp_die "Der eingerichtete Offsite-Pre-Update-Hook hat kein freigegebenes Ziel."
   gp_info "Starte den bisherigen Grabenplaner vor der externen Uebertragung wieder."
+  begin_deploy_phase previous-start
   gp_start_service "$service"
   gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Der bisherige Grabenplaner wurde vor der Offsite-Sicherung intern nicht wieder bereit."
   gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der bisherige Grabenplaner wurde vor der Offsite-Sicherung oeffentlich nicht wieder bereit."
   gp_info "Uebertrage den exakt verifizierten lokalen Sicherungspunkt vor dem App-Update ins Offsite-Repository."
+  begin_deploy_phase offsite-before-update
   "$offsite_pre_update_hook" --backup-result "$backup_result_file" --lock-already-held \
     || gp_die "Die Offsite-Sicherung vor dem Update ist fehlgeschlagen; das App-Update wurde nicht begonnen."
   gp_info "Erstelle unmittelbar vor dem App-Tausch einen aktuellen lokalen Rollback-Sicherungspunkt."
+  begin_deploy_phase final-service-stop
   gp_stop_service "$service" 150
+  begin_deploy_phase final-rollback-backup
   create_exact_local_backup
 fi
 
+begin_deploy_phase application-swap
 start_database_lock
 mv -- "$app_dir" "$rollback_root"
 old_app_moved=1
@@ -734,16 +803,24 @@ gp_apply_app_permissions "$app_dir" "$service_group"
 release_database_lock
 
 new_service_started=1
+begin_deploy_phase application-start
 gp_start_service "$service"
 gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Die neue App wurde intern nicht rechtzeitig betriebsbereit."
 gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der oeffentliche HTTPS-Readinesscheck ist fehlgeschlagen."
+begin_deploy_phase deployment-checks
+"$app_dir/server-tools/linux/test-grabenplaner-server.sh" --node "$node" --deploy-mode \
+  --env-file "$env_file" --app-dir "$app_dir" --data-dir "$data_dir" --database "$database" --backup-dir "$backup_dir" \
+  --public-url "$public_url" --service "$service" --caddy-service "$caddy_service" >&2 \
+  || gp_die "Die kurzen Betriebspruefungen nach dem Versionswechsel sind fehlgeschlagen."
+finish_deploy_phase
 receipt="$(write_receipt "success")"
 write_commit_marker
 update_committed=1
 
 # Nach einem bereits erfolgreich und atomar abgeschlossenen App-Update wird
 # zuerst ein signierter, fuer die App sichtbarer Queue-Beleg geschrieben und
-# danach der komplette Recovery-Assurance-Lauf asynchron eingeplant. Ein Fehler
+# im vollen Ablauf startet danach Recovery Assurance; im kurzen Ablauf arbeitet
+# der aktivierte Nacht-Timer die Queue ab. Ein Fehler
 # an dieser Stelle darf das gesunde neue Release nicht mehr zurueckrollen.
 if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transition" ]]; then
   offsite_common="/opt/grabenplaner-offsite/module/lib/offsite-common.sh"
@@ -760,7 +837,9 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transiti
   ); then
     gp_warn "Das erfolgreiche App-Update konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."
   fi
-  if ! systemctl start --no-block grabenplaner-offsite-assurance@app-updated.service >/dev/null; then
+  if [[ "$deploy_mode" == short ]]; then
+    gp_info "Der vollstaendige Recovery-Nachweis fuer die neue Version folgt im aktivierten Nachtlauf."
+  elif ! systemctl start --no-block grabenplaner-offsite-assurance@app-updated.service >/dev/null; then
     gp_warn "Die Recovery-Assurance-Pruefung nach dem App-Update konnte nicht eingeplant werden."
   fi
 fi

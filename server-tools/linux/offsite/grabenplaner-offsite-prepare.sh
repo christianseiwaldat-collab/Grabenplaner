@@ -43,6 +43,8 @@ done
 # Lock before inspecting or creating staging. A second preparation must see
 # the first one's committed point; upload must not remove it during this read.
 source "$core_common"
+deploy_workflow="$(offsite_core_deploy_workflow)" \
+  || offsite_fixed_failure PREPARE_FAILED "Der installierte App-Vertrag ist fuer den Sicherungsablauf ungueltig."
 readonly OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS=300
 (( lock_already_held == 1 )) \
   || offsite_acquire_maintenance_lock_with_wait "$OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS"
@@ -120,6 +122,28 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ -z "$backup_result" ]]; then
+  # FD 8 belongs to the repository, FD 6 to an enclosing Assurance run.
+  # Keep the lifecycle owner on FD 4 until cleanup has restarted the app.
+  workspace_database="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" "$OFFSITE_DATA_ROOT/data/dienstplan.db" <<'NODE'
+const fs = require("node:fs");
+const rows = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter(line => /^DB_PATH=/.test(line));
+if (rows.length > 1) process.exit(1);
+const value = rows.length ? rows[0].slice(8) : process.argv[3];
+if (!value.startsWith("/") || /[\x00-\x1f\x7f]/.test(value)) process.exit(1);
+process.stdout.write(value);
+NODE
+  )" || offsite_fixed_failure PREPARE_FAILED "Der gemeinsame Backup-Arbeitsbereich ist ungueltig."
+  maintenance_fd=9
+  if [[ "$(readlink -f -- /proc/$$/fd/6 2>/dev/null || true)" == "$GP_DEFAULT_MAINTENANCE_LOCK" ]]; then maintenance_fd=6; fi
+  if [[ "$deploy_workflow" == current ]]; then
+    gp_begin_backup_ownership "$workspace_database" "$OFFSITE_NODE" "$OFFSITE_APP_ROOT/lib/backup-maintenance.js" "$maintenance_fd" 4
+  # Heavy archive work precedes the stop; the app remains available while
+  # already verified, immutable rollback points are archived in order.
+  "$backup_script" --env-file "$OFFSITE_APP_ENV" --app-dir "$OFFSITE_APP_ROOT" --data-dir "$OFFSITE_DATA_ROOT" \
+    --backup-dir "$OFFSITE_BACKUP_ROOT" --service "$OFFSITE_APP_SERVICE" --node "$OFFSITE_NODE" \
+    --service-user "$OFFSITE_APP_USER" --service-group "$OFFSITE_APP_GROUP" --lock-already-held --finish-deferred \
+    || offsite_fixed_failure PREPARE_FAILED "Die aufgeschobenen Archivabschluesse konnten nicht beendet werden."
+  fi
   if systemctl is-active --quiet "$OFFSITE_APP_SERVICE"; then
     service_was_active=1
     gp_stop_service "$OFFSITE_APP_SERVICE" 150

@@ -352,6 +352,11 @@ Der monatliche Vollcheck liest die Repository-Daten vollständig und kann abhän
 
 #### Updates und Statusdiagnose
 
+Der folgende bisherige Ablauf gilt für den installierten Stand v0.92.36.
+Die lokal vorbereitete Umstellung auf kurze Deploys mit gebundener nächtlicher
+Vollprüfung ist unter [Kürzere Bereitstellung](docs/DEPLOY-ZEITEN-UND-NACHTPRUEFUNGEN.md)
+beschrieben. Sie wird erst mit dem passenden Kernpaket und Offsite-Modul 8 aktiv.
+
 Ist das Offsite-Modul eingerichtet, erstellt `grabenplaner-update` zunächst bei kurz gestopptem Dienst einen verifizierten lokalen Sicherungspunkt. Anschließend wird die bisherige App wieder gestartet und bleibt während der unter Umständen längeren Google-Drive-Übertragung erreichbar. Erst wenn diese Offsite-Kopie bestätigt ist, stoppt der Updater den Dienst erneut, erstellt unmittelbar vor dem App-Tausch einen zweiten aktuellen lokalen Rollback-Sicherungspunkt und ersetzt die Programmdateien. Ist Google Drive nicht erreichbar oder scheitert die Repository-Prüfung, wird der Austausch nicht begonnen; die bisherige App bleibt beziehungsweise wird wieder in Betrieb genommen.
 
 Mit v0.86.2 steigt der eigenständige Offsite-Modulvertrag auf Version 6. Ein bereits eingerichtetes Modul der Versionen 1 bis 5 wird nicht still durch das Kernupdate verändert: `grabenplaner-update` beendet den Vorgang andernfalls mit `migration-required`. Das alte Modul wird für diesen Übergang **nicht deinstalliert**.

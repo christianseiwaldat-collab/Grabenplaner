@@ -5,7 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-test("Linux OS lease is visible to the service user and expires when its owner exits", {
+for (const [maintenanceNumber, ownerNumber] of [[9, 8], [6, 4]]) {
+test(`Linux OS lease on FDs ${maintenanceNumber}/${ownerNumber} is visible to the service user and expires with its owner`, {
   skip: process.platform !== "linux" || process.getuid?.() !== 0 ? "isolated Linux root fixture" : false,
 }, t => {
   // /run is root-owned and not world-writable. Never touch the real GP paths.
@@ -26,7 +27,7 @@ test("Linux OS lease is visible to the service user and expires when its owner e
   function child(source, { asUser = false, passOwner = true } = {}) {
     const args = ["-e", source, moduleFile, database, lease, maintenance];
     const stdio = Array(10).fill("ignore"); stdio[1] = "pipe"; stdio[2] = "pipe";
-    if (!asUser) { stdio[9] = maintenanceFd; if (passOwner && ownerFd !== undefined) stdio[8] = ownerFd; }
+    if (!asUser) { stdio[maintenanceNumber] = maintenanceFd; if (passOwner && ownerFd !== undefined) stdio[ownerNumber] = ownerFd; }
     const result = spawnSync(asUser ? "/usr/sbin/runuser" : process.execPath,
       asUser ? ["--user", "nobody", "--", process.execPath, ...args] : args,
       { stdio, encoding: "utf8", timeout: 10000 });
@@ -36,11 +37,11 @@ test("Linux OS lease is visible to the service user and expires when its owner e
   const prelude = "const [file, databasePath, leasePath, maintenancePath] = process.argv.slice(1); const api = require(file);";
   const locked = spawnSync("/usr/bin/flock", ["--exclusive", "--nonblock", "3"], { stdio: ["ignore", "ignore", "ignore", maintenanceFd] });
   assert.equal(locked.status, 0);
-  child(prelude + "api.prepareOwnerFile({ leasePath, maintenancePath });");
+  child(prelude + `api.prepareOwnerFile({ leasePath, maintenancePath, maintenanceFd: ${maintenanceNumber} });`);
   ownerFd = fs.openSync(lease, "r+");
   const ownerLocked = spawnSync("/usr/bin/flock", ["--exclusive", "--nonblock", "3"], { stdio: ["ignore", "ignore", "ignore", ownerFd] });
   assert.equal(ownerLocked.status, 0);
-  child(prelude + "api.publishOwner(databasePath, { leasePath, maintenancePath });");
+  child(prelude + `api.publishOwner(databasePath, { leasePath, maintenancePath, maintenanceFd: ${maintenanceNumber}, ownerFd: ${ownerNumber} });`);
   const read = prelude + "console.log(api.ownsLifecycleBackup(databasePath, { leasePath }));";
   assert.equal(child(read, { asUser: true }), "true");
   assert.equal(child(prelude + "console.log(api.ownsLifecycleBackup(databasePath + '-other', { leasePath }));", { asUser: true }), "false");
@@ -49,3 +50,4 @@ test("Linux OS lease is visible to the service user and expires when its owner e
   fs.chmodSync(lease, 0o666);
   assert.equal(child(read, { asUser: true }), "false");
 });
+}
