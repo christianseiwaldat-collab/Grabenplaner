@@ -1,11 +1,11 @@
 # Grabenplaner Versions-Log
 
-## v0.92.37 Beta · Kürzere Deploys und nächtliche Vollprüfung (Releasekandidat)
+## v0.92.37 Beta · Kürzere Deploys und nächtliche Vollprüfung
 
 - Normaler Deploy mit einem frischen, vollständig geprüften DB-/Dokument-Rückkehrpunkt und kurzen Betriebsprüfungen; Archivabschluss, Aufbewahrung und vollständiger Recovery-Test folgen nachts. Die automatische Auswahl verlangt einen höchstens 36 Stunden alten, signierten und zum installierten Wiederherstellungsvertrag passenden Gesamtnachweis.
 - Fehlende Nachweise und Änderungen an Server-, Datenbank-, Sicherungs- oder Laufzeitcode erzwingen weiterhin den vollständigen Ablauf. Unterbrochene Archivaufträge bleiben nachvollziehbar erhalten.
-- Gemeinsame Sicherungszuständigkeit vermeidet zusätzliche Start-/Stoppsicherungen im Wartungslauf. Der regelmäßige Monitor verwendet kurze Lese- und Metadatenprüfungen; globale Datenbankprüfungen erfolgen bei geändertem Migrationsstand und nachts.
-- Lokal umgesetzt und gezielt geprüft, **noch nicht installiert**. Offsite-Modul 8 verlangt einen eigenen geprüften Modulwechsel. Aktivierung und Prüfgrenzen: [Deployablauf](docs/DEPLOY-ZEITEN-UND-NACHTPRUEFUNGEN.md).
+- Gemeinsame Sicherungszuständigkeit vermeidet zusätzliche Start-/Stoppsicherungen im Wartungslauf. Der regelmäßige Monitor verwendet kurze Lese- und Metadatenprüfungen. Die Organisationsmigration merkt sich erfolgreiche globale Prüfungen; eine weitere vollständige Startprüfung der Feature-Kompatibilität bleibt bestehen.
+- Am 12.09.2026 mit Offsite-Modul 8 und separatem Recovery-Nachtrag installiert. Vollständige Sicherungs-/Wiederherstellungsprüfung samt isoliertem App-Start, alle 24 Monitorprüfungen und ein realer Worker-/PDF-Test bestanden. Ein gebundener Gesamtnachweis liegt vor; die erstmalige Übernahme des Modulnachtrags ins nächste Kernpaket bleibt eine kritische Änderung mit Vollprüfung. Nachweise und Grenzen: [Releasebericht](docs/DEPLOY-RELEASE-v09237.md).
 
 ## v0.92.36 Beta · Verkaufsberichte, Kassenklärung und Browsernavigation
 
