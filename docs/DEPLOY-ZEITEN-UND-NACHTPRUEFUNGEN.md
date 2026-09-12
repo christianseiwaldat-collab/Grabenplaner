@@ -1,9 +1,13 @@
 # Kürzere Bereitstellung und nächtliche Wiederherstellungsprüfung
 
-Stand: 11.09.2026. Die freigegebene Aufteilung ist lokal umgesetzt und gezielt
-geprüft. **Noch nicht installiert:** Der produktive GP bleibt auf v0.92.36.
-Die Änderung benötigt beim nächsten freigegebenen Release das passende
-Kernpaket und den ausdrücklichen Wechsel auf Offsite-Modul 8.
+Stand: 12.09.2026. **v0.92.37-beta ist installiert**, einschließlich des
+ausdrücklichen Wechsels auf Offsite-Modul 8. Der Kernupdate-Beleg vom
+12.09.2026, 03:47:11 UTC, bestätigt den erfolgreichen vollständigen Ablauf.
+Die vollständige Recovery-Prüfung ist seit 05:47:02 UTC erfolgreich signiert.
+Der gebundene Nachweis erlaubt für den unveränderten kompatiblen Kernstand
+den kurzen Ablauf. Der separate Modulnachtrag für die Startprobe, seine
+einmalige Übernahme in ein nächstes Kernpaket und die genauen Quellstände sind im
+[Releasebericht](DEPLOY-RELEASE-v09237.md) dokumentiert.
 
 Beim erstmaligen Wechsel kann der installierte Paketprüfer den neuen
 Modulvertrag noch nicht kennen. Dafür erlaubt der Updater ausschließlich einen
@@ -13,7 +17,7 @@ die Vollprüfung; der bisherige Prüfer prüft weiterhin den installierten
 Runtimevertrag. Paketdateien, Runtimevergleich und Offsite-Kompatibilität
 bleiben vollständig geprüft. Normale Folgeupdates benötigen diese Option nicht.
 
-## Beobachtete Dauer
+## Ausgangsmessung vor der Umstellung (11.09.2026)
 
 Der Releaseablauf umfasst deutlich mehr als Paketübertragung und Versionswechsel.
 Die bisher abgeschlossenen Schritte zeigen folgende Größenordnung:
@@ -40,7 +44,7 @@ Zusammengesetzte Phasen enthalten mehrere Arbeiten; ihre Dauer ist keine reine
 Upload- oder Datenbankzeit. Die Gesamtdauer des Wartungslaufs und die tatsächliche
 Nichterreichbarkeit der Anwendung müssen getrennt ausgewiesen werden.
 
-Die Offsite-Vorbereitung übernimmt vor dem Stoppen der Anwendung nicht die
+Die bisherige Offsite-Vorbereitung übernahm vor dem Stoppen der Anwendung nicht die
 Lebenszyklus-Sicherung über den bestehenden Wartungs-Lease. Dadurch beginnt
 zusätzlich eine native Shutdown-Sicherung. Der Updater selbst verwendet diese
 Koordination bereits. Der beim Stoppen erreichte Sicherungs-Timeout erklärt
@@ -51,10 +55,12 @@ führt `VACUUM` sowie vollständige Integritäts- und Fremdschlüsselprüfungen 
 und startet erst danach die isolierte Anwendung. Schon die Vorbereitung der
 Testkopie dauerte mehrere Minuten. Der eigentliche Start scheiterte erneut am
 bestehenden 90-Sekunden-Limit; die Datenwiederherstellung hatte bestanden.
-Der fehlgeschlagene Anwendungsstart bleibt ein eigener offener Nachweis.
+Der fehlgeschlagene Anwendungsstart war ein eigener offener Nachweis. Er wurde
+am 12.09.2026 durch eine erfolgreiche isolierte Startprobe und einen vollständigen
+Gesamtlauf abgelöst; die frühere fehlgeschlagene Historie bleibt erhalten.
 
-Der automatische Monitor ruft dieselbe Serverprüfung mit `--monitor-mode` auf.
-Auch dabei werden Datenbank und gekoppeltes Backup umfangreich geprüft;
+Der bisherige automatische Monitor rief dieselbe Serverprüfung mit `--monitor-mode` auf.
+Auch dabei wurden Datenbank und gekoppeltes Backup umfangreich geprüft;
 die Unit begrenzt den Lauf auf vier Minuten. Mehrere reguläre Läufe erreichten
 dieses Limit. Der abschließende reguläre Lauf bestand am 11.09.2026 um
 20:43:51 UTC mit allen 24 Prüfungen in 3 Minuten 42 Sekunden. Dafür wurden
@@ -130,8 +136,13 @@ globaler Fremdschlüssel- und `quick_check`-Prüfung. Ein unveränderter, bereit
 geprüfter Migrationsstand benötigt diese Vollprüfung nicht bei jedem Start.
 Nach Fehler oder Unterbrechung wird sie erneut ausgeführt. Fachliche
 Beziehungsprüfungen laufen weiterhin; der Nachtlauf prüft die gesamte Datenbank.
-Das behebt eine wiederholte Startarbeit, beweist aber noch nicht, dass die
-produktive isolierte Startprobe nun innerhalb von 90 Sekunden erfolgreich ist.
+Das behebt die wiederholte Organisationsprüfung. Die separate
+Feature-Kompatibilitätsmigration enthält weiterhin eine globale `quick_check`-
+Prüfung; die Umstellung beseitigt somit nicht sämtliche vollständigen Prüfungen
+beim Start. Der erfolgreiche Organisations-Prüfbeleg allein beweist auch nicht,
+dass die isolierte Startprobe grundsätzlich innerhalb von 90 Sekunden erfolgreich
+ist. Der separate Modulnachtrag gibt ihr ein begrenztes Zehn-Minuten-Budget;
+die tatsächlich bestandene Probe dauerte am 12.09.2026 rund 35 Sekunden.
 
 ## Betriebsprüfung und Aktivierung
 
@@ -171,7 +182,7 @@ Der Wechsel von installiertem Offsite-Modul 7 auf 8 ist ausdrücklich:
 
 Es gibt bei dieser Umstellung keinen Host-Neustart. Der bisherige historische
 Runtime-Wechsel 4 → 5 bleibt auf Offsite 6 → 7 begrenzt und autorisiert Modul 8
-nicht. Die einmalige Einführung selbst wird deshalb noch umfassend geprüft.
+nicht. Die einmalige Einführung wurde deshalb umfassend geprüft.
 
 ## Nachweise der lokalen Umsetzung
 
@@ -188,5 +199,7 @@ nicht. Die einmalige Einführung selbst wird deshalb noch umfassend geprüft.
 - Weitere 16 Paket- und Runtime-Prüfungen bestanden, vier plattformabhängige
   Überspringungen. Der historische Übergang verweigert ausdrücklich Modul 8.
 
-Diese Nachweise ersetzen nicht die erste produktive Recovery-Prüfung des neuen
-Pakets. Die spätere Zeitersparnis wird erst nach dieser Aktivierung gemessen.
+Diese lokalen Nachweise wurden durch den erfolgreichen produktiven Gesamtlauf
+vom 12.09.2026 ergänzt. Der reguläre Monitor bestand anschließend alle 24
+Prüfungen in 28,534 Sekunden. Die Gesamtdauer eines späteren kurzen Deploys
+bleibt getrennt zu messen.
