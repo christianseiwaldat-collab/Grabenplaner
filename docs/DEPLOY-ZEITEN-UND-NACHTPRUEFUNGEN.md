@@ -5,6 +5,14 @@ geprüft. **Noch nicht installiert:** Der produktive GP bleibt auf v0.92.36.
 Die Änderung benötigt beim nächsten freigegebenen Release das passende
 Kernpaket und den ausdrücklichen Wechsel auf Offsite-Modul 8.
 
+Beim erstmaligen Wechsel kann der installierte Paketprüfer den neuen
+Modulvertrag noch nicht kennen. Dafür erlaubt der Updater ausschließlich einen
+expliziten, separat geprüften SHA256-Pin mit `--package-verifier-sha256`.
+Der Prüfer und sein Pfad müssen root-geschützt sein. Dieser Aufruf erzwingt
+die Vollprüfung; der bisherige Prüfer prüft weiterhin den installierten
+Runtimevertrag. Paketdateien, Runtimevergleich und Offsite-Kompatibilität
+bleiben vollständig geprüft. Normale Folgeupdates benötigen diese Option nicht.
+
 ## Beobachtete Dauer
 
 Der Releaseablauf umfasst deutlich mehr als Paketübertragung und Versionswechsel.

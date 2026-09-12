@@ -13,6 +13,47 @@ const workflow = source.slice(source.indexOf(entry))
   .replaceAll("/usr/local/sbin/grabenplaner-offsite-pre-update", "$TEST_MODULE_ROOT/grabenplaner-offsite-pre-update.sh")
   .replaceAll("/opt/grabenplaner-offsite/module", "$TEST_MODULE_ROOT");
 
+for (const scenario of ["default", "pinned", "wrong-hash", "writable", "non-root", "migration-conflict"]) {
+  test(`explicit package verifier trust: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-verifier-"));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, "lib"));
+    fs.writeFileSync(path.join(root, "lib/verify-package.js"), "// synthetic verifier\n");
+    const hash = require("node:crypto").createHash("sha256").update("// synthetic verifier\n").digest("hex");
+    const selection = source.slice(source.indexOf('trusted_package_verifier="$app_dir/'), source.indexOf('if [[ -n "$runtime_v5_transition" ]]; then'));
+    assert.ok(selection.includes('package_verifier_sha256'));
+    const script = `set -Eeuo pipefail
+app_dir=/installed
+SCRIPT_DIR="$PWD"
+verification_policy=auto
+package_verifier_sha256=${scenario === "default" ? "''" : scenario === "wrong-hash" ? "a".repeat(64) : hash}
+runtime_v5_transition=${scenario === "migration-conflict" ? "conflict" : "''"}
+gp_die() { exit 42; }
+gp_info() { :; }
+gp_validate_sha256() { [[ "$1" =~ ^[a-f0-9]{64}$ ]]; }
+stat() {
+ case "$1" in
+  --format=%u:%h) printf '${scenario === "non-root" ? "1000" : "0"}:1\\n';;
+  --format=%u) printf '0\\n';;
+  --format=%a) printf '${scenario === "writable" ? "777" : "755"}\\n';;
+ esac
+}
+${selection}
+printf '%s\\n' "$trusted_package_verifier" "$installed_runtime_verifier" "$verification_policy"
+`;
+    fs.writeFileSync(path.join(root, "run.sh"), script);
+    const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 10000 });
+    if (["default", "pinned"].includes(scenario)) {
+      assert.equal(result.status, 0, result.stderr);
+      const lines = result.stdout.trim().split(/\r?\n/);
+      assert.equal(lines[1], "/installed/server-tools/linux/lib/verify-package.js");
+      assert.equal(lines[2], scenario === "pinned" ? "full" : "auto");
+      assert.equal(lines[0].endsWith("/lib/verify-package.js"), true);
+      assert.equal(lines[0] === lines[1], scenario === "default");
+    } else assert.equal(result.status, 42, result.stderr);
+  });
+}
+
 for (const scenario of ["short", "full", "failed-readiness"]) {
   test(`actual updater orchestration: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     assert.ok(source.indexOf(entry) > 0);
