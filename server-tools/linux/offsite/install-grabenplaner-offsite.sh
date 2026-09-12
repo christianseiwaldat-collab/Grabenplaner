@@ -289,6 +289,8 @@ target_control_socket_was_enabled=0
 target_control_socket_was_active=0
 target_control_socket_paused=0
 setup_complete=0
+app_restart_started=0
+app_groups_before="$(id -G -- "$OFFSITE_APP_USER")"
 rollback_control_group() {
   (( setup_complete == 0 )) || return 0
   if (( control_member_added == 1 || control_group_created == 1 )) && getent group "$OFFSITE_CONTROL_GROUP" >/dev/null; then
@@ -386,7 +388,7 @@ cleanup() {
     fi
     systemctl daemon-reload >/dev/null 2>&1 || true
     rollback_control_group
-    if ! (gp_stop_service "$OFFSITE_APP_SERVICE" 150 && gp_start_service "$OFFSITE_APP_SERVICE") >/dev/null 2>&1; then
+    if (( app_restart_started == 1 )) && ! (gp_stop_service "$OFFSITE_APP_SERVICE" 150 && gp_start_service "$OFFSITE_APP_SERVICE") >/dev/null 2>&1; then
       offsite_warn "Der bisherige App-Dienst konnte nach dem Modul-Rollback nicht kontrolliert gestartet werden."
     fi
   fi
@@ -811,7 +813,18 @@ env_temporary="$(mktemp --tmpdir="$(dirname -- "$OFFSITE_APP_ENV")" .grabenplane
 const fs = require("node:fs");
 const [source, target, provider] = process.argv.slice(2);
 if (!["google_drive", "hetzner_object_storage", "backblaze_b2"].includes(provider)) process.exit(1);
-const lines = fs.readFileSync(source, "utf8").split(/\r?\n/)
+const original = fs.readFileSync(source, "utf8");
+const expected = ["GRABENPLANER_OFFSITE_CONFIGURED=1", `GRABENPLANER_OFFSITE_PROVIDER=${provider}`,
+  "GRABENPLANER_OFFSITE_STATUS_FILE=/var/lib/grabenplaner-offsite/status.json"];
+const originalLines = original.split(/\r?\n/);
+if (expected.every(value => {
+  const prefix = value.slice(0, value.indexOf("=") + 1), matching = originalLines.filter(line => line.startsWith(prefix));
+  return matching.length === 1 && matching[0] === value;
+})) {
+  fs.writeFileSync(target, original, { mode: 0o600 });
+  process.exit(0);
+}
+const lines = originalLines
   .filter((line) => !/^GRABENPLANER_OFFSITE_(?:CONFIGURED|PROVIDER|STATUS_FILE)=/.test(line));
 while (lines.length && !lines.at(-1)) lines.pop();
 lines.push(
@@ -840,10 +853,20 @@ else
   systemctl disable --now grabenplaner-offsite-target-control.socket >/dev/null 2>&1 || true
   systemctl stop 'grabenplaner-offsite-target-control@*.service' >/dev/null 2>&1 || true
 fi
-# Drain native backup children before systemd finishes the old process. The
-# runtime-5 predecessor can still require its full startup validation once.
-gp_stop_service "$OFFSITE_APP_SERVICE" 150
-gp_start_service "$OFFSITE_APP_SERVICE"
+# The exact module-7/runtime-5 predecessor needs no core restart when its
+# environment and process groups are unchanged. All other transitions drain
+# native backup children before systemd finishes the old process.
+core_workflow="$(offsite_core_deploy_workflow 2>/dev/null || true)"
+if [[ "$installed_module_version" == 7 && "$core_workflow" == legacy-full ]] \
+  && cmp --silent "$rollback_root/grabenplaner.env" "$OFFSITE_APP_ENV" \
+  && [[ "$app_groups_before" == "$(id -G -- "$OFFSITE_APP_USER")" ]] \
+  && systemctl is-active --quiet "$OFFSITE_APP_SERVICE"; then
+  offsite_info "Modulwechsel ohne zusaetzlichen App-Neustart: Core-Konfiguration und Prozessgruppen sind unveraendert."
+else
+  app_restart_started=1
+  gp_stop_service "$OFFSITE_APP_SERVICE" 150
+  gp_start_service "$OFFSITE_APP_SERVICE"
+fi
 systemctl is-active --quiet "$OFFSITE_APP_SERVICE" || offsite_die "Der Grabenplaner-Dienst konnte nach der Offsite-Aktivierung nicht gestartet werden."
 systemctl is-active --quiet grabenplaner-offsite-assurance-control.socket \
   || offsite_die "Der abgesicherte Recovery-Assurance-Steuerungssocket wurde nicht aktiviert."
