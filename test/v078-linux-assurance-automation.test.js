@@ -28,6 +28,8 @@ const {
   SMOKE_ROOT,
   DATABASE,
   verifiedApplicationSmokeResult,
+  START_TIMEOUT_MS,
+  STOP_TIMEOUT_MS,
 } = require(path.join(
   root, "server-tools/linux/offsite/lib/application-smoke.js",
 ));
@@ -1235,8 +1237,12 @@ test("application smoke is a private-network, hard-timeout unit without live dat
   assert.match(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/credentials(?:\s|$)/m);
   assert.doesNotMatch(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/rclone-config(?:\s|$)/m);
   assert.doesNotMatch(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/restore-test(?:\s|$)/m);
-  assert.match(smokeUnit, /TimeoutStartSec=120s/);
-  assert.match(smokeUnit, /RuntimeMaxSec=120s/);
+  const serviceBudgetMs = Number(smokeUnit.match(/^TimeoutStartSec=(\d+)s$/m)?.[1]) * 1000;
+  assert.ok(START_TIMEOUT_MS >= 2 * 330_000 - 60_000, "allow a measured cold database start with bounded I/O headroom");
+  assert.ok(START_TIMEOUT_MS <= 600_000, "readiness must still have a finite ten-minute limit");
+  assert.ok(serviceBudgetMs >= START_TIMEOUT_MS + STOP_TIMEOUT_MS + 15_000, "allow child termination and result sealing before systemd kills the unit");
+  assert.ok(serviceBudgetMs <= 630_000, "outer service budget remains bounded");
+  assert.doesNotMatch(smokeUnit, /^RuntimeMaxSec=/m, "RuntimeMaxSec is ignored for Type=oneshot; TimeoutStartSec enforces the budget");
   assert.match(smokeUnit, /KillMode=control-group/);
   assert.match(smokeUnit, /^MemoryHigh=512M$/m);
   assert.match(smokeUnit, /^MemoryMax=768M$/m);
