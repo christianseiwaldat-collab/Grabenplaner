@@ -32,6 +32,10 @@ Aenderung mit dem Hinweis auf eine explizite Servermigration abgelehnt.
                                  full erzwingt den umfassenden Ablauf.
 Archivabschluss und vollstaendiger Restore folgen beim kurzen Ablauf nachts.
 Ein frischer, vollstaendig gepruefter Rueckkehrpunkt bleibt immer erforderlich.
+  --package-verifier-sha256 HEX  Expliziter Vertrauenswechsel auf den separat
+                                 geprueften Paketpruefer neben diesem Skript;
+                                 erzwingt full. Installierter Runtimevertrag,
+                                 Paket-Hashes und Modulgrenzen bleiben geprueft.
 EOF
 }
 
@@ -61,6 +65,7 @@ lock_already_held=0
 commit_marker_arg=""
 runtime_v5_transition=""
 verification_policy="auto"
+package_verifier_sha256=""
 deploy_mode="full"
 deploy_decision='{"mode":"full","reason":"VERIFICATION_UNAVAILABLE"}'
 deploy_started_at="$(date --utc '+%Y-%m-%dT%H:%M:%S.%3NZ')"
@@ -98,6 +103,7 @@ while (($#)); do
     --commit-marker) commit_marker_arg="${2:?Wert fuer --commit-marker fehlt}"; shift 2 ;;
     --runtime-v5-transition) runtime_v5_transition="${2:?Wert fuer --runtime-v5-transition fehlt}"; shift 2 ;;
     --verification) verification_policy="${2:?Wert fuer --verification fehlt}"; shift 2 ;;
+    --package-verifier-sha256) package_verifier_sha256="${2:?Wert fuer --package-verifier-sha256 fehlt}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -184,7 +190,32 @@ gp_require_systemd_unit "$caddy_service"
 systemctl is-active --quiet "$service" || gp_die "$service muss vor dem Update aktiv sein."
 systemctl is-active --quiet "$caddy_service" || gp_die "$caddy_service muss vor dem Update aktiv sein."
 trusted_package_verifier="$app_dir/server-tools/linux/lib/verify-package.js"
+installed_runtime_verifier="$trusted_package_verifier"
 trusted_tree_verifier="$app_dir/server-tools/linux/lib/verify-install-tree.js"
+# Explicit root maintenance may introduce a package contract unknown to the
+# predecessor. Pin the standalone verifier separately; never infer this trust
+# from the candidate's own manifest or silently fall back after a rejection.
+if [[ -n "$package_verifier_sha256" ]]; then
+  [[ -z "$runtime_v5_transition" ]] || gp_die "Paketprueferwechsel und Runtime-v5-Migration sind getrennte Vorgaenge."
+  gp_validate_sha256 "$package_verifier_sha256"
+  pinned_verifier="$SCRIPT_DIR/lib/verify-package.js"
+  [[ -f "$pinned_verifier" && ! -L "$pinned_verifier" && "$(stat --format='%u:%h' -- "$pinned_verifier")" == "0:1" ]] \
+    || gp_die "Der separat freigegebene Paketpruefer ist nicht root-geschuetzt."
+  protected_path="$pinned_verifier"
+  while :; do
+    [[ ! -L "$protected_path" && "$(stat --format='%u' -- "$protected_path")" == 0 ]] \
+      || gp_die "Der Paketprueferpfad ist nicht root-geschuetzt."
+    protected_mode="$(stat --format='%a' -- "$protected_path")"
+    (( (8#$protected_mode & 022) == 0 )) || gp_die "Der Paketprueferpfad ist fremdschreibbar."
+    [[ "$protected_path" != / ]] || break
+    protected_path="$(dirname -- "$protected_path")"
+  done
+  [[ "$(sha256sum -- "$pinned_verifier" | awk '{print $1}')" == "${package_verifier_sha256,,}" ]] \
+    || gp_die "Der Paketpruefer entspricht nicht dem separat freigegebenen SHA256."
+  trusted_package_verifier="$pinned_verifier"
+  verification_policy=full
+  gp_info "Separat freigegebener Paketpruefer SHA256 ${package_verifier_sha256,,}; vollstaendige Deploy-Pruefung."
+fi
 if [[ -n "$runtime_v5_transition" ]]; then
   [[ "$lock_already_held" -eq 1 && -n "$commit_marker" ]] || gp_die "Runtime v5 verlangt den gebundenen Migrationsaufruf."
   inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
@@ -193,6 +224,7 @@ if [[ -n "$runtime_v5_transition" ]]; then
   "$node" "$SCRIPT_DIR/lib/runtime-v5-transition.js" invocation "$runtime_v5_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
     || gp_die "Der Runtime-v5-Vertrauensuebergang ist ungueltig."
   trusted_package_verifier="$SCRIPT_DIR/lib/verify-package.js"
+  installed_runtime_verifier="$trusted_package_verifier"
   trusted_tree_verifier="$SCRIPT_DIR/lib/verify-install-tree.js"
 fi
 [[ -f "$trusted_package_verifier" && ! -L "$trusted_package_verifier" ]] || gp_die "Die installierte vertrauenswuerdige Paketpruefung fehlt."
@@ -527,7 +559,7 @@ actual_expanded_bytes="$(du --bytes --summarize "$extract_root" | awk '{print $1
 (( actual_expanded_bytes <= maximum_expanded_bytes )) || gp_die "Die tatsaechlich entpackte Paketgroesse ist zu gross."
 
 "$node" "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" || gp_die "Die Einzeldatei- und Manifestpruefung ist fehlgeschlagen."
-"$node" "$trusted_package_verifier" --runtime-contract "$app_dir" >"$installed_runtime_result_file" \
+"$node" "$installed_runtime_verifier" --runtime-contract "$app_dir" >"$installed_runtime_result_file" \
   || gp_die "Der installierte Linux-Runtimevertrag ist ungueltig; das Update erfordert eine explizite Serverwartung."
 runtime_gate="$("$node" - "$installed_runtime_result_file" "$manifest_result_file" <<'NODE'
 const fs = require("node:fs");
