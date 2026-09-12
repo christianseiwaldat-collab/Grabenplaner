@@ -300,17 +300,35 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]
   if [[ "$offsite_status_gid" =~ ^[0-9]+$ && -f "$offsite_status_file" && ! -L "$offsite_status_file" \
     && "$(stat --format='%u:%g:%a:%h' -- "$offsite_status_file")" == "0:$offsite_status_gid:640:1" \
     && -f "$offsite_status_reader" && ! -L "$offsite_status_reader" ]] \
-    && "$node" - "$offsite_status_reader" "$offsite_status_file" <<'NODE' >/dev/null 2>&1
-const [readerPath, statusPath] = process.argv.slice(2);
+    && offsite_status_kind="$("$node" - "$offsite_status_reader" "$offsite_status_file" "$deploy_checks" <<'NODE'
+const [readerPath, statusPath, deployChecks] = process.argv.slice(2);
 const { readOffsiteBackupStatus } = require(readerPath);
 const diagnostics = readOffsiteBackupStatus({ configured: true, statusPath });
-if (!diagnostics.statusAvailable || diagnostics.state !== "ok" || diagnostics.blocksMainReadiness !== false) process.exit(1);
+if (!diagnostics.statusAvailable || diagnostics.blocksMainReadiness !== false) process.exit(1);
+if (diagnostics.state === "ok") process.stdout.write("complete");
+else {
+  // The first complete recovery proof follows the committed core/module update.
+  // Missing/stale full proofs must not make that very update impossible. This
+  // deploy-only allowance still requires a fresh confirmed external backup and
+  // repository check, with no unresolved backup/check/restore failures.
+  const fresh = value => Number.isFinite(value) && value >= 0 && value <= 36;
+  if (deployChecks !== "1" || diagnostics.state !== "warning"
+    || !fresh(diagnostics.agesHours?.backup) || !fresh(diagnostics.agesHours?.repositoryCheck)
+    || !diagnostics.unresolvedFailures
+    || ["backup", "fullCheck", "restoreTest"].some(key => diagnostics.unresolvedFailures[key] !== false)) process.exit(1);
+  process.stdout.write("pending-full-verification");
+}
 NODE
+    )"
   then
     offsite_status_current=1
   fi
   if (( offsite_timer_ok == 1 && offsite_status_current == 1 )); then
-    check_ok "Offsite-Sicherung" "lokaler Status und Timer sind aktuell"
+    if [[ "$offsite_status_kind" == pending-full-verification ]]; then
+      check_ok "Offsite-Sicherung" "aktuelle externe Sicherung und Timer bestaetigt; vollstaendiger Recovery-Nachweis folgt"
+    else
+      check_ok "Offsite-Sicherung" "lokaler Status und Timer sind aktuell"
+    fi
   else
     check_fail "Offsite-Sicherung" "lokaler Status oder Timer erfordert Aufmerksamkeit"
   fi

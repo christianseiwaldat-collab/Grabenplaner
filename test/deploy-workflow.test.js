@@ -157,3 +157,33 @@ test("changed Linux scripts remain valid Bash and short/nightly probes use separ
     assert.equal(result.status, 0, `${relative}: ${result.stderr}`);
   }
 });
+
+test("deploy accepts a pending first full proof only with fresh successful external backup checks", t => {
+  const directory = temporary(t);
+  const source = fs.readFileSync(path.join(root, "server-tools/linux/test-grabenplaner-server.sh"), "utf8").replace(/\r\n/g, "\n");
+  const begin = source.indexOf("const [readerPath, statusPath, deployChecks]");
+  assert.ok(begin > 0);
+  const code = source.slice(begin, source.indexOf("\nNODE", begin));
+  const reader = path.join(directory, "reader.cjs"), status = path.join(directory, "status.json");
+  fs.writeFileSync(reader, 'exports.readOffsiteBackupStatus=({statusPath})=>JSON.parse(require("node:fs").readFileSync(statusPath));');
+  const pending = { statusAvailable: true, blocksMainReadiness: false, state: "warning",
+    agesHours: { backup: 0.5, repositoryCheck: 0.5 }, unresolvedFailures: { backup: false, fullCheck: false, restoreTest: false } };
+  function probe(value, mode = "1") {
+    fs.writeFileSync(status, JSON.stringify(value));
+    return spawnSync(process.execPath, ["-", reader, status, mode], { input: code, encoding: "utf8", timeout: 10000 });
+  }
+  const initial = probe(pending);
+  assert.equal(initial.status, 0, initial.stderr);
+  assert.equal(initial.stdout, "pending-full-verification");
+  assert.notEqual(probe(pending, "0").status, 0, "monitor must still flag the missing full proof");
+  assert.equal(probe({ ...pending, state: "ok" }, "0").stdout, "complete");
+  for (const field of ["backup", "repositoryCheck"]) for (const age of [null, -1, 36.01]) {
+    assert.notEqual(probe({ ...pending, agesHours: { ...pending.agesHours, [field]: age } }).status, 0);
+  }
+  for (const field of ["backup", "fullCheck", "restoreTest"]) {
+    assert.notEqual(probe({ ...pending, unresolvedFailures: { ...pending.unresolvedFailures, [field]: true } }).status, 0);
+  }
+  for (const delta of [{ statusAvailable: false }, { blocksMainReadiness: true }, { state: "error" }]) {
+    assert.notEqual(probe({ ...pending, ...delta }).status, 0);
+  }
+});

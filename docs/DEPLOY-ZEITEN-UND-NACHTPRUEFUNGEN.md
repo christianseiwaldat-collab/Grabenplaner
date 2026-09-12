@@ -136,6 +136,12 @@ produktive isolierte Startprobe nun innerhalb von 90 Sekunden erfolgreich ist.
 ## Betriebsprüfung und Aktivierung
 
 `grabenplaner-test` ohne Modus bleibt die vollständige manuelle Prüfung.
+Beim Deploy darf ein noch fehlender oder veralteter Vollprüfungsnachweis
+ausdrücklich offen bleiben, wenn die externe Sicherung und Repositoryprüfung
+höchstens 36 Stunden alt sind, alle Sicherungs-Timer aktiv sind und keine
+ungeklärten Sicherungs-, Repository- oder Restorefehler bestehen. Das ist keine
+bestandene Vollprüfung: Der Monitor meldet den offenen Nachweis weiterhin,
+und kurze Folge-Deploys bleiben bis zum erfolgreichen Gesamtnachweis gesperrt.
 `--monitor-mode` und `--deploy-mode` verwenden kurze Prüfungen. Dabei wird
 ausdrücklich nur ein Sicherungsbeleg kontrolliert, nicht die Integrität aller
 Dateiinhalte behauptet. `--nightly-mode` führt die vollständigen Datenbank- und
