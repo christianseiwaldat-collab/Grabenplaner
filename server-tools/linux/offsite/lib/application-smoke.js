@@ -17,7 +17,10 @@ const NODE = "/usr/bin/node";
 const SERVER = path.join(APP_ROOT, "server.js");
 const FORMAT = "grabenplaner-recovery-application-smoke";
 const SCHEMA_VERSION = 1;
-const START_TIMEOUT_MS = 90_000;
+// A verified production-sized restore still runs the application's global
+// SQLite startup check under the smoke unit's CPU/memory limits. Measured core
+// starts take about 330 seconds; keep a finite budget with room for cold I/O.
+const START_TIMEOUT_MS = 600_000;
 const STOP_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 4096;
 const MAX_RESULT_BYTES = 2048;
