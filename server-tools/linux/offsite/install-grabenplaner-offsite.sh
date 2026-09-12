@@ -386,7 +386,9 @@ cleanup() {
     fi
     systemctl daemon-reload >/dev/null 2>&1 || true
     rollback_control_group
-    systemctl restart "$OFFSITE_APP_SERVICE" >/dev/null 2>&1 || true
+    if ! (gp_stop_service "$OFFSITE_APP_SERVICE" 150 && gp_start_service "$OFFSITE_APP_SERVICE") >/dev/null 2>&1; then
+      offsite_warn "Der bisherige App-Dienst konnte nach dem Modul-Rollback nicht kontrolliert gestartet werden."
+    fi
   fi
   rollback_control_group
   if (( setup_complete == 0 && timers_paused == 1 )); then
@@ -838,7 +840,10 @@ else
   systemctl disable --now grabenplaner-offsite-target-control.socket >/dev/null 2>&1 || true
   systemctl stop 'grabenplaner-offsite-target-control@*.service' >/dev/null 2>&1 || true
 fi
-systemctl restart "$OFFSITE_APP_SERVICE"
+# Drain native backup children before systemd finishes the old process. The
+# runtime-5 predecessor can still require its full startup validation once.
+gp_stop_service "$OFFSITE_APP_SERVICE" 150
+gp_start_service "$OFFSITE_APP_SERVICE"
 systemctl is-active --quiet "$OFFSITE_APP_SERVICE" || offsite_die "Der Grabenplaner-Dienst konnte nach der Offsite-Aktivierung nicht gestartet werden."
 systemctl is-active --quiet grabenplaner-offsite-assurance-control.socket \
   || offsite_die "Der abgesicherte Recovery-Assurance-Steuerungssocket wurde nicht aktiviert."
@@ -862,7 +867,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) process.exit(1);
 process.stdout.write(String(port));
 NODE
 )" || offsite_die "Der lokale Grabenplaner-Port konnte nicht sicher gelesen werden."
-gp_wait_ready "http://127.0.0.1:${app_port}/api/health/ready" 120 \
+gp_wait_ready "http://127.0.0.1:${app_port}/api/health/ready" 1500 \
   || offsite_die "Der Grabenplaner hat nach der Offsite-Aktivierung die Bereitschaftspruefung nicht bestanden."
 
 # Ab hier ist die neue Offsite-Konfiguration gesund und committed. Ein Fehler
