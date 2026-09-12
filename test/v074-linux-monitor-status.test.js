@@ -69,6 +69,13 @@ test("v0.74 monitor persists only allowlisted boolean checks and discards diagno
   assert.deepEqual(Object.keys(result.status.checks), CHECK_IDS);
 });
 
+test("short monitor probes retain exact status fields and cannot duplicate full-check labels", () => {
+  const output = passingOutput().replace("SQLite quick_check", "SQLite Lesetest")
+    .replace("Backup DB-/Dokumentkopplung", "Backup DB-/Dokumentbeleg");
+  assert.deepEqual(parseTestOutput(output, 0), checksWith());
+  assert.throws(() => parseTestOutput(`${output}\nOK\tSQLite quick_check\tok`, 0), /CHECK_OUTPUT_INVALID/);
+});
+
 test("v0.86.2 maps the complete hardened HTTP-header output contract", () => {
   assert.deepEqual(
     [...CHECK_LABELS.entries()].filter(([, id]) => [

@@ -26,6 +26,10 @@ Verwendung: sudo ./backup-grabenplaner.sh [Optionen]
   --keep ANZAHL         Anzahl lokaler Sicherungspunkte (1..1000)
   --service UNIT        systemd-App-Unit
   --node PFAD           Node.js-Programm
+  --defer-archive       Interner Updater-Auftrag: frischen Punkt pruefen,
+                       Archivabschluss vormerken (geerbte Wartungssperre).
+  --finish-deferred    Nur vorgemerkte Archive abschliessen, ohne Dienststopp
+                       oder neuen Punkt (geerbte Wartungssperre).
 EOF
 }
 
@@ -41,6 +45,8 @@ service_user="$GP_DEFAULT_SERVICE_USER"
 service_group="$GP_DEFAULT_SERVICE_GROUP"
 lock_already_held=0
 preserve_existing_backups=0
+defer_archive=0
+finish_deferred=0
 
 while (($#)); do
   case "$1" in
@@ -56,6 +62,8 @@ while (($#)); do
     --service-group) service_group="${2:?Wert fuer --service-group fehlt}"; shift 2 ;;
     --lock-already-held) lock_already_held=1; shift ;;
     --preserve-existing-backups) preserve_existing_backups=1; shift ;;
+    --defer-archive) defer_archive=1; shift ;;
+    --finish-deferred) finish_deferred=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -104,10 +112,18 @@ getent passwd "$service_user" >/dev/null || gp_die "Dienstbenutzer fehlt: $servi
 getent group "$service_group" >/dev/null || gp_die "Dienstgruppe fehlt: $service_group"
 
 gp_require_systemd_unit "$service"
-if systemctl is-active --quiet "$service"; then
+if (( finish_deferred == 0 )) && systemctl is-active --quiet "$service"; then
   gp_die "$service muss fuer dieses externe Sicherungswerkzeug beendet sein. Der laufende Dienst erstellt seine eigenen konsistenten Sicherungen."
 fi
 (( lock_already_held == 1 )) || gp_acquire_maintenance_lock
+if (( defer_archive == 1 || finish_deferred == 1 )); then
+  (( defer_archive + finish_deferred == 1 && preserve_existing_backups == 0 && lock_already_held == 1 )) \
+    || gp_die "Der aufgeschobene Archivabschluss verlangt einen eindeutigen gesperrten Wartungsauftrag."
+  inherited_maintenance_fd=9
+  if [[ "$(readlink -f -- /proc/$$/fd/6 2>/dev/null || true)" == "$GP_DEFAULT_MAINTENANCE_LOCK" ]]; then inherited_maintenance_fd=6; fi
+  [[ "$(readlink -f -- /proc/$$/fd/$inherited_maintenance_fd 2>/dev/null || true)" == "$GP_DEFAULT_MAINTENANCE_LOCK" ]] \
+    && flock --nonblock "$inherited_maintenance_fd" || gp_die "Die uebernommene Wartungssperre fehlt."
+fi
 gp_acquire_backup_workspace_lock "$database" "$node" "$app_dir/lib/backup-workspace.js"
 
 database_dir="$(dirname -- "$database")"
@@ -116,6 +132,22 @@ gp_path_is_same_or_child "$amu_dir" "$data_dir" || gp_die "Der Dokumentordner mu
 gp_assert_separate_trees "$backup_dir" "$data_dir" "Backup- und Datenordner"
 gp_assert_separate_trees "$backup_dir" "$app_dir" "Backup- und App-Ordner"
 gp_assert_separate_trees "$app_dir" "$data_dir" "App- und Datenordner"
+
+deferred_helper="$app_dir/server-tools/linux/lib/deferred-backups.js"
+[[ -f "$deferred_helper" && ! -L "$deferred_helper" ]] || gp_die "Der Helfer fuer aufgeschobene Archivabschluesse fehlt."
+if (( defer_archive == 1 )); then
+  "$node" "$deferred_helper" preflight "$data_dir" "$backup_dir" >/dev/null \
+    || gp_die "Offene Archivabschluesse muessen vor einem weiteren kurzen Deploy erledigt werden."
+else
+  # Process queued points before a newer archive is published. Unknown old raw
+  # backups have no queue receipt and are never adopted or removed here.
+  "$node" "$deferred_helper" drain "$data_dir" "$backup_dir" "$service_user" "$archive_enabled" >/dev/null \
+    || gp_die "Die aufgeschobenen Archivabschluesse konnten nicht beendet werden."
+fi
+if (( finish_deferred == 1 )); then
+  gp_info "Aufgeschobene Archivabschluesse wurden ohne Dienststopp abgearbeitet."
+  exit 0
+fi
 
 database_lock_module="$app_dir/lib/database-lock.js"
 amu_module="$app_dir/lib/amu-storage.js"
@@ -221,7 +253,11 @@ verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
 "$node" "$verifier" "$target_database" "$target_amu" "$amu_module" "$target_marker" >/dev/null \
   || gp_die "Der veroeffentlichte Sicherungspunkt konnte nicht erneut verifiziert werden."
 snapshot_committed=1
-if [[ "$archive_enabled" == "1" ]]; then
+if (( defer_archive == 1 )); then
+  "$node" "$deferred_helper" register "$data_dir" "$backup_dir" "$snapshot" >/dev/null \
+    || gp_die "Der gepruefte Rueckkehrpunkt bleibt erhalten; sein naechtlicher Archivauftrag konnte nicht erfasst werden."
+  gp_info "Frischer Rueckkehrpunkt vollstaendig geprueft; Archivierung und Aufbewahrung folgen nachts."
+elif [[ "$archive_enabled" == "1" ]]; then
   # Der root-Launcher uebergibt die vorhandenen Vault-Secrets ausschliesslich
   # als gefilterte Prozessumgebung, niemals als sichtbare Programmargumente.
   "$node" "$archive_helper" archive-as "$service_user" "$backup_dir" "$snapshot" "$keep" >/dev/null \

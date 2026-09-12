@@ -1,7 +1,7 @@
 {
   "format": "grabenplaner-linux-offsite-module-contract",
   "schemaVersion": 1,
-  "moduleVersion": 7,
+  "moduleVersion": 8,
   "activationPolicy": "explicit-root-setup",
   "managedArtifacts": [
     "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",

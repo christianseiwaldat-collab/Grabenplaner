@@ -928,9 +928,12 @@ const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
       "server-tools/linux/grabenplaner.service.in",
       "server-tools/linux/host-control/lib/host-reboot-broker.js",
       "server-tools/linux/lib/hold-database-lock.js",
+      "server-tools/linux/lib/backup-metadata.js",
+      "server-tools/linux/lib/deploy-policy.js",
       "server-tools/linux/lib/prune-backups.js",
       "server-tools/linux/lib/verify-package.js",
       "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
+      "server-tools/linux/offsite/grabenplaner-offsite-assurance.sh",
       "server-tools/linux/offsite/grabenplaner-offsite-restore-test.sh",
       "server-tools/linux/offsite/lib/offsite-restore-verify.js",
       "server-tools/linux/offsite/lib/offsite-stage.js",
@@ -1067,6 +1070,11 @@ const BASELINE_TEST_FILES = Object.freeze([
 ]);
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
+  "deployment-operations-verification": new Set([
+    "test/deploy-startup.test.js",
+    "test/deploy-workflow.test.js",
+    "test/v074-linux-monitor-status.test.js",
+  ]),
   "portal-ui-preferences-integration": new Set([
     "test/v087-mobile-portal-personalization.test.js",
     "test/v0885-past-week-user-preference.test.js",
@@ -3897,7 +3905,10 @@ function inspectPhase6PostgresqlOperations(root) {
 function scanRepository(root = REPOSITORY_ROOT) {
   const directGroups = expandGroups(PRODUCTION_DIRECT_GROUPS);
   const indirectGroups = expandGroups(PRODUCTION_INDIRECT_GROUPS);
-  const baselineTests = new Set(BASELINE_TEST_FILES);
+  const baselineTests = new Set([
+    ...BASELINE_TEST_FILES,
+    ...TEST_SPECIAL_GROUPS["deployment-operations-verification"],
+  ]);
   const classificationDuplicates = [
     ...directGroups.duplicates,
     ...indirectGroups.duplicates,

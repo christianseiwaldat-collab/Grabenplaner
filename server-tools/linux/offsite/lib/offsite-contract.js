@@ -4,8 +4,8 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const CURRENT_MODULE_VERSION = 7;
-const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, 3, 4, 5, 6, CURRENT_MODULE_VERSION]);
+const CURRENT_MODULE_VERSION = 8;
+const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, CURRENT_MODULE_VERSION]);
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const REMOTE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const FOLDER_LABEL_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,46}[A-Za-z0-9])?$/;
@@ -93,6 +93,7 @@ const VERSION_ARTIFACTS = new Map([
   [5, new Set(MODULE_V5_ARTIFACTS)],
   [6, new Set(MODULE_V6_ARTIFACTS)],
   [7, new Set(MODULE_V6_ARTIFACTS)],
+  [8, new Set(MODULE_V6_ARTIFACTS)],
 ]);
 
 function assertExactArtifactContract(moduleVersion, fullArtifacts) {

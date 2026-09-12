@@ -120,8 +120,8 @@ test("v0.86: bounded lock wait does not turn genuine prepare errors into success
 });
 
 test("v0.86: the target-control change preserves the explicit v4 to v6 offsite migration", () => {
-  assert.equal(moduleSchema.moduleVersion, 7);
-  assert.match(installer, /\[1, 2, 3, 4, 5, 6, 7\]\.includes\(value\.moduleVersion\)/);
+  assert.equal(moduleSchema.moduleVersion, 8);
+  assert.match(installer, /\[1, 2, 3, 4, 5, 6, 7, 8\]\.includes\(value\.moduleVersion\)/);
   assert.match(installer, /installed_module_version >= 1 && installed_module_version <= 5/);
   assert.match(installer, /kontrolliert auf v6 migriert/);
 });
