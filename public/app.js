@@ -1677,6 +1677,15 @@ function initializeFunctionSearchUi() {
 }
 
 function functionSearchSettingsTabButton(tab) {
+  if (["vacation", "timeTracking", "integrations"].includes(tab)) {
+    if (document.getElementById(`${tab}SettingsGroup`)?.classList.contains("hidden")) return null;
+    tab = "personnel";
+  }
+  if (tab === "databaseImports") {
+    if (document.getElementById("databaseImportSettings")?.classList.contains("hidden")) return null;
+    tab = "backup";
+  }
+  if (tab === "usbProvisioning") tab = "backup";
   return [...document.querySelectorAll("[data-settings-tab]")]
     .find((button) => button.dataset.settingsTab === tab) || null;
 }
@@ -2676,7 +2685,8 @@ function applyRoleVisibility() {
       ? "Technischen Zustand, Sicherungen und Wiederherstellbarkeit prüfen."
       : "Berechtigte Filial-, Rechte-, Regel- und Prozessübersichten öffnen.";
   }
-  const anySettingsAccess = settingsAccess || pdfSettingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess
+  const databaseImportAccess = Boolean(state.portalSession?.user?.dataImport?.read) || canImportSalesArticles();
+  const anySettingsAccess = databaseImportAccess || settingsAccess || pdfSettingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess
     || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
     || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess
     || loanSettingsAccess || mobilePortalLocationDisplayAccess || birthdayPresentationSettingsAccess || updateAccess;
@@ -2684,7 +2694,7 @@ function applyRoleVisibility() {
   const settingsTabs = {
     general: settingsAccess || brandingAccess || loanSettingsAccess,
     schedule: settingsAccess || scheduleSettingsAccess || pdfSettingsAccess,
-    personnel: settingsAccess || wifiSettingsAccess,
+    personnel: settingsAccess || wifiSettingsAccess || integrationAccess || (features.vacation !== false && globalAdministration),
     vacation: features.vacation !== false && (settingsAccess || globalAdministration),
     timeTracking: settingsAccess || (wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false),
     integrations: integrationAccess,
@@ -2692,9 +2702,15 @@ function applyRoleVisibility() {
       && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false)),
     rights: rightsAccess,
     dataProtection: retentionReadAccess,
-    backup: diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || usbProvisioningAccess,
+    backup: databaseImportAccess || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
+  document.querySelectorAll("[data-personnel-settings-group]").forEach(group => {
+    const allowed = settingsTabs[group.dataset.personnelSettingsGroup] === true;
+    group.classList.toggle("hidden", !allowed);
+    if (!allowed) group.open = false;
+  });
+  document.getElementById("databaseImportSettings")?.classList.toggle("hidden", !databaseImportAccess);
   elements.crossLocationScheduleSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.staffAssignmentNotificationSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.staffAssignmentChangeSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
@@ -6982,7 +6998,9 @@ async function loadSystemInfo() {
       <span><strong>Serverzeit</strong> ${escapeHtml(info.serverTime)} Uhr</span>
       <span><strong>App</strong> ${escapeHtml(appName)} ${escapeHtml(info.appVersionLabel)}</span>
       <span><strong>Node.js</strong> ${escapeHtml(info.nodeVersion)}</span>
-      <span><strong>SQLite</strong> ${escapeHtml(info.sqliteVersion)}</span>
+      <span><strong>${info.databaseProvider === "postgresql" ? "PostgreSQL" : "SQLite"}</strong> ${escapeHtml(info.databaseProvider === "postgresql"
+        ? (String(info.databaseVersion || "").match(/PostgreSQL\s+([\d.]+)/i)?.[1] || "Version nicht verfügbar")
+        : info.sqliteVersion)}</span>
       <span><strong>System</strong> ${escapeHtml(info.platform)}</span>
       <span><strong>Datenbank</strong> ${escapeHtml(info.database)}</span>
       <span><strong>Interne Sicherung</strong> ${escapeHtml(info.appBackupDirectory || "geschützter App-Datenbereich")}</span>
@@ -23404,18 +23422,32 @@ function initializeSettingsPackedGrids() {
   scheduleAllSettingsPackedGrids();
 }
 
-function integrateLegacyUsbProvisioning() {
-  const section = elements.usbProvisioningSettings;
-  if (!section || section.dataset.integratedIntoBackup === "1" || !elements.backupSettings) return;
-  section.dataset.integratedIntoBackup = "1";
-  section.classList.remove("settings-section", "settings-two-column", "active");
-  section.classList.add("settings-accordion-body", "settings-accordion-grid");
-  const details = document.createElement("details");
-  details.id = "legacyUsbProvisioning";
-  details.className = "settings-accordion full-settings-card legacy-usb-provisioning";
-  details.innerHTML = `<summary><span class="card-icon">USB</span><span class="settings-accordion-copy"><strong>Lokale Altinstallation auf USB-Stick</strong><small>Historisches Werkzeug für eigenständige lokale Windows-Installationen.</small></span><span class="settings-accordion-chevron" aria-hidden="true">›</span></summary>`;
-  details.append(section);
-  elements.backupSettings.append(details);
+function integratePersonnelSettings() {
+  // Keep field IDs and existing save/permission handlers; move their containers.
+  for (const [key, section, title, description] of [
+    ["vacation", elements.vacationSettings, "Urlaub", "Urlaubsfreigaben und Vertretungen festlegen."],
+    ["timeTracking", elements.timeTrackingSettings, "Zeiterfassung", "Pausenregeln und WLAN-Zeitvorschläge verwalten."],
+    ["integrations", elements.integrationSettings, "Import & Lohnverrechnung", "Personalimporte, Exportprofile und Monatsübergaben verwalten."],
+  ]) {
+    if (!section || section.dataset.integratedIntoPersonnel) continue;
+    section.dataset.integratedIntoPersonnel = "1";
+    section.classList.remove("settings-section", "settings-two-column", "active");
+    section.classList.add("settings-accordion-body", "settings-accordion-grid");
+    const details = document.createElement("details");
+    details.id = `${key}SettingsGroup`;
+    details.className = "settings-accordion full-settings-card";
+    details.dataset.personnelSettingsGroup = key;
+    details.innerHTML = `<summary><span class="card-icon" aria-hidden="true">${key === "vacation" ? "Urlaub" : key === "timeTracking" ? "Zeit" : "Import"}</span><span class="settings-accordion-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(description)}</small></span><span class="settings-accordion-chevron" aria-hidden="true">›</span></summary>`;
+    details.append(section);
+    elements.personnelSettings.append(details);
+    details.addEventListener("toggle", () => {
+      if (!details.open || details.classList.contains("hidden")) return;
+      if (key === "vacation") { loadWorkflowSettings(); loadApprovalDelegations(); }
+      if (key === "timeTracking") loadWifiAutomationSettings();
+      if (key === "integrations") loadIntegrations().catch(error => showToast(error.message, true));
+    });
+  }
+  elements.usbProvisioningSettings?.remove();
 }
 
 function integrateSchedulePdfSettings() {
@@ -30321,6 +30353,8 @@ async function loadSalesArticleImportCatalog() {
 
 function openSalesArticleImport() {
   if (!canImportSalesArticles() || !elements.salesArticleImportDialog) return;
+  setView("settings");
+  setSettingsTab("databaseImports");
   closeSalesArticleEditor({ restoreFocus: false, force: true });
   closeSalesArticleArchive({ restoreFocus: false, force: true });
   resetSalesArticleImportState({ restoreFocus: false });
@@ -31776,24 +31810,10 @@ function syncSalesHistoryAccess() {
   salesHistoryWorkspace?.destroy(); salesHistoryWorkspace = null;
   dataImportWorkspace?.destroy(); dataImportWorkspace = null;
   importMappingWorkspace?.destroy(); importMappingWorkspace = null;
-  let importPanel = document.getElementById("dataImportPanel");
-  if (!importPanel && elements.salesAdministrationView) {
-    importPanel = document.createElement("details");
-    importPanel.id = "dataImportPanel";
-    importPanel.className = "data-import-panel hidden";
-    importPanel.innerHTML = '<summary>TradeFoto-Gesamtimport</summary><div data-import-body></div>';
-    elements.salesAdministrationView.append(importPanel);
-  }
+  const importPanel = document.getElementById("dataImportPanel");
   importPanel?.classList.toggle("hidden", !user?.dataImport?.read);
   if (importPanel && user?.dataImport?.read) dataImportWorkspace = window.GrabenplanerDataImport?.mount(importPanel, { api });
-  let mappingPanel = document.getElementById("importMappingPanel");
-  if (!mappingPanel && elements.salesAdministrationView) {
-    mappingPanel = document.createElement("details");
-    mappingPanel.id = "importMappingPanel";
-    mappingPanel.className = "data-import-panel hidden";
-    mappingPanel.innerHTML = '<summary>Stammdaten-Zuordnung des Gesamtimports</summary><div data-mapping-body></div>';
-    elements.salesAdministrationView.append(mappingPanel);
-  }
+  const mappingPanel = document.getElementById("importMappingPanel");
   mappingPanel?.classList.toggle("hidden", !user?.dataImport?.read);
   if (mappingPanel && user?.dataImport?.read) importMappingWorkspace = window.GrabenplanerImportMappings?.mount(mappingPanel, { api });
   crmPurchaseWorkspace?.destroy(); crmPurchaseWorkspace = null;
@@ -34314,7 +34334,7 @@ function applyRequestedView({ fromHistory = false } = {}) {
   setView(requestedView);
   if (state.currentView === "settings") {
     const tab = functionSearchSettingsTabButton(parameters.get("section"));
-    if (tab && !tab.classList.contains("hidden")) setSettingsTab(tab.dataset.settingsTab);
+    if (tab && !tab.classList.contains("hidden")) setSettingsTab(parameters.get("section"));
   }
   if (state.currentView === "personnel") {
     const section = parameters.get("section");
@@ -34343,8 +34363,10 @@ function currentAdministrationRoute() {
 
 function setSettingsTab(tab) {
   if (tab === "usbProvisioning") tab = "backup";
+  const personnelTarget = ["vacation", "timeTracking", "integrations"].includes(tab) ? tab : "";
+  const databaseTarget = tab === "databaseImports";
   const integratedTarget = ["branding", "pdf"].includes(tab) ? tab : "";
-  const activeTab = integratedTarget === "pdf" ? "schedule" : integratedTarget ? "general" : tab;
+  const activeTab = personnelTarget ? "personnel" : databaseTarget ? "backup" : integratedTarget === "pdf" ? "schedule" : integratedTarget ? "general" : tab;
   if (elements.backupSettings.classList.contains("active") && activeTab !== "backup") {
     clearUsbProvisioningPasswords();
   }
@@ -34353,9 +34375,6 @@ function setSettingsTab(tab) {
   elements.generalSettings.classList.toggle("active", activeTab === "general");
   elements.scheduleSettings?.classList.toggle("active", activeTab === "schedule");
   elements.personnelSettings.classList.toggle("active", activeTab === "personnel");
-  elements.vacationSettings?.classList.toggle("active", activeTab === "vacation");
-  elements.timeTrackingSettings?.classList.toggle("active", activeTab === "timeTracking");
-  elements.integrationSettings?.classList.toggle("active", activeTab === "integrations");
   elements.dataProtectionSettings?.classList.toggle("active", activeTab === "dataProtection");
   elements.accessSettings.classList.toggle("active", activeTab === "access");
   elements.rightsSettings?.classList.toggle("active", activeTab === "rights");
@@ -34406,10 +34425,10 @@ function setSettingsTab(tab) {
   if (activeTab === "backup") {
     refreshServerDiagnostics();
     if (canManageOffsiteFolders()) loadManagedOffsiteFolders();
-    renderUsbAvailability(state.portalStatus?.usbProvisioning || {});
-    if (state.portalStatus?.usbProvisioning?.available === true) {
-      loadUsbProvisioning().catch((error) => showToast(error.message, true));
-    }
+  }
+  if (personnelTarget || databaseTarget) {
+    const group = document.getElementById(databaseTarget ? "databaseImportSettings" : `${personnelTarget}SettingsGroup`);
+    if (group && !group.classList.contains("hidden")) { group.open = true; group.scrollIntoView({ block: "nearest" }); }
   }
   if (activeTab === "personnel") loadTrustLevelSettings();
   if (activeTab === "general" && canSaveBranding) {
@@ -38095,7 +38114,7 @@ document.addEventListener("keydown", (event) => {
   }
 });
 syncMobileNavigationMode();
-integrateLegacyUsbProvisioning();
+integratePersonnelSettings();
 integrateSchedulePdfSettings();
 const permissionDefaultsUI = initializePermissionDefaults({
   api, toast: showToast, dependencyRules: permissionDependencyRules,

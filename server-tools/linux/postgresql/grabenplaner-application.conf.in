@@ -3,8 +3,8 @@ Requires=grabenplaner-postgresql.service
 After=grabenplaner-postgresql.service
 
 [Service]
-MemoryHigh=1280M
-MemoryMax=1536M
+MemoryHigh=2048M
+MemoryMax=2560M
 MemorySwapMax=0
 TasksMax=128
 ReadOnlyPaths=/etc/grabenplaner/postgresql-application.json /var/lib/grabenplaner/data/postgresql-pair.json

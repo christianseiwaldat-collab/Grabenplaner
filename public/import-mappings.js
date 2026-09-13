@@ -127,8 +127,12 @@
       if (el('search')?.contains(event.target)) clear();
       else { abort(); invalidate(); if (event.target === el('target-query')) { targetsNext = null; el('targets-next').hidden = true; el('target').innerHTML = option('', 'Bitte GP-Ziele erneut suchen'); } }
     }
+    const containers=[];
+    for(let node=root.parentElement;node;node=node.parentElement) if(node.matches?.('.view,.settings-section,details')) containers.push(node);
+    const visible=()=>root.open && !globalThis.document?.hidden && containers.every(node=>!node.classList.contains('hidden')
+      && (node.matches('details')?node.open:node.classList.contains('active')));
     async function load() {
-      if (loaded || disposed) return; loaded = true; const ticket = ++generation; controller = new AbortController();
+      if (loaded || disposed || !visible()) return; loaded = true; const ticket = ++generation; controller = new AbortController();
       body.textContent = 'Zuordnungsrechte werden geprüft …';
       try {
         const response = await api('/api/data-import/mappings/context', { signal: controller.signal });
@@ -142,12 +146,14 @@
           + '<p data-m="message" role="status" aria-live="polite">Zuerst einen Bereich und bei Bedarf eine Quellnummer auswählen.</p><div data-m="rows"></div><button type="button" data-m="next" hidden>Weitere Stammsätze</button><section data-m="editor"></section>';
       } catch (error) { if (!disposed && ticket === generation) { body.textContent = error.message || 'Zuordnung nicht verfügbar.'; loaded = false; } }
     }
-    function onToggle() { if (root.open) void load(); else { clear(); loaded = false; body.replaceChildren(); } }
-    function onVisibility() { if (globalThis.document?.hidden) { clear(); loaded = false; body.replaceChildren(); } else if (root.open) void load(); }
+    function onToggle() { if (visible()) void load(); else { clear(); loaded = false; body.replaceChildren(); } }
+    function onVisibility() { onToggle(); }
+    const observer=containers.length&&globalThis.MutationObserver?new MutationObserver(onVisibility):null;
+    for(const container of containers) observer?.observe(container,{attributes:true,attributeFilter:['class','open']});
     body.addEventListener('click', onClick); body.addEventListener('submit', onSubmit); body.addEventListener('input', onInput);
     root.addEventListener('toggle', onToggle); globalThis.document?.addEventListener('visibilitychange', onVisibility);
     if (root.open) void load();
-    return { destroy() { disposed = true; abort(); rows = []; selected = plan = request = context = null; body.replaceChildren();
+    return { destroy() { disposed = true; abort(); observer?.disconnect(); rows = []; selected = plan = request = context = null; body.replaceChildren();
       body.removeEventListener('click', onClick); body.removeEventListener('submit', onSubmit); body.removeEventListener('input', onInput);
       root.removeEventListener('toggle', onToggle); globalThis.document?.removeEventListener('visibilitychange', onVisibility); } };
   }

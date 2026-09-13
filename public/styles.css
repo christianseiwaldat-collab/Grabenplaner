@@ -4203,6 +4203,9 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 #settingsView .settings-accordion-copy small { font-size:8.5px; line-height:1.45; }
 #settingsView .settings-field-disclosure-chevron { width:24px; height:24px; font-size:19px; }
 #settingsView :is(.settings-field-disclosure-body,.settings-accordion-body) { min-width:0; gap:11px; padding:12px; }
+/* Measured 1px rows already include the space between cards. A gap on every
+   measurement row would inflate nested groups by hundreds of empty pixels. */
+#settingsView .settings-accordion-grid.settings-packed-grid { row-gap:0; column-gap:var(--settings-grid-gap); }
 #settingsView :is(.settings-field-disclosure,.settings-accordion) { overflow:visible; }
 #settingsView :is(.settings-card,.settings-field-disclosure-body,.settings-accordion-body) > * { min-width:0; max-width:100%; }
 #settingsView :is(h2,h3,p,small,strong,.settings-note,.field > span,.form-actions-inline) { overflow-wrap:anywhere; white-space:normal; text-overflow:clip; }

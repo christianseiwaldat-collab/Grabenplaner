@@ -285,9 +285,12 @@ test('Productive Block 2: empty and partially unverified selections never become
   assert.ok(result.days.every(day => day.gross === null));
 });
 
-test('Block 4: pinned history metadata covers 43 tables / 433 fields without legacy access activation', () => {
-  assert.deepEqual(H.TRADEFOTO_HISTORY_METADATA.coverage, { tables: 43, fields: 433 });
-  assert.equal(H.TRADEFOTO_HISTORY_PROFILES.length, 43);
+test('History retains the 43 original tables and adds the 21 reviewed Bestell profiles', () => {
+  assert.deepEqual(H.TRADEFOTO_HISTORY_METADATA.coverage, { tables: 64, fields: 1161 });
+  assert.equal(H.TRADEFOTO_HISTORY_PROFILES.length, 64);
+  assert.equal(H.TRADEFOTO_HISTORY_METADATA.tables.filter(t=>!t.sourceFile).length,43);
+  const B=require('../lib/tradefoto-bestell/profiles');
+  for(const table of B.metadata.tables.filter(t=>t.included)) assert.equal(H.profileFor('trade',table.name),B.profileFor(table.name));
   assert.deepEqual(H.profileFor('cash', 'Umsatz_KASSE').keyFields, ['Bonnr', 'Filialid', 'Kassenid', 'Bondatum']);
   assert.deepEqual(H.profileFor('cash', 'Umsatz_Kasse_Details').keyFields, ['RepID']);
   for (const name of ['Tagesbericht', 'KassenJournal_Details']) assert.deepEqual(H.profileFor('cash', name).keyFields, ['_source_snapshot_sha256', '_source_row']);
@@ -460,16 +463,16 @@ test('Block 4: every selected history profile writes and reads a complete synthe
     const { records: [record] } = await f.ingest(table.source, table.name, [value]);
     const detail = await f.service.detail(record.id); assert.equal(Object.keys(detail.fields).length, table.columns.length, table.name);
   }
-  assert.equal(f.database.prepare('SELECT count(DISTINCT source_table) n FROM import_history_records').get().n, 43);
+  assert.equal(f.database.prepare('SELECT count(DISTINCT source_table) n FROM import_history_records').get().n, 64);
 });
 
-test('Productive Block 1: history statements compile portably and runtime is composed with apply disabled', () => {
+test('Central imports use the existing portable history catalog and permission-checked apply', () => {
   assert.equal(SQLITE_IMPORT_HISTORY_CATALOG.length, 23); assert.equal(Object.keys(S).length, 23);
   for (const entry of SQLITE_IMPORT_HISTORY_CATALOG) assert.equal(compilePostgresqlDialectEntry(entry).strategy, 'portable-generated', entry.statement.id);
   assert.ok(!/AUTOINCREMENT|PRAGMA|rowid|json_|RAISE\(/iu.test(IMPORT_HISTORY_SCHEMA_SQL));
   const catalog=require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG;
   assert.ok(SQLITE_IMPORT_HISTORY_CATALOG.every(e=>catalog.some(c=>c.statement===e.statement)));
-  assert.match(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8'),/createDataImportRuntime\(\{[^}]*allowApply: false/);
+  assert.match(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8'),/createDataImportRuntime\(\{[^}]*allowApply: true, sharedPayloads: true/);
 });
 
 const reconcile = (heads, lines, options = {}) => R.reconcileTradeFotoReceipt({ head: heads, lines: lines.map(source => ({ source, parentRevision: 1 })),

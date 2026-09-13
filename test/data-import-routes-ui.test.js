@@ -10,7 +10,7 @@ async function fixture(t) {
   const state={session:session(),calls:0,csrf:true,available:true,password:null},app=express();app.use(express.json({limit:'16kb'}));
   const runtime={context:async get=>({available:state.available,projection:buildDataImportProjection(await get())}),
     list:async get=>{await get();return {items:[]};},sourceOperation:async(get,_id,action,body)=>{await get();state.calls++;return {action,body};},
-    upload:async(get,{buffer,password,onStarted})=>{await get();state.calls++;state.password=password;assert.ok(Buffer.isBuffer(buffer));onStarted({id:'a'.repeat(64),status:'reading'});buffer.fill(0);}};
+    upload:async(get,{buffer,kind,password,onStarted})=>{await get();state.calls++;state.kind=kind;state.password=password;assert.ok(Buffer.isBuffer(buffer));onStarted({id:'a'.repeat(64),status:'reading'});buffer.fill(0);}};
   const mappings={operation:async(get,action,body)=>{await get();state.calls++;return {action,body};}};
   registerDataImportRoutes(app,{runtime,mappings,requireSession(_r,permission){if(!state.session)throw Object.assign(new Error('private'),{status:401});
     if(!state.session.permissions.includes(permission))throw Object.assign(new Error('private'),{status:403});return state.session;},
@@ -40,9 +40,35 @@ test('Productive Block 1: wrong kinds, compression, MIME and missing vault canno
   assert.equal((await send('trade',{'Content-Type':'text/plain'})).status,422);
   f.state.available=false;assert.equal((await send('cash')).status,503);assert.equal(f.state.calls,0);
 });
+
+test('Central imports: all three source kinds use the same protected upload route',async t=>{
+  const f=await fixture(t),options={method:'POST',headers:{'Content-Type':'application/octet-stream'},body:Buffer.alloc(4096)};
+  for(const kind of ['cash','trade','bestell']) {
+    const result=await f.request(`/api/data-import/upload/${kind}`,options);
+    assert.equal(result.status,202);assert.equal(f.state.kind,kind);
+    assert.deepEqual(await result.json(),{id:'a'.repeat(64),status:'reading'});
+  }
+  f.state.csrf=false;
+  assert.equal((await f.request('/api/data-import/upload/bestell',options)).status,403);
+  assert.equal(f.state.calls,3);
+});
 test('Productive Block 1: real isolated reader reports malformed ACE files without leaking reader internals',async()=>{
   const buffer=Buffer.alloc(4096);buffer.write('Standard ACE DB',4);buffer[0x14]=3;
   await assert.rejects(streamTradeFotoFullSource({buffer,kind:'cash',onMessage:()=>{},timeoutMs:10000}),e=>/^IMPORT_/.test(e.code)&&!/SELECT|password/i.test(e.message));
+});
+
+test('Central imports: the reader consumes owned upload bytes without detaching neighboring data',async()=>{
+  const makeHeader=buffer=>{buffer.fill(0);buffer.write('Standard ACE DB',4);buffer[0x14]=3;return buffer;};
+  const owned=makeHeader(Buffer.alloc(4096));
+  const reading=streamTradeFotoFullSource({buffer:owned,kind:'bestell',consumeBuffer:true,onMessage:()=>{},timeoutMs:10000});
+  assert.equal(owned.byteLength,0);
+  await assert.rejects(reading,e=>/^IMPORT_/.test(e.code));
+  const allocation=Buffer.alloc(4160,29),slice=makeHeader(allocation.subarray(32,4128));
+  const slicedReading=streamTradeFotoFullSource({buffer:slice,kind:'bestell',consumeBuffer:true,onMessage:()=>{},timeoutMs:10000});
+  assert.equal(slice.byteLength,4096);assert.ok(slice.every(byte=>byte===0));
+  assert.ok(allocation.subarray(0,32).every(byte=>byte===29));
+  assert.ok(allocation.subarray(4128).every(byte=>byte===29));
+  await assert.rejects(slicedReading,e=>/^IMPORT_/.test(e.code));
 });
 test('Productive Block 1: preview markup escapes fields, exposes blocked counts, and cannot activate itself',()=>{
   const html=UI.renderSource({kind:'trade',fileSha256:'<script>secret</script>',status:'needs_review',tables:[{name:'<img>',declaredRows:2,run:{id:'a',receivedRows:1,status:'needs_review',counts:{invalid:1},gates:['SOURCE_ROW_COUNT_MISMATCH']}}],activationEnabled:false},{});
@@ -51,7 +77,7 @@ test('Productive Block 1: preview markup escapes fields, exposes blocked counts,
   const ui=fs.readFileSync(path.join(__dirname,'../public/data-import.js'),'utf8');assert.doesNotMatch(ui,/localStorage|sessionStorage/);
   assert.match(ui,/visibilitychange/);assert.match(ui,/controller\?\.abort/);
   const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');assert.equal(server.split('...DATA_IMPORT_PERMISSION_CATALOG').length-1,2);
-  assert.match(server,/createDataImportRuntime\(\{[^}]*allowApply: false/);assert.match(server,/refreshSession: \(request\) => loadPortalSessionFromRequest\(request, \{ touch: false \}\)/);
+  assert.match(server,/createDataImportRuntime\(\{[^}]*allowApply: true, sharedPayloads: true/);assert.match(server,/refreshSession: \(request\) => loadPortalSessionFromRequest\(request, \{ touch: false \}\)/);
 });
 
 test('compact cash preview shows full history and value verification without unsupported row undo or audit actions',()=>{

@@ -69,6 +69,7 @@ test("Präzise deutsche Suchen, Abkürzungen und Fachbegriffe liefern das richti
     ["KV", "personnel.collective-agreements"],
     ["TradeFoto PDF", "sales.report-import"],
     ["DB Sicherung", "settings.database-backups"],
+    ["ACCDB", "settings.database-imports"],
     ["persoenliche begruessungen", "settings.greetings"],
     ["mobile Leitung", "settings.mobile-leadership"],
     ["Lohnverrechnung Export", "settings.payroll-export"],

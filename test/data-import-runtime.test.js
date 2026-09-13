@@ -41,13 +41,112 @@ async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}) 
   },readerFactory:readerFactory(kind,values,counts)});
   const options={access:app.provider,vault:keyVault,allowApply,readSource,clock:()=>TIME};
   let runtime=createDataImportRuntime(options);
-  const upload=()=>runtime.upload(getSession,{buffer:sourceBuffer(),kind});
+  const upload=(buffer=sourceBuffer())=>runtime.upload(getSession,{buffer,kind});
   const reload=()=>{runtime=createDataImportRuntime(options);return runtime;};
   async function finish(source,action) {let n=0;do {source=await runtime.sourceOperation(getSession,source.id,action,{expectedRevision:source.revision});
     if(++n>700)throw new Error('Synthetic loop did not terminate');}while(source.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));return source;}
   t.after(async()=>{await app.provider.close();app.database.close();});
   return {...app,state,getSession,keyVault,options,upload,reload,finish,get runtime(){return runtime;}};
 }
+
+test('Bestell: full staged source, exact values, replay, changed snapshot and undo preserve the prior version',async t=>{
+  const B=require('../lib/tradefoto-bestell/profiles');
+  const {createImportHistoryService}=require('../lib/persistence/repositories/import-history');
+  const raw={...Object.fromEntries(B.tableFor('Reparatur').columns.map(c=>[c.name,null])),
+    ReparaturNr:17,FilialId:'018',Anlegedatum:new Date('2026-01-03T09:15:00Z'),
+    AName:'Synthetic camera',Fehler:'Private synthetic memo\u0001'.repeat(200),EK_Netto:123.456789,erledigt:false};
+  const values={Reparatur:[raw]};
+  const f=await fixture(t,{kind:'bestell',values});
+  f.options.sharedPayloads=true;f.reload();
+  let source=await f.upload();
+  assert.equal(source.kind,'bestell');assert.equal(source.tables.length,21);
+  assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_records').get().n,0);
+  source=await f.finish(source,'review');assert.equal(source.status,'ready');
+  source=await f.finish(source,'apply');assert.equal(source.status,'applied');
+  const record=f.database.prepare('SELECT * FROM import_history_records').get();
+  assert.equal(record.source_instance,'tradefoto-bestell');assert.equal(record.source,'trade');
+  assert.equal(f.database.prepare("SELECT count(*) n FROM import_history_records WHERE source='cash'").get().n,0);
+  const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+  t.after(()=>protection.destroy());
+  const service=createImportHistoryService({access:f.provider,protection,getActor:()=>({scopeId:'grabenplaner-main',ownerId:'synthetic-1'}),authorize:()=>true});
+  const before=await service.detail(record.id);
+  assert.equal(before.fields.FilialId,'018');assert.equal(before.fields.EK_Netto,'123.456789');
+  assert.equal(before.fields.Anlegedatum,'2026-01-03T09:15:00.000');assert.equal(before.fields.Fehler,raw.Fehler);
+  assert.ok(f.database.prepare('SELECT count(*) n FROM data_import_payload_blocks').get().n>0);
+  assert.ok(f.database.prepare('SELECT payload FROM import_history_segments').all().every(r=>!r.payload.includes('Private synthetic')));
+  f.reload();assert.equal((await f.upload()).id,source.id);
+  assert.equal((await service.detail(record.id)).revision,1);
+  const changed=sourceBuffer();changed[4095]=1;raw.erledigt=true;
+  let next=await f.upload(changed);assert.notEqual(next.id,source.id);
+  next=await f.finish(next,'review');next=await f.finish(next,'apply');
+  assert.equal((await service.detail(record.id)).fields.erledigt,true);
+  next=await f.finish(next,'undo');assert.equal(next.status,'reverted');
+  assert.deepEqual((await service.detail(record.id)).fields,before.fields);
+});
+
+test('Bestell: excluded tables are never opened and an incomplete source cannot be activated',async t=>{
+  const {EXCLUDED_TABLES}=require('../lib/tradefoto-full-import-source');
+  const defs=definitions('bestell'),opened=[];
+  const reader=readerFactory('bestell')();
+  await readTradeFotoFullSource({buffer:sourceBuffer(),kind:'bestell',send:()=>{},readerFactory:()=>({
+    getTableNames:()=>[...defs.map(d=>d.name),...EXCLUDED_TABLES.bestell],
+    getTable:name=>{opened.push(name);return reader.getTable(name);}})});
+  assert.deepEqual(opened.filter(name=>EXCLUDED_TABLES.bestell.includes(name)),[]);
+  assert.ok(EXCLUDED_TABLES.bestell.includes('Kasse_Zeiterfassung'));
+  const f=await fixture(t,{kind:'bestell',counts:{BESTELLUNGEN:1}});
+  let source=await f.upload();source=await f.finish(source,'review');
+  assert.equal(source.status,'needs_review');
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'apply',{expectedRevision:source.revision}),code('IMPORT_DECISION_GATE'));
+  assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_records').get().n,0);
+});
+
+test('Bestell: repairs missing from later exports remain readable and reappear under the same branch-specific identity',async t=>{
+  const B=require('../lib/tradefoto-bestell/profiles');
+  const {createImportHistoryService}=require('../lib/persistence/repositories/import-history');
+  const raw=(branch,extra={})=>({...Object.fromEntries(B.tableFor('Reparatur').columns.map(c=>[c.name,null])),
+    ReparaturNr:17,FilialId:branch,Anlegedatum:new Date('2026-01-03T09:15:00Z'),
+    AName:'Synthetic camera',erledigt:true,...extra});
+  const repair18=raw('018'),repair05=raw('005',{erledigt:false});
+  const values={Reparatur:[repair18,repair05]},f=await fixture(t,{kind:'bestell',values});
+  f.options.sharedPayloads=true;f.reload();
+  async function importVersion(marker) {
+    const bytes=sourceBuffer();bytes[4095]=marker;
+    let source=await f.upload(bytes);source=await f.finish(source,'review');
+    assert.equal(source.status,'ready');source=await f.finish(source,'apply');
+    assert.equal(source.status,'applied');return source;
+  }
+  await importVersion(1);
+  const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+  t.after(()=>protection.destroy());
+  const service=createImportHistoryService({access:f.provider,protection,
+    getActor:()=>({scopeId:'grabenplaner-main',ownerId:'synthetic-1'}),authorize:()=>true});
+  const list=()=>service.list({source:'trade',table:'Reparatur',sourceInstance:'tradefoto-bestell'});
+  const original=(await list()).items;
+  assert.equal(original.length,2);assert.notEqual(original[0].id,original[1].id);
+  const before18=original.find(r=>r.fields.FilialId==='018'),before05=original.find(r=>r.fields.FilialId==='005');
+
+  values.Reparatur=[repair05];await importVersion(2);f.reload();
+  assert.equal((await list()).items.length,2);
+  assert.deepEqual(await service.detail(before18.id),before18);
+  // Even an otherwise valid export with an empty repair table is not deletion
+  // authority. The archived case retains its own original source provenance.
+  values.Reparatur=[];await importVersion(3);
+  assert.equal((await list()).items.length,2);
+  assert.deepEqual(await service.detail(before18.id),before18);
+  assert.deepEqual(await service.detail(before05.id),before05);
+
+  values.Reparatur=[{...repair18,Fehler:'Synthetic later source correction'}];
+  await importVersion(4);
+  const after=await service.detail(before18.id);
+  assert.equal(after.id,before18.id);assert.equal(after.revision,2);
+  assert.equal(after.fields.Fehler,'Synthetic later source correction');
+  assert.equal(after.fields.erledigt,true);
+  // TradeRepair's flag never invents collection or payment dates in the GP.
+  for(const field of ['AbzuholenDatum','AbgeholtDatum','Bezahlt_Datum'])assert.equal(after.fields[field],null);
+  assert.deepEqual((await service.detail(before18.id,{revision:1})).fields,before18.fields);
+  assert.deepEqual(await service.detail(before05.id),before05);
+  assert.equal((await list()).items.length,2);
+});
 test('Q01: managed source persists accepted counts and audit across restart without activating closed targets',async t=>{
   const f=await fixture(t,{allowApply:false,values:{KUNDEN:[rawMaster('KUNDEN',{KUND_NR:'test-customer'})]},counts:{KUNDEN:2}});
   const profile=M.profileFor('KUNDEN');

@@ -32,9 +32,11 @@ test('receipt prices use exact signed source amounts independently of payment or
   assert.equal(Lines.money('19.54'), '19,54'); assert.equal(Lines.money('0'), '0,00');
   const html = UI.renderDetail(receipt([row('voucher', '252', { quantity: '-4', sourcePrice: '100', gross: '0', status: 'payment' }),
     row('issued', '252', { quantity: '2', sourcePrice: '10', gross: '0', status: 'voucher_issue' }),
+    row('deposit', '252', { quantity: '-1', sourcePrice: '300', gross: '-300', status: 'deposit' }),
     row('open', '252', { quantity: '2', sourcePrice: '75', gross: null, status: 'review' })]));
   assert.match(html, /-400,00/); assert.match(html, /150,00/); assert.match(html, /Zahlungsmittel/); assert.match(html, /Prüfung offen/);
   assert.match(html, /20,00/); assert.match(html, /Gutscheinausgabe · kein Warenumsatz/);
+  assert.match(html, /-300,00/); assert.match(html, /Anzahlung \/ Verrechnung · ohne Rohertrag/);
 });
 
 test('five-column receipt groups preserve staff and per-staff source order without inventing a header-seller fallback', () => {
