@@ -99,12 +99,13 @@ caddyfile="$(gp_existing_file "$caddyfile" "Caddyfile")"
 failures=0
 check_ok() { printf 'OK\t%s\t%s\n' "$1" "$2"; }
 check_fail() { printf 'FEHLER\t%s\t%s\n' "$1" "$2"; failures=$((failures + 1)); }
+postgresql_contract_ok=0
 if [[ "${DB_PROVIDER:-sqlite}" == postgresql ]]; then
   if "$node" "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$app_dir" >/dev/null \
     && systemctl is-active --quiet grabenplaner-postgresql.service \
     && systemctl is-active --quiet grabenplaner-postgresql-control.socket; then
-    check_ok 'PostgreSQL-Dienstvertrag' 'Datenbankpaar und Wartungssteuerung aktiv'
-  else check_fail 'PostgreSQL-Dienstvertrag' 'Dienstvertrag, Datenbank oder Wartungssteuerung unvollstaendig'; fi
+    postgresql_contract_ok=1
+  fi
 fi
 csp_has_exact_directive() {
   local policy="$1"
@@ -198,10 +199,13 @@ fi
 
 if [[ "$database_provider" == postgresql ]]; then
   postgresql_helper="$app_dir/server-tools/linux/lib/postgresql-operations.js"
-  if "$node" "$postgresql_helper" identity /etc/grabenplaner/postgresql-operations.json >/dev/null \
+  # The status protocol has one database slot. Include the service contract in
+  # that result so the monitor rejects failures without an unknown extra row.
+  if (( postgresql_contract_ok == 1 )) \
+    && "$node" "$postgresql_helper" identity /etc/grabenplaner/postgresql-operations.json >/dev/null \
     && "$node" "$postgresql_helper" connection-health /etc/grabenplaner/postgresql-operations.json >/dev/null; then
-    check_ok 'PostgreSQL Core/Sales' 'Datenbankpaar, Strukturen und Verbindungszustand geprueft'
-  else check_fail 'PostgreSQL Core/Sales' 'Paar- oder Strukturpruefung fehlgeschlagen'; fi
+    check_ok 'PostgreSQL Core/Sales' 'Dienstvertrag, Datenbankpaar, Strukturen und Verbindungszustand geprueft'
+  else check_fail 'PostgreSQL Core/Sales' 'Dienstvertrag, Paar- oder Strukturpruefung fehlgeschlagen'; fi
   postgresql_probe_mode=full
   if [[ "${short_checks:-0}" == 1 ]]; then postgresql_probe_mode=short; fi
   if "$node" "$postgresql_helper" backup-probe /etc/grabenplaner/postgresql-operations.json "$postgresql_probe_mode" "$maximum_backup_age_hours" >/dev/null; then
