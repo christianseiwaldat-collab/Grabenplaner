@@ -268,7 +268,7 @@ test('reviewed cash rules flow from an unchanged sealed publication through rece
   const { createCashPublications } = require('../lib/persistence/repositories/cash-publications');
   const publications = createCashPublications({ access: f.app.provider, protection: f.protection, scopeId: f.actor.scopeId });
   const publication = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
-  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 9);
+  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 10);
   const before = C.canonical(publication.row), runtime = f.history();
   const history = await runtime.run(f.get, w => w.search(f.query()));
   assert.equal(history.totals.gross, '1273.18'); assert.equal(history.coverage.counts.review, 0);
@@ -649,6 +649,51 @@ test('compact cash becomes usable through the normal history runtime with exact 
   assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM data_import_rows').get().n, 0);
   assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM cash_snapshot_6').get().n, 1);
 });
+test('personal report templates persist encrypted settings, isolate owners and reject stale writes or revoked rights', async t => {
+  const f = await fixture(t); await f.activate();
+  f.app.database.exec('CREATE TABLE portal_user_preferences(employee_number TEXT,preference_key TEXT,value TEXT,updated_at TEXT,PRIMARY KEY(employee_number,preference_key))');
+  f.session.permissions.push('sales:analytics:margin:read');
+  const runtime = f.history(), normalizeQuery = (session, input) => runtime.run(async () => session, w => w.reports.normalize(input));
+  const make = () => require('../lib/persistence/repositories/sales-report-templates').createSalesReportTemplates({ access: f.app.provider, vault: f.vault, scope: f.actor.scopeId, normalizeQuery });
+  const input = { title: '(Monat) (Jahr): Rohertrag nach MA', query: f.query({ reportVersion: 4, groupBy: ['seller'], metrics: ['grossMargin'], sellerIds: ['person-a'] }),
+    presentation: { periodMode: 'year', comparisonMode: 'year', comparisonCustom: false } };
+  const first = await make().save(f.session, input), stored = f.app.database.prepare('SELECT value FROM portal_user_preferences').get().value;
+  assert.doesNotMatch(stored, /Rohertrag|person-a|2010/);
+  const loaded = await make().get(f.session, first.id);
+  assert.equal(loaded.title, input.title); assert.deepEqual(loaded.presentation, input.presentation); assert.equal(loaded.query.reportVersion, 4);
+  assert.equal((await make().list({ ...f.session, employeeNumber: 'another-user' })).length, 0);
+  await assert.rejects(make().get({ ...f.session, employeeNumber: 'another-user' }, first.id), code('IMPORT_HISTORY_NOT_FOUND'));
+  const updated = await make().save(f.session, { ...input, title: 'Angepasste Vorlage', revision: first.revision }, first.id);
+  assert.equal(updated.revision, 2); assert.equal((await make().list(f.session)).length, 1);
+  await assert.rejects(make().save(f.session, { ...input, revision: first.revision }, first.id), code('IMPORT_REVISION_CONFLICT'));
+  await assert.rejects(make().remove(f.session, first.id, { revision: first.revision }), code('IMPORT_REVISION_CONFLICT'));
+  const revoked = { ...f.session, permissions: f.session.permissions.filter(p => p !== 'sales:analytics:margin:read') };
+  await assert.rejects(make().get(revoked, first.id), code('IMPORT_FORBIDDEN'));
+  assert.equal((await make().get(f.session, first.id)).title, 'Angepasste Vorlage');
+  await make().remove(f.session, first.id, { revision: 2 }); assert.deepEqual(await make().list(f.session), []);
+  assert.equal(f.app.database.prepare('SELECT count(*) n FROM sales_report_jobs').get().n, 0, 'saving templates never enqueues a report');
+});
+
+test('timeline report jobs use the historical dates, complete without a comparison scan and persist a protected PDF', async t => {
+  const f = await fixture(t), data = rows({ count: 2 });
+  data.Umsatz_Kasse_Details.forEach((r, i) => { r.Sortiment = i ? 132 : 130; r.RohertragDM = '2'; });
+  const id = await f.build(data); await f.activate(f.request(id)); f.session.permissions.push('sales:analytics:margin:read');
+  const runtime = f.history(), input = f.query({ reportVersion: 4, groupBy: [], chartType: 'timeline', timeGrain: 'month', metrics: ['grossMargin'], chartMetric: 'grossMargin', orientation: 'landscape' });
+  const metadata = await runtime.run(f.get, w => w.reports.metadata());
+  metadata.productGroups = [{ id: '130', label: 'Kameras', category: '13' }, { id: '132', label: 'Andere', category: '14' }];
+  metadata.merchandiseGroups = [{ id: '13', label: 'Fotografie' }, { id: '14', label: 'Zubehör' }];
+  const selected = await runtime.run(f.get, w => w.reports.step({ ...input, merchandiseGroupIds: ['13'] }, metadata));
+  assert.equal(selected.analysis.complete, true); assert.equal(selected.report.coverage.comparison.sourceRecords, 0);
+  assert.equal(selected.report.timeline.series[0].points[0].value, '2.00'); assert.equal(selected.report.total.metrics.grossMargin.current, '2.00');
+  assert.equal(selected.report.timeline.series[0].points[1].value, null);
+  const jobs = require('../lib/persistence/repositories/sales-report-jobs').createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: '(Monat) (Jahr): Grafik', query: input });
+  assert.equal(job.title, 'Jänner 2010: Grafik'); await jobs.tick();
+  assert.equal((await jobs.list(f.session))[0].status, 'completed');
+  const text = await reportPdfText(await jobs.download(f.session, job.id));
+  assert.match(text, /Jänner 2010/); assert.match(text, /Auswahl und Datenstand/); assert.match(text, /Grafiken/);
+});
+
 test('compact cash completes a multi-batch period and paging never counts sales twice', async t => {
   const f = await fixture(t, { count: 205 }); await f.activate(); const runtime = f.history();
   let result = await runtime.run(f.get, w => w.search(f.query())); assert.equal(result.totals, null); assert.equal(result.analysis.processed, 200);

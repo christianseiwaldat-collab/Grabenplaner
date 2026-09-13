@@ -31,7 +31,7 @@ function report(rows, result) {
 
 test('effective cash rules preserve the sealed source contract and unrelated policies', () => {
   const old = original(), before = C.canonical(old), current = resolveCashSalesPolicy(old);
-  assert.equal(C.canonical(old), before); assert.equal(old.version, 1); assert.equal(current.version, 9);
+  assert.equal(C.canonical(old), before); assert.equal(old.version, 1); assert.equal(current.version, 10);
   assert.equal(current.id, 'cash-confirmed-20260911');
   assert.notEqual(current.fingerprint, old.fingerprint);
   assert.equal(resolveCashSalesPolicy(current), current);
@@ -198,6 +198,38 @@ test('a confirmed net header applies only to the complete unchanged receipt sour
   assert.equal(reconcile(head('864'), rows, { policy: known }).reconciliation.headerBasis, 'gross');
 });
 
+test('confirmed net heads preserve gross positions and cash margins across line rounding and Access precision', () => {
+  const examples = [
+    { amount: '753.25', gross: '903.90', net: '753.25', margin: '119.08', items: [
+      ['69.900000000000', '25.008832000000005'], ['799.000000000000', '85.45842840266926'], ['35.000000000000', '8.609538765432099']
+    ] },
+    { amount: '790.8333129882812', gross: '949.00', net: '790.83', margin: '219.80', items: [
+      ['949.000000000000', '219.80368333333342']
+    ] }
+  ];
+  for (const example of examples) {
+    const h = head(example.amount), rows = example.items.map(([price, margin], i) => line(i + 1, {
+      VK_Preis: price, RohertragDM: margin, DEK_A: null
+    })), before = C.canonical([h, rows]), proof = coverage(h, rows);
+    const { fingerprint, ...definition } = policy();
+    const confirmed = R.defineTradeFotoSalesPolicy({ ...definition, headerBasisOverrides: [
+      ...definition.headerBasisOverrides, { receiptFingerprint: C.fingerprint([proof.headHash, proof.lineHashes]), basis: 'net' }
+    ] });
+    const checked = reconcile(h, rows, { policy: confirmed }), totals = report(rows, checked);
+    assert.equal(checked.canAggregate, true); assert.deepEqual(checked.issues, []);
+    assert.equal(checked.reconciliation.headerBasis, 'net'); assert.equal(checked.reconciliation.difference, '0.00');
+    assert.equal(checked.totals.gross, example.gross); assert.equal(checked.totals.net, example.net);
+    assert.equal(totals.total.metrics.grossMargin.current, example.margin);
+    assert.equal(totals.total.metrics.receiptCount.current, '1'); assert.equal(totals.coverage.current.review, 0);
+    assert.equal(C.canonical([h, rows]), before, 'the full source and historical unit margins remain unchanged');
+    assert.equal(reconcile(h, rows).canAggregate, false, 'matching net arithmetic does not approve another source');
+    assert.equal(reconcile(h, rows, { policy: confirmed, coverage: null }).canAggregate, false);
+    const changed = reconcile(h, rows.map((row, i) => i ? row : { ...row, RohertragDM: '999' }), { policy: confirmed });
+    assert.equal(changed.canAggregate, false, 'an altered cash margin no longer matches the approved source');
+    assert.equal(changed.reconciliation.headerBasis, 'gross');
+  }
+});
+
 test('instant prints use the booked unit price including tiers without a second discount or an EK lookup', () => {
   for (const [quantity, price, unitMargin, gross, net, margin] of [
     ['4', '0.89', '0.5191666666666667', '3.56', '2.97', '2.08'],
@@ -271,7 +303,7 @@ test('HD processing retains sales and cash margin while a net head requires the 
   assert.equal(open.totals, null); assert.equal(open.positions, null, 'all receipt values stay gated by the unconfirmed head');
   const uidHead = head('623.8250122070312'), uidCoverage = coverage(uidHead, rows);
   const { fingerprint, ...definition } = policy();
-  assert.equal(definition.headerBasisOverrides.length, 3, 'only the three individually confirmed real receipt sources are configured');
+  assert.equal(definition.headerBasisOverrides.length, 5, 'only the five individually confirmed real receipt sources are configured');
   const confirmedNet = R.defineTradeFotoSalesPolicy({ ...definition, headerBasisOverrides: [...definition.headerBasisOverrides,
     { receiptFingerprint: C.fingerprint([uidCoverage.headHash, uidCoverage.lineHashes]), basis: 'net' }] });
   const before = C.canonical([uidHead, rows]);

@@ -394,13 +394,14 @@ function csrf() {
 }
 
 async function api(url, options = {}) {
+  const { responseType, ...fetchOptions } = options;
   const formData = options.body instanceof FormData;
   const headers = { ...(formData ? {} : { "Content-Type": "application/json" }), ...options.headers };
   const token = csrf();
   if (token && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) headers["X-CSRF-Token"] = token;
   let response;
   try {
-    response = await fetch(url, { ...options, headers });
+    response = await fetch(url, { ...fetchOptions, headers });
   } catch (error) {
     throw window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname });
   }
@@ -415,7 +416,27 @@ async function api(url, options = {}) {
     if (response.status === 401) showLogin("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
-  return response.status === 204 ? null : response.json();
+  return response.status === 204 ? null : responseType === "blob" ? response.blob() : response.json();
+}
+
+const branchSalesWorkspaces = new Map();
+function resetBranchSalesWorkspaces() {
+  for (const workspace of branchSalesWorkspaces.values()) workspace.destroy();
+  branchSalesWorkspaces.clear();
+}
+function syncBranchSalesWorkspaces(tab = null) {
+  for (const [name, kind] of [["branchArticles", "articles"], ["branchReceipts", "receipts"]]) {
+    const permitted = portalTabAllowed(name);
+    document.getElementById(name + "Tab")?.classList.toggle("hidden", !permitted);
+    if (!permitted) { branchSalesWorkspaces.get(name)?.destroy(); branchSalesWorkspaces.delete(name); }
+    const active = permitted && tab === name;
+    document.getElementById(name + "View")?.classList.toggle("active", active);
+    if (active) {
+      if (!branchSalesWorkspaces.has(name)) branchSalesWorkspaces.set(name, window.GrabenplanerBranchSales.mount(
+        document.getElementById(name + "Workspace"), { kind, api, getUser: portalUser, lineFormat: window.GrabenplanerReceiptLineFormat }));
+      void branchSalesWorkspaces.get(name).load();
+    } else branchSalesWorkspaces.get(name)?.suspend();
+  }
 }
 
 const birthdayPresentationPaths = Object.freeze({
@@ -866,6 +887,7 @@ function mobileModuleAllowed(module, permissions = portalUser()?.permissions || 
 
 function portalTabAllowed(tab, user = portalUser()) {
   const permissions = user?.permissions || [];
+  if (["branchArticles", "branchReceipts"].includes(tab)) return window.GrabenplanerBranchSales?.allowed(tab, user) === true;
   if (tab === "home") return isMobileUi();
   if (tab === "settings") return true;
   const locationDisplayModule = mobileLocationDisplayTabModules[tab];
@@ -1080,7 +1102,7 @@ function applyMobileLeadershipLayout() {
       button.classList.add("hidden");
       button.classList.add("mobile-navigation-hidden");
     });
-    ["home", "schedule", "learningDashboard", "branchOrders", "loan", "branchVacation"]
+    ["home", "schedule", "branchArticles", "branchReceipts", "learningDashboard", "branchOrders", "loan", "branchVacation"]
       .filter((tab) => portalTabAllowed(tab))
       .forEach((tab, index) => {
         const button = document.querySelector(`[data-tab="${tab}"]`);
@@ -1094,7 +1116,7 @@ function applyMobileLeadershipLayout() {
     if (portalState.scheduleData) renderSchedule(portalState.scheduleData);
     return;
   }
-  const regularTabs = ["settings", "schedule", "branchVacation", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "amu"];
+  const regularTabs = ["settings", "schedule", "branchArticles", "branchReceipts", "branchVacation", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactMobile) {
     document.querySelectorAll("[data-tab]").forEach((button) => button.classList.remove("mobile-navigation-hidden"));
@@ -1480,7 +1502,7 @@ function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
   if (["leadershipTeam", "leadershipApprovals"].includes(tab) && !isLeadershipUser()) return "";
-  return ["home", "settings", "schedule", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "loan", "branchOrders", "branchVacation", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+  return ["home", "settings", "schedule", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "loan", "branchOrders", "branchArticles", "branchReceipts", "branchVacation", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
 const portalTabStorageKey = "grabenplaner.portal.active-tab";
@@ -2227,6 +2249,7 @@ function showLogin(error = "") {
   neutralizeBirthdayPresentationTheme();
   resetPersonalActionsState("");
   portalState.session = null;
+  resetBranchSalesWorkspaces();
   clearCandidateEvaluationState();
   portalState.personnelLearningDashboard = null;
   portalState.personnelLearningDashboardAvailable = false;
@@ -2244,6 +2267,7 @@ function showLogin(error = "") {
 }
 
 function applySelfServiceVisibility() {
+  syncBranchSalesWorkspaces(portalState.activeTab);
   const canCreatePrivacyRequest = hasPortalPermission("own_privacy_requests:create");
   const canReadPrivacyRequests = hasPortalPermission("own_privacy_requests:read");
   const canReadPrivacyExports = hasPortalPermission("own_privacy_export:read");
@@ -2319,6 +2343,7 @@ function populateVacationAccountYears() {
 }
 
 function showPortal(session) {
+  if (window.GrabenplanerBranchSales?.owner(portalUser()) !== window.GrabenplanerBranchSales?.owner(session?.user)) resetBranchSalesWorkspaces();
   const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
     || processTaskActorFingerprint(portalUser());
   const nextPersonalActionsActor = portalPersonalActionsActorKey(session?.user);
@@ -2557,6 +2582,7 @@ function setTab(tab) {
   if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
   const tabChanged = portalState.activeTab !== tab;
   portalState.activeTab = tab;
+  syncBranchSalesWorkspaces(tab);
   rememberPortalTab(tab);
   document.body.classList.toggle("portal-settings-active", tab === "settings" && isMobileUi());
   syncPortalTabButtons(tab);
@@ -3052,8 +3078,12 @@ function configureBranchOrderAutosave() {
 function mobileHomeTilesForCurrentAccount() {
   const user = portalUser();
   if (isOrganizationAccount(user)) {
-    return ["schedule", "learningDashboard", "branchOrders", "loan", "branchVacation"]
-      .map((tab) => mobileHomeTileCatalog.find((tile) => tile.tab === tab)
+    const branchTiles = [
+      { id: "branchArticles", tab: "branchArticles", label: "Artikelsuche", description: "Artikel, EAN und Verkaufspreise" },
+      { id: "branchReceipts", tab: "branchReceipts", label: "Belegsuche", description: "Belege der Filiale und PDF-Download" },
+    ];
+    return ["schedule", "branchArticles", "branchReceipts", "learningDashboard", "branchOrders", "loan", "branchVacation"]
+      .map((tab) => branchTiles.find(tile => tile.tab === tab) || mobileHomeTileCatalog.find((tile) => tile.tab === tab)
         || { id: tab, tab, label: tab === "schedule" ? "Dienstplan" : tab, description: "" })
       .filter((tile) => portalTabAllowed(tile.tab, user))
       .map((tile) => ({ ...tile, rgb: [...(mobileHomeDefaultColors[tile.id] || mobileHomeDefaultColors.schedule)] }));
