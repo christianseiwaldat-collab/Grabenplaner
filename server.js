@@ -10774,7 +10774,7 @@ function requirePortalAnyPermission(request, permissions) {
 }
 
 async function portalUsersForAdmin() {
-  return Promise.all((await organizationPersonnelRepository.listPortalUsersForAdmin()).map(async (row) => {
+  return persistenceAsyncCollections.map(await organizationPersonnelRepository.listPortalUsersForAdmin(), async (row) => {
     const role = row.role || "employee";
     const [
       grantedPermissions,
@@ -10836,7 +10836,7 @@ async function portalUsersForAdmin() {
       value: personnelLearningDenialAuthority || null,
     });
     return user;
-  }));
+  });
 }
 
 async function portalUsersForActor(actor) {
@@ -16743,21 +16743,21 @@ function locationPlannerProfileMatchesAmuReport(user, report) {
       || (report.department_id != null && Number(scope.departmentId) === Number(report.department_id))));
 }
 
-async function localAmuReviewerRecipients(report) {
+async function localAmuReviewerRecipients(report, users = null) {
   if (!report) return [];
-  const users = await portalUsersForAdmin();
-  const matches = await Promise.all(users.map(async (user) =>
+  users ??= await portalUsersForAdmin();
+  const matches = await persistenceAsyncCollections.map(users, async (user) =>
     managerProfileMatchesAmuReport(user, report)
       || await departmentManagerProfileMatchesAmuReport(user, report)
-      || locationPlannerProfileMatchesAmuReport(user, report)));
+      || locationPlannerProfileMatchesAmuReport(user, report));
   return users
     .filter((_user, index) => matches[index])
     .map((user) => user.employeeNumber)
     .filter((employeeNumber) => employeeNumber && employeeNumber !== report.employee_number);
 }
 
-async function resolveAmuResponsibilityForReport(report) {
-  const localReviewers = await localAmuReviewerRecipients(report);
+async function resolveAmuResponsibilityForReport(report, users = null) {
+  const localReviewers = await localAmuReviewerRecipients(report, users);
   if (localReviewers.length) {
     return {
       stage: "local",
@@ -55529,13 +55529,16 @@ app.get("/api/portal/v1/amu-reports", async (request, response) => {
   const rows = await sicknessAmuManagementRepository.listAllAmuReports({});
   const scopedRows = rows.filter((row) => sessionCanListAmuReport(session, row));
   const rowLookup = new Map(scopedRows.map((row) => [Number(row.id), row]));
-  const routingById = new Map(await Promise.all(scopedRows.map(async (row) => [
-    Number(row.id),
-    await resolveAmuResponsibilityForReport(row),
-  ])));
+  // Reuse rights only within this read response. Actions still resolve current
+  // authority independently; a large list must not flood the connection pool.
+  const users = scopedRows.length ? await portalUsersForAdmin() : [];
+  const routingById = new Map();
+  for (const row of scopedRows) {
+    routingById.set(Number(row.id), await resolveAmuResponsibilityForReport(row, users));
+  }
   const reports = (await serializeAmuReports(scopedRows, {
     includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session),
-    session,
+    // Capabilities below use the same routing instead of resolving it again.
   }))
     .map((report) => ({
       ...report,
