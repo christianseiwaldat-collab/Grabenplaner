@@ -1,10 +1,10 @@
 # Grabenplaner Versions-Log
 
-## v0.92.39 Beta · Isolierte PostgreSQL-Wiederherstellungsprüfung (Kandidat)
+## v0.92.39 Beta · Isolierte PostgreSQL-Wiederherstellungsprüfung
 
 - Der PostgreSQL-Recovery-Dienst kann den geschützten Programmordner über dieselbe vorübergehende Prozessgruppe lesen wie die vorhandene SQLite-Prüfung. Das Dienstkonto erhält keine dauerhafte zusätzliche Gruppenmitgliedschaft.
 - Produktive Daten, Konfiguration, Sicherungen und Wartungssockets bleiben innerhalb der getrennten Prüfumgebung ausdrücklich unzugänglich. Nur das eigene Wiederherstellungsverzeichnis ist beschreibbar.
-- Der Hotfix behebt den beim produktiven Offsite-Abnahmelauf gefundenen Startfehler der Prüfinstanz. Der laufende GP und die erfolgreich übernommenen PostgreSQL-Datenbanken bleiben maßgeblich; der endgültige Betriebsnachweis folgt in [Block 12](docs/postgresql-migration/BLOCK-12-PRODUCTION.md).
+- Der Hotfix behebt den beim produktiven Offsite-Abnahmelauf gefundenen Startfehler der Prüfinstanz. Der laufende GP und die erfolgreich übernommenen PostgreSQL-Datenbanken bleiben maßgeblich; der vollständige produktive Sicherungs-/Wiederherstellungs- und App-/PDF-Nachweis ist bestätigt in [Block 12](docs/postgresql-migration/BLOCK-12-PRODUCTION.md).
 
 ## v0.92.38 Beta · Zwei PostgreSQL-Datenbanken für GP und Verkaufsdaten
 
