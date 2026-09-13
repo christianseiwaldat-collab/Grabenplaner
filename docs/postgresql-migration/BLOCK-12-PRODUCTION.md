@@ -1,6 +1,6 @@
 # Block 12: Produktivumstellung am 13.09.2026
 
-Die Freigabe „Bitte Block 12 loslegen“ umfasst den vorbereiteten Release und die Umstellung auf zwei PostgreSQL-Datenbanken. **v0.92.39-beta ist produktiv installiert; der GP verwendet seit 13.09.2026, 11:38:23 UTC PostgreSQL.** Alle 248 Quelltabellen mit 2.887.718 Zeilen wurden übernommen und vollständig verglichen. Geschützte Daten, gemeinsame Sicherungen, vollständige externe Wiederherstellung und Anwendungstests einschließlich PDF-Bericht sind bestätigt. **Offen bleibt ausschließlich die angemeldete produktive Bedienabnahme**, weil die vorhandene Chrome-Sitzung abgelaufen ist.
+Die Freigabe „Bitte Block 12 loslegen“ umfasst den vorbereiteten Release und die Umstellung auf zwei PostgreSQL-Datenbanken. **Block 12 ist abgeschlossen; v0.92.42-beta ist produktiv installiert.** Der GP verwendet seit 13.09.2026, 11:38:23 UTC PostgreSQL. Alle 248 Quelltabellen mit 2.887.718 Zeilen wurden übernommen und vollständig verglichen. Geschützte Daten, gemeinsame Sicherungen, vollständige externe Wiederherstellung einschließlich Anwendung/PDF und die angemeldete Bedienabnahme sind bestätigt. Der Benutzer bestätigt den manuellen PDF-Download in Chrome; die Einschränkung der automatisierten Bedienung wird nicht als GP-Fehler geführt.
 
 ## Veröffentlichung
 
@@ -34,9 +34,13 @@ Vier interne/öffentliche Live-/Ready-Abfragen antworteten mit HTTP 200. Drei ge
 
 Die erste Sicherung umfasst beide Datenbanken und 72 gebundene Komponenten. Ihr Manifest-SHA-256 lautet `1a0cf07ccc0b9cf270deeb70eef8028d4b165a677a3ed3d3509b35b69c89c9a9`. Die Erstellung dauerte 70,8 Sekunden. Die anschließende kurze GP-Betriebsprüfung und der vollständige Offsite-Selbsttest liefen nacheinander und endeten um 11:41:25 UTC erfolgreich.
 
-## Offene Bedienabnahme
+## Angemeldete Bedienabnahme
 
-Offen ist die angemeldete produktive Prüfung von Dienstplan, Zeiten, Rechten, CRM, Artikelstamm, Kassenbelegen und einer begrenzten PDF-Auswertung. Die vorgefundene Chrome-Sitzung ist abgelaufen; die Bitte um erneute Anmeldung blieb unbeantwortet. Es wurden weder Anmeldedaten ausgelesen noch Ersatzberechtigungen oder Testkonten in der Produktion eingerichtet. Die technischen und isolierten Anwendungstests sind vollständig bestätigt; sie werden von dieser noch offenen Bedienprüfung unterschieden.
+Nach der erneuten Anmeldung durch den Benutzer wurden Dienstplan, Zeitübersicht, AUM-Liste, Rechtestandards, CRM-Suche, Artikelstamm und ein Kassenbeleg geprüft. Der Artikelstamm zeigt die getrennten Filial-/Internetpreise und seine begrenzte Ergebnisliste. Belegansicht und heruntergeladenes Beleg-PDF verwenden die gewünschte Spaltenfolge und fett gesetzte Personalnummern über den zugehörigen Positionen. Benutzerrechte, Personal-, Kunden- und Artikeldaten wurden dabei nicht verändert; es wurden keine Testkonten oder Ersatzberechtigungen eingerichtet.
+
+Ein begrenzter Sony-Bericht für Grabenweg 18, Januar 2026 gegen Januar 2025, wurde über die angemeldete Oberfläche angelegt. Der Hintergrundauftrag `2919d157-3bc2-4c49-a24d-a010fa26c10d` verarbeitete 2.239 Positionen und wurde um 14:27:30 UTC abgeschlossen. Die fünf vorhandenen Berichte blieben erhalten. Alle sieben Seiten des Original-PDF wurden gerendert und visuell geprüft: Kassen-Rohertrag, Warengruppen und Balkendiagramm sind vorhanden und lesbar. Zwei ungeklärte Positionen in den Gruppen Systemkameras/Sony und Akkus/Sony bleiben erkennbar; die ausgewiesenen Teilwerte werden nicht als vollständige Finanzsummen ausgegeben.
+
+**Der Benutzer bestätigt den erfolgreichen manuellen PDF-Download in Chrome.** `ERR_BLOCKED_BY_CLIENT` tritt ausschließlich bei der automatisierten Bedienung auf und wird nicht als GP-Fehler gewertet. Der Download-Endpunkt lieferte vor und nach der expliziten Download-Erlaubnis im PDF-Header HTTP 200 und dieselben 35.728 Bytes. Die Headeränderung ist deshalb kein Nachweis eines zuvor defekten manuellen Downloads. Ein weiterer Downloadtest durch den Benutzer ist nicht offen. Die einzelnen Beobachtungen stehen im [Bediennachweis](block-12-authenticated-ui-verification.json).
 
 ## Geprüfte Recovery-Korrektur
 
@@ -51,7 +55,7 @@ Damit die reguläre Aktualisierung einen echten erfolgreichen Restore-Status vor
 Ab der Veröffentlichung von `authority.json` bleibt PostgreSQL maßgeblich. Ein nachfolgender Fehler rechtfertigt keinen Rückfall auf den inzwischen veralteten SQLite-Stand. Die gemeinsamen Wiederherstellungsregeln aus [Block 12](BLOCK-12.md) gelten weiterhin.
 
 
-## Endgültiger Release und Wiederherstellungsnachweis
+## Recovery-Release v0.92.39 und erster vollständiger Wiederherstellungsnachweis
 
 v0.92.39-beta, Commit `bd79bf67ebb90932543b0512ce316c599edfe137`, wurde um 12:53:20 UTC über den regulären vollständigen Updater installiert. Das bestätigte Paket änderte gegenüber v0.92.38 ausschließlich den Recovery-Controller sowie README, Paketversion und UI-Versionsanzeige; alle übrigen Laufzeitdateien blieben bytegleich. Die Dateiprüfung bestätigte sämtliche 646 Manifestdateien. Offsite-Modul 9 und seine Providerbindung blieben erhalten.
 
@@ -74,3 +78,22 @@ Der aktuelle PostgreSQL-Deploynachweis ist an beide Datenbanken, Konfiguration, 
 Die Nachweise und Releasepakete liegen dauerhaft geschützt unter `/var/lib/grabenplaner-assurance/maintenance-evidence/pg12-20260913`. Beide eigenen Installationsbereiche, ihre Uploadverzeichnisse, temporäre Credential-Kopien und die geprüfte Kopie des ersten fehlgeschlagenen Restores wurden nach Pfad-, Eigentums-, Stillstands- und Inhaltsprüfung entfernt. Die beiden eigenen lokalen Paketierungs-Worktrees wurden ebenfalls nach sauberem HEAD-/Statusnachweis entfernt. Originale SQLite-Daten, finale Migrationsquellen, Qualifikationsnachweise und reguläre Sicherungen bleiben erhalten; `output/` wurde nicht verändert.
 
 Vier ausschließlich in diesem Auftrag angelegte fehlgeschlagene Hilfs-/Vorläuferjobs wurden nach dokumentiertem erfolgreichem Folgelauf gezielt quittiert. Journale und Migrationsbelege bleiben erhalten. Andere gespeicherte Host-/Systemfehler wurden nicht pauschal zurückgesetzt. SSH, Tailscale, Firewall, fremde Projekte und Ubuntu-Boot blieben unverändert.
+
+
+## Abschluss nach der angemeldeten Prüfung
+
+Die AUM-Liste verursachte beim parallelen wiederholten Auflösen der Benutzerrechte zu viele gleichzeitige Abfragen. v0.92.40 liest die Rechte einmal pro Listenaufruf, bestimmt die Zuständigkeit einmal pro sichtbarem Fall und begrenzt die Gleichzeitigkeit. Neue Anfragen und einzelne Aktionen lesen weiterhin aktuelle Rechte. Die Zeitübersicht und die AUM-Liste bestanden danach die angemeldete Nachprüfung. Antwortzeiten bleiben teilweise im Sekundenbereich; diese Abnahme behauptet keine vollständige Performanceoptimierung.
+
+Beim Monitor waren zwei getrennte Probleme sichtbar. Eine zusätzliche Ergebniszeile machte den strikt auf 24 Ergebnisse begrenzten Status unvollständig. Danach meldete der Kandidat v0.92.41 bereits kurze Pausen zwischen zwei Abfragen als Datenbankfehler. Der reguläre Updater kehrte um 15:33:18 UTC zum Programmstand v0.92.40 zurück. Alle PostgreSQL-Schreibvorgänge blieben erhalten; ein Daten- oder SQLite-Rückfall fand nicht statt.
+
+v0.92.42 bündelt Dienstvertrag und Datenbankprüfung in das vorhandene Ergebnis. Bei Leerlauf zählt die Dauer des aktuellen Zustands: Ab fünf Sekunden, bei abgebrochenen Transaktionen oder Sperrwartezeiten wird weiterhin gewarnt. Fehlende oder widersprüchliche Zähler ergeben einen Fehler. Die PostgreSQL-Dokumentation unterscheidet [laufende, wartende und abgebrochene Transaktionszustände](https://www.postgresql.org/docs/18/monitoring-stats.html) und beschreibt die Risiken [lang anhaltender offener Leerlauftransaktionen](https://www.postgresql.org/docs/18/runtime-config-client.html#GUC-IDLE-IN-TRANSACTION-SESSION-TIMEOUT). Die Korrektur verändert keine Serverzeitlimits, Berechtigungen oder Daten; die aktuelle SQL-Probe und das tatsächliche Kandidatenwerkzeug wurden gegen beide produktiven Datenbanken lesend geprüft.
+
+42 gezielte Prüfungen und die Architekturprüfung sind bestanden. Die bestehenden AUM-/Rechte-, PDF-Routen-, Recovery- und Monitorprüfungen bleiben erhalten. Der Architekturprüfer erkennt außerdem den bereits vorhandenen Offsite-Installer ausdrücklich als berechtigten Leser der geschützten Providerkonfiguration; allgemeine Verstöße bleiben gesperrt.
+
+Der endgültige Release `0.92.42-beta`, Commit `e4cfbd6141a15c6a37f591787a34d5b3ec929de7`, ist durch alle 646 Manifestdateien bestätigt. Paket-SHA-256: `29d8a8f5f77f485c548a11b9d2da0e0200ce0c78e88cddecb2cebb11961e0aab`; Manifest-SHA-256: `a6420a3fb7f23851f921dec9e897a4b02d30c993ff8e1b6445fee27938c5850b`. Die nacheinander ausgeführten GP-/Offsite-Betriebsprüfungen endeten erfolgreich um `2026-09-13T16:01:02Z`.
+
+Der reguläre vollständige Assurance-Lauf `9efbce61-8587-4332-b24e-369e0f702d3e` bestätigt den endgültigen Programmstand und beide Datenbanken. Snapshot `52f88b4f9dad`, Wiederherstellungsbeleg-SHA-256 `b15e6d88fcfb24c7c9b4e358dd7307a0711d9b2b9a5bb417708df7b379388d5d`. Der signierte Gesamterfolg vom **13.09.2026, 16:20:37 UTC**, ist in [block-12-production-verification.json](block-12-production-verification.json) enthalten. Bestätigt sind 55 geschützte Dokumente und 113 geschützte Datensätze. Der vollständige isolierte Anwendungstest einschließlich Berichtserstellung mit 2.239 Positionen und PDF-Ausgabe mit 74.577 Bytes ist bestanden; Probeänderungen betrafen ausschließlich die wiederhergestellte Kopie.
+
+Die abschließende Prüfung bestätigt vier erfolgreiche interne/öffentliche Live-/Ready-Abfragen, den Schutz unangemeldeter Fachrouten, aktives Autovacuum und alle 24 Monitorergebnisse. Die Monitor-Neustartzeit ist gegenüber dem Beginn unverändert. Bootkennung, eigener PostgreSQL-Prozess, Caddy, Lebensatlas und dessen Datenbankprozess blieben erhalten. Für unveränderte technische Grundlagen ist der kurze Deploypfad erneut durch den aktuellen vollständigen Wiederherstellungsnachweis freigegeben.
+
+Die zusätzlichen Release-, Rücknahme- und Abschlussnachweise liegen geschützt unter `/var/lib/grabenplaner-assurance/maintenance-evidence/pg12-20260913/post-authenticated-acceptance-v09242`. Die drei eigenen v40/v41/v42-Installationsbereiche und Uploads wurden nach Eigentums-, Pfad-, Stillstands- und Hashprüfung entfernt. Auch die drei zugehörigen lokalen Paketierungs-Worktrees wurden nach sauberem Status- und Commitnachweis entfernt. Der fehlgeschlagene v41-Hilfsjob wurde erst nach erfolgreichem Nachfolger und Sicherung seiner Fehlernachweise gezielt quittiert. Ursprüngliche SQLite-Datei, Migrationsquellen, reguläre Sicherungen, fremde Dienste und `output/` bleiben erhalten.

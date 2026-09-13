@@ -1,7 +1,7 @@
 {
-  "version": 7,
-  "recordedAt": "2026-09-13T13:24:33.193308+00:00",
-  "scope": "two-database-migration-productive-and-recovery-verified-block-12-authenticated-ui-acceptance-pending",
+  "version": 8,
+  "recordedAt": "2026-09-13T16:25:28.823392+00:00",
+  "scope": "two-database-migration-productive-recovery-and-authenticated-acceptance-completed",
   "sourceCommit": "c6b8a112e79514f39bbd0ce9906c54f052e45e40",
   "sourceSchemaSha256": "c257f1eca574b9133038f4687f7acd5e74204f21c6ad5a70ad5803fe6c10cd03",
   "productActivation": true,
@@ -20,9 +20,10 @@
     8,
     9,
     10,
-    11
+    11,
+    12
   ],
-  "nextBlock": 12,
+  "nextBlock": null,
   "sourceOwnership": {
     "total": 248,
     "core": 194,
@@ -849,12 +850,12 @@
     "unresolvedLocalTestFailures": 0
   },
   "block12": {
-    "completed": false,
+    "completed": true,
     "implementationPrepared": true,
     "isolationQualificationPassed": true,
     "productActivation": true,
     "productCutoverPending": false,
-    "fullProductAcceptancePending": true,
+    "fullProductAcceptancePending": false,
     "maintenanceWindowMinutes": [
       30,
       45
@@ -865,7 +866,8 @@
       "block-12-activation-verification.json",
       "block-12-local-verification.json",
       "block-12-live-verification.json",
-      "block-12-production-verification.json"
+      "block-12-production-verification.json",
+      "block-12-authenticated-ui-verification.json"
     ],
     "productiveRecoveryApply": "supervised PostgreSQL procedure; legacy SQLite apply refuses a PostgreSQL pair",
     "maintenanceWindowQuestionPending": false,
@@ -874,13 +876,13 @@
     "productiveMigrationCompleted": true,
     "productionEvidence": "block-12-production-verification.json",
     "productiveRecoveryVerified": true,
-    "productionReleaseVersion": "0.92.39-beta",
-    "authenticatedProductAcceptancePending": true,
-    "remainingAcceptance": [
-      "Authenticated production UI checks; current Chrome session expired."
-    ],
-    "finalAssuranceRunId": "1903e4fb-6332-4948-8ae7-d013b5467f82",
-    "durableEvidence": "/var/lib/grabenplaner-assurance/maintenance-evidence/pg12-20260913"
+    "productionReleaseVersion": "0.92.42-beta",
+    "authenticatedProductAcceptancePending": false,
+    "remainingAcceptance": [],
+    "finalAssuranceRunId": "9efbce61-8587-4332-b24e-369e0f702d3e",
+    "durableEvidence": "/var/lib/grabenplaner-assurance/maintenance-evidence/pg12-20260913/post-authenticated-acceptance-v09242",
+    "all24MonitorChecksPassed": true,
+    "userManualPdfDownloadConfirmed": true
   },
-  "releaseCommit": "bd79bf67ebb90932543b0512ce316c599edfe137"
+  "releaseCommit": "e4cfbd6141a15c6a37f591787a34d5b3ec929de7"
 }

@@ -1,0 +1,118 @@
+{
+  "format": "grabenplaner-authenticated-production-acceptance-v1",
+  "date": "2026-09-13",
+  "completed": true,
+  "provider": "postgresql",
+  "testedApplicationVersions": ["0.92.39-beta", "0.92.40-beta"],
+  "browser": "Chrome",
+  "authentication": "Existing user session after the user signed in; no extracted credentials, replacement accounts or authentication bypass.",
+  "checks": {
+    "planning": {
+      "passed": true,
+      "branchId": "18",
+      "week": "2026-W37",
+      "displayedEmployees": 5,
+      "exportLinksKeepBranch": true
+    },
+    "timeOverview": {
+      "passed": true,
+      "branchId": "18",
+      "from": "2026-09-07",
+      "to": "2026-09-13",
+      "displayedEmployees": 5,
+      "existingTrackingConfigurationUnchanged": true
+    },
+    "aumList": {
+      "passed": true,
+      "branchId": "18",
+      "displayedAumCases": 6,
+      "medicalAttachmentsOpened": false,
+      "productionCaseActionsPerformed": false
+    },
+    "rights": {
+      "passed": true,
+      "roleAndPositionDefaultsDisplayed": true,
+      "developerFullAccessDisplayed": true,
+      "unchangedSaveDisabled": true,
+      "rightsModified": false
+    },
+    "crm": {
+      "passed": true,
+      "searchResultCount": 22,
+      "customerRecordsModified": false
+    },
+    "articles": {
+      "passed": true,
+      "query": "Sony A7",
+      "results": 65,
+      "loaded": 50,
+      "visibleRows": 10,
+      "visibleRowRange": [5, 20],
+      "detailArticleNumber": "087282",
+      "retailAndInternetPricesDisplayedSeparately": true,
+      "ownImageActionDisplayed": true,
+      "unconfirmedPurchasePriceExplicitlyUnavailable": true,
+      "articleRecordsModified": false
+    },
+    "cashReceipt": {
+      "passed": true,
+      "date": "2026-01-23",
+      "branchId": "18",
+      "cashRegister": "0",
+      "receiptNumber": "2",
+      "itemAndSeparateDiscountMatchConfirmedReceiptRule": true,
+      "columns": ["Menge", "Artikelnr.", "Bezeichnung", "Einzelpreis", "Gesamtpreis"],
+      "personnelNumberInSeparateBoldGroupRow": true,
+      "pdfDownloadPassed": true,
+      "pdfPages": 1,
+      "pdfBytes": 20968,
+      "renderedPagesVisuallyChecked": 1,
+      "customerDataExcludedFromCommittedEvidence": true
+    }
+  },
+  "salesReport": {
+    "passed": true,
+    "jobId": "2919d157-3bc2-4c49-a24d-a010fa26c10d",
+    "title": "PostgreSQL-Abnahme · Sony · Januar 2026",
+    "createdAt": "2026-09-13T14:26:46Z",
+    "completedAt": "2026-09-13T14:27:30Z",
+    "status": "completed",
+    "branchId": "18",
+    "manufacturer": "Sony",
+    "period": ["2026-01-01", "2026-01-31"],
+    "comparisonPeriod": ["2025-01-01", "2025-01-31"],
+    "processedPositions": 2239,
+    "existingReportsPreserved": 5,
+    "pdfBytes": 35728,
+    "pdfSha256": "b38788ada2698416c3aea16c92ff8d542fac429a2971cf9103705e8c5662e43d",
+    "pdfPages": 7,
+    "renderedPagesVisuallyChecked": 7,
+    "orientation": "portrait",
+    "chart": "Horizontal bars by merchandise group; 13 categories",
+    "rohertragSource": "Historical Kassa unit Rohertrag multiplied by signed quantity",
+    "verifiedNetRevenueDisplayed": true,
+    "verifiedKassaRohertragDisplayed": true,
+    "currentMatchingPositions": 40,
+    "currentUnverifiedPositions": 2,
+    "unverifiedGroups": ["Systemkameras / Sony", "Akkus / Sony"],
+    "unverifiedReason": "Receipt total / sales status requires business clarification",
+    "partialValuesMarked": true,
+    "uncertainOverallComparisonDeltasSuppressed": true,
+    "completeFinancialTotalsClaimed": false,
+    "manualChromeDownloadConfirmedByUser": true,
+    "automatedChromeDownload": {
+      "result": "ERR_BLOCKED_BY_CLIENT",
+      "classification": "Automation limitation, not a GP product defect",
+      "serverHttpStatusBeforeAndAfterHeaderChange": 200,
+      "serverBytesBeforeAndAfterHeaderChange": 35728,
+      "pdfDownloadBugClaimed": false,
+      "furtherUserDownloadTestRequired": false
+    }
+  },
+  "productionWrites": {
+    "reportsCreated": 1,
+    "businessRecordsEdited": false,
+    "testAccountsCreated": false
+  },
+  "scopeLimit": "Authenticated acceptance confirms these observed functions. It does not resolve the remaining business receipt questions or establish subsecond response times."
+}
