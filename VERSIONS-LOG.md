@@ -1,16 +1,23 @@
 # Grabenplaner Versions-Log
 
-## v0.92.41 Beta · Vollständiger PostgreSQL-Monitorstatus
+## v0.92.42 Beta · PostgreSQL-Prüfung unter laufender Nutzung
+
+- Kurze Pausen zwischen Abfragen einer offenen Transaktion gelten als normaler Betriebszustand. Der Monitor meldet weiterhin Transaktionen, die mindestens fünf Sekunden im Leerlauf bleiben, abgebrochene Transaktionen und Sperrwartezeiten. Fehlende oder widersprüchliche Messwerte ergeben einen Fehler.
+- Dienstvertrag, Struktur, Identität beider Datenbanken und Verbindungszustand bleiben gemeinsam verpflichtend. Der vollständige Status umfasst weiterhin genau die vorhandenen 24 Prüfergebnisse.
+- Der Kandidat v0.92.41 wurde wegen des zuvor zu strengen Verbindungschecks automatisch auf den Programmstand v0.92.40 zurückgenommen. Die PostgreSQL-Daten einschließlich zwischenzeitlicher Änderungen blieben erhalten. v0.92.42 führt die korrigierte Prüfung fort; der Betriebsnachweis steht in [Block 12](docs/postgresql-migration/BLOCK-12-PRODUCTION.md).
+
+## v0.92.41 Beta · Vollständiger PostgreSQL-Monitorstatus (Kandidat, ersetzt durch v0.92.42)
 
 - Dienstvertrag, Datenbankpaar und Verbindungsprüfung liefern gemeinsam das vorhandene Datenbankergebnis des Monitors. Die zusätzliche, nicht zugelassene Ergebniszeile entfällt; alle Einzelprüfungen bleiben erforderlich.
 - Ein fehlender Dienstvertrag, inaktiver Datenbankdienst oder Wartungssocket sowie Fehler der Paar- oder Verbindungsprüfung ergeben weiterhin einen fehlgeschlagenen Datenbankcheck. Solche Warnungen lösen keinen automatischen App-Neustart aus.
-- Die Korrektur wurde bei der produktiven PostgreSQL-Abnahme gefunden. Sie ergänzt die begrenzten AUM-Rechteabfragen und den PDF-Download aus v0.92.40. Der vollständige Nachweis steht in [Block 12](docs/postgresql-migration/BLOCK-12-PRODUCTION.md).
+- Die Korrektur wurde bei der produktiven PostgreSQL-Abnahme gefunden. Sie ergänzt die begrenzten AUM-Rechteabfragen aus v0.92.40. Der vollständige Nachweis steht in [Block 12](docs/postgresql-migration/BLOCK-12-PRODUCTION.md).
 
-## v0.92.40 Beta · Begrenzte Rechteabfragen und PDF-Download
+## v0.92.40 Beta · Begrenzte Rechteabfragen
 
 - Die AUM-Liste liest Benutzerrechte einmal je Listenaufruf und berechnet die Zuständigkeit nur einmal je sichtbarem Fall. Benutzer- und Zuständigkeitsabfragen laufen mit begrenzter Gleichzeitigkeit, damit große Listen den PostgreSQL-Verbindungspool nicht überlasten.
 - Neue Listenaufrufe sowie einzelne Prüf- und Änderungsaktionen verwenden weiterhin aktuelle Rechte. Die Aufteilung in zwei PostgreSQL-Datenbanken und die bestehenden Berechtigungsgrenzen bleiben erhalten.
 - PDF-Berichte erlauben in ihrer Sicherheitsrichtlinie ausdrücklich den Dateidownload. Skripte, externe Inhalte und der Zugriff auf den Ursprung bleiben gesperrt; ältere HTML-Berichte behalten ihre bisherige Sandbox.
+- Der manuelle PDF-Download in Chrome ist vom Benutzer als funktionierend bestätigt. Die bei automatisierter Bedienung beobachtete Blockierung wird nicht als Produktfehler ausgewiesen.
 - Bei der angemeldeten Produktivabnahme gefunden; 24 gezielte Tests bestanden. Installation und abschließende Bedienprüfung werden im [Block-12-Produktivnachweis](docs/postgresql-migration/BLOCK-12-PRODUCTION.md) dokumentiert.
 
 ## v0.92.39 Beta · Isolierte PostgreSQL-Wiederherstellungsprüfung

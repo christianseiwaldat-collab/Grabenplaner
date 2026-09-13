@@ -13,7 +13,7 @@ test('paired deploy identity detects a replaced Sales database and never reuses 
 });
 test('paired operational monitoring refuses a stale WAL return even with a current logical backup',()=>{
  const now=Date.parse('2026-09-12T10:00:00Z'),checkedAt=new Date(now).toISOString(),record={verified:true,checkedAt,manifestSha256:'a'.repeat(64),sourceManifestSha256:'a'.repeat(64)};
- const base={cluster_id:'123',archive_mode:'on',in_recovery:false,connections:{blocked:0,idleInTransaction:0},wal:{lastArchivedAt:checkedAt,lastFailureAt:null}};
+ const base={cluster_id:'123',archive_mode:'on',in_recovery:false,connections:{total:1,active:1,blocked:0,idleInTransaction:0,idleInTransactionOverLimit:0,abortedInTransaction:0},wal:{lastArchivedAt:checkedAt,lastFailureAt:null}};
  const options={core:{...base,database:'core'},sales:{...base,database:'sales'},backup:record,restore:record,offsite:record,walOffsite:record,freeBytes:20*1024**3,recoveryPolicy:'wal-15m',now};
  assert.equal(evaluatePairedStatus(options).healthy,true);
  assert.deepEqual(evaluatePairedStatus({...options,walOffsite:{...record,checkedAt:new Date(now-16*60000).toISOString()}}).reasons,['OFFSITE_WAL_MISSING_OR_STALE']);
