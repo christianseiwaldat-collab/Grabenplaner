@@ -836,3 +836,14 @@ test("v0.87 DB Block 5: PostgreSQL-Fähigkeiten bleiben tief eingefroren und nic
   assert.equal(POSTGRESQL_CAPABILITIES.features.restore, false);
   assert.equal(POSTGRESQL_CAPABILITIES.features.pointInTimeRecovery, false);
 });
+
+test('PostgreSQL connection failure between transaction statements rejects the commit without an unhandled client error', async () => {
+  const client=new EventEmitter(),releases=[],diagnostics=[];let terminated=false;
+  const failure=Object.assign(new Error('synthetic idle transaction timeout'),{code:'25P03'});
+  client.query=async()=>{if(terminated)throw failure;return {rowCount:0,rows:[],fields:[]};};client.release=value=>releases.push(value);
+  const provider=createPostgresqlPersistenceProvider({pool:{connect:async()=>client,end:async()=>{}},catalog:[],onPoolError:e=>diagnostics.push(e.code)});
+  await assert.rejects(provider.transaction(async()=>{
+    terminated=true;assert.doesNotThrow(()=>client.emit('error',failure));
+  }),hasPersistenceCode(PERSISTENCE_ERROR_CODES.CONNECTION_UNAVAILABLE));
+  assert.deepEqual(diagnostics,[PERSISTENCE_ERROR_CODES.CONNECTION_UNAVAILABLE]);assert.ok(releases[0]);await provider.close();
+});

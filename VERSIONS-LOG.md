@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.38 Beta · Zwei PostgreSQL-Datenbanken für GP und Verkaufsdaten
+
+- Kontrollierte Migration des vollständigen SQLite-Bestands in `grabenplaner_core` und `grabenplaner_sales`, mit getrennten Geschäftszugängen und begrenzten Hintergrundarbeitern. Kassa und TradeFoto teilen sich die Verkaufsdatenbank; Planung, Personal, Rechte und CRM liegen im GP-Bestand.
+- Frische finale Quellaufnahme, vollständige Prüfung der Tabelleninhalte, Referenzen, Sequenzen und geschützten Dateien. Eigene Artikelbilder, Kassenregeln und historischer Kassen-Rohertrag bleiben Bestandteil der übernommenen Daten.
+- Gekoppelte Sicherungen und Offsite-Modul 9 verbinden beide Datenbanken mit Dokumenten und Schlüsseln. GP-Wartungsaktionen verwenden einen geschützten Root-Einstieg; nach Veröffentlichung der PostgreSQL-Verantwortung erfolgt kein automatischer Rückfall auf SQLite.
+- Wiederholte Caddy-Prüfungen verwenden jeweils eigene temporäre Dateien. Die Sicherungsdienste erhalten die begrenzten PostgreSQL-Arbeits- und Sicherungspfade, während die eigentlichen Clusterdateien für sie nur lesbar bleiben.
+- Freigegebener Produktivwechsel am 13.09.2026; der tatsächliche Abschluss wird im [Block-12-Nachweis](docs/postgresql-migration/BLOCK-12.md) festgehalten. Die isolierten Übernahme-, Anwendungs-, PDF-, Last- und Wiederherstellungsproben sind dort mit ihren Grenzen dokumentiert.
+
 ## v0.92.37 Beta · Kürzere Deploys und nächtliche Vollprüfung
 
 - Normaler Deploy mit einem frischen, vollständig geprüften DB-/Dokument-Rückkehrpunkt und kurzen Betriebsprüfungen; Archivabschluss, Aufbewahrung und vollständiger Recovery-Test folgen nachts. Die automatische Auswahl verlangt einen höchstens 36 Stunden alten, signierten und zum installierten Wiederherstellungsvertrag passenden Gesamtnachweis.

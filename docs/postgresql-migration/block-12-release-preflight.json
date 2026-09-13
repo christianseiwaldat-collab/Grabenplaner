@@ -1,0 +1,91 @@
+{
+  "recordedAt": "2026-09-13T09:30:54.162986+00:00",
+  "releaseVersion": "0.92.38-beta",
+  "authorization": "Bitte Block 12 loslegen",
+  "productionCutoverCompleted": false,
+  "sqlite": {
+    "checkedAt": "2026-09-13T09:29:21.913284+00:00",
+    "integrity": "ok",
+    "foreignKeyErrors": 0,
+    "sourceSchemaMatches": true,
+    "sourceSchemaSha256": "c257f1eca574b9133038f4687f7acd5e74204f21c6ad5a70ad5803fe6c10cd03",
+    "counts": {
+      "employees": 18,
+      "locations": 6,
+      "crm_customers": 30503,
+      "candidates": 3,
+      "candidate_applications": 3,
+      "sales_articles": 19024,
+      "sales_article_own_images": 0,
+      "cash_publications": 1,
+      "cash_publication_bindings": 11059,
+      "cash_snapshot_0": 39865,
+      "cash_snapshot_1": 219920,
+      "cash_snapshot_2": 0,
+      "cash_snapshot_3": 0,
+      "cash_snapshot_4": 89584,
+      "cash_snapshot_5": 346921,
+      "cash_snapshot_6": 385877
+    },
+    "reportJobs": [
+      {
+        "status": "completed",
+        "count": 5
+      }
+    ],
+    "articleSearchDirty": 0,
+    "cashInventorySha256": "c155ae622601f5a3c32791498e0a83f48d196b7070d7c6b8d44f129945bafef6",
+    "reportsPaused": false,
+    "milliseconds": 349836
+  },
+  "nativeOffsiteSandbox": [
+    {
+      "unit": "prepare",
+      "operationalPathsWritable": true,
+      "clusterDataReadOnly": true
+    },
+    {
+      "unit": "assurance@",
+      "operationalPathsWritable": true,
+      "clusterDataReadOnly": true
+    }
+  ],
+  "localChecks": {
+    "initial": {
+      "tests": 43,
+      "pass": 41,
+      "fail": 1,
+      "skipped": 1
+    },
+    "failure": "Obsolete Codespaces version expectation, corrected to package version",
+    "focusedRetest": {
+      "tests": 7,
+      "pass": 7,
+      "fail": 0
+    },
+    "nativeCaddyAndPaths": {
+      "tests": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    "unresolvedFailures": 0
+  },
+  "logs": [
+    {
+      "path": "tmp/pg12-release-focused-tests.txt",
+      "sha256": "b690a81ca4bc0b16092a5c1ba3bea7864efb9bb850cd8aaf30fbe1e8d5061b25"
+    },
+    {
+      "path": "tmp/pg12-release-retest.txt",
+      "sha256": "2c03b7050dcd79560bf31f8fdb9d8585f25e5f8c15674e8cf0f793be5d8b26ed"
+    },
+    {
+      "path": "tmp/pg12-offsite-unit-probe.json",
+      "sha256": "e2fc40452078d7433e08e8b0620ddea886b0a7dd26bb1958f1510f3d8b790b4b"
+    },
+    {
+      "path": "tmp/pg12-release-audit.txt",
+      "sha256": "2380de17d1bac100f6dbcd6378c01002283593d411e7b72c9b061cd66db09141"
+    }
+  ]
+}

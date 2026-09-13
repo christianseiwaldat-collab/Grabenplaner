@@ -1,0 +1,31 @@
+{
+  "fixture": "synthetic; full current SQLite schema; 200 employees; in-memory",
+  "coverage": "repository reads only; no HTTP, network, live load or report concurrency claim",
+  "node": "v24.19.0",
+  "results": [
+    {
+      "id": "organization-personnel.location.list",
+      "p50Ms": 0.025,
+      "p95Ms": 0.079,
+      "samples": 100
+    },
+    {
+      "id": "organization-personnel.department.list",
+      "p50Ms": 0.01,
+      "p95Ms": 0.012,
+      "samples": 100
+    },
+    {
+      "id": "organization-personnel.portal-user.list-for-admin",
+      "p50Ms": 1.031,
+      "p95Ms": 1.453,
+      "samples": 100
+    },
+    {
+      "id": "organization-personnel.schedule-note.get",
+      "p50Ms": 0.007,
+      "p95Ms": 0.018,
+      "samples": 100
+    }
+  ]
+}

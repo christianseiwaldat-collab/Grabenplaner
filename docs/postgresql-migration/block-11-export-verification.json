@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "databases": [
+    {
+      "domain": "core",
+      "tables": 200,
+      "rows": "209853",
+      "sequences": 22
+    },
+    {
+      "domain": "sales",
+      "tables": 58,
+      "rows": "2739063",
+      "sequences": 2
+    }
+  ],
+  "bytes": 995840000,
+  "sha256": "fcb5d6a77e1ded8cc0386e4cee67164777be363fe11df3499597062587b906b2",
+  "restoredBothDatabases": true,
+  "concurrentExportRejected": true,
+  "keysExcluded": true,
+  "protectedFilesExcluded": true,
+  "step": "export",
+  "checkedAt": "2026-09-12T23:56:27.108Z",
+  "milliseconds": 288726,
+  "productActivation": false
+}

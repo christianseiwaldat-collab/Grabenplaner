@@ -1,0 +1,35 @@
+[Unit]
+Description=Grabenplaner PostgreSQL maintenance request
+OnFailure=grabenplaner-postgresql-maintenance-recover.service
+
+[Service]
+Type=exec
+User=root
+Group=root
+ExecStart=/usr/bin/node /opt/grabenplaner/app/server-tools/linux/postgresql/control-worker.js
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=1500
+TimeoutStopSec=150
+KillMode=control-group
+UMask=0077
+Nice=10
+CPUQuota=100%
+MemoryMax=1536M
+MemorySwapMax=0
+TasksMax=64
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ReadWritePaths=/run/grabenplaner /run/grabenplaner-host-control /var/lib/grabenplaner/data /var/lib/grabenplaner-host-control /var/lib/grabenplaner-postgresql /var/backups/grabenplaner-postgresql
+ReadOnlyPaths=/opt/grabenplaner /etc/grabenplaner /var/lib/grabenplaner
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LimitCORE=0

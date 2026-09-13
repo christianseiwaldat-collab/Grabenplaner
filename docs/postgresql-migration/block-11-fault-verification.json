@@ -1,0 +1,100 @@
+{
+  "passed": true,
+  "provider": "postgresql-pair",
+  "http": true,
+  "forcedProcessTermination": "SIGKILL",
+  "restartCount": 1,
+  "processed": 2239,
+  "pdfBytes": 74563,
+  "endpoints": [
+    {
+      "route": "/api/health/live",
+      "status": 200,
+      "milliseconds": 9950
+    },
+    {
+      "route": "/api/health/ready",
+      "status": 200,
+      "milliseconds": 215
+    },
+    {
+      "route": "/api/portal/v1/auth/login",
+      "status": 200,
+      "milliseconds": 218
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 174
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 122
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 159
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 136
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 143
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 157
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 118
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 114
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 157
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 136
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 296
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 125
+    },
+    {
+      "route": "/api/sales-report-jobs/62d8e833-be71-4eb3-96f0-8c949a7a88b4/download",
+      "status": 200,
+      "milliseconds": 179
+    },
+    {
+      "route": "/api/sales-report-jobs/62d8e833-be71-4eb3-96f0-8c949a7a88b4",
+      "status": 200,
+      "milliseconds": 203
+    }
+  ],
+  "checkedAt": "2026-09-12T23:04:01.475Z",
+  "productActivation": false,
+  "step": "fault",
+  "milliseconds": 105052
+}

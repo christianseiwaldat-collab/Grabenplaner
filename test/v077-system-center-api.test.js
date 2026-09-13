@@ -167,7 +167,7 @@ test("v0.78: reine Leseberechtigung bleibt redigiert und GET ist nebenwirkungsfr
   assert.match(serverSource, /createAbsencePortalNotification\(\s*absenceManagementRepository,\s*employeeNumber,\s*"system\.recovery\.alert",[\s\S]{0,1000}?reactivate:\s*true/);
 });
 
-test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer begrenzt", () => {
+test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer begrenzt", async () => {
   const actor = (role, permissions = ["system:write", "system:diagnostics:technical"]) => ({
     employeeNumber: `role-${role}`,
     role,
@@ -175,7 +175,7 @@ test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer
   });
   for (const role of ["admin", "it_admin"]) {
     assert.deepEqual(
-      subject.serverMonitorActionCapabilities(actor(role), { managedRestartAvailable: true }),
+      (await subject.serverMonitorActionCapabilities(actor(role), { managedRestartAvailable: true })),
       {
         canRefresh: true,
         canRestart: true,
@@ -187,7 +187,7 @@ test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer
     );
   }
   assert.deepEqual(
-    subject.serverMonitorActionCapabilities(actor("developer"), { managedRestartAvailable: true }),
+    (await subject.serverMonitorActionCapabilities(actor("developer"), { managedRestartAvailable: true })),
     {
       canRefresh: true,
       canRestart: true,
@@ -197,106 +197,106 @@ test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer
     },
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("developer"), {
+    (await subject.serverMonitorActionCapabilities(actor("developer"), {
       managedRestartAvailable: true,
       managedHostRebootAvailable: true,
       hostSecurityConfigured: true,
       hostSecurityStatusAvailable: true,
       hostRebootRequired: true,
-    }).canVpsReboot,
+    })).canVpsReboot,
     true,
   );
   for (const role of ["admin", "it_admin", "hr"]) {
     assert.equal(
-      subject.serverMonitorActionCapabilities(actor(role), {
+      (await subject.serverMonitorActionCapabilities(actor(role), {
         managedHostRebootAvailable: true,
         hostRebootRequired: true,
-      }).canVpsReboot,
+      })).canVpsReboot,
       false,
       role,
     );
   }
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("developer"), {
+    (await subject.serverMonitorActionCapabilities(actor("developer"), {
       managedHostRebootAvailable: true,
       hostSecurityConfigured: true,
       hostSecurityStatusAvailable: true,
       hostRebootRequired: false,
-    }).canVpsReboot,
+    })).canVpsReboot,
     false,
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("developer"), {
+    (await subject.serverMonitorActionCapabilities(actor("developer"), {
       managedHostRebootAvailable: true,
       hostSecurityConfigured: true,
       hostSecurityStatusAvailable: true,
       hostRebootRequired: false,
-    }).vpsRebootUnavailableReason,
+    })).vpsRebootUnavailableReason,
     "VPS_REBOOT_NOT_REQUIRED",
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("developer"), {
+    (await subject.serverMonitorActionCapabilities(actor("developer"), {
       managedHostRebootAvailable: false,
       hostSecurityConfigured: true,
       hostSecurityStatusAvailable: true,
       hostRebootRequired: true,
-    }).vpsRebootUnavailableReason,
+    })).vpsRebootUnavailableReason,
     "VPS_REBOOT_CONTROL_UNAVAILABLE",
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("developer"), {
+    (await subject.serverMonitorActionCapabilities(actor("developer"), {
       managedHostRebootAvailable: true,
       hostSecurityConfigured: true,
       hostSecurityStatusAvailable: true,
       hostRebootRequired: true,
       hostSecurityPendingConfirmation: true,
-    }).vpsRebootUnavailableReason,
+    })).vpsRebootUnavailableReason,
     "VPS_REBOOT_SECURITY_CONFIRMATION_PENDING",
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("developer"), {
+    (await subject.serverMonitorActionCapabilities(actor("developer"), {
       managedHostRebootAvailable: true,
       hostSecurityConfigured: true,
       hostSecurityStatusAvailable: true,
       hostRebootRequired: true,
       hostRebootInProgress: true,
-    }).vpsRebootUnavailableReason,
+    })).vpsRebootUnavailableReason,
     "VPS_REBOOT_IN_PROGRESS",
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("developer", []), {
+    (await subject.serverMonitorActionCapabilities(actor("developer", []), {
       managedHostRebootAvailable: true,
       hostSecurityConfigured: true,
       hostSecurityStatusAvailable: true,
       hostRebootRequired: true,
-    }).vpsRebootUnavailableReason,
+    })).vpsRebootUnavailableReason,
     "VPS_REBOOT_PERMISSION_REQUIRED",
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("hr"), { managedRestartAvailable: true }).canRestart,
+    (await subject.serverMonitorActionCapabilities(actor("hr"), { managedRestartAvailable: true })).canRestart,
     false,
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("admin", []), { managedRestartAvailable: true }).canRestart,
+    (await subject.serverMonitorActionCapabilities(actor("admin", []), { managedRestartAvailable: true })).canRestart,
     false,
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("admin", ["system:write"]), { managedRestartAvailable: true }).canRestart,
+    (await subject.serverMonitorActionCapabilities(actor("admin", ["system:write"]), { managedRestartAvailable: true })).canRestart,
     false,
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("admin"), {
+    (await subject.serverMonitorActionCapabilities(actor("admin"), {
       managedRestartAvailable: true,
       restartCooldownSeconds: 1,
-    }).canRestart,
+    })).canRestart,
     false,
   );
   assert.equal(
-    subject.serverMonitorActionCapabilities(actor("admin"), { managedRestartAvailable: false }).canRestart,
+    (await subject.serverMonitorActionCapabilities(actor("admin"), { managedRestartAvailable: false })).canRestart,
     false,
   );
   assert.deepEqual(
-    subject.serverMonitorActionCapabilities(null),
+    (await subject.serverMonitorActionCapabilities(null)),
     {
       canRefresh: false,
       canRestart: false,

@@ -33,6 +33,8 @@ RuntimeDirectory=grabenplaner-offsite
 RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes
 ReadWritePaths=/var/lib/grabenplaner /var/backups/grabenplaner /var/lib/grabenplaner-offsite /run/grabenplaner /run/grabenplaner-offsite
+ReadWritePaths=-/var/lib/grabenplaner-postgresql -/var/backups/grabenplaner-postgresql
+ReadOnlyPaths=-/var/lib/grabenplaner-postgresql/data
 TimeoutStartSec=30min
 
 [Install]

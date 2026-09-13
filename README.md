@@ -2,7 +2,7 @@
 
 Grabenplaner bündelt Dienstplanung, Abwesenheiten, Personalorganisation, Zeiterfassung und ein mobiles Mitarbeiterportal in einer Anwendung.
 
-**v0.92.37 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
+**v0.92.38 Beta · verwalteter Ubuntu-Einzelserver · SQLite / PostgreSQL · source-available**
 
 [Letzter GitHub-Server-Release v0.92.0 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.92.0-beta) · [Serverbetrieb](SERVERBETRIEB.md) · [Sicherheit](SECURITY.md)
 
@@ -10,7 +10,7 @@ Grabenplaner bündelt Dienstplanung, Abwesenheiten, Personalorganisation, Zeiter
 
 `main` wird als zentral betriebenes Serverprodukt weiterentwickelt. Die Anwendung läuft hinter HTTPS auf einem von der zuständigen IT verwalteten Ubuntu-Einzelserver; der App-Prozess selbst bleibt an Loopback gebunden.
 
-SQLite ist der aktuell unterstützte Produktprovider. PostgreSQL besitzt eine nicht produktive Entwicklungs- und Nachweisgrundlage, ist aber noch nicht für Installation oder Migration freigegeben. Die verbindliche Reihenfolge steht in der [Datenbank-Provider-Strategie](docs/DATENBANK-PROVIDER-STRATEGIE.md).
+SQLite bleibt der Standard für unveränderte Installationen. Für ausdrücklich migrierte Ubuntu-Server steht PostgreSQL mit zwei gekoppelten Datenbanken bereit: `grabenplaner_core` für den Grabenplaner und `grabenplaner_sales` für Kassa und TradeFoto. Der Wechsel benötigt die geprüfte vollständige Datenübernahme und die geschützte Betriebskonfiguration; ein einzelner Umgebungsparameter aktiviert ihn nicht. Ablauf, Sicherungen und Wiederherstellung stehen im [Serverbetrieb](SERVERBETRIEB.md) und im [Migrationsnachweis](docs/postgresql-migration/BLOCK-12.md).
 
 Die frühere Windows-Portable-/LAN-Auslieferung ist als [v0.87.0-beta.legacy.1](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.87.0-beta.legacy.1) eingefroren. Sie ist kein zweites aktuelles Entwicklungsziel.
 
@@ -51,7 +51,7 @@ Alle Abbildungen stammen aus einem isolierten Demo-Profil mit fiktiven Personen 
 
 ## Betrieb und Entwicklung
 
-Der vorgesehene Serverbetrieb verwendet Node.js 24, Caddy, systemd, getrennte Dienstrechte und eine eingebettete SQLite-Datenbank. Installation, Update, Backup, Restore und Sicherheitsgrenzen sind in [SERVERBETRIEB.md](SERVERBETRIEB.md) beschrieben.
+Der vorgesehene Serverbetrieb verwendet Node.js gemäß Paketvertrag, Caddy, systemd und getrennte Dienstrechte. SQLite bleibt der Installationsstandard; die kontrollierte PostgreSQL-Migration ergänzt eine eigene lokale Datenbankinstanz. Installation, Update, Backup, Restore und Sicherheitsgrenzen sind in [SERVERBETRIEB.md](SERVERBETRIEB.md) beschrieben.
 
 Lokale Entwicklungsumgebung:
 

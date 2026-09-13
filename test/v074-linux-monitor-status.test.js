@@ -76,6 +76,17 @@ test("short monitor probes retain exact status fields and cannot duplicate full-
   assert.throws(() => parseTestOutput(`${output}\nOK\tSQLite quick_check\tok`, 0), /CHECK_OUTPUT_INVALID/);
 });
 
+test("paired PostgreSQL monitoring retains every check and does not restart a live app on a database warning", () => {
+  const output = passingOutput().replace("SQLite quick_check", "PostgreSQL Core/Sales")
+    .replace("Backup DB-/Dokumentkopplung", "PostgreSQL-Sicherungsbeleg");
+  assert.deepEqual(parseTestOutput(output, 0), checksWith());
+  assert.throws(() => parseTestOutput(`${output}\nOK\tSQLite quick_check\tok`, 0), /CHECK_OUTPUT_INVALID/);
+  const failed = output.replace("OK\tPostgreSQL Core/Sales", "FEHLER\tPostgreSQL Core/Sales");
+  const result = evaluateStatus(emptyStatus(new Date("2026-09-12T20:00:00.000Z")), parseTestOutput(failed, 1), new Date("2026-09-12T20:05:00.000Z"));
+  assert.equal(result.status.state, "warning");
+  assert.equal(result.restartEligible, false);
+});
+
 test("v0.86.2 maps the complete hardened HTTP-header output contract", () => {
   assert.deepEqual(
     [...CHECK_LABELS.entries()].filter(([, id]) => [

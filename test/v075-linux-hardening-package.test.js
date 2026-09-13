@@ -178,7 +178,7 @@ test("hardening stays separate from the current core runtime and binds its exact
   assert.equal(result.fingerprint, "e5e8edd4e7710263ce1b89a5a1214a18a2b7f8a6d37a9248dcccaeb5ca074ef9");
   // Bounded staging hashes, the 1500-second ready check and serialized
   // copy work change the pinned Offsite module independently of Hardening.
-  assert.equal(result.offsiteModule.fingerprint, "6aaa26d35310754c15c5d9a85aafdad4ac73dc8939d3917b3617a48879a06394");
+  assert.equal(result.offsiteModule.fingerprint, "5dbf1f91a08883656c3cd2f24287bcb8cc5d01ddc8e993cc53951d9cf67c06ed");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 

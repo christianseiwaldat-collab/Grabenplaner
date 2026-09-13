@@ -1,0 +1,2191 @@
+{
+  "scope": "sales-development",
+  "stage": 6,
+  "productActivation": false,
+  "total": 194,
+  "prepared": 194,
+  "failures": [],
+  "entries": [
+    {
+      "statementId": "data-import.runs.get",
+      "sourceContract": "ae837a2c7874317995e141f7381343e6b161a8a83adfc0862b57ea9dee7fece9",
+      "sqlSha256": "19e0762b3e4cb298d0d18578d56b1d3e3d920b5b3ef0ba399e3a81e31f43cc90",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.runs.list",
+      "sourceContract": "f85dd9e0f83f4d6dec1211b7dbac51060876df611c781c0a8d0b173244e351ff",
+      "sqlSha256": "545aa51233ded314e2d81b39b0225561f42930fd5fa09032ed2535d878881911",
+      "parameterTypes": [
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.runs.insert",
+      "sourceContract": "26788c6b5f4b1c035231b49fe2d32528d2fb7ed16d14cafa7c578ec93e380528",
+      "sqlSha256": "86d01449b394542525e288854a279620a1822e95649d36c685586ec5d5daa717",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "bigint",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.runs.update",
+      "sourceContract": "29bd2cf4f7c1992c450b3b110f6f78e74dceec562345f479a0a5817e5dc6b007",
+      "sqlSha256": "e68f0fc280da006d23581e315fdaeda617203410576dcf80ea0c41fb141b207b",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.insert",
+      "sourceContract": "fc2e989ee8d4e71a76c9900d7aca7250659f77a43e214449a32c36d352dae5a2",
+      "sqlSha256": "ac1323877aa223aac186dd6a756e33ab7b64e53705567b7f276eb475f5c4b7f4",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.get",
+      "sourceContract": "7d1971bc84875430eed34560a345fcce2b33341e45246332450584c1f8cd36d1",
+      "sqlSha256": "a72983573b25ffbd5b8abd6f580406c9a746cfaa63e0c47d942e56a08a50d274",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.find-identity",
+      "sourceContract": "08d681637ad4b28b39a140b791e3b97f2c6e96b3c1b30f27f478f952cead7e74",
+      "sqlSha256": "bde430a637d521dfcfc056a0beec263395bf311fb3a85e7f8fe4df49bb4c1376",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.conflict-identity",
+      "sourceContract": "420aa0ae31c7b55f094980cf7d24f00356dd333637e0faef42218b0e3dfc43bf",
+      "sqlSha256": "03cb975d24c54c8a82d172b771c4e1d20e2baeb966382fcc3d41474bca7b7972",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.list",
+      "sourceContract": "c157e5e8bf0fbe491aac5e3e9cec712a72ae354953b9f75aa8e3be59f6efe9bf",
+      "sqlSha256": "9fcdab63f38b977e6aa0f10904e36f3eb52f9e7533093c9f096fad87605d7591",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.pending-review",
+      "sourceContract": "4c3c48b0f20268fa154dcd831ac34cdb9cc046a21bca507c39981fc3f980164e",
+      "sqlSha256": "b344ad6371920af9f457839831e6ea5e2fe5e18c996a1c1ec41956bba904dd3d",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.reset-review",
+      "sourceContract": "c35a9bcd00c116d5f1f05b2e46ae6548aec354fbc00493d84d4991a21540ac76",
+      "sqlSha256": "d2ca68ff135e54d57d49f79de7d67cb5387bc5792ac6a043ea60aa9850e1fc7d",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.pending-apply",
+      "sourceContract": "3883033324fbe94ed99cfebaaaa4ad565784be5a43dc40ad5a093d9feb51f55e",
+      "sqlSha256": "1da7e5b9bac573937895e2ad27095801f9a72fe8c16444338027b6fc809cf6b0",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.update",
+      "sourceContract": "b11da8cbdf7c8d60ee96915db30b5c33dce67d7b414f8e6c0bce700a6d428742",
+      "sqlSha256": "31b60c5fa55e9c12d41c29c269d2d481adc0f99208cbb9cb991868c7a67d59c5",
+      "parameterTypes": [
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.counts",
+      "sourceContract": "95583039459f24bfa21323ffb6131707e1a8f9c88969f349ca938ca87d7733aa",
+      "sqlSha256": "b7121f9a3b0f17de73437eda2cb7d8e5dbbc449f1a0720b1d64692d623a26ec3",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.links.get",
+      "sourceContract": "5ea65c53dd5890a4b74866a5766e70ef6a45a219043ae0b034ed37d05fbd763c",
+      "sqlSha256": "104fddc6367f31890e4fb71be35966e0744e14f20de9490c3c42967a482e5019",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.links.insert",
+      "sourceContract": "c7f31f884197ed33f880fcd78306e6afd71112732b912c903211f871d6433354",
+      "sqlSha256": "78259c2ed9a778d340aa94ef9ee9d4be6ab5436ed4c364a70dda58cdc9f02cc3",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.links.update",
+      "sourceContract": "1d14c90530e6f9e1998b9e191369275e9c035f7e290b6aca5f976c9b0760f207",
+      "sqlSha256": "dcf1f6a4ff743f9cfd84a674cafe35b0c3cc01950f820227b4434470fc8f7683",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.links.delete",
+      "sourceContract": "f5ba139e3746cdb54be795ef0b8a7bc2244604a256e03622441014ad8ed293a3",
+      "sqlSha256": "d0ab0a820525a685dd620388f6510c1f1fb546d7ae800412c52a70d8060cc6d3",
+      "parameterTypes": [
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "data-import.changes.insert",
+      "sourceContract": "c13c399a02c1ff6641ddfb18af4cc197ee08c8a20a3e38d9cb03021ca14d2e36",
+      "sqlSha256": "6bdf24ac03cadd66ef163f9b47042c4ea87d4545e521bbf085f3517c3971de2b",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.changes.pending-undo",
+      "sourceContract": "431c8deeaedb95ef3d227c9c8a096898821a400b725f37867a11c0ebf3bef43e",
+      "sqlSha256": "513ce1a92379fc3fe5c9cbb2ca315e571cc64a65bd2e188d2f5ac9a341d70324",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.changes.undo-page",
+      "sourceContract": "073e06543016905a16d7d02ae103ae6cac48125746be1d621331513c6b2df218",
+      "sqlSha256": "d997c8155fa8ff558185d34eabcc1e33f28e892cd7e7d4225f5c0997ccdc6fbc",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.changes.revert",
+      "sourceContract": "de16483495dbafcb6a2a995e816a7c133b1499e7449f5f12239a4340755ee198",
+      "sqlSha256": "c3412c017b697365e487cac35835bf2f0dbc2857574f9e7debc04793db1f2384",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.events.insert",
+      "sourceContract": "22797a9c662654836ade53a2c778fb1c4748768b6e23616ad7704a472fad7395",
+      "sqlSha256": "e1588c40d019d51f3c4ff2fbfdb24b35c15db71b07d54c75783f29e01df3412a",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.events.list",
+      "sourceContract": "3bf5d083b6c14f66dac9f008c9d4f67aa76f6a032cb39406916be583fa0788fc",
+      "sqlSha256": "96824e4535f7ce4577830a68e3218dc96ae83bc20149f5a39690007b81c0a1de",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.rows.purge-payloads",
+      "sourceContract": "b4a64718f1705fd85988919e8aba510dc6e34430d8a22a6975c46d4823dc676d",
+      "sqlSha256": "6fa9c4b20ec428d77f457abd39e511a260d1d09a44b6bba97a501b317fff527e",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.changes.purge-payloads",
+      "sourceContract": "eebfa48f32b2aae25235cb25d558d20582874c232d4a0dfbde223af7861348f2",
+      "sqlSha256": "b075aa191739268599b6d7824ac5292cec1908b88845a9844459e2a76b33c142",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.payload-blocks.get",
+      "sourceContract": "851d3a47105529194bc1d2753d2898f99e2a19a06ae0ec1f2b67728be898ba1f",
+      "sqlSha256": "fdf27e90bd144d71c20d41e899d89d67c46b84c4190ed12deb330c9454fbad35",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.payload-blocks.insert",
+      "sourceContract": "a169986bdcb375725a2b1ddc2e4db21b3b8fa04eceeb9eb103b4e6279702b789",
+      "sqlSha256": "01da7ce0e80781e7b2103885ad34a22d735879850593f48e849a486debef7b96",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.row-payload-refs.get",
+      "sourceContract": "328a9dc2438284fb7b0c3530524ac1c4500282d3cb8f056890903f9309bb675b",
+      "sqlSha256": "d6d9100e88bda7dc516fafed2e1f92ebdc9c9a0c1f5a25a68a92b9bbe7a3d3c3",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.change-payload-refs.get",
+      "sourceContract": "6aedd568aef55fa79592833f7451de831f47722be8b227d0f74a332c5bc72e66",
+      "sqlSha256": "c0a5a295c930417888d0b01d3eeadcb214686315bf4364ac22f1e36c1a42af92",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.row-payload-refs.delete",
+      "sourceContract": "82a7c947f312069d166aa5c40d322aa8b11a24caf3aeea6a265f0478b9f40a02",
+      "sqlSha256": "d63f2aac1dff74eac14050c79532163658b38ceaec6fc6d1c176deaeb0391535",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.change-payload-refs.delete",
+      "sourceContract": "13f3ce7b631d01d122fd1213e3794af1762df035ae68e9a1563ba1f82f44f0ca",
+      "sqlSha256": "8669d2944d0401d4bae4f061c963650164d9ea89912d1f237a6815c6bda23c03",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.row-payload-refs.insert",
+      "sourceContract": "ae4dea9fe048ef92c2a586cd755bab9fe4fee614306185e317b35120c5da47da",
+      "sqlSha256": "cdd2556b6d2caa14217c8b616bf25d873cbade587dd5a467cd09d54e3fb06821",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "data-import.change-payload-refs.insert",
+      "sourceContract": "30b96a7deb71e0c9c6b8f6f5c037534aff7e288f2522e47aa6736209201297fb",
+      "sqlSha256": "7eff6e25136ed914056521033ee5eb90417104b7149f55d390b079efa3046a0e",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.report-dictionary-runs",
+      "sourceContract": "fbdf8aa371c343ae1c07e35c82b5ab9535a6668634b86d0a5c4bc7990449e617",
+      "sqlSha256": "ccd271cb1a91574061e751284aa9836dfacafeaab35a41a39f82e78d85b5cf50",
+      "parameterTypes": [
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.mapping.list",
+      "sourceContract": "74f3a8140f7dda8a6f0b19ccb4616bfbdaeedcc2fc14e5145323246619afa2cf",
+      "sqlSha256": "bbb9d5beecc052ca63259f8ca63342faf02569f057ff00068d1bc98c2f71ced0",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.get",
+      "sourceContract": "5914fd0693221e0e6c1829137ab9f1e505856b92af274e33ad10e7875115b709",
+      "sqlSha256": "c82cb7d72c3fad1bd364c9af65ee0acc4a22a70e524c341b7172ace0655aae0a",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.find",
+      "sourceContract": "07a4a5894586acdd55a4315eb14e66d5450202cc0797fd7712c7d733e358ecaa",
+      "sqlSha256": "92e4bbb1770f353ec34399fe36aa94542369e8edb2bc4c13b69f8f06ad92e399",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.insert",
+      "sourceContract": "a7c6ea8ba07012df83b5db4546c63a8fb13b13c9a5573246c774598c2def4de5",
+      "sqlSha256": "6f27b23aedadb9846e976c121ebfee3792767a6c0b306565e682c19276212f79",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.update",
+      "sourceContract": "8603e7a31e5930280acbcb9bc74e034cc98960f32df07ba00ab6230bb10f5525",
+      "sqlSha256": "583c22f8698f541ef5e15f80011ad06de60ea124b229f57b1b24bd91fda60178",
+      "parameterTypes": [
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.remove",
+      "sourceContract": "52aaeb940285f0d0580c459962c738be63c28f51f0835c05f6d2622e18836b57",
+      "sqlSha256": "1c67e67e4f639a0c25ba271d1eeb63e0b5e4ebba0b8908a1c74bc49e943d04f4",
+      "parameterTypes": [
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.segments",
+      "sourceContract": "bc08f31b71147a8d4447d679c88dc4f33e1dc3b34f79f6b9c2fd1cc4af0f4487",
+      "sqlSha256": "48e609c38f953e067adec95f20579e81a0d510e9d8fac363094d572349f0c111",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.segment.insert",
+      "sourceContract": "365008dabb6ef8136e42d84e107abd3ed03a8f1dd3353cf330796d90dd8b70c5",
+      "sqlSha256": "f36df2cadaa11902ed4fb82a3a9eb59a9586d32470212d1c22e2b309b440c2c7",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.segment.clear",
+      "sourceContract": "b1118892d8f762457d3741650b6a0405fea8ae4f34f93a5749cc8a2dca01ec58",
+      "sqlSha256": "2af41457fcd3228bafcba558547d26743608ef01c1713d0e233d803d3fbcd1b2",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.relations",
+      "sourceContract": "b8f0a9ec5a8111d208cf77701f1a677880f502b037f82d3a2b461705ae68cd6d",
+      "sqlSha256": "41bb0e193c8cff6810dab8ff8c930dd8302a7a84bbfee3f7e17b52db04a32715",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.relation.insert",
+      "sourceContract": "e3c2ee007bd1e2059b789555283695ac01b04dfdf43e8e8a0c34aa10f39f25b8",
+      "sqlSha256": "455ea7e72c2b7a62512e75ec0a57be0a453349c004086373072f7fb10a452f60",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.relation.clear",
+      "sourceContract": "84b5258a4f1f4c79682a227dba7568531612b0cdb21d5767aee6d676d8feb689",
+      "sqlSha256": "87ae476311b115a4f351a26321741b8dba18fcebfa0d0fa91929bcc0200a9355",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.dependencies",
+      "sourceContract": "b987be739b04e2d14ae825c5f99ba79c754763fc061a7cee822dd59338ef269e",
+      "sqlSha256": "78d22dc12863874a9c8ebcb7d339c4d954397672c7c5cfc372b9992ab040b24d",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.binding.get",
+      "sourceContract": "99e6c88e07ede0be4b18f87420e822a8938df662b5e5e992627d80025f73ff86",
+      "sqlSha256": "09dc9c96bdb081b98cdabc039188903fed0b54bcff230faa968ec401f23e6865",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.binding.insert",
+      "sourceContract": "266f8baf5d2dd9b2ab4d667cad6c978baae33eaae38e6bbc3ba7f39a0a56c4a0",
+      "sqlSha256": "5b6f9ec63efb809d1d141902fc75bac1ad737f43e14b91b238c1f6c0c2ed9684",
+      "parameterTypes": [
+        "boolean",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.binding.update",
+      "sourceContract": "97e91571c06f9b57b7cdfa5d543296cd1a00961aefae3fd9a150f80048516ede",
+      "sqlSha256": "227cae57707975c544bf8c501f6e1c4ae0570b27e3e0d373024e111bc39f7a3d",
+      "parameterTypes": [
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "import-master.binding.remove",
+      "sourceContract": "51be96f099d1585d8e6b2b98ddef47aa512b510270d5a0205cab15fb91b80c77",
+      "sqlSha256": "54c380af1cd456f2bebd4db5a48f19174c5ecd5fee03c3f0bf89cfda80141367",
+      "parameterTypes": [
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.event.insert",
+      "sourceContract": "adb1c3834690d503bafd12ab353f8da1067f88b505c69c81a3ce08fb03b49cba",
+      "sqlSha256": "013d43b2e511b4e0d3487f211c6c99b74f3481886b90dec741369dd4b3d5b8af",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.event.get",
+      "sourceContract": "52b3ee60a139873bf0895b1912a58d98a13a7f17151bc190a123c3a452542e86",
+      "sqlSha256": "a75bd2d8a901b4dc7001e74ed4db324c39e22e8c81f7dd8aae11ab391508efa1",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.event.revert",
+      "sourceContract": "f13372c8cdec49f8b22458c16d40f3ca4ae6b6b57f80e43b1ffc4b2fbf20c967",
+      "sqlSha256": "348acbf0027441bc838d9808031f28db13b6dc2875db6c47dd150bbd5bc90df2",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.article.by-source",
+      "sourceContract": "d68795e3630e37be0bce6b9a7774ee428289026d88d1737d78aa3133542acc20",
+      "sqlSha256": "f1e57466407891c5d69d14f6c8428e81251d474d205d32a35d5926f6f1a57ebf",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.hold.insert",
+      "sourceContract": "46b94556b7649a4f38c149a577646b41eaf2b1e6541b504ab6fc0df46b500b78",
+      "sqlSha256": "2ba689bcace524d344966f72ccb27e0fc0a3ca9efc60feceb3e568b149a74893",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.hold.remove",
+      "sourceContract": "f8122428bf589b8f24dfce2ff32ce109a0f18da38e86d762c7903dbe7f5d73e8",
+      "sqlSha256": "489ad7b1867155025b6cce0285d682d8aa0fe8f0aecd4ba921e5842c611564be",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-master.hold.count",
+      "sourceContract": "4b50dd0c1368387bd118dcc07d29aa2046074f9795315d141a33ab102c17db5b",
+      "sqlSha256": "9435d52dc8abb68fb0bf516e3c3c206ac119ddec31de4f4b5eb78c72599d36db",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.epoch",
+      "sourceContract": "dfa5b11c749d036a17d0b35d77c6437b1003ce27c7b0009e1cb9d25f1478557b",
+      "sqlSha256": "86aa6c78dde9989848fcb2a645345612e2c0eb458529753875b312a93f35033a",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.epoch.advance",
+      "sourceContract": "c8dcae74d1e2735428d1624d07720607a0aabc7aa04c31782c58769ef402dcc5",
+      "sqlSha256": "193165ba00bd2d226718475d94edce7316941be1c8e7e9ddffc41cb465330759",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.search",
+      "sourceContract": "1e62b0ee39bc8139420683e10c0e20297051a5e23537e677df1cd4eb76937d73",
+      "sqlSha256": "7ad3de1c613d989a2f6d8960afaf7a5e2a0fc519fba15680358fdd70b7682273",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "import-history.get",
+      "sourceContract": "718063c48c607be3fd98a4f753cac65b1fb2d7223be3a049407dabb59cce4c19",
+      "sqlSha256": "ec08cb0e89c9cc102c70dc6193428e4c1b44e15bb83ea07dc56881e730135126",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.find",
+      "sourceContract": "eff2333bbd77d768a55c4873d7f8697a135deb1966499e1645944ec42f024d59",
+      "sqlSha256": "ab04e07ff40f61ac0bf83fed7dd3a2a7c2f72a020b41ede3b50a6cd13039a9e4",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.insert",
+      "sourceContract": "f5fac64c7f17c97816a0a229d9e26752a84781ee41a985ab7bf336257e9cd360",
+      "sqlSha256": "735101a893bb74be1ff2da6435140551e5b32f57f5ba4ac00368d5b6f4ef8491",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.advance",
+      "sourceContract": "c345b28305119e5432da88a1670ba19c123d9c6f3dca77e3d8de3a4848fd68c6",
+      "sqlSha256": "a1234112304f6051372982f648571f207e008efbe15e461956632e5385dbce1a",
+      "parameterTypes": [
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.remove",
+      "sourceContract": "1451ba50ed963fe8153c587d070e9903ca6e579e76d506462bd58d07fb1c23d7",
+      "sqlSha256": "31abbbb5ed1c364e9403ad42e0c4136ead81babde70cecd221844fac6834b495",
+      "parameterTypes": [
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.version",
+      "sourceContract": "6e0025b6e4e9b739611dfa4b13cee217f85396f4dad893ab1bcaf9695c95cc2d",
+      "sqlSha256": "2fab74fed5924d90028c155760d5e7a33e65edefee3dff2f3da67c84b50129d4",
+      "parameterTypes": [
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "import-history.version.insert",
+      "sourceContract": "ee059a9899138469ef4d29b9f59c6561bb4e2517ff9f8ad7f8b1d0015112a7b5",
+      "sqlSha256": "1b6e97a3f501fc4dd2b061deb0cefac0d60dc3c07e8c01c94b7d77c9a39814c1",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.versions",
+      "sourceContract": "6f9913e3ca01c4675969540f5c06fc735acef7fd6f8bda99052696d956fe9d4c",
+      "sqlSha256": "dd75e78c618a665a20547f33307857c226b98261bcc1b99597fe29c28c47d33d",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.version.clear",
+      "sourceContract": "da6a446ebb4eccaa2aa1ec4b7367fa3c5c78c3916eeee0a1a5cd8cbff06da193",
+      "sqlSha256": "c6a3006edd1fd04689c01ae5a17869e9d00000e375691568a84313167bd0352e",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.segments",
+      "sourceContract": "a12f81600a58a78443d163c957630da58a0f8a904631f322d27e3175a0714560",
+      "sqlSha256": "445d6e8909c0723dbbebd4a587c6a7d7df0ddba29a394cb36f66acdf8422a8e3",
+      "parameterTypes": [
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "import-history.segment.insert",
+      "sourceContract": "6c2b8de0e4b315432c7f4249566ef2c09ba7626c6a126bb61595a8b9f8a039fc",
+      "sqlSha256": "49bb9b355acd5d9199a206e26fdb86ad6569a3daebe15faa577cf3b94c4fc9ab",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "import-history.segment.clear",
+      "sourceContract": "760afdc487a56032292ea630b8335ade24ff99fcacfd695b61ce3b61ba3444a8",
+      "sqlSha256": "1b0f53d835dc56480de6c625527d099dbd0049b546ae20737e3ca15b231798df",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.references",
+      "sourceContract": "e40dd4d39f84bff6e09dd0e0fdaa63ed1c2973e89411f8950e6abcd13efdba0d",
+      "sqlSha256": "adeb63535f4462211da4e3d5c0e241952c5ac1eb98190bf0ffbcd94ddab10eab",
+      "parameterTypes": [
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "import-history.reference.insert",
+      "sourceContract": "b1666a9f93b0bdde8b4b30e5f1687b60e15297bc09f934fd255bab4692d3c63a",
+      "sqlSha256": "587f400a52d9b840b677421b6dffc051ec04462323c5ddba2752590c08249857",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.reference.clear",
+      "sourceContract": "220a75d1d72cc2020fb1de95d0a9a7bde12a63ddb39c29b427daecf05a605c54",
+      "sqlSha256": "22f7aa701480d48bac280a14f07dc7de86d4220dd29f42417ca91cc9a1ebb5c9",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.dependencies",
+      "sourceContract": "9f021500557d376d00fddc48ad87bd14b4dfe4fd284504cca166ddf0e3ed05ae",
+      "sqlSha256": "2e4a84c99a815393161d6c5dc1014ec438f5a40b22e7d709a4d9ed2deb94e52c",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.children",
+      "sourceContract": "6fd7cce70f42f42dd624c679879f5c44f7f304e0d59d7cd27fd0ab2d4cce769c",
+      "sqlSha256": "f6b2e1ca508d315e91419b6f1fc558ba4f701603f03458669c7017ca68e77cf2",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.list",
+      "sourceContract": "ed506fde3434397d474f42690965fb3cf2c5b50d2fa612549009c6822e73d34c",
+      "sqlSha256": "11125e1a1d61f0027a8658c8af54defb76f65d2f6a5cee9c472b3b4ea73af36d",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.hold.insert",
+      "sourceContract": "87ee39acb9ea4506b7edafac8cfd358091a671128bf98fa8c7b8c480a3e1775c",
+      "sqlSha256": "3e7fcd6c9af0bff2a4acc16f7adf9971f0a4be030df56dd603fd0f040876c232",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "import-history.hold.remove",
+      "sourceContract": "48ff299a96cd803e292fda08815a7844ef5572fe5c82393bed48d3115021eb0d",
+      "sqlSha256": "592d4aadca320fa7cdb52b59f95a69f753c869517d571de063ef22e40f696577",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.dataset.next-slot",
+      "sourceContract": "3730617c4074c82c013524feb66d2fe95bd5726c0a387bafb22ab5ecf76d67ff",
+      "sqlSha256": "ee0945d7e5eecda3cebcc20b1ceb5132bbcd5b4627ccd86051cef099836ce613",
+      "parameterTypes": []
+    },
+    {
+      "statementId": "cash-snapshots.dataset.get",
+      "sourceContract": "37c156fd37d46453c339eae4314c2e7cffdccb798ec0c238a30028a134f9bf71",
+      "sqlSha256": "c224e55d8a37a987df7f961aa0ff40e4273c0483402beb526a54022b3c05fad7",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.dataset.inventory",
+      "sourceContract": "21f15510e49dd8045d95498d538aa8cabb2138f903479adfcfa889dbf68e14a5",
+      "sqlSha256": "9e28d0cc5332fdc44c6913a898a756960fc85cd5169895c68425c1779769379e",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.dataset.insert",
+      "sourceContract": "6f982735e7cd86137bdc69e7d8522481cef35e353beb21335e07b1f9e97afbba",
+      "sqlSha256": "a136774bdabc6edf56ed83f1cae4592bc59dc9c3d94e98c8248234bffd5e521f",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.dataset.update",
+      "sourceContract": "7e278f9cd2867303c27878853b6b64657ade9c728d6e76a7330a2f490030ecbb",
+      "sqlSha256": "d4d2ef7ae29fb6c38449630c2c58360d8729bb1505118eb600f96f863be31b79",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.insert",
+      "sourceContract": "8b0aa24c166dd6f01d9802f32df94bce21ac805e09d2c07c2346c097e64d6a6f",
+      "sqlSha256": "87e46db65653e5e37c273fa2fd913c8c26de84a4cf66a6eca549da1acfc59969",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.row",
+      "sourceContract": "bcc40fe9ccc3c241705c9ce4e6425aa586eddca62fcf3280341a6d4dd1633929",
+      "sqlSha256": "318dceaf9753d4aac3fc72a64456fc2b6f2c5119e8b005b84f3f11a5c3985e4e",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.key",
+      "sourceContract": "c34626d4ffec7dfa093d14ed3cf03d3aa4cf88dc9f625173dd36047ac3579b1d",
+      "sqlSha256": "29e69e4fadc76d8be56b3e9f59758008c92e701ef24a5fb3f20ebd49683eff65",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.page",
+      "sourceContract": "5da1ff90af7d06383d862a7e4a1ac3ba484352925b7215c32538a86b0c468584",
+      "sqlSha256": "be944fe92cde75b8a38558f4f657879e957d3d85b0189e3807c09bb4c741bae9",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.count",
+      "sourceContract": "ac8cc3bda1afea716e83cc78519dbb0b5f163057682929db7ad4835a2941b533",
+      "sqlSha256": "db9737acc39f771a417aa1b8e2eee911cd1ce164b4067c3abf336cd3c3781a0b",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.children",
+      "sourceContract": "94ba13f157f3d50de8e34ea4a25f97737735f4c22bae99a69d88b3a30712432c",
+      "sqlSha256": "cb9b7d59dd38fc7120f3f9b738d15627d3762b2f44f1fd0003a70f856b6d0d14",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.insert",
+      "sourceContract": "1d2587bdd80fa29f8243bc3c2b3967540846a413f3a50f0445318ee99c3f68fe",
+      "sqlSha256": "4c982cda8c58c650ee5b61c3d33c2086e6b932d729df151abe24a81d723a829f",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.row",
+      "sourceContract": "7a74c600ccb2b1c294728abb7a71d440fcd63ab1a155f103b02e3bdb3c4818d8",
+      "sqlSha256": "c2e6ee247046766f9b35d5910a20495aff7f930e6942f34bd6ed57b2558d993f",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.key",
+      "sourceContract": "f5897e2eebeac1764d52c66b5eb80bb11b19683ca634e5228caa0f6ff007d1b8",
+      "sqlSha256": "c20d6ca7441edf8983ee9f8bf30fcaab8d788daa442bfe5baff14f7c3579f8ac",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.page",
+      "sourceContract": "8e8467da10a1752766b5ea90288b951d7f1674e2e00e63314e3dd96fd9132746",
+      "sqlSha256": "21f4ff5f8a379095ad0eeb791d0a71c3f4676928d6fd455298c24cc6011af9ed",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.count",
+      "sourceContract": "6d475064d23f1384f51b6396fcd3af3b033543eef899c9585fdead110c58e0b5",
+      "sqlSha256": "45a5fde73a2ee8e54bf012eeff204e0534e346f00f953037611cfb809ac3f11c",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.children",
+      "sourceContract": "888042e318cb3d60d3d34e27c8dfea9659b27252a4210454b9af18d3d5d4cae7",
+      "sqlSha256": "31c44f0e105160dda6ece22f998eec4f2e6bfc62cf99339c377561966d45b783",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.insert",
+      "sourceContract": "bf3b4f9bf282972a27e373eaf99441cbac053571c3d23cfaf5b7ae1c685c5173",
+      "sqlSha256": "14945bbab3db60e1f161da535db15ef26436e220e47b9c7d722b3fbdf8fb894c",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.row",
+      "sourceContract": "d1350d50c4b68e5d488326c94a13c542d87e272dd9412f76a48258f0e5a4626a",
+      "sqlSha256": "3b65ca2930a6cf7f0920e05f9ae87558ae19c875c16d8f944adf3e964b7510f2",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.key",
+      "sourceContract": "d0b16f5e5736491f17e0c824e1de7a2419a8acf8f10cf15262f0ea85a6885e62",
+      "sqlSha256": "4f362abda562fedff46197eec5823e3162d0f4189efb4fa3b2253a48dcf41b8f",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.page",
+      "sourceContract": "7589784ebcb56c5c5fc62b63b512bff628f503e8cb7737a27987e32f889010a5",
+      "sqlSha256": "5d9cc0e7f79d9af8b4da0f61cbb2be1305e8ec6e341ea800255893a044766512",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.count",
+      "sourceContract": "c66524a7ce114d941637f5860ee3a57a8d868607ad00c350144c26577fedbaaf",
+      "sqlSha256": "70cf40dd03eb674d05391c6be38d25f0947e37504027443fdb02aae32c36dd8b",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.children",
+      "sourceContract": "e6431cd9575095ab4483c83bead0c09b257315573db1837d84711c2980611da2",
+      "sqlSha256": "01aca68d4318c0060dcd15630fe5920a738a3dd63b83932de28a17aaac8aa21a",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.insert",
+      "sourceContract": "b7e0c2f50c74013463131067eb4b8e3006b7c76ab6e4632aa01170c91e2fa2aa",
+      "sqlSha256": "a8676b341d6d88c6625d0fbd5ee5a81b9285cab69bbea319f0a7fc0b8f969fa9",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.row",
+      "sourceContract": "1a1fd66e37f38e36fa2815e637f3e2e6e32575566b6891c0cb9d0aa362055968",
+      "sqlSha256": "8d5c7b4efab485ba3bada4d79092cf71bc429b9a2241d4ac84592c27ac634073",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.key",
+      "sourceContract": "ecce44bd6346037b9fdf05ed28f55644a81b71c22d8dfc9c2b4cf9d72e48dd6d",
+      "sqlSha256": "d4e0173d77938aac9b3c4d2ea214bbfe7cdc45441d559ce4cf1f5c416124e375",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.page",
+      "sourceContract": "27dc8dd23053552b2082cb79082e216120f8faaedb19e3553e6cb3160dd48a5d",
+      "sqlSha256": "fe67d3a9b4bc759f9022fe6dac5eb7167d868dc76d6706e272df42531edee2f7",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.count",
+      "sourceContract": "b426e0ce0f9d5b0a7d123d938e371a090acf57a6eeea9e4334854b2b899cb8bc",
+      "sqlSha256": "dbbae4d311a130ef8d9c41865b093fa55e3abfd14464ad5b1ed0069919262444",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.children",
+      "sourceContract": "6e32b1ea077f829e66af991ed7dd466261a1ebeea67086fb7ebebf22b02e05ad",
+      "sqlSha256": "65f6b3a436dfbb6ea19520156ffe3a54b4f520d2d030f2690f88a80a28ac2876",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.insert",
+      "sourceContract": "aab0fd3ab4929d6eb90ac765fded4a6e0f0b5b89df85d2832c6efc92062b5474",
+      "sqlSha256": "6e142ab076ed2dd94c18d46e9b61c0018b0983d3ed28e02e35491955125342a3",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.row",
+      "sourceContract": "8a13887acf020072e65c5545f48132503b81ec6a92444646eecf0b6cabed0621",
+      "sqlSha256": "9223f66bf3d5f4e6968618ad9a0318f26d90f6b026d2f32e273647e02d432aaf",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.key",
+      "sourceContract": "0f49c9802aa4260337544dce7ee4369709238b5b20bdab02e36bbe30419c349f",
+      "sqlSha256": "c367e0add64a50e06d20781469502a0acaca7ee99124c78c4be78409e90c5614",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.page",
+      "sourceContract": "240a73166357aa0ee4aef0dba8995eb6dc25d4e0befcb072cb3e191fb1fe5a0d",
+      "sqlSha256": "bfc9079455e2e3934b327a388f5250e5b6443f6026d72b89a7ffab71027e7a9f",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.count",
+      "sourceContract": "2fcc5c99997bc692d966dbc6a7641b036a80c7e57720121f2582dd7e12ce3212",
+      "sqlSha256": "a7ee61bcc3dd934c27baaf21c244c0d84fdd8812ec9d8529bd355d39ad6562f3",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.children",
+      "sourceContract": "f8863cfb8fc7f8910d73e9cfc792a270af559c8ae9e46ccc03badbcc4d41900e",
+      "sqlSha256": "fb91d33ae92275e17e5000f065a7ffa21f4024285d6328c8651ecc5969a90bb1",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.insert",
+      "sourceContract": "9a54707fcc5e2125259f025cd7a177bf79c5a183ab8125a5fdb0cb1712e817d6",
+      "sqlSha256": "a194362c85f6dadc56fffd20c9e9d0c7ef5485fb7a24649f081badaa109a2268",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.row",
+      "sourceContract": "892a4220906e4937ed8691007bef4cd40f398461f2603e9de7fb1902284b9cd5",
+      "sqlSha256": "e0d712e48985e38f930bc81b86d1d444866122cdbd3ac40965d8a25d4dc2be43",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.key",
+      "sourceContract": "7dda56bfec581a7f2ad05acfbff37afcda6cfbf0a766475caf1e3a60eb6a3e84",
+      "sqlSha256": "1903643f7917b1610ad94638c8c0a47f3e10d00675974d2d7b57adcbfb43d399",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.page",
+      "sourceContract": "14576b8a1157c5f26dc367a37841daba996b1ff4d6a66305024c249cdeba7715",
+      "sqlSha256": "cafc2e149ace980fb21ff9f6d329d4f6d54ea77947141578133dbdabd2bea597",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.count",
+      "sourceContract": "babffcc98acf593dde743ed131a33a88a0c465582cd8909ba75b80149760f1e3",
+      "sqlSha256": "974e02d87ffd89f818c5959bbc999598084324262783fc37cb42946f47b80bfb",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.children",
+      "sourceContract": "b7155998b828e7c147f171205822b012b6d4f67de466ffec4ba4cc6b80e52e80",
+      "sqlSha256": "8b7d465469ae15e5acaa48e704e04ad175fc7316cf7512b260716ddc30e927b7",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.insert",
+      "sourceContract": "ce65d33ce3d2cebd4ba91693986f28a3bf583846301ffbfa18fcbcc3da22a565",
+      "sqlSha256": "bc4ba43482d3c0c8be3d9785e7cb686f7be1edf057f5e184530c408d8adb54aa",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.row",
+      "sourceContract": "2d18e4b6df8eb416175f8360780a5323e41f52bede6290f50b93663d399a4ffa",
+      "sqlSha256": "a914bb5ee90ee70176b5efc636fbdaba6d0def01989d5fdd717cd76180a79e1f",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.key",
+      "sourceContract": "2dda373c432177a6d00f27e41c12f531b935d0da80d2e1e0489f852703fe1d30",
+      "sqlSha256": "ec6d541d8d6a54ee1acd3cc5c376a2f7499e32e79e0302906fecf51649d1d7df",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.page",
+      "sourceContract": "5b0da683f90f844c495a0fb79e33e45c26f5d4b9e7a229378b5bc5278198b3ea",
+      "sqlSha256": "0ad3de2fa6868738d6c0349cb603d4ef6056d55331324b3a5000755b871130b4",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.count",
+      "sourceContract": "8548d43bc7fd94266f90e82cb1f8a966a60e83ee25bdec2a0eb1c90c7b7d9ae7",
+      "sqlSha256": "ccf6348549132f426e1338e82951c07573244f427fafa0d0f98599ed5711611b",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.children",
+      "sourceContract": "347f5f29011a6f5d75c2546eb4e5612527ed2edaae400756343fa15493001148",
+      "sqlSha256": "871867fe27d16cef0b17d339e6cc7b20cef3e25b6ed7bc03a522b76143db5931",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-publications.report-source-search",
+      "sourceContract": "1a0657d8c4c55eaa8d78729c4e37e1b293f4d7aa3ea521d5e533333c05bdf561",
+      "sqlSha256": "d3897783a926f6c210f5fab785542e274edb873e3bbe2590e2e96f7a48501747",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-publications.state",
+      "sourceContract": "4820f47b152c21355ecbdcba8959fbe6fd2241dd631645ca6f6d25c62047090c",
+      "sqlSha256": "47335e0658ab0413b016f7a827f290db23236818a70f50628314f5f1db948627",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.state.insert",
+      "sourceContract": "993fab908e72e79e90764e619bf53225933710067a97108b611203402b724184",
+      "sqlSha256": "abdd691849a7b4882a7e622365c426af9b76c7729f8937bc83282ab6ca56b105",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.state.update",
+      "sourceContract": "6a924dc783ff04abbd56cfe134fe22b8e2877b5887436cfbe5d10283084680ab",
+      "sqlSha256": "7ebb402857b9e9998dc8aae679ba15f7cb965991856c325730249d2af11063c5",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.get",
+      "sourceContract": "f8ad7ef89d6733f1f08e7bec09a1a87b162e49aa1ba5235a68a2834aa38c6f57",
+      "sqlSha256": "551ae565ae3027b3efdb2ea5fe858820af0f99496cce1743de1d0775d68b150c",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.insert",
+      "sourceContract": "73303e9f415720a33c8e1e07a5da02adb3a0fd572c2a47837cc154221b305cdd",
+      "sqlSha256": "b5eb74ce8f803d25f199a2b5ff62eed6024f0e2c4e6bc7b2f900d96081001410",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.binding.insert",
+      "sourceContract": "b967e2008e2f8f962a37ab31cc19ed16321ddb5ac57ca39654beebf1cb86c440",
+      "sqlSha256": "9014dc2d9beb62d7b2763aa6c1d3590bde624a637e0f2f21448cdca82a9a806a",
+      "parameterTypes": [
+        "boolean",
+        "text",
+        "text",
+        "text",
+        "bytea",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.binding.get",
+      "sourceContract": "d61856ee7739fdf476660a83f60429e197225edb0f5399c10a7efdf29c886bb7",
+      "sqlSha256": "84a3ac00dab3aabb20b01c5689cb9d95e209f6c54e8ca7cb9496961b17031b4a",
+      "parameterTypes": [
+        "text",
+        "text",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-publications.bindings",
+      "sourceContract": "d0556d0bfa7aa86bfd1815049e37bfd184f4063237f1ed68e55c8621caa048b3",
+      "sqlSha256": "df0b06be9374469a931a67a3ea5c3317d2a24f14a4aabbe0195f427bf5c03f5a",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.binding.count",
+      "sourceContract": "53ec9782baa4f11b8780f6ac1baf3989c08e97893665694d67a6134d73cc3640",
+      "sqlSha256": "f3748a42ef9fc26816778bbd846f9670323d4c2f503cce1c4c807e6181499ca0",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.binding.inventory",
+      "sourceContract": "8c53b45e46aef24d261f8b303a4ec20ae085b1732b51c3e377f9b4303a04ec54",
+      "sqlSha256": "b15b177c1636fa718190252a486c9e169bfc37b8a514846b1200637d1b8de9d3",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search.6",
+      "sourceContract": "720331641c28c06bf079ce3cd59cb8db2d752421012e1427c34c9751faac0d51",
+      "sqlSha256": "1ebfd3549a55387daf8d96edf0fc2e6701a25417445095e24d5e9c64c67d37ea",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search.5",
+      "sourceContract": "c5438afbd61a023d85cbedccf11bddf3fba3a8d0af6e0211fcfcb15a34548254",
+      "sqlSha256": "895ce8e6c2c49180896c86a3e2d3a221f8ae95d9e371b6316090a4d0f26cc1dc",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search.4",
+      "sourceContract": "b86387a6c0ca4246813dddf6b43d56bbcd0132a96eb88c64aaa4f6810f74e928",
+      "sqlSha256": "18c9fc920093e78f43c783d1d55c3b159c54c16f43a7e1ef1a3a66d1e98875a6",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search.1",
+      "sourceContract": "03444ef51f6e91fbc4917678f8064c18deeab08ff48c39b23f9cf58a73c628c9",
+      "sqlSha256": "6adc0bba8f55a7a951524a5fbf0888f89d3f907d9dbbb4309d03b649bb2dbdea",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search-assigned.6",
+      "sourceContract": "6572e22f99e0c487b221b0001649a9235a5bfa9fffaeae02684ee68d05523970",
+      "sqlSha256": "80e5439e71b43dcf53596a1062a32530b9c6000e2de5bdfc6db26cd27c1fc508",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search-assigned.5",
+      "sourceContract": "56200732780d6fc47cbf31e3c2d99cf59de7fc7591c442d4e7b687034ee2e3e4",
+      "sqlSha256": "adaeeee7c4ac1a0724bdf0f1defc7e6c6d72c36b04ba2eeb51d682f83f2f2f18",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search-assigned.4",
+      "sourceContract": "d3b207b59a538795dc2e6622d7d3b3d9b2b7b79d9a14efb1d1d88e3b139d179c",
+      "sqlSha256": "1109b70428b315743dd1cddbee3951336fac77269e3b82608b19f590f0dd625e",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search-assigned.1",
+      "sourceContract": "0e8bd3eed42ba63e03c4ef32cc1360b1e6c227747497d26644fb48a6f9ae2e0f",
+      "sqlSha256": "0746ed8b025819a381282571df19122b8dd6e4d6c57e212c6f2d845f6bf785aa",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.references.filialen",
+      "sourceContract": "5b0bf5b6698eacaba47621df2b17b92e441fb3ea3b06eff25487e58ed2bbeb85",
+      "sqlSha256": "07fc63987e792f097e907c51f6e83f01cea4d1f55557d2bd8af1914e1cfe9953",
+      "parameterTypes": [
+        "bytea",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-publications.references.mitarbeiter",
+      "sourceContract": "be626d52c70161b4588e4309a089b96c4e477b7372f16444f2b55fab57237bba",
+      "sqlSha256": "c044645b05484f2760c9a1d872ac1529e1604c8cf2580778eb68209bfbe289be",
+      "parameterTypes": [
+        "bytea",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-publications.references.artikel-stamm",
+      "sourceContract": "f07b69c09dc9a8f5d72240f46232552b0971211cf61b9b8d6c2c321106d76624",
+      "sqlSha256": "9a54526e4bdc3d247f4591f8754fb298eb2594f7dd3b0664c71c247ed0ccbc2d",
+      "parameterTypes": [
+        "bytea",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-publications.references.kunden",
+      "sourceContract": "27a7a1a78e5b93dbaee6c29880003bc7b3fc7e5782c5cd88a9fc0959244f5d17",
+      "sqlSha256": "17206b65bfa5832bcf04bf7b2ded2a7412b9fba0fb764338696550b6f6fa0c01",
+      "parameterTypes": [
+        "bytea",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "loan-module.get-article",
+      "sourceContract": "57852afd21ddcee32e4b7617e17b83a187cfb2819fb7e27fd748f91300a32941",
+      "sqlSha256": "d73fb7b5e94d4b2b1537bba4f27a0f543533e090f23d8bae3db90b14629bbfc6",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "loan-module.get-article-by-identifier",
+      "sourceContract": "0fdad2e35fbc20b467a713d95f76fa3f8aab598235fa0ff522094faa906f8078",
+      "sqlSha256": "0281291ae1a45e0cba06c7df7720460e4f21e696d06d233b7f1614035a8a23a3",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "loan-module.search-articles",
+      "sourceContract": "6c671a1df31c7dcafa5cabd25ce245607691e44e1bd76efa08bd5664f3d18f43",
+      "sqlSha256": "d7ba9e558b931bfc4ece71b7271b466a8679371f5df3d50bbabe88c6442ec883",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "loan-module.get-active-article",
+      "sourceContract": "6743005369dcef6d56be6f78b82fe83389d49487cd1d6517f97cb8fe0034aaa4",
+      "sqlSha256": "8b6c21a78d17f58d6a05e0bb6404bb1e761d21c99329553ee438f0c205de555e",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.list-active-by-number",
+      "sourceContract": "873af7df2f427a569926f89e33bfeba81b399f34880f2c58c8d335af80c74f53",
+      "sqlSha256": "f2a028a4b8f7be5a6c2643168045fb5397233ba5b4d0fe94f90fe5e5715dd095",
+      "parameterTypes": [
+        "boolean",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.count-active",
+      "sourceContract": "753c4f702fed3910e59c926181f06b450ea8fbcfec39f7044dfaa3e296fab330",
+      "sqlSha256": "6106744d86a92030f4479b6e33d00397636b026583f53d381797e6456a8896d2",
+      "parameterTypes": [
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.search-projection.dirty",
+      "sourceContract": "4584593967f8797fa2e5534cc39d1fb8b9a8ab445f046550e63f1d7cb9a53f3f",
+      "sqlSha256": "69333dd9cdce666e8e8554d81ab9982021cd26f19b17c621c6bc3e9c3f43ef33",
+      "parameterTypes": []
+    },
+    {
+      "statementId": "sales-article-catalog.search-projection.source",
+      "sourceContract": "d5ba691d25dc374ad84228ea6797492c23bad181a4c2b5b2e34eca6f1bb9e2a7",
+      "sqlSha256": "5863ce6b203edc09b7d111fd00230c69b828d87130fc3e16691af01c10e42e3c",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.search-projection.upsert",
+      "sourceContract": "fef90dd1ee1a4c67c48718b54b725a1d3ab47a9b43fd45dc573e89a594380c2e",
+      "sqlSha256": "abf0e438e9582342936639332b1300a48afbee12a8084b6cc517b4b53cc4f96d",
+      "parameterTypes": [
+        "boolean",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "numeric",
+        "text",
+        "numeric",
+        "text",
+        "text",
+        "text",
+        "numeric",
+        "text",
+        "numeric",
+        "text",
+        "numeric",
+        "text",
+        "numeric",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.search-projection.clear-dirty",
+      "sourceContract": "c4a50f6f8571f70b366b0aace86def5e6a7fd59fc5a3c8212eaa2f2f4038f0db",
+      "sqlSha256": "c23e8cfcfc1762f8947ad55720f12114ea6751485fbaecb67312390b3eea929b",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.search",
+      "sourceContract": "133c099853ffd4d225eb05ad3034578cbfe3e0a115fb4152d580a3a367550e13",
+      "sqlSha256": "a6e10408caea4ab3cd18e924d19df706824cac168abd1f4cb6c01f500b77adbf",
+      "parameterTypes": [
+        "boolean",
+        "text",
+        "text",
+        "bigint",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.search.count",
+      "sourceContract": "5f3cc53f226ede28a5cdb295cd670435c91ff996b60cf59a5aeadda243fcfd72",
+      "sqlSha256": "b1ce19f1db5c9940bd1aa2a147b5c5b55c163900a7abdb0d3127aa577b7c5228",
+      "parameterTypes": [
+        "boolean",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.get-by-idempotency-key",
+      "sourceContract": "c3ebffe1810887e802eefa30eac551cee67639ba53a3c316b2268b9fa878fb3a",
+      "sqlSha256": "38c7c22d905f1a492c3e859d828243ff133cc4eaa1a0d5080f5c1451d5ebe4d9",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.latest-at-by-source-system",
+      "sourceContract": "d228508835dff694a43b6590d54aa0311668e4b729b095102ff34bb05eb205fc",
+      "sqlSha256": "e13e37f3e32c877d33d44d60454cb19cf2fe6ad088dc0da3ede79d24bdcee1fd",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.insert",
+      "sourceContract": "3f17f4c4e8ed70fb5b4c8406ffe2e2da6cfb131ba4ab28909f32f6f834003af8",
+      "sqlSha256": "2e30fcc91292da79bf8e82b18a9452be5804e13f88c49fe9df7a6cabd696f54e",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.findings.list",
+      "sourceContract": "52fd0faa74a7c24c54c4b41c9804f9861c380a3a8c014717b9a894f5d6c00ed5",
+      "sqlSha256": "3083e0fc7b5b18ba9337a49da52a44993bcfb718cdc1ee221a3e44207097f49b",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.findings.insert",
+      "sourceContract": "4f6f1edae87d73c31594550251012834707774bffaba4a184ff35b2fbc279758",
+      "sqlSha256": "9bad9c29e92a9d08c2b067ed21b30f53164e37dfd9d477b74549ff684ce32ef3",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.run-metadata.get",
+      "sourceContract": "b835b29175a7b52c1331b539f7accb9de3b710b86f05c042b272aafdb629d54b",
+      "sqlSha256": "7bb551d0b8c32f1732ecc381c14649c40f9e60503cb88bb6fa48ac0f61f25d92",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.run-metadata.insert",
+      "sourceContract": "7d34a7d29c685e7251f981a276e0119219a53ae5a8575a4b56ae60ffaacbff85",
+      "sqlSha256": "2f67b2f3d693272945bf2be8234ffc56dbb9ebf3cf14f172f904c9b077885384",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.impacts.list",
+      "sourceContract": "8a4045024ab846a44642dd840699fe35c25cc61d87182ead843b75b3b125f413",
+      "sqlSha256": "190ee0b8f2b4c0a446deee79d3200f6015573b4205f966f79f997f8163b12066",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.impacts.insert",
+      "sourceContract": "dacab0e528352d1b0683c0d1adc23ccc75efc405c9223a86cfd071e0736b27da",
+      "sqlSha256": "49102302888d098459cd508a162cfcdd373bb7aaf0edb206221c094902bd9b4f",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "bigint",
+        "bigint",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.imports.impacts.head-conflicts",
+      "sourceContract": "33ab4c611709e54e3023c2d465804a32523f3076c101bacf9f5ef4de64fd3e87",
+      "sqlSha256": "3a20b2c3b0d3eef2c89be1a25fdf955ce111d4679ad37b19d995a37e9dffdfab",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.get-by-source",
+      "sourceContract": "09d7160fcf546d43f5f55724a036d2ff040fbd627f0f943f89b149c7885299d3",
+      "sqlSha256": "997db3af715af568bd691ec0ca93fb8f589a1425a06f1efb6c2a5f0aeefd0d14",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.get-by-number",
+      "sourceContract": "bf00e617d77a848074f159ede63f52ba4d6f89eaf9852d9d89b19c3a33c1f96a",
+      "sqlSha256": "739839cc6e260f3f3714ce4a7d52fb4bf40a6c70bbb71529d42ac4308e3c8530",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.get-by-product-id",
+      "sourceContract": "4e3b76f77ec7ad82801b6a24d53f6847f63f74d4731ae6679b9880429e569e3e",
+      "sqlSha256": "e2b9db944e91d14037a91c65e6606113f4250be07b6fe62b3b1e2828f5de8497",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.insert",
+      "sourceContract": "055b7b928c4ce7d9a1842be99e0c36023d40b2675afa2f9b02904c98523af63a",
+      "sqlSha256": "90cb449776e60b972d32ba702c6bc14852bb9a967db1764cd8de78fdca1c7573",
+      "parameterTypes": [
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.insert-source-link",
+      "sourceContract": "c7e11488696716e4947228a61325a2e02bbf5cc2793571554b05ea360434dc59",
+      "sqlSha256": "fe1b3f7fdd8ba12a2cff5bb9bc5a8cd7da717b85b8a9d41f6c237275c45dfc17",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.revisions.insert",
+      "sourceContract": "59d073b5966b3aa59d3b3ff05438a5712b910ecebd9ae30a5387b40c487ec638",
+      "sqlSha256": "b3df4142998d4804665631d9b2ee4ae1bc74f24080afed610c4977bf6f8be5d1",
+      "parameterTypes": [
+        "boolean",
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.articles.advance-revision",
+      "sourceContract": "ff145ed876036ef951864386db86af1d2e36eade9479f667de5d57a70dd4d20f",
+      "sqlSha256": "9d1eb78e31974915ee1f7aba9197ca3a28b349d1bc977d146199d6f25780a2a4",
+      "parameterTypes": [
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.revisions.get-latest",
+      "sourceContract": "30f77f6bfa9c095b8b39426f3fd404006bd4be2984fb234b6f5688dcefe3f39a",
+      "sqlSha256": "3dbf5c22599c239a3a410973538ad4bd4d7718e9dc699a845b9abb2c79ea0f77",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.revisions.get",
+      "sourceContract": "a82161645ebada442e2699c6ac0d68cbdf95a241db10e833b66d7d3ba5b1f763",
+      "sqlSha256": "9ef56fc9dcf3c4bd2020f917a73009de369b657fbd3d832b66a045366fbfa4b5",
+      "parameterTypes": [
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.identifiers.find-owner",
+      "sourceContract": "6d02843a70d0782797cf7e6fcba8a2bd137e2afb7a7e1a61fe19a86fb4385511",
+      "sqlSha256": "11adeba7d0664f179d72f53e111dd20ce614e5cab2210cee4d41ba4c73bd5df6",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.identifiers.insert",
+      "sourceContract": "2479e9fbf25ea17ac54371f3b2d7bb3ae71d5466183eb6a91174b908a9633aa4",
+      "sqlSha256": "2845bd7118cdd093b2a0c48dd3ff0d12b9fe28fc7fed9804f98dfa4e32532651",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.prices.insert",
+      "sourceContract": "ab887014f97875d7438030a725ec9ee4e0ddee3e1fdc6404e2313497acc0d94f",
+      "sqlSha256": "bcb65973fd83393f2622b49c8484fad12ce0c7685aaaf306deb30ef916314a5e",
+      "parameterTypes": [
+        "text",
+        "numeric",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.identifiers.list-current",
+      "sourceContract": "e6df96cbb8b55508dfec1d8f137060fbdc5823b5006fd8e00ce917c8b63a5e2c",
+      "sqlSha256": "79ecf345d2cd194f15b26bd1366b436bd24b92d06f0698dbd4f9617faa4ad415",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.prices.list-current",
+      "sourceContract": "f80fbe0b765f73f708898cbed7689d890f61a4b3ef84b1b700124e69f747a269",
+      "sqlSha256": "9ce51a55a312ab7c7c5da0c3fb15426741d2371c2e9dd1c7681c3004e56acca6",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.revisions.list",
+      "sourceContract": "dd00ae3eedd2c5a8c76367b8c0655a62f6c93d7f482686132518f2616f6e39bf",
+      "sqlSha256": "1f00f7921ba0b3f4236aeb6b8486043979a0ca952950d10a09002cf795d4945e",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-catalog.audit.insert",
+      "sourceContract": "60cbe61000876e940de996dc911322cfca16b7487ea188a4cd868b2e38614c2f",
+      "sqlSha256": "b02f271608f6d74fbdbbf63e08a0e470911ebdafe1ad74dadfc2b348670cef08",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-images.metadata",
+      "sourceContract": "9838716253aea9a93e5785b34fc1699803d699fb7119d99c4e6e2502365058f4",
+      "sqlSha256": "a3657b5cb9710c70af32ab7e541586d55e364150948844e176b2b62d745b802c",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-images.content",
+      "sourceContract": "4a947d4c54df65a5746a74f17ad2b6ec5e22e4161c9916c1956fd27bb4aa6bb5",
+      "sqlSha256": "e712785b4caeef85b7c8d49d30d22d8d2e39dec5d9884be7d3a6fa75ba761328",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "sales-article-images.insert",
+      "sourceContract": "b440bd71bc85188ed226c15d3135c8bd935b870406d7092d15d4caca515b854c",
+      "sqlSha256": "02df11dfb999fa99e5886ef1d56c7461dbd73758ccc67fe6420e56ef19e7915c",
+      "parameterTypes": [
+        "text",
+        "text",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "sales-article-images.replace",
+      "sourceContract": "8d424b450ac30cb6cadd91fa440f8a9b655922e3189ac7072e352f7b92d4b41c",
+      "sqlSha256": "d95ca0d768bbee54d02c048b66f49448bbca77d8f4cd3fd1c4068298f38750e2",
+      "parameterTypes": [
+        "text",
+        "text",
+        "bigint",
+        "bytea",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint"
+      ]
+    }
+  ],
+  "schemaPlanSha256": "8cc852f7003fa51cec873ee3334a8382c4003d762cc643327a386d90bdaff801"
+}

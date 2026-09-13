@@ -2135,11 +2135,9 @@ const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtime
 const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
 const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local").trim().toLowerCase() || "local";
 const systemdInvocationId = String(process.env.INVOCATION_ID || "").trim().toLowerCase();
-const serverManagedRestartAvailable = serverModeActive
-  && process.platform === "linux"
-  && /^[a-f0-9]{32}$/.test(systemdInvocationId);
 function currentHostManagedRebootAvailable() {
   if (!serverModeActive || process.platform !== "linux" || !hostBootGeneration) return false;
+  if (postgresqlActive) return require('./lib/persistence/postgresql/lifecycle-control').available();
   try {
     assertSafeHostRebootSocket();
     return true;
@@ -2172,6 +2170,13 @@ const persistenceConfiguration = resolvePersistenceConfiguration({
   defaultSqlitePath: path.join(dataDirectory, "dienstplan.db"),
 });
 const databasePath = persistenceConfiguration.databasePath;
+const postgresqlActive = persistenceConfiguration.providerId === 'postgresql';
+const serverManagedRestartAvailable = serverModeActive
+  && process.platform === "linux"
+  && /^[a-f0-9]{32}$/.test(systemdInvocationId)
+  && (!postgresqlActive || require('./lib/persistence/postgresql/lifecycle-control').available());
+const persistenceAsyncCollections = require('./lib/persistence/postgresql/application-operations/async-collections');
+const persistenceRequestContext = new (require('node:async_hooks').AsyncLocalStorage)();
 const appBackupDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "backups") : path.join(__dirname, "backups");
 const brandingKitsDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "branding-kits") : path.join(dataDirectory, "branding-kits");
 const privateDataDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "private") : path.join(dataDirectory, "private");
@@ -2416,7 +2421,12 @@ let instanceLockHandle = null;
 acquireInstanceLock();
 let applicationPersistence;
 try {
-  applicationPersistence = openSqliteApplicationPersistence({
+  applicationPersistence = postgresqlActive ? require('./lib/persistence/postgresql/application').openDeferredPostgresqlApplication({
+    ...persistenceConfiguration, authorize: authorizePersistenceOperation,
+    onOperation: persistenceConfiguration.rehearsal && process.env.GRABENPLANER_POSTGRESQL_TRACE === '1' ? (id) => {
+      fs.appendFileSync(path.join(dataRootDirectory,'logs','persistence-startup.jsonl'),JSON.stringify({id,heap:process.memoryUsage().heapUsed})+'\n',{mode:0o600});
+    } : undefined,
+  }) : openSqliteApplicationPersistence({
     databasePath,
     catalog: SQLITE_APPLICATION_CATALOG,
   });
@@ -2425,7 +2435,7 @@ try {
   throw error;
 }
 const { database: db, provider: persistenceProvider } = applicationPersistence;
-if (databasePath !== ":memory:") prepareBackupWorkspace(databasePath);
+if (!postgresqlActive && databasePath !== ":memory:") prepareBackupWorkspace(databasePath);
 const saturdayCreditService = createSaturdayCreditService({ access: persistenceProvider, today: () => viennaTodayIso() });
 const applicationRepositories = createApplicationRepositories(persistenceProvider);
 const {
@@ -2459,12 +2469,16 @@ const {
   workRuleGovernance: workRuleGovernanceRepository,
   workRules: workRuleStoreRepository,
 } = applicationRepositories;
-const sqliteMaintenanceOperations = createSqliteMaintenanceOperations(db);
-const sqliteSchemaOperations = createSqliteSchemaOperations(db);
-const sqliteSystemDiagnosticsOperations = createSqliteSystemDiagnosticsOperations(db);
-const sqliteAuditLogOperations = createSqliteAuditLogOperations(db);
-let loanProtectedStorageSnapshot = protectedLoanStorageSnapshotFromDatabase(db);
-let applicationSettingsSnapshot = applicationSettingsSnapshotFromDatabase(db);
+const sqliteMaintenanceOperations = postgresqlActive ? null : createSqliteMaintenanceOperations(db);
+const sqliteSchemaOperations = postgresqlActive ? require('./lib/persistence/postgresql/application-operations/startup').schema : createSqliteSchemaOperations(db);
+const sqliteSystemDiagnosticsOperations = postgresqlActive
+  ? require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlSystemDiagnosticsOperations(applicationPersistence.operations)
+  : createSqliteSystemDiagnosticsOperations(db);
+const sqliteAuditLogOperations = postgresqlActive
+  ? require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlAuditLogOperations(applicationPersistence.operations)
+  : createSqliteAuditLogOperations(db);
+let loanProtectedStorageSnapshot = postgresqlActive ? Object.freeze({documents:[],photos:[],photoAttachments:[]}) : protectedLoanStorageSnapshotFromDatabase(db);
+let applicationSettingsSnapshot = postgresqlActive ? Object.freeze({}) : applicationSettingsSnapshotFromDatabase(db);
 let planningSettingsReadModel = Object.freeze({
   pdfSettings: Object.freeze([]),
   locationBranding: Object.freeze([]),
@@ -2649,6 +2663,7 @@ function createDatabaseDownloadSnapshot() {
 }
 
 async function createDatabaseBackup(reason = "automatic", { deadlineMs = Date.now() + 1400000 } = {}) {
+  if (postgresqlActive) throw Object.assign(new Error('Eine gemeinsame PostgreSQL-Sicherung wird von der Serverwartung erstellt.'), { code: 'PG_PAIRED_BACKUP_REQUIRED' });
   const settings = tableExists("settings") ? getSettings() : {};
   // Both destinations and their queue time share one budget, not 1500 s each.
   const appBackup = await createDatabaseBackupInBackground(appBackupDirectory, reason, "app", { deadlineMs });
@@ -2668,7 +2683,9 @@ function createSchema() {
   ensureSqliteApplicationSchema(db);
 }
 
-const startupSchemaMigrationState = runSqliteStartupSchemaMigrations({
+const startupSchemaMigrationState = postgresqlActive ? Object.freeze({
+  ensureWorkRuleEvaluationReceiptIntegrity: (...args) => postgresqlStartupOperations.ensureWorkRuleEvaluationReceiptIntegrity(...args),
+}) : runSqliteStartupSchemaMigrations({
   database: db,
   databaseExistedBeforeOpen,
   appVersion: packageMetadata.version,
@@ -3003,10 +3020,13 @@ function parseProtectedJson(value, context) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid payload");
     return parsed;
   } catch (error) {
+    const failure = httpError(503, "Geschützte Personalakt-Daten konnten nicht sicher entschlüsselt werden.", error.code || "PERSONNEL_RECORD_INTEGRITY_FAILED");
     if (tableExists("audit_log")) {
-      auditPortal("system", "personnel-record.decrypt.failed", context.namespace || "personnel_record", String(context.recordId || ""), String(error.code || "invalid-payload"));
+      const audit = Promise.resolve(auditPortal("system", "personnel-record.decrypt.failed", context.namespace || "personnel_record", String(context.recordId || ""), String(error.code || "invalid-payload")));
+      audit.catch(() => {});
+      Object.defineProperty(failure,'persistenceAudit',{value:audit});
     }
-    throw httpError(503, "Geschützte Personalakt-Daten konnten nicht sicher entschlüsselt werden.", error.code || "PERSONNEL_RECORD_INTEGRITY_FAILED");
+    throw failure;
   }
 }
 
@@ -3275,7 +3295,10 @@ const {
   migrateProtectedVacationHistoryRecords,
   verifyProtectedPersonnelRecordDocuments,
   verifyProtectedSensitivePersonnelRecords,
-} = createSqliteProtectedRecordOperations(db, {
+} = postgresqlActive ? Object.fromEntries([
+  'migrateProtectedPersonnelRecords','migrateProtectedVacationHistoryRecords',
+  'verifyProtectedPersonnelRecordDocuments','verifyProtectedSensitivePersonnelRecords',
+].map(name => [name, (...args) => postgresqlStartupOperations[name](...args)])) : createSqliteProtectedRecordOperations(db, {
   appVersion: packageMetadata.version,
   vacationHistoryProtectionMigrationId,
   httpError,
@@ -3290,11 +3313,17 @@ const {
   amuDocumentProtectionContext,
 });
 
-migrateProtectedPersonnelRecords();
-migrateProtectedVacationHistoryRecords();
-verifyProtectedSensitivePersonnelRecords();
-verifyProtectedPersonnelRecordDocuments();
-runSqliteHistoricalCompatibilityMigrations(db);
+const postgresqlStartupOperations = postgresqlActive ? require('./lib/persistence/postgresql/application-operations/startup').createPostgresqlStartupOperations(applicationPersistence.operations, {
+  parseProtectedJson, personnelRecordDocumentProtectionContext, personnelSensitiveProtectionContext,
+  parseVacationHistorySnapshot, amuReportProtectionContext, amuDocumentProtectionContext, workRuleSha256,
+}) : null;
+if (!postgresqlActive) {
+  migrateProtectedPersonnelRecords();
+  migrateProtectedVacationHistoryRecords();
+  verifyProtectedSensitivePersonnelRecords();
+  verifyProtectedPersonnelRecordDocuments();
+  runSqliteHistoricalCompatibilityMigrations(db);
+}
 
 const defaultSettings = {
   installation_features: JSON.stringify(defaultInstallationFeatures),
@@ -3381,20 +3410,20 @@ for (const [day, start, end] of planningDays) {
   defaultSettings[`${day}_min_to`] = end;
 }
 
-const sqliteApplicationSeedingOperations = createSqliteApplicationSeedingOperations(db);
+const sqliteApplicationSeedingOperations = postgresqlActive ? null : createSqliteApplicationSeedingOperations(db);
 const {
   legacyDaySettingsSnapshot,
-} = sqliteApplicationSeedingOperations.seedApplicationDefaults({
+} = postgresqlActive ? {} : sqliteApplicationSeedingOperations.seedApplicationDefaults({
   defaultSettings,
   planningDays,
   builtinPortalRoles,
 });
-applicationSettingsSnapshot = applicationSettingsSnapshotFromDatabase(db);
+if (!postgresqlActive) applicationSettingsSnapshot = applicationSettingsSnapshotFromDatabase(db);
 
 const {
   localAmuRoutingMigrationNeeded,
   startupIntegrity,
-} = runSqliteFeatureCompatibilityMigrations(db, {
+} = postgresqlActive ? { localAmuRoutingMigrationNeeded:false, startupIntegrity:['pending'] } : runSqliteFeatureCompatibilityMigrations(db, {
   appVersion: packageMetadata.version,
   migrationState: startupSchemaMigrationState,
   normalizeAppFontScalePercent,
@@ -3407,7 +3436,7 @@ const {
 
 const {
   ensureDefaultLocation,
-} = runSqliteOrganizationSchemaMigrations(db, {
+} = postgresqlActive ? {ensureDefaultLocation:()=>postgresqlStartupOperations.ensureDefaultLocation()} : runSqliteOrganizationSchemaMigrations(db, {
   appVersion: packageMetadata.version,
   migrationState: startupSchemaMigrationState,
   legacyDaySettingsSnapshot,
@@ -3417,7 +3446,7 @@ const {
   defaultSettings,
 });
 
-sqliteApplicationSeedingOperations.seedDemoIfRequested({
+if (!postgresqlActive) sqliteApplicationSeedingOperations.seedDemoIfRequested({
   enabled: process.env.GRABENPLANER_SEED_DEMO === "1",
   demoProfile: process.env.GRABENPLANER_DEMO_PROFILE,
   appVersion: packageMetadata.version,
@@ -3425,12 +3454,20 @@ sqliteApplicationSeedingOperations.seedDemoIfRequested({
   sporthandelProfilePath: path.join(__dirname, "demo", "sporthandel", "demo-profile.json"),
 });
 
-ensureSqliteSystemCenterMetricsSchema(db);
-ensureSqliteBranchOrdersSchema(db);
-const sqliteBranchOrderOperations = createSqliteBranchOrderOperations(db);
-const sqliteEmployeeLocationLendingOperations = createSqliteEmployeeLocationLendingOperations(db);
-sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
-sqliteBranchOrderOperations.ensureConfiguredLocationCatalogContent();
+if (!postgresqlActive) {
+  ensureSqliteSystemCenterMetricsSchema(db);
+  ensureSqliteBranchOrdersSchema(db);
+}
+const sqliteBranchOrderOperations = postgresqlActive
+  ? require('./lib/persistence/postgresql/application-operations/branch-orders').createPostgresqlBranchOrderOperations(applicationPersistence.operations)
+  : createSqliteBranchOrderOperations(db);
+const sqliteEmployeeLocationLendingOperations = postgresqlActive
+  ? require('./lib/persistence/postgresql/application-operations/employee-location-lendings').createPostgresqlEmployeeLocationLendingOperations(applicationPersistence.operations)
+  : createSqliteEmployeeLocationLendingOperations(db);
+if (!postgresqlActive) {
+  sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
+  sqliteBranchOrderOperations.ensureConfiguredLocationCatalogContent();
+}
 let applicationInitialization = null;
 let configuredAdminSnapshot = false;
 let portalScopeProjectionSnapshot = Object.freeze({
@@ -3438,6 +3475,18 @@ let portalScopeProjectionSnapshot = Object.freeze({
   departments: Object.freeze([]),
   employees: Object.freeze([]),
 });
+
+async function protectedStorageReferencesForApplication() {
+  if (!postgresqlActive) return protectedStorageReferencesFromDatabase(db);
+  return applicationPersistence.operations.transaction(() => require('./lib/persistence/postgresql/application-operations/protected-storage')
+    .protectedStorageReferencesFromDatabase(applicationPersistence.operations),{readOnly:true});
+}
+
+async function protectedSicknessStorageForApplication() {
+  if (!postgresqlActive) return protectedSicknessAmuStorageSnapshotFromDatabase(db);
+  return applicationPersistence.operations.transaction(() => require('./lib/persistence/postgresql/application-operations/protected-storage')
+    .protectedSicknessAmuStorageSnapshotFromDatabase(applicationPersistence.operations),{readOnly:true});
+}
 
 async function refreshLoanProtectedStorageSnapshot() {
   const [documents, photos, photoAttachments] = await Promise.all([
@@ -3599,9 +3648,37 @@ function mobilePortalLocationDisplayAllows(session, moduleId) {
   return mobilePortalLocationDisplayForSession(session).allowedModules.includes(moduleId);
 }
 
+async function authorizePersistenceOperation({readOnly} = {}) {
+  const request = persistenceRequestContext.getStore()?.request;
+  // Authentication and scheduled server work use their own existing checks.
+  // An authenticated request must retain the same authority through commit.
+  const previous = request?.portalSession;
+  if (!request?.portalSessionLoaded || !previous) return true;
+  const application = await applicationPersistence.ready;
+  const current = await loadPortalSessionFromRequest(request, {touch:false, repository:application.authorizationRepositories.portalAccess});
+  if (!current) return false;
+  const fields = ['id','sessionKind','actorId','accountId','employeeNumber','role','homeLocationId',
+    'positionId','permissions','explicitScopes','permissionScopes','scopes','amuLocalAccessMode',
+    'personnelFieldPermissions','mustChangePassword'];
+  const fingerprint = session => JSON.stringify(fields.map(key=>session[key]));
+  return fingerprint(previous) === fingerprint(current);
+}
+
 function initializeApplicationPersistence() {
   if (!applicationInitialization) {
     applicationInitialization = (async () => {
+      if (postgresqlActive) {
+        await applicationPersistence.ready;
+        await postgresqlStartupOperations.seedDefaults({defaultSettings,builtinPortalRoles});
+        await postgresqlStartupOperations.ensureDefaultLocation();
+        await migrateProtectedPersonnelRecords();
+        await migrateProtectedVacationHistoryRecords();
+        await verifyProtectedSensitivePersonnelRecords();
+        await verifyProtectedPersonnelRecordDocuments();
+        await ensureWorkRuleEvaluationReceiptIntegrity();
+        await sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
+        await sqliteBranchOrderOperations.ensureConfiguredLocationCatalogContent();
+      }
       await refreshConfiguredAdminSnapshot();
       await refreshPortalScopeProjectionSnapshot();
       await refreshPlanningSettingsReadModel();
@@ -3625,12 +3702,21 @@ function initializeApplicationPersistence() {
       if (localAmuRoutingMigrationNeeded) {
         await reconcileOpenAmuResponsibilities("migration");
       }
-    })();
+      if (postgresqlActive) {
+        await postgresqlReceiptWorkers.warm();
+        await salesReportBatchWorker.run({operation:'initialize'});
+        startupIntegrity[0] = 'ok';
+      }
+    })().catch(async error => {
+      if (error.persistenceAudit) await error.persistenceAudit;
+      throw error;
+    });
   }
   return applicationInitialization;
 }
 
 app.disable("x-powered-by");
+app.use((request, _response, next) => persistenceRequestContext.run({request},next));
 app.use(async (_request, _response, next) => {
   try {
     await initializeApplicationPersistence();
@@ -4277,7 +4363,7 @@ async function requireBackupAdminReauthentication(request, {
   const rateKey = `${ipKey}:${session.employeeNumber}`;
   if (backupAdminGlobalRateLimits.get(ipKey, now).length >= 20
     || backupAdminAuthRateLimits.get(rateKey, now).length >= 5) {
-    auditPortal(session.employeeNumber, "backup.admin.reauthentication.rate-limited", "system", operation);
+    (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.rate-limited", "system", operation));
     throw httpError(429, "Zu viele fehlgeschlagene Freigaben. Bitte 15 Minuten warten.", "BACKUP_ADMIN_RATE_LIMITED");
   }
 
@@ -4305,11 +4391,11 @@ async function requireBackupAdminReauthentication(request, {
   if (!allowed || !suppliedPassword || !passwordMatches) {
     backupAdminAuthRateLimits.record(rateKey, now);
     backupAdminGlobalRateLimits.record(ipKey, now);
-    auditPortal(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation);
+    (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation));
     throw httpError(403, "Das aktuelle Passwort ist nicht korrekt.", "BACKUP_ADMIN_AUTH_FAILED");
   }
   backupAdminAuthRateLimits.clear(rateKey);
-  auditPortal(session.employeeNumber, "backup.admin.reauthentication.accepted", "system", operation);
+  (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.accepted", "system", operation));
   return { session, user };
 }
 
@@ -4515,14 +4601,14 @@ function isLoopbackRequest(request) {
   return address === "127.0.0.1" || address === "::1" || address === "localhost";
 }
 
-function auditPortal(actor, action, entityType = "", entityId = "", detail = "") {
-  sqliteAuditLogOperations.record({
+async function auditPortal(actor, action, entityType = "", entityId = "", detail = "") {
+  return persistenceRequestContext.run({auditOnly:true}, async () => (await sqliteAuditLogOperations.record({
     actor,
     action,
     entityType,
     entityId,
     detail,
-  });
+  })));
 }
 
 async function createPortalNotification(recipient, eventType, title, message = "", options = {}) {
@@ -4868,7 +4954,7 @@ function sessionPortalAccessScopeProjection(row = {}) {
   };
 }
 
-async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
+async function loadPortalSessionFromRequest(request, { touch = true, repository = portalAccessRepository } = {}) {
   const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
   if (!token) return null;
   const currentDate = new Date();
@@ -4876,7 +4962,7 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   const tokenHash = sha256(token);
   const timeoutMinutes = portalSessionTimeoutMinutes();
   const refreshedExpiresAt = new Date(currentDate.getTime() + timeoutMinutes * 60000).toISOString();
-  const session = await portalAccessRepository.getEmployeeSessionByToken({
+  const session = await repository.getEmployeeSessionByToken({
     tokenHash,
     now,
     businessDate: viennaTodayIso(currentDate),
@@ -4884,7 +4970,7 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   if (session) {
     if (isReservedEmployeePrincipal(session.employee_number)) return null;
     if (touch) {
-      await portalAccessRepository.touchEmployeeSession({ id: session.id, expiresAt: refreshedExpiresAt });
+      await repository.touchEmployeeSession({ id: session.id, expiresAt: refreshedExpiresAt });
       session.expires_at = refreshedExpiresAt;
     }
     const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session);
@@ -4928,11 +5014,11 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
       expiresAt: session.expires_at,
     };
   }
-  const organizationSession = await portalAccessRepository
+  const organizationSession = await repository
     .getOrganizationSessionByToken({ tokenHash, now });
   if (!organizationSession) return null;
   if (touch) {
-    await portalAccessRepository.touchOrganizationSession({ id: organizationSession.id, expiresAt: refreshedExpiresAt });
+    await repository.touchOrganizationSession({ id: organizationSession.id, expiresAt: refreshedExpiresAt });
     organizationSession.expires_at = refreshedExpiresAt;
   }
   const scopes = portalAccessScopesForPrincipal({
@@ -5105,16 +5191,16 @@ function personnelRecordDeniedRoute(request) {
   return `${method} ${routePath}`.slice(0, 320);
 }
 
-function auditPersonnelRecordDenied(session, employeeNumber, request, reason, fieldKeys = []) {
+async function auditPersonnelRecordDenied(session, employeeNumber, request, reason, fieldKeys = []) {
   const safeFieldKeys = [...new Set((Array.isArray(fieldKeys) ? fieldKeys : [])
     .map((fieldKey) => String(fieldKey || ""))
     .filter((fieldKey) => personnelFieldKeys.has(fieldKey)))];
-  auditPortal(session?.employeeNumber || "", "personnel-record.access.denied", "employee",
+  (await auditPortal(session?.employeeNumber || "", "personnel-record.access.denied", "employee",
     String(employeeNumber || ""), JSON.stringify({
       reason: String(reason || "PERSONNEL_RECORD_ACCESS_DENIED").slice(0, 120),
       route: personnelRecordDeniedRoute(request),
       fieldKeys: safeFieldKeys,
-    }));
+    })));
 }
 
 async function assertPersonnelRecordEmployeeScope(session, employeeNumber, request = null, fieldKeys = []) {
@@ -5138,13 +5224,13 @@ async function assertPersonnelRecordEmployeeScope(session, employeeNumber, reque
     });
   } catch (error) {
     if ([403, 404].includes(Number(error?.status))) {
-      auditPersonnelRecordDenied(session, employeeNumber, request, error.code || "PORTAL_SCOPE_DENIED", fieldKeys);
+      (await auditPersonnelRecordDenied(session, employeeNumber, request, error.code || "PORTAL_SCOPE_DENIED", fieldKeys));
     }
     throw error;
   }
 }
 
-function assertPersonnelRecordContextScope(session, input = {}, request = null, employeeNumber = "", fieldKeys = []) {
+async function assertPersonnelRecordContextScope(session, input = {}, request = null, employeeNumber = "", fieldKeys = []) {
   if (sessionHasGlobalScope(session)) return;
   try {
     if (!String(input.locationId || input.location || "").trim()) {
@@ -5159,7 +5245,7 @@ function assertPersonnelRecordContextScope(session, input = {}, request = null, 
     assertSessionContextScope({ ...session, scopes: explicitScopes }, input);
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelRecordDenied(session, employeeNumber, request, error.code || "PORTAL_SCOPE_DENIED", fieldKeys);
+      (await auditPersonnelRecordDenied(session, employeeNumber, request, error.code || "PORTAL_SCOPE_DENIED", fieldKeys));
     }
     throw error;
   }
@@ -7121,7 +7207,7 @@ async function confirmWifiSuggestionWeek(session, body = {}, now = new Date()) {
   if (!pendingIds.length || pendingIds.length !== submittedIds.length || pendingIds.some((id) => !submittedIds.includes(id))) {
     throw httpError(409, "Bitte alle offenen Vorschläge dieser Woche gemeinsam prüfen und erneut abschließen.", "WIFI_SUGGESTION_WEEK_INCOMPLETE");
   }
-  return confirmWifiSuggestionBatch(session, body.suggestions, now);
+  return (await confirmWifiSuggestionBatch(session, body.suggestions, now));
 }
 
 async function rejectWifiSuggestion(session, id, reason = "") {
@@ -7804,8 +7890,8 @@ function personalEmailVerificationRateReservation(row, now = Date.now()) {
   };
 }
 
-function personalEmailVerificationRateError(employeeNumber, retryAfter = 15 * 60) {
-  auditPortal(employeeNumber, "personal-email.verification.rate-limited", "portal_user", employeeNumber);
+async function personalEmailVerificationRateError(employeeNumber, retryAfter = 15 * 60) {
+  (await auditPortal(employeeNumber, "personal-email.verification.rate-limited", "portal_user", employeeNumber));
   const error = httpError(
     429,
     "Zu viele Bestätigungscodes wurden angefordert. Bitte 15 Minuten warten.",
@@ -7827,14 +7913,14 @@ function personalEmailVerificationCooldownError(row, now = Date.now()) {
   return error;
 }
 
-function assertPersonalEmailVerificationIpRate(request, employeeNumber, now = Date.now()) {
+async function assertPersonalEmailVerificationIpRate(request, employeeNumber, now = Date.now()) {
   const ipKey = loginRateKey(request);
   const events = personalEmailVerificationIpRateLimits.get(ipKey, now);
   if (events.length >= PERSONAL_EMAIL_VERIFICATION_IP_RATE_MAX) {
     const retryAfter = events.length
       ? Math.max(1, Math.ceil((PERSONAL_EMAIL_VERIFICATION_RATE_WINDOW_MS - (now - events[0])) / 1000))
       : 15 * 60;
-    throw personalEmailVerificationRateError(employeeNumber, retryAfter);
+    throw (await personalEmailVerificationRateError(employeeNumber, retryAfter));
   }
   personalEmailVerificationIpRateLimits.record(ipKey, now);
 }
@@ -8105,7 +8191,7 @@ async function throwPersonalNotificationVerificationReservationConflict(employee
   const cooldownError = personalEmailVerificationCooldownError(current, now);
   if (cooldownError) throw cooldownError;
   const rate = personalEmailVerificationRateReservation(current, now);
-  if (rate.limited) throw personalEmailVerificationRateError(employeeNumber, rate.retryAfter);
+  if (rate.limited) throw (await personalEmailVerificationRateError(employeeNumber, rate.retryAfter));
   throw httpError(
     409,
     "Die Benachrichtigungseinstellungen wurden gleichzeitig geaendert. Bitte neu laden.",
@@ -8138,8 +8224,8 @@ async function requestPersonalNotificationVerification(request, session, body = 
   const cooldownError = personalEmailVerificationCooldownError(row, now);
   if (cooldownError) throw cooldownError;
   const rate = personalEmailVerificationRateReservation(row, now);
-  if (rate.limited) throw personalEmailVerificationRateError(session.employeeNumber, rate.retryAfter);
-  assertPersonalEmailVerificationIpRate(request, session.employeeNumber, now);
+  if (rate.limited) throw (await personalEmailVerificationRateError(session.employeeNumber, rate.retryAfter));
+  (await assertPersonalEmailVerificationIpRate(request, session.employeeNumber, now));
   const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
   const salt = crypto.randomBytes(16).toString("base64url");
   const verificationGeneration = crypto.randomUUID();
@@ -8188,13 +8274,13 @@ async function requestPersonalNotificationVerification(request, session, body = 
       error.code || "PERSONAL_NOTIFICATION_VERIFICATION_DELIVERY_FAILED",
     );
   }
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "personal-notifications.verification.request",
     "portal_user",
     session.employeeNumber,
     JSON.stringify({ channel, target }),
-  );
+  ));
   return personalNotificationSettings(session.employeeNumber, session);
 }
 
@@ -8874,7 +8960,7 @@ function personnelRecordAccess(session) {
   };
 }
 
-function requirePersonnelRecordSession(request, { write = false } = {}) {
+async function requirePersonnelRecordSession(request, { write = false } = {}) {
   let session;
   if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
     session = {
@@ -8894,8 +8980,8 @@ function requirePersonnelRecordSession(request, { write = false } = {}) {
   if (write) assertPortalCsrf(request);
   const access = personnelRecordAccess(session);
   if (!access.canReadSensitive && !access.canReadPhone && !access.canReadDocuments && !access.canReadAmu) {
-    auditPersonnelRecordDenied(session, request.params?.employeeNumber, request,
-      write ? "PERSONNEL_RECORD_WRITE_PERMISSION_DENIED" : "PERSONNEL_RECORD_READ_PERMISSION_DENIED");
+    (await auditPersonnelRecordDenied(session, request.params?.employeeNumber, request,
+      write ? "PERSONNEL_RECORD_WRITE_PERMISSION_DENIED" : "PERSONNEL_RECORD_READ_PERMISSION_DENIED"));
     throw httpError(403, "Für den Personalakt fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
   return { session, access };
@@ -9084,12 +9170,12 @@ async function finalizeDeletedPersonnelRecordDocuments() {
           id: row.id,
         });
         if (result.rowsAffected) {
-          auditPortal("system", "personnel-record.document.purge-retry", "personnel_record_document", row.id);
+          (await auditPortal("system", "personnel-record.document.purge-retry", "personnel_record_document", row.id));
           purged += 1;
         }
       } catch (error) {
-        auditPortal("system", "personnel-record.document.purge-failed", "personnel_record_document", row.id,
-          String(error.code || "delete-failed"));
+        (await auditPortal("system", "personnel-record.document.purge-failed", "personnel_record_document", row.id,
+          String(error.code || "delete-failed")));
         failed += 1;
       }
     }
@@ -9399,7 +9485,7 @@ function personnelRecordFieldDeniedError(message, code, denied) {
   return error;
 }
 
-function assertPersonnelRecordFieldsWritable(
+async function assertPersonnelRecordFieldsWritable(
   request,
   session,
   access,
@@ -9414,12 +9500,12 @@ function assertPersonnelRecordFieldsWritable(
       ? "Telefonnummern dürfen durch Leitungen nur mit Vertrauensstufe A und ausdrücklich vergebenem Feldrecht geändert werden."
       : "Die Telefonnummer darf mit diesem Zugang nicht bearbeitet werden.";
     if (auditDenied) {
-      auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_PHONE_WRITE_DENIED", denied);
+      (await auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_PHONE_WRITE_DENIED", denied));
     }
     throw personnelRecordFieldDeniedError(message, "PERSONNEL_PHONE_WRITE_DENIED", denied);
   }
   if (auditDenied) {
-    auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_FIELD_WRITE_DENIED", denied);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_FIELD_WRITE_DENIED", denied));
   }
   throw personnelRecordFieldDeniedError(
     "Mindestens ein übermitteltes Personalakt-Feld darf mit diesem Zugang nicht bearbeitet werden.",
@@ -9435,19 +9521,19 @@ async function preparePersonnelRecordMutation(
   { assumeNew = false, auditDenied = true } = {},
 ) {
   if (value === undefined) return null;
-  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  const { session, access } = (await requirePersonnelRecordSession(request, { write: true }));
   const submittedFields = submittedPersonnelRecordFieldKeys(value);
   if (!submittedFields.length) {
     throw httpError(400, "Es wurden keine gültigen Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
   }
-  assertPersonnelRecordFieldsWritable(
+  (await assertPersonnelRecordFieldsWritable(
     request,
     session,
     access,
     submittedFields,
     employeeNumber,
     { auditDenied },
-  );
+  ));
   const input = personnelRecordInput(value);
   return {
     session,
@@ -9461,7 +9547,7 @@ async function preparePersonnelRecordMutation(
   };
 }
 
-function revalidatePreparedPersonnelRecordMutation(request, liveActor, prepared) {
+async function revalidatePreparedPersonnelRecordMutation(request, liveActor, prepared) {
   if (!prepared) return;
   if (!liveActor || liveActor.mustChangePassword) {
     throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
@@ -9471,14 +9557,14 @@ function revalidatePreparedPersonnelRecordMutation(request, liveActor, prepared)
     && !access.canReadDocuments && !access.canReadAmu) {
     throw httpError(403, "Für den Personalakt fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
-  assertPersonnelRecordFieldsWritable(
+  (await assertPersonnelRecordFieldsWritable(
     request,
     liveActor,
     access,
     prepared.submittedFields,
     prepared.employeeNumber,
     { auditDenied: false },
-  );
+  ));
   prepared.session = liveActor;
 }
 
@@ -9998,13 +10084,13 @@ async function assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, target
       repository,
     );
   if (!protectedTarget) return;
-  auditPortal(
+  (await auditPortal(
     actor.employeeNumber,
     "portal.personnel-lifecycle-account.protected",
     "portal_user",
     target.employee_number,
     JSON.stringify({ reason: "PERSONNEL_LIFECYCLE_ACCOUNT_TAKEOVER_DENIED" }),
-  );
+  ));
   throw httpError(
     403,
     "Personalkonten mit geschuetzten Personalmodul-Freigaben koennen nicht durch IT-Admin uebernommen oder sicherheitsrelevant geaendert werden.",
@@ -10012,14 +10098,14 @@ async function assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, target
   );
 }
 
-function assertPortalUserIsMutable(target, actor) {
+async function assertPortalUserIsMutable(target, actor) {
   if (!target) throw httpError(404, "Der Zugang wurde nicht gefunden.");
   if (target.role === "developer") {
-    auditPortal(actor?.employeeNumber || "system", "portal.developer.protected", "portal_user", target.employee_number || "", "mutation-denied");
+    (await auditPortal(actor?.employeeNumber || "system", "portal.developer.protected", "portal_user", target.employee_number || "", "mutation-denied"));
     throw httpError(403, "Der Developer-Zugang ist geschützt und kann nur mit dem lokalen Entwicklerwerkzeug geändert werden.", "PORTAL_DEVELOPER_PROTECTED");
   }
   if (target.role_locked) {
-    auditPortal(actor?.employeeNumber || "system", "portal.role-locked.protected", "portal_user", target.employee_number || "", "mutation-denied");
+    (await auditPortal(actor?.employeeNumber || "system", "portal.role-locked.protected", "portal_user", target.employee_number || "", "mutation-denied"));
     throw httpError(403, "Dieser geschützte Zugang kann nicht über die App geändert werden.", "PORTAL_ROLE_LOCKED");
   }
 }
@@ -10042,15 +10128,15 @@ async function assertEmployeeDestructiveMutationAllowed(
   const normalizedActor = personnelMutationActor(actor);
   const target = await repository.getPortalMutationTarget(employeeNumber);
   if (!target) return;
-  assertPortalUserIsMutable(target, normalizedActor);
+  (await assertPortalUserIsMutable(target, normalizedActor));
   await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
     normalizedActor,
     target,
     repository,
   );
   if (!actorCanManagePortalRole(normalizedActor, target.role)) {
-    auditPortal(normalizedActor.employeeNumber, "employee.destructive-mutation.denied", "employee", target.employee_number,
-      JSON.stringify({ targetRole: target.role }));
+    (await auditPortal(normalizedActor.employeeNumber, "employee.destructive-mutation.denied", "employee", target.employee_number,
+      JSON.stringify({ targetRole: target.role })));
     throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
   }
   if (roleHasPersonnelLearningDefaults(target.role)) {
@@ -10326,7 +10412,7 @@ async function validatePersonnelAccessProfile(
   assertEmployeePrincipalNotReserved(employeeNumber);
   const existing = await repository.getPortalMutationTarget(employeeNumber);
   if (existing) {
-    assertPortalUserIsMutable(existing, actor);
+    (await assertPortalUserIsMutable(existing, actor));
     if (!actorCanManagePortalRole(actor, existing.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
     }
@@ -10456,7 +10542,7 @@ async function applyPersonnelAccessProfileWithRepository(repository, actor, prof
   );
   const liveTarget = await repository.getPortalMutationTarget(profile.employeeNumber);
   if (liveTarget) {
-    assertPortalUserIsMutable(liveTarget, actor);
+    (await assertPortalUserIsMutable(liveTarget, actor));
     await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveTarget, repository);
     if (!actorCanManagePortalRole(actor, liveTarget.role)) {
       throw httpError(
@@ -15674,7 +15760,7 @@ async function prepareApprovedTimeOffMutation(
     addedShifts,
   };
   const [evaluations, branchSupervisionEvaluations] = await Promise.all([
-    evaluateWorkRuleChanges(shifts, planningChange),
+    (await evaluateWorkRuleChanges(shifts, planningChange)),
     evaluateBranchSupervisionChanges(shifts, planningChange),
   ]);
   return { shifts, addedShifts, options, evaluations, branchSupervisionEvaluations };
@@ -16190,14 +16276,14 @@ async function reconcileSicknessCaseRules(row, now = new Date(), { aumReviewed =
     id: row.id,
   });
   if (JSON.stringify(before.aumAllowance || null) !== JSON.stringify(payload.aumAllowance || null)) {
-    auditPortal(actor, "sickness.allowance.reconcile", "protected_record",
+    (await auditPortal(actor, "sickness.allowance.reconcile", "protected_record",
       protectedPortalEntityId("sickness-case", row.id), JSON.stringify({
         requiredBefore: before.aumAllowance?.required !== false,
         requiredAfter: payload.aumAllowance?.required !== false,
         reasonBefore: before.aumAllowance?.reason || "legacy",
         reasonAfter: payload.aumAllowance?.reason || "",
         quotaReleased: before.aumAllowance?.consumesQuota === true && payload.aumAllowance?.consumesQuota !== true,
-      }));
+      })));
   }
   return sicknessCaseMetadata(row.id);
 }
@@ -16806,17 +16892,17 @@ async function reconcileOpenAmuResponsibilities(actor = "system") {
       if ((await synchronizeAmuResponsibility(report, actor))?.changed) rerouted += 1;
     } catch {
       failed += 1;
-      auditPortal(actor, "amu.report.responsibility.failed", "protected_record",
-        protectedPortalEntityId("amu-report", report.id), "protected-payload-unavailable");
+      (await auditPortal(actor, "amu.report.responsibility.failed", "protected_record",
+        protectedPortalEntityId("amu-report", report.id), "protected-payload-unavailable"));
     }
   }
   return { checked: reports.length, rerouted, failed };
 }
 
-function assertAmuReportScope(session, report) {
+async function assertAmuReportScope(session, report) {
   if (!report) throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
   if (!sessionCanAccessAmuReport(session, report)) {
-    auditPortal(session.employeeNumber, "amu.access.denied", "amu_report", String(report.id), "scope");
+    (await auditPortal(session.employeeNumber, "amu.access.denied", "amu_report", String(report.id), "scope"));
     throw httpError(403, "Diese Arbeitsunfähigkeitsmeldung gehört nicht zum eigenen Standort.", "PORTAL_PERMISSION_DENIED");
   }
 }
@@ -16944,11 +17030,11 @@ async function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
         activeOnly: 0,
       });
       try { amuStorage.deleteBlob(row.storage_key); } catch (error) {
-        auditPortal("system", "amu.document.purge.error", "amu_document", row.id, error.message);
+        (await auditPortal("system", "amu.document.purge.error", "amu_document", row.id, error.message));
         continue;
       }
       await sicknessAmuManagementRepository.markAmuDocumentPurged({ id: String(row.id) });
-      auditPortal("system", "amu.document.purge", "amu_document", row.id);
+      (await auditPortal("system", "amu.document.purge", "amu_document", row.id));
       purged += 1;
     }
     await sicknessAmuManagementRepository.transaction(async (repository) => {
@@ -16978,12 +17064,12 @@ async function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
 async function reconcileOrphanAmuBlobs() {
   if (!amuStorage || amuMutationInProgress > 0) return { removed: 0 };
   const personnelFinalization = await finalizeDeletedPersonnelRecordDocuments();
-  const referenced = new Set(protectedStorageReferencesFromDatabase(db));
+  const referenced = new Set(await protectedStorageReferencesForApplication());
   let removed = 0;
   for (const storageKey of amuStorage.listStorageKeys()) {
     if (referenced.has(storageKey)) continue;
     if (amuStorage.deleteBlob(storageKey)) {
-      auditPortal("system", "amu.document.orphan.purge", "amu_document", storageKey);
+      (await auditPortal("system", "amu.document.orphan.purge", "amu_document", storageKey));
       removed += 1;
     }
   }
@@ -17364,7 +17450,7 @@ function serializeCostCenterType(row, positions = []) {
 }
 
 async function verifyActiveProtectedDocumentBlobs() {
-  const protectedSnapshot = protectedSicknessAmuStorageSnapshotFromDatabase(db);
+  const protectedSnapshot = await protectedSicknessStorageForApplication();
   const [amuDocuments, personnelDocuments] = await Promise.all([
     sicknessAmuManagementRepository.listActiveAmuDocuments({}),
     sicknessAmuManagementRepository.listActivePersonnelDocuments({}),
@@ -17378,6 +17464,7 @@ async function verifyActiveProtectedDocumentBlobs() {
 }
 
 function verifyActiveProtectedDocumentBlobsForBackup() {
+  if (postgresqlActive) throw new Error('PG_PAIRED_BACKUP_REQUIRED');
   const snapshot = protectedSicknessAmuStorageSnapshotFromDatabase(db);
   return verifyProtectedDocumentBlobRows(
     snapshot.amuDocuments,
@@ -18018,7 +18105,7 @@ async function validateDepartmentPayload(body, existingId = null) {
 }
 
 async function resolvePlanningContext(input = {}) {
-  ensureDefaultLocation();
+  (await ensureDefaultLocation());
   const locations = await organizationPersonnelRepository.listLocations(true);
   const activeLocations = locations.filter((location) => location.active);
   const fallbackLocation = activeLocations[0] || locations[0];
@@ -18733,12 +18820,12 @@ async function applyBrandingAssignment(
   if (manageTransaction) {
     const result = await persistenceProvider.transaction(async (executor) => {
       const repositories = createApplicationRepositories(executor);
-      return applyBrandingAssignment(input, actor, {
+      return (await applyBrandingAssignment(input, actor, {
         manageTransaction: false,
         repository: repositories.planningSettings,
         auditRepository: repositories.organizationPersonnel,
         prepared: preparedAssignment,
-      });
+      }));
     });
     await refreshPlanningSettingsReadModel();
     return {
@@ -18790,7 +18877,7 @@ async function applyBrandingAssignment(
   return result;
 }
 
-function deleteInstalledBrandingKit(kitId, actor = "") {
+async function deleteInstalledBrandingKit(kitId, actor = "") {
   const normalizedKitId = String(kitId || "").trim();
   if (normalizedKitId === "neutral") throw httpError(400, "Das Standard-Branding kann nicht geloescht werden.", "BRANDING_KIT_BUILTIN");
   const kit = readBrandingKitManifest(normalizedKitId);
@@ -18818,7 +18905,7 @@ function deleteInstalledBrandingKit(kitId, actor = "") {
   const stagedDirectory = `${kitDirectory}.deleting-${crypto.randomUUID()}`;
   fs.renameSync(kitDirectory, stagedDirectory);
   try {
-    auditPortal(actor, "branding.kit.delete", "branding_kit", normalizedKitId, JSON.stringify({ name: brandingKitName(kit) }));
+    (await auditPortal(actor, "branding.kit.delete", "branding_kit", normalizedKitId, JSON.stringify({ name: brandingKitName(kit) })));
     fs.rmSync(stagedDirectory, { recursive: true, force: true });
   } catch (error) {
     if (fs.existsSync(stagedDirectory) && !fs.existsSync(kitDirectory)) fs.renameSync(stagedDirectory, kitDirectory);
@@ -19621,12 +19708,12 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if (department) await validateDepartmentExists(departmentId, locationId);
   const homeLocationId = String(employee.home_location_id || "").trim();
   if (locationId === homeLocationId) {
-    const awayAssignment = sqliteEmployeeLocationLendingOperations.overlapForShift(
+    const awayAssignment = (await sqliteEmployeeLocationLendingOperations.overlapForShift(
       employeeNumber,
       shiftDate,
       startTime,
       endTime,
-    );
+    ));
     if (awayAssignment) {
       throw httpError(
         409,
@@ -19635,13 +19722,13 @@ async function validateShift(body, contextInput = {}, actor = null) {
       );
     }
   } else {
-    const assignment = sqliteEmployeeLocationLendingOperations.coverageForShift(
+    const assignment = (await sqliteEmployeeLocationLendingOperations.coverageForShift(
       employeeNumber,
       locationId,
       shiftDate,
       startTime,
       endTime,
-    );
+    ));
     if (!assignment) {
       if (actor && !sessionHasGlobalScope(actor)) {
         throw httpError(
@@ -19755,16 +19842,16 @@ function staffAssignmentAbsenceConstraintError(error) {
 
 async function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
   if (sessionHasGlobalScope(session)) return;
-  const employee = sqliteEmployeeLocationLendingOperations.employee(shift.employeeNumber);
+  const employee = (await sqliteEmployeeLocationLendingOperations.employee(shift.employeeNumber));
   const homeLocationId = String(employee?.home_location_id || "");
   if (homeLocationId === shift.locationId) return;
-  const assignment = sqliteEmployeeLocationLendingOperations.coverageForShift(
+  const assignment = (await sqliteEmployeeLocationLendingOperations.coverageForShift(
     shift.employeeNumber,
     shift.locationId,
     shift.shiftDate,
     shift.startTime,
     shift.endTime,
-  );
+  ));
   if (assignment && (!assignment.destinationDepartmentId
     || Number(assignment.destinationDepartmentId) === Number(shift.departmentId || 0))) return;
   throw httpError(
@@ -19837,16 +19924,16 @@ function approvedAbsenceAuditDetail(option) {
   });
 }
 
-function auditApprovedAbsenceEntry(session, action, entityId, option) {
+async function auditApprovedAbsenceEntry(session, action, entityId, option) {
   const optionType = String(option.optionType || option.option_type || "");
   if (!directlyApprovedAbsenceOptionTypes.has(optionType)) return;
-  auditPortal(
+  (await auditPortal(
     session?.employeeNumber || "local",
     action,
     "approved_absence",
     String(entityId || ""),
     approvedAbsenceAuditDetail(option),
-  );
+  ));
 }
 
 function optionIsAllDay(option) {
@@ -19914,14 +20001,14 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
     }
   }
   if (directlyApprovedAbsenceOptionTypes.has(optionType)) {
-    const assignment = sqliteEmployeeLocationLendingOperations.overlapForPeriod({
+    const assignment = (await sqliteEmployeeLocationLendingOperations.overlapForPeriod({
       employeeNumber,
       dateFrom,
       dateTo,
       allDay,
       startTime: allDay ? null : startTime,
       endTime: allDay ? null : endTime,
-    });
+    }));
     if (assignment) {
       throw httpError(
         409,
@@ -21291,13 +21378,13 @@ async function notifyStaffAssignmentRequest(
     }
   }
   try {
-    auditPortal(
+    (await auditPortal(
       "system",
       "staff-assignment-request.email",
       "staff_assignment_request",
       requestId,
       JSON.stringify({ ...result, failureCodes: [...failureCodes].sort() }),
-    );
+    ));
   } catch {}
   return result;
 }
@@ -21762,13 +21849,13 @@ async function submitStaffAssignmentRequest(session, input = {}) {
       );
     } catch {
       try {
-        auditPortal(
+        (await auditPortal(
           "system",
           "staff-assignment-request.email",
           "staff_assignment_request",
           outcome.request.id,
           JSON.stringify({ kind: "submitted", eligible: 0, delivered: 0, skipped: 0, failed: 1, failureCodes: ["recipient_resolution_failed"] }),
-        );
+        ));
       } catch {}
     }
     return outcome.request;
@@ -23073,7 +23160,7 @@ async function deleteVacationGroup(
 }
 
 function databasePragmaValue(name) {
-  return sqliteSystemDiagnosticsOperations.pragmaValue(name);
+  return postgresqlActive ? null : sqliteSystemDiagnosticsOperations.pragmaValue(name);
 }
 
 function directoryDiagnostics(directory) {
@@ -23144,10 +23231,10 @@ function newestDatabaseBackup(...backups) {
     .sort((left, right) => Number(right.modifiedMs) - Number(left.modifiedMs))[0] || null;
 }
 
-function serverDiagnostics() {
+async function serverDiagnostics() {
   const settings = getSettings();
   const portal = getPortalStatus();
-  const migration = sqliteSystemDiagnosticsOperations.latestMigration();
+  const migration = (await sqliteSystemDiagnosticsOperations.latestMigration());
   const warnings = [];
   const alerts = [];
   const addAlert = (id, severity, title, message, category = "system", action = "open-server-status") => {
@@ -23182,7 +23269,11 @@ function serverDiagnostics() {
   const backupMetadataError = () => addAlert("BACKUP_METADATA_UNAVAILABLE", "critical", "Sicherungsarchiv prüfen",
     "Die Sicherungsmetadaten oder die lokale Archivkonfiguration konnten nicht sicher geprüft werden.", "backup");
   const latestExternalBackup = externalDirectory ? latestDatabaseBackup(externalDirectory, backupMetadataError, "external") : null;
-  const latestAppBackup = latestDatabaseBackup(appBackupDirectory, backupMetadataError);
+  const postgresqlStatus = postgresqlActive && !persistenceConfiguration.rehearsal
+    ? require('./lib/persistence/postgresql/operations/status').readStatus(persistenceConfiguration.binding) : null;
+  const latestAppBackup = postgresqlActive ? postgresqlStatus?.backup || null : latestDatabaseBackup(appBackupDirectory, backupMetadataError);
+  if (postgresqlStatus?.code) addAlert('PG_OPERATIONS_ATTENTION', 'warning', 'Datenbankwartung prüfen',
+    'Der letzte Wartungs- oder Sicherungsstatus muss durch die technische Administration geprüft werden.', 'backup');
   const backgroundBackup = localBackupArchiveEnabled()
     ? require("./lib/background-backup-process").backgroundBackupStatus() : null;
   if (backgroundBackup?.lastErrorCode) addAlert("LOCAL_ARCHIVE_BACKGROUND_FAILED", "warning", "Archivierung prüfen",
@@ -23277,8 +23368,8 @@ function serverDiagnostics() {
     configured: hostSecurityConfiguration === "1" ? true : (hostSecurityConfiguration === "0" ? false : undefined),
   });
   const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
-  const protectedIntegrationConnectionCount = sqliteSystemDiagnosticsOperations
-    .protectedIntegrationConnectionCount();
+  const protectedIntegrationConnectionCount = (await sqliteSystemDiagnosticsOperations
+    .protectedIntegrationConnectionCount());
   const integrationSecretsReady = protectedIntegrationConnectionCount === 0 || Boolean(integrationSecretVault);
   const runtimeErrors = runtimeValidationErrors(runtimeConfiguration);
   const publicHttpsReady = /^https:\/\//i.test(publicUrl);
@@ -23346,7 +23437,7 @@ function serverDiagnostics() {
     addAlert(alert.id, alert.severity, alert.title, alert.message, alert.category);
   }
   if (serverModeActive && serviceControlToken.length < 32) addAlert("SERVICE_CONTROL_TOKEN_MISSING", "critical", "Dienststeuerung nicht abgesichert", "Der sichere Token für die Dienststeuerung fehlt.", "security");
-  const lockedAccounts = sqliteSystemDiagnosticsOperations.lockedPortalAccountCount();
+  const lockedAccounts = (await sqliteSystemDiagnosticsOperations.lockedPortalAccountCount());
   if (lockedAccounts) addAlert("PORTAL_ACCOUNTS_LOCKED", "warning", "Zugänge vorübergehend gesperrt", `${lockedAccounts} Zugang/Zugänge sind derzeit wegen fehlgeschlagener Anmeldungen gesperrt.`, "security");
   const productionChecks = [
     { id: "mode", label: "Servermodus", ok: serverModeActive, detail: serverModeActive ? "aktiv" : "nicht aktiv" },
@@ -23355,7 +23446,7 @@ function serverDiagnostics() {
     { id: "proxy", label: "Proxy-Vertrauen", ok: trustProxySetting.toLowerCase() === "loopback", detail: trustProxySetting },
     { id: "https", label: "HTTPS-Adresse", ok: publicHttpsReady, detail: publicUrl || "nicht konfiguriert" },
     { id: "admin", label: "Admin-Zugang", ok: portal.adminSetupState === "configured", detail: portal.adminSetupState },
-    { id: "database", label: "SQLite-Integrität", ok: startupIntegrity[0] === "ok", detail: startupIntegrity[0] || "unbekannt" },
+    { id: "database", label: "Datenbankprüfung", ok: startupIntegrity[0] === "ok", detail: startupIntegrity[0] || "unbekannt" },
     { id: "data", label: "Datenverzeichnis", ok: dataHealth.writable, detail: dataHealth.writable ? "beschreibbar" : "nicht beschreibbar" },
     {
       id: "backup",
@@ -23387,6 +23478,7 @@ function serverDiagnostics() {
     trustProxy: portal.trustProxy,
     passwordMinLength: portal.passwordMinLength,
     database: {
+      providerId: persistenceConfiguration.providerId,
       file: path.basename(databasePath),
       integrity: startupIntegrity[0] || "unknown",
       journalMode: databasePragmaValue("journal_mode"),
@@ -23417,7 +23509,7 @@ function serverDiagnostics() {
       retentionCount: backupKeep,
       retentionUnit: 'calendar-days',
       background: backgroundBackup,
-      lastVerified: Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
+      lastVerified: postgresqlActive ? latestAppBackup?.verified === true : Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
       offsite,
     },
     monitor,
@@ -23427,7 +23519,7 @@ function serverDiagnostics() {
     pilotChecks: productionChecks,
     security: {
       lockedAccounts,
-      activeSessions: sqliteSystemDiagnosticsOperations.activePortalSessionCount(),
+      activeSessions: (await sqliteSystemDiagnosticsOperations.activePortalSessionCount()),
       loginRateLimitActive: serverModeActive,
       secureCookies: serverModeActive,
       serviceControlConfigured: serviceControlToken.length >= 32,
@@ -23448,7 +23540,8 @@ function publicBackupPoint(backup, ageHours, timestampValid) {
   };
 }
 
-function serverStatusSummary(diagnostics = serverDiagnostics()) {
+async function serverStatusSummary(diagnostics) {
+  if (!diagnostics) diagnostics = (await serverDiagnostics());
   const offsite = diagnostics.backups?.offsite || {};
   const monitor = diagnostics.monitor || {};
   const hostSecurity = diagnostics.hostSecurity || {};
@@ -23603,8 +23696,8 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
   };
 }
 
-function sendReadiness(response) {
-  const diagnostics = serverDiagnostics();
+async function sendReadiness(response) {
+  const diagnostics = (await serverDiagnostics());
   response.setHeader("Cache-Control", "no-store");
   response.status(diagnostics.ready ? 200 : 503).json({
     ok: diagnostics.ready,
@@ -25014,8 +25107,8 @@ async function reconcileInterruptedIntegrationDeliveries() {
     return recovered;
   });
   for (const id of recoveredIds) {
-    auditPortal("system", "integration.payroll.delivery.recovered", "integration_delivery", id,
-      JSON.stringify({ status: "unknown", errorCode: "PROCESS_INTERRUPTED" }));
+    (await auditPortal("system", "integration.payroll.delivery.recovered", "integration_delivery", id,
+      JSON.stringify({ status: "unknown", errorCode: "PROCESS_INTERRUPTED" })));
   }
   return recoveredIds.length;
 }
@@ -25197,7 +25290,7 @@ app.post("/api/integrations/payroll-handoffs", async (request, response) => {
     actor: actor.employeeNumber,
   });
   const summary = requireGovernanceStore().payrollHandoffSummary(value);
-  auditPortal(actor.employeeNumber, value.reused ? "integration.payroll.handoff.reused" : "integration.payroll.handoff.created",
+  (await auditPortal(actor.employeeNumber, value.reused ? "integration.payroll.handoff.reused" : "integration.payroll.handoff.created",
     "payroll_handoff", summary.id, JSON.stringify({
       month: summary.month,
       locationId: summary.locationId,
@@ -25205,7 +25298,7 @@ app.post("/api/integrations/payroll-handoffs", async (request, response) => {
       revision: summary.revision,
       statementCount: summary.statementCount,
       receiptSha256: summary.receiptSha256,
-    }));
+    })));
   response.status(value.reused ? 200 : 201).json({ handoff: summary, reused: Boolean(value.reused) });
 });
 
@@ -25214,8 +25307,8 @@ app.get("/api/integrations/payroll-handoffs/:id/file", async (request, response)
   let value = await payrollHandoffForActor(actor, request.params.id);
   value = await requireGovernanceStore()
     .appendPayrollHandoffEvent(value.row.id, { eventType: "exported" }, actor.employeeNumber);
-  auditPortal(actor.employeeNumber, "integration.payroll.handoff.exported", "payroll_handoff", value.row.id,
-    JSON.stringify({ receiptSha256: value.handoff.receiptSha256 }));
+  (await auditPortal(actor.employeeNumber, "integration.payroll.handoff.exported", "payroll_handoff", value.row.id,
+    JSON.stringify({ receiptSha256: value.handoff.receiptSha256 })));
   const document = {
     contract: CONTRACT_IDS.payrollPeriodHandoff,
     handoff: value.handoff,
@@ -25247,12 +25340,12 @@ app.post("/api/integrations/payroll-handoffs/:id/events", async (request, respon
     note: request.body?.note || "",
   }, actor.employeeNumber);
   const summary = requireGovernanceStore().payrollHandoffSummary(value);
-  auditPortal(actor.employeeNumber, `integration.payroll.handoff.${action}`, "payroll_handoff", summary.id,
+  (await auditPortal(actor.employeeNumber, `integration.payroll.handoff.${action}`, "payroll_handoff", summary.id,
     JSON.stringify({
       state: summary.state,
       protocolResult: summary.protocolResult,
       protocolNumber: summary.protocolNumber,
-    }));
+    })));
   response.json({ handoff: summary });
 });
 
@@ -25320,8 +25413,8 @@ app.post("/api/integrations/connections", async (request, response) => {
     }
     throw error;
   }
-  auditPortal(actor.employeeNumber, "integration.connection.create", "integration_connection", id,
-    JSON.stringify({ kind: connection.kind, provider: connection.provider, credentialsConfigured: Boolean(protectedState.protectedCredentials) }));
+  (await auditPortal(actor.employeeNumber, "integration.connection.create", "integration_connection", id,
+    JSON.stringify({ kind: connection.kind, provider: connection.provider, credentialsConfigured: Boolean(protectedState.protectedCredentials) })));
   response.status(201).json({ connection: (await integrationConnectionById(id, "", { includeInactive: true })).public });
 });
 
@@ -25355,8 +25448,8 @@ app.put("/api/integrations/connections/:id", async (request, response) => {
     }
     throw error;
   }
-  auditPortal(actor.employeeNumber, "integration.connection.update", "integration_connection", existing.row.id,
-    JSON.stringify({ kind: connection.kind, provider: connection.provider, credentialsReplaced: connection.credentials !== null }));
+  (await auditPortal(actor.employeeNumber, "integration.connection.update", "integration_connection", existing.row.id,
+    JSON.stringify({ kind: connection.kind, provider: connection.provider, credentialsReplaced: connection.credentials !== null })));
   response.json({ connection: (await integrationConnectionById(existing.row.id, "", { includeInactive: true })).public });
 });
 
@@ -25368,8 +25461,8 @@ app.delete("/api/integrations/connections/:id", async (request, response) => {
     id: existing.row.id,
     actor: actor.employeeNumber,
   });
-  auditPortal(actor.employeeNumber, "integration.connection.disable", "integration_connection", existing.row.id,
-    JSON.stringify({ kind: existing.row.kind }));
+  (await auditPortal(actor.employeeNumber, "integration.connection.disable", "integration_connection", existing.row.id,
+    JSON.stringify({ kind: existing.row.kind })));
   response.status(204).end();
 });
 
@@ -25401,8 +25494,8 @@ app.post("/api/integrations/connections/:id/test", async (request, response) => 
       status,
       errorCode,
     });
-    auditPortal(actor.employeeNumber, "integration.connection.test", "integration_connection", connection.row.id,
-      JSON.stringify({ kind: connection.row.kind, status, errorCode }));
+    (await auditPortal(actor.employeeNumber, "integration.connection.test", "integration_connection", connection.row.id,
+      JSON.stringify({ kind: connection.row.kind, status, errorCode })));
     if (!error.status) error.status = 502;
     throw error;
   }
@@ -25411,8 +25504,8 @@ app.post("/api/integrations/connections/:id/test", async (request, response) => 
     status,
     errorCode: "",
   });
-  auditPortal(actor.employeeNumber, "integration.connection.test", "integration_connection", connection.row.id,
-    JSON.stringify({ kind: connection.row.kind, status }));
+  (await auditPortal(actor.employeeNumber, "integration.connection.test", "integration_connection", connection.row.id,
+    JSON.stringify({ kind: connection.row.kind, status })));
   response.json({ ok: true, connection: (await integrationConnectionById(connection.row.id)).public });
 });
 
@@ -25442,8 +25535,8 @@ app.post("/api/integrations/connections/:id/sql/inspect", async (request, respon
   });
   const parsed = sqlInspectionFromResult(connection, result, scopeContext);
   const session = integrationCache.create(actor.employeeNumber, "personnel-inspection", parsed);
-  auditPortal(actor.employeeNumber, "integration.personnel.sql.inspect", "integration_connection", connection.row.id,
-    JSON.stringify({ rows: result.rowCount, columns: result.columns.length, contentSha256: parsed.contentSha256 }));
+  (await auditPortal(actor.employeeNumber, "integration.personnel.sql.inspect", "integration_connection", connection.row.id,
+    JSON.stringify({ rows: result.rowCount, columns: result.columns.length, contentSha256: parsed.contentSha256 })));
   response.status(201).json(publicPersonnelInspection(parsed, session));
 });
 
@@ -25519,11 +25612,21 @@ registerDataImportRoutes(app, {
   refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }),
   assertCsrf: assertPortalCsrf,
 });
-const managedSalesHistoryRuntime = createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true });
+const postgresqlWorkerConfiguration = postgresqlActive ? persistenceConfiguration.readers : null;
+const postgresqlReceiptWorkers = postgresqlActive ? require('./lib/persistence/postgresql/reporting/receipt-runtime').createPostgresqlReceiptWorkers({
+  workerConfiguration: postgresqlWorkerConfiguration,
+  keyConfiguration: integrationEncryptionConfiguration ? {activeKeyId:integrationEncryptionConfiguration.keyId,keys:integrationEncryptionConfiguration.keys} : null,
+}) : null;
+const managedSalesHistoryRuntime = postgresqlActive
+  ? postgresqlReceiptWorkers.runtime({access:persistenceProvider,vault:integrationSecretVault,enabled:false,cashEnabled:true,cashBackendFactory:require('./lib/persistence/postgresql/reporting/receipt-prefetch').createPostgresqlCashHistoryBackend})
+  : createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true });
+const salesReportBatchWorker = require('./lib/sales-report-batch-worker').createSalesReportBatchWorker({ databasePath,
+    ...(postgresqlActive ? {workerFile:path.join(__dirname,'lib/persistence/postgresql/reporting/worker.js'),workerConfiguration:postgresqlWorkerConfiguration} : {}),
+    keyConfiguration: integrationEncryptionConfiguration ? { activeKeyId: integrationEncryptionConfiguration.keyId, keys: integrationEncryptionConfiguration.keys } : null });
 const salesReportJobs = createSalesReportJobs({ access: persistenceProvider, vault: integrationSecretVault,
+  scope: persistenceConfiguration.rehearsal ? 'postgresql-rehearsal-11' : 'grabenplaner-main',
   runtime: createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, cashEnabled: true, retainCompletedAnalyses: false }),
-  batchWorker: require('./lib/sales-report-batch-worker').createSalesReportBatchWorker({ databasePath,
-    keyConfiguration: integrationEncryptionConfiguration ? { activeKeyId: integrationEncryptionConfiguration.keyId, keys: integrationEncryptionConfiguration.keys } : null }),
+  batchWorker: salesReportBatchWorker,
   resolvePrincipal: resolveSalesReportPrincipal,
   onError: code => console.error('Berichtswarteschlange derzeit nicht verfügbar:', code) });
 registerSalesReportJobRoutes(app, { jobs: salesReportJobs, requireSession: requireEmployeePortalSession,
@@ -25704,7 +25807,7 @@ app.put("/api/sales-analytics/preferences", async (request, response) => {
     SALES_ANALYTICS_PREFERENCES_KEY,
     JSON.stringify(preferences),
   );
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "sales.analytics.preferences.update",
     "ui_preference",
@@ -25720,7 +25823,7 @@ app.put("/api/sales-analytics/preferences", async (request, response) => {
       pdfIncludesKpis: preferences.pdf.includeKpis,
       pdfIncludesTable: preferences.pdf.includeTable,
     }),
-  );
+  ));
   response.setHeader("Cache-Control", "private, no-store");
   response.json({ preferences });
 });
@@ -26188,7 +26291,7 @@ app.post("/api/sales-analytics/report-import/inspect", express.raw({
     "sales-report-preview",
     preview,
   );
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "sales.report.pdf.inspect",
     "sales_report_preview",
@@ -26205,7 +26308,7 @@ app.post("/api/sales-analytics/report-import/inspect", express.raw({
       ocrReviewed: preview.source.ocrReviewed,
       originalRetained: false,
     }),
-  );
+  ));
   response.setHeader("Cache-Control", "private, no-store");
   response.status(201).json({
     previewId: previewSession.id,
@@ -26214,14 +26317,14 @@ app.post("/api/sales-analytics/report-import/inspect", express.raw({
   });
 });
 
-function auditSalesReportImportRejection(session, entry, preview, locationId, reasonCode) {
+async function auditSalesReportImportRejection(session, entry, preview, locationId, reasonCode) {
   const safeReasonCode = String(reasonCode || "SALES_ANALYTICS_REPORT_IMPORT_FAILED")
     .replace(/[^A-Za-z0-9._:-]/g, "")
     .slice(0, 100) || "SALES_ANALYTICS_REPORT_IMPORT_FAILED";
   const sourceFileSha256 = /^[a-f0-9]{64}$/.test(String(preview?.source?.contentSha256 || ""))
     ? preview.source.contentSha256
     : null;
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "sales.report.pdf.rejected",
     "sales_report_import",
@@ -26236,7 +26339,7 @@ function auditSalesReportImportRejection(session, entry, preview, locationId, re
       extraction: preview?.source?.extraction || null,
       originalRetained: false,
     }),
-  );
+  ));
 }
 
 app.post("/api/sales-analytics/report-import/apply", async (request, response) => {
@@ -26255,13 +26358,13 @@ app.post("/api/sales-analytics/report-import/apply", async (request, response) =
     throw httpError(403, "Diese aktive Filiale ist für den Import nicht verfügbar.", "SALES_ANALYTICS_LOCATION_DENIED");
   }
   if (String(request.body?.currency || "").toUpperCase() !== "EUR") {
-    auditSalesReportImportRejection(
+    (await auditSalesReportImportRejection(
       session,
       entry,
       entry.value,
       locationId,
       "SALES_ANALYTICS_CURRENCY_CONFIRMATION_REQUIRED",
-    );
+    ));
     throw httpError(422, "Die Währung muss für diesen Bericht ausdrücklich als EUR bestätigt werden.", "SALES_ANALYTICS_CURRENCY_CONFIRMATION_REQUIRED");
   }
   let confirmedPreview = entry.value;
@@ -26277,13 +26380,13 @@ app.post("/api/sales-analytics/report-import/apply", async (request, response) =
       });
     }
   } catch (error) {
-    auditSalesReportImportRejection(
+    (await auditSalesReportImportRejection(
       session,
       entry,
       confirmedPreview,
       locationId,
       error?.code || "TRADEFOTO_REPORT_OCR_REVIEW_INVALID",
-    );
+    ));
     throw tradeFotoReportHttpError(error);
   }
   let result;
@@ -26298,13 +26401,13 @@ app.post("/api/sales-analytics/report-import/apply", async (request, response) =
     });
   } catch (error) {
     if (error?.operation === "tradefoto-branch-mapping-conflict") {
-      auditSalesReportImportRejection(
+      (await auditSalesReportImportRejection(
         session,
         entry,
         confirmedPreview,
         locationId,
         "SALES_ANALYTICS_BRANCH_MAPPING_CONFLICT",
-      );
+      ));
       throw httpError(
         409,
         "Die TradeFoto-Filialkennung ist bereits einer anderen GP-Filiale zugeordnet.",
@@ -26319,13 +26422,13 @@ app.post("/api/sales-analytics/report-import/apply", async (request, response) =
       const errorCode = periodConflict
         ? "SALES_ANALYTICS_REPORT_PERIOD_CONFLICT"
         : "SALES_ANALYTICS_REPORT_REUSE_CONFLICT";
-      auditSalesReportImportRejection(
+      (await auditSalesReportImportRejection(
         session,
         entry,
         confirmedPreview,
         locationId,
         errorCode,
-      );
+      ));
       integrationCache.delete(entry.id, session.employeeNumber);
       throw httpError(
         409,
@@ -26336,30 +26439,30 @@ app.post("/api/sales-analytics/report-import/apply", async (request, response) =
       );
     }
     if (error?.code === "PERSISTENCE_STATEMENT_INVALID") {
-      auditSalesReportImportRejection(
+      (await auditSalesReportImportRejection(
         session,
         entry,
         confirmedPreview,
         locationId,
         "SALES_ANALYTICS_REPORT_CONFIRMATION_REQUIRED",
-      );
+      ));
       throw httpError(
         422,
         "Der Bericht kann erst nach vollständiger Prüfung und Bestätigung übernommen werden.",
         "SALES_ANALYTICS_REPORT_CONFIRMATION_REQUIRED",
       );
     }
-    auditSalesReportImportRejection(
+    (await auditSalesReportImportRejection(
       session,
       entry,
       confirmedPreview,
       locationId,
       error?.code || error?.operation || "SALES_ANALYTICS_REPORT_IMPORT_FAILED",
-    );
+    ));
     throw error;
   }
   integrationCache.delete(entry.id, session.employeeNumber);
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     result.created ? "sales.report.pdf.import" : "sales.report.pdf.reuse",
     "sales_aggregate_report",
@@ -26375,7 +26478,7 @@ app.post("/api/sales-analytics/report-import/apply", async (request, response) =
       reviewMethod: result.report.reviewMethod,
       originalRetained: false,
     }),
-  );
+  ));
   response.status(result.created ? 201 : 200).json({
     created: result.created,
     report: publicSalesAnalyticsReport(result.report),
@@ -26414,7 +26517,7 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
     }
     reportIds = normalizeSalesAnalyticsReportSeriesIds(body.reportIds);
   } catch (error) {
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "sales.report.series.rejected",
       "sales_report_series",
@@ -26424,7 +26527,7 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
           .replace(/[^A-Za-z0-9._:-]/g, "").slice(0, 100),
         reportCount: Array.isArray(request.body?.reportIds) ? request.body.reportIds.length : 0,
       }),
-    );
+    ));
     throw salesReportSeriesHttpError(error);
   }
 
@@ -26432,7 +26535,7 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
   for (const reportId of reportIds) {
     const bundle = await salesAnalyticsRepository.getReportBundle(reportId);
     if (!bundle) {
-      auditPortal(
+      (await auditPortal(
         session.employeeNumber,
         "sales.report.series.rejected",
         "sales_report_series",
@@ -26441,7 +26544,7 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
           reasonCode: "SALES_ANALYTICS_REPORT_NOT_FOUND",
           reportCount: reportIds.length,
         }),
-      );
+      ));
       throw httpError(
         404,
         "Mindestens ein ausgewählter Statistikbericht wurde nicht gefunden.",
@@ -26451,7 +26554,7 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
     try {
       assertSalesAnalyticsLocation(projection, bundle.report.locationId);
     } catch (error) {
-      auditPortal(
+      (await auditPortal(
         session.employeeNumber,
         "sales.report.series.rejected",
         "sales_report_series",
@@ -26460,7 +26563,7 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
           reasonCode: "SALES_ANALYTICS_LOCATION_DENIED",
           reportCount: reportIds.length,
         }),
-      );
+      ));
       throw error;
     }
     bundles.push(publicSalesAnalyticsReportBundle(bundle, projection));
@@ -26470,7 +26573,7 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
   try {
     series = aggregateSalesAnalyticsReportSeries(bundles);
   } catch (error) {
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "sales.report.series.rejected",
       "sales_report_series",
@@ -26480,10 +26583,10 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
           .replace(/[^A-Za-z0-9._:-]/g, "").slice(0, 100),
         reportCount: reportIds.length,
       }),
-    );
+    ));
     throw salesReportSeriesHttpError(error);
   }
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "sales.report.series.analyze",
     "sales_report_series",
@@ -26497,7 +26600,7 @@ app.post("/api/sales-analytics/report-series/analyze", async (request, response)
       gapDays: series.selection.gapDays,
       comparisonAligned: series.selection.comparisonAligned,
     }),
-  );
+  ));
   response.setHeader("Cache-Control", "private, no-store");
   response.json(series);
 });
@@ -27053,7 +27156,7 @@ app.post("/api/sales-analytics/charts.pdf", async (request, response) => {
   const createdAt = new Date();
   const pdfPlan = salesAnalyticsChartsPdfPlan(detail, input);
   const targetId = input.series ? detail.selection.fingerprint : detail.report.id;
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "sales.report.charts.export",
     input.series ? "sales_report_series" : "sales_aggregate_report",
@@ -27070,7 +27173,7 @@ app.post("/api/sales-analytics/charts.pdf", async (request, response) => {
       includeKpis: input.pdfOptions.includeKpis,
       includeTable: input.pdfOptions.includeTable,
     }),
-  );
+  ));
   const filename = `${input.pdfOptions.filenamePrefix}-${locationId}-${formatFilenameTimestamp(createdAt)}.pdf`;
   response.status(200);
   response.setHeader("Content-Type", "application/pdf");
@@ -27112,7 +27215,7 @@ app.post("/api/integrations/profiles", async (request, response) => {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Ein Profil mit diesem Namen besteht bereits.", "INTEGRATION_PROFILE_DUPLICATE");
     throw error;
   }
-  auditPortal(actor.employeeNumber, "integration.profile.create", "integration_profile", id, JSON.stringify({ direction: profile.direction, kind: profile.kind, format: profile.format }));
+  (await auditPortal(actor.employeeNumber, "integration.profile.create", "integration_profile", id, JSON.stringify({ direction: profile.direction, kind: profile.kind, format: profile.format })));
   response.status(201).json({ profile: await integrationProfileById(id, "", "", { includeInactive: true }) });
 });
 
@@ -27133,7 +27236,7 @@ app.put("/api/integrations/profiles/:id", async (request, response) => {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Ein Profil mit diesem Namen besteht bereits.", "INTEGRATION_PROFILE_DUPLICATE");
     throw error;
   }
-  auditPortal(actor.employeeNumber, "integration.profile.update", "integration_profile", existing.id, JSON.stringify({ direction: profile.direction, kind: profile.kind, format: profile.format }));
+  (await auditPortal(actor.employeeNumber, "integration.profile.update", "integration_profile", existing.id, JSON.stringify({ direction: profile.direction, kind: profile.kind, format: profile.format })));
   response.json({ profile: await integrationProfileById(existing.id, "", "", { includeInactive: true }) });
 });
 
@@ -27141,7 +27244,7 @@ app.delete("/api/integrations/profiles/:id", async (request, response) => {
   const actor = integrationActor(request, "integrations:profiles:write");
   const existing = await integrationProfileById(request.params.id, "", "", { includeInactive: true });
   await integrationRuntimeRepository.deleteProfile({ id: existing.id });
-  auditPortal(actor.employeeNumber, "integration.profile.delete", "integration_profile", existing.id, JSON.stringify({ direction: existing.direction, kind: existing.kind }));
+  (await auditPortal(actor.employeeNumber, "integration.profile.delete", "integration_profile", existing.id, JSON.stringify({ direction: existing.direction, kind: existing.kind })));
   response.status(204).end();
 });
 
@@ -27292,8 +27395,8 @@ app.post("/api/integrations/payroll-export/deliver", async (request, response) =
       httpStatus: result.statusCode,
       errorCode,
     });
-    auditPortal(actor.employeeNumber, "integration.payroll.delivery", "integration_delivery", deliveryId,
-      JSON.stringify({ connectionId: connection.row.id, rows: preflight.rowCount, status, httpStatus: result.statusCode, contentSha256 }));
+    (await auditPortal(actor.employeeNumber, "integration.payroll.delivery", "integration_delivery", deliveryId,
+      JSON.stringify({ connectionId: connection.row.id, rows: preflight.rowCount, status, httpStatus: result.statusCode, contentSha256 })));
     const completed = serializeIntegrationDelivery(
       await integrationRuntimeRepository.getDelivery({ id: deliveryId }),
     );
@@ -27309,8 +27412,8 @@ app.post("/api/integrations/payroll-export/deliver", async (request, response) =
         status: definitive ? "rejected" : "unknown",
         errorCode,
       });
-      auditPortal(actor.employeeNumber, "integration.payroll.delivery", "integration_delivery", deliveryId,
-        JSON.stringify({ connectionId: connection.row.id, rows: preflight.rowCount, status: definitive ? "rejected" : "unknown", errorCode, contentSha256 }));
+      (await auditPortal(actor.employeeNumber, "integration.payroll.delivery", "integration_delivery", deliveryId,
+        JSON.stringify({ connectionId: connection.row.id, rows: preflight.rowCount, status: definitive ? "rejected" : "unknown", errorCode, contentSha256 })));
     }
     if (!error.status) error.status = 502;
     throw error;
@@ -27362,8 +27465,8 @@ app.post("/api/integrations/payroll-export/file", async (request, response) => {
       blockerCodes: [...new Set(preflight.blockers.map((blocker) => blocker.code))],
     },
   });
-  auditPortal(actor.employeeNumber, "integration.payroll.export", "integration_run", runId,
-    JSON.stringify({ profileId: preflight.profileId, format: preflight.configuration.format, rows: preflight.rowCount, draft, contentSha256 }));
+  (await auditPortal(actor.employeeNumber, "integration.payroll.export", "integration_run", runId,
+    JSON.stringify({ profileId: preflight.profileId, format: preflight.configuration.format, rows: preflight.rowCount, draft, contentSha256 })));
   response.setHeader("Content-Type", preflight.configuration.format === "xlsx"
     ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     : "text/csv; charset=utf-8");
@@ -27375,31 +27478,31 @@ app.post("/api/integrations/payroll-export/file", async (request, response) => {
 });
 
 app.get("/api/health/live", (_request, response) => response.json({ ok: true }));
-app.get("/api/health/ready", (_request, response) => sendReadiness(response));
-app.get("/api/health", (_request, response) => sendReadiness(response));
+app.get("/api/health/ready", async (_request, response) => (await sendReadiness(response)));
+app.get("/api/health", async (_request, response) => (await sendReadiness(response)));
 
-app.post("/api/service/stop", (request, response) => {
+app.post("/api/service/stop", async (request, response) => {
   if (!serverModeActive || !isLoopbackRequest(request) || serviceControlToken.length < 32) {
     throw httpError(404, "Der Dienststeuerungs-Endpunkt ist nicht verfügbar.", "SERVICE_CONTROL_UNAVAILABLE");
   }
   const provided = String(request.headers["x-grabenplaner-service-token"] || "");
   const valid = safeHashEquals(provided, serviceControlToken);
   if (!valid) {
-    auditPortal("service", "service.stop.denied", "system", "server");
+    (await auditPortal("service", "service.stop.denied", "system", "server"));
     throw httpError(403, "Die Dienststeuerung wurde abgelehnt.", "SERVICE_CONTROL_DENIED");
   }
   response.json({ ok: true, message: "Der Grabenplaner-Dienst wird kontrolliert beendet." });
   response.on("finish", () => setTimeout(() => shutdown({ reason: "windows-service" }), 150));
 });
 
-app.get("/api/server-diagnostics", (request, response) => {
+app.get("/api/server-diagnostics", async (request, response) => {
   requirePortalAdminOrLocal(request, "system:diagnostics:technical");
-  response.json(serverDiagnostics());
+  response.json((await serverDiagnostics()));
 });
 
-app.get("/api/server-status", (request, response) => {
+app.get("/api/server-status", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
-  response.json(serverStatusForActor(serverDiagnostics(), actor));
+  response.json((await serverStatusForActor((await serverDiagnostics()), actor)));
 });
 
 function runtimeDriveInfo() {
@@ -27554,13 +27657,13 @@ async function buildUpdateStatus() {
   return (await resolveUpdateStatus()).status;
 }
 
-app.get("/api/system-info", (request, response) => {
+app.get("/api/system-info", async (request, response) => {
   const settings = getSettings();
   const privileged = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("system:diagnostics:technical");
   const statusAllowed = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.some((permission) => ["system:diagnostics:read", "system:diagnostics:technical"].includes(permission));
   const diagnosticsAllowed = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("system:diagnostics:technical");
-  const diagnosticSnapshot = statusAllowed || diagnosticsAllowed ? serverDiagnostics() : null;
-  const sqliteVersion = sqliteSystemDiagnosticsOperations.sqliteVersion();
+  const diagnosticSnapshot = statusAllowed || diagnosticsAllowed ? (await serverDiagnostics()) : null;
+  const databaseVersion = postgresqlActive ? await sqliteSystemDiagnosticsOperations.databaseVersion() : await sqliteSystemDiagnosticsOperations.sqliteVersion();
   const serverTime = new Intl.DateTimeFormat("de-AT", {
     day: "2-digit",
     month: "2-digit",
@@ -27575,7 +27678,9 @@ app.get("/api/system-info", (request, response) => {
     serverTime,
     timezone: "Europe/Vienna",
     nodeVersion: process.version,
-    sqliteVersion,
+    sqliteVersion: postgresqlActive ? null : databaseVersion,
+    databaseVersion,
+    databaseProvider: persistenceConfiguration.providerId,
     platform: `${os.type()} ${os.release()} · ${os.arch()}`,
     uptimeSeconds: Math.floor(process.uptime()),
     database: path.basename(databasePath),
@@ -27590,7 +27695,7 @@ app.get("/api/system-info", (request, response) => {
     appVersion: packageMetadata.version,
     appVersionLabel: APP_VERSION_LABEL,
     portal: getPortalStatus(),
-    serverStatus: statusAllowed ? serverStatusForActor(diagnosticSnapshot, request.portalSession) : null,
+    serverStatus: statusAllowed ? (await serverStatusForActor(diagnosticSnapshot, request.portalSession)) : null,
     serverDiagnostics: diagnosticsAllowed ? diagnosticSnapshot : null,
     runtimeDrive: privileged ? runtimeDriveInfo() : null,
   });
@@ -27808,7 +27913,7 @@ app.put("/api/backup/settings", async (request, response) => {
   });
   await refreshApplicationSettingsSnapshot();
   scheduleAutomaticBackups();
-  auditPortal(request.portalSession?.employeeNumber || "local", "backup.settings.update", "system", "backup");
+  (await auditPortal(request.portalSession?.employeeNumber || "local", "backup.settings.update", "system", "backup"));
   response.json({
     ok: true,
     externalBackupEnabled,
@@ -27843,32 +27948,35 @@ app.post("/api/backup/database-download", async (request, response, next) => {
     operation: "database-download",
   });
   const requestId = crypto.randomUUID();
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "backup.database-download.requested",
     "database",
     requestId,
     JSON.stringify({ requestId }),
-  );
+  ));
 
   let snapshot;
   try {
-    snapshot = createDatabaseDownloadSnapshot();
+    snapshot = postgresqlActive
+      ? await require('./lib/persistence/postgresql/operations/application-export').createApplicationDatabaseExport({
+        ...persistenceConfiguration,directory:path.join(dataRootDirectory,'transient','database-exports')})
+      : createDatabaseDownloadSnapshot();
   } catch (error) {
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "backup.database-download.failed",
       "database",
       requestId,
       JSON.stringify({ requestId, errorCode: "SNAPSHOT_CREATION_FAILED" }),
-    );
+    ));
     if (error?.code === "BACKUP_WORKSPACE_BUSY") throw httpError(409, "Eine Sicherung oder Wiederherstellung läuft gerade. Bitte den Download danach erneut starten.", "BACKUP_WORKSPACE_BUSY");
     throw httpError(500, "Der geprüfte Datenbankstand konnte nicht erstellt werden.", "DATABASE_DOWNLOAD_FAILED");
   }
 
-  const filename = `Grabenplaner-Datenbank-${backupTimestamp(new Date()).replace(/Z$/, "")}.db`;
+  const filename = `Grabenplaner-Datenbank-${backupTimestamp(new Date()).replace(/Z$/, "")}.${snapshot.extension || 'db'}`;
   response.set({
-    "Content-Type": "application/vnd.sqlite3",
+    "Content-Type": snapshot.contentType || "application/vnd.sqlite3",
     "Content-Disposition": contentDispositionHeader(filename),
     "Cache-Control": "private, no-store, max-age=0",
     Pragma: "no-cache",
@@ -27878,7 +27986,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
   });
 
   let settled = false;
-  const cleanup = () => {
+  const cleanup = async () => {
     try {
       fs.rmSync(snapshot.temporaryRoot, {
         recursive: true,
@@ -27891,13 +27999,13 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       const errorCode = /^[A-Z0-9_]{1,80}$/.test(reportedCode) ? reportedCode : "CLEANUP_FAILED";
       console.error("Die temporäre Datenbankkopie konnte nicht vollständig entfernt werden:", errorCode);
       try {
-        auditPortal(
+        (await auditPortal(
           session.employeeNumber,
           "backup.database-download.cleanup-failed",
           "database",
           requestId,
           JSON.stringify({ requestId, errorCode }),
-        );
+        ));
       } catch {
         // Der Transferabschluss darf auch bei einem Auditfehler nicht abstürzen.
       }
@@ -27905,44 +28013,49 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       snapshot.releaseWorkspace();
     }
   };
-  const finishTransfer = (outcome, errorCode = "") => {
+  const finishTransfer = async (outcome, errorCode = "") => {
     if (settled) return;
     settled = true;
     try {
       if (outcome === "completed") {
-        auditPortal(
+        (await auditPortal(
           session.employeeNumber,
           "backup.database-download.completed",
           "database",
           requestId,
           JSON.stringify({ requestId, bytes: snapshot.size, sha256: snapshot.sha256 }),
-        );
+        ));
       } else {
-        auditPortal(
+        (await auditPortal(
           session.employeeNumber,
           "backup.database-download.failed",
           "database",
           requestId,
           JSON.stringify({ requestId, errorCode: errorCode || "TRANSFER_FAILED" }),
-        );
+        ));
       }
     } catch (error) {
       console.error("Der Abschluss des Datenbank-Downloads konnte nicht protokolliert werden:", error);
     } finally {
-      cleanup();
+      (await cleanup());
     }
   };
-  response.once("close", () => {
-    if (!response.writableEnded) finishTransfer("failed", "CLIENT_ABORTED");
+  if (postgresqlActive && (response.destroyed || !await authorizePersistenceOperation({readOnly:true}))) {
+    await finishTransfer('failed', response.destroyed ? 'CLIENT_ABORTED' : 'AUTHORIZATION_CHANGED');
+    if (!response.destroyed) throw httpError(403, 'Die Berechtigung für den Datenbank-Download hat sich geändert.', 'DATABASE_DOWNLOAD_FORBIDDEN');
+    return;
+  }
+  response.once("close", async () => {
+    if (!response.writableEnded) (await finishTransfer("failed", "CLIENT_ABORTED"));
   });
   response.sendFile(snapshot.path, {
     acceptRanges: false,
     cacheControl: false,
     lastModified: false,
     dotfiles: "deny",
-  }, (error) => {
+  }, async (error) => {
     if (error) {
-      finishTransfer("failed", "TRANSFER_FAILED");
+      (await finishTransfer("failed", "TRANSFER_FAILED"));
       if (response.headersSent) {
         response.destroy();
       } else {
@@ -27950,7 +28063,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       }
       return;
     }
-    finishTransfer("completed");
+    (await finishTransfer("completed"));
   });
 });
 
@@ -27986,35 +28099,35 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
     operation: "offsite-folder-create",
   });
   const requestId = crypto.randomUUID();
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "backup.offsite-folder.create.requested",
     "offsite_folder",
     body.folderLabel,
     JSON.stringify({ requestId }),
-  );
+  ));
   try {
     const result = await createManagedOffsiteFolder(body.folderLabel);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "backup.offsite-folder.create.completed",
       "offsite_folder",
       body.folderLabel,
       JSON.stringify({ requestId }),
-    );
+    ));
     response.status(201).json({
       activeFolder: result.activeFolder || null,
       createdFolder: result.createdFolder,
       requestId,
     });
   } catch (error) {
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "backup.offsite-folder.create.failed",
       "offsite_folder",
       body.folderLabel,
       JSON.stringify({ requestId, errorCode: String(error?.code || "UNAVAILABLE").slice(0, 80) }),
-    );
+    ));
     throw offsiteTargetHttpError(error);
   }
 });
@@ -28038,16 +28151,16 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
     operation: "offsite-folder-activate",
   });
   const requestId = crypto.randomUUID();
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "backup.offsite-folder.activate.requested",
     "offsite_folder",
     body.folderLabel,
     JSON.stringify({ requestId }),
-  );
+  ));
   try {
     const result = await activateManagedOffsiteFolder(body.folderLabel);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "backup.offsite-folder.activate.completed",
       "offsite_folder",
@@ -28058,7 +28171,7 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
         recoverySetState: result.recoverySetState,
         fallbackPreserved: result.fallbackPreserved === true,
       }),
-    );
+    ));
     response.json({
       activeFolder: result.activeFolder || null,
       migrationMode: result.migrationMode,
@@ -28067,13 +28180,13 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
       requestId,
     });
   } catch (error) {
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "backup.offsite-folder.activate.failed",
       "offsite_folder",
       body.folderLabel,
       JSON.stringify({ requestId, errorCode: String(error?.code || "UNAVAILABLE").slice(0, 80) }),
-    );
+    ));
     throw offsiteTargetHttpError(error);
   }
 });
@@ -28092,17 +28205,17 @@ function serverMonitorRestartCooldownSeconds(lastAcceptedAt, now = new Date()) {
   ));
 }
 
-function currentServerMonitorRestartCooldownSeconds(now = new Date()) {
-  const latestAcceptedAt = sqliteSystemDiagnosticsOperations
-    .latestAuditActionCreatedAt("system.server_monitor.restart.accepted");
+async function currentServerMonitorRestartCooldownSeconds(now = new Date()) {
+  const latestAcceptedAt = (await sqliteSystemDiagnosticsOperations
+    .latestAuditActionCreatedAt("system.server_monitor.restart.accepted"));
   return serverMonitorRestartCooldownSeconds(latestAcceptedAt, now);
 }
 
-function serverMonitorActionCapabilities(
+async function serverMonitorActionCapabilities(
   actor,
   {
     managedRestartAvailable = serverManagedRestartAvailable,
-    restartCooldownSeconds = currentServerMonitorRestartCooldownSeconds(),
+    restartCooldownSeconds,
     managedHostRebootAvailable = currentHostManagedRebootAvailable(),
     hostSecurityConfigured = false,
     hostSecurityStatusAvailable = false,
@@ -28112,6 +28225,8 @@ function serverMonitorActionCapabilities(
     hostRebootInProgress = hostManagedRebootRequested,
   } = {},
 ) {
+if (restartCooldownSeconds === undefined) restartCooldownSeconds = (await currentServerMonitorRestartCooldownSeconds());
+
   const vpsRebootVisible = Boolean(actor && actor.role === "developer");
   let vpsRebootUnavailableReason = null;
   if (vpsRebootVisible) {
@@ -28146,16 +28261,16 @@ function serverMonitorActionCapabilities(
   };
 }
 
-function serverStatusForActor(diagnostics, actor) {
+async function serverStatusForActor(diagnostics, actor) {
   return {
-    ...serverStatusSummary(diagnostics),
-    monitorActions: serverMonitorActionCapabilities(actor, {
+    ...(await serverStatusSummary(diagnostics)),
+    monitorActions: (await serverMonitorActionCapabilities(actor, {
       hostSecurityConfigured: diagnostics?.hostSecurity?.configured === true,
       hostSecurityStatusAvailable: diagnostics?.hostSecurity?.statusAvailable === true,
       hostSecurityStatusErrorCode: diagnostics?.hostSecurity?.lastErrorCode || null,
       hostRebootRequired: diagnostics?.hostSecurity?.rebootRequired === true,
       hostSecurityPendingConfirmation: diagnostics?.hostSecurity?.pendingConfirmation === true,
-    }),
+    })),
   };
 }
 
@@ -28243,6 +28358,23 @@ function hostRebootHttpError(error, response) {
   );
 }
 
+async function queuePostgresqlLifecycle(request, response, actor, action, requestId) {
+  await auditPortal(actor.employeeNumber, 'system.postgresql.maintenance.requested', 'system', action, JSON.stringify({ requestId }));
+  if (!await authorizePersistenceOperation({ readOnly: false })) throw httpError(403,
+    'Die Berechtigung hat sich geändert. Der Wartungsauftrag wurde nicht übergeben.', 'PG_LIFECYCLE_AUTHORIZATION_CHANGED');
+  let result;
+  try { result = await require('./lib/persistence/postgresql/lifecycle-control').requestControl({ action, requestId }); }
+  catch (error) {
+    await auditPortal(actor.employeeNumber, 'system.postgresql.maintenance.failed', 'system', action,
+      JSON.stringify({ requestId, code: String(error.code || error.message || 'PG_LIFECYCLE_FAILED').slice(0, 80) }));
+    throw httpError(503, 'Die Serverwartung konnte nicht beauftragt werden. Der aktuelle Zustand wird in der Diagnose angezeigt.', 'PG_LIFECYCLE_UNAVAILABLE');
+  }
+  return response.status(202).json({ ok: true, requestId, acceptedAt: result.acceptedAt, backupVerified: false,
+    code: action === 'restart' ? 'SERVER_RESTART_ACCEPTED' : action === 'vps-reboot' ? 'VPS_REBOOT_ACCEPTED' : 'SERVER_SHUTDOWN_ACCEPTED',
+    ...(action === 'vps-reboot' ? { previousHostBootGeneration: hostBootGeneration } : {}),
+    message: 'Die Serverwartung wurde beauftragt. Vor dem Abschluss wird ein gemeinsamer Sicherungspunkt beider Datenbanken erstellt.' });
+}
+
 app.post("/api/portal/v1/server-monitor/restart", async (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "system:write");
   if (isLocalSystemSession(actor) || !SERVER_MONITOR_CONTROL_ROLES.has(actor.role)) {
@@ -28270,7 +28402,7 @@ app.post("/api/portal/v1/server-monitor/restart", async (request, response) => {
   if (serverManagedRestartRequested) {
     throw httpError(409, "Ein kontrollierter Serverneustart wurde bereits eingeleitet.", "SERVER_RESTART_IN_PROGRESS");
   }
-  const cooldownSeconds = currentServerMonitorRestartCooldownSeconds();
+  const cooldownSeconds = (await currentServerMonitorRestartCooldownSeconds());
   if (cooldownSeconds > 0) {
     response.setHeader("Retry-After", String(cooldownSeconds));
     throw httpError(
@@ -28282,15 +28414,19 @@ app.post("/api/portal/v1/server-monitor/restart", async (request, response) => {
 
   const requestId = crypto.randomUUID();
   serverManagedRestartRequested = true;
+  if (postgresqlActive) {
+    try { return await queuePostgresqlLifecycle(request, response, actor, 'restart', requestId); }
+    catch (error) { serverManagedRestartRequested = false; throw error; }
+  }
   try {
     await createDatabaseBackup("server-monitor-restart");
-    auditPortal(
+    (await auditPortal(
       actor.employeeNumber,
       "system.server_monitor.restart.accepted",
       "system",
       "server-monitor",
       JSON.stringify({ requestId, result: "accepted" }),
-    );
+    ));
   } catch (error) {
     serverManagedRestartRequested = false;
     throw error;
@@ -28357,7 +28493,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     );
   }
   try {
-    assertSafeHostRebootSocket();
+    if (!postgresqlActive) assertSafeHostRebootSocket();
   } catch {
     throw httpError(
       503,
@@ -28376,24 +28512,28 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
 
   const requestId = crypto.randomUUID();
   hostManagedRebootRequested = true;
+  if (postgresqlActive) {
+    try { return await queuePostgresqlLifecycle(request, response, session, 'vps-reboot', requestId); }
+    catch (error) { hostManagedRebootRequested = false; throw error; }
+  }
   let result;
   try {
     result = await prepareControlledHostReboot({
       requestId,
       createBackup: () => createDatabaseBackup("vps-reboot"),
-      recordRequest: () => auditPortal(
+      recordRequest: async () => (await auditPortal(
         session.employeeNumber,
         "system.host_reboot.requested",
         "system",
         "vps-reboot",
         JSON.stringify({ requestId }),
-      ),
+      )),
       requestControl: requestHostReboot,
     });
   } catch (error) {
     hostManagedRebootRequested = false;
     try {
-      auditPortal(
+      (await auditPortal(
         session.employeeNumber,
         "system.host_reboot.failed",
         "system",
@@ -28402,7 +28542,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
           requestId,
           errorCode: String(error?.code || "VPS_REBOOT_CONTROL_UNAVAILABLE").slice(0, 80),
         }),
-      );
+      ));
     } catch {
       console.error("VPS-Reboot-Fehler konnte nicht revisionssicher protokolliert werden.");
     }
@@ -28417,13 +28557,13 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     throw hostRebootHttpError(error, response);
   }
   try {
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "system.host_reboot.accepted",
       "system",
       "vps-reboot",
       JSON.stringify({ requestId, result: "accepted" }),
-    );
+    ));
   } catch {
     console.error("Angenommener VPS-Reboot konnte nicht nachträglich protokolliert werden.");
   }
@@ -28443,6 +28583,7 @@ app.post("/api/system/exit", async (request, response) => {
     if (!["developer", "it_admin", "admin"].includes(session.role)) {
       throw httpError(403, "Nur Developer, IT-Administration oder Administration dürfen den Server beenden.", "SERVER_SHUTDOWN_ROLE_DENIED");
     }
+    if (postgresqlActive) return queuePostgresqlLifecycle(request, response, session, 'shutdown', crypto.randomUUID());
   }
   const driveInfo = runtimeDriveInfo();
   let backup = null;
@@ -28786,7 +28927,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     amuDocuments: currentAmuDocuments,
     personnelDocuments: currentPersonnelDocuments,
   } = await runtimeRecoveryRepository.protectedDocumentCounts();
-  const currentProtectedSnapshot = protectedSicknessAmuStorageSnapshotFromDatabase(db);
+  const currentProtectedSnapshot = await protectedSicknessStorageForApplication();
   const currentCandidateDocuments = currentProtectedSnapshot.candidateDocuments.length;
   const currentPersonnelDocumentVersions = currentProtectedSnapshot.personnelDocumentVersions.length;
   if (currentAmuDocuments + currentPersonnelDocuments + currentCandidateDocuments
@@ -29125,8 +29266,8 @@ async function recordPrivacyExportReceipt(state, bundle, actor) {
     createdAt: bundle.generatedAt,
     downloadedAt: bundle.generatedAt,
   });
-  auditPortal(actor, "privacy-request.export", "privacy_request", state.id,
-    JSON.stringify({ exportId: id, contentSha256, categories: bundle.scope }));
+  (await auditPortal(actor, "privacy-request.export", "privacy_request", state.id,
+    JSON.stringify({ exportId: id, contentSha256, categories: bundle.scope })));
   return { id, content };
 }
 
@@ -29252,8 +29393,8 @@ app.post("/api/privacy-governance/retention/rules", async (request, response) =>
   try {
     const rule = await requireGovernanceStore()
       .insertRetentionRule(request.body, actor.employeeNumber);
-    auditPortal(actor.employeeNumber, "retention.rule.create", "retention_policy", rule.id,
-      JSON.stringify({ category: rule.category, version: rule.version, status: rule.status }));
+    (await auditPortal(actor.employeeNumber, "retention.rule.create", "retention_policy", rule.id,
+      JSON.stringify({ category: rule.category, version: rule.version, status: rule.status })));
     response.status(201).json({ rule, notice: RETENTION_GOVERNANCE_NOTICE });
   } catch (error) {
     governanceRouteError(error, error?.code === "SQLITE_CONSTRAINT_UNIQUE" ? 409 : 400);
@@ -29270,8 +29411,8 @@ app.post("/api/privacy-governance/retention/preview", async (request, response) 
       actor.employeeNumber,
       await openPrivacyRequestLegalHolds(asOf),
     );
-    auditPortal(actor.employeeNumber, "retention.preview.create", "retention_preview", preview.id,
-      JSON.stringify({ asOf, counts: preview.counts, automaticExecution: false }));
+    (await auditPortal(actor.employeeNumber, "retention.preview.create", "retention_preview", preview.id,
+      JSON.stringify({ asOf, counts: preview.counts, automaticExecution: false })));
     response.status(201).json({ preview, notice: RETENTION_GOVERNANCE_NOTICE });
   } catch (error) {
     governanceRouteError(error);
@@ -29304,8 +29445,8 @@ app.post("/api/privacy-governance/retention/holds", async (request, response) =>
     validTo,
     actor: actor.employeeNumber,
   });
-  auditPortal(actor.employeeNumber, "retention.hold.create", "legal_hold", id,
-    JSON.stringify({ category, employeeNumber, validFrom, validTo, reasonCode }));
+  (await auditPortal(actor.employeeNumber, "retention.hold.create", "legal_hold", id,
+    JSON.stringify({ category, employeeNumber, validFrom, validTo, reasonCode })));
   response.status(201).json({ id, category, employeeNumber, reasonCode, validFrom, validTo, active: true });
 });
 
@@ -29316,7 +29457,7 @@ app.post("/api/privacy-governance/retention/holds/:id/release", async (request, 
     id: request.params.id,
   });
   if (!result.rowsAffected) throw httpError(404, "Der aktive Legal Hold wurde nicht gefunden.");
-  auditPortal(actor.employeeNumber, "retention.hold.release", "legal_hold", request.params.id);
+  (await auditPortal(actor.employeeNumber, "retention.hold.release", "legal_hold", request.params.id));
   response.json({ id: request.params.id, active: false });
 });
 
@@ -29361,8 +29502,8 @@ app.post("/api/privacy-governance/requests", async (request, response) => {
       scope: privacyRequestScope(type, request.body?.scope),
       channel: "other",
     }, actor.employeeNumber);
-    auditPortal(actor.employeeNumber, "privacy-request.create", "privacy_request", created.state.id,
-      JSON.stringify({ subject: employeeNumber, type, channel: "other" }));
+    (await auditPortal(actor.employeeNumber, "privacy-request.create", "privacy_request", created.state.id,
+      JSON.stringify({ subject: employeeNumber, type, channel: "other" })));
     response.status(201).json({ request: created.summary, notice: PRIVACY_REQUEST_GOVERNANCE_NOTICE });
   } catch (error) {
     governanceRouteError(error);
@@ -29383,8 +29524,8 @@ app.patch("/api/privacy-governance/requests/:id", async (request, response) => {
       actor.employeeNumber,
     );
     if (!updated) throw httpError(404, "Die Datenschutzanfrage wurde nicht gefunden.");
-    auditPortal(actor.employeeNumber, `privacy-request.${action}`, "privacy_request", updated.state.id,
-      JSON.stringify({ status: updated.state.status, automaticDecision: false }));
+    (await auditPortal(actor.employeeNumber, `privacy-request.${action}`, "privacy_request", updated.state.id,
+      JSON.stringify({ status: updated.state.status, automaticDecision: false })));
     response.json({ request: updated.summary, notice: PRIVACY_REQUEST_GOVERNANCE_NOTICE });
   } catch (error) {
     governanceRouteError(error, error?.code?.includes("STATUS") ? 409 : 400);
@@ -29472,8 +29613,8 @@ app.post("/api/time-record-statements/generate", async (request, response) => {
       });
     }
   }
-  auditPortal(actor.employeeNumber, "time-record-statements.generate", "time_record_statement", month,
-    JSON.stringify({ generated: statements.length, errors: errors.length }));
+  (await auditPortal(actor.employeeNumber, "time-record-statements.generate", "time_record_statement", month,
+    JSON.stringify({ generated: statements.length, errors: errors.length })));
   response.status(errors.length && !statements.length ? 422 : 201).json({ month, statements, errors });
 });
 
@@ -29489,8 +29630,8 @@ app.patch("/api/time-record-statements/:id", async (request, response) => {
       request.body || {},
       actor.employeeNumber,
     );
-    auditPortal(actor.employeeNumber, `time-record-statement.${request.body?.action}`, "time_record_statement",
-      request.params.id, JSON.stringify({ revision: statement.revision, status: statement.status }));
+    (await auditPortal(actor.employeeNumber, `time-record-statement.${request.body?.action}`, "time_record_statement",
+      request.params.id, JSON.stringify({ revision: statement.revision, status: statement.status })));
     response.json({ statement });
   } catch (error) {
     governanceRouteError(error, error?.code?.includes("INCOMPLETE") ? 409 : 400);
@@ -29515,7 +29656,7 @@ app.get("/api/time-record-statements/:id/download", async (request, response) =>
       .getEmployeeIdentity(value.row.employee_number);
     response.setHeader("X-Grabenplaner-Record-State", value.archived ? "archived" : "current");
     drawTimeRecordStatementPdf(response, value, employee);
-    auditPortal(actor.employeeNumber, "time-record-statement.download", "time_record_statement", value.row.id);
+    (await auditPortal(actor.employeeNumber, "time-record-statement.download", "time_record_statement", value.row.id));
   } catch (error) {
     governanceRouteError(error, 503);
   }
@@ -29548,8 +29689,8 @@ app.post("/api/portal/v1/self/privacy-requests", async (request, response) => {
       scope: privacyRequestScope(type, request.body?.scope),
       channel: "portal",
     });
-    auditPortal(session.employeeNumber, "privacy-request.self.create", "privacy_request", created.state.id,
-      JSON.stringify({ type, scope: created.state.scope }));
+    (await auditPortal(session.employeeNumber, "privacy-request.self.create", "privacy_request", created.state.id,
+      JSON.stringify({ type, scope: created.state.scope })));
     response.status(201).json({ request: created.summary, notice: PRIVACY_REQUEST_GOVERNANCE_NOTICE });
   } catch (error) {
     governanceRouteError(error);
@@ -29573,7 +29714,7 @@ app.patch("/api/portal/v1/self/privacy-requests/:id", async (request, response) 
       request.body,
       session.employeeNumber,
     );
-    auditPortal(session.employeeNumber, "privacy-request.self.withdraw", "privacy_request", request.params.id);
+    (await auditPortal(session.employeeNumber, "privacy-request.self.withdraw", "privacy_request", request.params.id));
     response.json({ request: updated.summary });
   } catch (error) {
     governanceRouteError(error, 409);
@@ -29652,8 +29793,8 @@ app.get("/api/portal/v1/self/time-record-statements/:id/download", async (reques
     const employee = await organizationPersonnelRepository
       .getEmployeeIdentity(session.employeeNumber);
     drawTimeRecordStatementPdf(response, value, employee);
-    auditPortal(session.employeeNumber, "time-record-statement.self.download",
-      "time_record_statement", value.row.id);
+    (await auditPortal(session.employeeNumber, "time-record-statement.self.download",
+      "time_record_statement", value.row.id));
   } catch (error) {
     governanceRouteError(error, 503);
   }
@@ -29890,11 +30031,11 @@ app.post("/api/collective-agreements", async (request, response) => {
       request.body,
       actor,
     );
-    auditPortal(actor, "collective-agreement.create", "collective_agreement", agreement.id, JSON.stringify({
+    (await auditPortal(actor, "collective-agreement.create", "collective_agreement", agreement.id, JSON.stringify({
       code: agreement.code,
       versionId: agreement.currentVersionId,
       reviewState: agreement.reviewState,
-    }));
+    })));
     response.status(201).json({ agreement });
   } catch (error) {
     collectiveAgreementRouteError(error);
@@ -29910,10 +30051,10 @@ app.post("/api/collective-agreements/:id/versions", async (request, response) =>
       request.body,
       actor,
     );
-    auditPortal(actor, "collective-agreement.version.create", "collective_agreement", agreement.id, JSON.stringify({
+    (await auditPortal(actor, "collective-agreement.version.create", "collective_agreement", agreement.id, JSON.stringify({
       versionId: agreement.currentVersionId,
       reviewState: agreement.reviewState,
-    }));
+    })));
     response.status(201).json({ agreement });
   } catch (error) {
     collectiveAgreementRouteError(error);
@@ -29928,14 +30069,14 @@ app.post("/api/collective-agreements/business-units", async (request, response) 
       request.body,
       actor,
     );
-    auditPortal(actor, "collective-agreement.business-unit.create", "collective_agreement_business_unit",
+    (await auditPortal(actor, "collective-agreement.business-unit.create", "collective_agreement_business_unit",
       businessUnit.id, JSON.stringify({
         code: businessUnit.code,
         scopes: businessUnit.scopes.map((scope) => ({
           scopeType: scope.scopeType,
           scopeKey: scope.scopeKey,
         })),
-      }));
+      })));
     response.status(201).json({ businessUnit });
   } catch (error) {
     collectiveAgreementRouteError(error);
@@ -29951,13 +30092,13 @@ app.post("/api/collective-agreements/business-units/:id/scopes", async (request,
       request.body.scopes,
       actor,
     );
-    auditPortal(actor, "collective-agreement.business-unit.scopes.add",
+    (await auditPortal(actor, "collective-agreement.business-unit.scopes.add",
       "collective_agreement_business_unit", businessUnit.id, JSON.stringify({
         scopes: businessUnit.scopes.map((scope) => ({
           scopeType: scope.scopeType,
           scopeKey: scope.scopeKey,
         })),
-      }));
+      })));
     response.status(201).json({ businessUnit });
   } catch (error) {
     collectiveAgreementRouteError(error);
@@ -29972,14 +30113,14 @@ app.post("/api/collective-agreements/assignments", async (request, response) => 
       request.body,
       actor,
     );
-    auditPortal(actor, "collective-agreement.assignment.prepare", "collective_agreement_assignment",
+    (await auditPortal(actor, "collective-agreement.assignment.prepare", "collective_agreement_assignment",
       assignment.id, JSON.stringify({
         agreementVersionId: assignment.agreementVersionId,
         businessUnitId: assignment.businessUnitId,
         reviewState: assignment.reviewState,
         validFrom: assignment.validFrom,
         validTo: assignment.validTo,
-      }));
+      })));
     response.status(201).json({ assignment });
   } catch (error) {
     collectiveAgreementRouteError(error);
@@ -30148,12 +30289,12 @@ app.post("/api/work-rules/drafts", async (request, response) => {
       request.body,
       actor,
     );
-    auditPortal(actor, "work-rule.draft.create", "work_rule_profile", draft.id, JSON.stringify({
+    (await auditPortal(actor, "work-rule.draft.create", "work_rule_profile", draft.id, JSON.stringify({
       code: draft.code,
       versionId: draft.currentVersionId,
       contentSha256: draft.currentVersion?.contentSha256,
       status: draft.status,
-    }));
+    })));
     response.status(201).json({ draft });
   } catch (error) {
     customWorkRuleDraftRouteError(error);
@@ -30169,12 +30310,12 @@ app.post("/api/work-rules/drafts/:id/revisions", async (request, response) => {
       request.body,
       actor,
     );
-    auditPortal(actor, "work-rule.draft.revision.create", "work_rule_profile", draft.id, JSON.stringify({
+    (await auditPortal(actor, "work-rule.draft.revision.create", "work_rule_profile", draft.id, JSON.stringify({
       code: draft.code,
       versionId: draft.currentVersionId,
       contentSha256: draft.currentVersion?.contentSha256,
       status: draft.status,
-    }));
+    })));
     response.status(201).json({ draft });
   } catch (error) {
     customWorkRuleDraftRouteError(error);
@@ -30482,10 +30623,10 @@ app.post("/api/work-rules/drafts/:id/versions/:versionId/restore", async (reques
       version.id,
       actor,
     );
-    auditPortal(actor, "work-rule.draft.restore", "work_rule_profile", draft.id, JSON.stringify({
+    (await auditPortal(actor, "work-rule.draft.restore", "work_rule_profile", draft.id, JSON.stringify({
       restoredFromVersionId: version.id,
       newDraftVersionId: draft.currentVersionId,
-    }));
+    })));
     response.status(201).json({ draft });
   } catch (error) {
     if (Number(error?.status) >= 400) throw error;
@@ -30531,12 +30672,12 @@ app.post("/api/work-rules/governance/requests", async (request, response) => {
       ...request.body,
       clientRequestId: String(request.body.clientRequestId || crypto.randomUUID()),
     }, actor);
-    auditPortal(actor.employeeNumber, "work-rule.governance.submit", "work_rule_review_request",
+    (await auditPortal(actor.employeeNumber, "work-rule.governance.submit", "work_rule_review_request",
       reviewRequest.id, JSON.stringify({
         operation: reviewRequest.operation,
         subjectId: reviewRequest.subjectId,
         basisSha256: reviewRequest.basisSha256,
-      }));
+      })));
     const governance = await workRuleGovernancePayload(request.portalSession);
     response.status(201).json({
       request: governance.requests.find((entry) => entry.id === reviewRequest.id) || null,
@@ -30560,11 +30701,11 @@ app.post("/api/work-rules/governance/requests/:id/decisions", async (request, re
       request.body,
       actor,
     );
-    auditPortal(actor.employeeNumber, "work-rule.governance.decision", "work_rule_review_request",
+    (await auditPortal(actor.employeeNumber, "work-rule.governance.decision", "work_rule_review_request",
       reviewRequest.id, JSON.stringify({
         decision: String(request.body.decision || ""),
         basisSha256: reviewRequest.basisSha256,
-      }));
+      })));
     const governance = await workRuleGovernancePayload(request.portalSession);
     response.json({
       request: governance.requests.find((entry) => entry.id === reviewRequest.id) || null,
@@ -30588,12 +30729,12 @@ app.post("/api/work-rules/governance/requests/:id/finalize", async (request, res
       request.body,
       actor,
     );
-    auditPortal(actor.employeeNumber, "work-rule.governance.finalize", "work_rule_review_request",
+    (await auditPortal(actor.employeeNumber, "work-rule.governance.finalize", "work_rule_review_request",
       visible.id, JSON.stringify({
         operation: visible.operation,
         basisSha256: visible.basisSha256,
         outcomeType: result.outcome?.type || "",
-      }));
+      })));
     const updatedGovernance = await workRuleGovernancePayload(request.portalSession);
     response.json({
       result: workRuleGovernanceFinalizeResultForSession(result, updatedGovernance),
@@ -31129,13 +31270,13 @@ app.post("/api/work-rules/exceptions", async (request, response) => {
     validTo: validTo || null,
     actor,
   });
-  auditPortal(actor, "work-rule.exception.create", "work_rule_exception", id, JSON.stringify({
+  (await auditPortal(actor, "work-rule.exception.create", "work_rule_exception", id, JSON.stringify({
     evaluationId,
     findingFingerprint,
     ruleId: matchedFinding.ruleId,
     validFrom,
     validTo: validTo || null,
-  }));
+  })));
   response.status(201).json({ id, state: "active" });
 });
 
@@ -31155,7 +31296,7 @@ app.post("/api/work-rules/exceptions/:id/revoke", async (request, response) => {
   if (!result.rowsAffected) {
     throw httpError(409, "Nur eine aktive Ausnahme kann widerrufen werden.");
   }
-  auditPortal(actor, "work-rule.exception.revoke", "work_rule_exception", id, JSON.stringify({ reason }));
+  (await auditPortal(actor, "work-rule.exception.revoke", "work_rule_exception", id, JSON.stringify({ reason })));
   response.json({ id, state: "revoked" });
 });
 
@@ -31291,7 +31432,7 @@ app.get("/api/portal/v1/cross-location-schedules", async (request, response) => 
   );
   const payload = await crossLocationSchedulePayload(session, request.query);
   if (payload.schedule) {
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "schedule.cross-location.view",
       "location",
@@ -31301,7 +31442,7 @@ app.get("/api/portal/v1/cross-location-schedules", async (request, response) => 
         teamMemberCount: payload.schedule.teamMembers.length,
         shiftCount: payload.schedule.shifts.length,
       }),
-    );
+    ));
   }
   response.json(payload);
 });
@@ -31525,11 +31666,11 @@ app.put("/api/locations/:id", async (request, response) => {
     const result = await organizationPersonnelRepository.updateLocation(update);
     if (!result.rowsAffected) throw httpError(404, "Die Filiale wurde nicht gefunden.");
     if (costCenterId !== current.cost_center_id) {
-      auditPortal(request.portalSession?.employeeNumber || "local", "location.cost-center.assign", "location", id,
-        JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }));
+      (await auditPortal(request.portalSession?.employeeNumber || "local", "location.cost-center.assign", "location", id,
+        JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId })));
     }
-    auditPortal(request.portalSession?.employeeNumber || "local", "location.update", "location", id,
-      JSON.stringify({ changedFields, operationalOnly: !fullLocationWrite }));
+    (await auditPortal(request.portalSession?.employeeNumber || "local", "location.update", "location", id,
+      JSON.stringify({ changedFields, operationalOnly: !fullLocationWrite })));
   } else {
     const expectedSignature = locationAdministrationConcurrencySignature(current);
     await personnelLifecycleSerializableTransaction(async (organization) => {
@@ -31791,12 +31932,12 @@ app.post("/api/cost-center-types", async (request, response) => {
     }
     throw error;
   }
-  auditPortal(actor.employeeNumber, "cost-center-type.create", "cost_center_type", id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "cost-center-type.create", "cost_center_type", id, JSON.stringify({
     code: value.code,
     isBranch: Boolean(value.isBranch),
     active: Boolean(value.active),
     positionCount: value.positionIds.length,
-  }));
+  })));
   response.status(201).json({ type: (await getCostCenterTypes(true)).find((entry) => entry.id === id) });
 });
 
@@ -31824,7 +31965,7 @@ app.put("/api/cost-center-types/:id", async (request, response) => {
     }
     throw error;
   }
-  auditPortal(actor.employeeNumber, "cost-center-type.update", "cost_center_type", id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "cost-center-type.update", "cost_center_type", id, JSON.stringify({
     code: existing.code,
     isBranchBefore: Boolean(existing.is_branch),
     isBranchAfter: Boolean(value.isBranch),
@@ -31832,7 +31973,7 @@ app.put("/api/cost-center-types/:id", async (request, response) => {
     activeAfter: Boolean(value.active),
     positionCountBefore: previousPositionIds.length,
     positionCountAfter: value.positionIds.length,
-  }));
+  })));
   response.json({ type: (await getCostCenterTypes(true)).find((entry) => entry.id === id) });
 });
 
@@ -31848,11 +31989,11 @@ app.delete("/api/cost-center-types/:id", async (request, response) => {
     });
   }
   await organizationPersonnelRepository.archiveCostCenterType(id, actor.employeeNumber);
-  auditPortal(actor.employeeNumber, "cost-center-type.archive", "cost_center_type", id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "cost-center-type.archive", "cost_center_type", id, JSON.stringify({
     code: existing.code,
     activeBefore: Boolean(existing.active),
     activeAfter: false,
-  }));
+  })));
   response.status(204).end();
 });
 
@@ -31883,8 +32024,8 @@ app.post("/api/cost-centers", async (request, response) => {
     }
     throw error;
   }
-  auditPortal(actor.employeeNumber, "cost-center.create", "cost_center", id,
-    JSON.stringify({ code: value.code, type: value.type, active: Boolean(value.active) }));
+  (await auditPortal(actor.employeeNumber, "cost-center.create", "cost_center", id,
+    JSON.stringify({ code: value.code, type: value.type, active: Boolean(value.active) })));
   response.status(201).json({ costCenter: (await getCostCenters(true)).find((entry) => entry.id === id) });
 });
 
@@ -31923,14 +32064,14 @@ app.put("/api/cost-centers/:id", async (request, response) => {
     }
     throw error;
   }
-  auditPortal(actor.employeeNumber, "cost-center.update", "cost_center", id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "cost-center.update", "cost_center", id, JSON.stringify({
     codeBefore: existing.code,
     codeAfter: value.code,
     typeBefore: existing.cost_center_type_id || existing.type,
     typeAfter: value.costCenterTypeId,
     activeBefore: Boolean(existing.active),
     activeAfter: Boolean(value.active),
-  }));
+  })));
   response.json({ costCenter: (await getCostCenters(true)).find((entry) => entry.id === id) });
 });
 
@@ -31941,8 +32082,8 @@ app.delete("/api/cost-centers/:id", async (request, response) => {
   if (!existing) throw httpError(404, "Die Kostenstelle wurde nicht gefunden.", "COST_CENTER_NOT_FOUND");
   if (existing.active) await assertCostCenterCanBeArchived(id);
   await organizationPersonnelRepository.archiveCostCenter(id, actor.employeeNumber);
-  auditPortal(actor.employeeNumber, "cost-center.archive", "cost_center", id,
-    JSON.stringify({ code: existing.code, activeBefore: Boolean(existing.active), activeAfter: false }));
+  (await auditPortal(actor.employeeNumber, "cost-center.archive", "cost_center", id,
+    JSON.stringify({ code: existing.code, activeBefore: Boolean(existing.active), activeAfter: false })));
   response.status(204).end();
 });
 
@@ -32225,10 +32366,10 @@ app.post("/api/employees", async (request, response) => {
     employee.sicknessWithoutAumEnabled = 0;
   }
   if (request.body.personnelRecord !== undefined) {
-    assertPersonnelRecordContextScope(mutationActor, {
+    (await assertPersonnelRecordContextScope(mutationActor, {
       locationId: employee.homeLocationId,
       departmentId: employee.preferredDepartmentId,
-    }, request, employee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
+    }, request, employee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord)));
   }
   assertSessionContextScope(mutationActor, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const accessProfile = await validatePersonnelAccessProfile(mutationActor, request.body.accessProfile, employee);
@@ -32274,16 +32415,16 @@ app.post("/api/employees", async (request, response) => {
         liveEmployee.sicknessWithoutAumEnabled = 0;
       }
       if (request.body.personnelRecord !== undefined) {
-        assertPersonnelRecordContextScope(liveLearningActor, {
+        (await assertPersonnelRecordContextScope(liveLearningActor, {
           locationId: liveEmployee.homeLocationId,
           departmentId: liveEmployee.preferredDepartmentId,
-        }, request, liveEmployee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
+        }, request, liveEmployee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord)));
       }
       assertSessionContextScope(liveLearningActor, {
         locationId: liveEmployee.homeLocationId,
         departmentId: liveEmployee.preferredDepartmentId,
       });
-      revalidatePreparedPersonnelRecordMutation(request, liveLearningActor, personnelRecordMutation);
+      (await revalidatePreparedPersonnelRecordMutation(request, liveLearningActor, personnelRecordMutation));
       const liveAccessProfile = await validatePersonnelAccessProfile(
         liveLearningActor,
         request.body.accessProfile,
@@ -32463,12 +32604,12 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
       departmentId: liveValidatedEmployee.preferredDepartmentId,
     });
     if (request.body.personnelRecord !== undefined) {
-      assertPersonnelRecordContextScope(liveLearningActor, {
+      (await assertPersonnelRecordContextScope(liveLearningActor, {
         locationId: liveValidatedEmployee.homeLocationId,
         departmentId: liveValidatedEmployee.preferredDepartmentId,
-      }, request, personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
+      }, request, personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord)));
     }
-    revalidatePreparedPersonnelRecordMutation(request, liveLearningActor, personnelRecordMutation);
+    (await revalidatePreparedPersonnelRecordMutation(request, liveLearningActor, personnelRecordMutation));
     const liveAccessProfile = await validatePersonnelAccessProfile(
       liveLearningActor,
       request.body.accessProfile,
@@ -32776,7 +32917,7 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
         employeeNumber,
       });
     }
-    auditPortal(employeeNumber, "mobile.login.failed", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`);
+    (await auditPortal(employeeNumber, "mobile.login.failed", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`));
     throw httpError(401, "Personalnummer oder Passwort ist nicht korrekt.", "MOBILE_LOGIN_FAILED");
   }
   clearLoginRate(request);
@@ -32787,8 +32928,8 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
     mobileAuthRepository,
     viennaTodayIso(now),
   ));
-  auditPortal(employeeNumber, "mobile.login.success", "mobile_session", created.id,
-    JSON.stringify({ platform: device.platform, appVersion: device.appVersion }));
+  (await auditPortal(employeeNumber, "mobile.login.success", "mobile_session", created.id,
+    JSON.stringify({ platform: device.platform, appVersion: device.appVersion })));
   response.status(201).json({
     tokenSet: created.tokenSet,
     bootstrap: await mobileBootstrapPayload(session, request, now),
@@ -32805,7 +32946,7 @@ app.post("/api/mobile/v1/auth/refresh", async (request, response) => {
     ? await mobileSessionRow(parsed.sessionId, mobileAuthRepository, viennaTodayIso(now))
     : null;
   const tokenSet = await refreshMobileSession(request.body?.refreshToken, device, now);
-  if (rowBefore) auditPortal(rowBefore.employee_number, "mobile.session.refresh", "mobile_session", rowBefore.id);
+  if (rowBefore) (await auditPortal(rowBefore.employee_number, "mobile.session.refresh", "mobile_session", rowBefore.id));
   response.json({ tokenSet });
 });
 
@@ -32818,7 +32959,7 @@ app.post("/api/mobile/v1/auth/logout", async (request, response) => {
   const result = row
     ? await mobileAuthRepository.revokeSession({ sessionId: row.id, reason: "logout" })
     : { rowsAffected: 0 };
-  if (row && result.rowsAffected) auditPortal(row.employee_number, "mobile.logout", "mobile_session", row.id);
+  if (row && result.rowsAffected) (await auditPortal(row.employee_number, "mobile.logout", "mobile_session", row.id));
   response.json({ ok: true });
 });
 
@@ -33069,7 +33210,7 @@ app.delete("/api/portal/v1/approval-delegations/:id", async (request, response) 
   const result = await organizationPersonnelRepository
     .deleteApprovalDelegation(Number(request.params.id));
   if (!result.rowsAffected) throw httpError(404, "Die Vertretung wurde nicht gefunden.");
-  auditPortal(session.employeeNumber, "approval_delegation.delete", "approval_delegation", request.params.id);
+  (await auditPortal(session.employeeNumber, "approval_delegation.delete", "approval_delegation", request.params.id));
   response.status(204).end();
 });
 
@@ -33207,13 +33348,13 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
         });
       }
     }
-    auditPortal(
+    (await auditPortal(
       sessionKind === "organization" && user ? `account:${user.account_id}` : loginName,
       "portal.login.failed",
       sessionKind === "organization" ? "portal_organization_account" : "portal_user",
       sessionKind === "organization" && user ? user.account_id : loginName,
       `ip=${loginRateKey(request)}`,
-    );
+    ));
     throw httpError(401, "Zugangskennung oder Passwort ist nicht korrekt.", "PORTAL_LOGIN_FAILED");
   }
   clearLoginRate(request);
@@ -33252,13 +33393,13 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
     ...request,
     headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` },
   }, { touch: false });
-  auditPortal(
+  (await auditPortal(
     portalActorId(session),
     "portal.login.success",
     sessionKind === "organization" ? "portal_organization_account" : "portal_user",
     sessionKind === "organization" ? user.account_id : loginName,
     `ip=${loginRateKey(request)}`,
-  );
+  ));
   response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: portalStatusForSession(session, request) });
 });
 
@@ -33271,12 +33412,12 @@ app.post("/api/portal/v1/auth/logout", async (request, response) => {
     } else {
       await portalAccessRepository.revokeEmployeeSessionById({ id: session.id });
     }
-    auditPortal(
+    (await auditPortal(
       portalActorId(session),
       "portal.logout",
       session.sessionKind === "organization" ? "portal_organization_account" : "portal_user",
       session.accountId || session.employeeNumber,
-    );
+    ));
   }
   clearPortalCookies(request, response);
   if (serverModeActive) response.setHeader("Clear-Site-Data", '"cache", "cookies", "storage"');
@@ -34175,16 +34316,16 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     });
   }
   if (allowPastWeekEditing !== undefined && previousAllowPastWeekEditing !== allowPastWeekEditing) {
-    auditPortal(
+    (await auditPortal(
       actor.employeeNumber,
       "schedule.past-week-preference.update",
       "portal_user",
       actor.employeeNumber,
       JSON.stringify({ previousEnabled: previousAllowPastWeekEditing, enabled: allowPastWeekEditing }),
-    );
+    ));
   }
   if (candidateEvaluationPdfPreferences !== undefined) {
-    auditPortal(
+    (await auditPortal(
       actor.employeeNumber,
       "personnel-lifecycle.evaluation-pdf-preferences.update",
       "portal_user",
@@ -34196,7 +34337,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
         includeLogo: candidateEvaluationPdfPreferences.includeLogo,
         includeDatePrefix: candidateEvaluationPdfPreferences.includeDatePrefix,
       }),
-    );
+    ));
   }
   return uiPreferencesForActor(actor, {
     pageThemes,
@@ -34282,8 +34423,8 @@ async function saveLocationDashboardOrder(actor, input) {
       LOCATION_DASHBOARD_ORDER_PREFERENCE,
       JSON.stringify(locationOrder),
     );
-    auditPortal(actor.employeeNumber, "dashboard.locations.order.update", "portal_user_preference", actor.employeeNumber,
-      JSON.stringify({ locationOrder }));
+    (await auditPortal(actor.employeeNumber, "dashboard.locations.order.update", "portal_user_preference", actor.employeeNumber,
+      JSON.stringify({ locationOrder })));
   }
   return locationOrder;
 }
@@ -38112,8 +38253,8 @@ const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
   ttlMs: SYSTEM_CENTER_TECHNICAL_CACHE_MS,
   fingerprint: systemCenterTechnicalFingerprint,
   load: async () => {
-    const diagnostics = serverDiagnostics();
-    const status = serverStatusSummary(diagnostics);
+    const diagnostics = (await serverDiagnostics());
+    const status = (await serverStatusSummary(diagnostics));
     const notificationStatus = externalNotificationProviderStatus();
     const [updateStatus, control] = await Promise.all([
       systemCenterUpdateStatus(),
@@ -38434,7 +38575,7 @@ app.post("/api/portal/v1/system-center/recovery-assurance/run", async (request, 
     || Object.keys(body).length !== 1 || body.confirmation !== "RECOVERY_ASSURANCE_START") {
     throw httpError(400, "Der Recovery-Test wurde nicht eindeutig bestätigt.", "RECOVERY_ASSURANCE_CONFIRMATION_REQUIRED");
   }
-  const diagnostics = serverDiagnostics();
+  const diagnostics = (await serverDiagnostics());
   if (diagnostics.recoveryAssurance?.configured !== true) {
     throw httpError(409, "Recovery Assurance ist auf diesem Server noch nicht vollständig eingerichtet.", "RECOVERY_ASSURANCE_NOT_CONFIGURED");
   }
@@ -38448,8 +38589,8 @@ app.post("/api/portal/v1/system-center/recovery-assurance/run", async (request, 
     const result = await requestRecoveryAssuranceRun({ requestId });
     systemCenterTechnicalCache.invalidate();
     systemCenterControlCache.invalidate();
-    auditPortal(actor.employeeNumber, "system.recovery_assurance.request.accepted", "recovery_assurance", requestId,
-      JSON.stringify({ result: "accepted" }));
+    (await auditPortal(actor.employeeNumber, "system.recovery_assurance.request.accepted", "recovery_assurance", requestId,
+      JSON.stringify({ result: "accepted" })));
     response.status(202).json({
       ok: true,
       code: "RECOVERY_ASSURANCE_QUEUED",
@@ -38464,8 +38605,8 @@ app.post("/api/portal/v1/system-center/recovery-assurance/run", async (request, 
     const retryAfterSeconds = Number.isSafeInteger(error?.retryAfterSeconds)
       ? Math.max(1, Math.min(900, error.retryAfterSeconds)) : null;
     const outcome = code === "BUSY" ? "busy" : code === "RATE_LIMITED" ? "rate_limited" : "unavailable";
-    auditPortal(actor.employeeNumber, `system.recovery_assurance.request.${outcome}`, "recovery_assurance", requestId,
-      JSON.stringify({ result: outcome }));
+    (await auditPortal(actor.employeeNumber, `system.recovery_assurance.request.${outcome}`, "recovery_assurance", requestId,
+      JSON.stringify({ result: outcome })));
     if (retryAfterSeconds) response.setHeader("Retry-After", String(retryAfterSeconds));
     if (code === "BUSY") throw httpError(409, "Ein Recovery-Assurance-Test läuft bereits.", "RECOVERY_ASSURANCE_BUSY");
     if (code === "RATE_LIMITED") throw httpError(429, "Der letzte Recovery-Test liegt noch zu kurz zurück. Bitte später erneut versuchen.", "RECOVERY_ASSURANCE_RATE_LIMITED");
@@ -39259,7 +39400,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     ));
   if (protectedPersonnelScopesToRemove.length
     && !actorCanManageProtectedPersonnelState(actor, [], protectedPersonnelScopesToRemove)) {
-    auditPortal(
+    (await auditPortal(
       actor.employeeNumber,
       "portal.rights.update.denied",
       "portal_user",
@@ -39268,7 +39409,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         reason: "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
         route: personnelRecordDeniedRoute(request),
       }),
-    );
+    ));
     throw httpError(
       403,
       "Ein von PL+ freigegebener Personalmodul-Geltungsbereich darf hier nicht entfernt oder verkleinert werden.",
@@ -41770,8 +41911,8 @@ function staffAssignmentEmployeeInScope(session, employee) {
   ));
 }
 
-function assertStaffAssignmentEmployeeScope(session, employeeNumber) {
-  const employee = sqliteEmployeeLocationLendingOperations.employee(employeeNumber);
+async function assertStaffAssignmentEmployeeScope(session, employeeNumber) {
+  const employee = (await sqliteEmployeeLocationLendingOperations.employee(employeeNumber));
   if (!employee || !employee.active) {
     throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.", "STAFF_ASSIGNMENT_EMPLOYEE_NOT_FOUND");
   }
@@ -42021,23 +42162,22 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
     throw httpError(403, "Diese Filiale ist dem Zugang nicht zugewiesen.", "STAFF_ASSIGNMENT_SCOPE_DENIED");
   }
   const scopeLocationIds = requestedLocationId ? [requestedLocationId] : assignedLocationIds;
-  const allCandidates = sqliteEmployeeLocationLendingOperations.activeCandidates();
+  const allCandidates = (await sqliteEmployeeLocationLendingOperations.activeCandidates());
   const candidateLookup = new Map(allCandidates.map((employee) => [employee.employeeNumber, employee]));
   const candidates = allCandidates
     .filter((employee) => staffAssignmentEmployeeInScope(session, employee))
     .filter((employee) => !requestedLocationId || employee.homeLocationId === requestedLocationId);
-  const assignments = sqliteEmployeeLocationLendingOperations.list({
+  const assignments = (await persistenceAsyncCollections.filter((await sqliteEmployeeLocationLendingOperations.list({
     status: status === "all" ? "" : status,
     dateFrom,
     dateTo,
     locationIds: scopeLocationIds,
-  })
-    .filter((assignment) => staffAssignmentVisibleToSession(
+  })), async (assignment) => staffAssignmentVisibleToSession(
       session,
       assignment,
       candidateLookup.get(assignment.employeeNumber)
-        || sqliteEmployeeLocationLendingOperations.employee(assignment.employeeNumber),
-    ))
+        || (await sqliteEmployeeLocationLendingOperations.employee(assignment.employeeNumber)),
+    )))
     .map((assignment) => {
       const requestBound = Boolean(staffAssignmentRequestIdFromAssignmentId(assignment.id));
       return {
@@ -42051,8 +42191,8 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
   response.json({
     assignments,
     candidates,
-    locations: sqliteEmployeeLocationLendingOperations.activeLocations(),
-    departments: sqliteEmployeeLocationLendingOperations.activeDepartments(),
+    locations: (await sqliteEmployeeLocationLendingOperations.activeLocations()),
+    departments: (await sqliteEmployeeLocationLendingOperations.activeDepartments()),
     delegates: await staffAssignmentDelegates(session, requestedLocationId),
     canManage: true,
   });
@@ -42061,32 +42201,32 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
 app.post("/api/portal/v1/staff-assignments", async (request, response) => {
   const session = requireStaffAssignmentAccess(request, { csrf: true });
   const input = normalizeStaffAssignmentInput(request.body || {});
-  assertStaffAssignmentEmployeeScope(session, input.employeeNumber);
+  (await assertStaffAssignmentEmployeeScope(session, input.employeeNumber));
   let assignment;
   try {
-    assignment = sqliteEmployeeLocationLendingOperations.create({
+    assignment = (await sqliteEmployeeLocationLendingOperations.create({
       ...input,
       actor: portalActorId(session),
-    });
+    }));
   } catch (error) {
     throw staffAssignmentHttpError(error);
   }
-  auditPortal(portalActorId(session), "staff-assignment.create", "staff_assignment", assignment.id, JSON.stringify({
+  (await auditPortal(portalActorId(session), "staff-assignment.create", "staff_assignment", assignment.id, JSON.stringify({
     employeeNumber: assignment.employeeNumber,
     homeLocationId: assignment.homeLocationId,
     destinationLocationId: assignment.destinationLocationId,
     dateFrom: assignment.dateFrom,
     dateTo: assignment.dateTo,
     allDay: assignment.allDay,
-  }));
+  })));
   response.status(201).json({ assignment });
 });
 
 app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, response) => {
   const session = requireStaffAssignmentAccess(request, { csrf: true });
-  const existing = sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId);
+  const existing = (await sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId));
   if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
-  assertStaffAssignmentEmployeeScope(session, existing.employeeNumber);
+  (await assertStaffAssignmentEmployeeScope(session, existing.employeeNumber));
   if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
     throw httpError(
       409,
@@ -42098,30 +42238,30 @@ app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, respon
   const revision = staffAssignmentRevision(request.body?.revision);
   let assignment;
   try {
-    assignment = sqliteEmployeeLocationLendingOperations.update(existing.id, {
+    assignment = (await sqliteEmployeeLocationLendingOperations.update(existing.id, {
       ...input,
       revision,
       actor: portalActorId(session),
-    });
+    }));
   } catch (error) {
     throw staffAssignmentHttpError(error);
   }
-  auditPortal(portalActorId(session), "staff-assignment.update", "staff_assignment", assignment.id, JSON.stringify({
+  (await auditPortal(portalActorId(session), "staff-assignment.update", "staff_assignment", assignment.id, JSON.stringify({
     employeeNumber: assignment.employeeNumber,
     destinationLocationId: assignment.destinationLocationId,
     dateFrom: assignment.dateFrom,
     dateTo: assignment.dateTo,
     allDay: assignment.allDay,
     revision: assignment.revision,
-  }));
+  })));
   response.json({ assignment });
 });
 
 app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request, response) => {
   const session = requireStaffAssignmentAccess(request, { csrf: true });
-  const existing = sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId);
+  const existing = (await sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId));
   if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
-  assertStaffAssignmentEmployeeScope(session, existing.employeeNumber);
+  (await assertStaffAssignmentEmployeeScope(session, existing.employeeNumber));
   if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
     throw httpError(
       409,
@@ -42132,17 +42272,17 @@ app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request
   const revision = staffAssignmentRevision(request.body?.revision);
   let assignment;
   try {
-    assignment = sqliteEmployeeLocationLendingOperations.cancel(existing.id, {
+    assignment = (await sqliteEmployeeLocationLendingOperations.cancel(existing.id, {
       revision,
       actor: portalActorId(session),
-    });
+    }));
   } catch (error) {
     throw staffAssignmentHttpError(error);
   }
-  auditPortal(portalActorId(session), "staff-assignment.cancel", "staff_assignment", assignment.id, JSON.stringify({
+  (await auditPortal(portalActorId(session), "staff-assignment.cancel", "staff_assignment", assignment.id, JSON.stringify({
     employeeNumber: assignment.employeeNumber,
     revision: assignment.revision,
-  }));
+  })));
   response.json({ assignment });
 });
 
@@ -42366,7 +42506,7 @@ app.get("/api/portal/v1/branch-orders/catalog", async (request, response) => {
   const context = requireBranchOrderSubmissionSession(request);
   const { session, locationId } = context;
   try {
-    const catalog = sqliteBranchOrderOperations.catalogSnapshot(locationId);
+    const catalog = (await sqliteBranchOrderOperations.catalogSnapshot(locationId));
     const weekStart = currentWeekStart();
     response.json({
       ...catalog,
@@ -42389,7 +42529,7 @@ app.get("/api/portal/v1/branch-orders/draft", async (request, response) => {
   try {
     response.json({
       locationId: context.locationId,
-      draft: sqliteBranchOrderOperations.draftSnapshot(context.locationId, scope),
+      draft: (await sqliteBranchOrderOperations.draftSnapshot(context.locationId, scope)),
     });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -42402,18 +42542,18 @@ app.put("/api/portal/v1/branch-orders/draft", async (request, response) => {
   const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
   const weekStart = currentWeekStart();
   try {
-    const draft = sqliteBranchOrderOperations.saveDraft(context.locationId, {
+    const draft = (await sqliteBranchOrderOperations.saveDraft(context.locationId, {
       ...scope,
       items: request.body?.items,
       expectedRevision: request.body?.expectedRevision,
       weekStartAtSave: weekStart,
-    });
-    auditPortal(context.session.actorId, "branch-order.draft.save", "branch_order_draft", draft.id, JSON.stringify({
+    }));
+    (await auditPortal(context.session.actorId, "branch-order.draft.save", "branch_order_draft", draft.id, JSON.stringify({
       locationId: context.locationId,
       selectedEmployeeNumber: draft.selectedEmployeeNumber,
       revision: draft.revision,
       lineCount: draft.items.length,
-    }));
+    })));
     response.json({ locationId: context.locationId, draft });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -42425,15 +42565,15 @@ app.delete("/api/portal/v1/branch-orders/draft", async (request, response) => {
   assertPortalCsrf(request);
   const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
   try {
-    const deleted = sqliteBranchOrderOperations.deleteDraft(context.locationId, {
+    const deleted = (await sqliteBranchOrderOperations.deleteDraft(context.locationId, {
       ...scope,
       expectedRevision: request.body?.expectedRevision,
-    });
-    auditPortal(context.session.actorId, "branch-order.draft.delete", "branch_order_draft", scope.selectedEmployeeNumber, JSON.stringify({
+    }));
+    (await auditPortal(context.session.actorId, "branch-order.draft.delete", "branch_order_draft", scope.selectedEmployeeNumber, JSON.stringify({
       locationId: context.locationId,
       selectedEmployeeNumber: scope.selectedEmployeeNumber,
       deleted,
-    }));
+    })));
     response.json({ locationId: context.locationId, deleted });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -42449,7 +42589,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
   let order;
   try {
     const emailDelivery = branchOrderEmailStatus();
-    const configuration = sqliteBranchOrderOperations.settingsSnapshot(locationId);
+    const configuration = (await sqliteBranchOrderOperations.settingsSnapshot(locationId));
     if (branchOrderConfigurationRequiresPdf(configuration) && !emailDelivery.attachmentsAvailable) {
       throw httpError(
         409,
@@ -42473,13 +42613,13 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
     throw branchOrderHttpError(error);
   }
 
-  auditPortal(session.actorId, "branch-order.submit", "branch_order", order.id, JSON.stringify({
+  (await auditPortal(session.actorId, "branch-order.submit", "branch_order", order.id, JSON.stringify({
     locationId,
     selectedEmployeeNumber: order.employee.employeeNumber,
     lineCount: order.lines.length,
     deliveryCount: order.deliveries.length,
     draftConsumed: order.draftConsumed,
-  }));
+  })));
   for (const delivery of order.deliveries) {
     try {
       await externalNotificationAdapter.sendBranchOrder({
@@ -42496,16 +42636,16 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
           },
         } : {}),
       });
-      sqliteBranchOrderOperations.markDelivery(delivery.id, { status: "sent" });
+      (await sqliteBranchOrderOperations.markDelivery(delivery.id, { status: "sent" }));
     } catch (error) {
-      sqliteBranchOrderOperations.markDelivery(delivery.id, {
+      (await sqliteBranchOrderOperations.markDelivery(delivery.id, {
         status: error?.code === "EXTERNAL_NOTIFICATION_TIMEOUT" ? "pending" : "failed",
         failureCode: String(error?.code || "EXTERNAL_NOTIFICATION_DELIVERY_FAILED"),
-      });
+      }));
     }
   }
-  const deliverySummary = sqliteBranchOrderOperations.finalizeOrder(order.id);
-  auditPortal(session.actorId, "branch-order.delivery", "branch_order", order.id, JSON.stringify(deliverySummary));
+  const deliverySummary = (await sqliteBranchOrderOperations.finalizeOrder(order.id));
+  (await auditPortal(session.actorId, "branch-order.delivery", "branch_order", order.id, JSON.stringify(deliverySummary)));
   response.status(deliverySummary.status === "sent" ? 201 : 202).json({
     order: {
       id: order.id,
@@ -42530,7 +42670,7 @@ app.get("/api/portal/v1/branch-orders/settings", async (request, response) => {
   try {
     response.json({
       locationId,
-      configuration: sqliteBranchOrderOperations.settingsSnapshot(locationId),
+      configuration: (await sqliteBranchOrderOperations.settingsSnapshot(locationId)),
       emailDelivery: branchOrderEmailStatus(),
     });
   } catch (error) {
@@ -42543,20 +42683,20 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {
-    const previousConfiguration = sqliteBranchOrderOperations.settingsSnapshot(locationId);
+    const previousConfiguration = (await sqliteBranchOrderOperations.settingsSnapshot(locationId));
     const emailDelivery = branchOrderEmailStatus();
-    const configuration = sqliteBranchOrderOperations.replaceConfiguration(
+    const configuration = (await sqliteBranchOrderOperations.replaceConfiguration(
       locationId,
       request.body?.configuration,
       portalActorId(session),
       { pdfDeliveryAvailable: emailDelivery.attachmentsAvailable },
-    );
-    auditPortal(portalActorId(session), "branch-order.settings.update", "branch_order_location", locationId, JSON.stringify({
+    ));
+    (await auditPortal(portalActorId(session), "branch-order.settings.update", "branch_order_location", locationId, JSON.stringify({
       recipientCount: configuration.recipients.length,
       groupCount: configuration.groups.length,
       itemCount: configuration.groups.reduce((count, group) => count + group.items.length, 0),
       recipientDeliveryChanges: branchOrderRecipientDeliveryAuditChanges(previousConfiguration, configuration),
-    }));
+    })));
     response.json({
       locationId,
       configuration,
@@ -42570,11 +42710,11 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
 app.get("/api/portal/v1/branch-orders/history", async (request, response) => {
   const access = await branchOrderHistoryAccess(request, request.query || {});
   try {
-    const orders = sqliteBranchOrderOperations.history(
+    const orders = (await sqliteBranchOrderOperations.history(
       access.locationId,
       Number(request.query?.limit || 50),
       { selectedEmployeeNumber: access.selectedEmployeeNumber },
-    );
+    ));
     response.json({
       locationId: access.locationId,
       orders: access.audience === "management" ? orders : orders.map(publicBranchOrderHistory),
@@ -42623,7 +42763,7 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
   const target = await organizationPersonnelRepository
     .getPortalScopeAssignmentTarget(employeeNumber);
   if (!target || !target.active) throw httpError(404, "Der aktive Zugang wurde nicht gefunden.");
-  assertPortalUserIsMutable(target, actor);
+  (await assertPortalUserIsMutable(target, actor));
   if (!actorCanManagePortalRole(actor, target.role)) {
     throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
   }
@@ -42683,7 +42823,7 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
   ));
   if (protectedPersonnelScopesToRemove.length
     && !actorCanManageProtectedPersonnelState(actor, [], protectedPersonnelScopesToRemove)) {
-    auditPortal(
+    (await auditPortal(
       actor.employeeNumber,
       "portal.scope.update.denied",
       "portal_user",
@@ -42692,7 +42832,7 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
         reason: "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
         route: personnelRecordDeniedRoute(request),
       }),
-    );
+    ));
     throw httpError(
       403,
       "Ein von PL+ freigegebener Personalmodul-Geltungsbereich darf hier nicht entfernt werden.",
@@ -42754,7 +42894,7 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
       || permissionScopeDelta.removed.length
     );
     if (!scopesChanged) return;
-    assertPortalUserIsMutable(liveTarget, liveLearningActor);
+    (await assertPortalUserIsMutable(liveTarget, liveLearningActor));
     await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
       liveLearningActor,
       liveTarget,
@@ -42869,7 +43009,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   let existingPersonnelLearningDenials = [];
   let existingPortalBirthdayPresentationRights = [];
   if (existingUser) {
-    assertPortalUserIsMutable(existingUser, actor);
+    (await assertPortalUserIsMutable(existingUser, actor));
     await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
       actor,
       existingUser,
@@ -42931,7 +43071,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
           existingPersonnelLifecycleGrants,
           existingPersonnelLifecyclePermissionScopes,
         )) {
-        auditPortal(
+        (await auditPortal(
           actor.employeeNumber,
           "portal.user.update.denied",
           "portal_user",
@@ -42940,7 +43080,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
             reason: "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
             route: personnelRecordDeniedRoute(request),
           }),
-        );
+        ));
         throw httpError(
           403,
           "Die Rolle kann erst geändert werden, nachdem PL+ die Personalmodul-Freigaben angepasst hat.",
@@ -43035,7 +43175,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     );
     if (!userChanged) return;
     if (liveUser) {
-      assertPortalUserIsMutable(liveUser, liveLearningActor);
+      (await assertPortalUserIsMutable(liveUser, liveLearningActor));
       if (!actorCanManagePortalRole(liveLearningActor, liveUser.role)) {
         throw httpError(
           403,
@@ -43179,7 +43319,7 @@ app.post("/api/portal/v1/users/:employeeNumber/unlock", async (request, response
         || String(liveUnlockState?.locked_until || "").trim(),
     );
     if (!unlockChanged) return;
-    assertPortalUserIsMutable(liveTarget, liveActor);
+    (await assertPortalUserIsMutable(liveTarget, liveActor));
     await assertItAdminCannotTakeOverPersonnelLifecycleTarget(liveActor, liveTarget, organization);
     if (!actorCanManagePortalRole(liveActor, liveTarget.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
@@ -43715,9 +43855,9 @@ app.put("/api/portal/v1/loans/branch-overview-settings", async (request, respons
     branchOverviewColumns: JSON.stringify(columns),
     actorEmployeeNumber: portalActorId(session),
   });
-  auditPortal(portalActorId(session), "loan.branch-overview.columns.update", "location", locationId, JSON.stringify({
+  (await auditPortal(portalActorId(session), "loan.branch-overview.columns.update", "location", locationId, JSON.stringify({
     columns,
-  }));
+  })));
   const setting = await loanLocationSettingRow(locationId);
   response.json({
     location: publicBranchLoanOverviewLocation(setting),
@@ -43863,7 +44003,7 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
     branchOverviewColumns: JSON.stringify(branchOverviewColumns),
     actorEmployeeNumber: actor.employeeNumber,
   });
-  auditPortal(actor.employeeNumber, "loan.settings.update", "location", locationId, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "loan.settings.update", "location", locationId, JSON.stringify({
     enabled,
     articleLookupEnabled: lookupEnabled,
     articleLookupProvider: provider,
@@ -43874,7 +44014,7 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
     photoPdfOutputMode,
     photoOriginalRetention,
     branchOverviewColumns,
-  }));
+  })));
   response.json({
     location: await publicLoanLocationSettingWithEmailState(
       await loanLocationSettingRow(locationId),
@@ -44422,13 +44562,13 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
   }
 
   if (recordChanged) {
-    auditPortal(actor.employeeNumber, "loan.article.resolve", "article", stored.article_number, JSON.stringify({
+    (await auditPortal(actor.employeeNumber, "loan.article.resolve", "article", stored.article_number, JSON.stringify({
       locationId: setting.location_id,
       sourceProvider: stored.source_provider,
       identifierType: identifier.type,
       identifierValue: identifier.value,
       externalLookup: Boolean(suggestion),
-    }));
+    })));
   }
   response.json({
     article: publicArticle(stored),
@@ -44643,10 +44783,10 @@ async function requestPersonalPasswordReset(input = {}) {
       recipient: candidate.email,
       resetUrl: `${normalizedPublicOrigin}/portal.html#password-reset=${rawToken}`,
     });
-    auditPortal("password-reset-public", "portal.password-reset.requested", "portal_user", candidate.employeeNumber);
+    (await auditPortal("password-reset-public", "portal.password-reset.requested", "portal_user", candidate.employeeNumber));
   } catch {
     try { await portalAccessRepository.revokePasswordResetTokenById({ id }); } catch {}
-    auditPortal("password-reset-public", "portal.password-reset.delivery-failed", "portal_user", candidate.employeeNumber);
+    (await auditPortal("password-reset-public", "portal.password-reset.delivery-failed", "portal_user", candidate.employeeNumber));
   }
 }
 
@@ -44703,16 +44843,16 @@ async function completePersonalPasswordReset(request) {
     });
     return current;
   });
-  auditPortal(completed.employee_number, "portal.password-reset.completed", "portal_user", completed.employee_number);
+  (await auditPortal(completed.employee_number, "portal.password-reset.completed", "portal_user", completed.employee_number));
   if (browserSession?.id
     && (browserSession.sessionKind === "organization"
       || browserSession.employeeNumber !== completed.employee_number)) {
-    auditPortal(
+    (await auditPortal(
       portalActorId(browserSession),
       "portal.password-reset.browser-session-revoked",
       browserSession.sessionKind === "organization" ? "portal_organization_account" : "portal_user",
       browserSession.accountId || browserSession.employeeNumber,
-    );
+    ));
   }
   return completed;
 }
@@ -45280,13 +45420,13 @@ async function deliverLoanDocumentEmail(loan, document, {
     errorCode,
     attemptedByEmployeeNumber,
   });
-  auditPortal(
+  (await auditPortal(
     attemptedByEmployeeNumber || "system",
     `loan.document.email.${status}`,
     "loan_document",
     document.id,
     JSON.stringify({ loanId: loan.id, errorCode }),
-  );
+  ));
   return { attempted: true, status, errorCode };
 }
 
@@ -45908,11 +46048,11 @@ app.get("/api/portal/v1/loans/documents/:documentId", async (request, response) 
     detectedMime: document.detected_mime,
     originalFilename: document.filename,
   });
-  auditPortal(session.employeeNumber, "loan.document.read", "loan_document", document.id, JSON.stringify({
+  (await auditPortal(session.employeeNumber, "loan.document.read", "loan_document", document.id, JSON.stringify({
     loanId: document.loan_id,
     documentType: document.document_type,
     revision: Number(document.loan_revision),
-  }));
+  })));
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", contentDispositionHeader(document.filename));
   response.setHeader("Cache-Control", "private, no-store, max-age=0");
@@ -45945,10 +46085,10 @@ app.get("/api/portal/v1/loans/photos/:photoId", async (request, response) => {
     detectedMime: photo.detected_mime,
     originalFilename: photo.filename,
   });
-  auditPortal(session.employeeNumber, "loan.photo.read", "loan_photo", photo.id, JSON.stringify({
+  (await auditPortal(session.employeeNumber, "loan.photo.read", "loan_photo", photo.id, JSON.stringify({
     loanId: photo.loan_id,
     phase: photo.phase,
-  }));
+  })));
   response.setHeader("Content-Type", "image/jpeg");
   response.setHeader("Content-Disposition", `inline; filename="${String(photo.filename).replace(/["\r\n]/g, "-")}"`);
   response.setHeader("Cache-Control", "private, no-store, max-age=0");
@@ -45975,7 +46115,7 @@ async function sendLoanPhotoAttachment(request, response, disposition) {
     originalFilename: attachment.filename,
   });
   const action = disposition === "inline" ? "preview" : "download";
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     `loan.photo_attachment.${action}`,
     "loan_photo_attachment",
@@ -45985,7 +46125,7 @@ async function sendLoanPhotoAttachment(request, response, disposition) {
       phase: attachment.phase,
       revision: Number(attachment.attachment_revision),
     }),
-  );
+  ));
   const contentDisposition = contentDispositionHeader(attachment.filename);
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader(
@@ -46294,11 +46434,11 @@ app.post("/api/portal/v1/loans", async (request, response) => {
     cleanupPreparedLoanDocument(preparedIssueDocument);
     throw error;
   }
-  auditPortal(actor.employeeNumber, "loan.issue", "loan", loanId, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "loan.issue", "loan", loanId, JSON.stringify({
     locationId: setting.location_id,
     borrowerEmployeeNumber: borrower.personnel_number,
     itemCount: input.items.length,
-  }));
+  })));
   if (borrower.personnel_number !== actor.employeeNumber) {
     await createPortalNotification(
       borrower.personnel_number,
@@ -46380,14 +46520,14 @@ app.put("/api/portal/v1/loans/:loanId/management", async (request, response) => 
       cancelledConfirmationId,
     }, repository);
   });
-  auditPortal(actor.employeeNumber, "loan.management.edit", "loan", row.id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "loan.management.edit", "loan", row.id, JSON.stringify({
     locationId: row.location_id,
     borrowerEmployeeNumber: row.borrower_employee_number,
     previousRevision: expectedRevision,
     revision: nextRevision,
     itemCount: input.items.length,
     cancelledConfirmationId,
-  }));
+  })));
   response.json({ loan: await publicLoan(await loanRow(row.id)) });
 });
 
@@ -46460,14 +46600,14 @@ app.post("/api/portal/v1/loans/:loanId/management/close", async (request, respon
       cancelledConfirmationId,
     }, repository);
   });
-  auditPortal(actor.employeeNumber, "loan.management.close_without_document", "loan", row.id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "loan.management.close_without_document", "loan", row.id, JSON.stringify({
     locationId: row.location_id,
     borrowerEmployeeNumber: row.borrower_employee_number,
     previousRevision: expectedRevision,
     revision: nextRevision,
     itemCount: input.items.length,
     cancelledConfirmationId,
-  }));
+  })));
   if (row.borrower_employee_number !== actor.employeeNumber) {
     await createPortalNotification(
       row.borrower_employee_number,
@@ -46541,14 +46681,14 @@ app.post("/api/portal/v1/loans/:loanId/management/reopen", async (request, respo
       preservedDocuments: previousDocuments,
     }, repository);
   });
-  auditPortal(actor.employeeNumber, "loan.management.reopen", "loan", row.id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "loan.management.reopen", "loan", row.id, JSON.stringify({
     locationId: row.location_id,
     borrowerEmployeeNumber: row.borrower_employee_number,
     previousRevision: expectedRevision,
     revision: nextRevision,
     previousStatus: row.status,
     preservedDocumentCount: previousDocuments.length,
-  }));
+  })));
   if (row.borrower_employee_number !== actor.employeeNumber) {
     await createPortalNotification(
       row.borrower_employee_number,
@@ -46571,16 +46711,16 @@ app.post("/api/portal/v1/branch-orders/:orderId/delivery-confirmation", async (r
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {
-    const result = sqliteBranchOrderOperations.confirmOrderDeliveries(
+    const result = (await sqliteBranchOrderOperations.confirmOrderDeliveries(
       locationId,
       request.params.orderId,
       new Date().toISOString(),
-    );
-    auditPortal(portalActorId(session), "branch-order.delivery.confirm", "branch_order", request.params.orderId, JSON.stringify({
+    ));
+    (await auditPortal(portalActorId(session), "branch-order.delivery.confirm", "branch_order", request.params.orderId, JSON.stringify({
       locationId,
       changedDeliveryCount: result.changed,
       status: result.status,
-    }));
+    })));
     response.json({ locationId, orderId: request.params.orderId, delivery: result });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -46829,14 +46969,14 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
       completionActor: actor,
       directManagement: true,
     });
-    auditPortal(actor.employeeNumber, "loan.return.management-complete", "loan", row.id, JSON.stringify({
+    (await auditPortal(actor.employeeNumber, "loan.return.management-complete", "loan", row.id, JSON.stringify({
       locationId: row.location_id,
       borrowerEmployeeNumber: row.borrower_employee_number,
       itemCount: returnedItems.length,
       photoCount: photoIds.length,
       photoAttachmentCount: photoAttachmentIds.length,
       noteProvided: Boolean(note),
-    }));
+    })));
     response.json({
       direct: true,
       loan: await publicLoan(completed.returnedLoan),
@@ -46903,7 +47043,7 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
       }, repository);
     }
   });
-  auditPortal(actor.employeeNumber, witness ? "loan.return.request" : "loan.return.prepare", "loan", row.id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, witness ? "loan.return.request" : "loan.return.prepare", "loan", row.id, JSON.stringify({
     locationId: row.location_id,
     borrowerEmployeeNumber: row.borrower_employee_number,
     witnessEmployeeNumber: witness?.personnel_number || null,
@@ -46911,7 +47051,7 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
     photoCount: photoIds.length,
     photoAttachmentCount: photoAttachmentIds.length,
     noteProvided: Boolean(note),
-  }));
+  })));
   if (witness) {
     await createPortalNotification(
       witness.personnel_number,
@@ -47004,11 +47144,11 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", as
         note: responseNote,
       }, repository);
     });
-    auditPortal(actor.employeeNumber, "loan.return.reject", "loan", loan.id, JSON.stringify({
+    (await auditPortal(actor.employeeNumber, "loan.return.reject", "loan", loan.id, JSON.stringify({
       confirmationId: confirmation.id,
       requestedByEmployeeNumber: confirmation.requested_by_employee_number,
       noteProvided: Boolean(responseNote),
-    }));
+    })));
     await createPortalNotification(
       confirmation.requested_by_employee_number,
       "loan.return_rejected",
@@ -47137,12 +47277,12 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", as
     cleanupPreparedLoanDocument(preparedReturnDocument);
     throw error;
   }
-  auditPortal(actor.employeeNumber, "loan.return.confirm", "loan", loan.id, JSON.stringify({
+  (await auditPortal(actor.employeeNumber, "loan.return.confirm", "loan", loan.id, JSON.stringify({
     confirmationId: confirmation.id,
     requestedByEmployeeNumber: confirmation.requested_by_employee_number,
     borrowerEmployeeNumber: loan.borrower_employee_number,
     itemCount: returnedItems.length,
-  }));
+  })));
   await loanModuleRepository.markRecipientConfirmationNotificationRead({
     employeeNumber: actor.employeeNumber,
     confirmationId: confirmation.id,
@@ -48021,13 +48161,13 @@ app.get("/api/portal/v1/me/candidate-evaluations", async (request, response) => 
   try {
     const evaluations = await requirePersonnelLifecycleService()
       .listTeamEvaluationAssignments(session.employeeNumber);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.team-evaluation.list",
       "candidate_evaluation",
       "pending",
       JSON.stringify({ count: evaluations.length }),
-    );
+    ));
     response.json({ evaluations });
   } catch (error) {
     personnelLifecycleRouteError(error);
@@ -48042,13 +48182,13 @@ app.post("/api/portal/v1/me/candidate-evaluations/:evaluationId", async (request
       request.body || {},
       session.employeeNumber,
     );
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.team-evaluation.submit",
       "candidate_evaluation",
       evaluation.id,
       JSON.stringify({ criteriaCount: evaluation.criteria.length }),
-    );
+    ));
     response.json({ evaluation });
   } catch (error) {
     personnelLifecycleRouteError(error);
@@ -48104,7 +48244,7 @@ app.post("/api/mobile/v1/me/password", async (request, response) => {
     });
     return rotateAuthenticatedMobileSession(session.mobileSessionId, new Date(), repository);
   });
-  auditPortal(session.employeeNumber, "mobile.password.change", "portal_user", session.employeeNumber);
+  (await auditPortal(session.employeeNumber, "mobile.password.change", "portal_user", session.employeeNumber));
   response.json({ ok: true, tokenSet });
 });
 
@@ -48197,7 +48337,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     weekEnd,
     calendarWeek: getIsoWeek(weekStart),
     shifts,
-    displaySettings: sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId),
+    displaySettings: (await sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId)),
   });
 });
 
@@ -48264,12 +48404,12 @@ app.post("/api/portal/v1/me/process-tasks/:runId/:stepId/complete", async (reque
   if (boundInstance && installationFeatureEnabled("personnelLifecycle")) {
     const workflowAccess = createPersonnelWorkflowAccessSnapshot(session);
     if (workflowAccess.canReadInstances !== true) {
-      auditPersonnelWorkflowAccessDenied(
+      (await auditPersonnelWorkflowAccessDenied(
         session,
         request,
         "CUSTOM_PROCESS_TASK_NOT_FOUND",
         PERSONNEL_WORKFLOW_PERMISSIONS.READ,
-      );
+      ));
       throw customProcessTaskNotFoundError();
     }
     const accessContext = { session, access: workflowAccess };
@@ -48285,7 +48425,7 @@ app.post("/api/portal/v1/me/process-tasks/:runId/:stepId/complete", async (reque
       response.json(result);
       return;
     } catch (error) {
-      auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+      (await auditPersonnelWorkflowServiceDenied(accessContext, request, error));
       if (error instanceof PersonnelWorkflowInstanceError
         && error.kind === PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.NOT_FOUND) {
         throw customProcessTaskNotFoundError();
@@ -48508,14 +48648,14 @@ async function createOwnSicknessCase(session, body = {}) {
     if (riskAlert.created) await queueExternalStaffingAlerts(row, riskRecipients, reportedAt);
   }
   const createdPayload = sicknessCasePayload(row);
-  auditPortal(`protected:${sicknessEmployeeLookup(session.employeeNumber)}`, "protected.record.create", "protected_record",
+  (await auditPortal(`protected:${sicknessEmployeeLookup(session.employeeNumber)}`, "protected.record.create", "protected_record",
     protectedPortalEntityId("sickness-case", caseId), JSON.stringify({
       staffingRisk: staffingRisk.atRisk,
       plannedShiftCount: staffingRisk.plannedShiftCount,
       aumRequired: createdPayload.aumAllowance?.required !== false,
       allowanceConsumed: createdPayload.aumAllowance?.consumesQuota === true,
       creditedSicknessMinutes: Number(createdPayload.timeValuation?.totalMinutes || 0),
-    }));
+    })));
   await runSicknessEscalationSweep();
   return { case: (await serializeSicknessCases([await sicknessCaseMetadata(caseId)]))[0] };
 }
@@ -48696,13 +48836,13 @@ async function applySicknessCaseAction(row, {
   let updatedCase = await sicknessCaseMetadata(row.id);
   await reconcileSicknessStaffingRisk(updatedCase);
   updatedCase = await sicknessCaseMetadata(row.id);
-  auditPortal(auditActor || actorEmployeeNumber, `sickness.case.${normalizedAction}`, "protected_record",
+  (await auditPortal(auditActor || actorEmployeeNumber, `sickness.case.${normalizedAction}`, "protected_record",
     protectedPortalEntityId("sickness-case", row.id), JSON.stringify({
       previousStatus: currentStatus,
       nextStatus,
       changedFields,
       reasonProvided: Boolean(eventNote),
-    }));
+    })));
   if (normalizedAction === "close") {
     await notifySicknessRecipients(updatedCase, { stage: "local", kind: "return_to_work" });
   }
@@ -49670,8 +49810,8 @@ app.put("/api/portal/v1/greeting-settings", async (request, response) => {
     value: JSON.stringify(settings),
   });
   await refreshPortalSettingsSnapshot();
-  auditPortal(actor.employeeNumber, "portal.greetings.update", "portal_settings", "personalized_greetings",
-    JSON.stringify({ enabled: settings.enabled, templateCounts: Object.fromEntries(Object.entries(settings.templates).map(([key, value]) => [key, value.length])) }));
+  (await auditPortal(actor.employeeNumber, "portal.greetings.update", "portal_settings", "personalized_greetings",
+    JSON.stringify({ enabled: settings.enabled, templateCounts: Object.fromEntries(Object.entries(settings.templates).map(([key, value]) => [key, value.length])) })));
   response.json({ settings, canChange: true });
 });
 
@@ -49811,9 +49951,9 @@ function publicPersonnelLifecycleCapabilities(access) {
   });
 }
 
-function auditPersonnelLifecycleAccessDenied(session, request, reason, requiredPermission = "") {
+async function auditPersonnelLifecycleAccessDenied(session, request, reason, requiredPermission = "") {
   if (!session?.employeeNumber) return;
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "personnel-lifecycle.access.denied",
     "personnel_lifecycle",
@@ -49823,10 +49963,10 @@ function auditPersonnelLifecycleAccessDenied(session, request, reason, requiredP
       requiredPermission: String(requiredPermission || "").slice(0, 120),
       route: personnelRecordDeniedRoute(request),
     }),
-  );
+  ));
 }
 
-function requirePersonnelLifecycleAccess(request, { action = "read" } = {}) {
+async function requirePersonnelLifecycleAccess(request, { action = "read" } = {}) {
   const definition = PERSONNEL_LIFECYCLE_ROUTE_ACTIONS[action];
   if (!definition) throw new TypeError(`Unbekannte Personalmodul-Aktion: ${action}`);
   let session = portalSessionFromRequest(request);
@@ -49897,12 +50037,12 @@ function requirePersonnelLifecycleAccess(request, { action = "read" } = {}) {
     });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_ACCESS_DENIED",
         definition.permission,
-      );
+      ));
     }
     throw error;
   }
@@ -50033,7 +50173,7 @@ function createPersonnelProfileRosterAccess(session, featureEnabled) {
   });
 }
 
-function requirePersonnelProfileAccess(request) {
+async function requirePersonnelProfileAccess(request) {
   let session = portalSessionFromRequest(request);
   try {
     session = requirePortalAnyPermissionOrLocal(
@@ -50055,18 +50195,18 @@ function requirePersonnelProfileAccess(request) {
     });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_PROFILE_ACCESS_DENIED",
         PERSONNEL_PROFILE_PERMISSION_IDS.join("|"),
-      );
+      ));
     }
     throw error;
   }
 }
 
-function requirePersonnelLifecycleOnboardingProfileAccess(request) {
+async function requirePersonnelLifecycleOnboardingProfileAccess(request) {
   let session = portalSessionFromRequest(request);
   try {
     session = requirePortalAnyPermissionOrLocal(request, [
@@ -50084,7 +50224,7 @@ function requirePersonnelLifecycleOnboardingProfileAccess(request) {
     return Object.freeze({ session, ...onboardingAccess });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_ONBOARDING_PREVIEW_ACCESS_DENIED",
@@ -50092,13 +50232,13 @@ function requirePersonnelLifecycleOnboardingProfileAccess(request) {
           PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
           PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.PACKAGES_READ,
         ].join("|"),
-      );
+      ));
     }
     throw error;
   }
 }
 
-function requirePersonnelLifecycleOffboardingProfileAccess(request) {
+async function requirePersonnelLifecycleOffboardingProfileAccess(request) {
   const requiredPermissions = [
     "personnel:central:read",
     PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
@@ -50118,18 +50258,18 @@ function requirePersonnelLifecycleOffboardingProfileAccess(request) {
     return Object.freeze({ session, ...offboardingAccess });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_OFFBOARDING_ACCESS_DENIED",
         PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
-      );
+      ));
     }
     throw error;
   }
 }
 
-function requirePersonnelLifecycleOnboardingStartAccess(request) {
+async function requirePersonnelLifecycleOnboardingStartAccess(request) {
   const requiredPermissions = [
     "personnel:central:read",
     PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_READ,
@@ -50156,18 +50296,18 @@ function requirePersonnelLifecycleOnboardingStartAccess(request) {
     return Object.freeze({ session, ...onboardingAccess });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_ONBOARDING_PERMISSION_REQUIRED",
         requiredPermissions.join("|"),
-      );
+      ));
     }
     throw error;
   }
 }
 
-function requirePersonnelLifecycleAssignedTaskAccess(request, { write = false } = {}) {
+async function requirePersonnelLifecycleAssignedTaskAccess(request, { write = false } = {}) {
   let session = portalSessionFromRequest(request);
   try {
     session = requireEmployeePortalSession(request);
@@ -50190,22 +50330,22 @@ function requirePersonnelLifecycleAssignedTaskAccess(request, { write = false } 
     return Object.freeze({ session, lifecycleAccess });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_ASSIGNED_TASK_SESSION_REQUIRED",
         "personal-assignment",
-      );
+      ));
     }
     throw error;
   }
 }
 
-function requirePersonnelLifecycleOnboardingTaskAccess(
+async function requirePersonnelLifecycleOnboardingTaskAccess(
   request,
   { write = false, close = false } = {},
 ) {
-  if (!close) return requirePersonnelLifecycleAssignedTaskAccess(request, { write });
+  if (!close) return (await requirePersonnelLifecycleAssignedTaskAccess(request, { write }));
   const requiredPermissions = [PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ];
   if (write || close) {
     requiredPermissions.push(PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_UPDATE);
@@ -50243,12 +50383,12 @@ function requirePersonnelLifecycleOnboardingTaskAccess(
     return Object.freeze({ session, lifecycleAccess });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_ONBOARDING_TASK_PERMISSION_REQUIRED",
         requiredPermissions.join("|"),
-      );
+      ));
     }
     throw error;
   }
@@ -50303,7 +50443,7 @@ const PERSONNEL_LIFECYCLE_OFFBOARDING_ACTION_ACCESS = Object.freeze({
   }),
 });
 
-function requirePersonnelLifecycleOffboardingActionAccess(request, action) {
+async function requirePersonnelLifecycleOffboardingActionAccess(request, action) {
   const definition = PERSONNEL_LIFECYCLE_OFFBOARDING_ACTION_ACCESS[action];
   if (!definition) throw new TypeError(`Unbekannte Offboarding-Aktion: ${action}`);
   const requiredPermissions = [
@@ -50330,19 +50470,19 @@ function requirePersonnelLifecycleOffboardingActionAccess(request, action) {
     return Object.freeze({ session, ...offboardingAccess });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_OFFBOARDING_PERMISSION_REQUIRED",
         requiredPermissions.slice(1).join("|"),
-      );
+      ));
     }
     throw error;
   }
 }
 
-function requirePersonnelLifecycleOffboardingTaskAccess(request, { write = false } = {}) {
-  return requirePersonnelLifecycleAssignedTaskAccess(request, { write });
+async function requirePersonnelLifecycleOffboardingTaskAccess(request, { write = false } = {}) {
+  return (await requirePersonnelLifecycleAssignedTaskAccess(request, { write }));
 }
 
 const PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS = Object.freeze({
@@ -50351,7 +50491,7 @@ const PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS = Object.freeze({
   access: "personnel:lifecycle:interfaces:access:read",
 });
 
-function requirePersonnelLifecycleInterfaceCatalogAccess(request) {
+async function requirePersonnelLifecycleInterfaceCatalogAccess(request) {
   const requiredPermissions = Object.values(PERSONNEL_LIFECYCLE_INTERFACE_READ_PERMISSIONS);
   let session = portalSessionFromRequest(request);
   try {
@@ -50369,12 +50509,12 @@ function requirePersonnelLifecycleInterfaceCatalogAccess(request) {
     return Object.freeze({ session, domainIds: Object.freeze(domainIds) });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_INTERFACE_CATALOG_PERMISSION_REQUIRED",
         requiredPermissions.join("|"),
-      );
+      ));
     }
     throw error;
   }
@@ -50388,7 +50528,7 @@ function personnelLifecycleAutomationPersonalCentralSession(session, lifecycleAc
     && lifecycleAccess?.central === true;
 }
 
-function requirePersonnelLifecycleAutomationCatalogAccess(request) {
+async function requirePersonnelLifecycleAutomationCatalogAccess(request) {
   const requiredPermissions = Object.values(PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS);
   let session = portalSessionFromRequest(request);
   try {
@@ -50412,18 +50552,18 @@ function requirePersonnelLifecycleAutomationCatalogAccess(request) {
     });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_AUTOMATION_CATALOG_PERMISSION_REQUIRED",
         requiredPermissions.join("|"),
-      );
+      ));
     }
     throw error;
   }
 }
 
-function requirePersonnelLifecycleAutomationPreviewAccess(request) {
+async function requirePersonnelLifecycleAutomationPreviewAccess(request) {
   const requiredPermissions = Object.freeze([
     ...Object.values(PERSONNEL_LIFECYCLE_AUTOMATION_READ_PERMISSIONS),
     PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OPERATIONAL_READ,
@@ -50444,12 +50584,12 @@ function requirePersonnelLifecycleAutomationPreviewAccess(request) {
     return Object.freeze({ session, lifecycleAccess });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_AUTOMATION_PREVIEW_PERMISSION_REQUIRED",
         requiredPermissions.join("|"),
-      );
+      ));
     }
     throw error;
   }
@@ -50493,7 +50633,7 @@ function personnelLifecycleEditorAllowedWorkflowTypes(session, lifecycleAccess) 
   return Object.freeze(allowed);
 }
 
-function requirePersonnelLifecycleEditorCatalogAccess(request) {
+async function requirePersonnelLifecycleEditorCatalogAccess(request) {
   const requiredPermission = PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.READ;
   let session = portalSessionFromRequest(request);
   try {
@@ -50512,12 +50652,12 @@ function requirePersonnelLifecycleEditorCatalogAccess(request) {
     return Object.freeze({ session, lifecycleAccess, workflowTypes });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_EDITOR_CATALOG_PERMISSION_REQUIRED",
         requiredPermission,
-      );
+      ));
     }
     throw error;
   }
@@ -50530,7 +50670,7 @@ function personnelLifecycleEditorSubmittedWorkflowType(body) {
   return descriptor.value.trim().toLowerCase();
 }
 
-function requirePersonnelLifecycleEditorValidateAccess(request) {
+async function requirePersonnelLifecycleEditorValidateAccess(request) {
   const requiredPermissions = Object.freeze([
     PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.READ,
     PERSONNEL_LIFECYCLE_EDITOR_PERMISSIONS.DRAFT_WRITE,
@@ -50566,12 +50706,12 @@ function requirePersonnelLifecycleEditorValidateAccess(request) {
     });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_LIFECYCLE_EDITOR_VALIDATE_PERMISSION_REQUIRED",
         requiredPermissions.join("|"),
-      );
+      ));
     }
     throw error;
   }
@@ -50777,23 +50917,23 @@ async function loadPersonnelProfileSubject(accessContext, employeeNumber, reques
   const row = await organizationPersonnelRepository
     .getEmployeeProfileOverviewProjection(employeeNumber);
   if (!row) {
-    auditPersonnelRecordDenied(
+    (await auditPersonnelRecordDenied(
       accessContext.session,
       employeeNumber,
       request,
       "EMPLOYEE_NOT_FOUND",
-    );
+    ));
     throw personnelProfileNotFound();
   }
   const capabilities = personnelProfileCapabilities(accessContext, row);
   if (capabilities[PERSONNEL_PROFILE_TAB_CAPABILITIES[tab]] !== true) {
-    auditPersonnelRecordDenied(
+    (await auditPersonnelRecordDenied(
       accessContext.session,
       employeeNumber,
       request,
       "PERSONNEL_PROFILE_SCOPE_DENIED",
       tab === "documents" ? ["documents"] : [],
-    );
+    ));
     throw personnelProfileNotFound();
   }
   return Object.freeze({ row, capabilities });
@@ -51067,9 +51207,9 @@ function personnelWorkflowInstanceAccessForSession(session, workflowAccess) {
   });
 }
 
-function auditPersonnelWorkflowAccessDenied(session, request, reason, requiredPermission = "") {
+async function auditPersonnelWorkflowAccessDenied(session, request, reason, requiredPermission = "") {
   if (!session?.employeeNumber) return;
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "personnel-workflow.access.denied",
     "personnel_workflow",
@@ -51079,10 +51219,10 @@ function auditPersonnelWorkflowAccessDenied(session, request, reason, requiredPe
       requiredPermission: String(requiredPermission || "").slice(0, 120),
       route: personnelRecordDeniedRoute(request),
     }),
-  );
+  ));
 }
 
-function requirePersonnelWorkflowAccess(request, { action = "read" } = {}) {
+async function requirePersonnelWorkflowAccess(request, { action = "read" } = {}) {
   const definition = PERSONNEL_WORKFLOW_ROUTE_ACTIONS[action];
   if (!definition) throw new TypeError(`Unbekannte Workflow-Center-Aktion: ${action}`);
   let session = portalSessionFromRequest(request);
@@ -51119,12 +51259,12 @@ function requirePersonnelWorkflowAccess(request, { action = "read" } = {}) {
     });
   } catch (error) {
     if (Number(error?.status) === 403) {
-      auditPersonnelWorkflowAccessDenied(
+      (await auditPersonnelWorkflowAccessDenied(
         session,
         request,
         error.code || "PERSONNEL_WORKFLOW_ACCESS_DENIED",
         definition.permission,
-      );
+      ));
     }
     throw error;
   }
@@ -51264,7 +51404,7 @@ function personnelLifecycleOffboardingRouteError(error) {
   throw error;
 }
 
-function auditPersonnelWorkflowServiceDenied(accessContext, request, error) {
+async function auditPersonnelWorkflowServiceDenied(accessContext, request, error) {
   if (!(error instanceof PersonnelWorkflowError)
     && !(error instanceof PersonnelWorkflowInstanceError)) return;
   const scopedNotFound = accessContext?.access?.global !== true
@@ -51273,12 +51413,12 @@ function auditPersonnelWorkflowServiceDenied(accessContext, request, error) {
   if (![PERSONNEL_WORKFLOW_ERROR_KINDS.FORBIDDEN,
     PERSONNEL_WORKFLOW_INSTANCE_ERROR_KINDS.FORBIDDEN].includes(error.kind)
     && !scopedNotFound) return;
-  auditPersonnelWorkflowAccessDenied(
+  (await auditPersonnelWorkflowAccessDenied(
     accessContext.session,
     request,
     scopedNotFound ? "PERSONNEL_WORKFLOW_SCOPED_NOT_FOUND" : error.code,
     PERSONNEL_WORKFLOW_PERMISSIONS.READ,
-  );
+  ));
 }
 
 function personnelLifecycleConversionInput(value) {
@@ -51408,13 +51548,13 @@ function candidatePersonnelRecordInput(profile = {}) {
   };
 }
 
-function auditPersonnelLifecycleConversionFieldDenied(session, request, operationId, denial) {
+async function auditPersonnelLifecycleConversionFieldDenied(session, request, operationId, denial) {
   const reason = String(denial?.reason || "");
   if (!PERSONNEL_RECORD_FIELD_DENIAL_CODES.has(reason)) return;
   const fieldKeys = [...new Set((Array.isArray(denial?.fieldKeys) ? denial.fieldKeys : [])
     .map((fieldKey) => String(fieldKey || ""))
     .filter((fieldKey) => personnelFieldKeys.has(fieldKey)))];
-  auditPortal(
+  (await auditPortal(
     portalActorId(session),
     "personnel-lifecycle.candidate.convert.denied",
     "candidate_conversion",
@@ -51424,7 +51564,7 @@ function auditPersonnelLifecycleConversionFieldDenied(session, request, operatio
       route: personnelRecordDeniedRoute(request),
       fieldKeys,
     }),
-  );
+  ));
 }
 
 function personnelLifecycleRouteError(error) {
@@ -51643,12 +51783,12 @@ async function assertPersonnelLifecycleStructuredApplicationScopes(
     // Deferral does not authorize the entry; any non-identical foreign delta is rejected there.
     if (!writable && !deferUnwritableEntriesToDeltaCheck) {
       if (auditScopeDenial) {
-        auditPersonnelLifecycleAccessDenied(
+        (await auditPersonnelLifecycleAccessDenied(
           session,
           request,
           "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED",
           PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
-        );
+        ));
       }
       throw httpError(
         403,
@@ -51687,7 +51827,7 @@ async function assertPersonnelLifecycleStructuredApplicationScopes(
   }
 }
 
-function auditPersonnelLifecycleCandidateCreateDenied(
+async function auditPersonnelLifecycleCandidateCreateDenied(
   accessContext,
   request,
   reason,
@@ -51696,7 +51836,7 @@ function auditPersonnelLifecycleCandidateCreateDenied(
   const safeFieldKeys = [...new Set((Array.isArray(fieldKeys) ? fieldKeys : [])
     .map((field) => String(field || "").trim())
     .filter((field) => PERSONNEL_LIFECYCLE_CANDIDATE_CREATE_AUDIT_FIELD_KEYS.has(field)))].sort();
-  auditPortal(
+  (await auditPortal(
     accessContext.session.employeeNumber,
     "personnel-lifecycle.candidate.create.denied",
     "candidate",
@@ -51706,7 +51846,7 @@ function auditPersonnelLifecycleCandidateCreateDenied(
       route: personnelRecordDeniedRoute(request),
       fieldKeys: safeFieldKeys,
     }),
-  );
+  ));
 }
 
 async function localPersonnelLifecycleCandidateCreateInput(request, accessContext) {
@@ -51717,12 +51857,12 @@ async function localPersonnelLifecycleCandidateCreateInput(request, accessContex
   const unknownRootFields = Object.keys(submitted)
     .filter((field) => !PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_CREATE_FIELDS.has(field));
   if (unknownRootFields.length) {
-    auditPersonnelLifecycleCandidateCreateDenied(
+    (await auditPersonnelLifecycleCandidateCreateDenied(
       accessContext,
       request,
       "PERSONNEL_LIFECYCLE_LOCAL_FIELD_FORBIDDEN",
       ["root"],
-    );
+    ));
     throw httpError(
       403,
       "Die Filialleitung darf bei der Bewerberanlage nur die vorgesehenen Stammdaten und die erste Bewerbung erfassen.",
@@ -51736,12 +51876,12 @@ async function localPersonnelLifecycleCandidateCreateInput(request, accessContex
   const forbiddenProfileFields = Object.keys(profile)
     .filter((field) => !PERSONNEL_LIFECYCLE_LOCAL_CANDIDATE_PROFILE_CREATE_FIELDS.has(field));
   if (forbiddenProfileFields.length) {
-    auditPersonnelLifecycleCandidateCreateDenied(
+    (await auditPersonnelLifecycleCandidateCreateDenied(
       accessContext,
       request,
       "PERSONNEL_LIFECYCLE_LOCAL_PROFILE_FIELD_FORBIDDEN",
       ["profile"],
-    );
+    ));
     throw httpError(
       403,
       "Die Filialleitung darf bei der Anlage nur die vorgesehenen Bewerberstammdaten erfassen.",
@@ -51759,12 +51899,12 @@ async function localPersonnelLifecycleCandidateCreateInput(request, accessContex
   const forbiddenApplicationFields = Object.keys(application)
     .filter((field) => !PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_CREATE_FIELDS.has(field));
   if (forbiddenApplicationFields.length) {
-    auditPersonnelLifecycleCandidateCreateDenied(
+    (await auditPersonnelLifecycleCandidateCreateDenied(
       accessContext,
       request,
       "PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_FIELD_FORBIDDEN",
       ["application"],
-    );
+    ));
     throw httpError(
       403,
       "Die Filialleitung darf keine vertraulichen oder internen Bewerbungsfelder erfassen.",
@@ -51793,12 +51933,12 @@ async function localPersonnelLifecycleCandidateCreateInput(request, accessContex
   if (!accessContext.access.canCreateCandidate(scope)
     || !accessContext.access.canReadApplication(scope)
     || !accessContext.access.canWriteApplication(scope)) {
-    auditPersonnelLifecycleCandidateCreateDenied(
+    (await auditPersonnelLifecycleCandidateCreateDenied(
       accessContext,
       request,
       "PERSONNEL_LIFECYCLE_CREATE_SCOPE_DENIED",
       ["application.desiredLocationId", ...(desiredDepartmentId ? ["application.desiredDepartmentId"] : [])],
-    );
+    ));
     throw httpError(
       403,
       "Der Bewerber darf nur im eigenen, für Bewerbungen freigegebenen Standort angelegt werden.",
@@ -51887,12 +52027,12 @@ async function assertPersonnelLifecycleApplicationInput(
       : PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_UPDATE_FIELDS;
     const forbidden = Object.keys(submitted).filter((key) => !localAllowed.has(key));
     if (forbidden.length) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         "PERSONNEL_LIFECYCLE_LOCAL_FIELD_FORBIDDEN",
         PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
-      );
+      ));
       throw httpError(
         403,
         "Standort- und Abteilungsleitungen dürfen nur strukturierte Bewerbungsfelder und den Status bearbeiten.",
@@ -51913,12 +52053,12 @@ async function assertPersonnelLifecycleApplicationInput(
       || key === "targetAreas" || key === "trialAppointments"
   ));
   if (changesScope && !access.canWriteCandidates) {
-    auditPersonnelLifecycleAccessDenied(
+    (await auditPersonnelLifecycleAccessDenied(
       session,
       request,
       "PERSONNEL_LIFECYCLE_SCOPE_CHANGE_PERMISSION_REQUIRED",
       PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_WRITE,
-    );
+    ));
     throw httpError(
       403,
       "Für eine Änderung des Bewerbungsbereichs fehlt das zentrale Bewerberrecht.",
@@ -51929,12 +52069,12 @@ async function assertPersonnelLifecycleApplicationInput(
     PERSONNEL_LIFECYCLE_CONFIDENTIAL_APPLICATION_FIELDS.has(key)
   ));
   if (writesConfidential && !access.canWriteConfidential) {
-    auditPersonnelLifecycleAccessDenied(
+    (await auditPersonnelLifecycleAccessDenied(
       session,
       request,
       "PERSONNEL_LIFECYCLE_CONFIDENTIAL_PERMISSION_REQUIRED",
       PERSONNEL_LIFECYCLE_PERMISSIONS.CONFIDENTIAL_WRITE,
-    );
+    ));
     throw httpError(
       403,
       "Für vertrauliche Bewerbungsfelder fehlt das gesonderte Schreibrecht.",
@@ -51948,16 +52088,16 @@ async function assertPersonnelLifecycleApplicationInput(
   );
 }
 
-function auditPersonnelLifecycleScopedNotFound(accessContext, request, error) {
+async function auditPersonnelLifecycleScopedNotFound(accessContext, request, error) {
   if (!accessContext?.access?.global
     && error instanceof PersonnelLifecycleError
     && error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND) {
-    auditPersonnelLifecycleAccessDenied(
+    (await auditPersonnelLifecycleAccessDenied(
       accessContext.session,
       request,
       "PERSONNEL_LIFECYCLE_SCOPED_NOT_FOUND",
       PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_READ,
-    );
+    ));
   }
 }
 
@@ -52324,7 +52464,7 @@ async function handlePersonnelLifecycleOffboardingCaseAction(
   response,
   { action, serviceMethod },
 ) {
-  const accessContext = requirePersonnelLifecycleOffboardingActionAccess(request, action);
+  const accessContext = (await requirePersonnelLifecycleOffboardingActionAccess(request, action));
   setPersonnelLifecycleOffboardingNoStore(response);
   const body = personnelLifecycleOffboardingBody(request, [
     "actorId",
@@ -52346,12 +52486,12 @@ async function handlePersonnelLifecycleOffboardingCaseAction(
         PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN,
         PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND,
       ].includes(error.kind)) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         accessContext.session,
         request,
         error.code,
         PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_CONFIDENTIAL_READ,
-      );
+      ));
     }
     personnelLifecycleOffboardingRouteError(error);
   }
@@ -52371,16 +52511,16 @@ function personnelLifecycleOffboardingPreparationFromFamilies(families, availabl
   });
 }
 
-app.get("/api/portal/v1/personnel-lifecycle/interfaces/catalog", (request, response) => {
-  const accessContext = requirePersonnelLifecycleInterfaceCatalogAccess(request);
+app.get("/api/portal/v1/personnel-lifecycle/interfaces/catalog", async (request, response) => {
+  const accessContext = (await requirePersonnelLifecycleInterfaceCatalogAccess(request));
   const catalog = personnelLifecycleInterfaceCatalog(accessContext.domainIds);
-  auditPortal(
+  (await auditPortal(
     portalActorId(accessContext.session),
     "personnel-lifecycle.interfaces.catalog.view",
     "personnel_lifecycle_interface_contract",
     catalog.contractVersion,
     JSON.stringify({ domains: catalog.domains.map(({ id }) => id) }),
-  );
+  ));
   response.status(200);
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("Cache-Control", "no-store");
@@ -52388,34 +52528,34 @@ app.get("/api/portal/v1/personnel-lifecycle/interfaces/catalog", (request, respo
   response.end(JSON.stringify(catalog));
 });
 
-app.get("/api/portal/v1/personnel-lifecycle/automation/catalog", (request, response) => {
-  const accessContext = requirePersonnelLifecycleAutomationCatalogAccess(request);
+app.get("/api/portal/v1/personnel-lifecycle/automation/catalog", async (request, response) => {
+  const accessContext = (await requirePersonnelLifecycleAutomationCatalogAccess(request));
   const catalog = personnelLifecycleAutomationCatalog(accessContext.domainIds);
-  auditPortal(
+  (await auditPortal(
     portalActorId(accessContext.session),
     "personnel-lifecycle.automation.catalog.view",
     "personnel_lifecycle_automation_contract",
     catalog.contractVersion,
     JSON.stringify({ domains: catalog.domains.map(({ id }) => id) }),
-  );
+  ));
   sendPersonnelLifecycleAutomationJson(response, catalog);
 });
 
-app.get("/api/portal/v1/personnel-lifecycle/editor/catalog", (request, response) => {
-  const accessContext = requirePersonnelLifecycleEditorCatalogAccess(request);
+app.get("/api/portal/v1/personnel-lifecycle/editor/catalog", async (request, response) => {
+  const accessContext = (await requirePersonnelLifecycleEditorCatalogAccess(request));
   const catalog = personnelLifecycleEditorCatalog(accessContext.workflowTypes);
-  auditPortal(
+  (await auditPortal(
     portalActorId(accessContext.session),
     "personnel-lifecycle.editor.catalog.view",
     "personnel_lifecycle_editor_contract",
     catalog.contractVersion,
     JSON.stringify({ workflowTypes: catalog.workflowTypes }),
-  );
+  ));
   sendPersonnelLifecycleEditorJson(response, catalog);
 });
 
-app.post("/api/portal/v1/personnel-lifecycle/editor/validate", (request, response) => {
-  const accessContext = requirePersonnelLifecycleEditorValidateAccess(request);
+app.post("/api/portal/v1/personnel-lifecycle/editor/validate", async (request, response) => {
+  const accessContext = (await requirePersonnelLifecycleEditorValidateAccess(request));
   let validation;
   try {
     validation = validatePersonnelLifecycleEditorDraft(request.body);
@@ -52424,19 +52564,19 @@ app.post("/api/portal/v1/personnel-lifecycle/editor/validate", (request, respons
   }
   const workflowType = String(validation?.draft?.workflowType || "").trim().toLowerCase();
   if (!accessContext.workflowTypes.includes(workflowType)) {
-    auditPersonnelLifecycleAccessDenied(
+    (await auditPersonnelLifecycleAccessDenied(
       accessContext.session,
       request,
       "PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSION_REQUIRED",
       PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSIONS[workflowType]?.join("|") || "workflowType",
-    );
+    ));
     throw httpError(
       403,
       "Für diese Lifecycle-Prozessart fehlt das getrennte Quellrecht.",
       "PERSONNEL_LIFECYCLE_EDITOR_SOURCE_PERMISSION_REQUIRED",
     );
   }
-  auditPortal(
+  (await auditPortal(
     portalActorId(accessContext.session),
     "personnel-lifecycle.editor.draft.validate",
     "personnel_lifecycle_editor_contract",
@@ -52444,12 +52584,12 @@ app.post("/api/portal/v1/personnel-lifecycle/editor/validate", (request, respons
     JSON.stringify({
       blockerCount: Array.isArray(validation.blockers) ? validation.blockers.length : 0,
     }),
-  );
+  ));
   sendPersonnelLifecycleEditorJson(response, validation);
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/automation/preview", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAutomationPreviewAccess(request);
+  const accessContext = (await requirePersonnelLifecycleAutomationPreviewAccess(request));
   const actorId = portalActorId(accessContext.session);
   const tasks = [];
   const includedSources = [];
@@ -52494,23 +52634,23 @@ app.get("/api/portal/v1/personnel-lifecycle/automation/preview", async (request,
       "PERSONNEL_LIFECYCLE_AUTOMATION_PREVIEW_INTEGRITY_FAILED",
     );
   }
-  auditPortal(
+  (await auditPortal(
     actorId,
     "personnel-lifecycle.automation.preview.view",
     "personnel_lifecycle_automation_contract",
     preview.contractVersion,
     JSON.stringify({ sources: includedSources }),
-  );
+  ));
   sendPersonnelLifecycleAutomationJson(response, preview);
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", async (request, response) => {
   const tab = String(request.query.tab || "overview").trim().toLowerCase();
   const accessContext = tab === "onboarding"
-    ? requirePersonnelLifecycleOnboardingProfileAccess(request)
+    ? (await requirePersonnelLifecycleOnboardingProfileAccess(request))
     : tab === "offboarding"
-      ? requirePersonnelLifecycleOffboardingProfileAccess(request)
-      : requirePersonnelProfileAccess(request);
+      ? (await requirePersonnelLifecycleOffboardingProfileAccess(request))
+      : (await requirePersonnelProfileAccess(request));
   if (!PERSONNEL_PROFILE_TABS.has(tab)) {
     throw httpError(
       400,
@@ -52519,13 +52659,13 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
     );
   }
   if (!personnelProfilePreflightCapability(accessContext, tab)) {
-    auditPersonnelRecordDenied(
+    (await auditPersonnelRecordDenied(
       accessContext.session,
       request.params.employeeNumber,
       request,
       "PERSONNEL_PROFILE_TAB_ACCESS_DENIED",
       tab === "documents" ? ["documents"] : [],
-    );
+    ));
     throw httpError(
       403,
       "Dieser Profilbereich ist für diesen Zugang nicht verfügbar.",
@@ -52544,12 +52684,12 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
     const row = await organizationPersonnelRepository
       .getEmployeeProfileOverviewProjection(employeeNumber);
     if (!row) {
-      auditPersonnelRecordDenied(
+      (await auditPersonnelRecordDenied(
         accessContext.session,
         employeeNumber,
         request,
         "EMPLOYEE_NOT_FOUND",
-      );
+      ));
       throw personnelProfileNotFound();
     }
     const profileAccessContext = Object.freeze({
@@ -52589,7 +52729,7 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
       onboardingPreview,
       accessContext,
     );
-    auditPortal(
+    (await auditPortal(
       portalActorId(accessContext.session),
       "personnel-lifecycle.onboarding-preview.view",
       "employee",
@@ -52599,7 +52739,7 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
         steps: onboardingPreview.assignmentPreview.stepCount,
         blockers: onboardingPreview.blockers.map(({ code }) => code),
       }),
-    );
+    ));
     return response.json({
       profile: projection.profile,
       onboardingPreview,
@@ -52713,13 +52853,13 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
           await personnelSensitiveProfile(employeeNumber),
           masterFieldKeys,
         );
-    auditPortal(
+    (await auditPortal(
       accessContext.session.employeeNumber || "local",
       "personnel-profile.master-org.view",
       "employee",
       employeeNumber,
       JSON.stringify({ fields: masterFieldKeys }),
-    );
+    ));
     return response.json({
       profile: projection.profile,
       masterData,
@@ -52729,13 +52869,13 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
   }
   if (tab === "documents") {
     const documents = await personnelRecordDocumentRows(employeeNumber);
-    auditPortal(
+    (await auditPortal(
       accessContext.session.employeeNumber || "local",
       "personnel-profile.documents.view",
       "employee",
       employeeNumber,
       JSON.stringify({ entries: documents.length }),
-    );
+    ));
     return response.json({
       profile: projection.profile,
       documents,
@@ -52743,17 +52883,17 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
       capabilities: projection.capabilities,
     });
   }
-  auditPortal(
+  (await auditPortal(
     accessContext.session.employeeNumber || "local",
     "personnel-profile.overview.view",
     "employee",
     employeeNumber,
-  );
+  ));
   response.json(projection);
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/onboarding-starts", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleOnboardingStartAccess(request);
+  const accessContext = (await requirePersonnelLifecycleOnboardingStartAccess(request));
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   if (!employeeNumber || employeeNumber.includes("\0")) {
     throw httpError(
@@ -52784,19 +52924,19 @@ app.post("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/onboardin
   } catch (error) {
     if (error instanceof PersonnelLifecycleOnboardingExecutionError
       && error.kind === PERSONNEL_LIFECYCLE_ONBOARDING_EXECUTION_ERROR_KINDS.FORBIDDEN) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         accessContext.session,
         request,
         error.code,
         PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_EXECUTE,
-      );
+      ));
     }
     personnelLifecycleOnboardingRouteError(error);
   }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/onboarding/tasks", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleOnboardingTaskAccess(request);
+  const accessContext = (await requirePersonnelLifecycleOnboardingTaskAccess(request));
   try {
     const result = await requirePersonnelLifecycleOnboardingTaskService().listActiveTasks(
       portalActorId(accessContext.session),
@@ -52815,19 +52955,19 @@ app.get("/api/portal/v1/personnel-lifecycle/onboarding/tasks", async (request, r
         PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.FORBIDDEN,
         PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.NOT_FOUND,
       ].includes(error.kind)) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         accessContext.session,
         request,
         error.code,
         "personal-assignment",
-      );
+      ));
     }
     personnelLifecycleOnboardingTaskRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/onboarding/tasks/:runId/:stepId/complete", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleOnboardingTaskAccess(request, { write: true });
+  const accessContext = (await requirePersonnelLifecycleOnboardingTaskAccess(request, { write: true }));
   try {
     const result = await requirePersonnelLifecycleOnboardingTaskService().completeTask(
       portalActorId(accessContext.session),
@@ -52844,22 +52984,22 @@ app.post("/api/portal/v1/personnel-lifecycle/onboarding/tasks/:runId/:stepId/com
         PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.FORBIDDEN,
         PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.NOT_FOUND,
       ].includes(error.kind)) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         accessContext.session,
         request,
         error.code,
         "personal-assignment",
-      );
+      ));
     }
     personnelLifecycleOnboardingTaskRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/onboarding/cases/:caseId/close", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleOnboardingTaskAccess(request, {
+  const accessContext = (await requirePersonnelLifecycleOnboardingTaskAccess(request, {
     write: true,
     close: true,
-  });
+  }));
   try {
     const result = await requirePersonnelLifecycleOnboardingTaskService().closeCase(
       portalActorId(accessContext.session),
@@ -52875,19 +53015,19 @@ app.post("/api/portal/v1/personnel-lifecycle/onboarding/cases/:caseId/close", as
         PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.FORBIDDEN,
         PERSONNEL_LIFECYCLE_ONBOARDING_TASK_ERROR_KINDS.NOT_FOUND,
       ].includes(error.kind)) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         accessContext.session,
         request,
         error.code,
         PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.ONBOARDING_CLOSE,
-      );
+      ));
     }
     personnelLifecycleOnboardingTaskRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/offboarding-preparations", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleOffboardingActionAccess(request, "prepare");
+  const accessContext = (await requirePersonnelLifecycleOffboardingActionAccess(request, "prepare"));
   setPersonnelLifecycleOffboardingNoStore(response);
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   if (!employeeNumber || employeeNumber.includes("\0")) {
@@ -52922,12 +53062,12 @@ app.post("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/offboardi
         PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN,
         PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND,
       ].includes(error.kind)) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         accessContext.session,
         request,
         error.code,
         PERSONNEL_LIFECYCLE_CASE_PERMISSIONS.OFFBOARDING_PREPARE,
-      );
+      ));
     }
     personnelLifecycleOffboardingRouteError(error);
   }
@@ -52976,7 +53116,7 @@ app.post("/api/portal/v1/personnel-lifecycle/offboarding/cases/:caseId/closures"
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/offboarding/tasks", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleOffboardingTaskAccess(request);
+  const accessContext = (await requirePersonnelLifecycleOffboardingTaskAccess(request));
   setPersonnelLifecycleOffboardingNoStore(response);
   try {
     const result = await requirePersonnelLifecycleOffboardingService().listTasks(
@@ -52996,19 +53136,19 @@ app.get("/api/portal/v1/personnel-lifecycle/offboarding/tasks", async (request, 
         PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN,
         PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND,
       ].includes(error.kind)) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         accessContext.session,
         request,
         error.code,
         "personal-assignment",
-      );
+      ));
     }
     personnelLifecycleOffboardingRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/offboarding/tasks/:runId/:stepId/completions", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleOffboardingTaskAccess(request, { write: true });
+  const accessContext = (await requirePersonnelLifecycleOffboardingTaskAccess(request, { write: true }));
   setPersonnelLifecycleOffboardingNoStore(response);
   const body = personnelLifecycleOffboardingTaskCompletionBody(request);
   try {
@@ -53027,19 +53167,19 @@ app.post("/api/portal/v1/personnel-lifecycle/offboarding/tasks/:runId/:stepId/co
         PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.FORBIDDEN,
         PERSONNEL_LIFECYCLE_OFFBOARDING_SERVICE_ERROR_KINDS.NOT_FOUND,
       ].includes(error.kind)) {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         accessContext.session,
         request,
         error.code,
         "personal-assignment",
-      );
+      ));
     }
     personnelLifecycleOffboardingRouteError(error);
   }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/workflows", async (request, response) => {
-  const accessContext = requirePersonnelWorkflowAccess(request, { action: "read" });
+  const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "read" }));
   try {
     response.json({
       ...await requirePersonnelWorkflowPublicationService().list({
@@ -53049,13 +53189,13 @@ app.get("/api/portal/v1/personnel-lifecycle/workflows", async (request, response
       capabilities: accessContext.capabilities,
     });
   } catch (error) {
-    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    (await auditPersonnelWorkflowServiceDenied(accessContext, request, error));
     personnelWorkflowRouteError(error);
   }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/workflow-instances", async (request, response) => {
-  const accessContext = requirePersonnelWorkflowAccess(request, { action: "instanceRead" });
+  const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "instanceRead" }));
   try {
     response.json({
       ...await requirePersonnelWorkflowInstanceService().list({
@@ -53067,13 +53207,13 @@ app.get("/api/portal/v1/personnel-lifecycle/workflow-instances", async (request,
       capabilities: accessContext.capabilities,
     });
   } catch (error) {
-    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    (await auditPersonnelWorkflowServiceDenied(accessContext, request, error));
     personnelWorkflowRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/workflow-instances", async (request, response) => {
-  const accessContext = requirePersonnelWorkflowAccess(request, { action: "instanceStart" });
+  const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "instanceStart" }));
   try {
     const result = await requirePersonnelWorkflowInstanceService().start(
       request.body,
@@ -53091,13 +53231,13 @@ app.post("/api/portal/v1/personnel-lifecycle/workflow-instances", async (request
       capabilities: accessContext.capabilities,
     });
   } catch (error) {
-    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    (await auditPersonnelWorkflowServiceDenied(accessContext, request, error));
     personnelWorkflowRouteError(error);
   }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/workflow-publications/resolve", async (request, response) => {
-  const accessContext = requirePersonnelWorkflowAccess(request, { action: "read" });
+  const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "read" }));
   const locationId = normalizeLocationId(request.query.locationId);
   const departmentId = normalizeDepartmentId(request.query.departmentId, true);
   try {
@@ -53110,13 +53250,13 @@ app.get("/api/portal/v1/personnel-lifecycle/workflow-publications/resolve", asyn
       capabilities: accessContext.capabilities,
     });
   } catch (error) {
-    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    (await auditPersonnelWorkflowServiceDenied(accessContext, request, error));
     personnelWorkflowRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/workflows/:processId/publish", async (request, response) => {
-  const accessContext = requirePersonnelWorkflowAccess(request, { action: "publish" });
+  const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "publish" }));
   try {
     const publication = await requirePersonnelWorkflowPublicationService().publish(
       request.params.processId,
@@ -53128,13 +53268,13 @@ app.post("/api/portal/v1/personnel-lifecycle/workflows/:processId/publish", asyn
     );
     response.status(201).json({ publication, capabilities: accessContext.capabilities });
   } catch (error) {
-    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    (await auditPersonnelWorkflowServiceDenied(accessContext, request, error));
     personnelWorkflowRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/workflow-publications/:publicationId/archive", async (request, response) => {
-  const accessContext = requirePersonnelWorkflowAccess(request, { action: "publish" });
+  const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "publish" }));
   try {
     const publication = await requirePersonnelWorkflowPublicationService().archive(
       request.params.publicationId,
@@ -53146,13 +53286,13 @@ app.post("/api/portal/v1/personnel-lifecycle/workflow-publications/:publicationI
     );
     response.json({ publication, capabilities: accessContext.capabilities });
   } catch (error) {
-    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    (await auditPersonnelWorkflowServiceDenied(accessContext, request, error));
     personnelWorkflowRouteError(error);
   }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/document-categories", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "confidentialRead" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "confidentialRead" }));
   try {
     response.json({
       categories: await requirePersonnelLifecycleService().listDocumentCategories({
@@ -53166,7 +53306,7 @@ app.get("/api/portal/v1/personnel-lifecycle/document-categories", async (request
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/candidates", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "read" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "read" }));
   const { session, access, capabilities } = accessContext;
   try {
     const result = await requirePersonnelLifecycleService().listCandidates({
@@ -53184,7 +53324,7 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates", async (request, respons
         ),
       ))
       .filter(Boolean);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.candidate.list",
       "candidate",
@@ -53195,16 +53335,16 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates", async (request, respons
         offset: result.pagination.offset,
         includeArchived: result.pagination.includeArchived,
       }),
-    );
+    ));
     response.json({ candidates, pagination: result.pagination, capabilities });
   } catch (error) {
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateCreate" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "candidateCreate" }));
   const { session, access, capabilities } = accessContext;
   try {
     let createInput = request.body || {};
@@ -53212,12 +53352,12 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, respon
       createInput = await localPersonnelLifecycleCandidateCreateInput(request, accessContext);
     } else if (request.body?.application) {
       if (!access.canWriteApplications) {
-        auditPersonnelLifecycleAccessDenied(
+        (await auditPersonnelLifecycleAccessDenied(
           session,
           request,
           "PERSONNEL_LIFECYCLE_APPLICATION_WRITE_PERMISSION_REQUIRED",
           PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
-        );
+        ));
         throw httpError(
           403,
           "Für die erste Bewerbung fehlt das zentrale Bewerbungsrecht.",
@@ -53241,7 +53381,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, respon
       projectPersonnelLifecycleCandidate(created, access, { detail: true }),
     );
     const application = Array.isArray(created.applications) ? created.applications[0] : null;
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.candidate.create",
       "candidate",
@@ -53257,7 +53397,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, respon
         desiredDepartmentId: Number(application?.desiredDepartmentId || 0) || null,
         dataProcessingAuthorizationConfirmed: true,
       }),
-    );
+    ));
     response.status(201).json({ candidate, capabilities });
   } catch (error) {
     personnelLifecycleRouteError(error);
@@ -53265,7 +53405,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, respon
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "read" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "read" }));
   const { session, access, capabilities } = accessContext;
   try {
     const detail = await requirePersonnelLifecycleService()
@@ -53280,21 +53420,21 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (req
         PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
       );
     }
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.candidate.read",
       "candidate",
       candidate.id,
-    );
+    ));
     response.json({ candidate, capabilities });
   } catch (error) {
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "read" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "read" }));
   const { session, access } = accessContext;
   response.set({
     "Cache-Control": "private, no-store, max-age=0",
@@ -53320,13 +53460,13 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", asyn
       detectedMime: reference.mediaType,
       originalFilename: "Bewerberfoto.jpg",
     });
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.candidate.photo.read",
       "candidate",
       reference.candidateId,
       JSON.stringify({ versionNumber: reference.versionNumber }),
-    );
+    ));
     response.set({
       "Content-Type": "image/jpeg",
       "Content-Disposition": "inline; filename=\"Bewerberfoto.jpg\"",
@@ -53334,25 +53474,25 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", asyn
     response.send(content);
   } catch (error) {
     if (String(error?.code || "").startsWith("AMU_")) {
-      auditPortal(
+      (await auditPortal(
         session.employeeNumber,
         "personnel-lifecycle.candidate.photo.integrity-failed",
         "candidate",
         String(request.params.candidateId || ""),
-      );
+      ));
       throw httpError(
         503,
         "Das Bewerberfoto konnte nicht integer gelesen werden.",
         "CANDIDATE_PHOTO_INTEGRITY_FAILED",
       );
     }
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "applicationWrite" }));
   const { session, access, capabilities } = accessContext;
   let stored = null;
   let committed = false;
@@ -53425,7 +53565,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", asy
       );
     }
     committed = true;
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.candidate.photo.upload",
       "candidate",
@@ -53435,7 +53575,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", asy
         versionNumber: photo.currentVersion,
         replacement: Boolean(detail.photo?.id),
       }),
-    );
+    ));
     response.status(detail.photo?.id ? 200 : 201).json({
       photo: {
         id: photo.id,
@@ -53451,7 +53591,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", asy
     if (!committed && stored?.storageKey) {
       try { requireAmuStorage().deleteBlob(stored.storageKey); } catch {}
     }
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     candidatePhotoUploadError(error);
   } finally {
     amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
@@ -53459,7 +53599,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/photo", asy
 });
 
 app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "candidateWrite" }));
   const { session, access, capabilities } = accessContext;
   try {
     const updated = await requirePersonnelLifecycleService().updateCandidate(
@@ -53470,13 +53610,13 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (req
     const candidate = withPersonnelCandidatePhotoUrl(
       projectPersonnelLifecycleCandidate(updated, access, { detail: true }),
     );
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.candidate.update",
       "candidate",
       candidate.id,
       JSON.stringify({ revision: candidate.revision }),
-    );
+    ));
     response.json({ candidate, capabilities });
   } catch (error) {
     personnelLifecycleRouteError(error);
@@ -53484,15 +53624,15 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (req
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "candidateWrite" }));
   const { session, access, capabilities } = accessContext;
   if (!access.canWriteApplications) {
-    auditPersonnelLifecycleAccessDenied(
+    (await auditPersonnelLifecycleAccessDenied(
       session,
       request,
       "PERSONNEL_LIFECYCLE_APPLICATION_WRITE_PERMISSION_REQUIRED",
       PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
-    );
+    ));
     throw httpError(
       403,
       "Für eine neue Bewerbung fehlt das zentrale Bewerbungsrecht.",
@@ -53507,13 +53647,13 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
       session.employeeNumber,
     );
     const application = projectPersonnelLifecycleApplication(created, access);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.application.create",
       "candidate_application",
       application.id,
       JSON.stringify({ candidateId: request.params.candidateId }),
-    );
+    ));
     response.status(201).json({ application, capabilities });
   } catch (error) {
     personnelLifecycleRouteError(error);
@@ -53521,7 +53661,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
 });
 
 app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "applicationWrite" }));
   const { session, access, capabilities } = accessContext;
   try {
     await assertPersonnelLifecycleApplicationInput(
@@ -53537,22 +53677,22 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
       { access },
     );
     const application = projectPersonnelLifecycleApplication(updated, access);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.application.update",
       "candidate_application",
       application.id,
       JSON.stringify({ revision: application.revision }),
-    );
+    ));
     response.json({ application, capabilities });
   } catch (error) {
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/trial-appointments/:trialAppointmentId", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "applicationWrite" }));
   const { session, access, capabilities } = accessContext;
   try {
     const service = requirePersonnelLifecycleService();
@@ -53613,7 +53753,7 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
     const appointment = application.trialAppointments?.find((entry) => (
       entry.id === String(request.params.trialAppointmentId || "")
     ));
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.trial-appointment.update",
       "candidate_trial_appointment",
@@ -53624,24 +53764,24 @@ app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
         cancellationRecorded: Boolean(appointment?.cancelledAt),
         replacementCreated: Boolean(submitted.replacement),
       }),
-    );
+    ));
     response.json({ application, capabilities });
   } catch (error) {
     if (error?.code === "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED") {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code,
         PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
-      );
+      ));
     }
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/team-feedback", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "applicationWrite" }));
   const { session, access, capabilities } = accessContext;
   try {
     const detail = await requirePersonnelLifecycleService().getCandidate(
@@ -53705,7 +53845,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
       { access },
     );
     const projected = projectPersonnelLifecycleApplication(updated, access);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.application.team-feedback.add",
       "candidate_application",
@@ -53717,24 +53857,24 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
         ratingProvided: request.body?.rating !== null && request.body?.rating !== undefined
           && request.body?.rating !== "",
       }),
-    );
+    ));
     response.status(201).json({ application: projected, capabilities });
   } catch (error) {
     if (error?.code === "PERSONNEL_LIFECYCLE_STRUCTURED_SCOPE_DENIED") {
-      auditPersonnelLifecycleAccessDenied(
+      (await auditPersonnelLifecycleAccessDenied(
         session,
         request,
         error.code,
         PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
-      );
+      ));
     }
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/evaluators", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "applicationWrite" }));
   const { session, access, capabilities } = accessContext;
   try {
     const detail = await requirePersonnelLifecycleService().getCandidate(
@@ -53760,13 +53900,13 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
     response.set({ "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache" });
     response.json({ evaluators, revision: application.revision, capabilities });
   } catch (error) {
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/team-evaluations", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "applicationWrite" }));
   const { session, access, capabilities } = accessContext;
   try {
     const detail = await requirePersonnelLifecycleService().getCandidate(
@@ -53800,7 +53940,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
       },
     );
     const projected = projectPersonnelLifecycleApplication(updated, access);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.team-evaluation.assign",
       "candidate_application",
@@ -53812,16 +53952,16 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
           : 0,
         trialAppointmentLinked: Boolean(request.body?.trialAppointmentId),
       }),
-    );
+    ));
     response.status(201).json({ application: projected, capabilities });
   } catch (error) {
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/evaluation.pdf", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "read" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "read" }));
   const { session, access } = accessContext;
   try {
     const detail = await requirePersonnelLifecycleService().getCandidate(
@@ -53872,7 +54012,7 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
       "Content-Length": String(pdf.length),
       "Content-Disposition": contentDispositionHeader(filename),
     });
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.team-evaluation.pdf",
       "candidate_application",
@@ -53885,10 +54025,10 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
         applyBranding: exportOptions.applyBranding,
         includeLogo: exportOptions.includeLogo,
       }),
-    );
+    ));
     response.send(pdf);
   } catch (error) {
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     if (error instanceof CandidateEvaluationPdfError) {
       const status = error.code === "CANDIDATE_EVALUATION_PDF_LOGO_INVALID" ? 422 : 409;
       throw httpError(status, error.message, error.code);
@@ -53898,7 +54038,7 @@ app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/status", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "applicationWrite" }));
   const { session, access, capabilities } = accessContext;
   try {
     await assertPersonnelLifecycleApplicationInput(request, accessContext, { statusOnly: true });
@@ -53910,22 +54050,22 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
       { access },
     );
     const application = projectPersonnelLifecycleApplication(transitioned, access);
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-lifecycle.application.status",
       "candidate_application",
       application.id,
       JSON.stringify({ status: application.status, revision: application.revision }),
-    );
+    ));
     response.json({ application, capabilities });
   } catch (error) {
-    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
     personnelLifecycleRouteError(error);
   }
 });
 
 app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/convert", async (request, response) => {
-  const accessContext = requirePersonnelLifecycleAccess(request, { action: "convert" });
+  const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "convert" }));
   const { session, capabilities } = accessContext;
   const submitted = personnelLifecycleConversionInput(request.body || {});
   const candidateId = String(request.params.candidateId || "").trim();
@@ -53976,7 +54116,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
           });
           const personnelRecordInputValue = candidatePersonnelRecordInput(candidate.profile);
           const submittedFields = submittedPersonnelRecordFieldKeys(personnelRecordInputValue);
-          assertPersonnelRecordContextScope(
+          (await assertPersonnelRecordContextScope(
             session,
             {
               locationId: employee.homeLocationId,
@@ -53985,7 +54125,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
             request,
             employee.personnelNumber,
             submittedFields,
-          );
+          ));
           let personnelRecordMutation;
           try {
             personnelRecordMutation = await preparePersonnelRecordMutation(
@@ -54057,12 +54197,12 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
     });
   } catch (error) {
     if (deferredFieldDenial?.error === error) {
-      auditPersonnelLifecycleConversionFieldDenied(
+      (await auditPersonnelLifecycleConversionFieldDenied(
         session,
         request,
         submitted.id,
         deferredFieldDenial,
-      );
+      ));
       deferredFieldDenial = null;
     }
     if (isUniquePersistenceViolation(error)) {
@@ -54077,13 +54217,13 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
 });
 
 app.get("/api/portal/v1/personnel-records/:employeeNumber", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request);
+  const { session, access } = (await requirePersonnelRecordSession(request));
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   await assertPersonnelRecordEmployeeScope(session, employeeNumber, request);
   const employee = await sicknessAmuManagementRepository
     .getEmployeePersonnelRecordProjection({ employeeNumber });
   if (!employee) {
-    auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND");
+    (await auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND"));
     throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
   }
   const protectedProfile = access.canReadPhone || access.canReadSensitive
@@ -54122,8 +54262,8 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", async (request, resp
   }
   const sections = [access.canReadPhone ? "phone" : "", access.canReadSensitive ? "sensitive" : "",
     access.canReadDocuments ? "documents" : "", access.canReadAmu ? "amu" : ""].filter(Boolean);
-  auditPortal(session.employeeNumber, "personnel-record.view", "employee", employeeNumber,
-    JSON.stringify({ sections, documentEntries: personnelDocuments.length, amuEntries: serialized.length }));
+  (await auditPortal(session.employeeNumber, "personnel-record.view", "employee", employeeNumber,
+    JSON.stringify({ sections, documentEntries: personnelDocuments.length, amuEntries: serialized.length })));
   response.json({
     employee,
     profile: {
@@ -54138,15 +54278,15 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", async (request, resp
 });
 
 app.put("/api/portal/v1/personnel-records/:employeeNumber", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  const { session, access } = (await requirePersonnelRecordSession(request, { write: true }));
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   await assertPersonnelRecordEmployeeScope(session, employeeNumber, request,
     submittedPersonnelRecordFieldKeys(request.body || {}));
   const employee = await sicknessAmuManagementRepository
     .getEmployeePersonnelRecordProjection({ employeeNumber });
   if (!employee) {
-    auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND",
-      submittedPersonnelRecordFieldKeys(request.body || {}));
+    (await auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND",
+      submittedPersonnelRecordFieldKeys(request.body || {})));
     throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
   }
   const hasSensitiveInput = Object.prototype.hasOwnProperty.call(request.body || {}, "sensitive");
@@ -54158,7 +54298,7 @@ app.put("/api/portal/v1/personnel-records/:employeeNumber", async (request, resp
   if (!submittedFields.length) {
     throw httpError(400, "Es wurden keine gültigen Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
   }
-  assertPersonnelRecordFieldsWritable(request, session, access, submittedFields, employeeNumber);
+  (await assertPersonnelRecordFieldsWritable(request, session, access, submittedFields, employeeNumber));
   const before = await personnelSensitiveProfile(employeeNumber);
   const next = mergePersonnelSensitiveProfile(before, hasSensitiveInput ? request.body.sensitive || {} : {});
   if (hasPhoneInput) next.phone = normalizePersonnelPhone(request.body.phone);
@@ -54185,23 +54325,23 @@ app.put("/api/portal/v1/personnel-records/:employeeNumber", async (request, resp
   if (personalNotificationMasterFieldsChanged(changedFields)) {
     await reconcilePersonalNotificationTargets(employeeNumber, null, session.employeeNumber);
   }
-  auditPortal(session.employeeNumber, "personnel-record.update", "employee", employeeNumber,
-    JSON.stringify({ fields: changedFields }));
+  (await auditPortal(session.employeeNumber, "personnel-record.update", "employee", employeeNumber,
+    JSON.stringify({ fields: changedFields })));
   response.json({ ok: true, changedFields, access });
 });
 
 app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  const { session, access } = (await requirePersonnelRecordSession(request, { write: true }));
   if (!access.canWriteDocuments) {
-    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
-      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
+    (await auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]));
     throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht hinzugefügt werden.", "PERSONNEL_DOCUMENT_WRITE_DENIED");
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   await assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
   if (!await sicknessAmuManagementRepository
     .getEmployeePersonnelRecordProjection({ employeeNumber })) {
-    auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND", ["documents"]);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND", ["documents"]));
     throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
   }
   const { fields, document } = await parsePersonnelDocumentMultipart(request);
@@ -54297,10 +54437,10 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (re
 });
 
 app.post("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/versions", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  const { session, access } = (await requirePersonnelRecordSession(request, { write: true }));
   if (!access.canWriteDocuments) {
-    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
-      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
+    (await auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]));
     throw httpError(
       403,
       "Personalakt-Dokumente dürfen mit diesem Zugang nicht versioniert werden.",
@@ -54312,8 +54452,8 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId
   await assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
   const current = await personnelRecordDocumentMetadata(employeeNumber, documentId);
   if (!current || Number(current.current_version || 0) < 1) {
-    auditPersonnelRecordDenied(session, employeeNumber, request,
-      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]));
     throw httpError(
       404,
       "Das Personalakt-Dokument wurde nicht gefunden.",
@@ -54427,10 +54567,10 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId
 });
 
 app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/history", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request);
+  const { session, access } = (await requirePersonnelRecordSession(request));
   if (!access.canReadDocuments) {
-    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
-      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]);
+    (await auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]));
     throw httpError(
       403,
       "Die Dokumenthistorie darf mit diesem Zugang nicht geöffnet werden.",
@@ -54444,8 +54584,8 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
     activeOnly: false,
   });
   if (!metadata || metadata.status === "purged" || Number(metadata.current_version || 0) < 1) {
-    auditPersonnelRecordDenied(session, employeeNumber, request,
-      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]));
     throw httpError(
       404,
       "Das Personalakt-Dokument wurde nicht gefunden.",
@@ -54456,12 +54596,12 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
     sicknessAmuManagementRepository.listPersonnelDocumentVersions({ documentId }),
     sicknessAmuManagementRepository.listPersonnelDocumentEvents({ documentId }),
   ]);
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "personnel-record.document.history",
     "personnel_record_document",
     documentId,
-  );
+  ));
   response.json({
     document: personnelRecordDocumentProjection(metadata),
     versions: versions.map((version) => (
@@ -54473,10 +54613,10 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
 });
 
 app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/versions/:versionNumber/content", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request);
+  const { session, access } = (await requirePersonnelRecordSession(request));
   if (!access.canReadDocuments) {
-    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
-      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]);
+    (await auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]));
     throw httpError(
       403,
       "Diese Dokumentversion darf mit diesem Zugang nicht geöffnet werden.",
@@ -54499,8 +54639,8 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
     activeOnly: false,
   });
   if (!metadata || metadata.status === "purged" || Number(metadata.current_version || 0) < 1) {
-    auditPersonnelRecordDenied(session, employeeNumber, request,
-      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]));
     throw httpError(
       404,
       "Das Personalakt-Dokument wurde nicht gefunden.",
@@ -54512,8 +54652,8 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
     versionNumber,
   });
   if (!version) {
-    auditPersonnelRecordDenied(session, employeeNumber, request,
-      "PERSONNEL_DOCUMENT_VERSION_NOT_FOUND", ["documents"]);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_VERSION_NOT_FOUND", ["documents"]));
     throw httpError(
       404,
       "Die Dokumentversion wurde nicht gefunden.",
@@ -54525,13 +54665,13 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
   try {
     prepared = readPersonnelRecordDocument(versionMetadata);
   } catch (error) {
-    auditPortal(
+    (await auditPortal(
       session.employeeNumber,
       "personnel-record.document.integrity-failed",
       "personnel_record_document",
       documentId,
       JSON.stringify({ versionNumber, reason: String(error.code || "read-failed") }),
-    );
+    ));
     if (error.code === "AMU_DOCUMENT_INTEGRITY_FAILED") {
       throw httpError(
         503,
@@ -54541,21 +54681,21 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
     }
     throw error;
   }
-  auditPortal(
+  (await auditPortal(
     session.employeeNumber,
     "personnel-record.document.version.download",
     "personnel_record_document",
     documentId,
     JSON.stringify({ versionNumber }),
-  );
+  ));
   sendAmuDocument(response, versionMetadata, prepared);
 });
 
 app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/content", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request);
+  const { session, access } = (await requirePersonnelRecordSession(request));
   if (!access.canReadDocuments) {
-    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
-      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]);
+    (await auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]));
     throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht geöffnet werden.", "PERSONNEL_DOCUMENT_READ_DENIED");
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
@@ -54566,15 +54706,15 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
   });
   if (!metadata || !["active", "retention_review"].includes(metadata.status)
     || Number(metadata.current_version || 0) < 1) {
-    auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]));
     throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
   }
   let prepared;
   try {
     prepared = readPersonnelRecordDocument(metadata);
   } catch (error) {
-    auditPortal(session.employeeNumber, "personnel-record.document.integrity-failed", "personnel_record_document", metadata.id,
-      String(error.code || "read-failed"));
+    (await auditPortal(session.employeeNumber, "personnel-record.document.integrity-failed", "personnel_record_document", metadata.id,
+      String(error.code || "read-failed")));
     if (error.code === "AMU_DOCUMENT_INTEGRITY_FAILED") {
       throw httpError(
         503,
@@ -54584,15 +54724,15 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
     }
     throw error;
   }
-  auditPortal(session.employeeNumber, "personnel-record.document.download", "personnel_record_document", metadata.id);
+  (await auditPortal(session.employeeNumber, "personnel-record.document.download", "personnel_record_document", metadata.id));
   sendAmuDocument(response, metadata, prepared);
 });
 
 app.post("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/retention-review", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  const { session, access } = (await requirePersonnelRecordSession(request, { write: true }));
   if (!access.canWriteDocuments) {
-    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
-      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
+    (await auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]));
     throw httpError(
       403,
       "Die Aufbewahrungsprüfung darf mit diesem Zugang nicht angefordert werden.",
@@ -54606,8 +54746,8 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId
     activeOnly: false,
   });
   if (!metadata || metadata.status !== "active" || Number(metadata.current_version || 0) < 1) {
-    auditPersonnelRecordDenied(session, employeeNumber, request,
-      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request,
+      "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]));
     throw httpError(
       404,
       "Das aktive Personalakt-Dokument wurde nicht gefunden.",
@@ -54668,10 +54808,10 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId
 });
 
 app.delete("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId", async (request, response) => {
-  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  const { session, access } = (await requirePersonnelRecordSession(request, { write: true }));
   if (!access.canWriteDocuments) {
-    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
-      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
+    (await auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]));
     throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht archiviert werden.", "PERSONNEL_DOCUMENT_WRITE_DENIED");
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
@@ -54682,7 +54822,7 @@ app.delete("/api/portal/v1/personnel-records/:employeeNumber/documents/:document
   });
   if (!metadata || !["active", "retention_review"].includes(metadata.status)
     || Number(metadata.current_version || 0) < 1) {
-    auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    (await auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]));
     throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
   }
   const archivedAt = new Date().toISOString();
@@ -54839,8 +54979,8 @@ async function createOwnAmuReport(session, { fields, documents }) {
     identityCheck = documentEvidence.identity;
     dateEvidence = documentEvidence.dates;
     if (identityCheck.status === "mismatch") {
-      auditPortal(session.employeeNumber, "amu.identity.reject", "protected_record",
-        protectedPortalEntityId("employee", session.employeeNumber), JSON.stringify({ status: "mismatch" }));
+      (await auditPortal(session.employeeNumber, "amu.identity.reject", "protected_record",
+        protectedPortalEntityId("employee", session.employeeNumber), JSON.stringify({ status: "mismatch" })));
       throw httpError(422, "Die AUM konnte der eigenen Personalakte nicht eindeutig zugeordnet werden. Bitte das Dokument prüfen oder die Personalleitung kontaktieren.", "AMU_SOCIAL_SECURITY_MISMATCH");
     }
     const preparedStaffingRisk = await evaluateSicknessStaffingRisk(
@@ -55264,11 +55404,11 @@ app.get("/api/portal/v1/me/amu-reports/:reportId/documents/:documentId/content",
   const session = requirePortalSession(request, "own_amu:read");
   const document = await amuDocumentMetadata(request.params.reportId, request.params.documentId);
   if (!document || document.employee_number !== session.employeeNumber || document.report_status === "withdrawn") {
-    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId));
+    (await auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId)));
     throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
   }
   const prepared = readAmuDocument(document);
-  auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id);
+  (await auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id));
   sendAmuDocument(response, document, prepared);
 });
 
@@ -55279,7 +55419,7 @@ async function applyAmuReportAction(report, session, {
   note = "",
 } = {}) {
   if (!report) throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
-  assertAmuReportScope(session, report);
+  (await assertAmuReportScope(session, report));
   if (sessionHasLocalAmuAccess(session) && !sessionCanUseLocalAmuForReport(session, report)) {
     throw httpError(403, "Diese AUM gehört nicht zum bearbeitbaren Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
   }
@@ -55476,9 +55616,9 @@ app.put("/api/portal/v1/amu-reports/:id/review", async (request, response) => {
   const session = requirePortalReadOrLocal(request, "sickness:read");
   assertPortalCsrf(request);
   const report = await amuReportMetadata(request.params.id);
-  assertAmuReportScope(session, report);
+  (await assertAmuReportScope(session, report));
   if (!(await amuResponsibilityForActor(report, session)).can_review) {
-    auditPortal(session.employeeNumber, "amu.review.denied", "amu_report", String(report?.id || request.params.id), "local-access-policy");
+    (await auditPortal(session.employeeNumber, "amu.review.denied", "amu_report", String(report?.id || request.params.id), "local-access-policy"));
     throw httpError(403, "Diese AUM ist einem anderen Bearbeitungsbereich zugewiesen.", "PORTAL_PERMISSION_DENIED");
   }
   if (!report || !["submitted", "returned"].includes(report.status)) throw httpError(409, "Diese Arbeitsunfähigkeitsmeldung ist bereits abgeschlossen.");
@@ -55506,25 +55646,25 @@ app.put("/api/portal/v1/amu-reports/:id/review", async (request, response) => {
 app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", async (request, response) => {
   const session = requirePortalReadOrLocal(request, "sickness:read");
   if (!actorCanListAmuReports(session) || !actorCanReadAmuFiles(session)) {
-    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId), "missing-protected-file-right");
+    (await auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId), "missing-protected-file-right"));
     throw httpError(403, "AUM-Dateien dürfen von diesem Zugang nicht geöffnet werden.", "PORTAL_PERMISSION_DENIED");
   }
   const document = await amuDocumentMetadata(request.params.reportId, request.params.documentId);
   if (!document) {
-    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId), "not-found");
+    (await auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId), "not-found"));
     throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
   }
-  assertAmuReportScope(session, document);
+  (await assertAmuReportScope(session, document));
   if (sessionHasLocalAmuAccess(session) && !sessionCanUseLocalAmuForReport(session, document)) {
-    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", document.id, "local-scope-inactive");
+    (await auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", document.id, "local-scope-inactive"));
     throw httpError(403, "Diese AUM gehört nicht zum aktuellen Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
   }
   if (sessionHasLocalAmuAccess(session) && ["withdrawn", "purged"].includes(String(document.report_status || ""))) {
-    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", document.id, "withdrawn");
+    (await auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", document.id, "withdrawn"));
     throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
   }
   const prepared = readAmuDocument(document);
-  auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id);
+  (await auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id));
   sendAmuDocument(response, document, prepared);
 });
 
@@ -55532,7 +55672,7 @@ app.delete("/api/portal/v1/amu-reports/:reportId/documents/:documentId", async (
   const session = requirePortalAdminOrLocal(request, "amu:delete");
   const document = await amuDocumentMetadata(request.params.reportId, request.params.documentId);
   if (!document) throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
-  assertAmuReportScope(session, document);
+  (await assertAmuReportScope(session, document));
   amuMutationInProgress += 1;
   try {
     const deleted = await sicknessAmuManagementRepository.markAmuDocumentDeleted({
@@ -55588,7 +55728,7 @@ app.get("/api/portal/v1/branch-portal-settings", async (request, response) => {
   try {
     response.json({
       locationId,
-      settings: sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId),
+      settings: (await sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId)),
     });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -55600,17 +55740,17 @@ app.put("/api/portal/v1/branch-portal-settings", async (request, response) => {
   assertPortalCsrf(request);
   const locationId = await branchPortalDisplaySettingsLocation(session, request.body || {});
   try {
-    const settings = sqliteBranchOrderOperations.saveBranchPortalSettings(
+    const settings = (await sqliteBranchOrderOperations.saveBranchPortalSettings(
       locationId,
       request.body?.settings,
       portalActorId(session),
-    );
-    auditPortal(portalActorId(session), "branch-portal.settings.update", "branch_order_location", locationId, JSON.stringify({
+    ));
+    (await auditPortal(portalActorId(session), "branch-portal.settings.update", "branch_order_location", locationId, JSON.stringify({
       scheduleDisplayMode: settings.scheduleDisplayMode,
       mobileHideElapsedDays: settings.mobileHideElapsedDays,
       orderAutosaveEnabled: settings.orderAutosaveEnabled,
       orderAutosaveMinutes: settings.orderAutosaveMinutes,
-    }));
+    })));
     response.json({ locationId, settings });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -58811,13 +58951,13 @@ app.post("/api/usb-provisioning/create", async (request, response) => {
         if (body.hideProgramFolder !== false) await hidePortableAppDirectory(appDirectory);
       },
     });
-    auditPortal(access.session?.employeeNumber || creator.personnelNumber, "usb.provision", "volume", result.driveLetter, JSON.stringify({
+    (await auditPortal(access.session?.employeeNumber || creator.personnelNumber, "usb.provision", "volume", result.driveLetter, JSON.stringify({
       installationName,
       employees: employees.length + 1,
       locations: selectedLocations,
       enabledFeatures,
       primaryBrandingKitId: brandingSelection.primaryKitId,
-    }));
+    })));
     response.json({
       ...result,
       installationName,
@@ -59127,7 +59267,7 @@ app.put("/api/branding/assignments", async (request, response) => {
       throw httpError(400, "Bitte mindestens eine und hoechstens 250 Standortzuordnungen uebermitteln.", "BRANDING_ASSIGNMENTS_INVALID");
     }
     const preparedAssignments = await Promise.all(
-      submittedAssignments.map(prepareBrandingAssignment),
+      (await persistenceAsyncCollections.map(submittedAssignments, prepareBrandingAssignment)),
     );
     if (new Set(preparedAssignments.map(({ assignment }) => assignment.locationId)).size !== preparedAssignments.length) {
       throw httpError(400, "Jeder Standort darf pro Speichervorgang nur einmal enthalten sein.", "BRANDING_ASSIGNMENTS_DUPLICATE");
@@ -59175,9 +59315,9 @@ app.put("/api/branding/preference", async (request, response) => {
   response.json({ ok: true, ...preference, kits: listBrandingKits() });
 });
 
-app.delete("/api/branding/kits/:kitId", (request, response) => {
+app.delete("/api/branding/kits/:kitId", async (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "branding:write");
-  const deleted = deleteInstalledBrandingKit(request.params.kitId, actor.employeeNumber);
+  const deleted = (await deleteInstalledBrandingKit(request.params.kitId, actor.employeeNumber));
   response.json({ ok: true, deleted, kits: listBrandingKits(String(request.query.locationId || "")) });
 });
 
@@ -59891,9 +60031,9 @@ async function invalidateWeekOptionReviews(options) {
   }
 }
 
-function auditTeamMeetingGroup(session, action, groupId, context, options) {
+async function auditTeamMeetingGroup(session, action, groupId, context, options) {
   const option = options[0] || {};
-  auditPortal(
+  (await auditPortal(
     session?.employeeNumber || "local",
     action,
     "team_meeting",
@@ -59907,7 +60047,7 @@ function auditTeamMeetingGroup(session, action, groupId, context, options) {
       startTime: option.startTime || option.start_time,
       endTime: option.endTime || option.end_time,
     }),
-  );
+  ));
 }
 
 app.post("/api/week-options", async (request, response) => {
@@ -59929,7 +60069,7 @@ app.post("/api/week-options", async (request, response) => {
       throw staffAssignmentAbsenceConstraintError(error);
     }
     await invalidateWeekOptionReviews(group.options);
-    auditTeamMeetingGroup(request.portalSession, "team-meeting.create", group.groupId, group.context, group.options);
+    (await auditTeamMeetingGroup(request.portalSession, "team-meeting.create", group.groupId, group.context, group.options));
     response.status(201).json({
       id: ids[0],
       groupId: group.groupId,
@@ -59951,7 +60091,7 @@ app.post("/api/week-options", async (request, response) => {
   }
   const id = Number(result.rows[0]?.id);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) await invalidateTimeDayReview(option.employeeNumber, date);
-  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.create", id, option);
+  (await auditApprovedAbsenceEntry(request.portalSession, "approved-absence.create", id, option));
   response.status(201).json({ id, ...option });
 });
 
@@ -59990,7 +60130,7 @@ app.put("/api/week-options/:id", async (request, response) => {
       throw staffAssignmentAbsenceConstraintError(error);
     }
     await invalidateWeekOptionReviews([...existingRows, ...group.options]);
-    auditTeamMeetingGroup(request.portalSession, "team-meeting.update", group.groupId, group.context, group.options);
+    (await auditTeamMeetingGroup(request.portalSession, "team-meeting.update", group.groupId, group.context, group.options));
     response.json({
       id: Number(existingRows[0]?.id),
       groupId: group.groupId,
@@ -60037,7 +60177,7 @@ app.put("/api/week-options/:id", async (request, response) => {
   if (!updated.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) await invalidateTimeDayReview(option.employeeNumber, date);
-  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.update", id, option);
+  (await auditApprovedAbsenceEntry(request.portalSession, "approved-absence.update", id, option));
   response.json({ id, ...option });
 });
 
@@ -60078,7 +60218,7 @@ app.delete("/api/week-options/:id", async (request, response) => {
       }
     });
     await invalidateWeekOptionReviews(existingRows);
-    auditTeamMeetingGroup(request.portalSession, "team-meeting.delete", existing.group_id, context, existingRows);
+    (await auditTeamMeetingGroup(request.portalSession, "team-meeting.delete", existing.group_id, context, existingRows));
     response.status(204).end();
     return;
   }
@@ -60096,7 +60236,7 @@ app.delete("/api/week-options/:id", async (request, response) => {
   const result = await planningSettingsRepository.deleteWeekOption({ id });
   if (!result.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
-  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.delete", id, existing);
+  (await auditApprovedAbsenceEntry(request.portalSession, "approved-absence.delete", id, existing));
   response.status(204).end();
 });
 
@@ -60799,8 +60939,8 @@ app.post("/api/portal/v1/product-readiness/evidence", async (request, response) 
     throw productReadinessRequestError(error);
   }
   await systemCenterMetricsRepository.insertReadinessEvidence(value);
-  auditPortal(actor.employeeNumber, "system.readiness.evidence.recorded", "product_readiness",
-    value.id, JSON.stringify({ checkId: value.checkId, outcome: value.outcome }));
+  (await auditPortal(actor.employeeNumber, "system.readiness.evidence.recorded", "product_readiness",
+    value.id, JSON.stringify({ checkId: value.checkId, outcome: value.outcome })));
   const technical = await systemCenterTechnicalCache.read();
   response.status(201).json(await productReadinessPayload(technical, actor));
 });
@@ -60843,8 +60983,8 @@ app.post("/api/portal/v1/product-readiness/acceptances", async (request, respons
     throw productReadinessRequestError(error);
   }
   await systemCenterMetricsRepository.insertReadinessAcceptance(value);
-  auditPortal(actor.employeeNumber, `system.readiness.acceptance.${value.decision}`,
-    "product_readiness", value.id, JSON.stringify({ discipline: value.discipline }));
+  (await auditPortal(actor.employeeNumber, `system.readiness.acceptance.${value.decision}`,
+    "product_readiness", value.id, JSON.stringify({ discipline: value.discipline })));
   response.status(201).json(await productReadinessPayload(technical, actor));
 });
 
@@ -63223,7 +63363,11 @@ app.get("/api/vacations-preview.pdf", async (request, response) => {
   drawVacationPdf(plan, selection, response, new Date());
 });
 
-app.use((error, request, response, _next) => {
+app.use(async (error, request, response, _next) => {
+  if (error.persistenceAudit) {
+    try { await error.persistenceAudit; }
+    catch { console.error('Fehlgeschlagene Entschlüsselung konnte nicht protokolliert werden.'); }
+  }
   const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 500;
   const requestId = request.grabenplanerRequestId || crypto.randomUUID();
   if (status >= 500) console.error(`[${requestId}] ${request.method} ${request.path}`, error);
@@ -63287,8 +63431,10 @@ async function closePersistenceForTests() {
     throw new Error("Die Test-Persistence darf nur im Testbetrieb geschlossen werden.");
   }
   if (!databaseClosed) {
+    await salesReportJobs.stop();
+    await postgresqlReceiptWorkers?.close();
     await persistenceProvider.close();
-    db.close();
+    db?.close();
     databaseClosed = true;
   }
   releaseInstanceLock();
@@ -63343,7 +63489,7 @@ async function startServer() {
       const interrupted = (
         await runtimeRecoveryRepository.markInterruptedNotifications()
       ).rowsAffected;
-      if (interrupted) auditPortal("system", "outbound-notification.interrupted", "outbound_notification_job", "", JSON.stringify({ interrupted }));
+      if (interrupted) (await auditPortal("system", "outbound-notification.interrupted", "outbound_notification_job", "", JSON.stringify({ interrupted })));
     } catch (error) { console.error("Unterbrochene Benachrichtigungen konnten nicht markiert werden:", error); }
     processOutboundNotificationJobs().catch((error) => console.error("Externe Warnmeldungen konnten nicht verarbeitet werden:", error));
     if (serverModeActive) {
@@ -63397,11 +63543,11 @@ async function startServer() {
       }, 5 * 60 * 1000);
       scannerProbeInterval.unref();
     }
-    const maintenanceOwnsStartupBackup = maintenanceOwnsLifecycleBackup();
+    const maintenanceOwnsStartupBackup = postgresqlActive || maintenanceOwnsLifecycleBackup();
     setTimeout(async () => {
       if (shutdownStarted) return;
       if (maintenanceOwnsStartupBackup) {
-        console.log("Startsicherung: Der Linux-Updater verantwortet den gekoppelten Sicherungspunkt.");
+        console.log("Startsicherung: Die Serverwartung verantwortet den gemeinsamen Sicherungspunkt.");
         return;
       }
       try {
@@ -63430,10 +63576,11 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     if (finished) return;
     finished = true;
     await salesReportJobs.stop().catch(() => {});
+    await postgresqlReceiptWorkers?.close().catch(() => {});
     if (!databaseClosed) {
       try {
         if (localBackupArchiveEnabled()) await require("./lib/background-backup-process").drainBackgroundBackups({ deadlineMs });
-        if (!skipBackup && !maintenanceOwnsLifecycleBackup()) await createDatabaseBackup(`shutdown-${reason}`, { deadlineMs });
+        if (!postgresqlActive && !skipBackup && !maintenanceOwnsLifecycleBackup()) await createDatabaseBackup(`shutdown-${reason}`, { deadlineMs });
       } catch (error) {
         console.error("Backup beim Dienststopp konnte nicht erstellt werden:", error);
         if (error?.code === "BACKGROUND_BACKUP_TREE_UNVERIFIED") {
@@ -63455,7 +63602,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
         );
       }
       try { sqliteMaintenanceOperations.checkpointWal(); } catch {}
-      try { db.close(); } finally { databaseClosed = true; }
+      try { db?.close(); } finally { databaseClosed = true; }
     }
     releaseInstanceLock();
     process.exit(exitCode);
@@ -63499,6 +63646,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runSalesReportQueueForTests() {
+    if (process.env.NODE_ENV !== 'test' || !persistenceConfiguration.rehearsal) throw new Error('PG_APPLICATION_REHEARSAL_REQUIRED');
+    return salesReportJobs.tick();
+  },
   app,
   db,
   startServer,

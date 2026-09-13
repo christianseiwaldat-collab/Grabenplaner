@@ -1,0 +1,51 @@
+{
+  "checkedAt": "2026-09-13T02:42:43.793084+00:00",
+  "verified": true,
+  "fullSuiteRerun": false,
+  "logGroupsMayOverlap": true,
+  "logs": [
+    {
+      "file": "tmp/postgresql-block12-package-tests.txt",
+      "sha256": "8bb18a1bd17ad8f4acc21261e697be8d495390bff4af32bbf47dd5362a444deb",
+      "tests": 24,
+      "pass": 21,
+      "fail": 0,
+      "skipped": 3,
+      "duration_ms": 3029.0403
+    },
+    {
+      "file": "tmp/postgresql-block12-runtime-tests.txt",
+      "sha256": "805347d538bdf00b7067c462d9c82d8165ff4a41ed5a243c92fb2b69e843d3a6",
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 580.8935
+    },
+    {
+      "file": "tmp/postgresql-block12-final-contract-tests.txt",
+      "sha256": "59c4b143d69ff9b587e02068914ddc1da4122a2436227386eeaa53e3421c7428",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 9541.4022
+    },
+    {
+      "file": "tmp/postgresql-block12-recovery-guards-tests.txt",
+      "sha256": "3246a121a8ce0c47426c925d76e36f7b93e35ebb2b58e1d4bf312ab337e56701",
+      "tests": 18,
+      "pass": 18,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 1472.9468
+    }
+  ],
+  "relativeRuntimeDependencies": 252,
+  "audit": {
+    "file": "tmp/postgresql-block12-final-audit.txt",
+    "sha256": "2380de17d1bac100f6dbcd6378c01002283593d411e7b72c9b061cd66db09141",
+    "unclassifiedProductionAccesses": 0,
+    "boundaryViolations": 0
+  }
+}

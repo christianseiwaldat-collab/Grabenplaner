@@ -167,7 +167,7 @@ test("Personalmodul-Fundament: Import und Sicherung bleiben für alle Bewerberda
 
 test("Personalmodul-Fundament: Dokumentregeln sind vor synchronen Startmigrationen initialisiert", () => {
   const startupMigrationIndex = server.indexOf(
-    "const startupSchemaMigrationState = runSqliteStartupSchemaMigrations(",
+    "runSqliteStartupSchemaMigrations(", server.indexOf("const startupSchemaMigrationState ="),
   );
   const categoriesIndex = server.indexOf("const PERSONNEL_DOCUMENT_CATEGORIES = new Set(");
   const visibilityIndex = server.indexOf(

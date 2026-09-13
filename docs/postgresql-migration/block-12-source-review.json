@@ -1,0 +1,3238 @@
+{
+  "format": "grabenplaner-working-source-review-v1",
+  "recordedAt": "2026-09-13T02:27:41.227240+00:00",
+  "sourceCommit": "c6b8a112e79514f39bbd0ce9906c54f052e45e40",
+  "workingTree": true,
+  "officialReleasePackage": false,
+  "applicationVersion": "0.92.37-beta",
+  "files": [
+    {
+      "path": "LICENSE.md",
+      "bytes": 1041,
+      "sha256": "ac3a13778f28d67f96354bf138f950c732253cf1cc750358d386f4d87f31a2d8"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5008,
+      "sha256": "69af5d25131cc118b9ceebb644835138755e75c5b31cac2a6fdd1187404ffdbe"
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 1893,
+      "sha256": "85c48a131923e388ecfc5a7c70b4e9f61335a0e4a5e1b6fb779ba7e6c6bdc25a"
+    },
+    {
+      "path": "SERVERBETRIEB.md",
+      "bytes": 60563,
+      "sha256": "c79846c89059d21619fdc99006f747477b112320cf49c1dab68bd6d385190e47"
+    },
+    {
+      "path": "backup.js",
+      "bytes": 7351,
+      "sha256": "e66d1a8737d0c77264c3ce90ec744d1e1b6f02b3e55188ce2591ddd367c36c4f"
+    },
+    {
+      "path": "lib/amu-auto-review.js",
+      "bytes": 2219,
+      "sha256": "13e3b760050fef64415df7004fe26abf0427f860140b8a8a92d8148ef05aa27e"
+    },
+    {
+      "path": "lib/amu-identity-check.js",
+      "bytes": 8208,
+      "sha256": "c32f91da7cef2d95692e37e8649db01ea0d608c7d781332b63138bdbb0197df7"
+    },
+    {
+      "path": "lib/amu-processing.js",
+      "bytes": 9292,
+      "sha256": "01642b4ba9cc4d716460748e2c1716077ff1908c3df21f58e77e015222af1d15"
+    },
+    {
+      "path": "lib/amu-storage.js",
+      "bytes": 42243,
+      "sha256": "f74ec36036f5ebf874d1cb0d56693e7907d6f6a857a53de22f847c34bfca9057"
+    },
+    {
+      "path": "lib/article-catalog.js",
+      "bytes": 14257,
+      "sha256": "fd2d0b5c96d212d3dedbec8a3571d001d3f25deb2654246107448c2e7b8d2c3a"
+    },
+    {
+      "path": "lib/background-backup-process.js",
+      "bytes": 17837,
+      "sha256": "bb5a8f9b533e497691183b10d024a8334836392ef3589f0cd9aa4374a68b83bc"
+    },
+    {
+      "path": "lib/backup-archive-workflow.js",
+      "bytes": 1637,
+      "sha256": "19edec981dfdc9934422e3a5e614672eff4f8512b5f4c76f03fb8048b5fd660e"
+    },
+    {
+      "path": "lib/backup-bundle.js",
+      "bytes": 35936,
+      "sha256": "c549ca4ba65ac10cabd73dc7bf4310d57da34b3f3e09023cff9fea9a31628362"
+    },
+    {
+      "path": "lib/backup-commit.js",
+      "bytes": 15102,
+      "sha256": "866bf85ffe68d159e8a72af791b647b659e287602333566c5b3163c2abf879ec"
+    },
+    {
+      "path": "lib/backup-maintenance.js",
+      "bytes": 6079,
+      "sha256": "0f4a5df8c77a7ee42faec735f42791fa7feae804af5da9ba3cb6af108e886228"
+    },
+    {
+      "path": "lib/backup-recovery-keys.js",
+      "bytes": 2601,
+      "sha256": "da21c842f0b1c42673cd9e1577710d457ea9119921c1870d79ce89bda3f01497"
+    },
+    {
+      "path": "lib/backup-retention.js",
+      "bytes": 2291,
+      "sha256": "4eedea2dd1a950953475c938471b93faaf51c70eae2b7699bbfc7ad6f057342f"
+    },
+    {
+      "path": "lib/backup-workspace.js",
+      "bytes": 6053,
+      "sha256": "4e547f5dd4b805f63ce6024dca8c97c79b269ef10af5683f63927ba97dfcd175"
+    },
+    {
+      "path": "lib/branch-order-pdf.js",
+      "bytes": 10449,
+      "sha256": "5ca476ff5004292263d00389246e9f512dad33a19f2b8a826b1dd509787d6201"
+    },
+    {
+      "path": "lib/branch-supervision.js",
+      "bytes": 13408,
+      "sha256": "f426ce1a9aec61b67730f4b0a5c722a47f39b435e1dd4586c2e5e01647037e9f"
+    },
+    {
+      "path": "lib/candidate-evaluation-pdf.js",
+      "bytes": 36344,
+      "sha256": "9809ed85c38849388a84384872e42f908d63c2c21fad25e964e97738b2a6af92"
+    },
+    {
+      "path": "lib/candidate-photo.js",
+      "bytes": 3261,
+      "sha256": "45d12b68b93141ee2fbd2b458be27c2ddad154d98cc1d997cef781fe5d82ade5"
+    },
+    {
+      "path": "lib/cash-source-policies.js",
+      "bytes": 8928,
+      "sha256": "d18c13068b5dae61ccc171fb95f11bc41ca09fbcefad5eeeae40d0174213b45c"
+    },
+    {
+      "path": "lib/collective-agreements.js",
+      "bytes": 23515,
+      "sha256": "6a5d97a50138fc628be1ed39dab6754d1a06c02ef2661133c0058e041c9c134e"
+    },
+    {
+      "path": "lib/controlled-host-reboot.js",
+      "bytes": 2141,
+      "sha256": "4f11149b11a22950c9dcaf6805bce755802d255bd7185c7262caace8eb505567"
+    },
+    {
+      "path": "lib/crm-access.js",
+      "bytes": 1495,
+      "sha256": "4e92a75f052c6c64c9ba5c8f32525a9e0656a973604f7d5f72dd35029dc6a8d0"
+    },
+    {
+      "path": "lib/crm-customers.js",
+      "bytes": 11764,
+      "sha256": "3f234f497584a5d420f621fd7ef49343517e45fb74408a1d68ababee4e61e93f"
+    },
+    {
+      "path": "lib/cross-location-schedule-access.js",
+      "bytes": 27306,
+      "sha256": "02439b2734655d1faaa9cdef072c1c3ed66418a126cdcf4366f73a3412392b21"
+    },
+    {
+      "path": "lib/data-import-access.js",
+      "bytes": 2334,
+      "sha256": "45cdd18b5ae5d465041a8df35e89700d347a37a3ecd8375ba89c1e67a649d402"
+    },
+    {
+      "path": "lib/data-import-contract.js",
+      "bytes": 13147,
+      "sha256": "b9379939c517c64f42a6c9209b95c345e43da0ae500014350abab79f12d0fa67"
+    },
+    {
+      "path": "lib/data-import-engine.js",
+      "bytes": 29518,
+      "sha256": "2af27f272a7ae97a308e19fcd276535682775207b5ac5e884127112dd8a83859"
+    },
+    {
+      "path": "lib/data-import-managed-protection.js",
+      "bytes": 1864,
+      "sha256": "1e29766743dd951aa33f2aed80bb53fc96f90d4d4fe57a7353264e64f48c5ec7"
+    },
+    {
+      "path": "lib/data-import-mapping-access.js",
+      "bytes": 1380,
+      "sha256": "ddea717c37549f26f1b47abc404b1a0744ae33b6d61454cf271e50e6bb150172"
+    },
+    {
+      "path": "lib/data-import-payload-store.js",
+      "bytes": 14181,
+      "sha256": "094bdb774b6ea5348c69be5ca5a5868f3561725c91e927c6eb542922023dd2d7"
+    },
+    {
+      "path": "lib/data-import-protection.js",
+      "bytes": 4320,
+      "sha256": "56611fa76ab00f94a6947be43da1c1ba9851c58c65212d11fa6a069ec8212407"
+    },
+    {
+      "path": "lib/data-import-routes.js",
+      "bytes": 8284,
+      "sha256": "74ef648967183be1121f2db3f271329dad357d5ced7fa31ed8436c08fb53cba1"
+    },
+    {
+      "path": "lib/data-import-source-tolerance.js",
+      "bytes": 2853,
+      "sha256": "3140e7c1d76537daa3f39508c910cc373367b4959a61ddde5d322fc0bfdb1a58"
+    },
+    {
+      "path": "lib/database-lock.js",
+      "bytes": 4211,
+      "sha256": "e9292c0c09de71f022c9b60254691916dc703bd18a650582697882f1aa9b48b9"
+    },
+    {
+      "path": "lib/email-provider-configuration.js",
+      "bytes": 3897,
+      "sha256": "09f98dc81da3f2e6ef31cc71aa13e356493181f059615b5f77ee3fb6adfd7574"
+    },
+    {
+      "path": "lib/external-notifications.js",
+      "bytes": 30569,
+      "sha256": "61eeb9dcdbc257e65310ac4ee7a6fb067255587a20d80479284e9690d38a3452"
+    },
+    {
+      "path": "lib/f18-loan-migration.js",
+      "bytes": 18458,
+      "sha256": "b9eaa3d093ca17b864555fe3f7cc13b60c7a010a20912c221414f3a29c32f4d5"
+    },
+    {
+      "path": "lib/file-integrity.js",
+      "bytes": 1845,
+      "sha256": "599e3cd627ae50f6834b7dd2e835b3b032941bc153d062e4ac5affbee86a0e21"
+    },
+    {
+      "path": "lib/first-steps-pdf.js",
+      "bytes": 17732,
+      "sha256": "781f5450bae29514bb26b343076065c58af5c104dfb436b44aa192b32f5e4187"
+    },
+    {
+      "path": "lib/flexible-search.js",
+      "bytes": 2858,
+      "sha256": "2353af789ce475726393f666a78a36f4c465b73e987c747de1e6f87fc77602a1"
+    },
+    {
+      "path": "lib/governance-store.js",
+      "bytes": 60165,
+      "sha256": "d9917a7408a4d611f8cbf1e80350e5a1303bd5038105bd6d823b220ae6e12fd3"
+    },
+    {
+      "path": "lib/host-reboot-control-client.js",
+      "bytes": 15663,
+      "sha256": "ceec0a71e73d4991b09343e6ca08d9b5131723be4ff95eb8c5edcd05647016b2"
+    },
+    {
+      "path": "lib/host-security-status.js",
+      "bytes": 12755,
+      "sha256": "98120390f90e23332229131068f4b57b98900838242e3a9d113baaaf9af99156"
+    },
+    {
+      "path": "lib/integration-cache.js",
+      "bytes": 4183,
+      "sha256": "2f2bb056dd7098830f06efc83ce40707a26581284459b5dfabf8cf33a74bd638"
+    },
+    {
+      "path": "lib/integration-connections.js",
+      "bytes": 19361,
+      "sha256": "b1fd59b91e68eba3aab3602bca533f300b1ce972557505012b4402af10dbae8e"
+    },
+    {
+      "path": "lib/integration-contracts.js",
+      "bytes": 7797,
+      "sha256": "3d3913aad9d383e1e24fabec2e46f4961f62116b378adf17bac4aa167c87164e"
+    },
+    {
+      "path": "lib/integration-secret-vault.js",
+      "bytes": 9701,
+      "sha256": "a53e67c4fc55528746658905498ec80fdb7f4ea6c7aca93eaa511dc8dde85b59"
+    },
+    {
+      "path": "lib/leave-governance.js",
+      "bytes": 25761,
+      "sha256": "6ffee294fa1a42ea484c80c6f6b767b867894168342dd05cbb4ee31fb1d5bc07"
+    },
+    {
+      "path": "lib/loan-pdf.js",
+      "bytes": 11797,
+      "sha256": "334b61f3376a2e33cf425b0bbf22952604051fbf1baf11dac591466d5a208891"
+    },
+    {
+      "path": "lib/loan-photo-pdf.js",
+      "bytes": 12801,
+      "sha256": "dbe106aa8cdc7d229dba59b2c08789a8298eb7dcea3f2b89d612e8e7dbb79db5"
+    },
+    {
+      "path": "lib/loan-photo.js",
+      "bytes": 3884,
+      "sha256": "25c57f93f3f8a4e553979e94c2cd2967674b954702346106150187cf3c54fbdb"
+    },
+    {
+      "path": "lib/loan-workflow.js",
+      "bytes": 4368,
+      "sha256": "f27e4f1611e8750c361be2729092ab6e3b73191093aece22bc7068462dcf22d4"
+    },
+    {
+      "path": "lib/local-backup-archive.js",
+      "bytes": 41209,
+      "sha256": "0356fb07a44a9cce86c062c81cf5e247acaae1cbd81667a806f32fbead0be1ff"
+    },
+    {
+      "path": "lib/local-backup-environment.js",
+      "bytes": 4186,
+      "sha256": "2dbbfed73cc568bc527e0eceaf33f1b7b8db6b41fc90a812938b092a2e8553e7"
+    },
+    {
+      "path": "lib/local-backup-policy.js",
+      "bytes": 6197,
+      "sha256": "10da86f8f684a562f231dfee7498ebcea31f332ab022f6865b0ef0771258b7a1"
+    },
+    {
+      "path": "lib/offsite-backup-status.js",
+      "bytes": 22305,
+      "sha256": "d4d19658461f75c442aa649f25af190d384f667d5706582b640b0086a9edbe64"
+    },
+    {
+      "path": "lib/offsite-provider-policy.js",
+      "bytes": 8513,
+      "sha256": "36d9b42ac96587f22dba3ceea2e79e0c6d37c6e70ea77c2664052479cdf30e9b"
+    },
+    {
+      "path": "lib/offsite-target-client.js",
+      "bytes": 15043,
+      "sha256": "497817202e302c52ebc1fce392258bce6fa08fb3b50ab219e4b9cf587d22b5ad"
+    },
+    {
+      "path": "lib/payroll-export.js",
+      "bytes": 8792,
+      "sha256": "610ca130ffc1f2ed58f4de84f630dbc1ca6fc417198d8b427e332a38da7b2e84"
+    },
+    {
+      "path": "lib/payroll-handoffs.js",
+      "bytes": 13282,
+      "sha256": "0bb5adb92c88d76e5d8292cd9b0c8b8148d0170e7a922404ed726b82fce1320f"
+    },
+    {
+      "path": "lib/pdf-fonts/LICENSE.txt",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "lib/pdf-fonts/Roboto-Bold.ttf",
+      "bytes": 514260,
+      "sha256": "61f89f8db49261c2f6106e8dccc35df7b2f7ed909020db40a3fc905e95f99334"
+    },
+    {
+      "path": "lib/pdf-fonts/Roboto-Regular.ttf",
+      "bytes": 515100,
+      "sha256": "56a45233d29f11b4dfb86d248e921939d115778f87325e7ae8cc108383d6664d"
+    },
+    {
+      "path": "lib/pdf-fonts/SOURCE.md",
+      "bytes": 711,
+      "sha256": "c597ed983ce3d1b2471bda44f0c590cabeb51fd51e24391515a2b89bcde78654"
+    },
+    {
+      "path": "lib/persistence/application-repositories.js",
+      "bytes": 5096,
+      "sha256": "49b09c7390be48d7cc7de6636311722452d003508c1c44795c5db4b5c23f020f"
+    },
+    {
+      "path": "lib/persistence/configuration.js",
+      "bytes": 2849,
+      "sha256": "c11d6e88fe789426cdc885a28ee825eca602cd5e6d4784b1249ea489114e5d23"
+    },
+    {
+      "path": "lib/persistence/contract.js",
+      "bytes": 27719,
+      "sha256": "1cbb6fb121e094f9a0e6e160c1cfbde3d1000ac8edd0b2c9748c7bf18560410c"
+    },
+    {
+      "path": "lib/persistence/dialects/application-manifest.js",
+      "bytes": 5809,
+      "sha256": "a8148d36317cfeb82c8d1e88b9e26ce4df63ff3c4bcb1eb4375ccdc41b34ddf4"
+    },
+    {
+      "path": "lib/persistence/dialects/contract.js",
+      "bytes": 8524,
+      "sha256": "dee5903e7abb7c225bbff391c88c7e7818c649e6207d3b3461f765c949b0f117"
+    },
+    {
+      "path": "lib/persistence/errors.js",
+      "bytes": 7801,
+      "sha256": "cba1cd87734aa18415d69d2c72250067412b9e9060ca488d25128c92103aa4be"
+    },
+    {
+      "path": "lib/persistence/migrations/application-manifest.js",
+      "bytes": 2953,
+      "sha256": "f25558130f9ff6c4167d153999a1218cdf3032b0b05bed8ac9cd17cc99fc859d"
+    },
+    {
+      "path": "lib/persistence/migrations/contract.js",
+      "bytes": 9401,
+      "sha256": "25269fffd4e181a8bc4e8fadd92c940776ef66d94b2c2c36015b67680ca8e5e1"
+    },
+    {
+      "path": "lib/persistence/migrations/runner.js",
+      "bytes": 3005,
+      "sha256": "805091645ca5ed415347e38043819b943b29a28bb91dc0e442659395b10d6619"
+    },
+    {
+      "path": "lib/persistence/operations/contract.js",
+      "bytes": 7743,
+      "sha256": "310667b1dd91d6cf6a2a4d49b2221dcb6d0eb133aa4fdc6e0cbaf20052594108"
+    },
+    {
+      "path": "lib/persistence/operations/mutation-quiesce.js",
+      "bytes": 2953,
+      "sha256": "0815dd279589311879e7b58f58a29dab12a01dd1111c30b1bdb897ebf0f4e0b3"
+    },
+    {
+      "path": "lib/persistence/operations/recovery-assurance.js",
+      "bytes": 11592,
+      "sha256": "638e10ef9f6da758cc1e729deb86021a594768a1e3c3c0ba438e123888a756d7"
+    },
+    {
+      "path": "lib/persistence/postgresql/application-operations/access.js",
+      "bytes": 4685,
+      "sha256": "272c481af4d07408e461c985ad6a7dc69caa3af523d162b7182e02226b65126e"
+    },
+    {
+      "path": "lib/persistence/postgresql/application-operations/async-collections.js",
+      "bytes": 1021,
+      "sha256": "3664ec2577b56c10e09afe7bd8f8df8b00b64e4a9167507555f3e05a11f0509a"
+    },
+    {
+      "path": "lib/persistence/postgresql/application-operations/branch-orders.js",
+      "bytes": 92581,
+      "sha256": "37aafeb7ad4d96798bf2368b1f034a12fff7620834b977632fb39ca892565cea"
+    },
+    {
+      "path": "lib/persistence/postgresql/application-operations/diagnostics.js",
+      "bytes": 1667,
+      "sha256": "bdbcac5afadc811653277c4d508e75522a24dfa59360ba859ca4ab95e194e9fe"
+    },
+    {
+      "path": "lib/persistence/postgresql/application-operations/employee-location-lendings.js",
+      "bytes": 28484,
+      "sha256": "797ed83eb29ed6b012d7c7f8d977dd7187a975a7edc7717c2bc04325bf1966a2"
+    },
+    {
+      "path": "lib/persistence/postgresql/application-operations/protected-storage.js",
+      "bytes": 7606,
+      "sha256": "c72c937657f7a72e33e04f2da9644d702ce250f84ee468a42482b12a89359d62"
+    },
+    {
+      "path": "lib/persistence/postgresql/application-operations/startup.js",
+      "bytes": 5454,
+      "sha256": "9d538abf1beb3877d4db25bf7540612ab2ace4ef95ac2c7c301c71e3a18a0999"
+    },
+    {
+      "path": "lib/persistence/postgresql/application.js",
+      "bytes": 3325,
+      "sha256": "eea3cd2c5433cdcfeb7ee37fee7ee2204fb1b57b2238ae356243edf1b3ab055e"
+    },
+    {
+      "path": "lib/persistence/postgresql/boundary/application.js",
+      "bytes": 13350,
+      "sha256": "c9c7be101ecaaaa4e5080a23af896818fc49866012ac59e08d816a80d36f591b"
+    },
+    {
+      "path": "lib/persistence/postgresql/boundary/catalog.js",
+      "bytes": 4566,
+      "sha256": "6a06795462ab4873a19d92650232e96b05bed3a92764235b6bcf54594db2256c"
+    },
+    {
+      "path": "lib/persistence/postgresql/boundary/migrate.js",
+      "bytes": 2348,
+      "sha256": "0ccb7cc6bf3d69824d80828b49287c7138742415c16f649ef9e83911f79f0aab"
+    },
+    {
+      "path": "lib/persistence/postgresql/boundary/personal-actions.js",
+      "bytes": 1581,
+      "sha256": "902122652e5eb7ef0bf5b348df79e6094a2461c8206723b999a6f84625eda2bb"
+    },
+    {
+      "path": "lib/persistence/postgresql/boundary/schema.js",
+      "bytes": 2248,
+      "sha256": "2a878f80d892528a964bd7377c7fa4c3ca26a9dc9a51529df1103e8129c3282b"
+    },
+    {
+      "path": "lib/persistence/postgresql/catalog-contract.js",
+      "bytes": 23007,
+      "sha256": "26c6223e3a74588a699e0fee7e8a30f7868de16957edb069b45d06026d15242b"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-1-inventory.json",
+      "bytes": 1022477,
+      "sha256": "62543b129900cd7de94be5461227512cdb93673d60e797dda94a69cf930d67fd"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-4-catalog.json",
+      "bytes": 389280,
+      "sha256": "3b2e1d374883a86f4f371e82dc638ec2c405b88f620c6695853346e44bf52805"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-5-catalog.json",
+      "bytes": 24867,
+      "sha256": "c4abedd06fe3a9a6446613c36ec83a2640133343054d68f305fa53796bcd55ca"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-6-catalog.json",
+      "bytes": 68106,
+      "sha256": "ea684cb63e046a5f1d15b3aec6d4fe0b16c8771238cc78f968420450c6440803"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-7-boundary-catalog.json",
+      "bytes": 4055,
+      "sha256": "a0a7250c5a5309bc8376514109dabbb3cded6d27a82bc954988afb00a9e8c17e"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-7-catalog.json",
+      "bytes": 64743,
+      "sha256": "b227c7b60173e6aebe2db0c2bb97d2270f386d4e29ebd96e0255bb2fc4d4912c"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-8-catalog.json",
+      "bytes": 77650,
+      "sha256": "65d03cb872c5eb1d61b82343adba1a6b52381665700e1f259d875d999ed7fcb0"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-8-reporting-catalog.json",
+      "bytes": 509,
+      "sha256": "441ae70f072bb6e93aa59b4aeb0be8e520b33ef621a58304531c51543db2adaf"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/manifest.json",
+      "bytes": 1896,
+      "sha256": "3b32d9f57bd848757f5a2d7713d0927e5144c6ab74974259730b511ae7a1d88d"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/source-schema-v09237.json",
+      "bytes": 1360214,
+      "sha256": "f74d87df15f830ede19f2cacdd986ff543ca64a77e08a1213308fc1fdeebb622"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/application.js",
+      "bytes": 2673,
+      "sha256": "ac136af8ad2f6627534a75cd77dbc48657c1a61b2a896291d2c614834d19e672"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/catalog.js",
+      "bytes": 13336,
+      "sha256": "21bc6783be61fdfaf277c7e7b57563866385cb2f54772fc1e5234be125790440"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/compatibility.sql",
+      "bytes": 8743,
+      "sha256": "57cb663ccd7a51a399311e8da18c7f18e4bcf42eaeac88dd3ab8fe0b13643d83"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/environment.js",
+      "bytes": 2517,
+      "sha256": "265f9319cbfc2c7b00d709d3651b8244d3df4a69b2e72f15bacc645813e63889"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/fingerprint.js",
+      "bytes": 3379,
+      "sha256": "2233663ae3bb8943f8840d3b921cdde2ff00bbc4c73d841a3207fa413796d77b"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/migrate.js",
+      "bytes": 4306,
+      "sha256": "5c092a1e6db1fa03d6b09c7babfa884874f28578be18681fc26b0114f548794a"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/schema.js",
+      "bytes": 7631,
+      "sha256": "eb11b14222ac5433277eb68ddf0755f31e00bb2e82f4774dfd248f17e96f67db"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/sql.js",
+      "bytes": 5647,
+      "sha256": "2dafea9215ceaefb63fcf549a079847c64ec98035ffd2900b7b8592a4357f140"
+    },
+    {
+      "path": "lib/persistence/postgresql/dialect-compiler.js",
+      "bytes": 29554,
+      "sha256": "f70af634415be6c1d8b2991298fe3e7f07c4a36acfa31e2f1bc4c628a4e4a7ce"
+    },
+    {
+      "path": "lib/persistence/postgresql/lifecycle-control.js",
+      "bytes": 2668,
+      "sha256": "7b19dc357d7e828348b48041d45812b2603445cf59f14486645343d55877da5c"
+    },
+    {
+      "path": "lib/persistence/postgresql/migrations/adapter.js",
+      "bytes": 37180,
+      "sha256": "738ea8afe5db953ff8e448184da1e8a639a14440a00f480e4373f79a24d1ebc0"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/application-export.js",
+      "bytes": 7458,
+      "sha256": "ababfc184a07bb31f222e13edca23da258d2419ea32694735f5ad2172d866a40"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/backup.js",
+      "bytes": 14788,
+      "sha256": "30deb1b9078df8c2493e6263c299f5d22853904fa47453f1f2510a12bbfeac96"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/cutover.js",
+      "bytes": 1539,
+      "sha256": "592a1839adee981232d784c8013afdd812a4eb7e4db9f812921f2f18e4732de1"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/evidence.js",
+      "bytes": 14096,
+      "sha256": "05e25fa9e091442bb1193aa49113083c6e28741706562f512b631d548a31c3fb"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/lifecycle.js",
+      "bytes": 1150,
+      "sha256": "d4563107d5f2a9e1130deeb4ca6445b061a09316910475c9c0f7af28c53f2f9e"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/monitor.js",
+      "bytes": 20535,
+      "sha256": "617d225ef3471f3584a890a672d0c4762abddd26cea44bb807278e304af0650d"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/paired-backup.js",
+      "bytes": 3821,
+      "sha256": "f58d4cdd9e8972b53a03bf5dfd6ff8375bc5204422d5758a064095a701559542"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/paired-bundle.js",
+      "bytes": 6378,
+      "sha256": "78205aa8608d61c6b79b51c9bb535fd714ac4b5bb67e5e46a0b10fbc45662df2"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/paired-checkpoint.js",
+      "bytes": 2218,
+      "sha256": "b54180b9ca857a6ba4800272ffdda7e79778f34161d59fd97f9e4e97ca5d7200"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/paired-development.js",
+      "bytes": 15622,
+      "sha256": "e80a631252b0b65e3120cf789959b7937d1e67481d295ef1242bfd1f343ae8ef"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/paired-monitor.js",
+      "bytes": 3748,
+      "sha256": "c6631c919176eb1a94ce98f8c58cdefeb60bed4d2695c986edf9d6c156c63d5b"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/paired-pitr.js",
+      "bytes": 12658,
+      "sha256": "18beb7eb68bd172f29029849a1e1d2543d49744fd7a340391702784f22f8abfe"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/paired-restore.js",
+      "bytes": 11490,
+      "sha256": "d083becbb250f1b418f595696f70d0b4bc25df56cc87a80b5676dd269eb478a8"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/paired-retention.js",
+      "bytes": 1785,
+      "sha256": "5313845d41094ca017bbfeea6cc5c6c0d3ffc05aa98c2f6a5d93145423d984b5"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/recovery-assurance.js",
+      "bytes": 14633,
+      "sha256": "90fc430c7c803c0e2b94ea7ec589aaa85e283eb25d92d8eda2a98218c1103e08"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/restore-privileges.js",
+      "bytes": 984,
+      "sha256": "31f75d71bc3348481a4e28eae45530dc7a7e372cd0d5d32c8ab79b4d59ab8bf7"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/restore.js",
+      "bytes": 13733,
+      "sha256": "669f766b20795378d24a1366b0b2516746a798d6d5cd54ce2bb4b87ede052035"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/runtime.js",
+      "bytes": 14135,
+      "sha256": "48b3d0b85345418cc320b7d7eca9cb057d6589ddf976b5e151b7c0e5072d7df4"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/snapshot.js",
+      "bytes": 4623,
+      "sha256": "f52782d2d807d4697436f3e2e05301f8b122d5ff7725e777ef6b1f37d07f9c92"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/status.js",
+      "bytes": 3149,
+      "sha256": "473327f5d0aa89aa136e2b06b3385f10e7cf2a0ff17c17dff1d6d69a6a2c1248"
+    },
+    {
+      "path": "lib/persistence/postgresql/operations/tools.js",
+      "bytes": 14315,
+      "sha256": "51402046e1e3d0f285393c02fb43ff4bd946af4df26b00fdd7dc5d1d3c027cab"
+    },
+    {
+      "path": "lib/persistence/postgresql/organization-departments-catalog.js",
+      "bytes": 6584,
+      "sha256": "9eca28fa02c97e5ffb3b69e0a82719cc87a42b4db83b3bf0b9a3569db6adc830"
+    },
+    {
+      "path": "lib/persistence/postgresql/planning-settings-catalog.js",
+      "bytes": 5940,
+      "sha256": "764c1fb3f9c2d0453beb1a2d41649ef73d1ef6690e36062268c68daa43a9e240"
+    },
+    {
+      "path": "lib/persistence/postgresql/policy.js",
+      "bytes": 4594,
+      "sha256": "ec60be51ad4aa83dd7b7b4a655d69fc7aca173cb45b195147977f9078d3b0fd9"
+    },
+    {
+      "path": "lib/persistence/postgresql/pool.js",
+      "bytes": 1791,
+      "sha256": "abf71b5536153a5641528b3e6e407b33cc8accbbd599fd96f8742a8b24d3bc20"
+    },
+    {
+      "path": "lib/persistence/postgresql/productive-configuration.js",
+      "bytes": 3463,
+      "sha256": "efd054895f85bc193fe1ec00eaba600535609d24c640bd22a34f9788a0d5f0e6"
+    },
+    {
+      "path": "lib/persistence/postgresql/provider.js",
+      "bytes": 27055,
+      "sha256": "42f4ce0a95569889d80fe07c3c2dabb381a332d0e69c92805563fa74dee15dc9"
+    },
+    {
+      "path": "lib/persistence/postgresql/rehearsal-configuration.js",
+      "bytes": 2704,
+      "sha256": "0baa7e4748e378334b7aa3e9db72fd06cd9d58738b0f9d6e1f5c8789d6a0fcf7"
+    },
+    {
+      "path": "lib/persistence/postgresql/reporting/catalog.js",
+      "bytes": 2128,
+      "sha256": "709b6038fd45324d59ac31d0800c89e8ae70ddd2f95ee72e0fd982dda599b020"
+    },
+    {
+      "path": "lib/persistence/postgresql/reporting/principal.js",
+      "bytes": 2439,
+      "sha256": "afe2d88dcb71e90180ef63f39ca0135068998834b533a389ba72455221a324fc"
+    },
+    {
+      "path": "lib/persistence/postgresql/reporting/receipt-prefetch.js",
+      "bytes": 550,
+      "sha256": "28f3bc04683f08e7722cb96f583ae48a7912a8c21fa7c32daafc6624a378561d"
+    },
+    {
+      "path": "lib/persistence/postgresql/reporting/receipt-runtime.js",
+      "bytes": 2337,
+      "sha256": "c7cf7d32adf798848cf999cec55da9f02854d70ff2fb74b4fbdf7aeb530d5261"
+    },
+    {
+      "path": "lib/persistence/postgresql/reporting/worker-priority.js",
+      "bytes": 765,
+      "sha256": "f9c3a59160e738eac3018a36d468f91fed00fe1ca3c87095d331f6d2d6fbd9cb"
+    },
+    {
+      "path": "lib/persistence/postgresql/reporting/worker.js",
+      "bytes": 3004,
+      "sha256": "56de3ee74be7409950c72a2bda56c18ebf115dd9bc2f1d37f5825c756a14c4a9"
+    },
+    {
+      "path": "lib/persistence/postgresql/runtime-binding.js",
+      "bytes": 777,
+      "sha256": "0c45681ea241d8d485cf8febc28f6ce8eaef3e3ade868158aa9f1b83812cfed7"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales-analytics-catalog.js",
+      "bytes": 4031,
+      "sha256": "7c6c7e624c970c97ceed55076b5d931ee77839301a673fa586f56f656dc49909"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales-analytics-schema.js",
+      "bytes": 16315,
+      "sha256": "1a6a9dfb2452e6aae4fc2ef2c72aa824071cb7ae2bdeb1f2185456573ff476d9"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales-article-catalog-schema.js",
+      "bytes": 26205,
+      "sha256": "ed52b35e8ecf2f860cf1051b376dc43534b210d083028d68c9707661935d4356"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales/application.js",
+      "bytes": 2604,
+      "sha256": "2a4f3354051419169a312df7727c449fa41a737a7c462088379f554e0cfdf6d7"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales/catalog.js",
+      "bytes": 3597,
+      "sha256": "48e2e4490c0f05521b9414dd90b9d2bdfaeaf08b76b06a85d81f3c584e2e227a"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales/layout.js",
+      "bytes": 1738,
+      "sha256": "881193092bb467bed9a7978226825047ff02faf64bbabcec3a8ada3685820af2"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales/migrate.js",
+      "bytes": 5157,
+      "sha256": "7b9f68e6a99565c4bb32c1adf7dd067c3bc4bd64e395564a60ba25db0ef13a01"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales/schema.js",
+      "bytes": 8617,
+      "sha256": "fb6bccaf98ba66e51c4eefd9ac89f7b8e356828d65c405a0c03a9916843b7df2"
+    },
+    {
+      "path": "lib/persistence/postgresql/system-center-metrics-catalog.js",
+      "bytes": 5748,
+      "sha256": "a2f4f5891fe90b16fa3f6dadc0df6eef32b4aa89f2230e38743f701f55d36073"
+    },
+    {
+      "path": "lib/persistence/postgresql/transfer/activation.js",
+      "bytes": 2520,
+      "sha256": "daa6918d985972e09e33c2bb948ff7e7dea30c8b8e41fe46a11772ae3f6f96b5"
+    },
+    {
+      "path": "lib/persistence/postgresql/transfer/history.js",
+      "bytes": 18458,
+      "sha256": "e57d136720fc27571932a6e42d0a165f3840ee1a16fb9e887973f5664bcd24b7"
+    },
+    {
+      "path": "lib/persistence/postgresql/transfer/protection.js",
+      "bytes": 3653,
+      "sha256": "e342ef98eab5d8d961f3e14df1b48b061e9f6f8afed2226d7ded50b6c6d6df35"
+    },
+    {
+      "path": "lib/persistence/postgresql/transfer/staging.js",
+      "bytes": 9805,
+      "sha256": "feb7e3d3f99d3946e720612dac2d2ac7e32597edaaa35ad4bdf95f49c3f05309"
+    },
+    {
+      "path": "lib/persistence/postgresql/transfer/values.js",
+      "bytes": 3050,
+      "sha256": "f11900d85f92425ba0d512541ac73d3caa8c2ca474eb53523aa65647bc7ba2d0"
+    },
+    {
+      "path": "lib/persistence/postgresql/transfer/verify-pair.js",
+      "bytes": 4633,
+      "sha256": "772da0c03100640b1e4b3dc09dbfe11e6f1eef72dff06dc7cc405e3c56c2beaf"
+    },
+    {
+      "path": "lib/persistence/postgresql/ui-preferences-catalog.js",
+      "bytes": 6859,
+      "sha256": "59fb23923d426fb1c172cfa5b5da49505d5850f4763eccd3401094df53036afb"
+    },
+    {
+      "path": "lib/persistence/repositories/absence-management.js",
+      "bytes": 19419,
+      "sha256": "1e98234000a5e7ec0cd2150951a90f7e7eb74b19e38d5cd3df82e1c411aad995"
+    },
+    {
+      "path": "lib/persistence/repositories/branding-snapshot.js",
+      "bytes": 1603,
+      "sha256": "3e5c946ae249031ef273d59c5b8c1ea5b376c56f6a66838d69931e9f9b32e9eb"
+    },
+    {
+      "path": "lib/persistence/repositories/cash-history-backend.js",
+      "bytes": 12508,
+      "sha256": "3afc06561a3680bf40fbd8d3df42da540065b74fa9acf0e2e1522dae95734e45"
+    },
+    {
+      "path": "lib/persistence/repositories/cash-publication-runtime.js",
+      "bytes": 4655,
+      "sha256": "8332bb5e985a39927468b1129c5c7f083c5afc284718947aa9d067d63d3f3cd2"
+    },
+    {
+      "path": "lib/persistence/repositories/cash-publications.js",
+      "bytes": 14945,
+      "sha256": "4b644adb6f4e3cb8b6797c5d45fa10504c6183bd317491dd35c7d9ff54d7b6c4"
+    },
+    {
+      "path": "lib/persistence/repositories/cash-snapshots.js",
+      "bytes": 16184,
+      "sha256": "e6c5f2165c2a8285b8c75135c897769976118ea459e6b956cd3833e7b589bda1"
+    },
+    {
+      "path": "lib/persistence/repositories/collective-agreements.js",
+      "bytes": 7753,
+      "sha256": "ce2a18f388d433ec16b1043b3997aac87f3134e70cedf15bf20490b179d8c317"
+    },
+    {
+      "path": "lib/persistence/repositories/crm-customers.js",
+      "bytes": 12101,
+      "sha256": "ca08e929c4edd07bee47d96ee417c916b6e74150bc5af6401bf2abdbfbc15c98"
+    },
+    {
+      "path": "lib/persistence/repositories/custom-process-management.js",
+      "bytes": 2679,
+      "sha256": "f5743f6eae94d3dc708e64af04878c34898adeead2a0d779d9864fb78b652622"
+    },
+    {
+      "path": "lib/persistence/repositories/custom-work-rules.js",
+      "bytes": 5611,
+      "sha256": "0fb241954802587fcdfbbe13921b93da8cb71c5c0add737eef8bf7e3efac5034"
+    },
+    {
+      "path": "lib/persistence/repositories/data-import-mapping-runtime.js",
+      "bytes": 3757,
+      "sha256": "63d6de14ad27cc7557f1537496734fb3a9c96031a2cf300d3cd68c01d3a8da83"
+    },
+    {
+      "path": "lib/persistence/repositories/data-import-runtime.js",
+      "bytes": 17920,
+      "sha256": "18f21f9ffabd5d9111fdef8bd5cbe7069581154da135a404dc6122025bbd378a"
+    },
+    {
+      "path": "lib/persistence/repositories/data-import.js",
+      "bytes": 1367,
+      "sha256": "7c783c2ebbb24f386b81a8ff458bf423cb6f243cd5e3a3841ffec31780494ceb"
+    },
+    {
+      "path": "lib/persistence/repositories/governance-store.js",
+      "bytes": 11765,
+      "sha256": "c67580af2b4ef1154834d7ebea972b52fb104c05b264b96356436811442a298f"
+    },
+    {
+      "path": "lib/persistence/repositories/import-history.js",
+      "bytes": 23634,
+      "sha256": "0368833f84a08876791054d6881c6f9c2cda690b6225430158f3c3578832a31b"
+    },
+    {
+      "path": "lib/persistence/repositories/import-master-data.js",
+      "bytes": 35870,
+      "sha256": "1a27cf0b0be3e8727557cd0751d8bdcc7ce94fcef7ce5c45d654088131b5c738"
+    },
+    {
+      "path": "lib/persistence/repositories/integration-runtime.js",
+      "bytes": 2360,
+      "sha256": "5e417c2fbce6a0baaa28ac10713c29591d6cf73a7a330e06065fe6b160302f06"
+    },
+    {
+      "path": "lib/persistence/repositories/loan-module.js",
+      "bytes": 2210,
+      "sha256": "765269e63db38d6e7402999b4e031e45b03936c43b2ff97320371eb90c06085a"
+    },
+    {
+      "path": "lib/persistence/repositories/mobile-auth.js",
+      "bytes": 2176,
+      "sha256": "33adcc92720d7e9fb1212e794ecca1a95e58931de0d0b75477301e02bd12ab20"
+    },
+    {
+      "path": "lib/persistence/repositories/organization-personnel.js",
+      "bytes": 37169,
+      "sha256": "4b1f9f2ebdec179f3a0e1fc9be0d7092d7a1ef58b240904215e48a0f5f7175d0"
+    },
+    {
+      "path": "lib/persistence/repositories/personal-action-log.js",
+      "bytes": 4256,
+      "sha256": "061d7aa66d790e1bc19eea5f3b2343ab15be53f197ad780ba0a2ad1417dfc1f4"
+    },
+    {
+      "path": "lib/persistence/repositories/personal-notification-contacts.js",
+      "bytes": 7146,
+      "sha256": "e03668e268b5f2124c5a07aacc38f9d0de59ab4646fc74f95905077e1326d954"
+    },
+    {
+      "path": "lib/persistence/repositories/personnel-learning.js",
+      "bytes": 6096,
+      "sha256": "2118ae6b5a756a5f01c348bcd2e134669fd6dd7025f1b72d195927dc3276a124"
+    },
+    {
+      "path": "lib/persistence/repositories/personnel-lifecycle.js",
+      "bytes": 6303,
+      "sha256": "ff8dc4871830dacb5eccede6cff30c6a81044b3c850302b8c615ba00da477053"
+    },
+    {
+      "path": "lib/persistence/repositories/planning-settings.js",
+      "bytes": 2991,
+      "sha256": "51ad5c44919f932652c36c9fa809f92be7494b550f70d4e3d55275afbd7ab84c"
+    },
+    {
+      "path": "lib/persistence/repositories/portal-access.js",
+      "bytes": 2211,
+      "sha256": "eeba915bd516da825fd5e16e4dc7715a3040fa64a2ba1b060c6fb78028d4c4b2"
+    },
+    {
+      "path": "lib/persistence/repositories/portal-birthday-presentations.js",
+      "bytes": 6246,
+      "sha256": "cd5588a2d1bd999410588efed9c51576178ca3052b512c667cd2d3192854ecc0"
+    },
+    {
+      "path": "lib/persistence/repositories/receipt-workspace.js",
+      "bytes": 13479,
+      "sha256": "9477405c2b83cb7d589f8d1a2b01216194fce77bf3f736ea1463fb6d62ead0a1"
+    },
+    {
+      "path": "lib/persistence/repositories/runtime-recovery.js",
+      "bytes": 887,
+      "sha256": "b4747c9d218d084ea92cf6a21291725ac5d607f8277cf3e2389e5e10b838c1e0"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-analytics.js",
+      "bytes": 32707,
+      "sha256": "d412b788e099ea95d992c3c6ef2af3267df57e019a6e53efc09217f54d26aea2"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-article-catalog.js",
+      "bytes": 56623,
+      "sha256": "3e47c2431f8129dc05da90506be371dfd7efbd0053b9bfad1e66786e305fe7fb"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-article-images.js",
+      "bytes": 3699,
+      "sha256": "865261e5d3ac90f56e36957e5b541bb1e02b037408be98a011ba4fb0838f8c35"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-history-runtime.js",
+      "bytes": 4472,
+      "sha256": "f5bd1446a50f04563d2d65bee0813927de157ad3787efe585933a44c8ea57bb3"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-history-workspace.js",
+      "bytes": 18776,
+      "sha256": "49ade214cb88531d1b6453384bff23406d5676bf992d763ef6619b6435c94cc3"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-master-data.js",
+      "bytes": 5410,
+      "sha256": "9b0b608a05beb3e9d747e74c2e6e4e80a48e89026998dbab6645e211546c97cf"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-report-jobs.js",
+      "bytes": 10716,
+      "sha256": "005944afa6af809fd873289702166491dbb7d075093bd51b16b1abcd15cb6952"
+    },
+    {
+      "path": "lib/persistence/repositories/sales-report-workspace.js",
+      "bytes": 9135,
+      "sha256": "0e271daf4fde64dfe43304949ee8f633a1ef45ee3f254a651eb10fddfd351517"
+    },
+    {
+      "path": "lib/persistence/repositories/saturday-credit.js",
+      "bytes": 9756,
+      "sha256": "d2366cd27dd293867dc71ab996c1e931dfcc12fc3c32d5f14c2ae3265850b1dc"
+    },
+    {
+      "path": "lib/persistence/repositories/sickness-amu-management.js",
+      "bytes": 2430,
+      "sha256": "9f03e1e77b244d0680d671340f86fa6143d75e37001b2287985898345a81ab3b"
+    },
+    {
+      "path": "lib/persistence/repositories/staff-assignment-requests.js",
+      "bytes": 3085,
+      "sha256": "ba282671063a88476a4c43e29c4b5392f143eb30b5ae463514734a96694ff439"
+    },
+    {
+      "path": "lib/persistence/repositories/system-center-metrics.js",
+      "bytes": 4512,
+      "sha256": "12bfe613cb9db52f5ffd96404dc99dc77bbd6aa4cf6f9bc49c79120081e84e1d"
+    },
+    {
+      "path": "lib/persistence/repositories/time-tracking.js",
+      "bytes": 2895,
+      "sha256": "ae4687ebff2d52ad45fb11ac68748ce4ff914ea378cfb7ae04e6456b7f704554"
+    },
+    {
+      "path": "lib/persistence/repositories/ui-preferences.js",
+      "bytes": 4844,
+      "sha256": "44d11d8087efa6dbdf4eee6e81aacf11a1046f7065636b5d0451100e520d3bdd"
+    },
+    {
+      "path": "lib/persistence/repositories/wifi-automation.js",
+      "bytes": 2216,
+      "sha256": "f96f25c5a1becdfe7b90e716a7bd3964bc02a39603c91f23e9810a2cf622b2b0"
+    },
+    {
+      "path": "lib/persistence/repositories/work-rule-governance.js",
+      "bytes": 12655,
+      "sha256": "4361644715457748902dfa6b417770b110326f034ee57117dcc5d88faa99c0b0"
+    },
+    {
+      "path": "lib/persistence/repositories/work-rule-store.js",
+      "bytes": 9043,
+      "sha256": "190f88eebc6d1c8266a3e6fe1072ec48765bfd757c4fe09e379cdaf62f198e2c"
+    },
+    {
+      "path": "lib/persistence/sqlite/absence-management-catalog.js",
+      "bytes": 54737,
+      "sha256": "1ac27bbf2bddb2a2f54cc288aea13d74d7aeba08eaec984f7b7b28aa136de295"
+    },
+    {
+      "path": "lib/persistence/sqlite/application-catalog.js",
+      "bytes": 6698,
+      "sha256": "f348e11fcd2fd9c119693e23f66d5163e3fbc4145f59c923d7a5e4b84b8fda55"
+    },
+    {
+      "path": "lib/persistence/sqlite/branding-snapshot-catalog.js",
+      "bytes": 1241,
+      "sha256": "47cb1a4e17a50e99c7c57358cd805f69ed1f280a2da4003f2aca04737e6083e6"
+    },
+    {
+      "path": "lib/persistence/sqlite/cash-publications-catalog.js",
+      "bytes": 5175,
+      "sha256": "6f5e306d4db4c98172298763bef0d7a3c840d8627176f5753d097a5d081d4f12"
+    },
+    {
+      "path": "lib/persistence/sqlite/cash-snapshots-catalog.js",
+      "bytes": 2344,
+      "sha256": "5ab2b0b4b4ee70ddcd9f1a4f944164f6bfcea5845daf66f4a0139a94b5d8747d"
+    },
+    {
+      "path": "lib/persistence/sqlite/collective-agreements-catalog.js",
+      "bytes": 12616,
+      "sha256": "c9006d156ebf551fb426eff9a34592fc609f2443b943feb2c4b6e94aabcfd2cf"
+    },
+    {
+      "path": "lib/persistence/sqlite/crm-customers-catalog.js",
+      "bytes": 6797,
+      "sha256": "ed94914646a38729d953a2243eba719168197e8721ebe8ec65fc738450b0ed51"
+    },
+    {
+      "path": "lib/persistence/sqlite/custom-process-management-catalog.js",
+      "bytes": 119839,
+      "sha256": "c0a1d1e6d70c828bfb7849d2229a22fcc13d4478755d7c33d5a4622e52786e9a"
+    },
+    {
+      "path": "lib/persistence/sqlite/custom-work-rules-catalog.js",
+      "bytes": 7120,
+      "sha256": "3683570d25eaa6636ce2f3b24ad923f5dd84730d555e89414bdb2b219aec9ee1"
+    },
+    {
+      "path": "lib/persistence/sqlite/data-import-catalog.js",
+      "bytes": 5119,
+      "sha256": "75d434bf54157306a690f311054a5d6e62bcf2a92e205e5b00358a904a444576"
+    },
+    {
+      "path": "lib/persistence/sqlite/data-import-runtime-catalog.js",
+      "bytes": 1492,
+      "sha256": "c1f0d83e9eff2d351b85efc28b3f758725f25dea1f7ba3de68446768e44a1442"
+    },
+    {
+      "path": "lib/persistence/sqlite/governance-store-catalog.js",
+      "bytes": 28092,
+      "sha256": "0c4ea6c241b10a3c7f2a866c68cf1b935f636c35fd775d150fb2a2b29fb064c3"
+    },
+    {
+      "path": "lib/persistence/sqlite/import-history-catalog.js",
+      "bytes": 5187,
+      "sha256": "739cd1427e5174f22329ce5d72f01158260dc2fdd028a3d47579142b15536456"
+    },
+    {
+      "path": "lib/persistence/sqlite/import-master-catalog.js",
+      "bytes": 6473,
+      "sha256": "5761ec92113b842e5f7635bde48c69c4b1d92aebf5090a628c93a726957fccfe"
+    },
+    {
+      "path": "lib/persistence/sqlite/integration-runtime-catalog.js",
+      "bytes": 20416,
+      "sha256": "286ce7de1ac90db4c4ffc4e70c45f840fa0c53603065cde42fe4d7ead3a056d2"
+    },
+    {
+      "path": "lib/persistence/sqlite/loan-module-catalog.js",
+      "bytes": 48017,
+      "sha256": "2715d4b505a4ba51139f8c1c70316b045d677cf0c291c6005d7edcbc274afe6a"
+    },
+    {
+      "path": "lib/persistence/sqlite/migrations/adapter.js",
+      "bytes": 19139,
+      "sha256": "66b5f7d497835595a4ae5146847901de429660bfc273777febb14aa7bb9f8421"
+    },
+    {
+      "path": "lib/persistence/sqlite/migrations/application-bindings.js",
+      "bytes": 14993,
+      "sha256": "ea7514cca8d53ae3a4fb88c7391009534d94b0ab08a1725b4c64776b6c779d48"
+    },
+    {
+      "path": "lib/persistence/sqlite/mobile-auth-catalog.js",
+      "bytes": 15733,
+      "sha256": "8844470bf985a4bbdab2673442ffbeb6f77ea0dbb07f96d22fa3700456918178"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/application-schema.js",
+      "bytes": 132797,
+      "sha256": "0a10e7a048f6e2182fe9e6100a590da553d8504fd68b7d6943d0f1f866c682aa"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/application-seeding.js",
+      "bytes": 12644,
+      "sha256": "f225ce180951ccbdd016cf165b95068de3cabd3509acb0b8f3e4200b6d391142"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/audit-log.js",
+      "bytes": 1259,
+      "sha256": "542d10716492c01694f98b01caf5998b8320f10c379a4e3bfa581c79eea01b62"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/branch-orders.js",
+      "bytes": 103899,
+      "sha256": "73290ba8b0ef0fbc8201339f6cb9826fc19f5570fbff3d926d383e2da29356bb"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/cash-inventory-schema.js",
+      "bytes": 3911,
+      "sha256": "7935cb9c91119ddd8dc518d62a27f0b5395fdd34019530f0c17410a175a70bdc"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/cash-publications-schema.js",
+      "bytes": 1259,
+      "sha256": "e07b23bdb6556f2116f60fe91cf5fe109d3221e127d0d3dda4c929c04e7780f5"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/cash-snapshots-schema.js",
+      "bytes": 2341,
+      "sha256": "29777920939baa5af9bb15624620759f16a1e268b3d936bc3eac9bf64a514abd"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/central-article-loan-migration.js",
+      "bytes": 34259,
+      "sha256": "1f1866fa1aa8135e02b0d23124de2f6a2f3d674a6a210dab230217591eb0f85e"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/collective-agreements-schema.js",
+      "bytes": 4710,
+      "sha256": "267e66aa5196382b7f0e56aed55a41987600ca885c5c465ef9989a436108802f"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/crm-schema.js",
+      "bytes": 7284,
+      "sha256": "c49f518b30de7d1dcf8743b290dca64140a4de47fed9850c563360c8b095afe9"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/data-import-runtime-schema.js",
+      "bytes": 1626,
+      "sha256": "8e01e35b046eb9deac1f0275b711ab968471dea90af13f2f72097ddd53a4b22a"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/data-import-schema.js",
+      "bytes": 8382,
+      "sha256": "0d4f8cf4ae092a5ae2b598e38c15b2f6db428f3a0ab847f54c58fbb1f5b51c19"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/database-import.js",
+      "bytes": 25126,
+      "sha256": "ac26d790c7904db32d076abe5855c7f9b84c3a70a2e72c167ae37bf3d52bcaa0"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/employee-location-lendings.js",
+      "bytes": 27863,
+      "sha256": "4cfbcb8d313c36bda512ece967ccb9acf473118210a0b79864c9a07522487b49"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/feature-compatibility-migrations.js",
+      "bytes": 13196,
+      "sha256": "3adcba593698d68fd21a4f382e56d24826d344908b13e2bb80b5ef62176e2278"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/historical-compatibility-migrations.js",
+      "bytes": 9046,
+      "sha256": "e08b222977fc33f926dd91ade8b96c7528a9ac57954278635b5fed541f2e38d1"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/import-history-schema.js",
+      "bytes": 3342,
+      "sha256": "05254ad31450ad7d8074486a9c950169fe207856312a12bf006544978170e468"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/import-master-schema.js",
+      "bytes": 2895,
+      "sha256": "c83002b56e0c70fd1098abce8b69f4ec05bab02ef8c560bdf8a69a3f78ceaa7f"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/maintenance.js",
+      "bytes": 15335,
+      "sha256": "59d5fc9d63fecbd6c351a64a45288ac81c8b9c6b81463c6262ed87a2b923d1cf"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/organization-schema-migrations.js",
+      "bytes": 56682,
+      "sha256": "d12aa08bc08f9c5f41b88a325b6f7ccdbe645e5e7887d076c3c642177f4e0af4"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personal-action-log-schema.js",
+      "bytes": 7115,
+      "sha256": "a3d9a4dc7ddeee5e1f28c3d4242b2db0e31f924c670ff8c221ebb95629936c8d"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-document-history-schema.js",
+      "bytes": 23750,
+      "sha256": "2a0c3fbc2a0573d0aa06b2ed5d3fc3f5362c6067cbd1a3bd221d15626310223f"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-learning-assignment-schema.js",
+      "bytes": 21396,
+      "sha256": "9091cda6cf58e87f94e7a3da5c7b141bf57e3fd96303629e94349e5636e6ad3c"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-learning-competency-schema.js",
+      "bytes": 17818,
+      "sha256": "3af42ed1393b0e363d52b79c1e1c5acefd5a59a7c8a14dcc6f26a1cf1b2acde5"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-learning-progress-schema.js",
+      "bytes": 19075,
+      "sha256": "a3ee3fa687fbce7848b6f89fb069dbbe68cf2f30af8e6c68b5c6d7276f193570"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-learning-schema.js",
+      "bytes": 33596,
+      "sha256": "9cc476afff76baa464d5c0b617dd30139c5fbe3fbb47d44466dc85274953c72c"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-lifecycle-case-schema.js",
+      "bytes": 15863,
+      "sha256": "50a1481618b8a417d8165d17c6acac78abafb4be777a4d42e4d177684091c1e4"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-lifecycle-offboarding-schema.js",
+      "bytes": 121615,
+      "sha256": "05d52ab13cbd8453fc55862b7f4aa415e83a67b606cc7c45ef5e77d978891622"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-lifecycle-onboarding-schema.js",
+      "bytes": 36651,
+      "sha256": "cd342b76e73f32ee6338fc20861e7a199e179c7203975bf106d3cdfdc21a5ff8"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-lifecycle-schema.js",
+      "bytes": 43127,
+      "sha256": "fe270d09ebe20b6a9ace6fd77c4429b107f02ed5e91e27fcb92ed518e46e8bcf"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-workflow-instance-schema.js",
+      "bytes": 58346,
+      "sha256": "6a04722aa748a994e7fc3578ef0a2475cc4fd9d6aa7a6c85c491877ae9f83d12"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/personnel-workflow-schema.js",
+      "bytes": 15064,
+      "sha256": "eac81e6cdd6e9027aa1b891446ddf5878dbba97795d0ca5a58d20d26b653e030"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/portal-birthday-presentation-claim-schema.js",
+      "bytes": 6129,
+      "sha256": "a3311c23bd0ff146b7d5d60ba0d48a76013f4f67fadc29109456cb6f01a9b358"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/portal-birthday-presentation-schema.js",
+      "bytes": 16272,
+      "sha256": "23e5e16872c5b1e367c6b34c8f9f93ca40bcb9eacace545ae9c8289a0fc324f8"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/portal-permission-defaults-schema.js",
+      "bytes": 2905,
+      "sha256": "6086125d0ad28ec699f41f3f0b108b80d0850b49aca90787cd58676b808cce7f"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/position-catalog-governance.js",
+      "bytes": 11452,
+      "sha256": "04831531548fd2c2e272f5330908802ef2c685a2048f20952039dd86042025a4"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/protected-record-migrations.js",
+      "bytes": 7704,
+      "sha256": "fde550c2b6e2ee7fc9034f39c486a201ffc22e13cacc8a48674b807547556fe9"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/sales-analytics-schema.js",
+      "bytes": 18030,
+      "sha256": "510702d67ef451098e08c9c419394058a77d1837c3c8efed09a4e63c5d57f0dd"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/sales-article-catalog-schema.js",
+      "bytes": 26634,
+      "sha256": "12064555175c34d2325e7c9a074b7c5da1fc4976248f17501f320405d001f062"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/sales-article-images-schema.js",
+      "bytes": 1164,
+      "sha256": "3b1cd82fb4f6d35a716bc5929c5d417f4fa09c72b690c95d44110151228fd13f"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/sales-article-search-projection-schema.js",
+      "bytes": 5097,
+      "sha256": "be4f5ff325915d09301d62cba60a2fa8eaf6c8d1513e2e39189dea3ecea2a610"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/sales-report-jobs-schema.js",
+      "bytes": 729,
+      "sha256": "69a714c7a61ab9a70325b478a5e68ea0fcf975c30c8e820097502ceb6ac5dfac"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/saturday-credit-schema.js",
+      "bytes": 976,
+      "sha256": "3ea1daeec4180231c8d1c9d3885b95033b0eb07b9fe6364291eb03498eddacbe"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/staff-assignment-request-schema.js",
+      "bytes": 27643,
+      "sha256": "5caec6b934934467a5453d60df3e9c21e763d35d7dd1e7525b23c1fa6a6d3543"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/startup-schema-migrations.js",
+      "bytes": 133062,
+      "sha256": "359387f212f28a0295499c11d462390a67cd432744a693c64f70684837935398"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/system-center-metrics-schema.js",
+      "bytes": 859,
+      "sha256": "692e3a27a01fef2d94740e587b01ee082563b63362f03a67db5f0a231e4bb7e3"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/system-diagnostics.js",
+      "bytes": 2378,
+      "sha256": "1a4b01e896c18d2bfd97b1975ce9c0eb242b485e7e42509cb218ad50b9fa041e"
+    },
+    {
+      "path": "lib/persistence/sqlite/operations/work-rule-store-schema.js",
+      "bytes": 4922,
+      "sha256": "bdff3d9c2be0de6495718d3a8f2ab94e3390a945d932897ad21fb120956a543e"
+    },
+    {
+      "path": "lib/persistence/sqlite/organization-personnel-catalog.js",
+      "bytes": 41857,
+      "sha256": "a3e6cdf37aeab44c9f67cddc6e18b91f6f38dc10f69304eceb4b894b27d9c60d"
+    },
+    {
+      "path": "lib/persistence/sqlite/personal-action-log-catalog.js",
+      "bytes": 2505,
+      "sha256": "c2389c5db3eacc005829587f7cc576dc54e0dbdbb098b7c32017074fc7ebcaf9"
+    },
+    {
+      "path": "lib/persistence/sqlite/personal-notification-contacts-catalog.js",
+      "bytes": 13046,
+      "sha256": "ae77f451c19a85f7563ac0daab3b4c91e8afe25d02813036bc5818b5fa7a1e41"
+    },
+    {
+      "path": "lib/persistence/sqlite/personnel-learning-catalog.js",
+      "bytes": 11053,
+      "sha256": "834af215f11567e95bc3639f1d401e7ed4ad57391024a4f21e3631cb37fd1c26"
+    },
+    {
+      "path": "lib/persistence/sqlite/personnel-lifecycle-catalog.js",
+      "bytes": 10238,
+      "sha256": "3de7f7617d26ee77de52d2c4edabc4ae35f7a2f2152f53527741f967a71c26f2"
+    },
+    {
+      "path": "lib/persistence/sqlite/planning-settings-catalog.js",
+      "bytes": 39902,
+      "sha256": "3a6cd6007f104325d81965619fd64ebfa46ebbf15cd8f48daa269996e064fa4b"
+    },
+    {
+      "path": "lib/persistence/sqlite/portal-access-catalog.js",
+      "bytes": 23794,
+      "sha256": "d0f836f91fa242e09fade53a38bd981cf8acf830cfd4b982140971acc9543860"
+    },
+    {
+      "path": "lib/persistence/sqlite/portal-birthday-presentations.js",
+      "bytes": 3715,
+      "sha256": "f87fc0558c6b3fb4f418a2af084aa99536c43c83fa0147161fa805359816b9ee"
+    },
+    {
+      "path": "lib/persistence/sqlite/provider.js",
+      "bytes": 33926,
+      "sha256": "735c5103491ae0fc834d8b4521b790dd0b8cb2aeecc0f304275dc4d438ac4037"
+    },
+    {
+      "path": "lib/persistence/sqlite/runtime-recovery-catalog.js",
+      "bytes": 1043,
+      "sha256": "344ea391d2f0b93de77caf17970476f231b8abdded60998bb5773effcca4832b"
+    },
+    {
+      "path": "lib/persistence/sqlite/sales-analytics-catalog.js",
+      "bytes": 14995,
+      "sha256": "4efc2dddaaa7a9979d8504d31479ed04e122a47b33f2522d608bd85ff11ec4d9"
+    },
+    {
+      "path": "lib/persistence/sqlite/sales-article-catalog-catalog.js",
+      "bytes": 16352,
+      "sha256": "70e8312b1b806b56b350f276b9ce9e528e27ccc942b6ebc082317d182c7ac9c0"
+    },
+    {
+      "path": "lib/persistence/sqlite/sales-article-images-catalog.js",
+      "bytes": 1192,
+      "sha256": "9d7cd4767feebb3a709b09b8bccaf8153e7fbf84db1251b18a86c1e615de28db"
+    },
+    {
+      "path": "lib/persistence/sqlite/sales-article-search-projection-sql.js",
+      "bytes": 2875,
+      "sha256": "f40bca5f727767084bdcbd562824c16c54bd3f74236ef5d9745c733ff23f4a90"
+    },
+    {
+      "path": "lib/persistence/sqlite/sales-report-jobs-catalog.js",
+      "bytes": 1356,
+      "sha256": "7c717b6233d0d56906787a298cb1faf11c5e3baf028ce672e9e4f3d32f4ce6f9"
+    },
+    {
+      "path": "lib/persistence/sqlite/saturday-credit-catalog.js",
+      "bytes": 1613,
+      "sha256": "439aee25f8d4ffbccebf024a81de6996957f45af6ec7f771c87db9bd62db1b2e"
+    },
+    {
+      "path": "lib/persistence/sqlite/sickness-amu-management-catalog.js",
+      "bytes": 48867,
+      "sha256": "ac3bb06cf5125c27ab3519cd6d8d1ab2cfe76b2c2d303ca504aba5f5b952369a"
+    },
+    {
+      "path": "lib/persistence/sqlite/staff-assignment-request-catalog.js",
+      "bytes": 5096,
+      "sha256": "a73c362ddba2b8749b1f31126a857748bf26612491056e5f8f145fc78b62ac95"
+    },
+    {
+      "path": "lib/persistence/sqlite/system-center-metrics-catalog.js",
+      "bytes": 5011,
+      "sha256": "97c57de5316c888fd05ab7b5ee930813b1bc752d7e06b5e7babd9ea4f87b888d"
+    },
+    {
+      "path": "lib/persistence/sqlite/time-tracking-catalog.js",
+      "bytes": 30368,
+      "sha256": "f85c7f9d4018958e7213b4102ca2263f6c7ebd1f818a9445ece407f2b01541f0"
+    },
+    {
+      "path": "lib/persistence/sqlite/ui-preferences-catalog.js",
+      "bytes": 1608,
+      "sha256": "6490d41474f38977b09a22a501f406126305305a5aff28dcccb63a6a42623ea5"
+    },
+    {
+      "path": "lib/persistence/sqlite/wifi-automation-catalog.js",
+      "bytes": 18110,
+      "sha256": "e8f71094b201ad0a240c3da36179da07c94a4e9d493b406db483292a5e3d4083"
+    },
+    {
+      "path": "lib/persistence/sqlite/work-rule-governance-catalog.js",
+      "bytes": 28341,
+      "sha256": "5dd918c38c504be4ba37eb1be226b4632523225fb87e61dd683bcde2e1ec260d"
+    },
+    {
+      "path": "lib/persistence/sqlite/work-rule-store-catalog.js",
+      "bytes": 16274,
+      "sha256": "fe5fa6126267b45faf10243001bef98c0b96aebdb0e7ba5a9dbb3a0e34ebc2ba"
+    },
+    {
+      "path": "lib/persistence/statements/absence-management.js",
+      "bytes": 9375,
+      "sha256": "2e46916f98f9bd7cadb5ed095022cd1b03149be4fc832c8ea223721d98366a55"
+    },
+    {
+      "path": "lib/persistence/statements/branding-snapshot.js",
+      "bytes": 1041,
+      "sha256": "f3976dc34fec2e18deab17629d32a7dfe542e735694731abab91bbabf32d9210"
+    },
+    {
+      "path": "lib/persistence/statements/cash-publications.js",
+      "bytes": 3050,
+      "sha256": "01829ff8a619534384ca4c3384f8ea5c686b9664ea77b98ff88cfe6d40a040c5"
+    },
+    {
+      "path": "lib/persistence/statements/cash-snapshots.js",
+      "bytes": 2333,
+      "sha256": "8902af2a05fa8544c0a92a1c477dec29a9170f4b8af1ab011aa1d313b7b8e93b"
+    },
+    {
+      "path": "lib/persistence/statements/collective-agreements.js",
+      "bytes": 10383,
+      "sha256": "50b2fb2aa323ae57785d24cd04c4793532238730546f9366767b5f36eca33471"
+    },
+    {
+      "path": "lib/persistence/statements/crm-customers.js",
+      "bytes": 3803,
+      "sha256": "ea1eda5cee191f79d7500120fa14ddbd031477935d397f0e3a7f79ad1cc4610e"
+    },
+    {
+      "path": "lib/persistence/statements/custom-process-management.js",
+      "bytes": 10758,
+      "sha256": "aea1e6bc474383c7931b5d858d7a679fc801a8171cb1592831211ad587aaaa05"
+    },
+    {
+      "path": "lib/persistence/statements/custom-work-rules.js",
+      "bytes": 5937,
+      "sha256": "eb15f437e4b40a68b7d24faeb7251bb05321a50b17e7408a0cb041d163116890"
+    },
+    {
+      "path": "lib/persistence/statements/data-import-runtime.js",
+      "bytes": 1243,
+      "sha256": "c76163699403dc2628d315e5930b935f687bb627c7316acabd0d8936096e167a"
+    },
+    {
+      "path": "lib/persistence/statements/data-import.js",
+      "bytes": 5203,
+      "sha256": "7e2de084b8f34b77f1cdb93676fc7d38870e69d041396c378c627d376092ec90"
+    },
+    {
+      "path": "lib/persistence/statements/governance-store.js",
+      "bytes": 5710,
+      "sha256": "ba5e9b8c9ac77cb17ec90f07558abb76e31868f36228bb846fe6d66e8b6a04a9"
+    },
+    {
+      "path": "lib/persistence/statements/import-history.js",
+      "bytes": 3489,
+      "sha256": "5e9bebf7b7079682b08571814c265b9177419019d658a115c021a395c78af2ab"
+    },
+    {
+      "path": "lib/persistence/statements/import-master-data.js",
+      "bytes": 5295,
+      "sha256": "b0d6ceb2d670bd3024ca0231f302ff396369dc2b21d4753961a988101e051aea"
+    },
+    {
+      "path": "lib/persistence/statements/integration-runtime.js",
+      "bytes": 3001,
+      "sha256": "22f834f39884412463377ee3d58a1c81dcb378f50259ee4b44473d5502a67fac"
+    },
+    {
+      "path": "lib/persistence/statements/loan-module.js",
+      "bytes": 5586,
+      "sha256": "f48a7a5392f0d1310ef7b9cc599c109529791eea2116a39592bde54918f12e1e"
+    },
+    {
+      "path": "lib/persistence/statements/mobile-auth.js",
+      "bytes": 2412,
+      "sha256": "9b1637eabf71e6aafc0c2f7a403d68f089909c1ff121952f290e78414ec5448a"
+    },
+    {
+      "path": "lib/persistence/statements/organization-personnel.js",
+      "bytes": 42177,
+      "sha256": "55e9c8fff8b4c976e2e8a59bdc67acb00d4dbd227565218faf1f443cfc74cc15"
+    },
+    {
+      "path": "lib/persistence/statements/personal-action-log.js",
+      "bytes": 2795,
+      "sha256": "725273f1424b83cd7a285ec35eddc61334cff2a7b52bc950435c1cb78edee848"
+    },
+    {
+      "path": "lib/persistence/statements/personal-notification-contacts.js",
+      "bytes": 4483,
+      "sha256": "534eec8c97e3ee5e15960788fa71f0adf550f4e2b9a0fdc292eea2c1916fac2f"
+    },
+    {
+      "path": "lib/persistence/statements/personnel-learning.js",
+      "bytes": 7896,
+      "sha256": "edf51330d0c3d2213f1be7e823d68c72622166e7b5ee6348a82057840bea28a9"
+    },
+    {
+      "path": "lib/persistence/statements/personnel-lifecycle.js",
+      "bytes": 11276,
+      "sha256": "6c79aa7e3b442e3c3088e9d873b23d360a6165bed274cf50ca41b7b370696972"
+    },
+    {
+      "path": "lib/persistence/statements/planning-settings.js",
+      "bytes": 4506,
+      "sha256": "5a45724e24d0ce92d8c2ff7f3fe61a6b43941231c1a1d8f943e6c767fbcb7fc0"
+    },
+    {
+      "path": "lib/persistence/statements/portal-access.js",
+      "bytes": 3623,
+      "sha256": "2a6b451562aeca0dba92054ebd78130cdeffc912b1a57620e70fd9bc43c6db87"
+    },
+    {
+      "path": "lib/persistence/statements/portal-birthday-presentations.js",
+      "bytes": 3033,
+      "sha256": "1a3a71b82c696f7384ca1acefc01e8bdc00b3e61ba8648f8e5d7b69182a1b69e"
+    },
+    {
+      "path": "lib/persistence/statements/runtime-recovery.js",
+      "bytes": 715,
+      "sha256": "da6fe5d50a938aad62267e8c990c909a816edf4033e3cc649de1f5f9c0db1c07"
+    },
+    {
+      "path": "lib/persistence/statements/sales-analytics.js",
+      "bytes": 11381,
+      "sha256": "08cdaad48829398953e594173a604a9cd7b21c2133946fc863a7c58202ab1a19"
+    },
+    {
+      "path": "lib/persistence/statements/sales-article-catalog.js",
+      "bytes": 11154,
+      "sha256": "d9fc108e409cb08aac2e6033bd37ff0e9c645049d58c0adeb24b76909a13695d"
+    },
+    {
+      "path": "lib/persistence/statements/sales-article-images.js",
+      "bytes": 1027,
+      "sha256": "d2ac7141ba8b800e4700b7114a18cb11244a7d19aae49fdb07b8e97ca489b70a"
+    },
+    {
+      "path": "lib/persistence/statements/sales-report-jobs.js",
+      "bytes": 962,
+      "sha256": "884f469f6489a1a4d915374e7dc3972e24ef930ba2a01394c2531be9da217292"
+    },
+    {
+      "path": "lib/persistence/statements/saturday-credit.js",
+      "bytes": 1058,
+      "sha256": "1ef57442b2ce63fe1f46f6f44d2a6959192003c4e0a5c1a06ea0d51e53cdd692"
+    },
+    {
+      "path": "lib/persistence/statements/sickness-amu-management.js",
+      "bytes": 4637,
+      "sha256": "c8d2d4de350bfeddf6ae4378e66ae8ffaf7fc7b3bb7597547fe993a5bd019618"
+    },
+    {
+      "path": "lib/persistence/statements/staff-assignment-requests.js",
+      "bytes": 3683,
+      "sha256": "30c81a2d7022e4b65969ed2d66f5d8d22e650a219deac6201bca4290c3a45329"
+    },
+    {
+      "path": "lib/persistence/statements/system-center-metrics.js",
+      "bytes": 4641,
+      "sha256": "af1b5486fd3cadc7afe6ccd66f0fc44a1416de4c6c0ca8d001ff6f79edc47be8"
+    },
+    {
+      "path": "lib/persistence/statements/time-tracking.js",
+      "bytes": 4119,
+      "sha256": "6fd971de7fa6cd8174d99b6a7336f56345226584ddae2587c03df2f4271bf21a"
+    },
+    {
+      "path": "lib/persistence/statements/ui-preferences.js",
+      "bytes": 1127,
+      "sha256": "7f6f7d2b3fda3f06750160ceb2c705696fc6c06bb5ba70fed054510589b5d221"
+    },
+    {
+      "path": "lib/persistence/statements/wifi-automation.js",
+      "bytes": 3246,
+      "sha256": "436c176d0b2df6fb44a30259678ebdcc372efd4184f03417fd1e06d0270ac9d6"
+    },
+    {
+      "path": "lib/persistence/statements/work-rule-governance.js",
+      "bytes": 5293,
+      "sha256": "f77dba933f9db1e1a28ff6929d9497522ef18cb5f2a4c7f2e69b72535ea33748"
+    },
+    {
+      "path": "lib/persistence/statements/work-rule-store.js",
+      "bytes": 11976,
+      "sha256": "b436a72af6ac8c5a5064d899c2cf4c59ece4a74fd04755ec236870fa9ad3f50a"
+    },
+    {
+      "path": "lib/personal-action-log.js",
+      "bytes": 8701,
+      "sha256": "38c8b1b188660b630894348545bb28d0e587e65fd49c80bc88f828fe2608e7e7"
+    },
+    {
+      "path": "lib/personal-email-address.js",
+      "bytes": 774,
+      "sha256": "c30f05973167148ea69b1f7c19435e11a69063d3129437aa0151162d17bf4a22"
+    },
+    {
+      "path": "lib/personal-notification-contact-validation.js",
+      "bytes": 2344,
+      "sha256": "94d96b6d6a7413f2ad71167ce1049c0c1e52be2f9f3a1e89b547eb2549285126"
+    },
+    {
+      "path": "lib/personnel-import.js",
+      "bytes": 10264,
+      "sha256": "d62633ef8b8f26837af91a5197f502843aeb8cfe0717cfb4a6a0d4ee7cad2b6d"
+    },
+    {
+      "path": "lib/personnel-learning-access.js",
+      "bytes": 22787,
+      "sha256": "4f617ac0b622527925ccd1d8034fcf927c0647b1b4d902f50482a1dbcda3c46c"
+    },
+    {
+      "path": "lib/personnel-learning-assignments.js",
+      "bytes": 10538,
+      "sha256": "c9e607843e496235bce050c893a12cc24953525d8be58ca3b22d99111494e87f"
+    },
+    {
+      "path": "lib/personnel-learning-catalog.js",
+      "bytes": 11555,
+      "sha256": "2561d067d4fd3072dfff9b869e8bc5acb1e1965f647bfe8cac6d5ccd85bd7537"
+    },
+    {
+      "path": "lib/personnel-learning-competencies.js",
+      "bytes": 7051,
+      "sha256": "216c3a77e0272906e383691c13dd5b318b674c0a890b18804a925a1e8c30515d"
+    },
+    {
+      "path": "lib/personnel-learning-progress.js",
+      "bytes": 13752,
+      "sha256": "be64666714a56ac4568ff5dc4cc4452993903661033120772e85abe59b936a20"
+    },
+    {
+      "path": "lib/personnel-learning-skills.js",
+      "bytes": 4021,
+      "sha256": "65eb137f0c31f885df8c50e38ee0fdfb674cfd9888625ad994035656c4368b4b"
+    },
+    {
+      "path": "lib/personnel-lifecycle-access.js",
+      "bytes": 21822,
+      "sha256": "0dba80603c9faf39499682affd924b8141830f876e43543b98c4a27fb1f64020"
+    },
+    {
+      "path": "lib/personnel-lifecycle-automation-contract.js",
+      "bytes": 34104,
+      "sha256": "aad15fe10c22e0ccad7b1f223c924c4ac522d519b045b8d8ae818cf4dcd3b2ca"
+    },
+    {
+      "path": "lib/personnel-lifecycle-case-access.js",
+      "bytes": 17155,
+      "sha256": "da26550ff8c0db13226562f1a88d69594c78783bf931bb23d1eec734570b8ac2"
+    },
+    {
+      "path": "lib/personnel-lifecycle-case-contract.js",
+      "bytes": 20145,
+      "sha256": "7ce6564f1141a22d91054f285d516733856b0ef772cda9fbded5e119742e51b5"
+    },
+    {
+      "path": "lib/personnel-lifecycle-case-foundation.js",
+      "bytes": 13531,
+      "sha256": "6d654ea98077c94bfde11bb1bf3e8626a214773757f8737ea2dc63f81bef0174"
+    },
+    {
+      "path": "lib/personnel-lifecycle-editor-contract.js",
+      "bytes": 18880,
+      "sha256": "4ad08c9105a8c3e64096cc05a01fd711cd5d9ace8563de949524757e79a69c65"
+    },
+    {
+      "path": "lib/personnel-lifecycle-interfaces-contract.js",
+      "bytes": 25463,
+      "sha256": "07875c04e3fa7724723a5a48c5e76e060f09d9b2b1f83733b97d59f27e05a740"
+    },
+    {
+      "path": "lib/personnel-lifecycle-offboarding-contract.js",
+      "bytes": 26213,
+      "sha256": "e6f26e250188de969ab9d078a9184e488b31e28b3ca413c2a2c22afe4ddfce43"
+    },
+    {
+      "path": "lib/personnel-lifecycle-offboarding-receipt.js",
+      "bytes": 18046,
+      "sha256": "135a238f79723a6b3b148e7bcfd76d4d98aa0dda0a237a601f912f0d494c006c"
+    },
+    {
+      "path": "lib/personnel-lifecycle-offboarding-service.js",
+      "bytes": 90946,
+      "sha256": "55945dcc50b3ebf590a187bbca1784a27ecb192640bdb9a6cb89cf001b66dad3"
+    },
+    {
+      "path": "lib/personnel-lifecycle-onboarding-execution.js",
+      "bytes": 41555,
+      "sha256": "c8fa292ad49965ca00e08f77b2b45fa446136fadffde6dc1ed4d0a4ea94fd06b"
+    },
+    {
+      "path": "lib/personnel-lifecycle-onboarding-preview.js",
+      "bytes": 14167,
+      "sha256": "a2303fe89ac59c4d0dbc2d3a8a97856d6164efa174933742f6b5441ad333bf8b"
+    },
+    {
+      "path": "lib/personnel-lifecycle-onboarding-receipt.js",
+      "bytes": 6504,
+      "sha256": "e68d29838d3887e5ef986cee8a41a50787a62d79dd6dca3cce093d232f0589fc"
+    },
+    {
+      "path": "lib/personnel-lifecycle-onboarding-tasks.js",
+      "bytes": 37512,
+      "sha256": "a8bf81878813ea1dec7fce602d33d41fd1b84632d79ac765535718442df096c8"
+    },
+    {
+      "path": "lib/personnel-lifecycle.js",
+      "bytes": 152937,
+      "sha256": "99f2d393363a8bd12b2350034d27f87b0ea0d44c3d5a22583040c1eb4aaa4824"
+    },
+    {
+      "path": "lib/personnel-profile-access.js",
+      "bytes": 11594,
+      "sha256": "1e5fedda95238de4d015c0bf4ec21af80df1098a9946f99f48c032e60681122e"
+    },
+    {
+      "path": "lib/personnel-workflow-access.js",
+      "bytes": 10761,
+      "sha256": "999b6ef407d895bcc238562a45fb49ba9c3fb406bb806e6a7250ece40ccda4d7"
+    },
+    {
+      "path": "lib/personnel-workflow-instance-receipt.js",
+      "bytes": 1285,
+      "sha256": "173ea1ac5c0f71e3fdaa1cea0b2110f82ac2afb043e3d04a1d0a18dd02ffcace"
+    },
+    {
+      "path": "lib/personnel-workflow-instances.js",
+      "bytes": 62678,
+      "sha256": "08d9f600252016c1a3bca165fc408037737b29b69a5ef6a1c963431238ba2cba"
+    },
+    {
+      "path": "lib/personnel-workflow-publication-receipt.js",
+      "bytes": 817,
+      "sha256": "8adc184e381f6faff6776d1609dc51d27edc0e09975bc52ac05a76cc4104392f"
+    },
+    {
+      "path": "lib/personnel-workflow-publications.js",
+      "bytes": 23054,
+      "sha256": "d6b17ed46c312513286dc22ac460e96c999eeac27e66d6c47029928f3d2ee808"
+    },
+    {
+      "path": "lib/portal-birthday-presentation-claim.js",
+      "bytes": 4451,
+      "sha256": "95a33204b9043709e49db1f68764ae829195d3ce656b22e1ff11c9d9d80448bb"
+    },
+    {
+      "path": "lib/portal-birthday-presentations.js",
+      "bytes": 15845,
+      "sha256": "578388665b75731ec1803d8ce15c399d955cc46a5ab40f4c262835d67d168e93"
+    },
+    {
+      "path": "lib/portal-greetings.js",
+      "bytes": 13119,
+      "sha256": "ff3152b1be8bb280a1b863dffb91be9b1f48f1a96fdfd80e6d31b0982f3a957c"
+    },
+    {
+      "path": "lib/portal-permission-defaults-routes.js",
+      "bytes": 6326,
+      "sha256": "4fde52bdf081cef67e7671ac12578bec6a0a5c2405ebd56ae4d1859768cdd45a"
+    },
+    {
+      "path": "lib/privacy-requests.js",
+      "bytes": 35949,
+      "sha256": "77561887f6025a310b44e929192e35a2c5d812e598a862a373cd1c55364447ae"
+    },
+    {
+      "path": "lib/product-readiness.js",
+      "bytes": 18016,
+      "sha256": "b98d10db545e1923d18a1907f6ef11bda766f2ff01ec8558ee6e1101f30b0dae"
+    },
+    {
+      "path": "lib/receipt-info-pdf.js",
+      "bytes": 9523,
+      "sha256": "d66a01b3890d191d7cbc535f16d0c50baefd50cf262dad4a91f8a8424239b13c"
+    },
+    {
+      "path": "lib/receipt-result-store.js",
+      "bytes": 4428,
+      "sha256": "b4926e02f893fa6c6e308af5a2f9de61483f9834fcfa4853c86a7f34e87162c1"
+    },
+    {
+      "path": "lib/receipt-search-routes.js",
+      "bytes": 4916,
+      "sha256": "d8e838a686a819b27167d941921f2d1b3d5ff4c897fa366d7a62d4812a86e897"
+    },
+    {
+      "path": "lib/receipt-search.js",
+      "bytes": 5889,
+      "sha256": "f4b687245bd1ac12b9ce4ada6e6dffee5e239719f12bd219f05563db4d4ac057"
+    },
+    {
+      "path": "lib/receipt-summary-store.js",
+      "bytes": 2047,
+      "sha256": "32caa7958bbe492f41923d7f853d114ef73367c1a39e8b708935dbbf1e8c059b"
+    },
+    {
+      "path": "lib/recovery-assurance-control-client.js",
+      "bytes": 12070,
+      "sha256": "4941af07cd8cecb810c094b3ef21f3ea0241a3b16ef7aa4cbf7cb27833d32fe8"
+    },
+    {
+      "path": "lib/recovery-assurance-status.js",
+      "bytes": 28939,
+      "sha256": "366a816b96f29be5181bb5a74de042c64b7f82e2aebfd7908f3e1a1a817ccaac"
+    },
+    {
+      "path": "lib/release-version.js",
+      "bytes": 2148,
+      "sha256": "5adf97283ff82d4545ef4ebe62ecfe71ba7057f10487f2c09d1a1a778e3efd6e"
+    },
+    {
+      "path": "lib/retention-policy.js",
+      "bytes": 20216,
+      "sha256": "cb684d11213f616ff871482c409ae9fb9a483da529bc88a8e8e6be8da01a5441"
+    },
+    {
+      "path": "lib/safe-api-delivery.js",
+      "bytes": 23104,
+      "sha256": "fd50666e2ddfe81fe319ca2ad528f8e34230e78c2f63e6f24d29dd638eea7617"
+    },
+    {
+      "path": "lib/sales-analysis-pdf.js",
+      "bytes": 17105,
+      "sha256": "69c8a6cbd98d36871c0660f7ef8725e968d5a72453ab7b9cde63a4606431410a"
+    },
+    {
+      "path": "lib/sales-analytics-access.js",
+      "bytes": 2611,
+      "sha256": "50520708de9e621fad012a3d67dc83fa48216e3382105d6d73e2da5cfa0c292a"
+    },
+    {
+      "path": "lib/sales-analytics-import.js",
+      "bytes": 26851,
+      "sha256": "1294b37eeeba8b37c94535c003731934fac0789b08e802530771c8192772aeb1"
+    },
+    {
+      "path": "lib/sales-analytics-model.js",
+      "bytes": 16848,
+      "sha256": "51ad0fe59ebf7cb9009a6d63a8e17969deaf0724c76dd5beb6354693b2068a08"
+    },
+    {
+      "path": "lib/sales-analytics-report-series.js",
+      "bytes": 17959,
+      "sha256": "189f0cc7f0acb8161c88ab8f8222bd7286e418f9c42e41227864c55fb9976a74"
+    },
+    {
+      "path": "lib/sales-analytics-tradefoto-ocr.js",
+      "bytes": 12830,
+      "sha256": "328839276f587e8b3149655e894ec45abc44163a47ada317357b5ddcf85d9afb"
+    },
+    {
+      "path": "lib/sales-analytics-tradefoto-report.js",
+      "bytes": 36674,
+      "sha256": "435e5b2030c1ae557cbf909b8a3a06ee46098bbb4cb2a4b6bcc865336057c344"
+    },
+    {
+      "path": "lib/sales-article-catalog-access.js",
+      "bytes": 3885,
+      "sha256": "68308f4d054352dcc9a75a82387529d6816c0ae611a79fffa3e082c14d338c21"
+    },
+    {
+      "path": "lib/sales-article-catalog.js",
+      "bytes": 30491,
+      "sha256": "c919df4dcfffbd6dc2a69752f840ea8dff9239016c1887d842eaed61fd9d0dbd"
+    },
+    {
+      "path": "lib/sales-article-detail-source.js",
+      "bytes": 3669,
+      "sha256": "d7fd26c30b1fa3d4cc957c584db3422045b361f068bdcc57a57ae967e19665bf"
+    },
+    {
+      "path": "lib/sales-article-image-routes.js",
+      "bytes": 5118,
+      "sha256": "349d46b07554d53d04b930aba1f1639c7b2a50370937691afca433e668923ddf"
+    },
+    {
+      "path": "lib/sales-article-image.js",
+      "bytes": 7979,
+      "sha256": "72bae1540be6c795bd4e9c61c66d2b76e1ab0fab1211cd48f030d50e329f769a"
+    },
+    {
+      "path": "lib/sales-article-search-projection.js",
+      "bytes": 930,
+      "sha256": "803a8671bb2e205474fd08af24e064bc4eefd738c2044debb98d985f6138548e"
+    },
+    {
+      "path": "lib/sales-article-table.js",
+      "bytes": 2184,
+      "sha256": "8a38c96d06550e440071d84d79e6a9a79556a971ae35906bda546c742d64ebb7"
+    },
+    {
+      "path": "lib/sales-history-access.js",
+      "bytes": 3535,
+      "sha256": "2da8965487bd2affbe0867401cb58be4a21d0d0210ee7d9744128d5c31f66887"
+    },
+    {
+      "path": "lib/sales-history-query.js",
+      "bytes": 3106,
+      "sha256": "70db401f676d0ef354cff60b4725ff1484e3f7784e3fa09329d2bb10b57aab17"
+    },
+    {
+      "path": "lib/sales-history-routes.js",
+      "bytes": 3868,
+      "sha256": "0d7f28ed09b7c1dd9eb981b498ad9873200a27dcfd41fa52997e8106e05cb835"
+    },
+    {
+      "path": "lib/sales-report-batch-worker.js",
+      "bytes": 2663,
+      "sha256": "f3b3b10bf79e8aa7a2003407ef36b466be49ba1567849c85a4dd61d2e5f9f2e6"
+    },
+    {
+      "path": "lib/sales-report-checkpoints.js",
+      "bytes": 2335,
+      "sha256": "6bebb89792227b91331c1751f99249ca3401bc6f474aeee487e54f1de8d1e0a7"
+    },
+    {
+      "path": "lib/sales-report-document.js",
+      "bytes": 1870,
+      "sha256": "b9fe0d6e75dd530da1cf32875a050ffff8f97a8bc804be2ee1eb971bdd8738ae"
+    },
+    {
+      "path": "lib/sales-report-jobs-routes.js",
+      "bytes": 2960,
+      "sha256": "9418353802e33f6fa8c1a2d9209d1537904ca3890ba8da577bb51a17f24c35c5"
+    },
+    {
+      "path": "lib/sales-report-locations.js",
+      "bytes": 454,
+      "sha256": "281a37a91414145b2abea93983ce3df773e1c988fedff6778b61d611cbeb9b37"
+    },
+    {
+      "path": "lib/sales-report-margin.js",
+      "bytes": 1081,
+      "sha256": "1f82bb87cff6dc37d0cca14ef4cd8630498ed4b9847d3897a0e2590e917965f3"
+    },
+    {
+      "path": "lib/sales-report-model.js",
+      "bytes": 14487,
+      "sha256": "c2baf05332c5307d4e3502cc01eaf85aba33a281812fc7637e92a0400d7b319d"
+    },
+    {
+      "path": "lib/sales-report-worker.js",
+      "bytes": 2239,
+      "sha256": "efcf32b4cfd2e4bd2518b7f974a9c5e782aa9f79a93a4a764d477e1db561c280"
+    },
+    {
+      "path": "lib/schedule-matrix-layout.js",
+      "bytes": 8117,
+      "sha256": "d2f8bed933c420e573379d956f2bf8bc0ea3c940b0fd4a847308b3198528576b"
+    },
+    {
+      "path": "lib/schedule-pdf-designs.js",
+      "bytes": 7063,
+      "sha256": "cc9f8ef3f786bb4720dfde218290d8239a5e6d0b204f373973d89d3b7a8e4480"
+    },
+    {
+      "path": "lib/server-monitor-status.js",
+      "bytes": 13852,
+      "sha256": "6bd9dde17f626edde8d8a9a64c3d9bd046ca60482f1a725559a8b725b56ab9b0"
+    },
+    {
+      "path": "lib/server-runtime.js",
+      "bytes": 7652,
+      "sha256": "4a588fc9ac9410b410c2bd0079910f85772ce567b16ee7598dee37b0b2e1e4cd"
+    },
+    {
+      "path": "lib/sickness-valuation.js",
+      "bytes": 8639,
+      "sha256": "d58f00f5011d150789c24f3417c77f1304c90d70f28e850909835e816ad3358f"
+    },
+    {
+      "path": "lib/sickness-workflow.js",
+      "bytes": 13056,
+      "sha256": "3867b41745b7458b66abb26c717839a183caae7832008cd4f25303de03448f95"
+    },
+    {
+      "path": "lib/sql-view-source.js",
+      "bytes": 24974,
+      "sha256": "9d669f0d9cf31eb9c2b07779aa9ed3a600a7bca639ca52894a940c685f9e7d54"
+    },
+    {
+      "path": "lib/staff-assignment-request-fulfillment.js",
+      "bytes": 8797,
+      "sha256": "8903872c869bee42af810842ed95a7b6b274c7251b751c73dcef0b5ae2763de5"
+    },
+    {
+      "path": "lib/staff-assignment-requests.js",
+      "bytes": 25087,
+      "sha256": "bbd36b19c2cfd69c775a561e66c00dbff42c520511f2dab57086d039b1964da0"
+    },
+    {
+      "path": "lib/system-center-metrics.js",
+      "bytes": 20700,
+      "sha256": "415875c53eb2aba1a9b777ba2a30f73e17d11c6635241bf067ced97e2c58cf22"
+    },
+    {
+      "path": "lib/system-center-technical-cache.js",
+      "bytes": 1831,
+      "sha256": "daa04155aa3c83f5bc889b9b6fc5af5fb7d2210ad6ac80fe6525cc8d4498bf64"
+    },
+    {
+      "path": "lib/system-trust-index.js",
+      "bytes": 32981,
+      "sha256": "35c892b33787d21a68e8c83f9dc67902c57dcd09fc265b67fa378e63a73cef75"
+    },
+    {
+      "path": "lib/tabular-data.js",
+      "bytes": 17703,
+      "sha256": "6f177000943709a55173dcdd81774d757275dde7d1aa9b3e20c4d5a9faa08232"
+    },
+    {
+      "path": "lib/time-record-statements.js",
+      "bytes": 27476,
+      "sha256": "cacd42c14806c6bb3cc11ef2a62472dea745318b493356746e006747a14c1588"
+    },
+    {
+      "path": "lib/tradefoto-accdb-import.js",
+      "bytes": 18611,
+      "sha256": "4f9ac557798ba0faf9062e887c23cb3a8819282524a48fb03bd67ac3ab9e2716"
+    },
+    {
+      "path": "lib/tradefoto-accdb-worker.js",
+      "bytes": 1159,
+      "sha256": "f47a89667a84c56afeb15cf9c6a042dec3bdd5eb2bdf1eede91c5da4fa826dc1"
+    },
+    {
+      "path": "lib/tradefoto-article-import.js",
+      "bytes": 18021,
+      "sha256": "4997284539533a7b326fa55272fb021686ee1684e954289220434f3b5ec4bae5"
+    },
+    {
+      "path": "lib/tradefoto-article-source-profile.js",
+      "bytes": 15494,
+      "sha256": "c0b1501e8e2ed9582b0639d3599a4c05773a95ca7a9cc8693bad6300889865d6"
+    },
+    {
+      "path": "lib/tradefoto-full-import-reader.js",
+      "bytes": 2555,
+      "sha256": "5c2bd72ca6309c48cba16c2b379b1c6e0c1a420d73a99b2ff5bfa6cb9f8e6477"
+    },
+    {
+      "path": "lib/tradefoto-full-import-source.js",
+      "bytes": 5565,
+      "sha256": "dcbe9fcbaa4d22f25668626ae535a3207d320faf24707d03b55b60c1d94b8bfc"
+    },
+    {
+      "path": "lib/tradefoto-full-import-worker.js",
+      "bytes": 908,
+      "sha256": "44bb9a36607ec8d5ca74525123eec0f4274dc7d21ad1d7aa9ad7ef05e77c7633"
+    },
+    {
+      "path": "lib/tradefoto-history-metadata.json",
+      "bytes": 66250,
+      "sha256": "98770faacac73038c8e97e0cdb7770db78975d07d67b98f51e6d4d7186ef04b1"
+    },
+    {
+      "path": "lib/tradefoto-history-profiles.js",
+      "bytes": 6898,
+      "sha256": "285540d783adb6fce227dad9ee489f40385c86c5430bd1510278803f97a371e6"
+    },
+    {
+      "path": "lib/tradefoto-import-preflight.js",
+      "bytes": 3729,
+      "sha256": "20965cb89cddbc754c86d785627e5586372bf4a9d79f021470697862dedf1aff"
+    },
+    {
+      "path": "lib/tradefoto-master-metadata.json",
+      "bytes": 134776,
+      "sha256": "91a71f9eed6c4986e18724d84d3a5ad0c967f2b4acb57c73c03a72efcb968f2c"
+    },
+    {
+      "path": "lib/tradefoto-master-profiles.js",
+      "bytes": 7977,
+      "sha256": "5c92927c99ee6083dcbbf0bf847b46cd615e5e057e2bba8503fe0c36ed3ae19f"
+    },
+    {
+      "path": "lib/tradefoto-master-views.js",
+      "bytes": 4937,
+      "sha256": "1d5985a0b6b779ed7214bb611d1dd56ff29409954a3dd3af0bab2adccb12a21e"
+    },
+    {
+      "path": "lib/tradefoto-sales-rules.js",
+      "bytes": 16404,
+      "sha256": "39a050cb14d02ebb050d4ad4796c0bb3829b8adf758edbf3e830140215eb9e31"
+    },
+    {
+      "path": "lib/tradefoto-source-tolerances.js",
+      "bytes": 1417,
+      "sha256": "7d8f88450fbe8b4cb5edff821815821399afd71e9db5cbed1fe1728cc4edfec9"
+    },
+    {
+      "path": "lib/update-download.js",
+      "bytes": 6790,
+      "sha256": "e03fa5d503ded2dc5a0dd36419c95db26ade6df8ab36207f4e7d02b33e7d2003"
+    },
+    {
+      "path": "lib/usb-profile-database.js",
+      "bytes": 27371,
+      "sha256": "3a6f67b945342ffeea77e5d3b9ff9fcad66f12736291a4eef4fdab6387e967a1"
+    },
+    {
+      "path": "lib/usb-provisioning.js",
+      "bytes": 42880,
+      "sha256": "0fc0088d8aea6e6c0d7eb6138246f64559babab89ebf31f2f81b8f1a069d6cfb"
+    },
+    {
+      "path": "lib/vendor-patches/brace-expansion@5.0.9.patch",
+      "bytes": 729,
+      "sha256": "8609b7ad63ef1633e51cb8b2b920d58cf5d5bd4c7f79ee383ef86a6979278688"
+    },
+    {
+      "path": "lib/work-rules/calendar.js",
+      "bytes": 3461,
+      "sha256": "6404dfaec26c1cca75590ab7eb9459476eb713f3512e78a0512a5f3c225555b4"
+    },
+    {
+      "path": "lib/work-rules/catalog.js",
+      "bytes": 19959,
+      "sha256": "e3cebdbb1b53061b2af7c073c8ad6c0a36f5a7794ff6c89de89c227851fe3a53"
+    },
+    {
+      "path": "lib/work-rules/compensation.js",
+      "bytes": 7922,
+      "sha256": "404b5254b8762f02820250ef2d0ff19470ba4f25a418284f4423ada79e3ca53c"
+    },
+    {
+      "path": "lib/work-rules/custom-rules.js",
+      "bytes": 32487,
+      "sha256": "774b579fe71bc9c55fe812415892a707a99a37b6be37f5e779cb7ae252e5301f"
+    },
+    {
+      "path": "lib/work-rules/evaluator.js",
+      "bytes": 73347,
+      "sha256": "db6b1c62b07cee76134bb4ede3c657085cbf497c14f3144208995df346ee3483"
+    },
+    {
+      "path": "lib/work-rules/governance.js",
+      "bytes": 88963,
+      "sha256": "2f978a28c44df3d6cd7e99e82506bae08aad89ca0e9e1b968c9b2e70e4092ebf"
+    },
+    {
+      "path": "lib/work-rules/index.js",
+      "bytes": 211,
+      "sha256": "d680907eef55e864bbcc1ae41a4c1885428cf8d3acb3a826126b496f5678d57d"
+    },
+    {
+      "path": "lib/work-rules/receipt.js",
+      "bytes": 664,
+      "sha256": "04f734c0bcd2dd717d5fb4107796d16ee1b0b1595b43b06c85205c2b6188536e"
+    },
+    {
+      "path": "lib/work-rules/saturday-credit-time.js",
+      "bytes": 2021,
+      "sha256": "57de547792596c2f309f48bd486933d40355c46718223504c480ccabdad29031"
+    },
+    {
+      "path": "lib/work-rules/saturday-credit.js",
+      "bytes": 7794,
+      "sha256": "6f9501109e635686b0f2ebc0bed2c30de9b80df9872bb53c256a705bd16351ca"
+    },
+    {
+      "path": "lib/work-rules/store.js",
+      "bytes": 25628,
+      "sha256": "06b864ff7e4795849b144a036ba210f88feb96dc806ffcae4c4916afef78239d"
+    },
+    {
+      "path": "lib/xoffi-time-import.js",
+      "bytes": 22032,
+      "sha256": "8782265121987df4a5bf780840c91b478c9dce991b6981675cab1c0b6cb37200"
+    },
+    {
+      "path": "package.json",
+      "bytes": 848,
+      "sha256": "1697f06e9a71f3b474051e2bfdaa3553a9c716de964b509069b75ca91e9e2f7b"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "bytes": 88806,
+      "sha256": "e9c21316de4bf582970b75b808a2bbebde456bde99a0fa0fb0a1d84637d187ca"
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "bytes": 203,
+      "sha256": "0e5e38755f6fd5925fbe70863f6036f423018c97e8dfe761b3c5fbc71440ecb5"
+    },
+    {
+      "path": "public/amu-ocr-client.js",
+      "bytes": 7194,
+      "sha256": "1548758530898310286e05b1ea29443f406cfcc4aee5bc6462c0c6477e22588c"
+    },
+    {
+      "path": "public/amu-ocr-parser.js",
+      "bytes": 17328,
+      "sha256": "64338967e7c69da6a436d970e4c79b9e53b5ffcabb03ff591265805bc26b4061"
+    },
+    {
+      "path": "public/amu-pdf-client.js",
+      "bytes": 21879,
+      "sha256": "bcacc21d75ef2a1ae294e8aa50144f02e3bc985335f6010d73fe887ab0ad252e"
+    },
+    {
+      "path": "public/api-errors.js",
+      "bytes": 2395,
+      "sha256": "35c7d913d31357cc158353c8a5d3e840ce559c6047015eb6deeceab557268cab"
+    },
+    {
+      "path": "public/app.js",
+      "bytes": 2340103,
+      "sha256": "27cfe2cb3a33524a33184b960e09b180ced4dd8a4c81a132f981eda214434b6a"
+    },
+    {
+      "path": "public/assets/birthday-presentations/dezent.svg",
+      "bytes": 2391,
+      "sha256": "dfc42510f1b069d8456f77453cd5f59c453d0caae6805afe2953f14705dd182b"
+    },
+    {
+      "path": "public/assets/birthday-presentations/elegant.svg",
+      "bytes": 2121,
+      "sha256": "6ddba9470251987944c57daafe8ebc8152a10661838cbdb51f9fe500b3e48433"
+    },
+    {
+      "path": "public/assets/birthday-presentations/farbenfroh.svg",
+      "bytes": 2822,
+      "sha256": "9896dc55373c94a3876a9b8ca9eabf04056005782100c3c7676a3c0513234568"
+    },
+    {
+      "path": "public/assets/birthday-presentations/fotowelt.svg",
+      "bytes": 2913,
+      "sha256": "cfe4f68b9a2dc31c6108533e43c535956b506fb217d0050f0b916c636078d6a4"
+    },
+    {
+      "path": "public/assets/birthday-presentations/technik.svg",
+      "bytes": 2683,
+      "sha256": "517037f95debcf30df58347c893536d2a8e657295cd06b32d5ddd4448cfd661f"
+    },
+    {
+      "path": "public/assets/demo/berg-und-ball-icon.svg",
+      "bytes": 392,
+      "sha256": "2c30dd360ac1117b2ceab24124e5ebae2f2fb0a4431ba17d211179ab921c0a17"
+    },
+    {
+      "path": "public/assets/demo/berg-und-ball-logo.svg",
+      "bytes": 892,
+      "sha256": "0d671811278777e82a9dd208865ff112dfd11661e167f714a18b4e86b30328cc"
+    },
+    {
+      "path": "public/assets/grabenplaner-logo.svg",
+      "bytes": 1428,
+      "sha256": "6e62e4b9c81fa7624562bca429b3cd43e5740b9368025f9065e0a1f5be75d342"
+    },
+    {
+      "path": "public/assets/webicon.svg",
+      "bytes": 802,
+      "sha256": "e729a4c2d18b75ef7e00f6c47643588e81cc5c99ed042ebeacfb34fe9e0cbc6b"
+    },
+    {
+      "path": "public/candidate-evaluation.css",
+      "bytes": 5868,
+      "sha256": "e56960b4698161b09410faea21ba66e658ec4536616ed33c689cd9c2d870fcb5"
+    },
+    {
+      "path": "public/candidate-evaluation.html",
+      "bytes": 1193,
+      "sha256": "16088f3311f74f31effe1e96ffd962e7434784612b1eb5f22ebf279788ef57fa"
+    },
+    {
+      "path": "public/candidate-evaluation.js",
+      "bytes": 8611,
+      "sha256": "10b31af42b0df90cebfc08c273f91213203c1ed9fff1949fc7d280150d6dfccf"
+    },
+    {
+      "path": "public/cash-publication.js",
+      "bytes": 9602,
+      "sha256": "ba3711fa7ab46fd60d7710ac1e9d599637b67fc9ea82b91dbdb1de3b5d493739"
+    },
+    {
+      "path": "public/credential-boundaries.js",
+      "bytes": 8083,
+      "sha256": "d63cc9511bb4d74076adc64815c60226650e1dfcdaae16ea14932527be84759b"
+    },
+    {
+      "path": "public/data-import.css",
+      "bytes": 2706,
+      "sha256": "b1c2de33d13d09185b8be44a4c96df6512e1e97c5c848a063fd8ca34ed565f9a"
+    },
+    {
+      "path": "public/data-import.js",
+      "bytes": 15207,
+      "sha256": "d4df11e2b6f0976b876425977c988d3385e6344d8011160c13bae329c41bbf83"
+    },
+    {
+      "path": "public/date-range-calendar.js",
+      "bytes": 9199,
+      "sha256": "d92959d9ef3ad2075495e73c45fc446dd34b1a02afbbe3514ca7c2e1e3d4a8f7"
+    },
+    {
+      "path": "public/function-search-catalog.js",
+      "bytes": 65097,
+      "sha256": "3046a64bd262ce3e4189620db46761b03c11181637e2a65b6cc344c8b6a2b8cc"
+    },
+    {
+      "path": "public/function-search-navigation.js",
+      "bytes": 8125,
+      "sha256": "1e213aba134db3a9c8b4c630c2a886fa63ef07ac558661b458db2c6dc12ed18b"
+    },
+    {
+      "path": "public/function-search-ui.js",
+      "bytes": 8093,
+      "sha256": "10cae932e4a0efb38c386a47de1ba1bd1d97e9d44291ea4b40c0cd861d8e619b"
+    },
+    {
+      "path": "public/function-search.js",
+      "bytes": 20415,
+      "sha256": "a7cc6ea9c5a28aa21e2137dfe309d68cb04613e148859b76990fa0e512f51187"
+    },
+    {
+      "path": "public/import-mappings.js",
+      "bytes": 15115,
+      "sha256": "b01af8a371ac5055d90c6e9aa92d64e213d8ebe9581f4884a5be8f5d48f5a03b"
+    },
+    {
+      "path": "public/index.html",
+      "bytes": 475870,
+      "sha256": "3bf3bc12c1d69c2c80331eb6193bfbe7a75e33940cf21b7e8bdb38f4ee2a651f"
+    },
+    {
+      "path": "public/mobile-refinements.css",
+      "bytes": 16601,
+      "sha256": "39e71a78e3f94af23401f2ff2b0362857068f3676c3f35fcc20fb5ab50c429b8"
+    },
+    {
+      "path": "public/navigation-history.js",
+      "bytes": 2572,
+      "sha256": "e4cad91c916ffd8ec8a9678fff886d339c8f44f82a82cf94c3a38a61afb9b7aa"
+    },
+    {
+      "path": "public/permission-defaults.js",
+      "bytes": 7171,
+      "sha256": "543d127f1ae9c8414016c0b03fbdd11da3409e5c283fe261c0eb855d616472bc"
+    },
+    {
+      "path": "public/portal.css",
+      "bytes": 143096,
+      "sha256": "28312a3fbe59993737a1102a3477fb0d5c427119d62b46ade13787e14a5a2b0f"
+    },
+    {
+      "path": "public/portal.html",
+      "bytes": 87698,
+      "sha256": "1c0ea13de8403878ad30ea74ea595f0e43cab45026c4e5a0b8096b3dff02edca"
+    },
+    {
+      "path": "public/portal.js",
+      "bytes": 426692,
+      "sha256": "4978b9ed727a34fa3f39f868e46c8f95b8f49d3b9398cc0dfa2c318e7be4da99"
+    },
+    {
+      "path": "public/receipt-line-format.js",
+      "bytes": 2127,
+      "sha256": "dde327a7e644dad167b2757516f2aedfce9754ce8b1ae8f9388f09ce22fdfcb3"
+    },
+    {
+      "path": "public/receipt-search.css",
+      "bytes": 4579,
+      "sha256": "294c922b7b0dfa0e87a32ef1498b51d616bfa81ca6e07dd485e09ddf45d39381"
+    },
+    {
+      "path": "public/receipt-search.js",
+      "bytes": 27768,
+      "sha256": "0c2b5ccfd1ecf19bc0baed03aa370d488995ed86f488afc024fa75616a711e71"
+    },
+    {
+      "path": "public/sales-article-image.js",
+      "bytes": 6968,
+      "sha256": "6289b00deff0ad6f1645ff8ef50e18552011beefdd488840e9d72ec1da772ff7"
+    },
+    {
+      "path": "public/sales-history.css",
+      "bytes": 3164,
+      "sha256": "30700542cc2d55a2fd03af32df35bbc01dc3deae46201bc5eabbdffa7537bed5"
+    },
+    {
+      "path": "public/sales-history.js",
+      "bytes": 18611,
+      "sha256": "634fc1fcdcee56c0cdba557de97f3b1726c71a89ed33366bf498e7b063a4890b"
+    },
+    {
+      "path": "public/sales-report-controls.js",
+      "bytes": 8090,
+      "sha256": "160bb9871650f902c18f80b39c70ae6fc6f2a92bb12467a77b31b9064f71dd1c"
+    },
+    {
+      "path": "public/sales-report-jobs.js",
+      "bytes": 13943,
+      "sha256": "91c39491867ad694ed30ae6807b8d9bfc320b5d940b1f5e02029e453d1d8525a"
+    },
+    {
+      "path": "public/schedule-duty.js",
+      "bytes": 5739,
+      "sha256": "bd7834efd0704d159ddc5d73e96822a7ad13d5bc524d21e85d7b19dcecdd81b6"
+    },
+    {
+      "path": "public/styles.css",
+      "bytes": 685873,
+      "sha256": "9300b4c1eafe9be40c83eb033dcc0520b7ad1a1819406aaf948133101e4bbe0e"
+    },
+    {
+      "path": "scripts/manage-local-backup-archive.js",
+      "bytes": 19105,
+      "sha256": "9d7cb8ee420d296f5b4b4e8742d666421f7c800a5d0dd10076617b9724710f12"
+    },
+    {
+      "path": "scripts/run-background-backup.js",
+      "bytes": 2518,
+      "sha256": "bef20db7757ae30ef6b4c9ec712d83fdfe5280870e01b6d1884cf263ec65192c"
+    },
+    {
+      "path": "server-tools/caddy/Caddyfile.example",
+      "bytes": 500,
+      "sha256": "f774eff30a5220af66eee5604c8f5b93925ca8c402db10883d57329c50eabae4"
+    },
+    {
+      "path": "server-tools/linux/Caddyfile.in",
+      "bytes": 546,
+      "sha256": "faaeae73a0f5303cd6d78396d0a694c2d17225266e9eea41cc5f78882a12eebd"
+    },
+    {
+      "path": "server-tools/linux/RUNTIME-MIGRATIONS.md",
+      "bytes": 14271,
+      "sha256": "286d192de1f17387c4ebc573f798782c197f71690311094f31535c729eb2f281"
+    },
+    {
+      "path": "server-tools/linux/backup-grabenplaner.sh",
+      "bytes": 15896,
+      "sha256": "10f425dcf9904777a46f77adb40eeedb924ef7c51ace6bde0dab6e57aaa22233"
+    },
+    {
+      "path": "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
+      "bytes": 28544,
+      "sha256": "2abd9cd2dbd117e6ce9997fe2780b4540439190fc1884628dd5c552d82985817"
+    },
+    {
+      "path": "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
+      "bytes": 7329,
+      "sha256": "df1a00add79a38710036b6ecb0fa27a013deb457aa7d7a98514a2618d9bab7f1"
+    },
+    {
+      "path": "server-tools/linux/grabenplaner-bootstrap.service.in",
+      "bytes": 1661,
+      "sha256": "86607aa99f594b87ee8e78e984a0872359b36615f651a05801c295aea826056c"
+    },
+    {
+      "path": "server-tools/linux/grabenplaner-monitor.service.in",
+      "bytes": 1239,
+      "sha256": "9b7f178b166092070a217cb0a141f210d005a049e8ff3f474321d89eea12ab64"
+    },
+    {
+      "path": "server-tools/linux/grabenplaner-monitor.timer.in",
+      "bytes": 220,
+      "sha256": "2de083b0509c4ecc35dd2520996ee40f47046ccaa584d5c8218ff639be77d85d"
+    },
+    {
+      "path": "server-tools/linux/grabenplaner.env.example",
+      "bytes": 2919,
+      "sha256": "7327185db60a9611a17403f470941200c7288fdebad033c42d94fcb85ae780ff"
+    },
+    {
+      "path": "server-tools/linux/grabenplaner.service.in",
+      "bytes": 1693,
+      "sha256": "5c4573b3bb91dff0fc6ca4efe4eea3c24755f7efb0a1490d188b4852e7ba9605"
+    },
+    {
+      "path": "server-tools/linux/hardening/grabenplaner-host-security.sh",
+      "bytes": 74108,
+      "sha256": "9cf669bb46846bfbbfe3927de99ce97e46e91fd8142874cf9bdf341458739c6e"
+    },
+    {
+      "path": "server-tools/linux/hardening/install-grabenplaner-host-hardening.sh",
+      "bytes": 15852,
+      "sha256": "96a2a5e1b646e03d37ef4decf421a94422f7a8ece22e652f10b3aebf03a0ce2a"
+    },
+    {
+      "path": "server-tools/linux/hardening/lib/hardening-common.sh",
+      "bytes": 10376,
+      "sha256": "7efeafb5c1cbd2f852c916d33c1eeda40e3b67372a984c93e3f15cf78df0b4f6"
+    },
+    {
+      "path": "server-tools/linux/hardening/lib/hardening-contract.js",
+      "bytes": 7194,
+      "sha256": "fa87c2b6774f425e69146137e0f95d9b5c3c201c77c321fe918a573294b8998c"
+    },
+    {
+      "path": "server-tools/linux/hardening/lib/hardening-policy.js",
+      "bytes": 23780,
+      "sha256": "4d3d8fa4210af7f81a337101aef1981f3de63579a4dbfa83ba607f201b5aa81a"
+    },
+    {
+      "path": "server-tools/linux/hardening/module-schema.json",
+      "bytes": 1475,
+      "sha256": "d9e69e86cca38ec5755d2cba61b2e913ac0914a26c30a92cafbe482d4dd5ab0f"
+    },
+    {
+      "path": "server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.service.in",
+      "bytes": 610,
+      "sha256": "9ca238935203e1c9b885a5ac3c1c18aabc78d0aee73841f92a1ceaadff602f25"
+    },
+    {
+      "path": "server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.timer.in",
+      "bytes": 221,
+      "sha256": "17b705ee341f86e35e6f0adbf3c384b0806e2af8908887dd0c67cabe958659cc"
+    },
+    {
+      "path": "server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.service.in",
+      "bytes": 374,
+      "sha256": "26d6a10699c24818054fb0157c5e8c1c9139a60b76c6c7153dfc692f400550b9"
+    },
+    {
+      "path": "server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.timer.in",
+      "bytes": 233,
+      "sha256": "a7357b017d82de1ff0a89ac8ba0715fff9bd8ed1636fea11e9c2151b79c25911"
+    },
+    {
+      "path": "server-tools/linux/hardening/templates/00-grabenplaner-hardening.conf",
+      "bytes": 503,
+      "sha256": "dd269b47e7a6c4f0199c4808b2b2c9cb2d7534bf6a56ed506f5b9d19761b667c"
+    },
+    {
+      "path": "server-tools/linux/hardening/templates/60-grabenplaner-journald.conf",
+      "bytes": 232,
+      "sha256": "61ade1cb966091a83dd8a66979ef5c535b0299c63308ff69eaf8a4803bbae7c1"
+    },
+    {
+      "path": "server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf",
+      "bytes": 961,
+      "sha256": "abc82e96beafefe65de335f113faa2347f10ed7cd7c556cc7bbbb32185b332b9"
+    },
+    {
+      "path": "server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades",
+      "bytes": 168,
+      "sha256": "491404317647bff0a77632805b03470c0f30cb68f543c11377729e85299ebb9b"
+    },
+    {
+      "path": "server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades",
+      "bytes": 674,
+      "sha256": "fd73d505ffb7c2ebe8dc311d4df1c08e9feefde8ebb17d599bb468cac08378fc"
+    },
+    {
+      "path": "server-tools/linux/hardening/test-grabenplaner-host-hardening.sh",
+      "bytes": 28091,
+      "sha256": "8a211bdfa4b5c40429181126046391f6be7b74173d3eb2eebd166a3a3a4ca532"
+    },
+    {
+      "path": "server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh",
+      "bytes": 5643,
+      "sha256": "bdf3879e23527779f05236ab237e5480aca43eaef2b9747cd13bb9e33beea6eb"
+    },
+    {
+      "path": "server-tools/linux/host-control/lib/host-reboot-broker.js",
+      "bytes": 40954,
+      "sha256": "074d09567f024320ce0294e4d2b00e081b274c10178d091841c9fc8ec23f5133"
+    },
+    {
+      "path": "server-tools/linux/host-control/systemd/grabenplaner-host-control.socket.in",
+      "bytes": 414,
+      "sha256": "fadd81279279a3bb83de2a91446656aa8ac9a484760227a6ba9fcf29be0abcec"
+    },
+    {
+      "path": "server-tools/linux/host-control/systemd/grabenplaner-host-control@.service.in",
+      "bytes": 1648,
+      "sha256": "ae395a80cfa502e2a88c4f7ee607e6f5dd27d547d52bcbb30d3fc5e9b9de9d8b"
+    },
+    {
+      "path": "server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in",
+      "bytes": 1279,
+      "sha256": "fa8dbf18bd933a0e856e02d8b5fd3dc1927196678f9df390acf2ec43e9711490"
+    },
+    {
+      "path": "server-tools/linux/install-grabenplaner-server.sh",
+      "bytes": 60463,
+      "sha256": "cd97411002e19c07a46857718aa01fa6ba6407f8e6ef53de8ef067fed71d5699"
+    },
+    {
+      "path": "server-tools/linux/lib/backup-metadata.js",
+      "bytes": 3440,
+      "sha256": "25d639626489728a46049ab68da1f5b71c1fa3e2ad97da866a3a9dcc9e830164"
+    },
+    {
+      "path": "server-tools/linux/lib/backup-snapshot.js",
+      "bytes": 2539,
+      "sha256": "16a3a7a1cdaa3d486635fbf12b2e6edaf2754ed5b19245627b5941cff863ee0a"
+    },
+    {
+      "path": "server-tools/linux/lib/common.sh",
+      "bytes": 15222,
+      "sha256": "a4654e7ed3e8ead8c990688cbee401ad4e14bc792e87a205ad015ac71cf5045d"
+    },
+    {
+      "path": "server-tools/linux/lib/deferred-backups.js",
+      "bytes": 6321,
+      "sha256": "24694dd28e1c8a5d8d140fed6fd7868e0371db0f1b9c9f1b6ec687acd987bd09"
+    },
+    {
+      "path": "server-tools/linux/lib/deploy-policy.js",
+      "bytes": 12490,
+      "sha256": "389eb4b95bc4e50b4b5820479583b1b3b8c0f9bea6a71c1e661b68bcc668d665"
+    },
+    {
+      "path": "server-tools/linux/lib/extract-updater-contract.js",
+      "bytes": 7644,
+      "sha256": "d69f74e82c55e3e9a19b9c3c3473fcb1be654237534820ce3b1184839566f640"
+    },
+    {
+      "path": "server-tools/linux/lib/hold-database-lock.js",
+      "bytes": 1350,
+      "sha256": "67aaeb751e910e59511323519f8f8ca6bfd1c525f0ae93a421db5869a46d274f"
+    },
+    {
+      "path": "server-tools/linux/lib/local-backup-archive.js",
+      "bytes": 7973,
+      "sha256": "68b1424415e65ba4c3f970307727aa8b48c105feee56ac23fbf79b92c949b485"
+    },
+    {
+      "path": "server-tools/linux/lib/offsite-update-compat.js",
+      "bytes": 7859,
+      "sha256": "1c0dddff2c7fd3f709f531a43cf506a8bd8c0250adbdb8bc8956c6a0151cb88c"
+    },
+    {
+      "path": "server-tools/linux/lib/postgresql-maintenance.sh",
+      "bytes": 2768,
+      "sha256": "cdc79b96dad9fe4274ccc36622160edc278cd7372b24d6af0fb3f81d4e8498b0"
+    },
+    {
+      "path": "server-tools/linux/lib/postgresql-operations.js",
+      "bytes": 1752,
+      "sha256": "91df5801bd8ca30de4b587dbdcb86ec36c1977cc4f3b3353709783f92554737d"
+    },
+    {
+      "path": "server-tools/linux/lib/prune-backups.js",
+      "bytes": 3410,
+      "sha256": "a8effd5cc6c75afea5df1be365a7248220e3ac442469d1c6dd883282611e87f9"
+    },
+    {
+      "path": "server-tools/linux/lib/restore-backup.js",
+      "bytes": 3780,
+      "sha256": "b41e5d54e9c8984066c804e8859dfbe9f8464d836d4918ce7401a62289b09ea2"
+    },
+    {
+      "path": "server-tools/linux/lib/runtime-v5-transition.js",
+      "bytes": 5446,
+      "sha256": "ba38bad8ee742a3da3fefeac9f4044455444f6656a8514ee01f64da7d126e8bc"
+    },
+    {
+      "path": "server-tools/linux/lib/verify-backup.js",
+      "bytes": 3974,
+      "sha256": "d4bbea8a2bb522f5dec9d638b1ad8ba1038cd80fc10c69580d54219f5c07921f"
+    },
+    {
+      "path": "server-tools/linux/lib/verify-install-tree.js",
+      "bytes": 1650,
+      "sha256": "8c99e08c002cabd521e1eaa55069241c0a428c7aa30deb1d24783e6242c8443c"
+    },
+    {
+      "path": "server-tools/linux/lib/verify-package.js",
+      "bytes": 29985,
+      "sha256": "e8bb789efbc6b21fc6cb3f71f02f5488472f7f3ddd3222039fb9bd48ea326c17"
+    },
+    {
+      "path": "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
+      "bytes": 41255,
+      "sha256": "f25446e9b2d22fa2df1924642f3560f9079a36108816b871b069151f6ee0ebc1"
+    },
+    {
+      "path": "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
+      "bytes": 43007,
+      "sha256": "f9d75e3a61cd93fdbc8376217176928eabb80d9e590b2439cf0cd291081c2f6c"
+    },
+    {
+      "path": "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
+      "bytes": 31201,
+      "sha256": "d01c54b0ec33567905901df4c5c8db3782d545f6cfa7bfa4290d8032dfe57391"
+    },
+    {
+      "path": "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
+      "bytes": 31437,
+      "sha256": "4bce047ba6c3036e016e11a44c8423fd0b6634276976a8a92b390aa484e6420e"
+    },
+    {
+      "path": "server-tools/linux/monitor/lib/monitor-status.js",
+      "bytes": 16504,
+      "sha256": "adfa274617168d58f6bac94f73a4c80ae6798ee961cec81b238968bbc2379964"
+    },
+    {
+      "path": "server-tools/linux/monitor/run-grabenplaner-monitor.sh",
+      "bytes": 5950,
+      "sha256": "69d5af4e3f17d19cdb1d2409558a960cb2e10a5dc126654179af8256df749936"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
+      "bytes": 621,
+      "sha256": "6562f758aa74e9a35c7a81c10ea0715dd2236c075e0ebda87f1e48e5a62b0886"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-assurance.sh",
+      "bytes": 9262,
+      "sha256": "c5f79c720350bdbe0e14da6a8259380475ae08ed4518f81194f336a6cbae0d8a"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-check.sh",
+      "bytes": 1957,
+      "sha256": "be425953cbf245af0ce7bbab5359c65a2160a8bf128b204805eeaa6e327c839c"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-pre-update.sh",
+      "bytes": 1329,
+      "sha256": "62ff779a7e569048d4d74d34fde59c6a99fb835375d189a15eaa4d1512e6ffa6"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-prepare.sh",
+      "bytes": 17165,
+      "sha256": "286e1c53c9d7ff4af30eb03759efa308d6f7ba5baa6367db584f4a8b97cb2193"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-rclone-wrapper.sh",
+      "bytes": 1271,
+      "sha256": "132e4f2d398e53459367f692dd77735172ae4c9897b85bfe4f61fae9fe1c9257"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-read-secret.sh",
+      "bytes": 613,
+      "sha256": "4fabc3a42d418c18221eaa8d57508838105770c863842bede1bbb4bf6f7b88cd"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh",
+      "bytes": 18618,
+      "sha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-recovery-set.sh",
+      "bytes": 13774,
+      "sha256": "264d9f23545ec7a271e6c3ef2db79413b7735fefe9734403ecd21dcbbf1b9322"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-restore-test.sh",
+      "bytes": 17334,
+      "sha256": "e9fab0a83a8e2bc08324afc5cf7e94919aaf5c10eb64e419155d69d65bda2e30"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-switch-target.sh",
+      "bytes": 21543,
+      "sha256": "043ee3d10cea774bff57cbacd11df3bb01acc2a12f136e730577922f6a69db6f"
+    },
+    {
+      "path": "server-tools/linux/offsite/grabenplaner-offsite-upload.sh",
+      "bytes": 6116,
+      "sha256": "82a631ad95b83b339bb4139b3730258ed1227fd977a51bb56966a5785089a8e8"
+    },
+    {
+      "path": "server-tools/linux/offsite/install-grabenplaner-offsite.sh",
+      "bytes": 55791,
+      "sha256": "19dcd209cdf3d595e0531d473aefffda69bd17a03b01e8a1bbbc1e25872dcbfd"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/application-smoke.js",
+      "bytes": 30116,
+      "sha256": "fcf885c3287bb7a2e81461c6bb31472828b4a8cc6d45f7baa921e47862926e77"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/assurance-control-broker.js",
+      "bytes": 18952,
+      "sha256": "c6261a06bd7016ef3b113fbabc356f90871591e3b66476ca9202dd6fa86a9cd5"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/assurance-history.js",
+      "bytes": 37126,
+      "sha256": "7fcb0e4f12ea96c049728ef63a2e002c36f56526d6fbbe46c2539c01774a5a89"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-common.sh",
+      "bytes": 28252,
+      "sha256": "f89dbf19537d3867e9a38b8bd922a10de407c92cfff3a93456d7fac1941336c8"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-contract.js",
+      "bytes": 21498,
+      "sha256": "e702a0d643035dc21097307319c86e2a0943adc340b725f804c98e4d4314bcfd"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
+      "bytes": 7283,
+      "sha256": "df15a00286d1bf807a81b96e538ac1197bca81580ed7f6457a431ecc763687c3"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-restore-verify.js",
+      "bytes": 3425,
+      "sha256": "0fd109dba9ba1c5df4e158739976b46a29ad9688bb9491e8553bfea469f9474c"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-retention-verify.js",
+      "bytes": 1888,
+      "sha256": "98974e777542a49408f2786c089331dc61016fd9e29daaab6b0684381c21893c"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-setup-rclone-wrapper.sh",
+      "bytes": 1467,
+      "sha256": "8b132a4cc9babc7f58b6b1a56dddfcde5ad0380241200819dfef30df3c8e28fc"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-stage.js",
+      "bytes": 14445,
+      "sha256": "ea57b61db1d2e94f76d50902ea50994cf237dbedd5fcd97946694c3c8d5b85d4"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-status.js",
+      "bytes": 11791,
+      "sha256": "e1ae43a0b50f850dd9b9cabdf4cb9ed65d5889d835804187600c2024bf77d079"
+    },
+    {
+      "path": "server-tools/linux/offsite/lib/offsite-target-broker.js",
+      "bytes": 34624,
+      "sha256": "e24629092c36f7701bef02522085be1f052d1477963053d352f2d7c88084fbd3"
+    },
+    {
+      "path": "server-tools/linux/offsite/module-schema.json",
+      "bytes": 3140,
+      "sha256": "f33b0ce47ccf7dab4f8930ea525fe0c3f9060c6c7b7d1409675d4e1fa07220f5"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-application-smoke.service.in",
+      "bytes": 2195,
+      "sha256": "7b050a22af04de9343fa36476c4319dc2499f5b2296f1316ac7f93c883df295d"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control.socket.in",
+      "bytes": 423,
+      "sha256": "5e9828ee46d3601bf5fd4d3354ee66edc07d32dc89accf331497ccbef29ee8f6"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control@.service.in",
+      "bytes": 1325,
+      "sha256": "94c4bd367b1e702a361cc513e406893da9fc14582c83ad0a9aa2ca88d160d071"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance.timer.in",
+      "bytes": 387,
+      "sha256": "b1d53181751838bba126b5c0528589c0e138749cc51a3ce7635da904d6aaf5d9"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance@.service.in",
+      "bytes": 1352,
+      "sha256": "2d0d38dff7bd54ae9c8e2e20b02885330d6b4afbed83a37f8925b90ea9184e67"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.service.in",
+      "bytes": 1270,
+      "sha256": "ddfec86871316ee7673ba9d7a5ff27a91b8cc1d193d4f21c8131c31e43479074"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.timer.in",
+      "bytes": 242,
+      "sha256": "c43a50668fc49300905d0bc1021aee48dbe6e26b6eb716e017936c16201b7f5f"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-prepare.service.in",
+      "bytes": 1098,
+      "sha256": "d8a12b888cb20b2473151cd7345785280c697c78ce26068ea0708f4dcc70228e"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-restore-test.service.in",
+      "bytes": 1312,
+      "sha256": "35b90339925271daab7801f9290f6c10e81306cf3ad6217a73870e1f3314a8a6"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-restore-test.timer.in",
+      "bytes": 274,
+      "sha256": "e889b67b7b27996b1f0f1bc94cd0b326c813cf32516cfee10066025dc0e1ce50"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-target-control.socket.in",
+      "bytes": 422,
+      "sha256": "d756ff52034e33219388f4320a14a6ff55fcca2032981963bb1cc15d48eb2ef1"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-target-control@.service.in",
+      "bytes": 1685,
+      "sha256": "a135599563d3192bc20f63dc1b4ad314cbd7c99b6769c53cd4e08a28bf2e5933"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-upload.service.in",
+      "bytes": 1319,
+      "sha256": "fa2a39ca10eb14be98395d9c1382ad535dd495fde5c38140d49578a0480d5c05"
+    },
+    {
+      "path": "server-tools/linux/offsite/systemd/grabenplaner-offsite-upload.timer.in",
+      "bytes": 226,
+      "sha256": "ee8c138c7ceff454b1dca8c956b702b7c2a6c80ec9542d9ca9edfdeae6211759"
+    },
+    {
+      "path": "server-tools/linux/offsite/test-grabenplaner-offsite.sh",
+      "bytes": 15511,
+      "sha256": "506669ad56a36aec7461ae6b9255ae7de6cd1168626cf89945e25fd4677ceded"
+    },
+    {
+      "path": "server-tools/linux/offsite/uninstall-grabenplaner-offsite.sh",
+      "bytes": 5817,
+      "sha256": "20cbd22c29d6e467f942d3021cd77d5d74e354262960757c35c3b13bb7e1f46d"
+    },
+    {
+      "path": "server-tools/linux/postgresql/capture-final-source.py",
+      "bytes": 5377,
+      "sha256": "7bc850e4010608164e1cf5cd09af7fb53bde91ce60ea1765e367dbd9913063b1"
+    },
+    {
+      "path": "server-tools/linux/postgresql/control-worker.js",
+      "bytes": 3721,
+      "sha256": "c3533d649ca80a73bcddcd6f0bcba8582f330e7ce92e45a2a4e96a37a0763e18"
+    },
+    {
+      "path": "server-tools/linux/postgresql/grabenplaner-application.conf.in",
+      "bytes": 267,
+      "sha256": "fb2d847f8fe0f2d8c72199220f5e9f03c5959f449dae49cf700662a8877656b7"
+    },
+    {
+      "path": "server-tools/linux/postgresql/grabenplaner-postgresql-control.socket.in",
+      "bytes": 288,
+      "sha256": "102d7a94462de9cb4c9629ee496d3699c774840f12dd7dbc49842d395204e089"
+    },
+    {
+      "path": "server-tools/linux/postgresql/grabenplaner-postgresql-control@.service.in",
+      "bytes": 1022,
+      "sha256": "39160b013786370ccfc3648733220ca5725db162dc55e09c7c123e95b20d5918"
+    },
+    {
+      "path": "server-tools/linux/postgresql/grabenplaner-postgresql-maintenance-recover.service.in",
+      "bytes": 530,
+      "sha256": "c7bd4776d2cc731ec18dcd26f6656a3bcd11d1a29b42faaed79bf8634c45ddd6"
+    },
+    {
+      "path": "server-tools/linux/postgresql/grabenplaner-postgresql.service.in",
+      "bytes": 833,
+      "sha256": "2a703535f1ff2a49051707abc3423bba4955ed952ab26e17939bfdd96fc19b64"
+    },
+    {
+      "path": "server-tools/linux/postgresql/host-reboot.js",
+      "bytes": 1799,
+      "sha256": "1af0e4f55f6d0cad2e7b4fe992daaa2f6044a9a2c9b7e1564e13e96f30c3cbe6"
+    },
+    {
+      "path": "server-tools/linux/postgresql/lifecycle-maintenance.sh",
+      "bytes": 1268,
+      "sha256": "1a32badec8b4486672cee2951e29cfd715b736f99081670a440c69e3869eb8e9"
+    },
+    {
+      "path": "server-tools/linux/postgresql/lifecycle-run.js",
+      "bytes": 5694,
+      "sha256": "5bd70930cb173ea52ba6aaa27f81f9cc8269b81f055cdd75e809737e57618b7d"
+    },
+    {
+      "path": "server-tools/linux/postgresql/lifecycle-status.js",
+      "bytes": 4067,
+      "sha256": "8a73b1533fa104e3cd58ca62df7110aba752aa3cac88d3eb566a4934d55e8250"
+    },
+    {
+      "path": "server-tools/linux/postgresql/managed-contract.js",
+      "bytes": 2747,
+      "sha256": "07c5af8571c8c9ddb900c536a466c1966573668f7d1926408af7075150f09976"
+    },
+    {
+      "path": "server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh",
+      "bytes": 936,
+      "sha256": "e0f577f54347c53bc0d13db518bce7ce258d1829aeedfe7ed536d671051fbfbc"
+    },
+    {
+      "path": "server-tools/linux/postgresql/migration-host.js",
+      "bytes": 18270,
+      "sha256": "a5081ed8a8faa3d403af61245dcc429e787cd4905b6dcda816a781cb13a76184"
+    },
+    {
+      "path": "server-tools/linux/postgresql/recover-maintenance.sh",
+      "bytes": 676,
+      "sha256": "27290bb4583187ce201015979f4d67941defe0be38aaaef9dbd17b5699bbd8ed"
+    },
+    {
+      "path": "server-tools/linux/recovery/grabenplaner-recovery.sh",
+      "bytes": 22023,
+      "sha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e"
+    },
+    {
+      "path": "server-tools/linux/recovery/lib/postgresql-application-smoke.js",
+      "bytes": 14843,
+      "sha256": "8be7d5156b29dd75701c5556b5940a9e2ea6255b0c22e6da94aa2a81c401bce9"
+    },
+    {
+      "path": "server-tools/linux/recovery/lib/postgresql-recovery-worker.js",
+      "bytes": 2998,
+      "sha256": "4a41d53002437a857afc9e449f08be6c9e4af419e821fc469d63b2d98da8377a"
+    },
+    {
+      "path": "server-tools/linux/recovery/lib/postgresql-recovery.js",
+      "bytes": 6705,
+      "sha256": "47279f618cac9e6c89dd4711a57e82902b50877cc7820a100c7bc6b43fd1964c"
+    },
+    {
+      "path": "server-tools/linux/recovery/lib/recovery-apply.js",
+      "bytes": 20101,
+      "sha256": "59dab947b11985df8b66cb8f1f5cecbd59be963a1ed0dd27daabbe57740eac35"
+    },
+    {
+      "path": "server-tools/linux/recovery/lib/recovery-metadata.js",
+      "bytes": 17993,
+      "sha256": "93ea829c6ce014e75d74df9e4cd2fa96dbd539bec09c0f08069312081abae829"
+    },
+    {
+      "path": "server-tools/linux/recovery/lib/recovery-verify.js",
+      "bytes": 28539,
+      "sha256": "a9fdbe25916ebb0a810557ba752b7d84598c0bb15be46e7e4be3ca3e4dbb588d"
+    },
+    {
+      "path": "server-tools/linux/runtime-schema.json",
+      "bytes": 872,
+      "sha256": "f181cd459d1ddbe9176e5794b9c73c78534d1167b850d8f943d516b5577e0cae"
+    },
+    {
+      "path": "server-tools/linux/stop-grabenplaner-server.sh",
+      "bytes": 2195,
+      "sha256": "a7d75a2f077106d9075a126f5f617896f39c7b672ceaa81637929ba4052a55f6"
+    },
+    {
+      "path": "server-tools/linux/test-grabenplaner-server.sh",
+      "bytes": 23129,
+      "sha256": "b37acc2e25df63726780c6fa68312e53b8763e1d07f500201d9ea378ad71ec72"
+    },
+    {
+      "path": "server-tools/linux/uninstall-grabenplaner-server.sh",
+      "bytes": 10504,
+      "sha256": "d843c7af265328c68fbc2cb770f6fdcf37b0b2a8765991d8ba47875522970a76"
+    },
+    {
+      "path": "server-tools/linux/update-grabenplaner-server.sh",
+      "bytes": 54497,
+      "sha256": "06b8dbdf777dc0347cf6feb116bef72534b3eb0773c6bb86b27f93b62ab929ca"
+    },
+    {
+      "path": "server-tools/package/New-GrabenplanerLinuxServerPackage.ps1",
+      "bytes": 31542,
+      "sha256": "0d2dbcd9cd8166fa034bf14d627a4853d79143fb26323f9bff239da07fee9296"
+    },
+    {
+      "path": "server-tools/server.env.example",
+      "bytes": 1982,
+      "sha256": "944dbe3bab65ee088bb830e084a5849cc4cded6d66cbcc1852ec0fd9e01ac639"
+    },
+    {
+      "path": "server-tools/windows/Backup-Grabenplaner.ps1",
+      "bytes": 9970,
+      "sha256": "7c4c0fb0ab9864e0c0e8af6027a61313d98a918b314e1f92f27d8ab79d70e805"
+    },
+    {
+      "path": "server-tools/windows/Caddy.Service.xml.example",
+      "bytes": 1298,
+      "sha256": "af3d025eb13ffed83875f3c8078bccd2a5d4aaeac41de8ba616ffca2addcdbb5"
+    },
+    {
+      "path": "server-tools/windows/Grabenplaner.Service.xml.example",
+      "bytes": 2340,
+      "sha256": "7c1c25614adb12dfe6e7f7c2804c2bc98d56604e9ad3dc111dc2440e114a94f8"
+    },
+    {
+      "path": "server-tools/windows/Install-GrabenplanerServer.ps1",
+      "bytes": 20990,
+      "sha256": "9bc109826fc90ec55b893bf55cb463dd57dcb767e2a0fd8917b73db0ceb28f51"
+    },
+    {
+      "path": "server-tools/windows/New-GrabenplanerServerPackage.ps1",
+      "bytes": 15935,
+      "sha256": "e0156cae0413948f3e75110702e72d39b351d25b2cfbab3316fce3e60aec3219"
+    },
+    {
+      "path": "server-tools/windows/Restore-Grabenplaner.ps1",
+      "bytes": 20281,
+      "sha256": "89eb7e03914dfed70ba405ad7ecc04f9407767663dd229d1f92169fccb332e5a"
+    },
+    {
+      "path": "server-tools/windows/Stop-GrabenplanerServer.ps1",
+      "bytes": 1041,
+      "sha256": "bc452ef4b66fa5d79d305cf2e169cbb4ea00d7adb8b7d40b13e613c476dc54c8"
+    },
+    {
+      "path": "server-tools/windows/Test-GrabenplanerServer.ps1",
+      "bytes": 12275,
+      "sha256": "73c0440ccbed98be920a2bd59602ec5e771da685109620b7c669d13d3b889139"
+    },
+    {
+      "path": "server-tools/windows/Uninstall-GrabenplanerServer.ps1",
+      "bytes": 2021,
+      "sha256": "d9a3fade5a2ac9c9686380c54aa07924a7d17aa1fc3594daf93afe1f3cef536d"
+    },
+    {
+      "path": "server-tools/windows/Update-GrabenplanerServer.ps1",
+      "bytes": 29930,
+      "sha256": "f279ae3660c2478b9c0194d589b700eaf5021c0837313fa778b7f8d7cef8faf7"
+    },
+    {
+      "path": "server.js",
+      "bytes": 2819830,
+      "sha256": "030674b3941588bc39cf40ce91199e535b0cebd570055c5a842d7ff6c0429b31"
+    }
+  ],
+  "runtimeFileCount": 645,
+  "runtimeBytes": 19236814,
+  "runtimeSourceSha256": "74f68739ba9a2171e6244b2893b15ab582a37e1d2cd91ffb285941f8f19c705f"
+}

@@ -77,7 +77,14 @@ fi
 
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
-database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
+database_provider="${DB_PROVIDER:-sqlite}"
+if [[ "$database_provider" == postgresql ]]; then
+  [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] || gp_die 'Der PostgreSQL-Paarbezug ist ungueltig.'
+  database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" 'PostgreSQL-Paarbezug')"
+else
+  [[ "$database_provider" == sqlite ]] || gp_die 'Der Datenbankprovider wird nicht unterstuetzt.'
+  database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
+fi
 backup_dir="$(gp_existing_directory "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
 public_url="${public_url_arg:-${GRABENPLANER_PUBLIC_URL:-}}"
 port="${PORT:-3000}"
@@ -92,6 +99,13 @@ caddyfile="$(gp_existing_file "$caddyfile" "Caddyfile")"
 failures=0
 check_ok() { printf 'OK\t%s\t%s\n' "$1" "$2"; }
 check_fail() { printf 'FEHLER\t%s\t%s\n' "$1" "$2"; failures=$((failures + 1)); }
+if [[ "${DB_PROVIDER:-sqlite}" == postgresql ]]; then
+  if "$node" "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$app_dir" >/dev/null \
+    && systemctl is-active --quiet grabenplaner-postgresql.service \
+    && systemctl is-active --quiet grabenplaner-postgresql-control.socket; then
+    check_ok 'PostgreSQL-Dienstvertrag' 'Datenbankpaar und Wartungssteuerung aktiv'
+  else check_fail 'PostgreSQL-Dienstvertrag' 'Dienstvertrag, Datenbank oder Wartungssteuerung unvollstaendig'; fi
+fi
 csp_has_exact_directive() {
   local policy="$1"
   local required="$2"
@@ -134,7 +148,7 @@ if gp_url_reports_ready "$public_ready_url" 15; then check_ok "Oeffentliche HTTP
 
 headers_file="$(mktemp --tmpdir grabenplaner-headers.XXXXXX)"
 scanner_probe="$(mktemp --tmpdir grabenplaner-scanner.XXXXXX)"
-cleanup() { rm -f -- "$headers_file" "$scanner_probe"; }
+cleanup() { rm -f -- "$headers_file" "$scanner_probe" "${caddy_raw_config:-}" "${caddy_validation_config:-}"; }
 trap cleanup EXIT
 
 if curl --fail --silent --show-error --max-time 15 --dump-header "$headers_file" --output /dev/null -- "$public_ready_url"; then
@@ -182,6 +196,24 @@ else
   check_fail "TLS-Zertifikat" "ungueltig, nicht erreichbar oder laeuft zu frueh ab"
 fi
 
+if [[ "$database_provider" == postgresql ]]; then
+  postgresql_helper="$app_dir/server-tools/linux/lib/postgresql-operations.js"
+  if "$node" "$postgresql_helper" identity /etc/grabenplaner/postgresql-operations.json >/dev/null \
+    && "$node" "$postgresql_helper" connection-health /etc/grabenplaner/postgresql-operations.json >/dev/null; then
+    check_ok 'PostgreSQL Core/Sales' 'Datenbankpaar, Strukturen und Verbindungszustand geprueft'
+  else check_fail 'PostgreSQL Core/Sales' 'Paar- oder Strukturpruefung fehlgeschlagen'; fi
+  postgresql_probe_mode=full
+  if [[ "${short_checks:-0}" == 1 ]]; then postgresql_probe_mode=short; fi
+  if "$node" "$postgresql_helper" backup-probe /etc/grabenplaner/postgresql-operations.json "$postgresql_probe_mode" "$maximum_backup_age_hours" >/dev/null; then
+    check_ok 'Backup-Aktualitaet' 'gemeinsamer PostgreSQL-Sicherungsstand aktuell'
+    if [[ "$postgresql_probe_mode" == short ]]; then
+      check_ok 'PostgreSQL-Sicherungsbeleg' 'Paarmanifest, Dateigroessen und Aktualitaet geprueft; Inhaltspruefung im Nachtlauf'
+    else check_ok 'PostgreSQL-Sicherungspaar' 'alle Komponenten, Hashes und Aktualitaet geprueft'; fi
+  else
+    check_fail 'Backup-Aktualitaet' 'gemeinsamer PostgreSQL-Sicherungsstand nicht bestaetigt'
+    check_fail 'PostgreSQL-Sicherungspaar' 'Pruefung fehlgeschlagen oder Sicherung zu alt'
+  fi
+else
 database_label="SQLite quick_check"
 if [[ "${short_checks:-0}" == 1 ]]; then database_label="SQLite Lesetest"; fi
 database_check="$(NODE_NO_WARNINGS=1 "$node" - "$database" "${short_checks:-0}" <<'NODE' 2>&1
@@ -240,6 +272,8 @@ else
   check_fail "$backup_check_label" "kein gekoppelter Sicherungspunkt vorhanden"
 fi
 
+fi
+
 printf 'Grabenplaner scanner readiness probe\n' >"$scanner_probe"
 scanner_result="$("$node" - "$app_dir/lib/amu-storage.js" "$scanner_probe" <<'NODE' 2>/dev/null
 const [modulePath, probe] = process.argv.slice(2);
@@ -254,8 +288,10 @@ if [[ -n "$scanner_result" ]]; then check_ok "AUM-Virenscanner" "$scanner_result
 caddy_validation_ok=0
 if [[ -n "${RUNTIME_DIRECTORY:-}" ]]; then
   install -d -m 0700 "$RUNTIME_DIRECTORY/caddy-config" "$RUNTIME_DIRECTORY/caddy-data"
-  caddy_raw_config="$RUNTIME_DIRECTORY/caddy-raw.json"
-  caddy_validation_config="$RUNTIME_DIRECTORY/caddy-validation.json"
+  # The assurance unit preserves its runtime directory between checks. Each
+  # invocation needs fresh files; the validated JSON is created exclusively.
+  caddy_raw_config="$(mktemp --tmpdir="$RUNTIME_DIRECTORY" caddy-raw.XXXXXXXX.json)"
+  caddy_validation_config="$caddy_raw_config.validated"
   if caddy adapt --config "$caddyfile" --adapter caddyfile >"$caddy_raw_config" 2>/dev/null; then
     if "$node" - "$caddy_raw_config" "$caddy_validation_config" <<'NODE' >/dev/null 2>&1
 const fs = require("node:fs");

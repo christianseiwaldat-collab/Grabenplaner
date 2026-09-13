@@ -1,0 +1,38 @@
+[Unit]
+Description=Grabenplaner dedicated PostgreSQL database pair
+After=network.target
+
+[Service]
+Type=simple
+User=grabenplaner-db
+Group=grabenplaner-db
+ExecStart=/usr/lib/postgresql/18/bin/postgres -D /var/lib/grabenplaner-postgresql/data/cluster
+KillSignal=SIGINT
+KillMode=mixed
+TimeoutStopSec=180
+Restart=on-failure
+RestartSec=5
+UMask=0077
+Nice=5
+CPUQuota=200%
+MemoryHigh=1280M
+MemoryMax=1536M
+MemorySwapMax=0
+TasksMax=128
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/grabenplaner-postgresql/data
+InaccessiblePaths=/var/lib/grabenplaner /etc/grabenplaner
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

@@ -66,7 +66,14 @@ const CHECK_LABELS = new Map([
   ["Monitor-Statusschutz", "monitorStatusProtection"],
 ]);
 const ERROR_CODES = new Set(["MONITOR_RUN_FAILED", "CHECK_OUTPUT_INVALID", "LIVE_RESTART_FAILED"]);
-const SHORT_CHECK_LABELS = new Map([["SQLite Lesetest", "sqlite"], ["Backup DB-/Dokumentbeleg", "backupIntegrity"]]);
+// Preserve established wire keys for compatible readers. The database slot
+// describes the active provider; alternate labels cannot duplicate a check.
+const ALTERNATIVE_CHECK_LABELS = new Map([
+  ["SQLite Lesetest", "sqlite"], ["Backup DB-/Dokumentbeleg", "backupIntegrity"],
+  ["PostgreSQL Core/Sales", "sqlite"],
+  ["PostgreSQL-Sicherungspaar", "backupIntegrity"],
+  ["PostgreSQL-Sicherungsbeleg", "backupIntegrity"],
+]);
 const STATES = new Set(["ok", "warning", "error"]);
 const TOP_LEVEL_KEYS = new Set([
   "format", "schemaVersion", "generatedAt", "state", "complete", "consecutiveLiveFailures",
@@ -171,7 +178,7 @@ function parseTestOutput(text, exitCode) {
   for (const line of lines) {
     const match = line.match(/^(OK|FEHLER)\t([^\t]+)\t/);
     if (!match) throw new Error("CHECK_OUTPUT_INVALID");
-    const id = CHECK_LABELS.get(match[2]) || SHORT_CHECK_LABELS.get(match[2]);
+    const id = CHECK_LABELS.get(match[2]) || ALTERNATIVE_CHECK_LABELS.get(match[2]);
     if (!id || Object.hasOwn(checks, id)) throw new Error("CHECK_OUTPUT_INVALID");
     checks[id] = match[1] === "OK";
   }

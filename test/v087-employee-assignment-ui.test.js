@@ -36,7 +36,7 @@ test("v0.87 Block 2 UI: Mitarbeiteranlage beginnt bei der Kostenstelle", () => {
   const save = between(app, "async function saveEmployee(event)", "function canManageTimeTrackingSettings");
   assert.match(save, /costCenterId:\s*elements\.employeeCostCenter\.value/);
   assert.doesNotMatch(save, /homeLocationId:/);
-  assert.match(app, /elements\.employeeCostCenter\.addEventListener\("change", \(\) => updateEmployeeAssignmentOptions\(\)\)/);
+  assert.match(app, /elements\.employeeCostCenter\.addEventListener\("change", \(\) => \{\s*updateEmployeeAssignmentOptions\(\);\s*renderEmployeeAccessProfile\(employeeAccessCurrentEmployee\(\)\);\s*\}\)/);
   const open = between(app, "function openEmployeeModal(", "function shiftRuleFindingsForCandidate");
   assert.match(open, /if \(!employee && !centralPersonnelWrite\)/);
   assert.match(open, /scopedLocation\?\.cost_center_id/);

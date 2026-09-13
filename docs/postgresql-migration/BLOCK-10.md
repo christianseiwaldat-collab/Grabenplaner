@@ -1,0 +1,44 @@
+# Block 10: gemeinsamer Sicherungs- und Wiederherstellungsvertrag
+
+Am 12.09.2026 nach Block 9 implementiert und isoliert geprüft. Die produktive Anwendung bleibt auf SQLite. Die vollständige Anwendungsprobe ist Gegenstand von Block 11.
+
+Die erste native Probe sichert Core und Sales aus gleichzeitig geschützten Datenbankständen. Sie bindet beide Dumps, Rollen, Konfiguration, private Dateien, Branding und den Inhaltsnachweis in einem gemeinsamen Manifest. Ein vollständiger Marker entsteht erst nach beiden erfolgreichen Dumps und Datei-/Hashprüfung.
+
+Die logische Wiederherstellung erfolgt in einer weiteren eigenen PostgreSQL-Instanz auf Loopback-Port 55484 unter dem eigenen Entwicklungsverzeichnis. Sie verwendet weder das Lebensatlas-Datenverzeichnis noch eine produktive Dienstdefinition. Beide wiederhergestellten Datenbanken müssen vollständig zum Inhalt aus Block 9 passen; Schema, Schlüsselbezüge, lokale Referenzen und Sequenzen werden erneut geprüft.
+
+## Praktisch bestandene Nachweise
+
+- Gemeinsame logische Sicherung: beide Dumps, Rollen, Konfiguration, Datenbankzugänge, private Dateien, Branding und Inhaltsnachweis; 71 Komponenten mit rund 1,006 GB. Core-Dump 5,7 Sekunden, Sales-Dump 50,4 Sekunden.
+- Logischer Restore in einer eigenen Instanz auf Port 55484: beide Datenbanken in zusammen 100,3 Sekunden eingespielt; anschließender Inhalts-/Beziehungs-/Sequenzvergleich 91,5 Sekunden. Alle 248 Tabellen und 2.887.715 Zeilen stimmen zum Block-9-Inhalt `b37ad81733768b2e0c90f728e7d5c4a33dca7b6f33c7cb4f98599db254ece379`.
+- Physischer Basisbackup mit SHA-256-Manifest und `pg_verifybackup`, danach WAL-Wiederherstellung zum gemeinsamen Restorepunkt `1/3700FE48`. Beide Datenbanken enthalten die technischen Testschritte 1 und 2; späterer Schritt 3 ist ausgeschlossen. Alle historischen Daten und 55 verschlüsselten Dateien erneut geprüft. Der vollständige erfolgreiche Wiederanlauf einschließlich Inhaltsvergleich benötigte rund 115 Sekunden; die vorgelagerte Basisbackupzeit gehört zusätzlich dazu.
+- Additive Offsite-Probe über das bereits gebundene, verschlüsselte Repository: Snapshot `9f0e1519a1f0ac3bc2fd075c2a0db67370bdfd18e6802dca1086d8e76aa28d3c`, ausschließlich Tags `postgresql-migration-qualification` und `paired-block10`. Keine Änderung der produktiven Aufbewahrung oder Statusdatei.
+- Vollständiger Restore aus dem tatsächlich zurückgeholten Offsite-Paar: 248 Tabellen, 2.887.715 Zeilen, 30.503 Quellenreferenzen, sechs Filialreferenzen, vier Artikelrevisionen, 23 Sequenzen und 55 verschlüsselte Dateien bestätigt. Einspielen rund 100,4 Sekunden, Inhaltsprüfung 93,7 Sekunden. Offsite-Paarmanifest `9263d750bf7aa6341a24318e3bd2a737eebdbed1e4fe18d1730deecce4d77954`.
+- Wiederverwendbare Backup-API mit gemeinsamer Anwendungssperre, beiden Datenbanksperren, exportierten Snapshots, Dateibindung und dauerhaftem Abschlussmarker: native Probe 70,8 Sekunden einschließlich aller Komponentenprüfungen.
+- Eigene Betriebsleserrolle `gp_operations_monitor`: kein Superuser, kein DDL/DML-Zugriff, Geschäftsdatenzugriff abgewiesen; PostgreSQL-Monitoring in Read-only-Transaktionen geprüft. Das optionale strengere Profil `wal-15m` weist fehlende laufende WAL-Archivierung und fehlenden Offsite-WAL-Stand ausdrücklich ab.
+- Der Offsite-Stagingvertrag unterstützt zusätzlich Version 2 mit dem untrennbaren PostgreSQL-Paar. SQLite-Staging bleibt Version 1. Der kurze Deploy-Entscheider unterstützt einen an beide Datenbanken gebundenen Nachweis; ein SQLite-Nachweis oder eine ausgetauschte Sales-Datenbank genügt dafür nicht.
+- Regulärer PostgreSQL-Betriebsadapter: gemeinsames Paket einschließlich vollständiger acht Zugangsdaten, Quell-Zeilenzahlen und Sequenzstände in 68,6 Sekunden. Der anschließende automatische Restore prüft alle 264 Tabellen einschließlich technischer Tabellen, 24 Sequenzen, die sechs Fachzugänge, 55 verschlüsselte Dateien, 113 geschützte Datensätze und den separaten Importarchivschlüssel. 264 ist die physische Zieltabellenzahl einschließlich Hilfs- und Referenztabellen; die 248 historischen Quelltabellen bleiben unverändert vollständig übernommen.
+- Derselbe Restore lief über den tatsächlichen Einstieg `recovery-verify.js` und einen begrenzten systemd-Probedienst: eigener Unix-Socket, gesperrtes Netzwerk, private temporäre Dateien, kein Zugriff auf produktive GP-Daten oder Konfiguration. Datenrestore einschließlich Prüfungen 178,5 Sekunden. Die vollständige Anwendungsprüfung wird ausdrücklich noch nicht als bestanden ausgewiesen. Nachweis: [Betriebsweg](block-10-recovery-verification.json).
+- Backup, Updater, Offsite-Vorbereitung, nächtlicher Restore, Aufbewahrung und Monitor erkennen den Provider. Kompatible PostgreSQL-Code-Rückkehr erhält sämtliche bereits geschriebenen PostgreSQL-Daten; sie spielt keine alte SQLite-Datei ein. Ein wechselndes Paar oder Schema sperrt diesen Rückkehrweg. Der erste Datenbankwechsel erhält in Block 12 einen eigenen Ablauf.
+- Der Offsite-Code verwendet Modulversion 9; Version 8 bleibt als Vorgänger lesbar. Der produktiv installierte Modulstand ist unverändert 8. Monitoring behält seine bisherigen internen Feldkennungen bei, zeigt den Datenbankcheck neutral an und löst bei Datenbank-/Backupwarnungen keinen GP-Neustart aus.
+
+Gezielte lokale Abschlussprüfung: 72 bestandene Tests, zwei Linux-spezifische Fälle zunächst ausgelassen; ergänzend 23 Linux-Fälle auf dem Host bestanden, einschließlich beider Sperrwartefälle, Modulübergang und PostgreSQL-Monitoring. Der Persistenzaudit meldet keine unklassifizierten Zugriffe oder Grenzverletzungen. Die überarbeiteten Schlüsselprüfungen haben zusätzlich 17 bestehende Recovery-/Governancefälle bestanden. Keine erneute vollständige Anwendungstestsuite in diesem Block.
+
+## Befunde und Korrekturen
+
+`pg_dump` lässt explizit gespeicherte Standardrechte weg. Nach dem Restore werden dieselben Standardrechte wieder explizit gesetzt; der unveränderte strenge Strukturhash stimmt danach vollständig. Die Rechte werden nicht erweitert. Hintergrund: [PostgreSQL-Standardrechte](https://www.postgresql.org/docs/18/ddl-priv.html).
+
+WAL-Archivdateien bleiben unveränderlich, die private zurückgespielte Arbeitskopie benötigt dagegen Schreibrechte. Außerdem bedeutet eine erste Read-only-Bereitschaft noch nicht, dass der gewählte Restorepunkt vollständig erreicht und die Promotion abgeschlossen ist. Der Prüfer wartet jetzt darauf. Ein durch die vorzeitige Prüfung unterbrochener Wiederanlauf erreichte später einen falschen Stand und wurde zuverlässig durch den Checkpointvergleich abgewiesen. Der erfolgreiche Wiederholungslauf begann deshalb aus dem geprüften Basisbackup. Ein bloßes Startsignal ist kein Wiederherstellungsnachweis.
+
+Der vorhandene signierte produktive Assurance-Verlauf wurde geprüft: Nach den älteren Fehlern folgte am 12.09.2026 um 05:47:02 UTC ein vollständiger erfolgreicher Lauf für 0.92.37-beta. Die älteren systemd-Fehlzustände wurden nicht gelöscht.
+
+Der generische Rollenrestore muss auch die ursprüngliche vergebende Administratorrolle erhalten. Eine neue Bootstrap-Rolle besaß nicht dieselben `ADMIN OPTION`-Bezüge und wurde von PostgreSQL abgewiesen. Der Wiederholungslauf verwendet die gesicherte ursprüngliche Rolle auf einem ausschließlich privaten Socket; Rollenrechte und Strukturhash stimmen danach. Ein fehlendes Prüfmodul in der ersten isolierten Quellkopie wurde ergänzt, bevor derselbe vorhandene Dump erneut geprüft wurde.
+
+## Betriebsgrenze und Übergang zu Block 11
+
+Das anfängliche Betriebsprofil bleibt bei der vorhandenen täglichen Offsite-Sicherung. Ein frischer gemeinsamer Punkt bleibt bei jedem Deploy erforderlich. Die umfangreiche Aufbewahrungs- und Restoreprüfung bleibt im Nachtablauf. Ein neuerer lokaler Deploy-Sicherungspunkt macht einen weiterhin aktuellen, korrekt gebundenen nächtlichen Offsite-Stand nicht automatisch ungültig.
+
+Die ursprüngliche Bestandsaufnahme nennt ein 15-Minuten-RPO als bedingtes Beispiel. **Ein dauerhaftes 15-Minuten-RPO wird nicht zugesagt:** Die zusätzliche PITR-Probe ist lokal, ein kontinuierlicher Offsite-WAL-Dienst ist noch nicht aktiviert. Das strengere Monitoringprofil kann diese Leistung erst bei nachgewiesenem WAL-Transport als erfüllt melden.
+
+Block 11 integriert und prüft jetzt die vollständige HTTP-Anwendung, Störungen und Rückkehr. Der automatische Assurance-Ablauf unterscheidet bereits Datenrestore und Anwendungstest: Ein reiner PostgreSQL-Datenrestore darf keinen vollständigen Anwendungsnachweis und damit keine kurze Deployfreigabe erzeugen. Produktive Aktivierung und Erstwechsel erfolgen erst nach der Gesamtprobe in Block 12.
+
+Die produktiven GP-, Lebensatlas- und PostgreSQL-Hauptdienste wurden für diese Proben weder umgestellt noch neu gestartet. Fehlgeschlagene eigene Probeverzeichnisse wurden erst nach bestandenen Ersatznachweisen entfernt; Fehlerprotokolle und erfolgreiche Sicherungen bleiben erhalten.

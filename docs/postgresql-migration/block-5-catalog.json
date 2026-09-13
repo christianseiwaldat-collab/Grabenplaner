@@ -1,0 +1,813 @@
+{
+  "scope": "sales-development",
+  "stage": 5,
+  "productActivation": false,
+  "total": 70,
+  "prepared": 70,
+  "failures": [],
+  "entries": [
+    {
+      "statementId": "cash-snapshots.dataset.next-slot",
+      "sourceContract": "3730617c4074c82c013524feb66d2fe95bd5726c0a387bafb22ab5ecf76d67ff",
+      "sqlSha256": "ee0945d7e5eecda3cebcc20b1ceb5132bbcd5b4627ccd86051cef099836ce613",
+      "parameterTypes": []
+    },
+    {
+      "statementId": "cash-snapshots.dataset.get",
+      "sourceContract": "37c156fd37d46453c339eae4314c2e7cffdccb798ec0c238a30028a134f9bf71",
+      "sqlSha256": "c224e55d8a37a987df7f961aa0ff40e4273c0483402beb526a54022b3c05fad7",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.dataset.inventory",
+      "sourceContract": "21f15510e49dd8045d95498d538aa8cabb2138f903479adfcfa889dbf68e14a5",
+      "sqlSha256": "9e28d0cc5332fdc44c6913a898a756960fc85cd5169895c68425c1779769379e",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.dataset.insert",
+      "sourceContract": "6f982735e7cd86137bdc69e7d8522481cef35e353beb21335e07b1f9e97afbba",
+      "sqlSha256": "a136774bdabc6edf56ed83f1cae4592bc59dc9c3d94e98c8248234bffd5e521f",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.dataset.update",
+      "sourceContract": "7e278f9cd2867303c27878853b6b64657ade9c728d6e76a7330a2f490030ecbb",
+      "sqlSha256": "d4d2ef7ae29fb6c38449630c2c58360d8729bb1505118eb600f96f863be31b79",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.insert",
+      "sourceContract": "8b0aa24c166dd6f01d9802f32df94bce21ac805e09d2c07c2346c097e64d6a6f",
+      "sqlSha256": "87e46db65653e5e37c273fa2fd913c8c26de84a4cf66a6eca549da1acfc59969",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.row",
+      "sourceContract": "bcc40fe9ccc3c241705c9ce4e6425aa586eddca62fcf3280341a6d4dd1633929",
+      "sqlSha256": "318dceaf9753d4aac3fc72a64456fc2b6f2c5119e8b005b84f3f11a5c3985e4e",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.key",
+      "sourceContract": "c34626d4ffec7dfa093d14ed3cf03d3aa4cf88dc9f625173dd36047ac3579b1d",
+      "sqlSha256": "29e69e4fadc76d8be56b3e9f59758008c92e701ef24a5fb3f20ebd49683eff65",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.page",
+      "sourceContract": "5da1ff90af7d06383d862a7e4a1ac3ba484352925b7215c32538a86b0c468584",
+      "sqlSha256": "be944fe92cde75b8a38558f4f657879e957d3d85b0189e3807c09bb4c741bae9",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.count",
+      "sourceContract": "ac8cc3bda1afea716e83cc78519dbb0b5f163057682929db7ad4835a2941b533",
+      "sqlSha256": "db9737acc39f771a417aa1b8e2eee911cd1ce164b4067c3abf336cd3c3781a0b",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.0.children",
+      "sourceContract": "94ba13f157f3d50de8e34ea4a25f97737735f4c22bae99a69d88b3a30712432c",
+      "sqlSha256": "cb9b7d59dd38fc7120f3f9b738d15627d3762b2f44f1fd0003a70f856b6d0d14",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.insert",
+      "sourceContract": "1d2587bdd80fa29f8243bc3c2b3967540846a413f3a50f0445318ee99c3f68fe",
+      "sqlSha256": "4c982cda8c58c650ee5b61c3d33c2086e6b932d729df151abe24a81d723a829f",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.row",
+      "sourceContract": "7a74c600ccb2b1c294728abb7a71d440fcd63ab1a155f103b02e3bdb3c4818d8",
+      "sqlSha256": "c2e6ee247046766f9b35d5910a20495aff7f930e6942f34bd6ed57b2558d993f",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.key",
+      "sourceContract": "f5897e2eebeac1764d52c66b5eb80bb11b19683ca634e5228caa0f6ff007d1b8",
+      "sqlSha256": "c20d6ca7441edf8983ee9f8bf30fcaab8d788daa442bfe5baff14f7c3579f8ac",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.page",
+      "sourceContract": "8e8467da10a1752766b5ea90288b951d7f1674e2e00e63314e3dd96fd9132746",
+      "sqlSha256": "21f4ff5f8a379095ad0eeb791d0a71c3f4676928d6fd455298c24cc6011af9ed",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.count",
+      "sourceContract": "6d475064d23f1384f51b6396fcd3af3b033543eef899c9585fdead110c58e0b5",
+      "sqlSha256": "45a5fde73a2ee8e54bf012eeff204e0534e346f00f953037611cfb809ac3f11c",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.1.children",
+      "sourceContract": "888042e318cb3d60d3d34e27c8dfea9659b27252a4210454b9af18d3d5d4cae7",
+      "sqlSha256": "31c44f0e105160dda6ece22f998eec4f2e6bfc62cf99339c377561966d45b783",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.insert",
+      "sourceContract": "bf3b4f9bf282972a27e373eaf99441cbac053571c3d23cfaf5b7ae1c685c5173",
+      "sqlSha256": "14945bbab3db60e1f161da535db15ef26436e220e47b9c7d722b3fbdf8fb894c",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.row",
+      "sourceContract": "d1350d50c4b68e5d488326c94a13c542d87e272dd9412f76a48258f0e5a4626a",
+      "sqlSha256": "3b65ca2930a6cf7f0920e05f9ae87558ae19c875c16d8f944adf3e964b7510f2",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.key",
+      "sourceContract": "d0b16f5e5736491f17e0c824e1de7a2419a8acf8f10cf15262f0ea85a6885e62",
+      "sqlSha256": "4f362abda562fedff46197eec5823e3162d0f4189efb4fa3b2253a48dcf41b8f",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.page",
+      "sourceContract": "7589784ebcb56c5c5fc62b63b512bff628f503e8cb7737a27987e32f889010a5",
+      "sqlSha256": "5d9cc0e7f79d9af8b4da0f61cbb2be1305e8ec6e341ea800255893a044766512",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.count",
+      "sourceContract": "c66524a7ce114d941637f5860ee3a57a8d868607ad00c350144c26577fedbaaf",
+      "sqlSha256": "70cf40dd03eb674d05391c6be38d25f0947e37504027443fdb02aae32c36dd8b",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.2.children",
+      "sourceContract": "e6431cd9575095ab4483c83bead0c09b257315573db1837d84711c2980611da2",
+      "sqlSha256": "01aca68d4318c0060dcd15630fe5920a738a3dd63b83932de28a17aaac8aa21a",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.insert",
+      "sourceContract": "b7e0c2f50c74013463131067eb4b8e3006b7c76ab6e4632aa01170c91e2fa2aa",
+      "sqlSha256": "a8676b341d6d88c6625d0fbd5ee5a81b9285cab69bbea319f0a7fc0b8f969fa9",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.row",
+      "sourceContract": "1a1fd66e37f38e36fa2815e637f3e2e6e32575566b6891c0cb9d0aa362055968",
+      "sqlSha256": "8d5c7b4efab485ba3bada4d79092cf71bc429b9a2241d4ac84592c27ac634073",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.key",
+      "sourceContract": "ecce44bd6346037b9fdf05ed28f55644a81b71c22d8dfc9c2b4cf9d72e48dd6d",
+      "sqlSha256": "d4e0173d77938aac9b3c4d2ea214bbfe7cdc45441d559ce4cf1f5c416124e375",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.page",
+      "sourceContract": "27dc8dd23053552b2082cb79082e216120f8faaedb19e3553e6cb3160dd48a5d",
+      "sqlSha256": "fe67d3a9b4bc759f9022fe6dac5eb7167d868dc76d6706e272df42531edee2f7",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.count",
+      "sourceContract": "b426e0ce0f9d5b0a7d123d938e371a090acf57a6eeea9e4334854b2b899cb8bc",
+      "sqlSha256": "dbbae4d311a130ef8d9c41865b093fa55e3abfd14464ad5b1ed0069919262444",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.3.children",
+      "sourceContract": "6e32b1ea077f829e66af991ed7dd466261a1ebeea67086fb7ebebf22b02e05ad",
+      "sqlSha256": "65f6b3a436dfbb6ea19520156ffe3a54b4f520d2d030f2690f88a80a28ac2876",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.insert",
+      "sourceContract": "aab0fd3ab4929d6eb90ac765fded4a6e0f0b5b89df85d2832c6efc92062b5474",
+      "sqlSha256": "6e142ab076ed2dd94c18d46e9b61c0018b0983d3ed28e02e35491955125342a3",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.row",
+      "sourceContract": "8a13887acf020072e65c5545f48132503b81ec6a92444646eecf0b6cabed0621",
+      "sqlSha256": "9223f66bf3d5f4e6968618ad9a0318f26d90f6b026d2f32e273647e02d432aaf",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.key",
+      "sourceContract": "0f49c9802aa4260337544dce7ee4369709238b5b20bdab02e36bbe30419c349f",
+      "sqlSha256": "c367e0add64a50e06d20781469502a0acaca7ee99124c78c4be78409e90c5614",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.page",
+      "sourceContract": "240a73166357aa0ee4aef0dba8995eb6dc25d4e0befcb072cb3e191fb1fe5a0d",
+      "sqlSha256": "bfc9079455e2e3934b327a388f5250e5b6443f6026d72b89a7ffab71027e7a9f",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.count",
+      "sourceContract": "2fcc5c99997bc692d966dbc6a7641b036a80c7e57720121f2582dd7e12ce3212",
+      "sqlSha256": "a7ee61bcc3dd934c27baaf21c244c0d84fdd8812ec9d8529bd355d39ad6562f3",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.4.children",
+      "sourceContract": "f8863cfb8fc7f8910d73e9cfc792a270af559c8ae9e46ccc03badbcc4d41900e",
+      "sqlSha256": "fb91d33ae92275e17e5000f065a7ffa21f4024285d6328c8651ecc5969a90bb1",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.insert",
+      "sourceContract": "9a54707fcc5e2125259f025cd7a177bf79c5a183ab8125a5fdb0cb1712e817d6",
+      "sqlSha256": "a194362c85f6dadc56fffd20c9e9d0c7ef5485fb7a24649f081badaa109a2268",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.row",
+      "sourceContract": "892a4220906e4937ed8691007bef4cd40f398461f2603e9de7fb1902284b9cd5",
+      "sqlSha256": "e0d712e48985e38f930bc81b86d1d444866122cdbd3ac40965d8a25d4dc2be43",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.key",
+      "sourceContract": "7dda56bfec581a7f2ad05acfbff37afcda6cfbf0a766475caf1e3a60eb6a3e84",
+      "sqlSha256": "1903643f7917b1610ad94638c8c0a47f3e10d00675974d2d7b57adcbfb43d399",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.page",
+      "sourceContract": "14576b8a1157c5f26dc367a37841daba996b1ff4d6a66305024c249cdeba7715",
+      "sqlSha256": "cafc2e149ace980fb21ff9f6d329d4f6d54ea77947141578133dbdabd2bea597",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.count",
+      "sourceContract": "babffcc98acf593dde743ed131a33a88a0c465582cd8909ba75b80149760f1e3",
+      "sqlSha256": "974e02d87ffd89f818c5959bbc999598084324262783fc37cb42946f47b80bfb",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.5.children",
+      "sourceContract": "b7155998b828e7c147f171205822b012b6d4f67de466ffec4ba4cc6b80e52e80",
+      "sqlSha256": "8b7d465469ae15e5acaa48e704e04ad175fc7316cf7512b260716ddc30e927b7",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.insert",
+      "sourceContract": "ce65d33ce3d2cebd4ba91693986f28a3bf583846301ffbfa18fcbcc3da22a565",
+      "sqlSha256": "bc4ba43482d3c0c8be3d9785e7cb686f7be1edf057f5e184530c408d8adb54aa",
+      "parameterTypes": [
+        "bytea",
+        "text",
+        "bytea",
+        "bigint",
+        "bytea",
+        "bigint",
+        "text",
+        "bytea",
+        "bytea",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.row",
+      "sourceContract": "2d18e4b6df8eb416175f8360780a5323e41f52bede6290f50b93663d399a4ffa",
+      "sqlSha256": "a914bb5ee90ee70176b5efc636fbdaba6d0def01989d5fdd717cd76180a79e1f",
+      "parameterTypes": [
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.key",
+      "sourceContract": "2dda373c432177a6d00f27e41c12f531b935d0da80d2e1e0489f852703fe1d30",
+      "sqlSha256": "ec6d541d8d6a54ee1acd3cc5c376a2f7499e32e79e0302906fecf51649d1d7df",
+      "parameterTypes": [
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.page",
+      "sourceContract": "5b0da683f90f844c495a0fb79e33e45c26f5d4b9e7a229378b5bc5278198b3ea",
+      "sqlSha256": "0ad3de2fa6868738d6c0349cb603d4ef6056d55331324b3a5000755b871130b4",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.count",
+      "sourceContract": "8548d43bc7fd94266f90e82cb1f8a966a60e83ee25bdec2a0eb1c90c7b7d9ae7",
+      "sqlSha256": "ccf6348549132f426e1338e82951c07573244f427fafa0d0f98599ed5711611b",
+      "parameterTypes": [
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-snapshots.6.children",
+      "sourceContract": "347f5f29011a6f5d75c2546eb4e5612527ed2edaae400756343fa15493001148",
+      "sqlSha256": "871867fe27d16cef0b17d339e6cc7b20cef3e25b6ed7bc03a522b76143db5931",
+      "parameterTypes": [
+        "bigint",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-publications.report-source-search",
+      "sourceContract": "1a0657d8c4c55eaa8d78729c4e37e1b293f4d7aa3ea521d5e533333c05bdf561",
+      "sqlSha256": "d3897783a926f6c210f5fab785542e274edb873e3bbe2590e2e96f7a48501747",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-publications.state",
+      "sourceContract": "4820f47b152c21355ecbdcba8959fbe6fd2241dd631645ca6f6d25c62047090c",
+      "sqlSha256": "47335e0658ab0413b016f7a827f290db23236818a70f50628314f5f1db948627",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.state.insert",
+      "sourceContract": "993fab908e72e79e90764e619bf53225933710067a97108b611203402b724184",
+      "sqlSha256": "abdd691849a7b4882a7e622365c426af9b76c7729f8937bc83282ab6ca56b105",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.state.update",
+      "sourceContract": "6a924dc783ff04abbd56cfe134fe22b8e2877b5887436cfbe5d10283084680ab",
+      "sqlSha256": "7ebb402857b9e9998dc8aae679ba15f7cb965991856c325730249d2af11063c5",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.get",
+      "sourceContract": "f8ad7ef89d6733f1f08e7bec09a1a87b162e49aa1ba5235a68a2834aa38c6f57",
+      "sqlSha256": "551ae565ae3027b3efdb2ea5fe858820af0f99496cce1743de1d0775d68b150c",
+      "parameterTypes": [
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.insert",
+      "sourceContract": "73303e9f415720a33c8e1e07a5da02adb3a0fd572c2a47837cc154221b305cdd",
+      "sqlSha256": "b5eb74ce8f803d25f199a2b5ff62eed6024f0e2c4e6bc7b2f900d96081001410",
+      "parameterTypes": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.binding.insert",
+      "sourceContract": "b967e2008e2f8f962a37ab31cc19ed16321ddb5ac57ca39654beebf1cb86c440",
+      "sqlSha256": "9014dc2d9beb62d7b2763aa6c1d3590bde624a637e0f2f21448cdca82a9a806a",
+      "parameterTypes": [
+        "boolean",
+        "text",
+        "text",
+        "text",
+        "bytea",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.binding.get",
+      "sourceContract": "d61856ee7739fdf476660a83f60429e197225edb0f5399c10a7efdf29c886bb7",
+      "sqlSha256": "84a3ac00dab3aabb20b01c5689cb9d95e209f6c54e8ca7cb9496961b17031b4a",
+      "parameterTypes": [
+        "text",
+        "text",
+        "bytea"
+      ]
+    },
+    {
+      "statementId": "cash-publications.bindings",
+      "sourceContract": "d0556d0bfa7aa86bfd1815049e37bfd184f4063237f1ed68e55c8621caa048b3",
+      "sqlSha256": "df0b06be9374469a931a67a3ea5c3317d2a24f14a4aabbe0195f427bf5c03f5a",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.binding.count",
+      "sourceContract": "53ec9782baa4f11b8780f6ac1baf3989c08e97893665694d67a6134d73cc3640",
+      "sqlSha256": "f3748a42ef9fc26816778bbd846f9670323d4c2f503cce1c4c807e6181499ca0",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.binding.inventory",
+      "sourceContract": "8c53b45e46aef24d261f8b303a4ec20ae085b1732b51c3e377f9b4303a04ec54",
+      "sqlSha256": "b15b177c1636fa718190252a486c9e169bfc37b8a514846b1200637d1b8de9d3",
+      "parameterTypes": [
+        "text"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search.6",
+      "sourceContract": "720331641c28c06bf079ce3cd59cb8db2d752421012e1427c34c9751faac0d51",
+      "sqlSha256": "1ebfd3549a55387daf8d96edf0fc2e6701a25417445095e24d5e9c64c67d37ea",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search.5",
+      "sourceContract": "c5438afbd61a023d85cbedccf11bddf3fba3a8d0af6e0211fcfcb15a34548254",
+      "sqlSha256": "895ce8e6c2c49180896c86a3e2d3a221f8ae95d9e371b6316090a4d0f26cc1dc",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search.4",
+      "sourceContract": "b86387a6c0ca4246813dddf6b43d56bbcd0132a96eb88c64aaa4f6810f74e928",
+      "sqlSha256": "18c9fc920093e78f43c783d1d55c3b159c54c16f43a7e1ef1a3a66d1e98875a6",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search.1",
+      "sourceContract": "03444ef51f6e91fbc4917678f8064c18deeab08ff48c39b23f9cf58a73c628c9",
+      "sqlSha256": "6adc0bba8f55a7a951524a5fbf0888f89d3f907d9dbbb4309d03b649bb2dbdea",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search-assigned.6",
+      "sourceContract": "6572e22f99e0c487b221b0001649a9235a5bfa9fffaeae02684ee68d05523970",
+      "sqlSha256": "80e5439e71b43dcf53596a1062a32530b9c6000e2de5bdfc6db26cd27c1fc508",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search-assigned.5",
+      "sourceContract": "56200732780d6fc47cbf31e3c2d99cf59de7fc7591c442d4e7b687034ee2e3e4",
+      "sqlSha256": "adaeeee7c4ac1a0724bdf0f1defc7e6c6d72c36b04ba2eeb51d682f83f2f2f18",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search-assigned.4",
+      "sourceContract": "d3b207b59a538795dc2e6622d7d3b3d9b2b7b79d9a14efb1d1d88e3b139d179c",
+      "sqlSha256": "1109b70428b315743dd1cddbee3951336fac77269e3b82608b19f590f0dd625e",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.search-assigned.1",
+      "sourceContract": "0e8bd3eed42ba63e03c4ef32cc1360b1e6c227747497d26644fb48a6f9ae2e0f",
+      "sqlSha256": "0746ed8b025819a381282571df19122b8dd6e4d6c57e212c6f2d845f6bf785aa",
+      "parameterTypes": [
+        "text",
+        "bigint",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "bigint",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "boolean"
+      ]
+    },
+    {
+      "statementId": "cash-publications.references.filialen",
+      "sourceContract": "5b0bf5b6698eacaba47621df2b17b92e441fb3ea3b06eff25487e58ed2bbeb85",
+      "sqlSha256": "07fc63987e792f097e907c51f6e83f01cea4d1f55557d2bd8af1914e1cfe9953",
+      "parameterTypes": [
+        "bytea",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-publications.references.mitarbeiter",
+      "sourceContract": "be626d52c70161b4588e4309a089b96c4e477b7372f16444f2b55fab57237bba",
+      "sqlSha256": "c044645b05484f2760c9a1d872ac1529e1604c8cf2580778eb68209bfbe289be",
+      "parameterTypes": [
+        "bytea",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-publications.references.artikel-stamm",
+      "sourceContract": "f07b69c09dc9a8f5d72240f46232552b0971211cf61b9b8d6c2c321106d76624",
+      "sqlSha256": "9a54526e4bdc3d247f4591f8754fb298eb2594f7dd3b0664c71c247ed0ccbc2d",
+      "parameterTypes": [
+        "bytea",
+        "bigint",
+        "bigint"
+      ]
+    },
+    {
+      "statementId": "cash-publications.references.kunden",
+      "sourceContract": "27a7a1a78e5b93dbaee6c29880003bc7b3fc7e5782c5cd88a9fc0959244f5d17",
+      "sqlSha256": "17206b65bfa5832bcf04bf7b2ded2a7412b9fba0fb764338696550b6f6fa0c01",
+      "parameterTypes": [
+        "bytea",
+        "bigint",
+        "bigint"
+      ]
+    }
+  ],
+  "schemaPlanSha256": "c48d4115d138ac0ad3729892c3ca74689049fb397972f3e1cfe99f7969851372"
+}

@@ -6209,7 +6209,7 @@ const serverMonitorCheckLabels = {
   crossOriginResourcePolicy: "Cross-Origin-Resource-Policy",
   permittedCrossDomainPolicies: "X-Permitted-Cross-Domain-Policies",
   tlsCertificate: "TLS-Zertifikat",
-  sqlite: "SQLite",
+  sqlite: "Datenbank",
   backupFresh: "Sicherungsalter",
   backupIntegrity: "Sicherungsbeleg und Dokumentzuordnung",
   amuScanner: "AUM-Virenscanner",

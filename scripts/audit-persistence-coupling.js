@@ -68,6 +68,197 @@ const BASELINE_PACKAGE_DEPENDENCY_NAMES = Object.freeze([
   "tesseract.js",
 ]);
 const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer"]);
+// A read-only SQLite snapshot is the source of the user-authorized Block 9
+// transfer. This exception does not permit application fallback to SQLite.
+const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
+// User-authorized 2026 migration blocks; isolated environment, never product activation.
+const MIGRATION_DEVELOPMENT_FILES = new Set([
+  'lib/persistence/postgresql/runtime-binding.js',
+  'lib/persistence/postgresql/productive-configuration.js',
+  'lib/persistence/postgresql/lifecycle-control.js',
+  'lib/persistence/postgresql/operations/status.js',
+  'lib/persistence/postgresql/operations/lifecycle.js',
+  'lib/persistence/postgresql/operations/cutover.js',
+  'lib/persistence/postgresql/transfer/staging.js',
+  'lib/persistence/postgresql/transfer/activation.js',
+  'lib/persistence/postgresql/transfer/protection.js',
+  'scripts/postgresql/activation-rehearsal-step.js',
+  'scripts/postgresql/managed-activation-qualification.js',
+  'server-tools/linux/postgresql/control-worker.js',
+  'server-tools/linux/postgresql/host-reboot.js',
+  'server-tools/linux/postgresql/lifecycle-run.js',
+  'server-tools/linux/postgresql/lifecycle-status.js',
+  'server-tools/linux/postgresql/lifecycle-maintenance.sh',
+  'server-tools/linux/postgresql/migration-host.js',
+  'server-tools/linux/postgresql/managed-contract.js',
+  'server-tools/linux/postgresql/recover-maintenance.sh',
+  'server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh',
+  'server-tools/linux/postgresql/capture-final-source.py',
+  'test/postgresql-migration-activation.test.js',
+  'test/postgresql-migration-cutover.test.js',
+  'test-support/postgresql-migration/application-outbox.js',
+  'test-support/postgresql-migration/application-load.js',
+  'test-support/postgresql-migration/application-export.js',
+  'lib/persistence/postgresql/operations/application-export.js',
+  'test/postgresql-migration-full-application.test.js',
+  'scripts/postgresql/application-fault-child.js',
+  'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
+  'lib/persistence/postgresql/application.js',
+  'lib/persistence/postgresql/rehearsal-configuration.js',
+  'lib/persistence/postgresql/application-operations/access.js',
+  'lib/persistence/postgresql/application-operations/async-collections.js',
+  'lib/persistence/postgresql/application-operations/branch-orders.js',
+  'lib/persistence/postgresql/application-operations/diagnostics.js',
+  'lib/persistence/postgresql/application-operations/employee-location-lendings.js',
+  'lib/persistence/postgresql/application-operations/protected-storage.js',
+  'lib/persistence/postgresql/application-operations/startup.js',
+  'lib/persistence/postgresql/boundary/personal-actions.js',
+  'lib/persistence/postgresql/operations/restore-privileges.js',
+  'lib/persistence/postgresql/contracts/manifest.json',
+  'lib/persistence/postgresql/contracts/source-schema-v09237.json',
+  'lib/persistence/postgresql/contracts/block-1-inventory.json',
+  'lib/persistence/postgresql/contracts/block-4-catalog.json',
+  'lib/persistence/postgresql/contracts/block-5-catalog.json',
+  'lib/persistence/postgresql/contracts/block-6-catalog.json',
+  'lib/persistence/postgresql/contracts/block-7-catalog.json',
+  'lib/persistence/postgresql/contracts/block-8-catalog.json',
+  'lib/persistence/postgresql/contracts/block-7-boundary-catalog.json',
+  'lib/persistence/postgresql/contracts/block-8-reporting-catalog.json',
+  'scripts/postgresql/application-rehearsal-step.js',
+  'test-support/postgresql-migration/application-http.js',
+  'test-support/postgresql-migration/application-operations.js',
+  'lib/persistence/postgresql/operations/paired-checkpoint.js',
+  'lib/persistence/postgresql/operations/paired-restore.js',
+  'scripts/postgresql/qualify-nightly-restore.js',
+  'server-tools/linux/recovery/lib/postgresql-recovery.js',
+  'server-tools/linux/recovery/lib/postgresql-recovery-worker.js',
+  'lib/persistence/postgresql/transfer/values.js',
+  'lib/persistence/postgresql/transfer/history.js',
+  'lib/persistence/postgresql/transfer/verify-pair.js',
+  'scripts/postgresql/transfer-historical.js',
+  'scripts/postgresql/verify-historical-pair.js',
+  'scripts/postgresql/verify-historical-protection.js',
+  'test/postgresql-migration-transfer-values.test.js',
+  'test/postgresql-migration-transfer-guards.test.js',
+  'lib/persistence/postgresql/operations/paired-development.js',
+  'lib/persistence/postgresql/operations/paired-pitr.js',
+  'lib/persistence/postgresql/operations/paired-bundle.js',
+  'lib/persistence/postgresql/operations/paired-backup.js',
+  'lib/persistence/postgresql/operations/paired-monitor.js',
+  'lib/persistence/postgresql/operations/paired-retention.js',
+  'lib/persistence/postgresql/operations/runtime.js',
+  'server-tools/linux/lib/postgresql-operations.js',
+  'scripts/postgresql/qualify-operations-runtime.js',
+  'scripts/postgresql/qualify-paired-backup-api.js',
+  'scripts/postgresql/qualify-paired-monitor.js',
+  'test/postgresql-migration-operations.test.js',
+  'scripts/postgresql/prepare-paired-offsite.js',
+  'test/postgresql-migration-paired-backup.test.js',
+  'scripts/postgresql/qualify-paired-recovery.js',
+  'lib/persistence/postgresql/core/environment.js',
+  'lib/persistence/postgresql/core/sql.js',
+  'lib/persistence/postgresql/core/schema.js',
+  'lib/persistence/postgresql/core/compatibility.sql',
+  'lib/persistence/postgresql/core/fingerprint.js',
+  'lib/persistence/postgresql/core/migrate.js',
+  'lib/persistence/postgresql/core/catalog.js',
+  'lib/persistence/postgresql/core/application.js',
+  'lib/persistence/postgresql/sales/layout.js',
+  'lib/persistence/postgresql/sales/schema.js',
+  'lib/persistence/postgresql/sales/catalog.js',
+  'lib/persistence/postgresql/sales/migrate.js',
+  'lib/persistence/postgresql/sales/application.js',
+  'scripts/postgresql/apply-sales-schema.js',
+  'scripts/postgresql/validate-sales-catalog.js',
+  'scripts/postgresql/validate-sales-triggers.js',
+  'test-support/postgresql-migration/sales-fixture.js',
+  'test-support/postgresql-migration/cash-fixture.js',
+  'test/postgresql-migration-cash.test.js',
+  'test-support/postgresql-migration/trade-fixture.js',
+  'test/postgresql-migration-trade.test.js',
+  'lib/persistence/postgresql/boundary/schema.js',
+  'lib/persistence/postgresql/boundary/migrate.js',
+  'lib/persistence/postgresql/boundary/catalog.js',
+  'lib/persistence/postgresql/boundary/application.js',
+  'lib/persistence/postgresql/reporting/catalog.js',
+  'lib/persistence/postgresql/reporting/principal.js',
+  'lib/persistence/postgresql/reporting/worker.js',
+  'lib/persistence/postgresql/reporting/receipt-prefetch.js',
+  'lib/persistence/postgresql/reporting/receipt-runtime.js',
+  'lib/persistence/postgresql/reporting/worker-priority.js',
+  'scripts/postgresql/apply-boundary-schema.js',
+  'scripts/postgresql/validate-boundary-catalog.js',
+  'scripts/postgresql/validate-reporting-catalog.js',
+  'scripts/postgresql/prepare-server-qualification.sh',
+  'scripts/postgresql/run-server-qualification.js',
+  'scripts/postgresql/qualify-load.js',
+  'scripts/postgresql/recover-interrupted-fixture.js',
+  'scripts/postgresql/verify-development-state.js',
+  'test-support/postgresql-migration/report-fixture.js',
+  'test-support/postgresql-migration/load-articles.js',
+  'test-support/postgresql-migration/aggregate-fixture.js',
+  'scripts/postgresql/tune-development-pools.js',
+  'test/postgresql-migration-boundary.test.js',
+  'test/postgresql-migration-reporting.test.js',
+  'test/postgresql-migration-connection.test.js',
+  'test/postgresql-migration-immutable-validation.test.js',
+  'scripts/postgresql/apply-core-schema.js',
+  'scripts/postgresql/validate-core-triggers.js',
+  'scripts/postgresql/validate-core-catalog.js',
+  'scripts/postgresql/lock-core-catalog.js',
+  'scripts/postgresql/development-environment.sh',
+  'scripts/postgresql/build-inventory.js',
+  'scripts/postgresql/benchmark-core.js',
+  'scripts/postgresql/mark-development-environment.js',
+  'scripts/postgresql/run-development.js',
+  'scripts/postgresql/create-isolated-environment.sh',
+  'test-support/postgresql-migration/source-schema-v09237.json',
+  'test-support/postgresql-migration/sqlite-source.js',
+  'test-support/postgresql-migration/core-fixture.js',
+  'test-support/postgresql-migration/query-inputs.js',
+  'test/postgresql-migration-inventory.test.js',
+  'test/postgresql-migration-environment.test.js',
+  'test/postgresql-migration-schema.test.js',
+  'test/postgresql-migration-application.test.js',
+  'test/postgresql-migration-queries.test.js',
+]);
+const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
+  'lib/persistence/postgresql/transfer/staging.js',
+  'scripts/postgresql/activation-rehearsal-step.js',
+  'server-tools/linux/postgresql/migration-host.js',
+  'test-support/postgresql-migration/application-export.js',
+  'lib/persistence/postgresql/operations/application-export.js',
+  'lib/persistence/postgresql/application-operations/access.js',
+  'lib/persistence/postgresql/operations/paired-restore.js',
+  'lib/persistence/postgresql/operations/runtime.js',
+  'scripts/postgresql/qualify-operations-runtime.js',
+  'scripts/postgresql/qualify-paired-backup-api.js',
+  'scripts/postgresql/qualify-paired-monitor.js',
+  'lib/persistence/postgresql/operations/paired-development.js',
+  'lib/persistence/postgresql/operations/paired-pitr.js',
+  'lib/persistence/postgresql/transfer/history.js',
+  'scripts/postgresql/verify-historical-protection.js',
+  'scripts/postgresql/validate-reporting-catalog.js',
+  'scripts/postgresql/tune-development-pools.js',
+  'lib/persistence/postgresql/boundary/application.js',
+  'scripts/postgresql/apply-boundary-schema.js',
+  'scripts/postgresql/validate-boundary-catalog.js',
+  'scripts/postgresql/recover-interrupted-fixture.js',
+  'scripts/postgresql/verify-development-state.js',
+  'test/postgresql-migration-connection.test.js',
+  'lib/persistence/postgresql/sales/application.js',
+  'scripts/postgresql/apply-sales-schema.js',
+  'scripts/postgresql/validate-sales-catalog.js',
+  'scripts/postgresql/validate-sales-triggers.js',
+  'test-support/postgresql-migration/sales-fixture.js',
+  'lib/persistence/postgresql/core/application.js',
+  'test-support/postgresql-migration/core-fixture.js',
+  'scripts/postgresql/mark-development-environment.js',
+  'scripts/postgresql/apply-core-schema.js',
+  'scripts/postgresql/validate-core-triggers.js',
+  'scripts/postgresql/validate-core-catalog.js',
+  'test/postgresql-migration-schema.test.js',
+]);
 // Explicit qualification entrypoints with a fixed synthetic in-memory database
 // or a source-hash-bound isolated fixture; no application or productive vault.
 const ISOLATED_CASH_QUALIFICATION_CLI_FILES = new Set([
@@ -2324,14 +2515,32 @@ function architectureBoundaryViolationsForText(file, text) {
     "lib/persistence/contract.js",
     "lib/persistence/postgresql/provider.js",
     "lib/persistence/sqlite/provider.js",
+    "lib/persistence/postgresql/boundary/application.js",
+    "lib/persistence/postgresql/application.js",
   ]);
   const statementDefinitionFiles = new Set([
     "lib/persistence/contract.js",
     ...PHASE_3_STATEMENT_FILES,
     "lib/persistence/statements/sales-analytics.js",
+    "lib/persistence/postgresql/boundary/catalog.js",
+    "lib/persistence/postgresql/reporting/catalog.js",
+    "lib/persistence/postgresql/boundary/personal-actions.js",
   ]);
-  const configurationFiles = new Set(["lib/persistence/configuration.js"]);
+  // Installed operations select the provider but never consume web-supplied
+  // connection details. The application configuration gate remains separate.
+  const configurationFiles = new Set(["lib/persistence/configuration.js",
+    'lib/persistence/postgresql/productive-configuration.js',
+    'server-tools/linux/postgresql/migration-host.js',
+    'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
+    'lib/persistence/postgresql/rehearsal-configuration.js',
+    'server-tools/linux/backup-grabenplaner.sh',
+    'server-tools/linux/lib/deploy-policy.js',
+    'server-tools/linux/offsite/grabenplaner-offsite-prepare.sh',
+    'server-tools/linux/test-grabenplaner-server.sh',
+    'server-tools/linux/update-grabenplaner-server.sh',
+  ]);
   const persistenceInternalFiles = new Set([
+    'lib/persistence/postgresql/application.js',
     ...PHASE_2_CONTRACT_FILES,
     ...PHASE_3_SQLITE_PROVIDER_FILES,
     ...PHASE_4_PERSISTENCE_FILES,
@@ -2345,7 +2554,7 @@ function architectureBoundaryViolationsForText(file, text) {
     "lib/persistence/sqlite/migrations/application-bindings.js",
   ]);
   const configurationConsumers = new Set(["server.js", ...PHASE_2_CONTRACT_FILES]);
-  const sqliteDriverFiles = new Set(PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES);
+  const sqliteDriverFiles = new Set([...PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES,...HISTORICAL_SOURCE_DRIVER_FILES]);
   const rules = [
     {
       id: "provider-contract-outside-boundary",
@@ -2408,13 +2617,13 @@ function architectureBoundaryViolationsForText(file, text) {
     },
     {
       id: "postgresql-driver-import",
-      allowedFiles: PHASE_5_POSTGRESQL_DRIVER_FILE_SET,
+      allowedFiles: new Set([...PHASE_5_POSTGRESQL_DRIVER_FILE_SET, ...MIGRATION_DEVELOPMENT_DRIVER_FILES]),
       source: "postgresql-driver-imports",
     },
     {
       id: "postgresql-runtime-provider",
       pattern: /\b(?:createPostgres(?:ql)?(?:Persistence)?Provider|Postgres(?:ql)?(?:Persistence)?Provider)\b/g,
-      allowedFiles: PHASE_5_POSTGRESQL_RUNTIME_FILE_SET,
+      allowedFiles: new Set([...PHASE_5_POSTGRESQL_RUNTIME_FILE_SET,'lib/persistence/postgresql/core/application.js','lib/persistence/postgresql/sales/application.js']),
       source: "code",
     },
     {
@@ -2815,6 +3024,7 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
   for (const file of files) {
     if (isPostgresqlRuntimeArtifactPath(file)
       && !PHASE_5_POSTGRESQL_FILE_SET.has(file)
+      && !MIGRATION_DEVELOPMENT_FILES.has(file)
       && !SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET.has(file)
       && !PHASE_6_POSTGRESQL_OPERATIONS_FILE_SET.has(file)) {
       postgresqlRuntimeArtifacts.push(`file:${file}`);
@@ -3445,6 +3655,16 @@ function inspectPhase5Postgresql(root) {
     ...serverText.matchAll(/["'][^"']*\/persistence\/postgresql(?:\/[^"']*)?["']/g),
     ...serverText.matchAll(/\brequire\s*\(\s*["']pg(?:\/[^"']*)?["']\s*\)/g),
   ].length;
+  // The full server is now qualified only behind the explicit Linux/private-
+  // network rehearsal guard. Default and productive PostgreSQL remain closed.
+  const rehearsalConfiguration = require('../lib/persistence/postgresql/rehearsal-configuration');
+  const rehearsalGuardClosed = [
+    { DB_PROVIDER: 'postgresql' },
+    { DB_PROVIDER: 'postgresql', NODE_ENV: 'production', GRABENPLANER_POSTGRESQL_REHEARSAL: 'application-11' },
+  ].every(environment => {
+    try { configuration.resolvePersistenceConfiguration({ environment }); return false; }
+    catch { return true; }
+  }) && typeof rehearsalConfiguration.configuration === 'function';
   const providerContractValid = Boolean(
     capabilities
     && capabilities.features?.atomicTransactions === true
@@ -3581,7 +3801,7 @@ function inspectPhase5Postgresql(root) {
     && missingTestFiles.length === 0
     && moduleErrors.length === 0
     && configurationStillClosed
-    && serverActivationReferences === 0
+    && (serverActivationReferences === 0 || rehearsalGuardClosed)
     && providerContractValid
     && policyValid
     && compilerValid
@@ -3605,6 +3825,7 @@ function inspectPhase5Postgresql(root) {
     productionActivation: false,
     configurationStillClosed,
     serverActivationReferences,
+    rehearsalGuardClosed,
     driverDependency: packageJson.dependencies?.pg || "",
     providerContractValid,
     policyValid,
@@ -3821,6 +4042,14 @@ function inspectPhase6PostgresqlOperations(root) {
   ].filter((entry) => entry.count > 0);
   const serverActivationReferences = serverActivationReferenceDetails
     .reduce((sum, entry) => sum + entry.count, 0);
+  // The default provider remains closed. The 2026 managed runtime additionally
+  // reads its protected root status; neither import can activate it by itself.
+  const rehearsalExportOnly = serverActivationReferences === 2
+    && serverActivationReferenceDetails[0]?.id === 'postgresql-operations-module'
+    && countMatches(serverText, /persistence\/postgresql\/operations\/application-export/g) === 1
+    && countMatches(serverText, /persistence\/postgresql\/operations\/status/g) === 1
+    && [{DB_PROVIDER:'postgresql'}, {DB_PROVIDER:'postgresql',NODE_ENV:'production',GRABENPLANER_POSTGRESQL_REHEARSAL:'application-11'}]
+      .every(environment => {try{configuration.resolvePersistenceConfiguration({environment});return false;}catch{return true;}});
   const versions = {
     backupBundle: backupBundle?.BACKUP_BUNDLE_SCHEMA_VERSION ?? null,
     operationalContract: operationsContract?.OPERATIONAL_CONTRACT_VERSION ?? null,
@@ -3862,7 +4091,7 @@ function inspectPhase6PostgresqlOperations(root) {
     && moduleErrors.length === 0
     && exportContractErrors.length === 0
     && configurationStillClosed
-    && serverActivationReferences === 0
+    && (serverActivationReferences === 0 || rehearsalExportOnly)
     && operationalProfile === "development-contract"
     && backupMethod === "postgresql-pg-dump-custom"
     && restoreMethod === "postgresql-pg-restore-custom"
@@ -3987,7 +4216,11 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const records = [];
   for (const file of files) {
     const isTest = file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file);
-    const classification = isTest
+    const classification = MIGRATION_DEVELOPMENT_FILES.has(file) ? {
+      ...PHASE_5_CLASSIFICATION,
+      id: 'postgresql-core-migration-development',
+      transitionException: 'Explicit 2026 migration development; isolated identity and roles; no product activation',
+    } : isTest
       ? (baselineTests.has(file)
         ? testClassification(file)
         : (PHASE_2_CONTRACT_TEST_FILE_SET.has(file)
@@ -4054,6 +4287,8 @@ function scanRepository(root = REPOSITORY_ROOT) {
     ]));
   const legacyProductionRecords = productionDirect
     .filter((record) => (
+      !MIGRATION_DEVELOPMENT_FILES.has(record.file)
+      &&
       !PHASE_3_SQLITE_PROVIDER_FILE_SET.has(record.file)
       && !SQLITE_MAINTENANCE_CLI_FILES.has(record.file)
       && !PHASE_4_PERSISTENCE_FILE_SET.has(record.file)
@@ -4346,7 +4581,12 @@ function scanRepository(root = REPOSITORY_ROOT) {
   }
   if (productionRegressions.length) errors.push(`Produktive Kopplungswerte gestiegen: ${productionRegressions.map((entry) => entry.key).join(", ")}`);
   if (serverRegressions.length) errors.push(`server.js-Kopplungswerte gestiegen: ${serverRegressions.map((entry) => entry.key).join(", ")}`);
-  const unexpectedProductionDrivers = sortedDifference(productionDriverFiles, PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES);
+  const unexpectedProductionDrivers = sortedDifference(productionDriverFiles, new Set([
+    ...PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES,
+    // Block 9 reads a separately captured source with DatabaseSync readOnly.
+    // This is an isolated migration tool, never an application fallback.
+    ...HISTORICAL_SOURCE_DRIVER_FILES,
+  ]));
   const unexpectedTestDrivers = sortedDifference(testDriverFiles, PHASE_3_ALLOWED_TEST_DRIVER_FILES);
   if (unexpectedProductionDrivers.length) errors.push(`Neue produktive node:sqlite-Importe: ${unexpectedProductionDrivers.join(", ")}`);
   if (unexpectedTestDrivers.length) errors.push(`Neue Test-node:sqlite-Importe: ${unexpectedTestDrivers.join(", ")}`);

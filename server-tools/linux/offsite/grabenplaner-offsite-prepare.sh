@@ -43,6 +43,10 @@ done
 # Lock before inspecting or creating staging. A second preparation must see
 # the first one's committed point; upload must not remove it during this read.
 source "$core_common"
+backup_provider="$("$OFFSITE_NODE" -e 'const fs=require("node:fs"),v=require("node:util").parseEnv(fs.readFileSync(process.argv[1],"utf8"));const p=v.DB_PROVIDER||"sqlite";if(!["sqlite","postgresql"].includes(p))process.exit(1);process.stdout.write(p)' "$OFFSITE_APP_ENV")" \
+  || offsite_fixed_failure PREPARE_FAILED 'Der Datenbankprovider ist ungueltig.'
+backup_root="$OFFSITE_BACKUP_ROOT"
+if [[ "$backup_provider" == postgresql ]]; then backup_root=/var/backups/grabenplaner-postgresql; fi
 deploy_workflow="$(offsite_core_deploy_workflow)" \
   || offsite_fixed_failure PREPARE_FAILED "Der installierte App-Vertrag ist fuer den Sicherungsablauf ungueltig."
 readonly OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS=300
@@ -140,7 +144,7 @@ NODE
   # Heavy archive work precedes the stop; the app remains available while
   # already verified, immutable rollback points are archived in order.
   "$backup_script" --env-file "$OFFSITE_APP_ENV" --app-dir "$OFFSITE_APP_ROOT" --data-dir "$OFFSITE_DATA_ROOT" \
-    --backup-dir "$OFFSITE_BACKUP_ROOT" --service "$OFFSITE_APP_SERVICE" --node "$OFFSITE_NODE" \
+    --backup-dir "$backup_root" --service "$OFFSITE_APP_SERVICE" --node "$OFFSITE_NODE" \
     --service-user "$OFFSITE_APP_USER" --service-group "$OFFSITE_APP_GROUP" --lock-already-held --finish-deferred \
     || offsite_fixed_failure PREPARE_FAILED "Die aufgeschobenen Archivabschluesse konnten nicht beendet werden."
   fi
@@ -152,7 +156,7 @@ NODE
   result_owned=1
   chmod 0600 -- "$backup_result"
   if ! "$backup_script" --env-file "$OFFSITE_APP_ENV" --app-dir "$OFFSITE_APP_ROOT" --data-dir "$OFFSITE_DATA_ROOT" \
-    --backup-dir "$OFFSITE_BACKUP_ROOT" --service "$OFFSITE_APP_SERVICE" --node "$OFFSITE_NODE" \
+    --backup-dir "$backup_root" --service "$OFFSITE_APP_SERVICE" --node "$OFFSITE_NODE" \
     --service-user "$OFFSITE_APP_USER" --service-group "$OFFSITE_APP_GROUP" --lock-already-held >"$backup_result"; then
     offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."
   fi
@@ -187,9 +191,15 @@ backup_marker="$(realpath --canonicalize-existing -- "${backup_paths[2]}")" \
   || offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."
 
 for target in "$backup_database" "$backup_documents" "$backup_marker"; do
-  [[ "$target" == "$OFFSITE_BACKUP_ROOT/"* ]] \
+  [[ "$target" == "$backup_root/"* ]] \
     || offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."
 done
+if [[ "$backup_provider" == postgresql ]]; then
+  [[ -d "$backup_database" && ! -L "$backup_database" && "$backup_documents" == "$backup_database/private/amu" && "$backup_marker" == "$backup_database.complete.json" ]] \
+    || offsite_fixed_failure PREPARE_FAILED 'Das PostgreSQL-Sicherungspaar ist ungueltig.'
+  "$OFFSITE_NODE" "$OFFSITE_APP_ROOT/server-tools/linux/lib/postgresql-operations.js" verify /etc/grabenplaner/postgresql-operations.json "$backup_database" "$backup_marker" >/dev/null \
+    || offsite_fixed_failure PREPARE_FAILED 'Das PostgreSQL-Sicherungspaar konnte nicht bestaetigt werden.'
+else
 [[ -f "$backup_database" && ! -L "$backup_database" && -d "$backup_documents" && ! -L "$backup_documents" \
   && -f "$backup_marker" && ! -L "$backup_marker" ]] \
   || offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."
@@ -200,6 +210,7 @@ if find "$backup_documents" -xdev \( -type l -o -type f -links +1 \) -print -qui
 fi
 "$OFFSITE_NODE" "$backup_verifier" "$backup_database" "$backup_documents" "$amu_module" "$backup_marker" >/dev/null 2>&1 \
   || offsite_fixed_failure PREPARE_FAILED "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."
+fi
 
 workspace_database="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" "$OFFSITE_DATA_ROOT/data/dienstplan.db" <<'NODE'
 const fs = require("node:fs");
@@ -214,13 +225,23 @@ gp_acquire_backup_workspace_lock "$workspace_database" "$OFFSITE_NODE" "$OFFSITE
 workspace_held=1
 
 install -d -m 0700 -o root -g root -- "$temporary_stage/backup" "$temporary_stage/recovery"
-cp --reflink=never --preserve=mode,timestamps -- "$backup_database" "$backup_marker" "$temporary_stage/backup/"
-cp --archive --reflink=never -- "$backup_documents" "$temporary_stage/backup/"
+if [[ "$backup_provider" == postgresql ]]; then
+  cp --archive --reflink=never -- "$backup_database" "$temporary_stage/backup/"
+  cp --reflink=never --preserve=mode,timestamps -- "$backup_marker" "$temporary_stage/backup/"
+else
+  cp --reflink=never --preserve=mode,timestamps -- "$backup_database" "$backup_marker" "$temporary_stage/backup/"
+  cp --archive --reflink=never -- "$backup_documents" "$temporary_stage/backup/"
+fi
 staged_database="$temporary_stage/backup/$(basename -- "$backup_database")"
 staged_documents="$temporary_stage/backup/$(basename -- "$backup_documents")"
 staged_marker="$temporary_stage/backup/$(basename -- "$backup_marker")"
-"$OFFSITE_NODE" "$backup_verifier" "$staged_database" "$staged_documents" "$amu_module" "$staged_marker" >/dev/null 2>&1 \
-  || offsite_fixed_failure PREPARE_FAILED "Der kopierte Offsite-Sicherungspunkt konnte nicht bestaetigt werden."
+if [[ "$backup_provider" == postgresql ]]; then
+  "$OFFSITE_NODE" "$OFFSITE_APP_ROOT/server-tools/linux/lib/postgresql-operations.js" verify /etc/grabenplaner/postgresql-operations.json "$staged_database" "$staged_marker" >/dev/null \
+    || offsite_fixed_failure PREPARE_FAILED 'Das kopierte PostgreSQL-Sicherungspaar konnte nicht bestaetigt werden.'
+else
+  "$OFFSITE_NODE" "$backup_verifier" "$staged_database" "$staged_documents" "$amu_module" "$staged_marker" >/dev/null 2>&1 \
+    || offsite_fixed_failure PREPARE_FAILED "Der kopierte Offsite-Sicherungspunkt konnte nicht bestaetigt werden."
+fi
 cp --reflink=never --preserve=mode,timestamps -- "$env_example" "$temporary_stage/recovery/grabenplaner.env.example"
 cp --reflink=never --preserve=mode,timestamps -- "$OFFSITE_APP_ROOT/package.json" "$temporary_stage/recovery/package.json"
 cp --reflink=never --preserve=mode,timestamps -- "$OFFSITE_APP_ROOT/server-tools/linux/runtime-schema.json" "$temporary_stage/recovery/runtime-schema.json"

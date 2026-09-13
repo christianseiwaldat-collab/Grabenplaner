@@ -19,7 +19,7 @@ const bash = [
 
 test("current runtime contract retains the monitor units after later explicit migrations", () => {
   const schema = JSON.parse(read("server-tools", "linux", "runtime-schema.json"));
-  assert.equal(schema.deploymentSchemaVersion, 4);
+  assert.equal(schema.deploymentSchemaVersion, 5);
   assert.equal(schema.migrationPolicy, "explicit-maintenance");
   assert.deepEqual(schema.managedArtifacts.filter((item) => item.includes("grabenplaner-monitor")), [
     "server-tools/linux/grabenplaner-monitor.service.in",
@@ -31,7 +31,7 @@ test("current runtime contract retains the monitor units after later explicit mi
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const contract = JSON.parse(verification.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 4);
+  assert.equal(contract.deploymentSchemaVersion, 5);
   assert.equal(contract.managedArtifacts.length, 11);
 
   const updater = read("server-tools", "linux", "update-grabenplaner-server.sh");

@@ -501,7 +501,8 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
   assert.equal(report.phase5Progress.providerSliceComplete, true);
   assert.equal(report.phase5Progress.productionActivation, false);
   assert.equal(report.phase5Progress.configurationStillClosed, true);
-  assert.equal(report.phase5Progress.serverActivationReferences, 0);
+  assert.ok(report.phase5Progress.serverActivationReferences > 0);
+  assert.equal(report.phase5Progress.rehearsalGuardClosed, true);
   assert.equal(report.phase5Progress.driverDependency, "8.22.0");
   assert.equal(
     report.phase5Progress.compilerVersion,

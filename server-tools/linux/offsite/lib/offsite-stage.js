@@ -63,12 +63,64 @@ function atomicJson(file, value) {
   fs.renameSync(temporary, file);
 }
 
+// Version 2 carries an inseparable Core/Sales pair. Version 1 remains the
+// existing SQLite format so old snapshots keep their original restore route.
+function verifyPair(stage, source) {
+  if (!safeName(String(source.bundle || "")) || !safeName(String(source.commitMarker || ""))
+    || !/^[a-f0-9]{64}$/.test(String(source.manifestSha256 || ""))) fail("Der PostgreSQL-Sicherungsbezug ist ungueltig.");
+  const bundle = path.join(stage, "backup", source.bundle);
+  const markerFile = path.join(stage, "backup", source.commitMarker);
+  const manifestFile = path.join(bundle, "manifest.json");
+  if (assertRegular(markerFile).size > 4096 || assertRegular(manifestFile).size > 4 * 1024 * 1024) fail("Der PostgreSQL-Sicherungsbezug ist zu gross.");
+  const marker = JSON.parse(fs.readFileSync(markerFile, "utf8"));
+  if (marker.format !== "grabenplaner-postgresql-pair" || marker.schemaVersion !== 1
+    || marker.bundle !== source.bundle || marker.manifestSha256 !== source.manifestSha256
+    || sha256(manifestFile) !== source.manifestSha256) fail("Der gemeinsame PostgreSQL-Abschlussbeleg stimmt nicht.");
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  if (manifest.format !== marker.format || manifest.schemaVersion !== 1 || manifest.snapshotId !== marker.snapshotId
+    || !Array.isArray(manifest.databases) || manifest.databases.map((d) => d.domain).join(",") !== "core,sales"
+    || manifest.databases[0].database === manifest.databases[1].database || !Array.isArray(manifest.files)) fail("Die PostgreSQL-Datenbankpaarung ist ungueltig.");
+  const actual = walk(bundle).filter((file) => file.path !== "manifest.json");
+  const expected = new Map();
+  for (const file of manifest.files) {
+    if (typeof file.file !== "string" || !file.file.split("/").every((part) => safeName(part) && part !== "." && part !== "..")
+      || expected.has(file.file)) fail("Eine PostgreSQL-Komponente ist ungueltig.");
+    expected.set(file.file, file);
+  }
+  if (expected.size !== actual.length) fail("Die PostgreSQL-Sicherung ist unvollstaendig.");
+  for (const file of actual) {
+    const entry = expected.get(file.path);
+    if (!entry || entry.bytes !== file.bytes || entry.sha256 !== file.sha256) fail("Eine PostgreSQL-Komponente stimmt nicht.");
+  }
+  for (const database of manifest.databases) {
+    if (!/^[a-z][a-z0-9_]{0,62}$/.test(database.database) || database.file !== `${database.domain}.dump`
+      || !expected.has(database.file)) fail("Eine PostgreSQL-Datenbank fehlt.");
+  }
+  for (const file of ["configuration.env", "roles.sql"]) if (!expected.has(file)) fail("Die PostgreSQL-Wiederherstellungskonfiguration fehlt.");
+  return { providerId: "postgresql-pair", bundle, commitMarker: markerFile, manifestSha256: source.manifestSha256 };
+}
+
+function createPair(stage, result) {
+  const sourceBackup = {
+    providerId: "postgresql-pair", bundle: path.basename(String(result.bundle || "")),
+    commitMarker: path.basename(String(result.commitMarker || "")), manifestSha256: result.sha256,
+    sourcePaths: { bundle: result.bundle, commitMarker: result.commitMarker },
+  };
+  verifyPair(stage, sourceBackup);
+  const files = walk(stage).filter((item) => item.path !== "offsite-stage-manifest.json");
+  atomicJson(path.join(stage, "offsite-stage-manifest.json"), {
+    format: "grabenplaner-offsite-stage", schemaVersion: 2, createdAt: new Date().toISOString(), sourceBackup, files,
+  });
+  process.stdout.write(`${JSON.stringify({ ok: true, providerId: "postgresql-pair", files: files.length })}\n`);
+}
+
 function create(stage, resultFile, metadataFiles) {
   const stageStat = fs.lstatSync(stage);
   if (!stageStat.isDirectory() || stageStat.isSymbolicLink()) fail("Der Stagingordner ist unzulaessig.");
   const resultStat = assertRegular(resultFile);
   if (resultStat.size < 2 || resultStat.size > 64 * 1024) fail("Das Backup-Ergebnis ist unzulaessig.");
   const result = JSON.parse(fs.readFileSync(resultFile, "utf8").replace(/^\uFEFF/, ""));
+  if (result.providerId === "postgresql-pair") return createPair(stage, result);
   for (const key of ["path", "amuBackup", "commitMarker", "sha256", "createdAt"]) {
     if (!Object.hasOwn(result, key)) fail("Das Backup-Ergebnis ist unvollstaendig.");
   }
@@ -114,7 +166,7 @@ function verify(stage) {
   const stat = assertRegular(manifestPath);
   if (stat.size < 2 || stat.size > 1024 * 1024) fail("Das Staging-Manifest ist unzulaessig.");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  if (manifest.format !== "grabenplaner-offsite-stage" || manifest.schemaVersion !== 1 || !Array.isArray(manifest.files)) fail("Das Staging-Manifest wird nicht unterstuetzt.");
+  if (manifest.format !== "grabenplaner-offsite-stage" || ![1, 2].includes(manifest.schemaVersion) || !Array.isArray(manifest.files)) fail("Das Staging-Manifest wird nicht unterstuetzt.");
   const actual = walk(stage).filter((item) => item.path !== "offsite-stage-manifest.json");
   if (actual.length !== manifest.files.length) fail("Das Staging ist unvollstaendig.");
   for (let index = 0; index < actual.length; index += 1) {
@@ -122,6 +174,11 @@ function verify(stage) {
     if (actual[index].path !== expected.path || actual[index].bytes !== expected.bytes || actual[index].sha256 !== expected.sha256) fail("Die Staging-Pruefsumme stimmt nicht.");
   }
   const source = manifest.sourceBackup || {};
+  if (manifest.schemaVersion === 2) {
+    if (source.providerId !== "postgresql-pair") fail("Der Staging-Provider ist ungueltig.");
+    process.stdout.write(`${JSON.stringify({ ok: true, ...verifyPair(stage, source) })}\n`);
+    return;
+  }
   for (const name of [source.database, source.documents, source.commitMarker]) if (!safeName(String(name || ""))) fail("Der Backup-Bezug ist ungueltig.");
   if (!/^[a-f0-9]{64}$/.test(String(source.databaseSha256 || ""))) fail("Der Datenbank-Hash ist ungueltig.");
   const databaseEntry = actual.find((item) => item.path === `backup/${source.database}`);
@@ -149,6 +206,13 @@ function verifyResult(stage, resultFile) {
   const manifest = JSON.parse(fs.readFileSync(path.join(stage, "offsite-stage-manifest.json"), "utf8"));
   const source = manifest.sourceBackup || {};
   const paths = source.sourcePaths || {};
+  if (manifest.schemaVersion === 2) {
+    if (supplied.providerId !== "postgresql-pair" || paths.bundle !== supplied.bundle || paths.commitMarker !== supplied.commitMarker
+      || source.bundle !== path.basename(String(supplied.bundle || "")) || source.commitMarker !== path.basename(String(supplied.commitMarker || ""))
+      || source.manifestSha256 !== supplied.sha256) fail("Das PostgreSQL-Staging gehoert nicht zum uebergebenen Sicherungsstand.");
+    process.stdout.write(`${JSON.stringify({ ok: true, exactBackupResult: true, providerId: "postgresql-pair" })}\n`);
+    return;
+  }
   if (paths.database !== supplied.path || paths.documents !== supplied.amuBackup || paths.commitMarker !== supplied.commitMarker
     || source.database !== path.basename(String(supplied.path || ""))
     || source.documents !== path.basename(String(supplied.amuBackup || ""))

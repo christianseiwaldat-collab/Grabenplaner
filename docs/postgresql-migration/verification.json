@@ -1,0 +1,874 @@
+{
+  "version": 5,
+  "recordedAt": "2026-09-13T02:42:43.793084+00:00",
+  "scope": "two-database-migration-blocks-1-through-11-complete-block-12-prepared",
+  "sourceCommit": "c6b8a112e79514f39bbd0ce9906c54f052e45e40",
+  "sourceSchemaSha256": "c257f1eca574b9133038f4687f7acd5e74204f21c6ad5a70ad5803fe6c10cd03",
+  "productActivation": false,
+  "productionDataMigrated": false,
+  "commitCreated": false,
+  "pushed": false,
+  "deployed": false,
+  "completedBlocks": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "nextBlock": 12,
+  "sourceOwnership": {
+    "total": 248,
+    "core": 194,
+    "sales": 54,
+    "movedToCore": [
+      "import_master_bindings",
+      "import_master_events",
+      "import_master_holds"
+    ],
+    "emptyDeniedCompatibilityTablesInSales": 3
+  },
+  "coreBasePlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+  "coreBoundaryPlanSha256": "7a88136c16cd111828426078271ffdb71ccc0660b151238dc2f4779b75b8fa8c",
+  "salesSchemas": [
+    {
+      "stage": 5,
+      "planSha256": "c48d4115d138ac0ad3729892c3ca74689049fb397972f3e1cfe99f7969851372",
+      "tables": 13,
+      "indexes": 21,
+      "triggers": 26
+    },
+    {
+      "stage": 6,
+      "planSha256": "8cc852f7003fa51cec873ee3334a8382c4003d762cc643327a386d90bdaff801",
+      "tables": 34,
+      "indexes": 25,
+      "triggers": 29
+    },
+    {
+      "stage": 7,
+      "planSha256": "d7c6419d4b361b5092afe6f92cd0c8b473844c40ca161637ebae19abee3e495a",
+      "tables": 0,
+      "indexes": 0,
+      "triggers": 0
+    },
+    {
+      "stage": 8,
+      "planSha256": "aead304692e3a5fe8b2af01618054e4b69917cee29db1c486fdd22f3becf2fa9",
+      "tables": 10,
+      "indexes": 8,
+      "triggers": 15
+    }
+  ],
+  "catalogs": {
+    "coreSourceStatements": 1125,
+    "salesStage8Prepared": 219,
+    "boundaryPrepared": 24,
+    "reportingExtrasPrepared": 3,
+    "routing": {
+      "sourceStatements": 1354,
+      "routedSourceStatements": 1354,
+      "missing": [],
+      "ambiguous": 0,
+      "withTechnicalStatements": 1370,
+      "productActivation": false
+    },
+    "salesLockSha256": "65d03cb872c5eb1d61b82343adba1a6b52381665700e1f259d875d999ed7fcb0",
+    "boundaryLockSha256": "a0a7250c5a5309bc8376514109dabbb3cded6d27a82bc954988afb00a9e8c17e",
+    "reportingLockSha256": "441ae70f072bb6e93aa59b4aeb0be8e520b33ef621a58304531c51543db2adaf"
+  },
+  "triggerResolution": {
+    "block5": {
+      "functions": 26,
+      "failures": []
+    },
+    "block6": {
+      "functions": 29,
+      "failures": []
+    },
+    "block8": {
+      "functions": 15,
+      "failures": []
+    },
+    "meaning": "Typed SQL resolution; not every semantic branch of every trigger"
+  },
+  "tests": {
+    "block5": {
+      "uniquePassed": 5,
+      "completeFinalRun": true
+    },
+    "block6": {
+      "uniquePassed": 4,
+      "completeCoverageAcrossInitialAndFocusedRuns": true
+    },
+    "block7": {
+      "uniquePassed": 4,
+      "allFourPassedTogetherOnStage8": true
+    },
+    "block8": {
+      "reportingTestsPassed": 5,
+      "latestReceiptPdfAndRevocationPassed": true,
+      "articleSearchParityCombinations": 108,
+      "canonicalEncodingTests": 3,
+      "linuxPriorityAndConnectionFailureTests": 2
+    },
+    "logs": [
+      {
+        "file": "tmp/postgresql-block5-native-final.txt",
+        "sha256": "1973c646510c58f4b7d9e9cc1228c7c587c12aa3365c11d01becefb0aa1bbd55",
+        "passed": 5,
+        "failed": 0
+      },
+      {
+        "file": "tmp/postgresql-block6-focused-test.txt",
+        "sha256": "50b84482e35c25635b7dfcfe1b2c11e71e41d0c543c5bac3c875215c024d9a56",
+        "passed": 2,
+        "failed": 0
+      },
+      {
+        "file": "tmp/postgresql-block7-8-regression.txt",
+        "sha256": "d41fded1b043db80c08145b383bb923cb979eb96a9a564473e90f8fe678d438c",
+        "passed": 8,
+        "failed": 1
+      },
+      {
+        "file": "tmp/postgresql-block8-worker-regression.txt",
+        "sha256": "cc8313613c5a272d4eca0b39b239b82c4194177df2d9fe1e952563d232e06b10",
+        "passed": 5,
+        "failed": 0
+      },
+      {
+        "file": "tmp/postgresql-block8-native-final.txt",
+        "sha256": "74ca4b021142c5db21004bc0e509822e85ecfc5a442a428ec29dc1d602b6f973",
+        "passed": 1,
+        "failed": 0
+      },
+      {
+        "file": "tmp/postgresql-block8-decode-regression.txt",
+        "sha256": "e086ede76104c4ddf005770b08e4dcfad7f80c32842969f14d40013b74746ac8",
+        "passed": 63,
+        "failed": 0
+      },
+      {
+        "file": "tmp/postgresql-block8-normalization-regression.txt",
+        "sha256": "16ba010ef0fdc8c4a86181ac7bef45de708a81713e177e7eafd11d47e0d8da52",
+        "passed": 143,
+        "failed": 0
+      },
+      {
+        "file": "tmp/postgresql-block8-worker-priority-test.txt",
+        "sha256": "0381968fe5876fa788be1da9b1907ee9b3b392ad5e0073d8f57b9d9fa9140c72",
+        "passed": 2,
+        "failed": 0
+      },
+      {
+        "file": "tmp/postgresql-block8-unit-final.txt",
+        "sha256": "24c761c7193720f7937e83b755c2c0c35e73498e1a0664caa41b22770b8c174c",
+        "passed": 25,
+        "failed": 0
+      },
+      {
+        "file": "tmp/postgresql-block8-load-priority.txt",
+        "sha256": "94d21815503738f58a6cb3c181c563c825952dc6d635091bdb98a141266c9422",
+        "passed": 0,
+        "failed": 0
+      }
+    ],
+    "priorFailures": "Initial fixture assumptions, resource limits and load targets failed before corrections. The 8/9 combined regression log includes the initial aggregate error expectation; all 5 reporting cases subsequently passed together and the final PDF/receipt test passed again.",
+    "targetedRegressionSuites": [
+      {
+        "passed": 63,
+        "scope": "Cash, publication, receipt and immutable-row tests after final decoder changes"
+      },
+      {
+        "passed": 143,
+        "scope": "Import foundation, payload, history, master-data and confirmed cash semantics"
+      },
+      {
+        "passed": 25,
+        "scope": "Provider, report worker, model and routes"
+      }
+    ]
+  },
+  "performance": {
+    "file": "block-8-load.json",
+    "sha256": "015c99779ceec3f78f2be1c0bd5e33f53dd9e1200f36935d5f68c3d546938c2f",
+    "checks": {
+      "firstPages": true,
+      "nextPages": true,
+      "accept": true,
+      "core": true,
+      "overlap": true
+    },
+    "coreDegradationPercent": 7.2541472875397695,
+    "acceptMs": 131.63522499997634,
+    "completePositions": 8000,
+    "overlapSamples": 100,
+    "scope": "Repository and real worker calls in isolated server development; no HTTP/browser or full historical production claim"
+  },
+  "pdf": {
+    "small": {
+      "file": "output/pdf/grabenplaner-postgresql-block8-synthetic.pdf",
+      "pages": 9,
+      "orientation": "A4-landscape",
+      "allTextInsidePage": true,
+      "grossRevenue": "159.08",
+      "grossMargin": "36.28",
+      "synthetic": true,
+      "sha256": "d6b4e566f9b3f420d4492eb69ee838e7268a57d77cb2c6a083aa7f15636ddf95"
+    },
+    "large": {
+      "pages": 9,
+      "allTextInsidePage": true,
+      "processedPositions": 8000,
+      "currentGrossRevenue": "240000.00",
+      "currentNetRevenue": "200000.00",
+      "currentGrossMargin": "40000.00",
+      "currentReceipts": 500,
+      "comparisonEqual": true,
+      "synthetic": true,
+      "sha256": "fe02ebe3702c96efde808cf2fb4acb79854ab30af5c9829a46eef5595d45f451"
+    },
+    "visuallyReviewed": true
+  },
+  "persistenceAudit": {
+    "result": "OK",
+    "unclassifiedProduction": 0,
+    "unclassifiedTests": 0,
+    "phaseBoundaryViolations": 0,
+    "logSha256": "c7585d08702c3d842fd433af707b0e5431c9587adad6bc3da57af2f5f1f9a2da"
+  },
+  "development": {
+    "checkedAt": "2026-09-12T18:45:14.929Z",
+    "productActivation": false,
+    "core": {
+      "environmentVerified": true,
+      "schemaContractVerified": true,
+      "emptyBusinessAndReferenceTables": 198,
+      "occupiedTables": 0,
+      "schema": {
+        "boundary": true,
+        "baseTarget": "b7f2b4c396600e94e56753a2664470b674ad8db683b879f204fb98a56376508a"
+      }
+    },
+    "sales": {
+      "environmentVerified": true,
+      "schemaContractVerified": true,
+      "emptyBusinessAndReferenceTables": 61,
+      "occupiedTables": 0,
+      "schema": {
+        "stages": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "plans": [
+          {
+            "stage": 5,
+            "sha256": "c48d4115d138ac0ad3729892c3ca74689049fb397972f3e1cfe99f7969851372"
+          },
+          {
+            "stage": 6,
+            "sha256": "8cc852f7003fa51cec873ee3334a8382c4003d762cc643327a386d90bdaff801"
+          },
+          {
+            "stage": 7,
+            "sha256": "d7c6419d4b361b5092afe6f92cd0c8b473844c40ca161637ebae19abee3e495a"
+          },
+          {
+            "stage": 8,
+            "sha256": "aead304692e3a5fe8b2af01618054e4b69917cee29db1c486fdd22f3becf2fa9"
+          }
+        ]
+      }
+    },
+    "running": false,
+    "port": 55482,
+    "listeners": 0,
+    "localTunnelPort": 55483,
+    "localTunnelStopped": true,
+    "retained": "Empty schemas, ledgers and private credentials for continuation; no business data"
+  },
+  "productionReadOnlyCheck": {
+    "grabenplaner": "active-running",
+    "gpMainPid": 2326383,
+    "lebensatlas": "active-running",
+    "postgresql18Main": "active-running",
+    "gpLiveHttp": 200,
+    "gpReadyHttp": 200,
+    "servicesRestarted": false,
+    "sourceProvider": "sqlite",
+    "healthLogSha256": "5dbe5a7985de7c3c753b88f7bf3c46fefacfc1ccec93db912258384fe742618d",
+    "serviceLogSha256": "a25fee4ccfc86e25b33adff85e84cfd224bf45d3b1514dcbebf8e689f74d8fa6"
+  },
+  "operationalFindings": [
+    {
+      "unit": "grabenplaner-offsite-assurance@scheduled-nightly.service",
+      "state": "failed",
+      "exitStatus": 1,
+      "lastExit": "2026-09-12T06:23:55+02:00"
+    },
+    {
+      "unit": "grabenplaner-offsite-assurance@app-updated.service",
+      "state": "failed",
+      "exitStatus": 1,
+      "lastExit": "2026-09-11T22:01:13+02:00"
+    }
+  ],
+  "limits": [
+    "Synthetic tests do not prove complete historical row, identity, file and key transfer; this is Block 9.",
+    "PostgreSQL backup, offsite and linked restore qualification remains Block 10.",
+    "Full HTTP/browser, historical multi-year/all-branch, wider user scope, outage and recovery rehearsal remains Block 11.",
+    "The prior failed assurance services remain unresolved; no productive restore readiness is claimed.",
+    "Production cutover requires the separate Block 12 approval."
+  ],
+  "previousFoundationVerification": {
+    "version": 1,
+    "recordedAt": "2026-09-12T15:25:32.243Z",
+    "sourceCommit": "c6b8a112e79514f39bbd0ce9906c54f052e45e40",
+    "scope": "two-database-migration-blocks-1-through-4-isolated-development",
+    "productActivation": false,
+    "productionDataMigrated": false,
+    "commitCreated": false,
+    "pushed": false,
+    "deployed": false,
+    "sourceSchemaSha256": "c257f1eca574b9133038f4687f7acd5e74204f21c6ad5a70ad5803fe6c10cd03",
+    "schemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+    "catalogLockSha256": "3b2e1d374883a86f4f371e82dc638ec2c405b88f620c6695853346e44bf52805",
+    "inventory": {
+      "tables": 248,
+      "coreTables": 191,
+      "salesTables": 57,
+      "explicitIndexes": 267,
+      "triggers": 369,
+      "views": 1
+    },
+    "coreSchema": {
+      "sourceTables": 191,
+      "sourceIndexes": 213,
+      "sourceTriggers": 299,
+      "sourceViews": 1,
+      "plannedStatements": 1280
+    },
+    "catalog": {
+      "prepared": 1125,
+      "reads": 632,
+      "writes": 493,
+      "prepareFailures": 0,
+      "excludedSalesStatements": 228,
+      "excludedCrossDatabaseStatements": 1
+    },
+    "readComparisons": {
+      "executed": 632,
+      "matchingResults": 632,
+      "nonemptyResults": 135,
+      "failures": 0,
+      "synthetic": true
+    },
+    "triggerProbes": {
+      "functions": 299,
+      "failures": 0,
+      "scope": "typed-sql-resolution-not-every-business-branch"
+    },
+    "automatedTests": {
+      "uniqueNewTestsPassed": 24,
+      "existingTargetedTestsPassed": 55,
+      "failed": 0,
+      "skipped": 0,
+      "files": [
+        {
+          "file": "test/postgresql-migration-inventory.test.js",
+          "passed": 4
+        },
+        {
+          "file": "test/postgresql-migration-environment.test.js",
+          "passed": 3
+        },
+        {
+          "file": "test/postgresql-migration-schema.test.js",
+          "passed": 6
+        },
+        {
+          "file": "test/postgresql-migration-application.test.js",
+          "passed": 10
+        },
+        {
+          "file": "test/postgresql-migration-queries.test.js",
+          "passed": 1
+        }
+      ],
+      "testLogs": [
+        {
+          "file": "tmp/postgresql-foundation-test.txt",
+          "passed": 13,
+          "failed": 0,
+          "skipped": 0,
+          "sha256": "7a87560ae35a274cdda00a6abb561fccde77ac62ea72e3262b2c675974a09120"
+        },
+        {
+          "file": "tmp/postgresql-environment-final-test.txt",
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0,
+          "sha256": "e816e22d67204e0cdc5290d73b37c943a12de447fa5f6f649621aa2fdf4e67de"
+        },
+        {
+          "file": "tmp/postgresql-final-semantic-test.txt",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0,
+          "sha256": "6c90ac1f4cccd7e32069efc3004cebf1b31194fbb77a297499c726107aca60b0"
+        },
+        {
+          "file": "tmp/postgresql-application-test.txt",
+          "passed": 10,
+          "failed": 0,
+          "skipped": 0,
+          "sha256": "7abc59b4b9055fcedc9be474c1592ef4b631039011ceed609a3d429ba093beb8"
+        },
+        {
+          "file": "tmp/postgresql-sqlite-regression.txt",
+          "passed": 55,
+          "failed": 0,
+          "skipped": 0,
+          "sha256": "af03c031b9c36cd43797a554db933fd1632f3bf4b15667f14fcfa3cd31026871"
+        }
+      ]
+    },
+    "persistenceAudit": {
+      "result": "OK",
+      "unclassifiedProduction": 0,
+      "unclassifiedTests": 0,
+      "phaseBoundaryViolations": 0,
+      "logSha256": "b54a0d5c10d4cf575a110f321ad94d50f7339ad4cdd3d2244a6deaf3af50f002"
+    },
+    "development": {
+      "checkedAt": "2026-09-12T15:22:11.863Z",
+      "environmentVerified": true,
+      "emptyBusinessAndReferenceTables": 192,
+      "occupiedTables": 0,
+      "schemaContractVerified": true,
+      "sourceSchemaSha256": "c257f1eca574b9133038f4687f7acd5e74204f21c6ad5a70ad5803fe6c10cd03",
+      "schemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+      "productActivation": false,
+      "running": false,
+      "port": 55482,
+      "listeners": 0,
+      "localTunnelStopped": true,
+      "localTunnelPort": 55483,
+      "retained": "private-schema-ledger-and-credentials-no-business-data"
+    },
+    "productionReadOnlyCheck": {
+      "grabenplaner": "active-running",
+      "lebensatlas": "active-running",
+      "postgresql18Main": "active-running",
+      "gpLiveHttp": 200,
+      "gpReadyHttp": 200,
+      "servicesRestarted": false,
+      "sourceProvider": "sqlite"
+    },
+    "operationalFindings": [
+      {
+        "unit": "grabenplaner-offsite-assurance@scheduled-nightly.service",
+        "state": "failed",
+        "exitStatus": 1,
+        "lastExit": "2026-09-12T06:23:55+02:00"
+      },
+      {
+        "unit": "grabenplaner-offsite-assurance@app-updated.service",
+        "state": "failed",
+        "exitStatus": 1,
+        "lastExit": "2026-09-11T22:01:13+02:00"
+      }
+    ],
+    "limits": [
+      "PREPARE of all writes is not exhaustive semantic write coverage.",
+      "Synthetic comparisons do not prove complete historical data or HTTP parity.",
+      "Core/Sales integration, historical rowids and identities, files and keys require later blocks.",
+      "Recorded assurance failures are an operational follow-up; this check does not certify productive restore readiness.",
+      "No PostgreSQL production performance, full restore or cutover acceptance is claimed."
+    ],
+    "nextBlock": 5
+  },
+  "sourceQuality": {
+    "javascriptFiles": 71,
+    "newTextFiles": 75,
+    "gitDiffCheck": true,
+    "failures": []
+  },
+  "historicalTransfer": {
+    "checkedAt": "2026-09-12T20:08:52.500Z",
+    "verified": true,
+    "tables": 248,
+    "rows": 2887715,
+    "sourceSha256": "aa37fbd4ce0b9d1c914cda7df6ac8c56b6437dd3ca6e091b8e040d6e270a84c3",
+    "contentSha256": "b37ad81733768b2e0c90f728e7d5c4a33dca7b6f33c7cb4f98599db254ece379",
+    "references": {
+      "sourceReferences": 30503,
+      "locations": 6,
+      "articleReferences": 4,
+      "sequences": 23
+    },
+    "repeatedImports": 2,
+    "abortRolledBackAndReverified": true,
+    "sourceModified": false,
+    "productActivation": false,
+    "durationSeconds": [
+      570.857,
+      655.257
+    ]
+  },
+  "block10": {
+    "status": "completed-isolated-operations",
+    "logical": {
+      "checkedAt": "2026-09-12T20:28:00.750Z",
+      "logicalRestore": true,
+      "verified": true,
+      "tables": 248,
+      "rows": 2887715,
+      "contentSha256": "b37ad81733768b2e0c90f728e7d5c4a33dca7b6f33c7cb4f98599db254ece379",
+      "references": {
+        "sourceReferences": 30503,
+        "locations": 6,
+        "articleReferences": 4,
+        "sequences": 23
+      },
+      "milliseconds": 91460,
+      "timings": [
+        {
+          "tool": "pg_restore",
+          "milliseconds": 10267
+        },
+        {
+          "tool": "pg_restore",
+          "milliseconds": 90077
+        }
+      ],
+      "bundleManifestSha256": "75d3671828f10e64dd741df53c2bd22548320ea1e1460bfe9a20d7b7e2547a94",
+      "filesVerified": 71,
+      "dataDirectory": "/home/gpadmin/grabenplaner-pg-migration-20260912/recovery-10/logical-data-3",
+      "port": 55484,
+      "attempt": 3,
+      "productActivation": false
+    },
+    "offsiteRestore": {
+      "checkedAt": "2026-09-12T20:49:38.016Z",
+      "logicalRestore": true,
+      "verified": true,
+      "tables": 248,
+      "rows": 2887715,
+      "contentSha256": "b37ad81733768b2e0c90f728e7d5c4a33dca7b6f33c7cb4f98599db254ece379",
+      "references": {
+        "sourceReferences": 30503,
+        "locations": 6,
+        "articleReferences": 4,
+        "sequences": 23
+      },
+      "milliseconds": 93687,
+      "timings": [
+        {
+          "tool": "pg_restore",
+          "milliseconds": 10224
+        },
+        {
+          "tool": "pg_restore",
+          "milliseconds": 90142
+        }
+      ],
+      "bundleManifestSha256": "9263d750bf7aa6341a24318e3bd2a737eebdbed1e4fe18d1730deecce4d77954",
+      "filesVerified": 71,
+      "encryptedFiles": 55,
+      "dataDirectory": "/home/gpadmin/grabenplaner-pg-migration-20260912/recovery-10/offsite-data-2",
+      "port": 55484,
+      "attempt": 2,
+      "source": "offsite",
+      "offsiteSnapshotId": "9f0e1519a1f0ac3bc2fd075c2a0db67370bdfd18e6802dca1086d8e76aa28d3c",
+      "productActivation": false
+    },
+    "physical": {
+      "checkedAt": "2026-09-12T20:42:14.537Z",
+      "physicalRestore": true,
+      "verified": true,
+      "tables": 248,
+      "rows": 2887715,
+      "contentSha256": "b37ad81733768b2e0c90f728e7d5c4a33dca7b6f33c7cb4f98599db254ece379",
+      "references": {
+        "sourceReferences": 30503,
+        "locations": 6,
+        "articleReferences": 4,
+        "sequences": 23
+      },
+      "milliseconds": 100776,
+      "systemIdentifier": "7684747411176262445",
+      "restorePoint": "1/3700FE48",
+      "restorePointName": "grabenplaner_pair_recovery_block10",
+      "checkpointRowsInBothDatabases": [
+        1,
+        2
+      ],
+      "laterRowsExcluded": [
+        3
+      ],
+      "encryptedFiles": 55,
+      "archiver": {
+        "archived_count": "27",
+        "failed_count": "0",
+        "last_archived_time": "2026-09-12T20:36:26.763Z"
+      },
+      "baseManifestSha256": "58d8e46c9a36e9ba40cd20772110f43381b0187456de0f95ec0616752b525ea1",
+      "recoveryMilliseconds": 114955,
+      "resumedOwnedTarget": false,
+      "rebuiltFromVerifiedBase": true,
+      "fileCheckpoint": "immutable-shared-bundle",
+      "offsiteWal": false,
+      "productActivation": false,
+      "walFileCount": 54
+    },
+    "monitor": {
+      "verified": true,
+      "readOnlyIdentity": true,
+      "businessReadDenied": true,
+      "status": {
+        "providerId": "postgresql-pair",
+        "checkedAt": "2026-09-12T20:50:21.040Z",
+        "healthy": false,
+        "reasons": [
+          "WAL_ARCHIVE_DISABLED",
+          "OFFSITE_WAL_MISSING_OR_STALE"
+        ],
+        "databases": {
+          "core": {
+            "database": "gp_migration_core",
+            "role": "gp_operations_monitor",
+            "dedicated_identity": true,
+            "privileged": false,
+            "monitor_role": true,
+            "read_only": "on",
+            "server_version": 180006,
+            "archive_mode": "off",
+            "in_recovery": false,
+            "bytes": "207509183",
+            "cluster_id": "7684646235966481477",
+            "connections": {
+              "total": 1,
+              "active": 1,
+              "idleInTransaction": 0,
+              "blocked": 0
+            },
+            "wal": {
+              "archived": "0",
+              "failed": "0",
+              "lastArchivedAt": null,
+              "lastFailureAt": null
+            }
+          },
+          "sales": {
+            "database": "gp_migration_sales",
+            "role": "gp_operations_monitor",
+            "dedicated_identity": true,
+            "privileged": false,
+            "monitor_role": true,
+            "read_only": "on",
+            "server_version": 180006,
+            "archive_mode": "off",
+            "in_recovery": false,
+            "bytes": "2790414015",
+            "cluster_id": "7684646235966481477",
+            "connections": {
+              "total": 1,
+              "active": 1,
+              "idleInTransaction": 0,
+              "blocked": 0
+            },
+            "wal": {
+              "archived": "0",
+              "failed": "0",
+              "lastArchivedAt": null,
+              "lastFailureAt": null
+            }
+          }
+        },
+        "freeBytes": 16979603456,
+        "recoveryPolicy": "wal-15m"
+      },
+      "productActivation": false
+    },
+    "nativeBackupApi": {
+      "checkedAt": "2026-09-12T20:45:35.683Z",
+      "verified": true,
+      "providerId": "postgresql-pair",
+      "bundle": "/home/gpadmin/grabenplaner-pg-migration-20260912/recovery-10/api-snapshots/8fd791e5-de2a-44ec-8b5a-e43926716283.pair",
+      "commitMarker": "/home/gpadmin/grabenplaner-pg-migration-20260912/recovery-10/api-snapshots/8fd791e5-de2a-44ec-8b5a-e43926716283.pair.complete.json",
+      "sha256": "0ebf1800dd33a159195bf85b172e3922c5e046d67778f7cc4c08f16bf3658315",
+      "createdAt": "2026-09-12T20:45:31.010Z",
+      "timings": [
+        {
+          "domain": "core",
+          "milliseconds": 6205
+        },
+        {
+          "domain": "sales",
+          "milliseconds": 52367
+        }
+      ],
+      "milliseconds": 70848,
+      "productActivation": false
+    },
+    "remaining": [
+      "Full HTTP application and full nightly application-smoke proof belong to block 11",
+      "Activation of prepared production operations and cutover belong to block 12"
+    ],
+    "nightlyRestore": {
+      "providerId": "postgresql-pair",
+      "verified": true,
+      "checkedAt": "2026-09-12T21:34:13.021Z",
+      "manifestSha256": "69359dc11eb51817eb10f4d79262a22f9c475d8c93bfa5e491e5a747573fff5f",
+      "databases": {
+        "core": {
+          "tables": 201,
+          "rows": "209790",
+          "sequences": 22,
+          "schemaSha256": "eb8d84e0a7c06e30ca900c08e83bd5e4086654695e3b1115b0c360e230cc652e"
+        },
+        "sales": {
+          "tables": 63,
+          "rows": "2738950",
+          "sequences": 2,
+          "schemaSha256": "0fd23c3cd7117e619348c79aa2058f8e49fc7ee1afab133335754dbe369f195d"
+        }
+      },
+      "protectedDocuments": 55,
+      "protectedRecords": 113,
+      "integrationCredentials": 0,
+      "managedImportKey": true,
+      "recoveryAccounts": 8,
+      "timings": [
+        {
+          "domain": "core",
+          "milliseconds": 9873
+        },
+        {
+          "domain": "sales",
+          "milliseconds": 95426
+        }
+      ],
+      "milliseconds": 118736,
+      "productActivation": false
+    },
+    "rootRecoveryPath": {
+      "ok": true,
+      "providerId": "postgresql-pair",
+      "databaseSha256": "69359dc11eb51817eb10f4d79262a22f9c475d8c93bfa5e491e5a747573fff5f",
+      "pairManifestSha256": "69359dc11eb51817eb10f4d79262a22f9c475d8c93bfa5e491e5a747573fff5f",
+      "stageManifestSha256": "b8e024ffe6b9fccf52559b008ba02ca0138520e7ec25e1bc047f0302eabf73c3",
+      "sourceAppVersion": "0.92.37-beta",
+      "targetAppVersion": "0.92.37-beta",
+      "deploymentSchemaVersion": 5,
+      "protectedDocuments": 55,
+      "protectedRecords": 113,
+      "integrationCredentials": 0,
+      "frozenFiles": 75,
+      "verifiedAt": "2026-09-12T21:40:47.742Z",
+      "pairedRestore": {
+        "providerId": "postgresql-pair",
+        "verified": true,
+        "checkedAt": "2026-09-12T21:40:41.230Z",
+        "manifestSha256": "69359dc11eb51817eb10f4d79262a22f9c475d8c93bfa5e491e5a747573fff5f",
+        "databases": {
+          "core": {
+            "tables": 201,
+            "rows": "209790",
+            "sequences": 22,
+            "schemaSha256": "eb8d84e0a7c06e30ca900c08e83bd5e4086654695e3b1115b0c360e230cc652e"
+          },
+          "sales": {
+            "tables": 63,
+            "rows": "2738950",
+            "sequences": 2,
+            "schemaSha256": "0fd23c3cd7117e619348c79aa2058f8e49fc7ee1afab133335754dbe369f195d"
+          }
+        },
+        "protectedDocuments": 55,
+        "protectedRecords": 113,
+        "integrationCredentials": 0,
+        "managedImportKey": true,
+        "recoveryAccounts": 8,
+        "timings": [
+          {
+            "domain": "core",
+            "milliseconds": 12546
+          },
+          {
+            "domain": "sales",
+            "milliseconds": 137890
+          }
+        ],
+        "milliseconds": 178536,
+        "application": {
+          "compatibility": true,
+          "fullApplicationSmoke": false
+        }
+      },
+      "fullApplicationSmoke": false
+    },
+    "recoveryPolicy": {
+      "initial": "paired-daily",
+      "continuousOffsiteWal": false,
+      "pitrQualifiedLocally": true,
+      "fifteenMinuteRpoClaimed": false
+    },
+    "tests": {
+      "localPassed": 72,
+      "localLinuxSkipped": 2,
+      "nativeDistinctPassed": 23,
+      "legacyRecoveryPassed": 17,
+      "auditPassed": true
+    }
+  },
+  "block11": {
+    "completed": true,
+    "productActivation": false,
+    "evidenceFiles": [
+      "block-11-export-verification.json",
+      "block-11-fault-verification.json",
+      "block-11-full-recovery-verification.json",
+      "block-11-http-verification.json",
+      "block-11-load-verification.json",
+      "block-11-operations-verification.json",
+      "block-11-outbox-verification.json",
+      "block-11-regression-verification.json"
+    ],
+    "regressionReview": "grabenplaner-migration-regression-review-v1",
+    "unresolvedLocalTestFailures": 0
+  },
+  "block12": {
+    "completed": false,
+    "implementationPrepared": true,
+    "isolationQualificationPassed": true,
+    "productActivation": false,
+    "productCutoverPending": true,
+    "fullProductAcceptancePending": true,
+    "maintenanceWindowMinutes": [
+      30,
+      45
+    ],
+    "officialReleasePackageCreated": false,
+    "sourceReview": "block-12-source-review.json",
+    "evidenceFiles": [
+      "block-12-activation-verification.json",
+      "block-12-local-verification.json",
+      "block-12-live-verification.json"
+    ],
+    "productiveRecoveryApply": "supervised PostgreSQL procedure; legacy SQLite apply refuses a PostgreSQL pair",
+    "maintenanceWindowQuestionPending": false,
+    "authorizedAt": "2026-09-13",
+    "authorization": "Bitte Block 12 loslegen"
+  }
+}

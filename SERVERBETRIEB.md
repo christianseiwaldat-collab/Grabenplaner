@@ -1,5 +1,19 @@
 # Grabenplaner Serverbetrieb
 
+## PostgreSQL-Migration ab v0.92.38
+
+Für ausdrücklich migrierte Ubuntu-Server verwenden GP und seine Hintergrundarbeiter zwei Datenbanken: `grabenplaner_core` für Planung, Personal, Rechte und CRM sowie `grabenplaner_sales` für Kassa und TradeFoto. Eine eigene PostgreSQL-18-Instanz läuft ausschließlich auf `127.0.0.1:55486` als `grabenplaner-db`; bestehende andere Datenbankinstanzen bleiben getrennt. Neue Standardinstallationen verwenden weiterhin SQLite. Die folgenden SQLite-Anleitungen gelten nur vor einer solchen Migration.
+
+Die root-geschützten Einstiege `server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh prepare` und `execute` erwarten als zweites Argument den SHA-256 des installierten `grabenplaner-server-manifest.json`. Vorher sind das offizielle Release und Offsite-Modul 9 einzuspielen. Das Wartungsfenster umfasst einen sauberen GP-Stopp, eine frische SQLite-/Dateiquelle, die vollständige Übernahme mit Inhaltsprüfung sowie die erste gemeinsame Sicherung. Der Ablauf veröffentlicht PostgreSQL erst nach diesem Sicherungspunkt. Eine alleinige Änderung von `DB_PROVIDER` ist kein Migrationsweg.
+
+Die Daten liegen unter `/var/lib/grabenplaner-postgresql/data/cluster`; Schlüssel und Geschäftszugänge werden getrennt in `/etc/grabenplaner/postgresql-application.json` und `/etc/grabenplaner/postgresql-operations.json` verwaltet. Die Anwendung erhält vier Geschäftszugänge, keine administrativen Wiederherstellungsrechte. `/var/lib/grabenplaner/data/postgresql-pair.json` bindet beide Datenbanken an dieselbe Umgebung und Quelle. Diese Dateien sind keine Vorlagen zum manuellen Ausfüllen oder Kopieren aus Testumgebungen.
+
+Gekoppelte Sicherungen liegen unter `/var/backups/grabenplaner-postgresql` und enthalten beide Datenbanken, verschlüsselte Dateien sowie die erforderliche Schlüssel- und Betriebskonfiguration. Eine Sicherung oder ein GP-Neustart beendet zunächst die Schreiber unter der gemeinsamen Wartungssperre. Offsite-Modul 9 überträgt und prüft das Paar als Einheit. Umfangreiche Wiederherstellungsprüfungen bleiben im Nachtablauf; bei kompatiblen Folge-Deploys gelten die vorhandenen Regeln für den kurzen Ablauf.
+
+Nach Veröffentlichung der PostgreSQL-Verantwortung gibt es keinen automatischen Rückfall auf SQLite. Eine Reparatur erhält den neuen Bestand; eine notwendige Wiederherstellung erfolgt beaufsichtigt für beide Datenbanken und alle gekoppelten Dateien. Der generische SQLite-Recovery-Apply verweigert PostgreSQL-Paare. Eine Wiederherstellung nur einer Datenbank sowie die Aktivierung einer mit Testdaten beschriebenen Prüfinstanz sind ausgeschlossen. Lokale PITR-Proben begründen keine Zusicherung laufender externer WAL-Sicherung oder eines 15-Minuten-RPO. Der vollständige Ablauf und die Abnahme stehen in `docs/postgresql-migration/BLOCK-12.md`.
+
+## Bisheriger Installationsstandard
+
 Der HTTPS-Serverbetrieb ist für eine zentrale, von der Firmen-IT verwaltete Grabenplaner-Instanz vorgesehen. Die Node.js-Anwendung läuft ausschließlich auf `127.0.0.1`; Browser greifen nur über Caddy und eine freigegebene HTTPS-Adresse darauf zu. Lokalbetrieb und LAN-Host bleiben davon unabhängig.
 
 Unterstützt werden **Ubuntu 24.04 LTS und Ubuntu 26.04 LTS auf x86-64**; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen. Die vorhandenen Windows-Werkzeuge bleiben unterstützt. Auf beiden Plattformen gelten dieselben Sicherheitsgrenzen: eine lokale SQLite-Datenbank, genau eine aktive Grabenplaner-Instanz, Caddy als einziger öffentlicher Zugang sowie getrennte Programm-, Daten-, Schlüssel- und Backupbereiche.

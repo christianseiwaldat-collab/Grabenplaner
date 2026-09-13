@@ -221,6 +221,13 @@ function sourcePaths(stage) {
   return { database, documents, runtimeConfig: pathExists(runtimeConfig) ? runtimeConfig : null, branding: pathExists(branding) ? branding : null };
 }
 
+function assertSqliteRecoveryTarget(dataRoot, prepared, verified) {
+  if (prepared?.providerId === 'postgresql-pair' || verified?.providerId === 'postgresql-pair'
+      || pathExists(path.join(dataRoot, 'data', 'postgresql-pair.json'))) {
+    fail('PostgreSQL benoetigt die gekoppelte Wiederherstellung beider Datenbanken. SQLite-Apply darf den PostgreSQL-Bestand und seine Dateien nicht ersetzen.');
+  }
+}
+
 function verifySafetyReceipt(file, safetyRoot, recoveryId, snapshotId, internalPolicy) {
   const receipt = readJson(file, { maximumBytes: 8 * 1024 * 1024 });
   if (receipt?.format !== "grabenplaner-pre-restore-safety" || receipt?.schemaVersion !== 1
@@ -265,6 +272,7 @@ function applyRecovery(values, internalPolicy) {
   const safetyRoot = path.resolve(values["safety-root"]);
   const safetyReceiptPath = path.resolve(values["safety-receipt"]);
   const dataRoot = path.resolve(values["data-root"]);
+  assertSqliteRecoveryTarget(dataRoot, prepared, verified);
   const dataRootStat = fs.lstatSync(dataRoot);
   if (dataRoot === path.parse(dataRoot).root || !dataRootStat.isDirectory() || dataRootStat.isSymbolicLink()) fail("Der Live-Datenbaum ist unzulaessig.");
   const targetDatabase = assertChild(values.database, dataRoot, "Live-Datenbank");
@@ -386,4 +394,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { applyRecovery, parseArguments, sourcePaths };
+module.exports = { applyRecovery, parseArguments, sourcePaths, assertSqliteRecoveryTarget };

@@ -127,6 +127,9 @@ function temporaryWorkflowDatabase(label) {
       id TEXT PRIMARY KEY,
       permissions TEXT NOT NULL DEFAULT '[]'
     );
+    CREATE VIEW portal_user_roles AS
+      SELECT u.employee_number, r.id, r.permissions
+      FROM portal_users u JOIN portal_roles r ON r.id = u.role;
     CREATE TABLE portal_access_scopes (
       employee_number TEXT NOT NULL,
       location_id TEXT NOT NULL,

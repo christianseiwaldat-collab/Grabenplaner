@@ -108,7 +108,7 @@ test("backup health reads cached authenticated archive points without inventing 
 
 test("app and external backup share one deadline and publish success only after both awaited points", async () => {
   const calls = [], releases = [];
-  const dependencies = { tableExists: () => true, getSettings: () => ({}), serverModeActive: false,
+  const dependencies = { postgresqlActive: false, tableExists: () => true, getSettings: () => ({}), serverModeActive: false,
     appBackupDirectory: "app", backupDirectoryFromSettings: () => "external", lastBackup: null,
     createDatabaseBackupInBackground: (directory, reason, kind, options) => {
       calls.push({ directory, reason, kind, deadlineMs: options.deadlineMs });
@@ -154,8 +154,9 @@ test("server forwards existing recovery keys and the shared deadline only to the
 test("shutdown shares one deadline with drain and does not release the instance when child termination is unverified", async () => {
   for (const code of [null, "BACKGROUND_BACKUP_TREE_UNVERIFIED", "BACKGROUND_BACKUP_ARCHIVE_RECOVERY_REQUIRED"]) {
     const events = [], deadlines = [];
-    const dependencies = { shutdownStarted: false, server: null, databaseClosed: false, maintenanceOwnsLifecycleBackup: () => false,
+    const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false, maintenanceOwnsLifecycleBackup: () => false,
       salesReportJobs: { stop: async () => {} },
+      postgresqlReceiptWorkers: null,
       backupInterval: null, retentionInterval: null, scannerProbeInterval: null, sicknessSweepInterval: null,
       notificationDispatchInterval: null, rateLimitCleanupInterval: null, systemCenterHealthInterval: null,
       localBackupArchiveEnabled: () => true, console: { error() {} }, setInterval: () => events.push("recovery-wait"),
@@ -179,4 +180,11 @@ test("shutdown shares one deadline with drain and does not release the instance 
       if (!code) assert.equal(deadlines[0], deadlines[1]);
     }
   }
+});
+
+test("PostgreSQL never publishes a successful SQLite lifecycle backup", async () => {
+  const dependencies = { postgresqlActive: true, lastBackup: null };
+  const create = serverFunction("createDatabaseBackup", "function createSchema", dependencies);
+  await assert.rejects(create("shutdown-signal"), { code: "PG_PAIRED_BACKUP_REQUIRED" });
+  assert.equal(dependencies.lastBackup, null);
 });

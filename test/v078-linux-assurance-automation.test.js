@@ -39,8 +39,8 @@ const {
 const broker = require(path.join(root, "server-tools/linux/offsite/lib/assurance-control-broker.js"));
 const history = require(path.join(root, "server-tools/linux/offsite/lib/assurance-history.js"));
 
-test("deploy workflow packages module v8 and preserves verified legacy migrations", () => {
-  assert.equal(schema.moduleVersion, 8);
+test("deploy workflow packages module v9 and preserves verified legacy migrations", () => {
+  assert.equal(schema.moduleVersion, 9);
   for (const relative of [
     "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
     "server-tools/linux/offsite/lib/application-smoke.js",
