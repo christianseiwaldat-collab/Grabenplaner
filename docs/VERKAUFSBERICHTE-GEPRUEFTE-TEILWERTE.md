@@ -504,6 +504,48 @@ und visuell geprüft. Der Persistenzaudit meldet keine Phasengrenzverletzungen.
 Die Kandidatenprüfung ist unter `tmp/build-cash-deposit-proof.py` nachvollziehbar;
 die PDF-Prüfmuster liegen in `tmp/pdfs/cash-deposit-20260913/`.
 
+## Ergänzung: zwei bestätigte Nettoköpfe vom August 2026 (13.09.2026)
+
+Stand: lokal umgesetzt und geprüft, für den nächsten Deploy vorbereitet.
+Keine neue Veröffentlichung und keine Änderung produktiver Quelldaten oder
+gespeicherter Berichte durch diese Ergänzung.
+
+Die August-Auswertung enthält vier offene Positionen in zwei Belegen. Bei beiden
+steht die Nettosumme im Kopf, während die Positionen Bruttobeträge mit 20 % MwSt.
+enthalten. Der Benutzer hat die Korrektur für den nächsten Deploy beauftragt.
+903,90 EUR brutto ergeben 753,25 EUR netto; 949,00 EUR brutto ergeben 790,83 EUR
+netto. Der zweite Kopf enthält den unveränderten Access-Wert
+`790.8333129882812`, der nach der bestehenden Cent-Rundung ebenfalls 790,83 EUR
+ergibt. Es wird kein zusätzlicher Rabatt und keine neue Steuerbehandlung abgeleitet.
+
+Die effektive Regel `cash-confirmed-20260911`, Version 10, ergänzt genau diese
+beiden vollständigen Quellfingerabdrücke als Nettokopf-Ausnahmen. Die zuvor
+bestätigten drei Ausnahmen und die Anzahlungsregel bleiben erhalten. Eine
+geänderte Quelle oder ein anderer Beleg wird durch die neue Bestätigung nicht
+freigegeben. Die versiegelte ursprüngliche Quellregel bleibt Version 1;
+historische Preise, Steuerkennzeichen und Kassen-Roherträge werden nicht geändert.
+
+76 gezielte Regel-, Berichtsmodell- und Kassenintegrationsprüfungen bestanden.
+Der neue Regressionstest deckt die Summe mehrerer netto gerundeter Positionen,
+die Access-Genauigkeit des Einzelbelegs, unveränderte historische Roherträge und
+die Ablehnung fehlender Abdeckung oder geänderter Quelldaten ab.
+
+Die begrenzte lesende PostgreSQL-Prüfung vom 13.09.2026, 21:01:38 UTC, verwendet
+die lokale Regel ausschließlich im Speicher eines getrennten Leseprozesses.
+Ergebnis für die betroffene Mitarbeiter-Auswahl im August: 212 geprüfte,
+sechs ausgeschlossene und null offene Positionen; zuvor waren 208 geprüft und
+vier offen. Nettoumsatz 11.441,06 EUR, Kassen-Rohertrag 3.368,95 EUR und 140
+Belege. Die Differenz zum bisherigen geprüften Teil beträgt 1.544,08 EUR netto
+und 338,88 EUR Rohertrag. Quelle und bestehender Berichtsauftrag wurden erneut
+auf Unverändertheit geprüft. Nach dem späteren Deploy muss die Auswertung neu
+erstellt werden; bereits gespeicherte PDFs bleiben unverändert.
+
+Nachweise: `tmp/ma419-net-heads-source-proof.json`,
+`tmp/ma419-net-heads-candidate-readonly.json`,
+`tmp/ma419-net-heads-tests-20260913.log`. Die dazugehörigen lokalen
+Prüfskripte liegen im selben ignorierten Verzeichnis. Sie ändern keine
+Produktivdatei und führen ausschließlich PostgreSQL-Lesezugriffe aus.
+
 ## Weiterer Stand
 
 Nicht bestätigte weitere Statuskombinationen, Steuercodes und Belegabweichungen

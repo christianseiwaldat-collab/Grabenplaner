@@ -38,6 +38,8 @@ const ALLOWED_PERMISSIONS = [
   "schedule:location:view",
   "personnel_learning:location:dashboard",
   "branch_orders:submit",
+  "branch_articles:read",
+  "branch_receipts:read",
 ];
 
 let baseUrl;

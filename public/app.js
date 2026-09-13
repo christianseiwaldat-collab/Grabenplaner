@@ -784,7 +784,7 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionSearch", "positionListStatus", "positionTableHead", "positionList", "positionDeleteModal", "positionDeleteForm", "positionDeleteModalTitle", "positionDeleteModalCopy", "positionDeleteWarning", "positionDeleteWarningTitle", "positionDeleteWarningText", "positionDeleteName", "positionDeleteActiveCount", "positionDeleteHistoryCount", "positionDeleteMessage", "confirmPositionDeleteButton", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "adminAccessModeLabel", "accessSettings", "portalUserAccessCard", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
-    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
+    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountLearningDashboardRow", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountArticles", "organizationAccountArticlesRow", "organizationAccountReceipts", "organizationAccountReceiptsRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
@@ -22461,17 +22461,24 @@ function syncOrganizationAccountPermissionControls() {
   [
     elements.organizationAccountLoanOverview,
     elements.organizationAccountScheduleView,
-    elements.organizationAccountLearningDashboard,
   ].forEach((input) => {
     if (!input) return;
     if (branchAccount) input.checked = true;
     input.disabled = branchAccount;
   });
-  if (elements.organizationAccountBranchOrders) {
-    if (!branchAccount) elements.organizationAccountBranchOrders.checked = false;
-    elements.organizationAccountBranchOrders.disabled = !branchAccount;
+  if (elements.organizationAccountLearningDashboard) {
+    elements.organizationAccountLearningDashboard.checked = branchAccount;
+    elements.organizationAccountLearningDashboard.disabled = true;
   }
-  elements.organizationAccountBranchOrdersRow?.classList.toggle("hidden", !branchAccount);
+  elements.organizationAccountLearningDashboardRow?.classList.toggle("hidden", !branchAccount);
+  for (const name of ["BranchOrders", "Articles", "Receipts"]) {
+    const input = elements["organizationAccount" + name];
+    if (input) {
+      if (!branchAccount) input.checked = false;
+      input.disabled = !branchAccount;
+    }
+    elements["organizationAccount" + name + "Row"]?.classList.toggle("hidden", !branchAccount);
+  }
 }
 
 function resetOrganizationAccountForm() {
@@ -22492,6 +22499,8 @@ function resetOrganizationAccountForm() {
   elements.organizationAccountScheduleView.checked = true;
   elements.organizationAccountLearningDashboard.checked = true;
   elements.organizationAccountBranchOrders.checked = false;
+  elements.organizationAccountArticles.checked = false;
+  elements.organizationAccountReceipts.checked = false;
   syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = true;
   elements.organizationAccountCancel.classList.add("hidden");
@@ -22510,7 +22519,10 @@ function renderOrganizationAccounts() {
     const functions = [
       account.permissions?.includes("loans:overview:read") ? "Leihübersicht" : "",
       account.permissions?.includes("schedule:location:view") ? "Dienstplanansicht" : "",
+      account.permissions?.includes("personnel_learning:location:dashboard") ? "Schulungsdashboard" : "",
       account.permissions?.includes("branch_orders:submit") ? "Filialbestellung" : "",
+      account.permissions?.includes("branch_articles:read") ? "Artikelsuche" : "",
+      account.permissions?.includes("branch_receipts:read") ? "Belegsuche" : "",
     ].filter(Boolean).join(" · ");
     const status = !account.active
       ? "Inaktiv"
@@ -22568,6 +22580,8 @@ function editOrganizationAccount(accountId) {
   elements.organizationAccountScheduleView.checked = account.permissions?.includes("schedule:location:view") === true;
   elements.organizationAccountLearningDashboard.checked = account.permissions?.includes("personnel_learning:location:dashboard") === true;
   elements.organizationAccountBranchOrders.checked = account.permissions?.includes("branch_orders:submit") === true;
+  elements.organizationAccountArticles.checked = account.permissions?.includes("branch_articles:read") === true;
+  elements.organizationAccountReceipts.checked = account.permissions?.includes("branch_receipts:read") === true;
   syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = account.active === true;
   elements.organizationAccountCancel.classList.remove("hidden");
@@ -22584,6 +22598,8 @@ async function saveOrganizationAccount(event) {
     elements.organizationAccountScheduleView.checked ? "schedule:location:view" : "",
     elements.organizationAccountLearningDashboard.checked ? "personnel_learning:location:dashboard" : "",
     elements.organizationAccountBranchOrders.checked ? "branch_orders:submit" : "",
+    elements.organizationAccountArticles.checked ? "branch_articles:read" : "",
+    elements.organizationAccountReceipts.checked ? "branch_receipts:read" : "",
   ].filter(Boolean);
   const body = {
     loginName: elements.organizationAccountLoginName.value,
@@ -33670,7 +33686,11 @@ function renderSalesAnalyticsReport() {
 let salesReportJobUi = null;
 function renderSalesAnalyticsTabs() {
   if (!salesReportJobUi && window.createSalesReportJobUi) salesReportJobUi = window.createSalesReportJobUi({ api,
-    visible: () => state.currentView === 'salesAnalytics' && ['create', 'reports'].includes(state.salesAnalytics.tab) && canAccessSalesAnalytics() });
+    visible: () => state.currentView === 'salesAnalytics' && ['create', 'reports', 'graphics'].includes(state.salesAnalytics.tab) && canAccessSalesAnalytics(),
+    navigate: tab => setSalesAnalyticsTab(tab) });
+  if (['create', 'graphics'].includes(state.salesAnalytics.tab)) salesReportJobUi?.setMode(state.salesAnalytics.tab === 'graphics' ? 'graphic' : 'report');
+  const analyticsTabs = document.getElementById('salesAnalyticsTabs'), pdfTab = document.getElementById('salesAnalyticsPdfTab');
+  if (analyticsTabs && pdfTab && analyticsTabs.lastElementChild !== pdfTab) analyticsTabs.append(pdfTab);
   void salesReportJobUi?.refresh();
   const tab = state.salesAnalytics.tab;
   document.getElementById("salesAnalyticsTabs")?.querySelectorAll("[data-sales-analytics-tab]").forEach((button) => {
@@ -33685,7 +33705,7 @@ function renderSalesAnalyticsTabs() {
 
 function setSalesAnalyticsTab(tab, { moveFocus = false } = {}) {
   if (!canAccessSalesAnalytics()) return;
-  state.salesAnalytics.tab = ["create", "pdf", "reports"].includes(tab) ? tab : "create";
+  state.salesAnalytics.tab = ["create", "reports", "graphics", "pdf"].includes(tab) ? tab : "create";
   renderSalesAnalyticsTabs();
   if (moveFocus) document.querySelector('#salesAnalyticsTabs [aria-selected="true"]')?.focus();
   if (state.currentView === "salesAnalytics" && state.salesAnalytics.tab === "pdf" && !state.salesAnalytics.loaded) {
@@ -34303,7 +34323,7 @@ function applyRequestedView({ fromHistory = false } = {}) {
   }
   if (requestedView === "salesAnalytics") {
     const requestedSection = parameters.get("section");
-    if (["create", "pdf", "reports"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
+    if (["create", "reports", "graphics", "pdf"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");

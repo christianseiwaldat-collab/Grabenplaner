@@ -17,6 +17,50 @@ test('new PDF presentation choices and ten-item limits are validated without cha
   assert.equal(old.reportVersion, 2); assert.equal(Object.hasOwn(old, 'orientation'), false);
   assert.deepEqual(query(old), old); assert.throws(() => query({ chartType: 'bars' }), { code: 'IMPORT_REPORT_SELECTION' });
 });
+test('WGR and assortment selections apply jointly without guessing a parent from its number', () => {
+  const q = query({ reportVersion: 4, merchandiseGroupIds: ['13'], productGroupIds: ['1'], groupBy: ['merchandiseGroup', 'productGroup'] });
+  assert.deepEqual(query(q), q);
+  const s = M.accumulator();
+  M.accumulate(s, 'current', q, line({ merchandiseGroup: { id: '13', label: 'Foto' } }));
+  M.accumulate(s, 'current', q, line({ merchandiseGroup: { id: '12', label: 'Andere WGR' } }));
+  M.accumulate(s, 'current', q, line({ merchandiseGroup: { id: '13', label: 'Foto' }, productGroup: { id: '2', label: 'Anderes Sortiment' } }));
+  M.accumulate(s, 'current', q, line());
+  const result = M.finishReport(s, q); assert.equal(result.total.metrics.netRevenue.current, '100.00'); assert.equal(result.coverage.current.checked, 1);
+  assert.deepEqual(result.rows[0].dimensions.map(d => d.id), ['13', '1']);
+  assert.throws(() => query({ reportVersion: 3, merchandiseGroupIds: ['13'] }), { code: 'IMPORT_REPORT_SELECTION' });
+  assert.throws(() => query({ reportVersion: 4, merchandiseGroupIds: Array.from({ length: 11 }, (_, i) => String(i)) }), { code: 'IMPORT_REPORT_SELECTION' });
+});
+
+test('timeline intervals preserve partial months, Monday weeks and leap days', () => {
+  assert.deepEqual(M.timelineIntervals({ dateFrom: '2024-02-28', dateTo: '2024-03-01', timeGrain: 'day' }).map(i => i.from), ['2024-02-28', '2024-02-29', '2024-03-01']);
+  assert.deepEqual(M.timelineIntervals({ dateFrom: '2026-01-01', dateTo: '2026-01-06', timeGrain: 'week' }), [
+    { id: '2025-12-29', from: '2026-01-01', to: '2026-01-04' }, { id: '2026-01-05', from: '2026-01-05', to: '2026-01-06' }
+  ]);
+  assert.deepEqual(M.timelineIntervals({ dateFrom: '2026-01-15', dateTo: '2026-02-03', timeGrain: 'month' }), [
+    { id: '2026-01-01', from: '2026-01-15', to: '2026-01-31' }, { id: '2026-02-01', from: '2026-02-01', to: '2026-02-03' }
+  ]);
+});
+
+test('timeline ratios use weighted totals, retain returns and distinguish missing days from known zero selections', () => {
+  const q = query({ reportVersion: 4, chartType: 'timeline', timeGrain: 'day', groupBy: [], sellerIds: ['42'], chartMetric: 'marginRate' });
+  const s = M.accumulator();
+  M.accumulate(s, 'current', q, line({ date: '2026-02-01' }));
+  M.accumulate(s, 'current', q, line({ date: '2026-02-01', metric: { status: 'sale', gross: '360.00', net: '300.00' }, margin: '120.00', receiptKey: 'other' }));
+  M.accumulate(s, 'current', q, line({ date: '2026-02-02', seller: { id: '43' } }));
+  M.accumulate(s, 'current', q, line({ date: '2026-02-04', metric: { status: 'return', gross: '-120.00', net: '-100.00' }, quantity: '-1', margin: '-20.00' }));
+  M.accumulate(s, 'current', q, line({ date: '2026-02-05', metric: null, reviewIssues: ['RECEIPT_AMOUNT_MISMATCH'] }));
+  M.accumulate(s, 'current', q, line({ date: '2026-02-06', margin: null }));
+  const finish = metric => M.finishReport(JSON.parse(JSON.stringify(s)), { ...q, chartMetric: metric }).timeline.series[0].points;
+  const ratio = finish('marginRate'), revenue = finish('netRevenue');
+  assert.equal(ratio[0].value, '35.00'); assert.equal(ratio[1].value, null); assert.equal(ratio[1].hasSource, true);
+  assert.equal(revenue[1].value, '0.00'); assert.equal(revenue[2].value, null); assert.equal(revenue[2].hasSource, false);
+  assert.equal(revenue[3].value, '-100.00'); assert.equal(ratio[3].value, null);
+  assert.equal(revenue[4].value, null); assert.equal(revenue[4].review, 1);
+  assert.equal(ratio[5].value, null); assert.equal(ratio[5].missingMargin, 1);
+  assert.deepEqual(query(q), q); assert.throws(() => query({ reportVersion: 4, chartType: 'timeline', timeGrain: 'hour' }));
+  assert.throws(() => query({ reportVersion: 4, chartType: 'timeline', groupBy: ['seller', 'location'] }));
+});
+
 test('confirmed cash margin multiplies unit margin by quantity before rounding, preserving return signs and precision', () => {
   assert.equal(M.positionMargin('8.141666666666667', '2'), '16.28');
   assert.equal(M.positionMargin('17.86844166666667', '1'), '17.87');
@@ -24,6 +68,15 @@ test('confirmed cash margin multiplies unit margin by quantity before rounding, 
   assert.equal(M.positionMargin('0.004999999', '2000000'), '10000.00');
   assert.equal(M.positionMargin('-0.005', '1'), '-0.01');
   assert.equal(M.positionMargin(null, '2'), null);
+});
+
+test('separate branch graphics do not turn another branch source day into a confirmed zero', () => {
+  const q = query({ reportVersion: 4, chartType: 'timeline', timeGrain: 'day', groupBy: ['location'], chartMetric: 'netRevenue' }), s = M.accumulator();
+  M.accumulate(s, 'current', q, line({ date: '2026-02-01', location: { id: 'a', label: 'A' } }));
+  M.accumulate(s, 'current', q, line({ date: '2026-02-02', location: { id: 'b', label: 'B' } }));
+  const series = M.finishReport(JSON.parse(JSON.stringify(s)), q).timeline.series;
+  assert.equal(series[0].points[0].value, '100.00'); assert.equal(series[0].points[1].value, null); assert.equal(series[0].points[1].hasSource, false);
+  assert.equal(series[1].points[0].value, null); assert.equal(series[1].points[1].value, '100.00');
 });
 test('calendar-year comparison clamps leap days, preserves custom dates and rejects invalid ranges/rights', () => {
   assert.equal(M.previousYear('2024-02-29'), '2023-02-28');

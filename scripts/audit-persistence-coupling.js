@@ -364,6 +364,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   // Read-only route bridge, composed without a production import source.
   "lib/sales-history-routes.js",
   "lib/receipt-search-routes.js",
+  "lib/branch-sales-routes.js",
   "scripts/verify-tradefoto-test-import.mjs",
   "lib/persistence/repositories/sales-history-workspace.js",
   "lib/persistence/repositories/import-history.js",
@@ -505,6 +506,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "test/branch-sales-api.test.js",
   "test/sales-article-images.test.js",
   "test/sales-report-jobs-routes.test.js",
   "scripts/benchmark-cash-assigned-search.js",

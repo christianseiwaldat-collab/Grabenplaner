@@ -59,10 +59,21 @@
           <button id="historyTab" data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Anträge</button>
           <button class="hidden" id="loanTab" data-tab="loan" type="button" role="tab" aria-selected="false" aria-controls="loanView" tabindex="-1">Leihe</button>
           <button class="hidden" id="branchOrdersTab" data-tab="branchOrders" type="button" role="tab" aria-selected="false" aria-controls="branchOrdersView" tabindex="-1">Filialbestellung</button>
+          <button class="hidden" id="branchArticlesTab" data-tab="branchArticles" type="button" role="tab" aria-selected="false" aria-controls="branchArticlesView" tabindex="-1">Artikelsuche</button>
+          <button class="hidden" id="branchReceiptsTab" data-tab="branchReceipts" type="button" role="tab" aria-selected="false" aria-controls="branchReceiptsView" tabindex="-1">Belegsuche</button>
           <button class="hidden" id="branchOrderSettingsTab" data-tab="settings" data-settings-focus="branch-orders" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Bestellverwaltung</button>
           <button id="amuTab" data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
+
+        <section class="portal-view" id="branchArticlesView" role="tabpanel" aria-labelledby="branchArticlesTab">
+          <div class="view-heading"><div><span class="eyebrow">Filialkonto</span><h1>Artikelsuche</h1><p>Artikelnummern, Bezeichnungen, EAN und Verkaufspreise aus dem gemeinsamen Artikelstamm.</p></div></div>
+          <div class="portal-card branch-sales-workspace" id="branchArticlesWorkspace"></div>
+        </section>
+        <section class="portal-view" id="branchReceiptsView" role="tabpanel" aria-labelledby="branchReceiptsTab">
+          <div class="view-heading"><div><span class="eyebrow">Filialkonto</span><h1>Belegsuche</h1><p>Kassenbelege der zugewiesenen Filiale suchen, ansehen und als Beleginformation herunterladen.</p></div></div>
+          <div class="portal-card branch-sales-workspace" id="branchReceiptsWorkspace"></div>
+        </section>
 
         <section class="portal-view" id="settingsView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Startseite, mobile Navigation, persönliches Portaldesign, freiwillige Funktionen und Sicherheit an einem Ort.</p></div><button class="text-button mobile-settings-home" id="mobileSettingsHome" type="button">Zur Startseite</button></div>
@@ -808,6 +819,8 @@
     <script src="/date-range-calendar.js"></script>
     <script src="/credential-boundaries.js"></script>
     <script src="/navigation-history.js"></script>
+    <script src="/receipt-line-format.js"></script>
+    <script src="/portal-branch-sales.js"></script>
     <script src="/portal.js"></script>
   </body>
 </html>

@@ -726,6 +726,7 @@ const ORGANIZATION_SCHEDULE_PERMISSION = "schedule:location:view";
 const PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION =
   "personnel_learning:location:dashboard";
 const BRANCH_ORDER_SUBMIT_PERMISSION = "branch_orders:submit";
+const { BRANCH_ARTICLES_PERMISSION, BRANCH_RECEIPTS_PERMISSION } = require("./lib/branch-sales-access");
 const BRANCH_ORDER_MANAGE_PERMISSION = "branch_orders:manage";
 const BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION = "branch_portal:display:manage";
 const MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION = "mobile_portal:location_display:manage";
@@ -755,6 +756,18 @@ const branchOrganizationAccountBasePermissions = Object.freeze([
   PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION,
 ]);
 const organizationAccountPermissionCatalog = Object.freeze([
+  {
+    id: BRANCH_ARTICLES_PERMISSION,
+    label: "Artikelsuche verwenden",
+    description: "Gemeinsamen Artikelstamm nach Artikelnummer, Bezeichnung und EAN durchsuchen; Verkaufspreise ansehen.",
+    accountTypes: ["branch"],
+  },
+  {
+    id: BRANCH_RECEIPTS_PERMISSION,
+    label: "Belegsuche und PDF-Download verwenden",
+    description: "Kassenbelege der zugewiesenen Filiale suchen und als Beleginformation herunterladen; kein Original-Rechnungsdokument.",
+    accountTypes: ["branch"],
+  },
   {
     id: LOAN_OVERVIEW_PERMISSION,
     label: "Offene Leihen am Standort ansehen",
@@ -6314,6 +6327,7 @@ function getSettings() {
 function installationFeaturesForApiPath(apiPath) {
   const requestPath = String(apiPath || "").toLowerCase();
   const required = new Set();
+  if (/^\/portal\/v1\/branch-(?:articles|receipts)(?:\/|$)/.test(requestPath)) required.add("employeePortal");
   if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule|cross-location-schedules|cross-location-schedule-settings|staff-assignment-requests)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
   if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/personnel-vacations(?:\/|$)/.test(requestPath)) required.add("vacation");
@@ -25629,11 +25643,24 @@ const salesReportJobs = createSalesReportJobs({ access: persistenceProvider, vau
   batchWorker: salesReportBatchWorker,
   resolvePrincipal: resolveSalesReportPrincipal,
   onError: code => console.error('Berichtswarteschlange derzeit nicht verfügbar:', code) });
-registerSalesReportJobRoutes(app, { jobs: salesReportJobs, requireSession: requireEmployeePortalSession,
+const salesReportTemplates = require('./lib/persistence/repositories/sales-report-templates').createSalesReportTemplates({
+  access: persistenceProvider, vault: integrationSecretVault, normalizeQuery: (session, query) => salesReportJobs.normalize(session, query),
+  scope: persistenceConfiguration.rehearsal ? 'postgresql-rehearsal-11' : 'grabenplaner-main' });
+registerSalesReportJobRoutes(app, { jobs: salesReportJobs, templates: salesReportTemplates, requireSession: requireEmployeePortalSession,
   refreshSession: request => loadPortalSessionFromRequest(request, { touch: false }), assertCsrf: assertPortalCsrf });
 require("./lib/receipt-search-routes").registerReceiptSearchRoutes(app, {
   runtime: managedSalesHistoryRuntime, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }), preferences: uiPreferencesRepository,
+});
+require("./lib/branch-sales-routes").registerBranchSalesRoutes(app, {
+  catalog: salesArticleCatalogRepository,
+  receipts: require("./lib/persistence/repositories/branch-receipt-runtime").createBranchReceiptRuntime({
+    access: persistenceProvider, vault: integrationSecretVault,
+    ...(postgresqlActive ? { cashBackendFactory: require("./lib/persistence/postgresql/reporting/receipt-prefetch").createPostgresqlCashHistoryBackend,
+      dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+  }),
+  requireSession: requirePortalSession, assertCsrf: assertPortalCsrf,
+  refreshSession: request => loadPortalSessionFromRequest(request, { touch: false }),
 });
 registerSalesHistoryRoutes(app, {
   runtime: managedSalesHistoryRuntime,

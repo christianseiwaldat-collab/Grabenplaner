@@ -42,9 +42,9 @@ for (const [count, negative] of [[5, false], [65, true]]) test(`PDF with ${count
   } finally { await loading.destroy(); }
 });
 
-for (const [orientation, chartType, negative] of [['landscape', 'shares', false], ['landscape', 'shares', true], ['portrait', 'none', false]])
-  test(`presentation ${orientation}/${chartType}, returns=${negative} preserves every value, page bounds and chart choice`, async () => {
-    const input = fixture(10, negative, { reportVersion: 3, orientation, chartType });
+for (const [orientation, chartType, negative, reportVersion = 3] of [['landscape', 'shares', false], ['landscape', 'shares', true], ['portrait', 'none', false], ['landscape', 'none', false, 4]])
+  test(`presentation v${reportVersion} ${orientation}/${chartType}, returns=${negative} preserves every value, page bounds and chart choice`, async () => {
+    const input = fixture(10, negative, { reportVersion, orientation, chartType });
     const buffer = await createSalesAnalysisPdf(input);
     const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const loading = getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }), pdf = await loading.promise;
@@ -62,6 +62,7 @@ for (const [orientation, chartType, negative] of [['landscape', 'shares', false]
       }
       const all = text.join('\n');
       for (let i = 0; i < 10; i++) assert.match(all, new RegExp(`Hersteller ${i} ·`));
+      if (reportVersion === 4) { assert.match(all, /Warengruppen \(WGR\):/); assert.match(all, /Sortimentsgruppen:/); }
       if (chartType === 'none') assert.doesNotMatch(all, /Anteile im Auswertungszeitraum|Übersicht|Skala:/);
       else if (negative) { assert.match(all, /als Balkendiagramm dargestellt/); assert.doesNotMatch(all, /Anteile im Auswertungszeitraum/); }
       else { assert.match(all, /Anteile im Auswertungszeitraum/); assert.doesNotMatch(all, /als Balkendiagramm dargestellt/); }

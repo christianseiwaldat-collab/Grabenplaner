@@ -42,7 +42,7 @@
     "dataRequests",
   ]);
   const SUPPORTED_PERSONNEL_TABS = new Set(["employees", "locations"]);
-  const SUPPORTED_SALES_ANALYTICS_TABS = new Set(["create", "pdf", "reports"]);
+  const SUPPORTED_SALES_ANALYTICS_TABS = new Set(["create", "reports", "graphics", "pdf"]);
   const SUPPORTED_SETTINGS_TABS = new Set([
     "general",
     "schedule",
@@ -554,10 +554,19 @@
       "sales.report-create",
       "Bericht erstellen öffnen",
       ["Verkaufsverwaltung", "Verkaufsanalysen", "Bericht erstellen"],
-      "Öffnet die vorbereitete Suchmaske für künftige Datenbankberichte. Es wird kein Auftrag gestartet.",
-      ["bericht erstellen", "berichtgenerierung", "bericht beauftragen", "auswertung erstellen", "datenbankbericht"],
+      "Öffnet die Berichtseinstellungen mit getrennten Warengruppen, Sortimentsgruppen und persönlichen Vorlagen.",
+      ["bericht erstellen", "berichtgenerierung", "bericht beauftragen", "auswertung erstellen", "datenbankbericht", "berichtsvorlagen", "sortimentsgruppen"],
       ["salesAnalyticsNavButton"],
       { view: "salesAnalytics", salesAnalyticsTab: "create", focusId: "salesAnalyticsRequestQuery" },
+    ),
+    entry(
+      "sales.graphics",
+      "Grafiken öffnen",
+      ["Verkaufsverwaltung", "Verkaufsanalysen", "Grafiken"],
+      "Öffnet den PDF-Zeitverlauf mit wählbaren Kennzahlen und Filial-, MA-, WGR- und Sortimentsfiltern.",
+      ["grafiken", "zeitverlauf", "zeitachse", "umsatzdiagramm", "rohertragsquote"],
+      ["salesAnalyticsNavButton"],
+      { view: "salesAnalytics", salesAnalyticsTab: "graphics", focusId: "salesAnalyticsGraphicsPanel" },
     ),
     entry(
       "sales.pdf-analytics",
@@ -572,7 +581,7 @@
       "sales.generated-reports",
       "Berichte öffnen",
       ["Verkaufsverwaltung", "Verkaufsanalysen", "Berichte"],
-      "Öffnet die vorbereitete Ablage für künftig beauftragte Berichte.",
+      "Öffnet Aufträge und fertige PDF-Berichte. Deren Einstellungen können erneut geladen und angepasst werden.",
       ["meine berichte", "beauftragte berichte", "berichtstatus", "fertige berichte", "hintergrundberichte"],
       ["salesAnalyticsNavButton"],
       { view: "salesAnalytics", salesAnalyticsTab: "reports", focusId: "salesAnalyticsReportsPanel" },

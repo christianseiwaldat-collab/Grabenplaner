@@ -1404,3 +1404,41 @@ html[data-portal-birthday-theme] #portalApp :is(.portal-tabs,.branch-mobile-acti
   }
   html[data-portal-birthday-theme] #portalApp main { width:calc(100% - 12px); }
 }
+
+.branch-organization-account .portal-tabs { overflow-x:auto; }
+.branch-sales-workspace { max-width:980px; padding:20px; }
+.branch-search-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+.branch-search-form label { min-width:0; max-width:100%; flex:1 1 180px; color:var(--ink); }
+.branch-search-form .branch-search-wide { flex:2 1 280px; }
+.branch-search-form input,.branch-search-form select { width:100%; min-width:0; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:11px 12px; }
+.branch-search-form :focus-visible,.branch-sales-workspace button:focus-visible,.branch-receipt-dialog button:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.branch-search-source { margin:14px 0; font-size:12px; overflow-wrap:anywhere; }
+.branch-search-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.branch-search-actions button { min-height:42px; }
+.branch-sales-workspace button:disabled { opacity:.5; cursor:not-allowed; }
+.branch-search-results { margin:16px 0; display:grid; gap:10px; }
+.branch-search-result { display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:14px; border:1px solid var(--line); border-radius:12px; }
+.branch-search-result > div { flex:1 1 220px; min-width:0; }
+.branch-search-result strong,.branch-search-result b { overflow-wrap:anywhere; }
+.branch-search-result p { font-size:12px; margin:5px 0 0; overflow-wrap:anywhere; }
+.branch-search-result dl { display:flex; align-items:center; flex-wrap:wrap; gap:20px; margin:0; }
+.branch-search-result dt { color:var(--muted); font-size:11px; }
+.branch-search-result dd { margin:4px 0 0; font-variant-numeric:tabular-nums; font-weight:750; }
+.branch-search-result .branch-search-actions { flex:0 1 auto; }
+.branch-receipt-dialog { width:min(740px,calc(100vw - 28px)); max-height:85dvh; overflow:auto; padding:22px; border:1px solid var(--line); border-radius:16px; color:var(--ink); background:var(--paper); }
+.branch-receipt-dialog::backdrop { background:rgba(20,35,29,.45); }
+.branch-search-dialog-heading { display:flex; align-items:start; justify-content:space-between; gap:12px; }
+.branch-search-dialog-heading h2 { overflow-wrap:anywhere; }
+.branch-receipt-lines { display:grid; gap:10px; margin:18px 0; }
+.branch-receipt-lines article { padding:12px 0; border-top:1px solid var(--line); overflow-wrap:anywhere; }
+.branch-receipt-lines small { display:block; margin-top:5px; color:var(--muted); }
+.branch-receipt-lines p { margin:8px 0 0; font-size:13px; font-variant-numeric:tabular-nums; }
+@media(max-width:540px) {
+  .branch-sales-workspace { padding:16px; }
+  .branch-search-form label { flex-basis:130px; }
+  .branch-search-form .branch-search-wide { flex-basis:100%; }
+  .branch-search-form .branch-search-receipt { flex-basis:100%; }
+  .branch-search-result { padding:12px; }
+  .branch-search-result .branch-search-actions { flex-basis:100%; }
+  .branch-receipt-dialog { padding:16px; }
+}

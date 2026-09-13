@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.44 Beta · Berichtsvorlagen, Grafiken und Filialkonto-Suche
+
+- Verkaufsanalysen erlauben getrennte WGR- und Sortimentsfilter. Persönliche Berichtsvorlagen speichern die vollständigen Einstellungen, lassen sich erneut laden, anpassen und kopieren. Der Titel unterstützt Monat und Jahr als Platzhalter.
+- Der neue Bereich Grafiken erstellt PDF-Zeitverläufe nach Tag, Woche oder Monat mit frei wählbarer Kennzahl und optionaler Aufteilung nach Filiale, Mitarbeiter, WGR, Sortiment oder Hersteller. PDF-Analysen bleibt das letzte Register.
+- Zwei bestätigte Nettobelegköpfe für MA 419 werden mit den vollständigen Brutto-Positionen korrekt abgeglichen. Neue Berichte berücksichtigen die geklärten Positionen und ihren historischen Kassen-Rohertrag; gespeicherte PDFs bleiben unverändert.
+- Filialkonten erhalten unabhängig schaltbare Artikel- und Belegsuche. Artikelnummer, Bezeichnung, EAN und Verkaufspreise sind lesbar; Belege und PDF-Informationen bleiben auf die zugewiesene Filiale begrenzt. Suchläufe nutzen den vorhandenen begrenzten PostgreSQL-Workerpool, Rechteentzug verwirft laufende Ergebnisse.
+- Beim Wechsel auf ein Terminalkonto entfernt die Oberfläche nicht verfügbare Filialrechte zuverlässig. Beide Kontotypen bleiben getrennt von persönlichen Mitarbeiterkonten.
+
 ## v0.92.43 Beta · Zentrale Datenbankimporte und geklärte Anzahlungen
 
 - Urlaub, Zeiterfassung und Import & Lohnverrechnung stehen kompakt als aufklappbare Gruppen unter Personal. Die drei Access-Datenbankquellen werden ausschließlich unter System → Datenbankimporte hochgeladen, geprüft und bewusst übernommen; alte Einstiege führen dorthin. Die technische Fußzeile zeigt die tatsächlich verwendete PostgreSQL-Version.

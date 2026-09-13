@@ -459,6 +459,11 @@ test('report dictionaries read reviewed labels without applying master rows and 
   const read = () => f.provider.transaction(tx => reader.dictionary(tx, 'ARTIKEL_Sortimente', ['Sortiment', 'Bezeichnung', 'Warengruppe']), { readOnly: true });
   assert.deepEqual(await read(), [{ Sortiment: '130', Bezeichnung: 'Systemkameras', Warengruppe: '13' }]);
   assert.equal(f.records('ARTIKEL_Sortimente').length, 0);
+  await f.ready('ARTIKEL_Warengruppen', [raw('ARTIKEL_Warengruppen', { Warengruppe: 13, Bezeichnung: 'Foto und Video' })]);
+  assert.deepEqual(await f.provider.transaction(tx => reader.dictionary(tx, 'ARTIKEL_Warengruppen', ['Warengruppe', 'Bezeichnung']), { readOnly: true }),
+    [{ Warengruppe: '13', Bezeichnung: 'Foto und Video' }]);
+  assert.equal(f.records('ARTIKEL_Warengruppen').length, 0);
+  await assert.rejects(f.provider.transaction(tx => reader.dictionary(tx, 'ARTIKEL_Warengruppen', ['Notizen']), { readOnly: true }), errorCode('IMPORT_FORBIDDEN'));
   await assert.rejects(f.provider.transaction(tx => reader.dictionary(tx, 'KUNDEN', ['NACHNAME']), { readOnly: true }), errorCode('IMPORT_FORBIDDEN'));
   f.database.prepare("UPDATE data_import_rows SET content_hash=? WHERE run_id=?").run('0'.repeat(64), run.id);
   await assert.rejects(read());
