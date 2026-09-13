@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.40 Beta · Begrenzte Rechteabfragen und PDF-Download
+
+- Die AUM-Liste liest Benutzerrechte einmal je Listenaufruf und berechnet die Zuständigkeit nur einmal je sichtbarem Fall. Benutzer- und Zuständigkeitsabfragen laufen mit begrenzter Gleichzeitigkeit, damit große Listen den PostgreSQL-Verbindungspool nicht überlasten.
+- Neue Listenaufrufe sowie einzelne Prüf- und Änderungsaktionen verwenden weiterhin aktuelle Rechte. Die Aufteilung in zwei PostgreSQL-Datenbanken und die bestehenden Berechtigungsgrenzen bleiben erhalten.
+- PDF-Berichte erlauben in ihrer Sicherheitsrichtlinie ausdrücklich den Dateidownload. Skripte, externe Inhalte und der Zugriff auf den Ursprung bleiben gesperrt; ältere HTML-Berichte behalten ihre bisherige Sandbox.
+- Bei der angemeldeten Produktivabnahme gefunden; 24 gezielte Tests bestanden. Installation und abschließende Bedienprüfung werden im [Block-12-Produktivnachweis](docs/postgresql-migration/BLOCK-12-PRODUCTION.md) dokumentiert.
+
 ## v0.92.39 Beta · Isolierte PostgreSQL-Wiederherstellungsprüfung
 
 - Der PostgreSQL-Recovery-Dienst kann den geschützten Programmordner über dieselbe vorübergehende Prozessgruppe lesen wie die vorhandene SQLite-Prüfung. Das Dienstkonto erhält keine dauerhafte zusätzliche Gruppenmitgliedschaft.

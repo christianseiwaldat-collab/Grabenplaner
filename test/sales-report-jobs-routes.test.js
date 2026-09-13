@@ -23,7 +23,9 @@ test('report HTTP endpoints require personal rights and CSRF, protect downloads 
   assert.match(download.headers.get('content-disposition'), /Verkaufsanalyse\.pdf/);
   assert.match(await download.text(), /^%PDF-/);
   assert.match(download.headers.get('content-disposition'), /^attachment;/); assert.match(download.headers.get('content-security-policy'), /sandbox/);
+  assert.equal(download.headers.get('content-security-policy'), "default-src 'none'; style-src 'unsafe-inline'; sandbox allow-downloads");
   pdf = false; const legacy = await request('/id/download'); assert.match(legacy.headers.get('content-type'), /text\/html/);
+  assert.equal(legacy.headers.get('content-security-policy'), "default-src 'none'; style-src 'unsafe-inline'; sandbox");
   session = { ...original, isEmployee: false, sessionKind: 'organization' }; assert.equal((await request()).status, 403);
   session = original; revoke = true; assert.equal((await request('/id/download')).status, 403);
   session = original; revoke = false; fail = true; const failure = await request(); assert.equal(failure.status, 500); assert.doesNotMatch(await failure.text(), /SELECT|private source/);
