@@ -17,21 +17,23 @@ Stand 13.09.2026. Die nacheinander bearbeiteten Blöcke gehören zum neuen [12-B
 | 9 | Zweimalige vollständige historische Übernahme von 2.887.715 Datensätzen, Abbruch/Wiederanlauf, Dateien und Schlüsselbindungen | [Historischer Transfer](BLOCK-9.md) |
 | 10 | Gemeinsame Sicherungen, Offsite-Rückholung, logischer und physischer Restore, Betriebsadapter, Monitoring und kurzer Deployvertrag | [Betrieb und Wiederherstellung](BLOCK-10.md) |
 | 11 | Vollständige HTTP-Anwendung, historischer Lastlauf, harter Abbruch/Wiederanlauf, doppelte Audit-Zustellung, vollständiger Restore und Datenausgabe | [Generalprobe](BLOCK-11.md) |
-| 12 | Geschützte Produktivkonfiguration, erneute vollständige Übernahme, Start als Anwendungsbenutzer, Sicherungs-/Neustartsteuerung und Wartungsablauf vorbereitet; Produktivwechsel noch offen | [Umstellung](BLOCK-12.md) |
+| 12 | v0.92.38 produktiv installiert, vollständiger aktueller Bestand übernommen, beide PostgreSQL-Datenbanken aktiv, erste gemeinsame Sicherung und Betriebsprüfungen bestanden; Abschlussabnahme läuft | [Produktivumstellung](BLOCK-12-PRODUCTION.md) |
 
 Die Zielaufteilung bleibt **eine Core-Datenbank für GP einschließlich CRM und eine Sales-Datenbank für Kassa, TradeFoto und Berichte**. Das Anfangsinventar ordnete 191 Tabellen Core und 57 Sales zu. Block 7 verschiebt drei bestätigte GP-Zuordnungstabellen in den Core: fachlich jetzt 194 Core-/54 Sales-Quelltabellen. Ihre drei alten Sales-Tabellen bleiben in dieser Entwicklungsstufe leer und gesperrt; zusätzliche technische Referenz- und Übergabetabellen kommen hinzu. Die Originalarchive bleiben vollständig in Sales. Etwa 90 % des ursprünglich zugeordneten SQLite-Platzes entfallen auf Verkauf; das ist keine Prognose der PostgreSQL-Größe.
 
-Die produktive Anwendung läuft weiterhin auf SQLite. Die isolierten Datenbanken enthalten seit Block 9 eine vollständig geprüfte historische Kopie. Block 12 ergänzt die ausdrücklich gebundene, Root-verwaltete Aktivierung und den kontrollierten Umschaltablauf. Die zusätzliche Probe verwendet bereits die endgültigen Namen `grabenplaner_core` und `grabenplaner_sales`. Der Nutzer hat die Fortsetzung bis Block 12 beauftragt; dessen produktiver Abschluss benötigt noch den konkreten Release-/Paketstand und das Wartungsfenster aus dem Migrationsplan.
+Die produktive Anwendung verwendet seit 13.09.2026, 11:38:23 UTC, `grabenplaner_core` und `grabenplaner_sales`. Übernommen und vollständig verglichen wurden alle 248 Quelltabellen mit 2.887.718 Zeilen aus einer frischen finalen Quelle. Die frühere historische Qualifikation aus Block 9 bleibt als eigener Nachweis erhalten. Der Nutzer hat Release und Wartungsfenster ausdrücklich freigegeben. Die aktuelle [Produktivabnahme](BLOCK-12-PRODUCTION.md) unterscheidet den erfolgreichen Datenbankwechsel von den noch ausstehenden Prüfungen.
 
 ## Arbeitsstand
 
-Repository: `C:\Users\chris\Documents\Lamprechter\Grabenplaner-v0927-function-search`, Branch `feature/schedule-pdf-day-separators`, Ausgangs-HEAD `c6b8a112e79514f39bbd0ce9906c54f052e45e40`. Die Änderungen liegen lokal, ohne Commit, Push oder Deploy. Der bestehende unversionierte Ordner `output/` bleibt erhalten.
+Repository: `C:\Users\chris\Documents\Lamprechter\Grabenplaner-v0927-function-search`, Branch `feature/schedule-pdf-day-separators`. Release-Commit `daa62f9b3157cd64342224c1e8dea46451b90e40` wurde auf diesem Branch veröffentlicht und als v0.92.38-beta installiert. Der aktuelle Betriebsnachweis ergänzt den Releasecode. Der bestehende unversionierte Ordner `output/` bleibt erhalten.
 
 Die zusammengefassten Prüfergebnisse und der Abschlusszustand werden in [verification.json](verification.json) festgehalten. Die Fachtests verwenden ausschließlich eigene synthetische Daten und räumen diese nach überprüfter Umgebungs- und Eigentumskennung wieder auf. Schema, Migrationsledger und private Zugangsdaten bleiben für die Fortsetzung erhalten.
 
-Die eigene Entwicklungsinstanz enthält historische Daten und wurde nach den Proben wieder kontrolliert gestoppt. Ein lokaler SSH-Tunnel wurde nicht benötigt. Die synthetischen Bereinigungswerkzeuge dürfen diesen Bestand nicht leeren. Eigene, bereits vollständig nachgewiesene Restore-Duplikate wurden nach Prüfung ihres Stillstands entfernt; Quellkopie, Sicherungspakete, WAL-/Basisbackup und Nachweise bleiben erhalten. Fehlgeschlagene ältere Recovery-Assurance-Läufe werden mit späteren signierten Erfolgsnachweisen abgeglichen; ein alter systemd-Fehlerstatus allein entscheidet nicht über den aktuellen Wiederherstellungsnachweis.
+Die Dateien der beiden eigenen, vollständig nachgewiesenen Testcluster wurden vor dem Produktivaufbau nach Prüfung ihres Stillstands und ihrer Instanzkennungen entfernt. Unveränderliche Quellkopie, Sicherungspakete, WAL-/Basisbackup und Qualifikationsnachweise bleiben erhalten. Ein lokaler SSH-Tunnel wurde nicht benötigt. Synthetische Bereinigungswerkzeuge dürfen weder die erhaltenen Quellen noch den produktiven Bestand leeren. Fehlgeschlagene ältere Recovery-Assurance-Läufe werden mit späteren signierten Erfolgsnachweisen abgeglichen; ein alter systemd-Fehlerstatus allein entscheidet nicht über den aktuellen Wiederherstellungsnachweis.
 
-## Wiederanlauf der Entwicklung
+## Historischer Entwicklungsweg
+
+Die folgenden Befehle beschreiben den Aufbau der abgeschlossenen Qualifikation. Die zuvor verwendeten Testclusterdateien wurden am 13.09.2026 wie oben beschrieben zurückgebaut. Ein erneuter Entwicklungslauf benötigt zuerst eine eigene, ausdrücklich geprüfte Umgebung; diese Befehle dürfen nicht auf den produktiven Bereich `/var/lib/grabenplaner-postgresql` umgelenkt werden.
 
 Eigener Serverbereich: `/home/gpadmin/grabenplaner-pg-migration-20260912`, nur `127.0.0.1:55482`, ohne systemd-Unit. Die dortigen Datenbanken heißen `gp_migration_core` und `gp_migration_sales`. Sie sind weder die produktive GP-Quelle noch der Lebensatlas-Cluster auf Port 5432.
 
@@ -65,6 +67,6 @@ Nach einer bewusst geänderten Core-Schema-/SQL-Implementierung benötigt `lock-
 
 ## Nächste Arbeit
 
-Die Blöcke 9–11 sind abgeschlossen. Die Umsetzungsvorbereitung für Block 12 ist in [BLOCK-12.md](BLOCK-12.md) festgehalten. Die bestätigten Fachregeln für Rohertrag, Rabatte, Zahlungsmittel, Gutscheinausgabe, UID-Buchungen und Rücknahmen bleiben maßgeblich.
+Die Blöcke 9–11 sind abgeschlossen. Block 12 ist produktiv aktiviert; sein verbleibender Abnahmezustand steht im [Produktivnachweis](BLOCK-12-PRODUCTION.md). Die bestätigten Fachregeln für Rohertrag, Rabatte, Zahlungsmittel, Gutscheinausgabe, UID-Buchungen und Rücknahmen bleiben maßgeblich.
 
-Identitäten und Benachrichtigungscursor, Inhaltsvergleiche sowie Dateien und Schlüsselzuordnungen sind übernommen und geprüft. PostgreSQL-Backup/Restore und die vollständige Gesamtprobe sind bestätigt. Für den finalen Wechsel sind 30–45 Minuten GP-Unterbrechung einzuplanen. Erst der vollständige Abgleich des dann aktuellen Bestands, die produktive Funktionsprüfung und die erste gemeinsame Sicherung schließen Block 12 ab.
+Identitäten, Benachrichtigungscursor, Tabelleninhalte und Schlüsselzuordnungen sind aus der finalen Quelle übernommen und geprüft. Die erste produktive gemeinsame Sicherung und die anschließenden Betriebsprüfungen sind bestätigt. Die vollständige externe Wiederherstellungsprobe ist gestartet; die angemeldete Bedienprüfung benötigt noch eine aktuelle Benutzersitzung.

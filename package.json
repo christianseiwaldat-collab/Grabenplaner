@@ -1,6 +1,6 @@
 {
   "name": "grabenplaner",
-  "version": "0.92.38-beta",
+  "version": "0.92.39-beta",
   "private": true,
   "description": "Web-App zur Erstellung und zum PDF-Export von Wochendienstplänen",
   "main": "server.js",
