@@ -1,0 +1,614 @@
+{
+  "format": "grabenplaner-postgresql-production-verification-v1",
+  "recordedAt": "2026-09-13T11:46:29.634439+00:00",
+  "migrationCompleted": true,
+  "fullProductAcceptancePending": true,
+  "release": {
+    "appVersion": "0.92.38-beta",
+    "sourceCommit": "daa62f9b3157cd64342224c1e8dea46451b90e40",
+    "manifestSha256": "8e223560bd9198d87d04357034aa2540f2a315139a48f6dfd0f7a068f65142d3",
+    "manifestFiles": 646,
+    "offsiteModuleVersion": 9,
+    "offsiteProviderBindingPreserved": true
+  },
+  "authority": {
+    "format": "grabenplaner-postgresql-authority-v1",
+    "runId": "d8cd8dc4-74f5-4064-ba51-17f9bf78d611",
+    "binding": {
+      "format": "grabenplaner-postgresql-runtime-binding-v1",
+      "profile": "grabenplaner-postgresql-v1",
+      "clusterId": "7684970073632912650",
+      "environmentId": "grabenplaner-pair-00be95f8-5d61-4dd4-be03-d3fbd746c1d0"
+    },
+    "packageSha256": "8e223560bd9198d87d04357034aa2540f2a315139a48f6dfd0f7a068f65142d3",
+    "sourceSha256": "d3dcd416f494797884e691c07057f4e1da3a57df494211d33816ad22fd5ea4a0",
+    "authoritativeProvider": "postgresql",
+    "publishedAt": "2026-09-13T11:38:23.524Z"
+  },
+  "transfer": {
+    "verified": true,
+    "tableCount": 248,
+    "rowCount": 2887718,
+    "sourceSha256": "d3dcd416f494797884e691c07057f4e1da3a57df494211d33816ad22fd5ea4a0",
+    "contentSha256": "b8a7857bcac8921ea6c77f7d1388919c7ac3bad7830a591f9a05000a39069e8e"
+  },
+  "protectedData": {
+    "verified": true,
+    "encryptedFiles": 55,
+    "fileReferences": 55,
+    "protectedRecords": 113,
+    "integrationCredentials": 0,
+    "managedImportKey": true,
+    "checkedAt": "2026-09-13T11:37:09.485Z"
+  },
+  "firstBackup": {
+    "ok": true,
+    "providerId": "postgresql-pair",
+    "sha256": "1a0cf07ccc0b9cf270deeb70eef8028d4b165a677a3ed3d3509b35b69c89c9a9",
+    "createdAt": "2026-09-13T11:38:18.165Z",
+    "timings": [
+      {
+        "domain": "core",
+        "milliseconds": 5758
+      },
+      {
+        "domain": "sales",
+        "milliseconds": 52165
+      }
+    ],
+    "milliseconds": 70777
+  },
+  "runtime": {
+    "verified": true,
+    "checkedAt": "2026-09-13T11:40:07.537Z",
+    "runId": "d8cd8dc4-74f5-4064-ba51-17f9bf78d611",
+    "provider": "postgresql",
+    "databaseCount": 2,
+    "identities": {
+      "core": {
+        "clusterId": "7684970073632912650",
+        "database": "grabenplaner_core",
+        "environmentId": "grabenplaner-pair-00be95f8-5d61-4dd4-be03-d3fbd746c1d0",
+        "schemaSha256": "eb8d84e0a7c06e30ca900c08e83bd5e4086654695e3b1115b0c360e230cc652e"
+      },
+      "sales": {
+        "clusterId": "7684970073632912650",
+        "database": "grabenplaner_sales",
+        "environmentId": "grabenplaner-pair-00be95f8-5d61-4dd4-be03-d3fbd746c1d0",
+        "schemaSha256": "e7310d88fa0dfe8a479a19fbe0cdb51fb7d65b17cf6daf5510baeff3a55323e3"
+      }
+    },
+    "backup": {
+      "verified": true,
+      "verificationScope": "manifest-and-sizes",
+      "manifestSha256": "1a0cf07ccc0b9cf270deeb70eef8028d4b165a677a3ed3d3509b35b69c89c9a9",
+      "createdAt": "2026-09-13T11:38:18.165Z",
+      "ageSeconds": 110,
+      "files": 72
+    },
+    "domains": {
+      "core": {
+        "reader": "gp_core_reader",
+        "counts": {
+          "candidate_applications": 3,
+          "candidates": 3,
+          "crm_customers": 30503,
+          "employees": 18,
+          "locations": 6,
+          "personnel_field_permissions": 72,
+          "schedule_manual_locks": 8,
+          "schedule_notes": 7,
+          "time_entries": 12
+        }
+      },
+      "sales": {
+        "reader": "gp_sales_reader",
+        "counts": {
+          "cash_publication_bindings": 11059,
+          "cash_publications": 1,
+          "cash_snapshot_0": 39865,
+          "cash_snapshot_1": 219920,
+          "cash_snapshot_2": 0,
+          "cash_snapshot_3": 0,
+          "cash_snapshot_4": 89584,
+          "cash_snapshot_5": 346921,
+          "cash_snapshot_6": 385877,
+          "sales_article_own_images": 0,
+          "sales_articles": 19024
+        },
+        "reportJobs": [
+          {
+            "status": "completed",
+            "count": 5
+          }
+        ]
+      }
+    },
+    "health": {
+      "http://127.0.0.1:3000/api/health/live": {
+        "status": 200,
+        "milliseconds": 173
+      },
+      "http://127.0.0.1:3000/api/health/ready": {
+        "status": 200,
+        "milliseconds": 1038
+      },
+      "https://beta.grabenplaner.eu/api/health/live": {
+        "status": 200,
+        "milliseconds": 526
+      },
+      "https://beta.grabenplaner.eu/api/health/ready": {
+        "status": 200,
+        "milliseconds": 526
+      }
+    },
+    "unauthenticated": {
+      "/api/schedule": 401,
+      "/api/sales/articles": 401,
+      "/api/sales-report-jobs": 401
+    },
+    "productionWritesPerformed": false,
+    "authenticatedUiAcceptancePending": true
+  },
+  "configurationAccess": {
+    "/etc/grabenplaner": {
+      "mode": "0o750",
+      "uid": 0,
+      "gid": 982,
+      "applicationCanRead": true
+    },
+    "/etc/grabenplaner/grabenplaner.env": {
+      "mode": "0o600",
+      "uid": 0,
+      "gid": 0,
+      "applicationCanRead": false
+    },
+    "/etc/grabenplaner/postgresql-operations.json": {
+      "mode": "0o600",
+      "uid": 0,
+      "gid": 0,
+      "applicationCanRead": false
+    },
+    "/etc/grabenplaner/postgresql-application.json": {
+      "mode": "0o640",
+      "uid": 0,
+      "gid": 982,
+      "applicationCanRead": true
+    },
+    "/var/lib/grabenplaner/data/postgresql-pair.json": {
+      "mode": "0o640",
+      "uid": 0,
+      "gid": 982,
+      "applicationCanRead": true
+    }
+  },
+  "temporaryBulkSettingRestored": {
+    "autovacuum": "on",
+    "overrideRemoved": true,
+    "restoredAt": "2026-09-13T11:39:31.330Z",
+    "analyzed": [
+      {
+        "domain": "core",
+        "milliseconds": 2362
+      },
+      {
+        "domain": "sales",
+        "milliseconds": 10216
+      }
+    ]
+  },
+  "operationalChecks": {
+    "passed": true,
+    "finishedAt": "2026-09-13T11:41:25Z",
+    "sequential": true,
+    "serverOkLines": 25,
+    "offsiteOkLines": 28,
+    "logSha256": "da5cb74cef2738a94c41a7f0e4c32c51d803506f950e7886ab8f407eb2245968"
+  },
+  "firstAttempt": {
+    "runId": "60670981-1d93-49bd-a069-d3b669fb1a03",
+    "code": "PG_STAGING_ACTIVE_CLIENTS",
+    "beforeAuthority": true,
+    "sqliteReadinessRestored": true,
+    "sourceAndProofRetained": true
+  },
+  "assurance": {
+    "state": "retry_running",
+    "firstFailedRunId": "318581f0-7c5e-4c84-89b8-b682675103e1",
+    "failedAt": "2026-09-13T11:55:07Z",
+    "reason": "PG recovery worker could not read protected application code",
+    "snapshot": "b9694ab32d42",
+    "nativeFixValidatedAt": "2026-09-13T12:12:19Z",
+    "retryInvocationId": "c946c0f084b64776bfe1e27ecb8236fa"
+  },
+  "authenticatedUiAcceptance": {
+    "state": "pending-user-login",
+    "lastObservedDate": "2026-09-13",
+    "productionFixturesCreated": false,
+    "authenticationBypassUsed": false
+  },
+  "hostRebooted": false,
+  "unrelatedProcessesUnchanged": true,
+  "servicesBeforeAssurance": {
+    "grabenplaner.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "MainPID": "2508305",
+      "Result": "success"
+    },
+    "grabenplaner-postgresql.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "MainPID": "2500472",
+      "Result": "success"
+    },
+    "grabenplaner-postgresql-control.socket": {
+      "ActiveState": "active",
+      "SubState": "listening",
+      "UnitFileState": "enabled",
+      "Result": "success"
+    },
+    "grabenplaner-monitor.timer": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "Result": "success"
+    },
+    "grabenplaner-offsite-assurance.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "UnitFileState": "enabled",
+      "Result": "success"
+    },
+    "caddy.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "MainPID": "2158925",
+      "Result": "success"
+    },
+    "lebensatlas.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "MainPID": "2211708",
+      "Result": "success"
+    },
+    "postgresql@18-main.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled-runtime",
+      "MainPID": "2011459",
+      "Result": "success"
+    }
+  },
+  "freeBytesBeforeAssurance": 20296445952,
+  "evidenceSha256": {
+    "bulk-transfer-control.json": "e3d0dc5314e2cea9bf3013a8b7089842094508e47ac0de79e57f71436d307304",
+    "operational-checks-exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "operational-checks.log": "da5cb74cef2738a94c41a7f0e4c32c51d803506f950e7886ab8f407eb2245968",
+    "productive-host-verification.json": "93318dc7e438b791a90db2db798339460df7d75fe5a4cf128c358419aa7cbd5c",
+    "productive-read-verification.json": "dd3089c681e63e83fef6f51c4764cea09f82a232e5183e8ce9c43d738bf777e2",
+    "release-verification.json": "e40b1a86b6d745ea39556b51804cc052f3cedf6f0f3bc7090d438b305061394d",
+    "recovery-native-verification.json": "6f8a53c92e8ecab3e838fb27242709a5e54a1b39e88c2a20b9b37440bbb29d90"
+  },
+  "nativeRecovery": {
+    "startedAt": "2026-09-13T12:06:07.460333+00:00",
+    "contract": {
+      "runId": "6c767eb5-a3e5-47e1-868b-109448bbb88a",
+      "root": "/var/lib/grabenplaner-offsite/postgresql-recovery/6c767eb5-a3e5-47e1-868b-109448bbb88a",
+      "properties": [
+        "User=grabenplaner-offsite",
+        "Group=grabenplaner-offsite",
+        "SupplementaryGroups=grabenplaner",
+        "PrivateNetwork=yes",
+        "PrivateTmp=yes",
+        "NoNewPrivileges=yes",
+        "ProtectSystem=strict",
+        "ProtectHome=yes",
+        "ProtectProc=invisible",
+        "RestrictSUIDSGID=yes",
+        "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
+        "UMask=0077",
+        "KillMode=control-group",
+        "MemoryMax=1536M",
+        "CPUQuota=100%",
+        "Nice=15",
+        "RuntimeMaxSec=900",
+        "ReadOnlyPaths=/opt/grabenplaner/app",
+        "ReadWritePaths=/var/lib/grabenplaner-offsite/postgresql-recovery/6c767eb5-a3e5-47e1-868b-109448bbb88a",
+        "InaccessiblePaths=-/var/lib/grabenplaner -/var/lib/grabenplaner-postgresql -/etc/grabenplaner -/var/backups/grabenplaner -/var/backups/grabenplaner-postgresql -/var/log/grabenplaner -/var/lib/grabenplaner-assurance -/run/postgresql -/run/grabenplaner -/run/grabenplaner-offsite -/run/grabenplaner-assurance-control -/var/lib/grabenplaner-offsite/credentials -/var/lib/grabenplaner-offsite/uploader-home -/var/lib/grabenplaner-offsite/staging -/var/lib/grabenplaner-offsite/restore-tests -/var/lib/grabenplaner-offsite/status.json"
+      ],
+      "sourceCodeSha256": "0fe91bf18d9baceb1e1a614d46d711ed1da835ffae72fc57b58dc12a432ed791",
+      "previousRun": "ff8e4afc-6301-4ec9-8536-84e3c7c61f2d",
+      "sourceBundle": "0127f986-abc5-4aca-9276-acee7d87a855.pair"
+    },
+    "sourceSnapshot": "b9694ab32d42",
+    "sourceAndProductionUnchanged": true,
+    "access": {
+      "passed": true,
+      "codeReadable": true,
+      "codeWritable": false,
+      "livePathsHidden": true,
+      "networkPrivate": true,
+      "temporaryGroup": 982
+    },
+    "workerExit": 0,
+    "restore": {
+      "providerId": "postgresql-pair",
+      "verified": true,
+      "checkedAt": "2026-09-13T12:09:13.821Z",
+      "manifestSha256": "1c17e3e29af551f17556e137512be8b25448a044ff60a9800501cfce6062970f",
+      "databases": {
+        "core": {
+          "tables": 201,
+          "rows": "209793",
+          "sequences": 22,
+          "schemaSha256": "eb8d84e0a7c06e30ca900c08e83bd5e4086654695e3b1115b0c360e230cc652e"
+        },
+        "sales": {
+          "tables": 63,
+          "rows": "2738950",
+          "sequences": 2,
+          "schemaSha256": "e7310d88fa0dfe8a479a19fbe0cdb51fb7d65b17cf6daf5510baeff3a55323e3"
+        }
+      },
+      "protectedDocuments": 55,
+      "protectedRecords": 113,
+      "integrationCredentials": 0,
+      "managedImportKey": true,
+      "recoveryAccounts": 8,
+      "timings": [
+        {
+          "domain": "core",
+          "milliseconds": 13168
+        },
+        {
+          "domain": "sales",
+          "milliseconds": 147499
+        }
+      ],
+      "milliseconds": 184119,
+      "application": {
+        "passed": true,
+        "provider": "postgresql-pair",
+        "http": true,
+        "fullApplicationSmoke": true,
+        "workRuleReceipts": 544,
+        "endpoints": [
+          {
+            "route": "/api/health/live",
+            "status": 200,
+            "milliseconds": 60799
+          },
+          {
+            "route": "/api/health/ready",
+            "status": 200,
+            "milliseconds": 1193
+          },
+          {
+            "route": "/api/portal/v1/auth/login",
+            "status": 200,
+            "milliseconds": 444
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 1368
+          },
+          {
+            "route": "/api/system-info",
+            "status": 200,
+            "milliseconds": 1084
+          },
+          {
+            "route": "/api/sales/articles",
+            "status": 200,
+            "milliseconds": 447
+          },
+          {
+            "route": "/api/schedule",
+            "status": 200,
+            "milliseconds": 3993
+          },
+          {
+            "route": "/api/schedule.pdf",
+            "status": 200,
+            "milliseconds": 3471
+          },
+          {
+            "route": "/api/receipt-search/context",
+            "status": 200,
+            "milliseconds": 400
+          },
+          {
+            "route": "/api/sales-report-jobs/context",
+            "status": 200,
+            "milliseconds": 5297
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 591
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 613
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 696
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 784
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 886
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 988
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 1114
+          },
+          {
+            "route": "/api/locations",
+            "status": 200,
+            "milliseconds": 1200
+          },
+          {
+            "route": "/api/sales/articles/import/catalog",
+            "status": 200,
+            "milliseconds": 97
+          },
+          {
+            "route": "/api/sales/articles",
+            "status": 200,
+            "milliseconds": 201
+          },
+          {
+            "route": "/api/sales/articles/import/preview",
+            "status": 201,
+            "milliseconds": 782
+          },
+          {
+            "route": "/api/sales/articles/import/apply",
+            "status": 409,
+            "milliseconds": 105
+          },
+          {
+            "route": "/api/sales/articles/import/apply",
+            "status": 201,
+            "milliseconds": 634
+          },
+          {
+            "route": "/api/sales/articles",
+            "status": 200,
+            "milliseconds": 162
+          },
+          {
+            "route": "/api/portal/v1/me/actions/receipt%3Abf4c146c-2922-4236-af7e-8b4577c32417/undo",
+            "status": 200,
+            "milliseconds": 555
+          },
+          {
+            "route": "/api/portal/v1/me/actions/receipt%3Abf4c146c-2922-4236-af7e-8b4577c32417/undo",
+            "status": 200,
+            "milliseconds": 163
+          },
+          {
+            "route": "/api/receipt-search/search",
+            "status": 200,
+            "milliseconds": 5418
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 4984
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 189
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 275
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 130
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 190
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 163
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 124
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 138
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 112
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 167
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 117
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 106
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 200,
+            "milliseconds": 166
+          },
+          {
+            "route": "/api/sales-report-jobs/284e863a-0b33-462e-8357-afdb04baaced/download",
+            "status": 200,
+            "milliseconds": 162
+          },
+          {
+            "route": "/api/sales-report-jobs/284e863a-0b33-462e-8357-afdb04baaced",
+            "status": 200,
+            "milliseconds": 129
+          },
+          {
+            "route": "/api/sales-report-jobs",
+            "status": 401,
+            "milliseconds": 45
+          }
+        ],
+        "authenticatedLogin": true,
+        "historicalArticleSearch": true,
+        "concurrentAuthorizedReads": 8,
+        "importConfirmed": true,
+        "importConflictRejected": true,
+        "importUndo": true,
+        "schedulePdfBytes": 5975,
+        "salesPdfBytes": 74573,
+        "salesPositions": 2239,
+        "revokedSessionRejected": true,
+        "compatibility": true
+      }
+    },
+    "persistentGroupsUnchanged": true,
+    "passed": true,
+    "finishedAt": "2026-09-13T12:12:19.352385+00:00"
+  }
+}

@@ -1,14 +1,14 @@
 {
-  "version": 5,
-  "recordedAt": "2026-09-13T02:42:43.793084+00:00",
-  "scope": "two-database-migration-blocks-1-through-11-complete-block-12-prepared",
+  "version": 6,
+  "recordedAt": "2026-09-13T11:46:29.634439+00:00",
+  "scope": "two-database-migration-blocks-1-through-11-complete-block-12-live-acceptance-pending",
   "sourceCommit": "c6b8a112e79514f39bbd0ce9906c54f052e45e40",
   "sourceSchemaSha256": "c257f1eca574b9133038f4687f7acd5e74204f21c6ad5a70ad5803fe6c10cd03",
-  "productActivation": false,
-  "productionDataMigrated": false,
-  "commitCreated": false,
-  "pushed": false,
-  "deployed": false,
+  "productActivation": true,
+  "productionDataMigrated": true,
+  "commitCreated": true,
+  "pushed": true,
+  "deployed": true,
   "completedBlocks": [
     1,
     2,
@@ -852,23 +852,27 @@
     "completed": false,
     "implementationPrepared": true,
     "isolationQualificationPassed": true,
-    "productActivation": false,
-    "productCutoverPending": true,
+    "productActivation": true,
+    "productCutoverPending": false,
     "fullProductAcceptancePending": true,
     "maintenanceWindowMinutes": [
       30,
       45
     ],
-    "officialReleasePackageCreated": false,
+    "officialReleasePackageCreated": true,
     "sourceReview": "block-12-source-review.json",
     "evidenceFiles": [
       "block-12-activation-verification.json",
       "block-12-local-verification.json",
-      "block-12-live-verification.json"
+      "block-12-live-verification.json",
+      "block-12-production-verification.json"
     ],
     "productiveRecoveryApply": "supervised PostgreSQL procedure; legacy SQLite apply refuses a PostgreSQL pair",
     "maintenanceWindowQuestionPending": false,
     "authorizedAt": "2026-09-13",
-    "authorization": "Bitte Block 12 loslegen"
-  }
+    "authorization": "Bitte Block 12 loslegen",
+    "productiveMigrationCompleted": true,
+    "productionEvidence": "block-12-production-verification.json"
+  },
+  "releaseCommit": "daa62f9b3157cd64342224c1e8dea46451b90e40"
 }
