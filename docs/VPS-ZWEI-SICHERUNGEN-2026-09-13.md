@@ -102,7 +102,22 @@ ungefähr **69,32 GB** frei. Der laufende PostgreSQL-Cluster benötigt etwa
 geschätzten 10 GB sind somit für diese beiden Gruppen großzügig bemessen;
 Betriebssystem und andere Anwendungen benötigen ihren eigenen Platz.
 
-Die zwei aktuellen Paare wurden vor dieser Konfigurationsänderung erstellt.
-Bei einer späteren Wiederherstellung dieser älteren Punkte muss die hier
-dokumentierte Aufbewahrungsregel erneut gesetzt werden. Neu erstellte Punkte
-enthalten die geänderte Konfiguration automatisch.
+Die zum Bereinigungszeitpunkt noch aktuellen Paare waren vor dieser
+Konfigurationsänderung erstellt worden. Solche älteren Punkte erfordern nach
+einer Wiederherstellung erneut die hier dokumentierte Aufbewahrungsregel.
+Neu erstellte Punkte enthalten die geänderte Konfiguration automatisch.
+
+## Bestätigung nach dem anschließenden Deploy
+
+v0.92.43-beta wurde anschließend erfolgreich veröffentlicht und vollständig
+wiederhergestellt/geprüft. Die beiden jetzt aktuellen Paare stammen vom
+13.09.2026, 20:00:32 und 20:05:55 UTC. Beide enthalten die neue Konfiguration.
+Die Rotation wurde damit auch bei mehreren aufeinanderfolgenden echten
+Sicherungsaufrufen und im vollständigen Assurance-Lauf bestätigt.
+
+Nach Abschluss bleiben genau zwei vollständig inhaltlich geprüfte Paare mit
+insgesamt 2.013.610.266 Byte. Die alten Sicherungsordner und das Offsite-Staging
+sind leer; temporäre Wiederherstellungen und eigene Deploy-Stages sind entfernt.
+Freier Platz nach Abschluss: **88.730.021.888 Byte / 88,73 GB**.
+Die externen Sicherungen behalten ihre unabhängige 14/8/12-Aufbewahrung.
+Alle Details und Endnachweise: [Release v0.92.43](DEPLOY-RELEASE-v09243.md).
