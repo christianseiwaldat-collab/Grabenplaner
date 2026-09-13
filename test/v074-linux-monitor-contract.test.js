@@ -17,6 +17,42 @@ const bash = [
     : "",
 ].find((candidate) => candidate && spawnSync(candidate, ["--version"], { encoding: "utf8" }).status === 0) || "";
 
+test("PostgreSQL producer emits one database result and preserves every contract and health failure", { skip: !bash }, () => {
+  const source = read("server-tools/linux/test-grabenplaner-server.sh");
+  const contractStart = source.indexOf("postgresql_contract_ok=0");
+  assert.ok(contractStart >= 0);
+  const contract = source.slice(contractStart, source.indexOf("csp_has_exact_directive()", contractStart));
+  const healthStart = source.indexOf('if [[ "$database_provider" == postgresql ]]; then', contractStart);
+  assert.ok(healthStart >= 0);
+  const health = source.slice(healthStart, source.indexOf("  postgresql_probe_mode=full", healthStart)) + "fi\n";
+  const { CHECK_LABELS, parseTestOutput } = require("../server-tools/linux/monitor/lib/monitor-status");
+  for (const failure of ["none", "contract", "grabenplaner-postgresql.service", "grabenplaner-postgresql-control.socket", "identity", "connection-health"]) {
+    const script = `set -eu
+DB_PROVIDER=postgresql
+database_provider=postgresql
+app_dir=/synthetic
+node=mock_node
+failures=0
+mock_node() {
+  if [[ "$1" == *managed-contract.js ]]; then [[ "$FAILURE" != contract ]];
+  else [[ "$FAILURE" != "$2" ]]; fi
+}
+systemctl() { [[ "$FAILURE" != "$3" ]]; }
+check_ok() { printf 'OK\\t%s\\tok\\n' "$1"; }
+check_fail() { printf 'FEHLER\\t%s\\tfailed\\n' "$1"; failures=$((failures + 1)); }
+${contract}
+${health}
+exit "$failures"
+`;
+    const run = spawnSync(bash, ["-s"], { input: script, encoding: "utf8", env: { ...process.env, FAILURE: failure } });
+    assert.equal(run.status, failure === "none" ? 0 : 1, run.stderr);
+    assert.equal(run.stdout.trim().split(/\r?\n/).length, 1, run.stdout);
+    const otherChecks = [...CHECK_LABELS].filter(([, id]) => id !== "sqlite").map(([label]) => `OK\t${label}\tok`).join("\n");
+    const parsed = parseTestOutput(otherChecks + "\n" + run.stdout, run.status);
+    assert.equal(parsed.sqlite, failure === "none", failure);
+  }
+});
+
 test("current runtime contract retains the monitor units after later explicit migrations", () => {
   const schema = JSON.parse(read("server-tools", "linux", "runtime-schema.json"));
   assert.equal(schema.deploymentSchemaVersion, 5);

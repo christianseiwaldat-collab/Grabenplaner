@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.41 Beta · Vollständiger PostgreSQL-Monitorstatus
+
+- Dienstvertrag, Datenbankpaar und Verbindungsprüfung liefern gemeinsam das vorhandene Datenbankergebnis des Monitors. Die zusätzliche, nicht zugelassene Ergebniszeile entfällt; alle Einzelprüfungen bleiben erforderlich.
+- Ein fehlender Dienstvertrag, inaktiver Datenbankdienst oder Wartungssocket sowie Fehler der Paar- oder Verbindungsprüfung ergeben weiterhin einen fehlgeschlagenen Datenbankcheck. Solche Warnungen lösen keinen automatischen App-Neustart aus.
+- Die Korrektur wurde bei der produktiven PostgreSQL-Abnahme gefunden. Sie ergänzt die begrenzten AUM-Rechteabfragen und den PDF-Download aus v0.92.40. Der vollständige Nachweis steht in [Block 12](docs/postgresql-migration/BLOCK-12-PRODUCTION.md).
+
 ## v0.92.40 Beta · Begrenzte Rechteabfragen und PDF-Download
 
 - Die AUM-Liste liest Benutzerrechte einmal je Listenaufruf und berechnet die Zuständigkeit nur einmal je sichtbarem Fall. Benutzer- und Zuständigkeitsabfragen laufen mit begrenzter Gleichzeitigkeit, damit große Listen den PostgreSQL-Verbindungspool nicht überlasten.
