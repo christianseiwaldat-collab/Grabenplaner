@@ -149,18 +149,21 @@ test("DB Block 6 No-Cutover: server.js oeffnet keinen PostgreSQL-Produktpfad", (
   const server = read("server.js");
   assert.match(server, /require\("\.\/lib\/persistence\/sqlite\/provider"\)/);
   assert.match(server, /openSqliteApplicationPersistence\(/);
-  assert.doesNotMatch(server, /require\(["']\.\/lib\/persistence\/postgresql\//);
+  assert.match(server, /postgresqlActive/);
+  assert.deepEqual(IMPLEMENTED_PERSISTENCE_PROVIDER_IDS, ["sqlite"]);
+  assert.throws(() => resolvePersistenceConfiguration({environment: {DB_PROVIDER: "postgresql"}}));
+  assert.throws(() => resolvePersistenceConfiguration({environment: {DB_PROVIDER: "postgresql", NODE_ENV: "production", GRABENPLANER_POSTGRESQL_REHEARSAL: "application-11"}}));
   assert.doesNotMatch(server, /require\(["']pg["']\)/);
   assert.doesNotMatch(server, /\bcreatePostgresql(?:Persistence)?Provider\s*\(/);
   assert.doesNotMatch(server, /\bcreatePostgresqlOperationsMonitor\s*\(/);
 });
 
-test("DB Block 6 No-Cutover: README und Produktoberflaeche melden keinen PostgreSQL-Support", () => {
+test("PostgreSQL product documentation requires the separately authorized managed migration", () => {
   const readme = read("README.md");
-  assert.match(readme, /SQLite ist der aktuell unterst\S+tzte Produktprovider\./);
+  assert.match(readme, /SQLite bleibt der Standard/);
   assert.match(
     readme,
-    /PostgreSQL besitzt eine nicht produktive Entwicklungs- und Nachweisgrundlage,[\s\S]*noch nicht f\S+r Installation oder Migration freigegeben\./,
+    /ausdrücklich migrierte Ubuntu-Server[\s\S]*grabenplaner_core[\s\S]*grabenplaner_sales[\s\S]*ein einzelner Umgebungsparameter aktiviert ihn nicht/,
   );
 
   const productSurface = [
@@ -175,7 +178,12 @@ test("DB Block 6 No-Cutover: neue Betriebsdateien aktivieren weder Cutover noch 
   const operationalFiles = [
     "lib/backup-bundle.js",
     ...javascriptFiles("lib/persistence/operations"),
-    ...javascriptFiles("lib/persistence/postgresql/operations"),
+    // The separately authorized 2026 Block 12 has explicit root workflows. This
+    // historical check remains scoped to the original provider operations.
+    ...javascriptFiles("lib/persistence/postgresql/operations").filter(file => ![
+      'lib/persistence/postgresql/operations/cutover.js',
+      'lib/persistence/postgresql/operations/lifecycle.js',
+    ].includes(file)),
   ];
   const operationalSource = operationalFiles
     .map((file) => `\n/* ${file} */\n${read(file)}`)

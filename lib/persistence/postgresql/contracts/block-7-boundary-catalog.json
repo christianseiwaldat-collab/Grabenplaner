@@ -1,0 +1,126 @@
+{
+  "productActivation": false,
+  "prepared": 24,
+  "entries": [
+    {
+      "domain": "core",
+      "id": "database-boundary.source-reference",
+      "sha256": "d5f5ebee6a0b6453c152a6c6d84d6f83bbfc48e1c142487d0abaefc11439b11c"
+    },
+    {
+      "domain": "core",
+      "id": "database-boundary.source-version",
+      "sha256": "94774dc01fa97439381e83ab0fccad1e174d04037bbeb6911d1b2dcd71c2b1c8"
+    },
+    {
+      "domain": "core",
+      "id": "database-boundary.get-source-version",
+      "sha256": "80ba66e9a9408d693c07ba0ed46749de0734eee68b6fd4a17c94f23427e67c83"
+    },
+    {
+      "domain": "core",
+      "id": "database-boundary.master-dependents",
+      "sha256": "56cb54a5d42760ddf915af67cc68e19f6dce51b00854060f0928540d4afb4c58"
+    },
+    {
+      "domain": "core",
+      "id": "database-boundary.publish-article",
+      "sha256": "e10e15efefe6cbcbf0162ad403e5f18f19f7e949ab16ddb61892d68976604f39"
+    },
+    {
+      "domain": "core",
+      "id": "database-boundary.get-article-reference",
+      "sha256": "584b19996d4b8ac6a84a710f225589fd340eed9d4f009a33ec027cd35715066f"
+    },
+    {
+      "domain": "core",
+      "id": "database-boundary.get-audit-receipt",
+      "sha256": "eb40c39a268bae857c208b5a53b88c21976fd6481c09f9a1ff4d21f43951c718"
+    },
+    {
+      "domain": "core",
+      "id": "database-boundary.append-audit",
+      "sha256": "3e5cd931a232c0613c1e57ba3b8c1b9a51b993f58a8f28f1b5a6afa255ff1b0e"
+    },
+    {
+      "domain": "core",
+      "id": "database-boundary.ack-audit",
+      "sha256": "ea355f3a449d703e055e1eb1feed5cd3ca36ab94618af1f6857c010e85488579"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.binding.get",
+      "sha256": "28b3f5a99cc9821d6d40e653cb9dad68339a36022e13cdddf30e305d8e55ce4a"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.binding.insert",
+      "sha256": "1ee178191ce99457afe879dc689f908175d4f6bb72b372dd917a45e0bd867b9d"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.binding.update",
+      "sha256": "7b67b520c99fdaf3a6b27f8e116ca86276ea7f05f9c2b9ee90c2055bb4739dbb"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.binding.remove",
+      "sha256": "cf258620ce9b19a763316cf1b785392369d145b5b91c09dcdbb8426186e7b3f4"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.event.insert",
+      "sha256": "3b5732ad7d085997b0f2d8911398c4d5735c9958600ed54de3667ee5dd6b8666"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.event.get",
+      "sha256": "1fd65a34eec62ab884e20adb815a6d3f620e90421816de689517f8c1b7c6ceec"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.event.revert",
+      "sha256": "e69112514dce5ea3cec3a370e93ce68b02442ce89dc701f1dd709646c106f0e7"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.crm.dependents",
+      "sha256": "52f3baf51b6631340dafcd0f742756f63742fc994bc56872c8bcd7daa637d39d"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.hold.insert",
+      "sha256": "7770f5f872264486a540ccc00e1e24c0fc4a0837c9c26d83de754841e5d1573e"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.hold.remove",
+      "sha256": "2a7d5d997993c3c0c8f7ced9b67829c4b12fc6d46ac1bec7774385e1c472eed5"
+    },
+    {
+      "domain": "core",
+      "id": "import-master.hold.count",
+      "sha256": "40f6aa91f2379574d44514907f903b0e6b74683741e00402bcc5aa24cf6d328c"
+    },
+    {
+      "domain": "sales",
+      "id": "database-boundary.source-header",
+      "sha256": "f42ce9e88c15000e38fc7aa1130d54d43f85e3a299434b87bccedf893728ecda"
+    },
+    {
+      "domain": "sales",
+      "id": "database-boundary.article-revision",
+      "sha256": "f49060b34e98466cc8251d77095a7a715f088080e2a89bbb366e2d55adbe848a"
+    },
+    {
+      "domain": "sales",
+      "id": "database-boundary.pending-audits",
+      "sha256": "8985fe26d762845cd53ba33101d8519df3215e07eed07efa880b1374bb3fc978"
+    },
+    {
+      "domain": "sales",
+      "id": "database-boundary.delivered-audit",
+      "sha256": "6f1e3e29fff228fe27ff0a40252adad4f1211f091bd1ee72a2c51bbd1c6e17b7"
+    }
+  ]
+}

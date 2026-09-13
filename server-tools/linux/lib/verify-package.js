@@ -300,7 +300,7 @@ function readOffsiteModuleContract() {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der optionale Offsite-Modulvertrag fehlt oder ist unzulaessig.");
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || !(runtimeOnly ? [6, 7, 8] : [8]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
+    || !(runtimeOnly ? [6, 7, 8, 9] : [9]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedOffsiteArtifacts.length
     || expectedOffsiteArtifacts.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");
@@ -425,6 +425,25 @@ function main() {
   }
 
   const required = [
+    'lib/persistence/postgresql/productive-configuration.js',
+    'lib/persistence/postgresql/application.js',
+    'lib/persistence/postgresql/operations/runtime.js',
+    'lib/persistence/postgresql/operations/status.js',
+    'lib/persistence/postgresql/operations/lifecycle.js',
+    'lib/persistence/postgresql/operations/cutover.js',
+    'lib/persistence/postgresql/transfer/activation.js',
+    'lib/persistence/postgresql/transfer/protection.js',
+    'lib/persistence/postgresql/transfer/staging.js',
+    'lib/persistence/postgresql/transfer/history.js',
+    'lib/persistence/postgresql/contracts/manifest.json',
+    'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
+    'server-tools/linux/recovery/lib/postgresql-recovery-worker.js',
+    ...['control-worker.js', 'host-reboot.js', 'lifecycle-run.js', 'lifecycle-status.js', 'lifecycle-maintenance.sh',
+      'migration-host.js', 'managed-contract.js', 'migrate-grabenplaner-postgresql.sh', 'capture-final-source.py',
+      'grabenplaner-postgresql.service.in', 'grabenplaner-application.conf.in',
+      'grabenplaner-postgresql-maintenance-recover.service.in', 'recover-maintenance.sh',
+      'grabenplaner-postgresql-control.socket.in', 'grabenplaner-postgresql-control@.service.in']
+      .map(file => 'server-tools/linux/postgresql/' + file),
     "server.js",
     "backup.js",
     ...backupRuntimeScripts,

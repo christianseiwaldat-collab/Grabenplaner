@@ -348,7 +348,7 @@ test("Personalmodul M4: HTTP-Vertrag trennt zentrale Freigabe, lokale Scopes und
 
   const itRead = await request("/api/portal/v1/personnel-lifecycle/workflows", { auth: it });
   assert.equal(itRead.response.status, 403);
-  assert.equal(itRead.payload.code, "PORTAL_PERMISSION_DENIED");
+  assert.equal(itRead.payload.code, "PERSONNEL_WORKFLOW_PERMISSION_REQUIRED");
   const itPublish = await request(
     "/api/portal/v1/personnel-lifecycle/workflows/m4-api-central/publish",
     { method: "POST", auth: it, body: publicationBody("mandatory") },

@@ -1,0 +1,21 @@
+[Unit]
+Description=Recover an interrupted Grabenplaner PostgreSQL maintenance request
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/bash /opt/grabenplaner/app/server-tools/linux/postgresql/recover-maintenance.sh
+TimeoutStartSec=240
+UMask=0077
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+PrivateTmp=yes
+ReadWritePaths=/run/grabenplaner /var/lib/grabenplaner-postgresql
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=256M
+TasksMax=32
+LimitCORE=0

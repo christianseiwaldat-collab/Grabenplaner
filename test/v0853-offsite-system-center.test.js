@@ -60,11 +60,11 @@ test.after(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("Offsite-Provider bleibt ohne Recovery Assurance fail-closed und lokal getrennt", () => {
+test("Offsite-Provider bleibt ohne Recovery Assurance fail-closed und lokal getrennt", async () => {
   db.prepare("UPDATE settings SET value = '1' WHERE key = 'external_backup_enabled'").run();
   createDatabaseBackupToDirectory(externalBackupPath, "offsite-separation-test", "external");
 
-  const diagnostics = serverDiagnostics();
+  const diagnostics = await serverDiagnostics();
   assert.equal(diagnostics.backups.offsite.state, "ok");
   assert.equal(diagnostics.backups.offsite.provider.selectedProviderId, "google_drive");
   assert.equal(diagnostics.backups.offsite.providerPolicy.systemCenterOk, false);

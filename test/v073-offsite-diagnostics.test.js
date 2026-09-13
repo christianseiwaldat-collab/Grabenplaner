@@ -12,7 +12,7 @@ test("v0.73 exposes redacted offsite diagnostics only through the protected serv
   const server = read("server.js");
   assert.match(server, /require\("\.\/lib\/offsite-backup-status"\)/);
   assert.match(server, /GRABENPLANER_OFFSITE_CONFIGURED/);
-  assert.match(server, /requirePortalAdminOrLocal\(request, "system:diagnostics:technical"\)[\s\S]*response\.json\(serverDiagnostics\(\)\)/);
+  assert.match(server, /requirePortalAdminOrLocal\(request, "system:diagnostics:technical"\)[\s\S]*response\.json\(\(await serverDiagnostics\(\)\)\)/);
   assert.match(server, /const diagnosticsAllowed = [^\n]+system:diagnostics:technical/);
   assert.match(server, /serverDiagnostics: diagnosticsAllowed \? diagnosticSnapshot : null/);
   assert.match(server, /backups:\s*\{[\s\S]*offsite,/);

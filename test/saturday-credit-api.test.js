@@ -31,7 +31,7 @@ test.before(async () => {
   const day = { open: true, start: '09:00', end: '18:00', lunchEnabled: true, lunchStart: '12:30', lunchEnd: '13:00', minStaff: 0, minFrom: '09:00', minTo: '18:00' };
   for (const id of ['91', '92']) db.prepare('INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)').run(id, id, JSON.stringify(Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(name => [name, day]))));
   actors.admin = session('S901', 'admin');
-  actors.manager = session('S902', 'manager', ['employees:write', 'work_rules:assign'], '91');
+  actors.manager = session('S902', 'manager', ['employees:write'], '91');
   actors.hr = session('S905', 'hr', ['employees:write', 'work_rules:assign'], '91');
   actors.employee = session('S903', 'employee');
   session('S904', 'employee', [], '92');

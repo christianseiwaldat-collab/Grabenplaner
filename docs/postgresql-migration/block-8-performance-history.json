@@ -1,0 +1,232 @@
+{
+  "scope": "Synthetic diagnostic history; unsuccessful attempts are not accepted runs",
+  "architectureChangedBetweenAttempts": true,
+  "attempts": [
+    {
+      "change": "Initial SQL and main-thread receipt work",
+      "evidenceFile": "tmp/postgresql-block8-load-before.json",
+      "sha256": "f8dadfc5d6cfd6a869dc4a2c730a02c13ad7e55d6668b23691552d0566ff6754",
+      "phases": {
+        "coldApplication": {
+          "core": 43.28690099998494,
+          "articleFirst": 1523.4974820000061,
+          "articleNext": 1554.2108489999955,
+          "receiptFirst": 1318.3475599999947,
+          "receiptNext": 1306.1766639999987
+        },
+        "warm": {
+          "core": 19.66402399999788,
+          "articleFirst": 1338.3018429999938,
+          "articleNext": 1394.00831200002,
+          "receiptFirst": 934.8311329999997,
+          "receiptNext": 961.875344
+        },
+        "withReport": {
+          "core": 24.390011000010418,
+          "articleFirst": 1364.1844869999913,
+          "articleNext": 1444.9661690000212,
+          "receiptFirst": 1016.8276409999817,
+          "receiptNext": 1005.4648569999845
+        }
+      },
+      "checks": {
+        "firstPages": false,
+        "nextPages": false,
+        "accept": true,
+        "core": false,
+        "overlap": true
+      },
+      "coreDegradation": 0.24033671846683302
+    },
+    {
+      "change": "Stored search text and indexes",
+      "evidenceFile": "tmp/postgresql-block8-load-article-optimized.json",
+      "sha256": "998560f023f8d318e999ddbfbc389df5e8d1d611a95e76c54adb23f44957b1bb",
+      "phases": {
+        "coldApplication": {
+          "core": 47.00391499999387,
+          "articleFirst": 439.26084499999706,
+          "articleNext": 381.75845000000845,
+          "receiptFirst": 1223.1710849999945,
+          "receiptNext": 1144.3624359999958
+        },
+        "warm": {
+          "core": 45.78295599998091,
+          "articleFirst": 299.68513800000073,
+          "articleNext": 212.90119999999297,
+          "receiptFirst": 778.6970980000042,
+          "receiptNext": 810.694679999986
+        },
+        "withReport": {
+          "core": 34.01003999999375,
+          "articleFirst": 174.91649599999073,
+          "articleNext": 168.8871479999798,
+          "receiptFirst": 532.3424630000081,
+          "receiptNext": 506.565294
+        }
+      },
+      "checks": {
+        "firstPages": false,
+        "nextPages": false,
+        "accept": true,
+        "core": true,
+        "overlap": true
+      },
+      "coreDegradation": -0.25714626202799296
+    },
+    {
+      "change": "Bounded receipt batch reads",
+      "evidenceFile": "tmp/postgresql-block8-load-prefetch.json",
+      "sha256": "f4ba84707b406cabd112162ac50cbc63bded338783fcd8ca68db2450b64ae0cd",
+      "phases": {
+        "coldApplication": {
+          "core": 105.62483600000269,
+          "articleFirst": 352.5512619999936,
+          "articleNext": 348.61815600001137,
+          "receiptFirst": 891.4031950000062,
+          "receiptNext": 857.4016709999996
+        },
+        "warm": {
+          "core": 29.51983000000473,
+          "articleFirst": 110.31242099998053,
+          "articleNext": 120.75067000000854,
+          "receiptFirst": 354.5465989999939,
+          "receiptNext": 392.0037299999967
+        },
+        "withReport": {
+          "core": 29.099958999984665,
+          "articleFirst": 134.37271100000362,
+          "articleNext": 137.00877799998852,
+          "receiptFirst": 293.71547100000316,
+          "receiptNext": 311.8605740000203
+        }
+      },
+      "checks": {
+        "firstPages": true,
+        "nextPages": false,
+        "accept": true,
+        "core": true,
+        "overlap": true
+      },
+      "coreDegradation": -0.014223354267961508
+    },
+    {
+      "change": "Two receipt workers, duplicate fixture pools",
+      "evidenceFile": "tmp/postgresql-block8-load-two-workers.json",
+      "sha256": "21313751aa825c718edaf77cc4f790a33b117e247f9c2f0e1e38d82143567b74",
+      "phases": {
+        "coldApplication": {
+          "core": 20.175643000009586,
+          "articleFirst": 102.43653099999938,
+          "articleNext": 89.88774399999238,
+          "receiptFirst": 623.305560000008,
+          "receiptNext": 574.8666430000012
+        },
+        "warm": {
+          "core": 19.25245800000266,
+          "articleFirst": 87.72111900000891,
+          "articleNext": 96.05137200001627,
+          "receiptFirst": 266.42775000000256,
+          "receiptNext": 271.69372199999634
+        },
+        "withReport": {
+          "core": 21.395959999994375,
+          "articleFirst": 120.54363199998625,
+          "articleNext": 127.79869699999108,
+          "receiptFirst": 327.0727300000144,
+          "receiptNext": 325.8748649999907
+        }
+      },
+      "checks": {
+        "firstPages": true,
+        "nextPages": false,
+        "accept": true,
+        "core": true,
+        "overlap": true
+      },
+      "coreDegradation": 0.11133653687188505
+    },
+    {
+      "change": "Compiled normalized scalar encoding",
+      "evidenceFile": "tmp/postgresql-block8-load-compiled-two.json",
+      "sha256": "433902a7af8dd6408104d6a17cca5503ce0ef2b164d71d39987569bb09666502",
+      "phases": {
+        "coldApplication": {
+          "core": 28.71682799998962,
+          "articleFirst": 104.20153999999457,
+          "articleNext": 105.24026800000865,
+          "receiptFirst": 715.8273480000062,
+          "receiptNext": 756.337830000004
+        },
+        "warm": {
+          "core": 22.27023300001747,
+          "articleFirst": 131.11385500000324,
+          "articleNext": 135.1494609999936,
+          "receiptFirst": 349.8130579999997,
+          "receiptNext": 365.260638000007
+        },
+        "withReport": {
+          "core": 27.483786999975564,
+          "articleFirst": 137.0712399999902,
+          "articleNext": 164.7971869999892,
+          "receiptFirst": 406.9882420000213,
+          "receiptNext": 421.52363999999943
+        }
+      },
+      "checks": {
+        "firstPages": true,
+        "nextPages": false,
+        "accept": true,
+        "core": false,
+        "overlap": true
+      },
+      "coreDegradation": 0.2341041514901978
+    },
+    {
+      "change": "Three workers with shared Core pool; authority isolation not yet final",
+      "evidenceFile": "tmp/postgresql-block8-load-shared-before.json",
+      "sha256": "8b48af28f7da835bac8be04396dbb402af0cab70ddc894eff3570a6868fdf2fa",
+      "phases": {
+        "coldApplication": {
+          "core": 27.125350999995135,
+          "articleFirst": 117.12658499999088,
+          "articleNext": 121.03054800000973,
+          "receiptFirst": 553.6806829999987,
+          "receiptNext": 511.5147050000087
+        },
+        "warm": {
+          "core": 20.81388900001184,
+          "articleFirst": 103.87664600001881,
+          "articleNext": 102.89373000001069,
+          "receiptFirst": 289.6378809999733,
+          "receiptNext": 277.09512400001404
+        },
+        "withReport": {
+          "core": 25.034527000010712,
+          "articleFirst": 140.3383979999926,
+          "articleNext": 136.46038600002066,
+          "receiptFirst": 325.5654720000166,
+          "receiptNext": 310.7566050000023
+        }
+      },
+      "checks": {
+        "firstPages": true,
+        "nextPages": false,
+        "accept": true,
+        "core": false,
+        "overlap": true
+      },
+      "coreDegradation": 0.20277988414353842
+    }
+  ],
+  "acceptedRun": "block-8-load.json",
+  "additionalFailedConnectionBudgetAttempt": {
+    "file": "tmp/postgresql-block8-load-three-workers.txt",
+    "sha256": "8423e85dfbb0e68421a4b2cc1786fe3ef4e71316b2eb525be88ed7f5ca9e3dd4",
+    "reason": "Reserved connection slots reached while unused standalone fixture pools were still open"
+  },
+  "workerCpuProfile": {
+    "file": "tmp/postgresql-block8-worker-profile-summary.txt",
+    "sha256": "6d9c3659349e6067d496dc2d708498e5b4fd41c52c9e3b68dd47627c0ac6d525"
+  }
+}

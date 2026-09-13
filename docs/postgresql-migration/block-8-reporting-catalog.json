@@ -1,0 +1,18 @@
+{
+  "productActivation": false,
+  "prepared": 3,
+  "entries": [
+    {
+      "id": "reporting-boundary.publish-location",
+      "sha256": "b9668e73b4098b90f906bf4511232f1598f1b974c21d6286446fe86dfaa2cf7c"
+    },
+    {
+      "id": "reporting-boundary.prefetch-heads",
+      "sha256": "46c8e87cbe27f8ec0173b454fe8e07f993ef0e88be08d9d17f032216e15d37fe"
+    },
+    {
+      "id": "reporting-boundary.prefetch-children",
+      "sha256": "71d3d5a104d6ef48fd4f0ebb5201eb5304d89843257f757eb139e74d53f71430"
+    }
+  ]
+}

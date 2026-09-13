@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "interruptedAfterCoreCommit": true,
+  "idempotentDelivery": true,
+  "compensationRetained": true,
+  "rollbackBeforeSalesCommit": true,
+  "syntheticOnly": true,
+  "step": "outbox",
+  "checkedAt": "2026-09-12T23:27:27.372Z",
+  "milliseconds": 9796,
+  "productActivation": false
+}

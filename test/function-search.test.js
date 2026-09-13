@@ -119,7 +119,7 @@ test("Tippfehler bleiben fehlertolerant, ohne die Rangfolge gleich guter Ziele z
 
 test("Mehrwortsuche verlangt für jeden relevanten Suchbegriff einen Treffer", () => {
   const ids = resultIds("TradeFoto PDF", fullAccess, { limit: 10 });
-  assert.deepEqual(ids, ["sales.report-import", "sales.report-archive"]);
+  assert.deepEqual(ids, ["sales.report-import", "sales.pdf-analytics", "sales.report-archive"]);
   assert.equal(ids.includes("settings.pdf"), false);
   assert.equal(ids.includes("settings.loans"), false);
 });

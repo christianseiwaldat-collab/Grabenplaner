@@ -73,9 +73,34 @@ function databaseIdentity(databasePath) {
   return { databasePath: resolved, schemaSha256: digest(deploymentSchemaSnapshotFromFile(resolved)) };
 }
 
+function postgresqlPairIdentity({ core, sales } = {}) {
+  if (!core || !sales || core.clusterId !== sales.clusterId || !/^[0-9]+$/.test(String(core.clusterId || ""))
+    || core.database === sales.database || [core, sales].some(item => !/^[a-z][a-z0-9_]{0,62}$/.test(item.database || "")
+      || !HASH.test(item.schemaSha256 || "") || typeof item.environmentId !== "string" || !item.environmentId)) {
+    throw new Error("DEPLOY_POSTGRESQL_PAIR_INVALID");
+  }
+  const pair = [core, sales].map((item, index) => ({ domain: index === 0 ? "core" : "sales", clusterId: item.clusterId,
+    database: item.database, environmentId: item.environmentId, schemaSha256: item.schemaSha256 }));
+  return { providerId: "postgresql-pair", databaseIdentitySha256: digest(pair), schemaSha256: digest(pair.map(item => [item.domain, item.schemaSha256])) };
+}
+
+function sameDatabaseIdentity(proof, identity) {
+  if (identity?.providerId === "postgresql-pair") {
+    return proof.schemaVersion === 2 && proof.providerId === "postgresql-pair"
+      && HASH.test(identity.databaseIdentitySha256 || "") && proof.databaseIdentitySha256 === identity.databaseIdentitySha256
+      && proof.schemaSha256 === identity.schemaSha256;
+  }
+  return proof.schemaVersion === 1 && (!proof.providerId || proof.providerId === "sqlite")
+    && (!identity?.providerId || identity.providerId === "sqlite")
+    && proof.databasePath === identity?.databasePath && proof.schemaSha256 === identity?.schemaSha256;
+}
+
 function configurationIdentity(envFile) {
   const files = [envFile, "/etc/grabenplaner/offsite/installed-contract.json",
     "/etc/grabenplaner/offsite/repository-id", "/etc/grabenplaner/offsite/installation-id", "/etc/caddy/Caddyfile"];
+  if (require("node:util").parseEnv(readRegular(envFile, 65536, { rootOnly: true }).toString("utf8")).DB_PROVIDER === "postgresql") {
+    files.push("/etc/grabenplaner/postgresql-operations.json");
+  }
   // No configuration values, tokens or credentials are emitted or saved.
   const hashes = files.map(file => [file, crypto.createHash("sha256").update(readRegular(file, 2 * 1024 * 1024, { rootOnly: true })).digest("hex")]);
   hashes.push(["node", sha256File(process.execPath)]);
@@ -86,8 +111,7 @@ function evaluateDeploy({ installed, candidate, proof, history, identity, config
   const full = reason => ({ mode: "full", reason });
   if (!installed || !candidate || !HASH.test(installed.fingerprint || "") || installed.fingerprint !== candidate.fingerprint) return full("RECOVERY_CONTRACT_CHANGED");
   if (!timerActive) return full("NIGHTLY_TIMER_UNAVAILABLE");
-  if (!proof || proof.format !== FORMAT || proof.schemaVersion !== 1 || proof.contractSha256 !== installed.fingerprint
-    || proof.databasePath !== identity?.databasePath || proof.schemaSha256 !== identity?.schemaSha256
+  if (!proof || proof.format !== FORMAT || !sameDatabaseIdentity(proof, identity) || proof.contractSha256 !== installed.fingerprint
     || proof.configurationSha256 !== configurationSha256 || !HASH.test(proof.configurationSha256 || "")
     || !HASH.test(proof.schemaSha256 || "")) return full("VERIFICATION_BINDING_CHANGED");
   const verifiedAt = Date.parse(proof.verifiedAt);
@@ -111,13 +135,23 @@ function inspectedHistory() {
   return require(path.join(OFFSITE_ROOT, "lib/assurance-history.js")).inspectHistory({ root: HISTORY_ROOT, statusGid: info.gid });
 }
 
-function recordVerification({ appRoot, databasePath, envFile, runId }) {
+async function configuredDatabaseIdentity(databasePath, envFile) {
+  const environment = require("node:util").parseEnv(readRegular(envFile, 65536, { rootOnly: true }).toString("utf8"));
+  const provider = String(environment.DB_PROVIDER || "sqlite");
+  if (provider === "sqlite") return databaseIdentity(databasePath);
+  if (provider !== "postgresql") throw new Error("DEPLOY_PROVIDER_INVALID");
+  const operations = require("../../../lib/persistence/postgresql/operations/runtime");
+  const configuration = operations.loadConfiguration("/etc/grabenplaner/postgresql-operations.json");
+  return postgresqlPairIdentity(await operations.inspectPair(configuration));
+}
+
+async function recordVerification({ appRoot, databasePath, envFile, runId }) {
   const history = inspectedHistory(), event = history.events.at(-1);
   const contract = applicationContract(appRoot);
   if (event?.payload.eventType !== "full-assurance-passed" || event.payload.runId !== runId
     || event.payload.evidence.appVersion !== contract.appVersion) throw new Error("DEPLOY_FULL_RECOVERY_REQUIRED");
-  const identity = databaseIdentity(databasePath);
-  const proof = { format: FORMAT, schemaVersion: 1, contractSha256: contract.fingerprint, ...identity,
+  const identity = await configuredDatabaseIdentity(databasePath, envFile);
+  const proof = { format: FORMAT, schemaVersion: identity.providerId === "postgresql-pair" ? 2 : 1, contractSha256: contract.fingerprint, ...identity,
     configurationSha256: configurationIdentity(envFile), verifiedAt: event.payload.occurredAt,
     runId, sequence: event.sequence, eventHash: event.eventHash, receiptSha256: event.payload.evidence.receiptSha256 };
   const temporary = `${PROOF_FILE}.${process.pid}.${crypto.randomBytes(6).toString("hex")}`;
@@ -134,7 +168,7 @@ function recordVerification({ appRoot, databasePath, envFile, runId }) {
   return { ok: true, verifiedAt: proof.verifiedAt, runId };
 }
 
-function main(args = process.argv.slice(2)) {
+async function main(args = process.argv.slice(2)) {
   if (process.platform !== "linux" || process.getuid?.() !== 0) throw new Error("DEPLOY_ROOT_REQUIRED");
   const [action, ...values] = args;
   if (action === "record" && values.length === 4) {
@@ -146,14 +180,15 @@ function main(args = process.argv.slice(2)) {
     try {
       return evaluateDeploy({ installed: applicationContract(appRoot), candidate: applicationContract(candidateRoot),
         proof: JSON.parse(readRegular(PROOF_FILE, 16384, { rootOnly: true })), history: inspectedHistory(),
-        identity: databaseIdentity(databasePath), configurationSha256: configurationIdentity(envFile), timerActive: timerActive === "1" });
+        identity: await configuredDatabaseIdentity(databasePath, envFile), configurationSha256: configurationIdentity(envFile), timerActive: timerActive === "1" });
     } catch { return { mode: "full", reason: "VERIFICATION_UNAVAILABLE" }; }
   }
   throw new Error("DEPLOY_ARGUMENTS_INVALID");
 }
 
 if (require.main === module) {
-  try { process.stdout.write(`${JSON.stringify(main())}\n`); }
-  catch { process.stderr.write("Die Deploy-Pruefgrundlage konnte nicht bestaetigt werden.\n"); process.exitCode = 1; }
+  main().then(result => process.stdout.write(`${JSON.stringify(result)}\n`)).catch(() => {
+    process.stderr.write("Die Deploy-Pruefgrundlage konnte nicht bestaetigt werden.\n"); process.exitCode = 1;
+  });
 }
-module.exports = { applicationContract, criticalPath, databaseIdentity, evaluateDeploy, MAX_AGE_MS, FORMAT };
+module.exports = { applicationContract, criticalPath, databaseIdentity, postgresqlPairIdentity, sameDatabaseIdentity, evaluateDeploy, MAX_AGE_MS, FORMAT };

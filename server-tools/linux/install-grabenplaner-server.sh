@@ -605,13 +605,13 @@ if (runtimeContract?.format !== "grabenplaner-linux-runtime-contract" || runtime
   || !Array.isArray(runtimeContract?.managedArtifacts)
   || runtimeContract.managedArtifacts.length !== expectedRuntimeArtifacts.length
   || expectedRuntimeArtifacts.some((relative) => !runtimeContract.managedArtifacts.includes(relative))) {
-  fail("Der Linux-Runtimevertrag v4 ist ungueltig.");
+  fail("Der Linux-Runtimevertrag v5 ist ungueltig.");
 }
 const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-schema.json");
 let offsiteContract;
 try { offsiteContract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Offsite-Modulvertrag ist nicht lesbar."); }
 if (offsiteContract?.format !== "grabenplaner-linux-offsite-module-contract" || offsiteContract?.schemaVersion !== 1
-  || offsiteContract?.moduleVersion !== 8 || offsiteContract?.activationPolicy !== "explicit-root-setup"
+  || offsiteContract?.moduleVersion !== 9 || offsiteContract?.activationPolicy !== "explicit-root-setup"
   || !Array.isArray(offsiteContract?.managedArtifacts) || offsiteContract.managedArtifacts.length !== expectedOffsiteArtifacts.length
   || expectedOffsiteArtifacts.some((relative) => !offsiteContract.managedArtifacts.includes(relative))
   || offsiteContract.managedArtifacts.some((relative) => typeof relative !== "string" || !relative.startsWith("server-tools/linux/offsite/") || relative.includes("\\") || relative.split("/").some((part) => !part || part === "." || part === ".."))) {

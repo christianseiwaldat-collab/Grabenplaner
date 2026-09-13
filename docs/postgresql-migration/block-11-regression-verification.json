@@ -1,0 +1,100 @@
+{
+  "format": "grabenplaner-migration-regression-review-v1",
+  "recordedAt": "2026-09-13T00:14:19.674066+00:00",
+  "complete": true,
+  "fullSuiteRerunAfterFixes": false,
+  "initialFullSuiteFiles": 488,
+  "initialFailures": 33,
+  "unresolvedFailures": 0,
+  "method": "Full local suite followed by targeted reruns for every failed case; intermediate failures superseded by subsequent passing focused runs. No claim of a new all-green full-suite run.",
+  "runtimeCorrection": "Password-reset background callback catches the Promise instead of accessing catch on its resolved undefined value.",
+  "testCorrections": [
+    "Async diagnostics, monitor-capability and shutdown fixtures match awaited runtime contracts.",
+    "Released permissions, menu, version and current offsite/runtime contract expectations reconciled with source and prior server baseline.",
+    "Personnel import fixture includes its role view.",
+    "Migration transfer and qualification files remain explicitly classified; default PostgreSQL activation remains closed."
+  ],
+  "logs": [
+    {
+      "file": "tmp/postgresql-block11-full-suite.txt",
+      "sha256": "0e1b96f214cd1d2ae68e453b7fbacc372ae1557c42fd4962a37ca637993d91fc",
+      "tests": 3397,
+      "pass": 3282,
+      "fail": 33,
+      "skipped": 82,
+      "duration_ms": 1344593.8255
+    },
+    {
+      "file": "tmp/postgresql-block11-shutdown-tests.txt",
+      "sha256": "0b9daa7259e55a40d53d81def45ff951a7aa74203066601ff721e1505a0a4a12",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 205.4634
+    },
+    {
+      "file": "tmp/postgresql-block11-search-regressions.txt",
+      "sha256": "2cba99bef0354b967b73c1bfcbaacfbc2d1a9a92659874b7a744c15ef9f3149f",
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 2509.7017
+    },
+    {
+      "file": "tmp/postgresql-block11-regression-details2.txt",
+      "sha256": "47cdf264ab9f074a9e1b36a19e481cd9cdd6da017f05af9ee3566a6fdfcd19ee",
+      "tests": 46,
+      "pass": 43,
+      "fail": 2,
+      "skipped": 1,
+      "duration_ms": 38404.9656
+    },
+    {
+      "file": "tmp/postgresql-block11-import-fixture.txt",
+      "sha256": "82dddf6054e06acf2151234476561d8bc0a6c43ae45a62fcfe9ab7280a5ce091",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 1862.6661
+    },
+    {
+      "file": "tmp/postgresql-block11-final-regressions.txt",
+      "sha256": "9cf90bd62a048aa8af886895c044deacab4adecb59bced8e20ca270c125508aa",
+      "tests": 96,
+      "pass": 87,
+      "fail": 6,
+      "skipped": 3,
+      "duration_ms": 46660.8289
+    },
+    {
+      "file": "tmp/postgresql-block11-final-regressions2.txt",
+      "sha256": "7cb7ea9e94282edd3db829327b3a633d10266c4389e3073dcddf6e87d8571db6",
+      "tests": 25,
+      "pass": 21,
+      "fail": 1,
+      "skipped": 3,
+      "duration_ms": 10689.8141
+    },
+    {
+      "file": "tmp/postgresql-block11-final-regressions3.txt",
+      "sha256": "be82980b822606e4034b15552f11e51f9e1c74178a51811f9033f738f3cdb7ca",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 9276.4981
+    },
+    {
+      "file": "tmp/postgresql-block11-download-regressions.txt",
+      "sha256": "8d0fb0bfb52fab471d9c42c08510b17404781b074d35577b898670a5810e8ba9",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 5251.6147
+    }
+  ]
+}

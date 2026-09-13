@@ -172,7 +172,7 @@ test("Verkaufsanalyse: Archiv, Sortierung, Grafikvarianten und PDF-Export sind i
     '<section id="personnelView"',
   );
   assert.doesNotMatch(section, /Aufgearbeitete TradeFoto-Berichte/);
-  assert.match(section, /Der Warengruppenvergleich wird als strukturierter/);
+  assert.match(section, /Warengruppenvergleich netto/);
   assert.doesNotMatch(section, /id="salesReportTableSort"/);
   assert.match(section, /id="salesReportChartType"[\s\S]*?value="ranking"[\s\S]*?value="change"[\s\S]*?value="absolute_change"[\s\S]*?value="share"[\s\S]*?value="pareto"/);
   assert.match(section, /id="salesReportChartPdfButton"/);

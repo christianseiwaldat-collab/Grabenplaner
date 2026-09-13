@@ -1,5 +1,7 @@
 # Datenbank-Provider-Strategie
 
+**Fortschreibung 13.09.2026:** Die nachfolgende Phasenbeschreibung dokumentiert den früheren Entwicklungsstand. Die vollständige Umsetzung mit zwei Datenbanken und ihre qualifizierten Proben stehen im [aktuellen Migrationsnachweis](postgresql-migration/README.md). Der produktive Block 12 ist ausdrücklich freigegeben; sein tatsächlicher Abschluss wird separat in [Block 12](postgresql-migration/BLOCK-12.md) belegt. SQLite bleibt der unverändert nutzbare Standard. PostgreSQL wird ausschließlich über die kontrollierte Ubuntu-Migration aktiviert, weiterhin mit einer aktiven GP-Instanz.
+
 Katalogzahlen fortgeschrieben am 07.09.2026 für den aktuellen lokalen Codebestand einschließlich Belegsuche. Das ist keine neue Produktivfreigabe; datierte Abnahmen sind über ihre jeweiligen Nachweisartefakte belegt.
 
 **Status:** Verbindliche Zielarchitektur; Phase 4 abgeschlossen, Phase 5

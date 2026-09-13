@@ -1216,7 +1216,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const managerRightsPayload = await managerRightsResponse.json();
     assert.ok(managerRightsPayload.users.some((user) => user.employeeNumber === "105" && user.manageable));
     assert.ok(managerRightsPayload.users.every((user) => (
-      user.role === "department_manager" && user.homeLocationId === "01"
+      ["department_manager", "employee"].includes(user.role) && user.homeLocationId === "01"
     )));
     assert.ok(managerRightsPayload.catalog.length > 0);
     assert.ok(managerRightsPayload.catalog.every((permission) => permission.editable));

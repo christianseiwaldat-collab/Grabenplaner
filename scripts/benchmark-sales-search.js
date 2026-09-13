@@ -14,6 +14,8 @@ db.exec(`
  CREATE TABLE sales_article_import_snapshots(id TEXT PRIMARY KEY,source_system TEXT);
  CREATE TABLE sales_article_identifiers(product_id TEXT,source_snapshot_id TEXT,identifier_value TEXT,canonical_gtin14 TEXT,is_primary INTEGER,source_rank INTEGER);
  CREATE INDEX idx_sales_article_identifiers_product ON sales_article_identifiers(product_id,source_snapshot_id);
+ CREATE TABLE sales_article_price_snapshots(product_id TEXT,source_snapshot_id TEXT,price_type TEXT,price_basis TEXT,currency TEXT,quality_status TEXT,amount TEXT);
+ CREATE INDEX synthetic_price_source ON sales_article_price_snapshots(product_id,source_snapshot_id);
  CREATE TABLE search_projection(product_id TEXT PRIMARY KEY,article_number TEXT,description TEXT,primary_identifier TEXT,search_text TEXT,sort_key TEXT);
  CREATE INDEX search_projection_order ON search_projection(sort_key,product_id);
  CREATE VIRTUAL TABLE search_fts USING fts5(search_text,content='search_projection',content_rowid='rowid',tokenize='trigram');

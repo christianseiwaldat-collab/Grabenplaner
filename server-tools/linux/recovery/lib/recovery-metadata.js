@@ -271,7 +271,7 @@ function restoreTestReceipt(output, snapshotFile, statsFile, verificationFile, s
   }
   const receipt = {
     format: "grabenplaner-offsite-restore-test",
-    schemaVersion: 1,
+    schemaVersion: verification.providerId === 'postgresql-pair' ? 2 : 1,
     result: "verified",
     snapshotId: snapshot.id,
     snapshotTime: snapshot.time,
@@ -298,6 +298,17 @@ function restoreTestReceipt(output, snapshotFile, statsFile, verificationFile, s
       boundary: "Kein nachweislich nebenwirkungsfreier isolierter App-Testmodus vorhanden.",
     },
   };
+  if (verification.providerId === 'postgresql-pair') {
+    if (verification.pairManifestSha256 !== verification.databaseSha256
+      || verification.pairedRestore?.verified !== true
+      || verification.pairedRestore?.manifestSha256 !== verification.pairManifestSha256
+      || !verification.pairedRestore?.databases?.core || !verification.pairedRestore?.databases?.sales) {
+      fail('Der gemeinsame PostgreSQL-Restore-Testbeleg ist unvollstaendig.');
+    }
+    receipt.providerId = 'postgresql-pair';
+    receipt.pairManifestSha256 = verification.pairManifestSha256;
+    receipt.databases = verification.pairedRestore.databases;
+  }
   atomicJson(output, receipt);
   return receipt;
 }

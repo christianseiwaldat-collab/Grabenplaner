@@ -296,7 +296,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   assert.ok(report.serverHotspot.dbPrepareCall < BASELINE.serverHotspot.dbPrepareCall);
   assert.equal(
     report.productionTotals.directNodeSqliteImport,
-    BASELINE.productionTotals.directNodeSqliteImport + 2,
+    BASELINE.productionTotals.directNodeSqliteImport + 3,
   );
   assert.equal(
     report.legacyProductionTotals.directNodeSqliteImport,
@@ -315,17 +315,19 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // PRAGMAs; business writes use the existing audited repositories.
   // Search projection, cash inventory and role-default schema adapters are
   // explicit SQLite operations; the synthetic benchmark is a test entrypoint.
-  assert.equal(report.summary.productionDirectFiles, 81);
+  // The explicitly classified historical transfer, paired recovery and full application
+  // rehearsal adapters extend the frozen pre-migration inventory. Unknown files still fail.
+  assert.equal(report.summary.productionDirectFiles, 93);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
   // The workspace lease reuses the existing lock adapter; Offsite staging
   // reads only the configured database path, not business records.
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 15);
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 4);
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 18);
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 15);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
-  assert.equal(report.summary.productionJavaScriptDriverFiles, 14);
+  assert.equal(report.summary.productionJavaScriptDriverFiles, 15);
   assert.equal(report.summary.phase3SqliteProviderFiles, PHASE_3_SQLITE_PROVIDER_FILES.length);
   assert.equal(report.summary.phase3SqliteProviderTestFiles, PHASE_3_SQLITE_PROVIDER_TEST_FILES.length);
   assert.equal(report.summary.phase4PersistenceFiles, PHASE_4_PERSISTENCE_FILES.length);
@@ -340,7 +342,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     report.summary.salesAnalyticsPersistenceTestFiles,
     SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES.length,
   );
-  assert.deepEqual(report.productionDriverFiles, [...PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES].sort());
+  assert.deepEqual(report.productionDriverFiles, [...PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES, "lib/persistence/postgresql/transfer/history.js"].sort());
   assert.deepEqual(report.testDriverFiles, expectedTestDriverFiles.sort());
   assert.equal(report.phase3Progress.status, "completed");
   assert.deepEqual(report.phase3Progress.completedSlices, ["all-runtime-domains"]);
@@ -424,7 +426,8 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   assert.equal(report.phase5Progress.providerSliceComplete, true);
   assert.equal(report.phase5Progress.productionActivation, false);
   assert.equal(report.phase5Progress.configurationStillClosed, true);
-  assert.equal(report.phase5Progress.serverActivationReferences, 0);
+  assert.ok(report.phase5Progress.serverActivationReferences > 0);
+  assert.equal(report.phase5Progress.rehearsalGuardClosed, true);
   assert.equal(report.phase5Progress.driverDependency, "8.22.0");
   assert.equal(report.phase5Progress.providerContractValid, true);
   assert.equal(report.phase5Progress.policyValid, true);

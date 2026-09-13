@@ -163,7 +163,12 @@ restored_stage="$restore_root${OFFSITE_STAGE_CURRENT}"
   || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
 
 application_smoke_passed=0
-if [[ -n "$assurance_result" ]]; then
+restore_provider="$("$OFFSITE_NODE" -e 'const x=require(process.argv[1]);process.stdout.write(x.providerId||"sqlite")' "$operation_root/verification.json")"
+if [[ -n "$assurance_result" && "$restore_provider" == "postgresql-pair" ]]; then
+  # PostgreSQL restore and application rehearsal share an isolated native
+  # environment. A database-only restore must not produce a full app proof.
+  application_smoke_passed="$("$OFFSITE_NODE" -e 'const x=require(process.argv[1]);process.stdout.write(x.fullApplicationSmoke===true?"1":"0")' "$operation_root/verification.json")"
+elif [[ -n "$assurance_result" && "$restore_provider" == "sqlite" ]]; then
   # Die Root-Pruefung oben hat den exakten Restore-Stand samt geschuetzten
   # Datensaetzen und Dokumenten bereits mit den echten Schluesseln verifiziert.
   # Die unprivilegierte Anwendung erhaelt danach nur eine bereinigte Kopie der

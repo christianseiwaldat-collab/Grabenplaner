@@ -94,9 +94,9 @@ test("Serverpfad verlangt Developer, Reauth und Backup vor dem Root-Broker", () 
   assert.match(endpoint, /response\.status\(202\)\.json/);
 });
 
-test("reboot capabilities require a current audit and preserve role and pending-operation gates", () => {
-  const start = server.indexOf("function serverMonitorActionCapabilities(");
-  const end = server.indexOf("function serverStatusForActor(", start);
+test("reboot capabilities require a current audit and preserve role and pending-operation gates", async () => {
+  const start = server.indexOf("async function serverMonitorActionCapabilities(");
+  const end = server.indexOf("async function serverStatusForActor(", start);
   const capabilities = vm.runInNewContext(`${server.slice(start, end)}; serverMonitorActionCapabilities`, {
     serverManagedRestartAvailable: true,
     currentServerMonitorRestartCooldownSeconds: () => 0,
@@ -106,18 +106,18 @@ test("reboot capabilities require a current audit and preserve role and pending-
   });
   const actor = { role: "developer", permissions: ["system:write", "system:diagnostics:technical"] };
   const verified = { hostSecurityConfigured: true, hostSecurityStatusAvailable: true, hostRebootRequired: true };
-  assert.equal(capabilities(actor, verified).canVpsReboot, true);
+  assert.equal((await capabilities(actor, verified)).canVpsReboot, true);
   for (const code of ["HOST_SECURITY_STATUS_STALE", "HOST_SECURITY_STATUS_TIMESTAMP_FUTURE"]) {
-    const result = capabilities(actor, { ...verified, hostSecurityStatusErrorCode: code });
+    const result = (await capabilities(actor, { ...verified, hostSecurityStatusErrorCode: code }));
     assert.equal(result.canVpsReboot, false);
     assert.equal(result.vpsRebootUnavailableReason, "VPS_REBOOT_STATUS_UNVERIFIED");
   }
   for (const condition of [
     { managedHostRebootAvailable: false }, { hostSecurityStatusAvailable: false },
     { hostSecurityPendingConfirmation: true }, { hostRebootInProgress: true }, { hostRebootRequired: false },
-  ]) assert.equal(capabilities(actor, { ...verified, ...condition }).canVpsReboot, false);
-  assert.equal(capabilities({ ...actor, role: "admin" }, verified).canVpsReboot, false);
-  assert.equal(capabilities({ ...actor, permissions: [] }, verified).canVpsReboot, false);
+  ]) assert.equal((await capabilities(actor, { ...verified, ...condition })).canVpsReboot, false);
+  assert.equal((await capabilities({ ...actor, role: "admin" }, verified)).canVpsReboot, false);
+  assert.equal((await capabilities({ ...actor, permissions: [] }, verified)).canVpsReboot, false);
   assert.match(server.slice(end, server.indexOf("function assertServerRestartConfirmation", end)), /hostSecurityStatusErrorCode: diagnostics\?\.hostSecurity\?\.lastErrorCode/);
 });
 

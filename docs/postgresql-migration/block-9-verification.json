@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-09-12T20:08:52.500Z",
+  "verified": true,
+  "tables": 248,
+  "rows": 2887715,
+  "sourceSha256": "aa37fbd4ce0b9d1c914cda7df6ac8c56b6437dd3ca6e091b8e040d6e270a84c3",
+  "contentSha256": "b37ad81733768b2e0c90f728e7d5c4a33dca7b6f33c7cb4f98599db254ece379",
+  "references": {
+    "sourceReferences": 30503,
+    "locations": 6,
+    "articleReferences": 4,
+    "sequences": 23
+  },
+  "repeatedImports": 2,
+  "abortRolledBackAndReverified": true,
+  "sourceModified": false,
+  "productActivation": false,
+  "durationSeconds": [
+    570.857,
+    655.257
+  ]
+}

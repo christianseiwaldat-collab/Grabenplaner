@@ -1,0 +1,47 @@
+{
+  "checkedAt": "2026-09-13T02:43:57.753094+00:00",
+  "applicationVersion": "0.92.37-beta",
+  "runtimeVersion": 5,
+  "offsiteVersion": 8,
+  "provider": "sqlite",
+  "databasePath": "/var/lib/grabenplaner/data/dienstplan.db",
+  "checks": [
+    {
+      "scope": "live",
+      "status": 200,
+      "ready": true
+    },
+    {
+      "scope": "ready",
+      "status": 200,
+      "ready": true
+    },
+    {
+      "scope": "public",
+      "status": 200,
+      "ready": true
+    }
+  ],
+  "services": {
+    "grabenplaner.service": {
+      "ActiveState": "active",
+      "MainPID": "2437042"
+    },
+    "lebensatlas.service": {
+      "ActiveState": "active",
+      "MainPID": "2211708"
+    },
+    "postgresql@18-main.service": {
+      "ActiveState": "active",
+      "MainPID": "2011459"
+    }
+  },
+  "ownDevelopmentStopped": true,
+  "ownActivationStopped": true,
+  "freeBytes": 24110743552,
+  "productiveChangesByMigration": false,
+  "observedScheduledRestart": {
+    "at": "2026-09-13T01:20:37Z",
+    "source": "existing grabenplaner-offsite-prepare.service"
+  }
+}

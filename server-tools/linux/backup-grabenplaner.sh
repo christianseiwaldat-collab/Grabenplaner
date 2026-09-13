@@ -77,6 +77,14 @@ gp_require_command runuser
 gp_require_command getent
 gp_load_env_file "$env_file"
 
+if [[ "${DB_PROVIDER:-sqlite}" == postgresql ]]; then
+  # shellcheck source=server-tools/linux/lib/postgresql-maintenance.sh
+  source "$SCRIPT_DIR/lib/postgresql-maintenance.sh"
+  gp_postgresql_backup
+  exit 0
+fi
+[[ "${DB_PROVIDER:-sqlite}" == sqlite ]] || gp_die "Der Datenbankprovider wird nicht unterstuetzt."
+
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
 database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"

@@ -124,7 +124,15 @@ for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemct
 gp_load_env_file "$env_file"
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
-database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
+database_provider="${DB_PROVIDER:-sqlite}"
+if [[ "$database_provider" == postgresql ]]; then
+  [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] || gp_die 'Der PostgreSQL-Paarbezug ist ungueltig.'
+  database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" 'PostgreSQL-Paarbezug')"
+else
+  [[ "$database_provider" == sqlite ]] || gp_die 'Der Datenbankprovider wird nicht unterstuetzt.'
+  database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
+fi
+postgresql_before_identity=''
 backup_dir="$(gp_safe_absolute_path "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
 amu_dir="$(gp_existing_directory "$data_dir/private/amu" "Geschuetzter Dokumentordner")"
 public_url="${public_url_arg:-${GRABENPLANER_PUBLIC_URL:-}}"
@@ -439,7 +447,15 @@ rollback_update() {
     gp_log ERROR "Der vorherige App-Baum fehlt oder ist unzulaessig; das Wartungsverzeichnis bleibt zur Analyse erhalten."
   fi
   rollback_data_ok="$rollback_stop_ok"
-  if (( rollback_app_ok == 1 && new_service_started == 1 )) && [[ -n "$backup_database" && -f "$backup_database" && -d "$backup_amu" ]]; then
+  if (( rollback_app_ok == 1 && new_service_started == 1 )) && [[ "$database_provider" == postgresql ]]; then
+    # Retain all PostgreSQL writes. A code rollback is safe only while the
+    # previous package's exact database pair/schema remains compatible.
+    postgresql_rollback_identity="$("$node" "$app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json 2>/dev/null)"
+    if [[ -z "$postgresql_before_identity" || "$postgresql_rollback_identity" != "$postgresql_before_identity" ]]; then
+      rollback_data_ok=0
+      gp_log ERROR 'Der PostgreSQL-Stand passt nicht zur vorherigen App. Die Daten bleiben erhalten; der Dienst bleibt fuer die gezielte Wiederherstellung gestoppt.'
+    fi
+  elif (( rollback_app_ok == 1 && new_service_started == 1 )) && [[ -n "$backup_database" && -f "$backup_database" && -d "$backup_amu" ]]; then
     rollback_helper="$app_dir/server-tools/linux/lib/restore-backup.js"
     if [[ -f "$rollback_helper" ]] && (cd -- "$data_dir" && runuser --user "$service_user" -- env -i PATH="/usr/local/bin:/usr/bin:/bin" NODE_ENV=production \
       "$node" "$rollback_helper" "$backup_database" "$backup_amu" "$database" "$amu_dir" \
@@ -499,12 +515,20 @@ create_exact_local_backup() {
     retention_args=(--defer-archive)
   fi
   [[ -x "$backup_script" ]] || gp_die "Installiertes Linux-Backupwerkzeug fehlt: $backup_script"
+  if [[ "$database_provider" == postgresql ]]; then
+    postgresql_before_identity="$("$node" "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json)" || gp_die 'Der PostgreSQL-Paarstand konnte nicht gebunden werden.'
+  fi
   "$backup_script" --env-file "$env_file" --app-dir "$backup_app_dir" --data-dir "$data_dir" --database "$database" \
     --backup-dir "$backup_dir" --keep "$backup_keep" --service "$service" --node "$node" \
     --service-user "$service_user" --service-group "$service_group" --lock-already-held "${retention_args[@]}" >"$backup_result_file"
   backup_database="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).path))' "$backup_result_file")"
   backup_amu="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).amuBackup))' "$backup_result_file")"
-  [[ -f "$backup_database" && -d "$backup_amu" ]] || gp_die "Das Sicherheitsbackup vor dem Update ist unvollstaendig."
+  if [[ "$database_provider" == postgresql ]]; then
+    [[ -d "$backup_database" && -d "$backup_amu" ]] || gp_die 'Die gekoppelte PostgreSQL-Sicherung ist unvollstaendig.'
+    "$node" "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" verify /etc/grabenplaner/postgresql-operations.json "$backup_database" "$backup_database.complete.json" >/dev/null || gp_die 'Die PostgreSQL-Sicherung konnte nicht bestaetigt werden.'
+  else
+    [[ -f "$backup_database" && -d "$backup_amu" ]] || gp_die "Das Sicherheitsbackup vor dem Update ist unvollstaendig."
+  fi
 }
 
 install -m 0600 -o root -g root -- "$package" "$staged_package"
@@ -559,6 +583,10 @@ actual_expanded_bytes="$(du --bytes --summarize "$extract_root" | awk '{print $1
 (( actual_expanded_bytes <= maximum_expanded_bytes )) || gp_die "Die tatsaechlich entpackte Paketgroesse ist zu gross."
 
 "$node" "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" || gp_die "Die Einzeldatei- und Manifestpruefung ist fehlgeschlagen."
+if [[ "$database_provider" == postgresql ]]; then
+  "$node" "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$extract_root" >/dev/null \
+    || gp_die 'Der PostgreSQL-Dienstvertrag stimmt nicht mit dem Paket ueberein; eine explizite Modulwartung ist erforderlich.'
+fi
 "$node" "$installed_runtime_verifier" --runtime-contract "$app_dir" >"$installed_runtime_result_file" \
   || gp_die "Der installierte Linux-Runtimevertrag ist ungueltig; das Update erfordert eine explizite Serverwartung."
 runtime_gate="$("$node" - "$installed_runtime_result_file" "$manifest_result_file" <<'NODE'
@@ -781,7 +809,7 @@ elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
     || gp_die "Die Deploy-Pruefstrategie konnte nicht bestimmt werden."
 fi
 deploy_mode="$("$node" -e 'const value=JSON.parse(process.argv[1]); if(!["short","full"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
-if [[ "$deploy_mode" == short ]] \
+if [[ "$database_provider" == sqlite && "$deploy_mode" == short ]] \
   && ! "$node" "$SCRIPT_DIR/lib/deferred-backups.js" preflight "$data_dir" "$backup_dir" >/dev/null; then
   deploy_mode=full
   deploy_decision='{"mode":"full","reason":"DEFERRED_ARCHIVE_REQUIRES_COMPLETION"}'

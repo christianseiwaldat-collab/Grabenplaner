@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "name": "source-schema-v09237.json",
+      "source": "test-support/postgresql-migration/source-schema-v09237.json",
+      "sha256": "f74d87df15f830ede19f2cacdd986ff543ca64a77e08a1213308fc1fdeebb622"
+    },
+    {
+      "name": "block-1-inventory.json",
+      "source": "docs/postgresql-migration/block-1-inventory.json",
+      "sha256": "62543b129900cd7de94be5461227512cdb93673d60e797dda94a69cf930d67fd"
+    },
+    {
+      "name": "block-4-catalog.json",
+      "source": "docs/postgresql-migration/block-4-catalog.json",
+      "sha256": "3b2e1d374883a86f4f371e82dc638ec2c405b88f620c6695853346e44bf52805"
+    },
+    {
+      "name": "block-5-catalog.json",
+      "source": "docs/postgresql-migration/block-5-catalog.json",
+      "sha256": "c4abedd06fe3a9a6446613c36ec83a2640133343054d68f305fa53796bcd55ca"
+    },
+    {
+      "name": "block-6-catalog.json",
+      "source": "docs/postgresql-migration/block-6-catalog.json",
+      "sha256": "ea684cb63e046a5f1d15b3aec6d4fe0b16c8771238cc78f968420450c6440803"
+    },
+    {
+      "name": "block-7-catalog.json",
+      "source": "docs/postgresql-migration/block-7-catalog.json",
+      "sha256": "b227c7b60173e6aebe2db0c2bb97d2270f386d4e29ebd96e0255bb2fc4d4912c"
+    },
+    {
+      "name": "block-8-catalog.json",
+      "source": "docs/postgresql-migration/block-8-catalog.json",
+      "sha256": "65d03cb872c5eb1d61b82343adba1a6b52381665700e1f259d875d999ed7fcb0"
+    },
+    {
+      "name": "block-7-boundary-catalog.json",
+      "source": "docs/postgresql-migration/block-7-boundary-catalog.json",
+      "sha256": "a0a7250c5a5309bc8376514109dabbb3cded6d27a82bc954988afb00a9e8c17e"
+    },
+    {
+      "name": "block-8-reporting-catalog.json",
+      "source": "docs/postgresql-migration/block-8-reporting-catalog.json",
+      "sha256": "441ae70f072bb6e93aa59b4aeb0be8e520b33ef621a58304531c51543db2adaf"
+    }
+  ]
+}

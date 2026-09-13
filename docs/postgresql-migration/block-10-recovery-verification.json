@@ -1,0 +1,56 @@
+{
+  "ok": true,
+  "providerId": "postgresql-pair",
+  "databaseSha256": "69359dc11eb51817eb10f4d79262a22f9c475d8c93bfa5e491e5a747573fff5f",
+  "pairManifestSha256": "69359dc11eb51817eb10f4d79262a22f9c475d8c93bfa5e491e5a747573fff5f",
+  "stageManifestSha256": "b8e024ffe6b9fccf52559b008ba02ca0138520e7ec25e1bc047f0302eabf73c3",
+  "sourceAppVersion": "0.92.37-beta",
+  "targetAppVersion": "0.92.37-beta",
+  "deploymentSchemaVersion": 5,
+  "protectedDocuments": 55,
+  "protectedRecords": 113,
+  "integrationCredentials": 0,
+  "frozenFiles": 75,
+  "verifiedAt": "2026-09-12T21:40:47.742Z",
+  "pairedRestore": {
+    "providerId": "postgresql-pair",
+    "verified": true,
+    "checkedAt": "2026-09-12T21:40:41.230Z",
+    "manifestSha256": "69359dc11eb51817eb10f4d79262a22f9c475d8c93bfa5e491e5a747573fff5f",
+    "databases": {
+      "core": {
+        "tables": 201,
+        "rows": "209790",
+        "sequences": 22,
+        "schemaSha256": "eb8d84e0a7c06e30ca900c08e83bd5e4086654695e3b1115b0c360e230cc652e"
+      },
+      "sales": {
+        "tables": 63,
+        "rows": "2738950",
+        "sequences": 2,
+        "schemaSha256": "0fd23c3cd7117e619348c79aa2058f8e49fc7ee1afab133335754dbe369f195d"
+      }
+    },
+    "protectedDocuments": 55,
+    "protectedRecords": 113,
+    "integrationCredentials": 0,
+    "managedImportKey": true,
+    "recoveryAccounts": 8,
+    "timings": [
+      {
+        "domain": "core",
+        "milliseconds": 12546
+      },
+      {
+        "domain": "sales",
+        "milliseconds": 137890
+      }
+    ],
+    "milliseconds": 178536,
+    "application": {
+      "compatibility": true,
+      "fullApplicationSmoke": false
+    }
+  },
+  "fullApplicationSmoke": false
+}

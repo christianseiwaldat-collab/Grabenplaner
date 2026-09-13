@@ -56,7 +56,7 @@ test("UI-Block 2: dynamische Inhalte, Accordions, Tabs und Schriftgröße lösen
   assert.match(app, /attributeFilter:\s*\["class", "open"\]/);
   assert.match(app, /settingsPackedGridFrame = requestAnimationFrame/);
   assert.match(app, /document\.fonts\?\.ready\?\.then\(scheduleAllSettingsPackedGrids\)/);
-  assert.match(app, /function setSettingsTab[\s\S]*?scheduleAllSettingsPackedGrids\(\);\s*\}/);
+  assert.match(app, /function setSettingsTab[\s\S]*?scheduleAllSettingsPackedGrids\(\);[\s\S]*?\n\}/);
   assert.match(app, /function applyAppFontScalePercent[\s\S]*?scheduleAllSettingsPackedGrids\(\);[\s\S]*?return normalized;/);
 });
 

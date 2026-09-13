@@ -1,0 +1,232 @@
+{
+  "passed": true,
+  "provider": "postgresql-pair",
+  "http": true,
+  "fullApplicationSmoke": false,
+  "endpoints": [
+    {
+      "route": "/api/health/live",
+      "status": 200,
+      "milliseconds": 11625
+    },
+    {
+      "route": "/api/health/ready",
+      "status": 200,
+      "milliseconds": 155
+    },
+    {
+      "route": "/api/portal/v1/auth/login",
+      "status": 200,
+      "milliseconds": 235
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 101
+    },
+    {
+      "route": "/api/system-info",
+      "status": 200,
+      "milliseconds": 274
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 207
+    },
+    {
+      "route": "/api/schedule",
+      "status": 200,
+      "milliseconds": 2963
+    },
+    {
+      "route": "/api/schedule.pdf",
+      "status": 200,
+      "milliseconds": 3140
+    },
+    {
+      "route": "/api/receipt-search/context",
+      "status": 200,
+      "milliseconds": 319
+    },
+    {
+      "route": "/api/sales-report-jobs/context",
+      "status": 200,
+      "milliseconds": 3675
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 231
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 291
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 327
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 398
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 416
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 497
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 519
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 582
+    },
+    {
+      "route": "/api/sales/articles/import/catalog",
+      "status": 200,
+      "milliseconds": 38
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 73
+    },
+    {
+      "route": "/api/sales/articles/import/preview",
+      "status": 201,
+      "milliseconds": 361
+    },
+    {
+      "route": "/api/sales/articles/import/apply",
+      "status": 409,
+      "milliseconds": 65
+    },
+    {
+      "route": "/api/sales/articles/import/apply",
+      "status": 201,
+      "milliseconds": 639
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 83
+    },
+    {
+      "route": "/api/portal/v1/me/actions/receipt%3A467723e3-5343-4e14-9e8f-ae7ece94110e/undo",
+      "status": 200,
+      "milliseconds": 442
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 10805
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 2960
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 120
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 118
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 111
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 116
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 108
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 117
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 134
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 124
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 127
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 122
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 180
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 200,
+      "milliseconds": 289
+    },
+    {
+      "route": "/api/sales-report-jobs/b573c025-3950-45d6-a217-e1cc43f2aeae/download",
+      "status": 200,
+      "milliseconds": 144
+    },
+    {
+      "route": "/api/sales-report-jobs/b573c025-3950-45d6-a217-e1cc43f2aeae",
+      "status": 200,
+      "milliseconds": 489
+    },
+    {
+      "route": "/api/sales-report-jobs",
+      "status": 401,
+      "milliseconds": 42
+    }
+  ],
+  "authenticatedLogin": true,
+  "historicalArticleSearch": true,
+  "concurrentAuthorizedReads": 8,
+  "importConfirmed": true,
+  "importConflictRejected": true,
+  "importUndo": true,
+  "schedulePdfBytes": 5975,
+  "salesPdfBytes": 74582,
+  "salesPositions": 2239,
+  "revokedSessionRejected": true,
+  "step": "http",
+  "checkedAt": "2026-09-12T22:58:13.632Z",
+  "milliseconds": 86127,
+  "productActivation": false
+}

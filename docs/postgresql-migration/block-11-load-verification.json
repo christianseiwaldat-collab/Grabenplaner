@@ -1,0 +1,399 @@
+{
+  "passed": true,
+  "provider": "postgresql-pair",
+  "historical": true,
+  "receipts": [
+    {
+      "year": "2025",
+      "repeat": 0,
+      "milliseconds": 2095
+    },
+    {
+      "year": "2025",
+      "repeat": 1,
+      "milliseconds": 616
+    },
+    {
+      "year": "2025",
+      "repeat": 2,
+      "milliseconds": 436
+    },
+    {
+      "year": "2026",
+      "repeat": 0,
+      "milliseconds": 1217
+    },
+    {
+      "year": "2026",
+      "repeat": 1,
+      "milliseconds": 545
+    },
+    {
+      "year": "2026",
+      "repeat": 2,
+      "milliseconds": 559
+    }
+  ],
+  "reports": [
+    {
+      "label": "all-locations-month",
+      "milliseconds": 257691,
+      "ticks": 99,
+      "processed": 19551,
+      "pdfBytes": 127880
+    },
+    {
+      "label": "full-year-with-prior-year",
+      "milliseconds": 338914,
+      "ticks": 138,
+      "processed": 27499,
+      "pdfBytes": 113508
+    }
+  ],
+  "concurrent": [
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 842,
+      "report": "all-locations-month",
+      "tick": 0
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 2557,
+      "report": "all-locations-month",
+      "tick": 0
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 3366,
+      "report": "all-locations-month",
+      "tick": 0
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 356,
+      "report": "all-locations-month",
+      "tick": 1
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 371,
+      "report": "all-locations-month",
+      "tick": 1
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1361,
+      "report": "all-locations-month",
+      "tick": 1
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 323,
+      "report": "all-locations-month",
+      "tick": 2
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 453,
+      "report": "all-locations-month",
+      "tick": 2
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1233,
+      "report": "all-locations-month",
+      "tick": 2
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 235,
+      "report": "all-locations-month",
+      "tick": 3
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 304,
+      "report": "all-locations-month",
+      "tick": 3
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1007,
+      "report": "all-locations-month",
+      "tick": 3
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 162,
+      "report": "all-locations-month",
+      "tick": 4
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 283,
+      "report": "all-locations-month",
+      "tick": 4
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1050,
+      "report": "all-locations-month",
+      "tick": 4
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 234,
+      "report": "all-locations-month",
+      "tick": 5
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 414,
+      "report": "all-locations-month",
+      "tick": 5
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1100,
+      "report": "all-locations-month",
+      "tick": 5
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 201,
+      "report": "all-locations-month",
+      "tick": 6
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 368,
+      "report": "all-locations-month",
+      "tick": 6
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1258,
+      "report": "all-locations-month",
+      "tick": 6
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 273,
+      "report": "all-locations-month",
+      "tick": 7
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 386,
+      "report": "all-locations-month",
+      "tick": 7
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1003,
+      "report": "all-locations-month",
+      "tick": 7
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 620,
+      "report": "full-year-with-prior-year",
+      "tick": 0
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 1912,
+      "report": "full-year-with-prior-year",
+      "tick": 0
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 3333,
+      "report": "full-year-with-prior-year",
+      "tick": 0
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 245,
+      "report": "full-year-with-prior-year",
+      "tick": 1
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 358,
+      "report": "full-year-with-prior-year",
+      "tick": 1
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1118,
+      "report": "full-year-with-prior-year",
+      "tick": 1
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 203,
+      "report": "full-year-with-prior-year",
+      "tick": 2
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 422,
+      "report": "full-year-with-prior-year",
+      "tick": 2
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1496,
+      "report": "full-year-with-prior-year",
+      "tick": 2
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 330,
+      "report": "full-year-with-prior-year",
+      "tick": 3
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 405,
+      "report": "full-year-with-prior-year",
+      "tick": 3
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1213,
+      "report": "full-year-with-prior-year",
+      "tick": 3
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 334,
+      "report": "full-year-with-prior-year",
+      "tick": 4
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 542,
+      "report": "full-year-with-prior-year",
+      "tick": 4
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1431,
+      "report": "full-year-with-prior-year",
+      "tick": 4
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 360,
+      "report": "full-year-with-prior-year",
+      "tick": 5
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 463,
+      "report": "full-year-with-prior-year",
+      "tick": 5
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1088,
+      "report": "full-year-with-prior-year",
+      "tick": 5
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 153,
+      "report": "full-year-with-prior-year",
+      "tick": 6
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 344,
+      "report": "full-year-with-prior-year",
+      "tick": 6
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 1228,
+      "report": "full-year-with-prior-year",
+      "tick": 6
+    },
+    {
+      "route": "/api/locations",
+      "status": 200,
+      "milliseconds": 236,
+      "report": "full-year-with-prior-year",
+      "tick": 7
+    },
+    {
+      "route": "/api/sales/articles",
+      "status": 200,
+      "milliseconds": 306,
+      "report": "full-year-with-prior-year",
+      "tick": 7
+    },
+    {
+      "route": "/api/receipt-search/search",
+      "status": 200,
+      "milliseconds": 903,
+      "report": "full-year-with-prior-year",
+      "tick": 7
+    }
+  ],
+  "p95Milliseconds": 2557,
+  "maximumMilliseconds": 3366,
+  "endpointErrors": 0,
+  "privateSingleCpu": true,
+  "step": "load",
+  "checkedAt": "2026-09-12T23:41:03.667Z",
+  "milliseconds": 665593,
+  "productActivation": false
+}
