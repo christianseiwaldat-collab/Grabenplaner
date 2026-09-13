@@ -2536,6 +2536,7 @@ function architectureBoundaryViolationsForText(file, text) {
     'server-tools/linux/backup-grabenplaner.sh',
     'server-tools/linux/lib/deploy-policy.js',
     'server-tools/linux/offsite/grabenplaner-offsite-prepare.sh',
+    'server-tools/linux/offsite/install-grabenplaner-offsite.sh',
     'server-tools/linux/test-grabenplaner-server.sh',
     'server-tools/linux/update-grabenplaner-server.sh',
   ]);
