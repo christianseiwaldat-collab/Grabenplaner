@@ -184,7 +184,23 @@ backup_root_contract="$(stat --format='%u:%g:%a' -- "$OFFSITE_BACKUP_ROOT" 2>/de
 [[ -d /opt && ! -L /opt && -d /var/lib && ! -L /var/lib && -d /etc/grabenplaner && ! -L /etc/grabenplaner \
   && -d "$OFFSITE_DATA_ROOT" && ! -L "$OFFSITE_DATA_ROOT" && -d "$OFFSITE_BACKUP_ROOT" && ! -L "$OFFSITE_BACKUP_ROOT" ]] \
   || offsite_die "Ein benoetigter Server-Basispfad ist unsicher."
-[[ "$(stat --format='%u:%g:%a' -- /etc/grabenplaner)" == "0:0:700" \
+configuration_directory_ok=0
+configuration_directory_contract="$(stat --format='%u:%g:%a' -- /etc/grabenplaner)"
+if [[ "$configuration_directory_contract" == "0:0:700" ]]; then
+  configuration_directory_ok=1
+elif [[ "$configuration_directory_contract" == "0:$app_gid:750" ]] \
+  && "$OFFSITE_NODE" - "$OFFSITE_APP_ROOT" "$OFFSITE_APP_ENV" "$app_gid" <<'NODE'
+const fs = require('node:fs');
+const [root, env, group] = process.argv.slice(2);
+const configuration = require('node:util').parseEnv(fs.readFileSync(env, 'utf8'));
+if (configuration.DB_PROVIDER !== 'postgresql') process.exit(1);
+const C = require(root + '/lib/persistence/postgresql/productive-configuration');
+C.resolveDocument(C.readProtectedJson(C.FILE, { gid: Number(group) }), C.readProtectedJson(C.ANCHOR, { gid: Number(group) }));
+NODE
+then
+  configuration_directory_ok=1
+fi
+[[ "$configuration_directory_ok" == 1 \
   && "$(stat --format='%u:%g:%a' -- "$OFFSITE_DATA_ROOT")" == "$app_uid:$app_gid:750" \
   && ( "$backup_root_contract" == "$app_uid:$app_gid:700" \
     || "$backup_root_contract" == "$app_uid:$app_gid:750" ) ]] \

@@ -86,6 +86,25 @@
     {
       "path": "tmp/pg12-release-audit.txt",
       "sha256": "2380de17d1bac100f6dbcd6378c01002283593d411e7b72c9b061cd66db09141"
+    },
+    {
+      "path": "tmp/pg12-configuration-probe.json",
+      "sha256": "aa6af040e8d1f46bf09c1ddd1c588633c43e4980a598b3d1c06785f01a903415"
+    },
+    {
+      "path": "tmp/pg12-configuration-tests.txt",
+      "sha256": "65268c8ee0676ae19ef24bae4f0d03d269147a90c13d3528beca7d86a36d448e"
     }
-  ]
+  ],
+  "nativeConfigurationAccess": {
+    "applicationConfigReadable": true,
+    "administrativeSecretsDenied": true,
+    "rollbackRestoresRootOnly": true,
+    "isolated": true
+  },
+  "configurationAccessTests": {
+    "tests": 14,
+    "pass": 14,
+    "fail": 0
+  }
 }

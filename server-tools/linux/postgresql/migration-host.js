@@ -52,6 +52,9 @@ async function main() {
   }
   execFileSync('/usr/bin/node', [APP + '/server-tools/linux/lib/verify-package.js', '--runtime-contract', APP], { stdio: 'ignore' });
   assertFile(ENV);
+  const directoryAccess = require('./configuration-access');
+  const previousDirectory = directoryAccess.inspect();
+  if (previousDirectory.gid !== 0 || previousDirectory.mode !== 0o700) throw new Error('PG_CONFIGURATION_PREDECESSOR');
   const environment = require('node:util').parseEnv(fs.readFileSync(ENV, 'utf8'));
   if ((environment.DB_PROVIDER || 'sqlite') !== 'sqlite' || environment.DB_PATH !== '/var/lib/grabenplaner/data/dienstplan.db'
       || environment.GRABENPLANER_DATA_DIR !== '/var/lib/grabenplaner' || environment.GRABENPLANER_POSTGRESQL_APPLICATION_CONFIG
@@ -126,7 +129,7 @@ async function main() {
   const runId = crypto.randomUUID(), directory = ROOT + '/migration/' + runId;
   fs.mkdirSync(directory, { mode: 0o700 }); write(directory + '/ownership-marker', staging.FORMAT + '\n');
   log = fs.openSync(directory + '/execution-private.log', 'wx', 0o600);
-  let transfer, promotion;
+  let transfer, promotion, configurationDirectoryGroup;
   const changed = [];
   const install = (file, contents, options) => { write(file, contents, options); changed.push(file); };
   try {
@@ -168,6 +171,9 @@ async function main() {
         const documents = require('../../../lib/persistence/postgresql/transfer/activation').documents({ configuration, promotion, transfer, applicationSha256: packageSha256 });
         const gp = fs.readFileSync('/etc/passwd', 'utf8').split('\n').map(line => line.split(':')).find(row => row[0] === 'grabenplaner');
         if (!gp || !/^\d+$/.test(gp[3])) throw new Error('PG_MIGRATION_APPLICATION_ACCOUNT');
+        write(directory + '/configuration-directory-return-point.json', previousDirectory);
+        configurationDirectoryGroup = Number(gp[3]);
+        directoryAccess.grantApplicationRead(configurationDirectoryGroup);
         install('/etc/grabenplaner/postgresql-application.json', documents.application, { gid: Number(gp[3]), mode: 0o640 });
         install(ANCHOR, documents.anchor, { gid: Number(gp[3]), mode: 0o640 });
         install('/etc/grabenplaner/postgresql-operations.json', documents.operations);
@@ -199,6 +205,7 @@ async function main() {
         const source = directory + '/input/source/configuration.env';
         if (fs.existsSync(source)) write(ENV, fs.readFileSync(source, 'utf8'), { replace: true });
         for (const file of [...changed].reverse()) { assertFile(file, { privateFile: false }); fs.unlinkSync(file); }
+        if (configurationDirectoryGroup !== undefined) directoryAccess.restoreRootOnly(previousDirectory, configurationDirectoryGroup);
         await run('/usr/bin/systemctl', ['daemon-reload']);
       },
       verifySqliteReadiness: ready,
