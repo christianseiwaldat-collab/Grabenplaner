@@ -1,7 +1,7 @@
 {
-  "version": 6,
-  "recordedAt": "2026-09-13T11:46:29.634439+00:00",
-  "scope": "two-database-migration-blocks-1-through-11-complete-block-12-live-acceptance-pending",
+  "version": 7,
+  "recordedAt": "2026-09-13T13:24:33.193308+00:00",
+  "scope": "two-database-migration-productive-and-recovery-verified-block-12-authenticated-ui-acceptance-pending",
   "sourceCommit": "c6b8a112e79514f39bbd0ce9906c54f052e45e40",
   "sourceSchemaSha256": "c257f1eca574b9133038f4687f7acd5e74204f21c6ad5a70ad5803fe6c10cd03",
   "productActivation": true,
@@ -872,7 +872,15 @@
     "authorizedAt": "2026-09-13",
     "authorization": "Bitte Block 12 loslegen",
     "productiveMigrationCompleted": true,
-    "productionEvidence": "block-12-production-verification.json"
+    "productionEvidence": "block-12-production-verification.json",
+    "productiveRecoveryVerified": true,
+    "productionReleaseVersion": "0.92.39-beta",
+    "authenticatedProductAcceptancePending": true,
+    "remainingAcceptance": [
+      "Authenticated production UI checks; current Chrome session expired."
+    ],
+    "finalAssuranceRunId": "1903e4fb-6332-4948-8ae7-d013b5467f82",
+    "durableEvidence": "/var/lib/grabenplaner-assurance/maintenance-evidence/pg12-20260913"
   },
-  "releaseCommit": "daa62f9b3157cd64342224c1e8dea46451b90e40"
+  "releaseCommit": "bd79bf67ebb90932543b0512ce316c599edfe137"
 }
