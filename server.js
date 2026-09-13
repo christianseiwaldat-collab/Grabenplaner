@@ -25602,10 +25602,10 @@ app.delete("/api/integrations/personnel-import/sessions/:id", (request, response
   response.status(204).end();
 });
 
-// Protected import preparation is separate from the read-only sales bridge.
-// Production apply and the sales workspace still require separate approval.
+// Source data is staged and reviewed before explicit, permission-checked apply.
+// Core mappings and cash publication remain distinct reviewed decisions.
 registerDataImportRoutes(app, {
-  runtime: createDataImportRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowApply: false, compactCash: true }),
+  runtime: createDataImportRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowApply: true, sharedPayloads: true, compactCash: true }),
   mappings: createDataImportMappingRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowMapping: false }),
   cashPublications: createCashPublicationRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: true, policies: CASH_SOURCE_POLICIES }),
   requireSession: requireEmployeePortalSession,
@@ -27683,7 +27683,9 @@ app.get("/api/system-info", async (request, response) => {
     databaseProvider: persistenceConfiguration.providerId,
     platform: `${os.type()} ${os.release()} · ${os.arch()}`,
     uptimeSeconds: Math.floor(process.uptime()),
-    database: path.basename(databasePath),
+    database: postgresqlActive
+      ? [persistenceConfiguration.coreUrl, persistenceConfiguration.salesUrl].map(value => decodeURIComponent(new URL(value).pathname.slice(1))).join(" + ")
+      : path.basename(databasePath),
     appBackupDirectory: privileged ? appBackupDirectory : "",
     backupDirectory: privileged && !serverModeActive ? backupDirectoryFromSettings(settings) : "",
     externalBackupEnabled: !serverModeActive && settingEnabled(settings, "external_backup_enabled"),

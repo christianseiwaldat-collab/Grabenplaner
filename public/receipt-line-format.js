@@ -32,6 +32,7 @@
     return [...groups.values()];
   }
   const note = status => ({ return: 'Rückgabe', adjustment: 'Rabatt / Gegenbuchung', payment: 'Zahlungsmittel · kein Warenumsatz',
+    deposit: 'Anzahlung / Verrechnung · ohne Rohertrag',
     voucher_issue: 'Gutscheinausgabe · kein Warenumsatz',
     uid_clearing: 'UID-Zwischenbuchung · kein Warenumsatz',
     excluded: 'Ausgeschlossen', review: 'Prüfung offen' }[status] || '');

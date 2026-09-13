@@ -6,9 +6,10 @@
     needs_review:'Prüfung erforderlich',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen'};
   const label=state=>labels[state]||'Prüfung erforderlich';
   const number=value=>Number(value||0).toLocaleString('de-AT');
+  const sourceLabel=kind=>({cash:'Kassen-Umsätze',trade:'TradeFoto-Stamm und Historie',bestell:'TradeFoto-Bestellungen, Rechnungen und Reparaturen'})[kind]||'Unbekannte Quelle';
   function renderSource(source,projection={}) {
     const tables=source.tables||[], received=tables.reduce((n,t)=>n+(t.run?.receivedRows||0),0), expected=tables.reduce((n,t)=>n+t.declaredRows,0);
-    return `<header><h3>${source.kind==='cash'?'Kassen-Umsätze':'TradeFoto-Stamm und Historie'}</h3><p>${escape(label(source.status))} · ${number(received)} gelesene / ${number(expected)} deklarierte Zeilen</p></header>
+    return `<header><h3>${escape(sourceLabel(source.kind))}</h3><p>${escape(label(source.status))} · ${number(received)} gelesene / ${number(expected)} deklarierte Zeilen</p></header>
       <progress max="${Math.max(expected,received,1)}" value="${received}" aria-label="Bereitgestellte Quellzeilen"></progress>
       <p class="data-import-note">Dateifingerabdruck <code>${escape(source.fileSha256)}</code><br>Bereitstellung begonnen: ${escape(source.createdAt)}. Das ist kein Belegdatum.</p>
       ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>`<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(t.name)}</strong><p>${number(p.expectedRows)} lesbare / ${number(p.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert; keine Daten- oder Bestandskorrektur.</p><small>Freigabe: ${escape(p.approvalReference)} · Erfasst: ${escape(p.recordedAt)}<br>Prüfnachweis: ${escape(p.evidenceReference)} · ${escape(p.id)}</small></aside>`)).join('')}
@@ -29,7 +30,10 @@
     const body=root.querySelector('[data-import-body]');
     let disposed=false,generation=0,controller=null,timer=null,context=null,selected=null,cursor=null,working=false,logState=null,publicationView=null;
     const el=name=>body.querySelector(`[data-i="${name}"]`);
-    const visible=()=>root.open && !globalThis.document?.hidden && (root.closest?.('.view')?.classList.contains('active')??true);
+    const containers=[];
+    for(let node=root.parentElement;node;node=node.parentElement) if(node.matches?.('.view,.settings-section,details')) containers.push(node);
+    const visible=()=>root.open && !globalThis.document?.hidden && containers.every(node=>!node.classList.contains('hidden')
+      && (node.matches('details')?node.open:node.classList.contains('active')));
     const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;};
     async function request(url,options={}) {return api(url,{...options,signal:controller?.signal});}
     const post=(url,data={})=>request(url,{method:'POST',body:JSON.stringify(data)});
@@ -40,7 +44,7 @@
       const result=await post('/api/data-import/sources/search',next&&cursor?cursor:{});
       if(disposed||ticket!==generation)return;
       cursor=result.next;el('next').hidden=!cursor;
-      el('sources').innerHTML=result.items.map(s=>`<button type="button" data-i-source="${s.id}">${s.kind==='cash'?'Kasse':'TradeFoto'} · ${escape(s.createdAt)} · ${escape(label(s.status))}</button>`).join('')||'<p>Noch keine eigenen Gesamtimporte.</p>';
+      el('sources').innerHTML=result.items.map(s=>`<button type="button" data-i-source="${s.id}">${escape(sourceLabel(s.kind))} · ${escape(s.createdAt)} · ${escape(label(s.status))}</button>`).join('')||'<p>Noch keine eigenen Datenbankimporte.</p>';
       if(selected) {const selectedId=selected.id;const latest=await request(`/api/data-import/sources/${selectedId}`);if(disposed||ticket!==generation||selected?.id!==selectedId)return;selected=latest;renderSelected();}
       if(!working && visible() && (selected?.active||result.items.some(s=>s.active))) timer=setTimeout(()=>refresh().catch(e=>message(e.message)),2500);
     }
@@ -49,9 +53,9 @@
       try {
         context=await request('/api/data-import/context');if(disposed||ticket!==generation)return;
         body.innerHTML=`<p>${escape(context.message)}</p>
-          <form data-i="form" class="data-import-form" autocomplete="off"><label>Datenquelle<select data-i="kind"><option value="trade">TradeFoto-Datenbank</option><option value="cash">Kassen-Umsätze</option></select></label>
+          <form data-i="form" class="data-import-form" autocomplete="off"><label>Datenquelle<select data-i="kind" aria-describedby="dataImportSourceHint"><option value="trade">Trade_Daten.accdb</option><option value="cash">Kassen_Umsätze.accdb</option><option value="bestell">Trade_DatenBestell.accdb</option></select><small data-i="kind-hint" id="dataImportSourceHint">${sourceLabel('trade')}</small></label>
           <label>ACCDB-Datei<input data-i="file" type="file" accept=".accdb" required></label><label>Dateikennwort (falls erforderlich)<input data-i="password" type="password" autocomplete="new-password" maxlength="256"></label>
-          <button type="submit" ${!context.available||!context.projection.prepare?'disabled':''}>Geschützte Vorschau vorbereiten</button></form>
+          <button type="submit" ${!context.available||!context.projection.prepare?'disabled':''}>Datei prüfen</button></form><p data-i="file-name" class="data-import-note" aria-live="polite"></p>
           <p class="data-import-note">Maximal 512 MiB. Originaldatei und Kennwort werden nicht gespeichert. Nach einer Unterbrechung dieselbe Datei erneut auswählen. Bereits bereitgestellte Datensätze bleiben verschlüsselt; Rücknahmefrist: 30 Tage.</p>
           <p data-i="message" role="status" aria-live="polite"></p><div class="data-import-actions"><button type="button" data-i-refresh>Aktualisieren</button><button type="button" data-i="stop" data-i-stop hidden>Anhalten</button></div>
           <div data-i="sources" class="data-import-sources"></div><button type="button" data-i="next" hidden>Ältere Importe</button><section data-i="detail"></section><section data-i="publication"></section><section data-i="log"></section>`;
@@ -102,7 +106,7 @@
     }
     async function submit(event) {
       if(event.target!==el('form'))return;event.preventDefault();if(working)return;
-      const file=el('file').files[0];if(!file||file.size>context.maxBytes){message('Bitte eine ACCDB-Datei bis 512 MiB auswählen.');return;}
+      const file=el('file').files[0];if(!file||file.size<4096||file.size>context.maxBytes||!file.name.toLowerCase().endsWith('.accdb')){message('Bitte eine vollständige ACCDB-Datei bis 512 MiB auswählen.');return;}
       const ticket=generation;working=true;message('Datei wird geschützt übertragen …');
       let password=el('password').value;el('password').value='';
       try {
@@ -114,14 +118,22 @@
       }catch(error){if(!disposed&&ticket===generation)message(error.message);}
       finally{password='';if(!disposed&&ticket===generation)working=false;}
     }
-    const visibility=()=>{publicationView?.destroy();publicationView=null;if(!visible()){cancel();body.replaceChildren();selected=null;logState=null;}else void load();};
-    root.addEventListener('toggle',visibility);body.addEventListener('click',click);body.addEventListener('submit',submit);
+    let wasVisible=false;
+    const visibility=()=>{
+      const next=visible();if(next===wasVisible)return;wasVisible=next;
+      publicationView?.destroy();publicationView=null;
+      if(!next){cancel();body.replaceChildren();selected=null;logState=null;}else void load();
+    };
+    const change=event=>{
+      if(event.target===el('kind')) el('kind-hint').textContent=sourceLabel(el('kind').value);
+      if(event.target===el('file')) el('file-name').textContent=el('file').files[0]?.name||'';
+    };
+    root.addEventListener('toggle',visibility);body.addEventListener('click',click);body.addEventListener('submit',submit);body.addEventListener('change',change);
     globalThis.document?.addEventListener('visibilitychange',visibility);
-    const view=root.closest?.('.view');
-    const observer=view&&globalThis.MutationObserver?new MutationObserver(visibility):null;
-    observer?.observe(view,{attributes:true,attributeFilter:['class']});
-    if(visible())void load();
-    return {destroy(){disposed=true;cancel();publicationView?.destroy();observer?.disconnect();root.removeEventListener('toggle',visibility);body.removeEventListener('click',click);body.removeEventListener('submit',submit);globalThis.document?.removeEventListener('visibilitychange',visibility);body.replaceChildren();selected=null;logState=null;}};
+    const observer=containers.length&&globalThis.MutationObserver?new MutationObserver(visibility):null;
+    for(const container of containers) observer?.observe(container,{attributes:true,attributeFilter:['class','open']});
+    visibility();
+    return {destroy(){disposed=true;cancel();publicationView?.destroy();observer?.disconnect();root.removeEventListener('toggle',visibility);body.removeEventListener('click',click);body.removeEventListener('submit',submit);body.removeEventListener('change',change);globalThis.document?.removeEventListener('visibilitychange',visibility);body.replaceChildren();selected=null;logState=null;}};
   }
   return {mount,renderSource};
 }));

@@ -16,9 +16,10 @@ function detailsTag(id) {
   return html.match(new RegExp(`<details[^>]*\\bid="${id}"[^>]*>`))?.[0] || "";
 }
 
-test("v0.65: Einstellungen sind fachlich in Urlaub, Zeiterfassung und Personal gegliedert", () => {
-  assert.match(html, /data-settings-tab="vacation">Urlaub</);
-  assert.match(html, /data-settings-tab="timeTracking">Zeiterfassung</);
+test("Personal bündelt Urlaub, Zeiterfassung und Import bei unveränderten fachlichen Feldern", () => {
+  assert.doesNotMatch(html, /data-settings-tab="(?:vacation|timeTracking|integrations)"/);
+  assert.match(app, /function integratePersonnelSettings/);
+  assert.match(app, /elements\.personnelSettings\.append\(details\)/);
   assert.doesNotMatch(html, /data-settings-tab="wifiAutomation"/);
   assert.doesNotMatch(html, /data-settings-tab="branding"|data-settings-tab="pdf"/);
 

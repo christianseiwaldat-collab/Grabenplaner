@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{spawnSync}=require('node:child_process');
 const {sealPairBundle,verifyPairBundle}=require('../lib/persistence/postgresql/operations/paired-bundle');
-const {prunePairedSnapshots}=require('../lib/persistence/postgresql/operations/paired-retention');
+const {prunePairedSnapshots,configuredPairedRetention}=require('../lib/persistence/postgresql/operations/paired-retention');
 async function fixture(t){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-pair-test-'));fs.chmodSync(root,0o700);t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const bundle=path.join(root,'point.pair');fs.mkdirSync(bundle,{mode:0o700});
@@ -40,4 +40,38 @@ test('nightly pair retention preserves the most recent daily points and every un
  const unknown=path.join(root,'unknown-backup');fs.mkdirSync(unknown);fs.writeFileSync(path.join(unknown,'keep.txt'),'retain');
  const result=await prunePairedSnapshots(root,{keepDays:2,now:Date.parse('2026-09-12T12:00:00Z')});
  assert.equal(result.removed.length,2);assert.equal(fs.existsSync(results[2].bundle),true);assert.equal(fs.existsSync(results[3].bundle),true);assert.equal(fs.readFileSync(path.join(unknown,'keep.txt'),'utf8'),'retain');
+});
+
+async function countFixture(t){
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-pair-count-'));fs.chmodSync(root,0o700);t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const results=[];
+ for(const stamp of ['2026-09-12T08:00:00Z','2026-09-12T09:00:00Z','2026-09-12T10:00:00Z']){
+  const id=require('node:crypto').randomUUID(),directory=path.join(root,id+'.pair');fs.mkdirSync(directory,{mode:0o700});
+  for(const name of ['core.dump','sales.dump','configuration.env','roles.sql'])fs.writeFileSync(path.join(directory,name),'synthetic component',{mode:0o600});
+  results.push(await sealPairBundle(directory,{snapshotId:id,createdAt:stamp,databases:[{domain:'core',database:'core',file:'core.dump'},{domain:'sales',database:'sales',file:'sales.dump'}]}));
+ }
+ return {root,results,now:Date.parse('2026-09-12T12:00:00Z')};
+}
+
+test('two total complete points survive even on the same day, including a failed next backup',async t=>{
+ const {root,results,now}=await countFixture(t);
+ const pending=path.join(root,require('node:crypto').randomUUID()+'.pair');fs.mkdirSync(pending,{mode:0o700});fs.writeFileSync(path.join(pending,'core.dump'),'incomplete');
+ const result=await prunePairedSnapshots(root,{keepCount:2,now});
+ assert.equal(result.policy,'latest-count');assert.equal(result.retainedPoints,2);assert.equal(result.retainedDays,1);
+ assert.deepEqual(results.map(r=>fs.existsSync(r.bundle)),[false,true,true]);assert.ok(fs.existsSync(pending));
+ const again=await prunePairedSnapshots(root,{keepCount:2,now});assert.equal(again.removed.length,0);assert.equal(again.retainedPoints,2);
+});
+
+test('a damaged newest or oldest point prevents every retention deletion',async t=>{
+ for(const index of [0,2]){
+  const {root,results,now}=await countFixture(t);fs.appendFileSync(path.join(results[index].bundle,'sales.dump'),'damaged');
+  await assert.rejects(prunePairedSnapshots(root,{keepCount:2,now}),/PG_PAIR_COMPONENT_HASH/);
+  assert.ok(results.every(r=>fs.existsSync(r.bundle)&&fs.existsSync(r.commitMarker)));
+ }
+});
+
+test('a protected server count policy is explicit and fails closed on invalid values',()=>{
+ assert.equal(configuredPairedRetention({}),null);
+ assert.deepEqual(configuredPairedRetention({localBackupRetention:{keepCount:2}}),{keepCount:2});
+ for(const policy of [null,[],{}, {keepCount:1},{keepCount:'2'},{keepCount:2,keepDays:20}])assert.throws(()=>configuredPairedRetention({localBackupRetention:policy}),/PG_PAIR_RETENTION_POLICY/);
 });

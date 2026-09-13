@@ -1,0 +1,5010 @@
+{
+  "version": 1,
+  "sourceSystem": "tradefoto.bestell",
+  "sourceInstance": "tradefoto-bestell",
+  "schemaSha256": "50a01c283cde27ec3eb01a1151e8ee81ec2118118c9e7e0b9c43e7e924ff9f76",
+  "readerContract": {
+    "version": 1,
+    "float": "binary32_promoted_to_binary64_ecmascript_roundtrip_decimal",
+    "double": "binary64_ecmascript_roundtrip_decimal",
+    "currency": "exact_big_decimal",
+    "datetime": "local_civil_milliseconds_reject_submillisecond",
+    "linkedTables": "disabled"
+  },
+  "coverage": {
+    "tables": 27,
+    "fields": 749,
+    "includedTables": 21,
+    "includedFields": 728
+  },
+  "tables": [
+    {
+      "name": "ANGEBOTE",
+      "included": true,
+      "group": "offers",
+      "exclusionReason": null,
+      "declaredRows": 321,
+      "keys": [
+        "AngebotNr",
+        "Filialid"
+      ],
+      "dateField": "AngebotDatum",
+      "columns": [
+        {
+          "name": "AngebotNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AngebotDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kund_Nr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Angebotstext1",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Angebotstext2",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "AuftragsNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "erledigt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Bemerkung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "BestandsFilialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Preisgruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabattgruppe",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WGRRabatt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ARabatt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabattkunde",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Großhandelskunde",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kennung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zahlungsart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT1",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP1",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT2",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP2",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT3",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP3",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "NettoTage",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Internet",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kundengruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "reoMwst",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gpreisstandard",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ANREDE",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VORNAME",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "NACHNAME",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Abteilung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AdressZusatz",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "STRaße",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Land",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ORT",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "EMail",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TELEFON",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TELEFAX",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Lieferschein",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LieferscheinId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RechnungId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BankName",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "PreisLieferschein",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rechnungskopien",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheinkopien",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "UstID",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Nettorechnung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KontoNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "GPreisgruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Englisch",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EU",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FesterZahlungstermin",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "BankKntNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bankleitzahl",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "name": "ANGEBOTE_Details",
+      "included": true,
+      "group": "offers",
+      "exclusionReason": null,
+      "declaredRows": 1692,
+      "keys": null,
+      "dateField": null,
+      "columns": [
+        {
+          "name": "AngebotNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Position",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zusatz1",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VKMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MWST",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Alternativ",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Provision",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Prov",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Auftrag",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelkopf",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Set",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zusatz2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "SollPreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VK_Preis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RohertragDM",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "Provision_dm",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "N_VK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Beschreibung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Info",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bild",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Einheit",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rob",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lsonderroh",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LDurchschnittEk",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "LSonderartikel",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSpreis",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSortimentRabattgruppe",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LWGR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LArtikelnr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSout",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN_Rabatt",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "Auftrag",
+      "included": true,
+      "group": "orders",
+      "exclusionReason": null,
+      "declaredRows": 127,
+      "keys": [
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "dateField": "Anlegedatum",
+      "columns": [
+        {
+          "name": "Id",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KassenId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Anlegedatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "gedruckt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kopftext",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Fußtext",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AngebotNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "erledigt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "exportiert",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Anzahlung",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bemerkung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LagerNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Liefertermin",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BestandsFilialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Preisgruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabattgruppe",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WGRRabatt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ARabatt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabattkunde",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Großhandelskunde",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kennung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zahlungsart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT1",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP1",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT2",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP2",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT3",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP3",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "NettoTage",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Internet",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kundengruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "reoMwst",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gpreisstandard",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ANREDE",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VORNAME",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "NACHNAME",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Abteilung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AdressZusatz",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "STRaße",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Land",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ORT",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "EMail",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TELEFON",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TELEFAX",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Lieferschein",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LieferscheinId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RechnungId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BankName",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "PreisLieferschein",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rechnungskopien",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheinkopien",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "UstID",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Nettorechnung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KontoNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "GPreisgruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Englisch",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EU",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KFiliale",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FesterZahlungstermin",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "BankKntNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bankleitzahl",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Versandart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IBestellNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "IBestelldatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "name": "Auftrag_Details",
+      "included": true,
+      "group": "orders",
+      "exclusionReason": null,
+      "declaredRows": 716,
+      "keys": [
+        "Idd",
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "dateField": null,
+      "columns": [
+        {
+          "name": "Idd",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Id",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KassenId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zusatz1",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Zusatz2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VKMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Empfehlung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Provision",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Prov",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "LArtikelNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MWST",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Position",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelkopf",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Set",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IB",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Auslieferung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Listeneckpreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "VK_Preis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RohertragDM",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "Provision_dm",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "SollPreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "N_VK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Umenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "uebernahme",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ausgeliefert",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Einheit",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Beschreibung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Info",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rob",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lsonderroh",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LDurchschnittEk",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "LSonderartikel",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSpreis",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSortimentRabattgruppe",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LWGR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSout",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN_Rabatt",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "BESTELLDETAILS",
+      "included": true,
+      "group": "purchasing",
+      "exclusionReason": null,
+      "declaredRows": 34436,
+      "keys": [
+        "BestellId"
+      ],
+      "dateField": null,
+      "columns": [
+        {
+          "name": "BestellId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BestellNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BArtikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikeltext",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "BMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BBestellnummer",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "gMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BBestelldaten",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zusatz2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "BListeneckpreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "BRechnungspreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "BNettoNettoPreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "BVK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "bsuchname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "bkondition",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Verteiler",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BV",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "bBestelleinheit",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "bset",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VKNetto",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Faktor",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BWKZ",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BWKZArt",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "BESTELLKORB",
+      "included": true,
+      "group": "branch_requests",
+      "exclusionReason": null,
+      "declaredRows": 2389,
+      "keys": [
+        "KorbID",
+        "KEAN"
+      ],
+      "dateField": "KDatum",
+      "columns": [
+        {
+          "name": "KorbID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KEAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Ksuchname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KArtikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KBestelldaten",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KVerkäufer",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Kzusatz1",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KZusatz2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KListeneckpreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "ue",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filiale",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MengeZentrale",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MengeGesamt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MengeBestellt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MengeFilialen",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "UmlagerungvonFil",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestellungbei",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bemerkung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "erledigt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ErledigtDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Sortimentsart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Auslaufartikel",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Sonderartikel",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Sonderbestellung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BestelltFiliale",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VerkaufteMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Status",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Höchstbestand",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Anforderungdatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheindruck",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "iF",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MengeFil",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "BESTELLUNGEN",
+      "included": true,
+      "group": "purchasing",
+      "exclusionReason": null,
+      "declaredRows": 6305,
+      "keys": [
+        "BestellNr"
+      ],
+      "dateField": "Bestelldatum",
+      "columns": [
+        {
+          "name": "BestellNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestelldatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "BFirma",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BA1",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BA2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BA3",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BLand",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BPLZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BORT",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BTelefon",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "BTelefax",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LFilialID",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LFName",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LStraße",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LPLZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LOrt",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "erledigt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "bezahlt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Zahldatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Lieferungbis",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "verkäufer_id",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Text1",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Text2",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Valuta",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zahlungsziel",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "KundenNummer",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VMit",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "LAdresszusatz",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LAbteilung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kund_nr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "zahlbetrag",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SBestellnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "gedruckt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BKostenträgercode",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "BEmail",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Brabatt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "HBestellNr",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Direktlieferung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "LTelefon",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LeMail",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "name": "BestellVerteilung",
+      "included": true,
+      "group": "allocation",
+      "exclusionReason": null,
+      "declaredRows": 139948,
+      "keys": [
+        "BestellNr",
+        "BestellId",
+        "FilialID",
+        "EAN"
+      ],
+      "dateField": null,
+      "columns": [
+        {
+          "name": "BestellNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BestellId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialID",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Menge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "GelMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Liefermenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestand",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestellt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MM",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VKM",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FI",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "L",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "dummyb",
+      "included": false,
+      "group": "excluded",
+      "exclusionReason": "Technische leere Hilfstabelle.",
+      "declaredRows": 0,
+      "keys": null,
+      "dateField": null,
+      "columns": [
+        {
+          "name": "dummy",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "FehlerTabelle",
+      "included": false,
+      "group": "excluded",
+      "exclusionReason": "Technisches Fehler-/Replikationsprotokoll, keine Geschäftsvorgänge.",
+      "declaredRows": 0,
+      "keys": null,
+      "dateField": null,
+      "columns": [
+        {
+          "name": "s_Generation",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "s_Lineage",
+          "type": "ole",
+          "nativeTypeId": 11,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "TableName",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Pathname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "s_GUID",
+          "type": "guid",
+          "nativeTypeId": 15,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RowGuid",
+          "type": "guid",
+          "nativeTypeId": 15,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bemerkung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "Kasse_Zeiterfassung",
+      "included": false,
+      "group": "excluded",
+      "exclusionReason": "Nutzerentscheidung: keine Übernahme der Access-Zeiterfassung.",
+      "declaredRows": 103717,
+      "keys": null,
+      "dateField": null,
+      "columns": [
+        {
+          "name": "VerkäuferId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kommen",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gehen",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KassenId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "Lieferscheine",
+      "included": true,
+      "group": "delivery_notes",
+      "exclusionReason": null,
+      "declaredRows": 12081,
+      "keys": [
+        "LieferscheinID"
+      ],
+      "dateField": "Bondatum",
+      "columns": [
+        {
+          "name": "LieferscheinID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheinnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kund_Nr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bonnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BestandsFilialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kassenid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bondatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Verkäuferid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VKMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MWST",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "set",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KameraNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Gebucht",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AuftragsNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AuftragsNrPos",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RichtId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "zusatz1",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Zusatz2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LArtikelNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "UmsatzFilialID",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelkopf",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Position",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rechnungerstellen",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kopftext",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "IZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Sollpreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VK_Preis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "N_VK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ColorbildNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "reomwst",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSonderroh",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LDurchschnittEK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "LSonderartikel",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSpreis",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSortimentrabattgruppe",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LWGR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Einheit",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Beschreibung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Info",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestellt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSout",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Versandart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IBestellNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "IBestelldatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "name": "Lieferscheinerstellung",
+      "included": true,
+      "group": "delivery_notes",
+      "exclusionReason": null,
+      "declaredRows": 766,
+      "keys": [
+        "Filialida",
+        "NeueLieferscheinnummer"
+      ],
+      "dateField": "Datum",
+      "columns": [
+        {
+          "name": "Filialida",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NeueLieferscheinnummer",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Umsatzfilialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kund_Nr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Verkäufer_id",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Kopftext",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "IZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "BestandsFilialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "GPreisStandard",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Preisgruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabattgruppe",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WGRRabatt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ARabatt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabattkunde",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Großhandelskunde",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kennung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zahlungsart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT1",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP1",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT2",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP2",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT3",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP3",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "NettoTage",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Internet",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kundengruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "reoMwst",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ANREDE",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VORNAME",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "NACHNAME",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Abteilung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AdressZusatz",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "STRaße",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Land",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ORT",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "EMail",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TELEFON",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TELEFAX",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Lieferschein",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LieferscheinId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RechnungId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BankName",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "PreisLieferschein",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rechnungskopien",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheinkopien",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "UstID",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "erledigt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "NettoRechnung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KontoNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "GPreisgruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Englisch",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EU",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FesterZahlungstermin",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "BankKntNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bankleitzahl",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Versandart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IBestellNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "IBestelldatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "name": "Ratenzahlungen",
+      "included": true,
+      "group": "payments",
+      "exclusionReason": null,
+      "declaredRows": 0,
+      "keys": null,
+      "dateField": "Zahldatum",
+      "columns": [
+        {
+          "name": "RechnungsNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zahldatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Zahlbetrag",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bezahlt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "name": "Re_Schreibung",
+      "included": false,
+      "group": "excluded",
+      "exclusionReason": "Technische Schreibsteuerung, kein Geschäftsvorgang.",
+      "declaredRows": 1,
+      "keys": null,
+      "dateField": null,
+      "columns": [
+        {
+          "name": "Aktiv",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "Rechnung_Z",
+      "included": true,
+      "group": "invoices",
+      "exclusionReason": null,
+      "declaredRows": 13211,
+      "keys": [
+        "Rechnungsnr"
+      ],
+      "dateField": "Anlegedatum",
+      "columns": [
+        {
+          "name": "Rechnungsnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Anlegedatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kassenid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Rechnungsbetrag",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ZahlungsartA",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Zahlungsart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Zahldatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "bez",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Auftragsnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SkontoT1",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP1",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT2",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP2",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoT3",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "SkontoP3",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "NettoTage",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Kopftext",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "BFiliale",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Erstellungsdatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "BezahltA",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bezahlt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Zahlbetrag",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Skonto",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Forderungsverlust",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Mahndatum1",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Mahndatum2",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "MS1",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MS2",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Mahngebühr",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Verzugszinsen",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Fristtage2",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Fristdatum2",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "ANREDE",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "NACHNAME",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VORNAME",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Abteilung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AdressZusatz",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "STRaße",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Land",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "PLZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ORT",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KontoNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "romwst",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ustid",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "telefax",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "internet",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Fil",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Mahndatum3",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "MS3",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Fristtage",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Fristdatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Fristtage3",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Fristdatum3",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Kundengruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Preisgruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabattgruppe",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WGRRabatt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ARabatt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rabattkunde",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Großhandelskunde",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kennung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KCode",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "SummeTeilzahlungen",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "GPreisstandard",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "nettorechnung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "GPreisgruppe",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MailPaket",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "PaketNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Versanddatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gewicht",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilRe",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Englisch",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EU",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FesterZahlungstermin",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Versandart",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "IBestellNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "IBestelldatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TZText",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LeitwegID",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gutschrift",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MahnInfo",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "name": "Rechnungsdetails_Z",
+      "included": true,
+      "group": "invoices",
+      "exclusionReason": null,
+      "declaredRows": 181125,
+      "keys": null,
+      "dateField": null,
+      "columns": [
+        {
+          "name": "aid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Rechnungsnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Filialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BestandsFilialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Ean",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "menge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "MWST",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheinnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Lieferscheindatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gebucht",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KameraNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "set",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "zusatz1",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Zusatz2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LArtikelNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Auftragsnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelkopf",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Position",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "Sollpreis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "N_VK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "ColorbildNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rob",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rverkäuferid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Booklieferscheinnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BooklieferscheinDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSonderroh",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LDurchschnittEK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "LSonderartikel",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSpreis",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSortimentrabattgruppe",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LWGR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BooklieferscheinnrBA",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WEID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "WEID_Wien",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Einheit",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Beschreibung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Info",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "LSout",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN_Rabatt",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "Reklamation",
+      "included": true,
+      "group": "complaints",
+      "exclusionReason": null,
+      "declaredRows": 4,
+      "keys": [
+        "ReklamationsNr",
+        "FilialId"
+      ],
+      "dateField": "Anlegedatum",
+      "columns": [
+        {
+          "name": "ReklamationsNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "FilialId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Anlegedatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Labor_ID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TaschenNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Inhalt",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "bestellt",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Motiv1",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Motiv2",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Motiv3",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Motiv4",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Nachfrage1",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Nachfrage2",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Nachfrage3",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "InfoAm1",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "InfoAm2",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "InfoAm3",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "InfoVon1",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "InfoVon2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "InfoVon3",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bemerkung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "abgeschlossen",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "name": "Reparatur",
+      "included": true,
+      "group": "repairs",
+      "exclusionReason": null,
+      "declaredRows": 8021,
+      "keys": [
+        "ReparaturNr",
+        "FilialId"
+      ],
+      "dateField": "Anlegedatum",
+      "columns": [
+        {
+          "name": "ReparaturNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "FilialId",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "WerkstattName",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Anlegedatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "MWST",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "GarantiekarteVom",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "Fehler",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Garantie",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AName",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ANr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Zusatz",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ASuchname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KVDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AArbeit",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Reparatur",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "erledigt",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Belegtext",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Lagerware",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bemerkung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bearbeitungsgebühr",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KostenvoranschlagAb",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "VVKosten",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "IKosten",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "KVKosten",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "ReparaturDauer",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ArtikelArt",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Reklamation",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "ReklamationBemerkung",
+          "type": "memo",
+          "nativeTypeId": 12,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "ReklamationAkzeptiert",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "ReklamationDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "WerkstattAuftragNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Reparieren",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "RepAuftragDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kassieren",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AbzuholenDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AbgeholtDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "EK_Netto",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "EK_Brutto",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "VK_Kalkuliert",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Bezahlt_Datum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Bezahlt_Zeit",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "BonNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Kasse_ID",
+          "type": "integer",
+          "nativeTypeId": 3,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Rechnungsbetrag",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Abholnachrichtdatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Anzahlung",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "name": "Reparatur_Bilder",
+      "included": true,
+      "group": "repair_media",
+      "exclusionReason": null,
+      "declaredRows": 10,
+      "keys": [
+        "Bild_ID"
+      ],
+      "dateField": null,
+      "columns": [
+        {
+          "name": "Bild_ID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ReparaturNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "FilialId",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Dateiname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        }
+      ]
+    },
+    {
+      "name": "RichtTabelle",
+      "included": true,
+      "group": "fulfilment",
+      "exclusionReason": null,
+      "declaredRows": 680,
+      "keys": [
+        "Idd",
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "dateField": null,
+      "columns": [
+        {
+          "name": "RichtId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Idd",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Id",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "FilialId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KassenId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Position",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LiefernDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "bestellt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "liefern",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "geliefert",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "KameraNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "LagerNr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Reserviert",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Richten",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Gerichtet",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Set",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Bestandgebucht",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RVK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "BestandsFilialid",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "RFbestand",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "VFiliale",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "AFiliale",
+          "type": "byte",
+          "nativeTypeId": 2,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rOBestand",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rUFilialid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rVerkäuferid",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "rVK_preis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rSoll_Preis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rRabatt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rRohertrag",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "rProvision",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "rProvision_DM",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "rMwSt",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rSortiment",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rsonderartikel",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "rAProvision",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "LSout",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "Studio",
+      "included": true,
+      "group": "studio",
+      "exclusionReason": null,
+      "declaredRows": 6,
+      "keys": [
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "dateField": "Datum",
+      "columns": [
+        {
+          "name": "Id",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "FilialId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KassenId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VerkäuferID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Uhrzeit",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Länge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Anlegedatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "FertigNach",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "FertigUhrzeit",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Rücktritt",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Anzahlung",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        }
+      ]
+    },
+    {
+      "name": "Studio_Details",
+      "included": true,
+      "group": "studio",
+      "exclusionReason": null,
+      "declaredRows": 0,
+      "keys": [
+        "Idd",
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "dateField": null,
+      "columns": [
+        {
+          "name": "Idd",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Id",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "FilialId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KassenId",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Zusatz1",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Zusatz2",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VKMenge",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Empfehlung",
+          "type": "boolean",
+          "nativeTypeId": 1,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Provision",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "Prov",
+          "type": "float",
+          "nativeTypeId": 6,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "VK_Preis",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "RohertragDM",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "catalog_costs"
+        },
+        {
+          "name": "Provision_dm",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "personnel_restricted"
+        }
+      ]
+    },
+    {
+      "name": "tblVerzeichnis",
+      "included": false,
+      "group": "excluded",
+      "exclusionReason": "Lokale Pfadkonfiguration, keine Geschäftsvorgänge.",
+      "declaredRows": 1,
+      "keys": [
+        "Verzeichnisname"
+      ],
+      "dateField": null,
+      "columns": [
+        {
+          "name": "Verzeichnisname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Verzeichnisablage",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "Teilzahlungen",
+      "included": true,
+      "group": "payments",
+      "exclusionReason": null,
+      "declaredRows": 12581,
+      "keys": null,
+      "dateField": "Zahlungsdatum",
+      "columns": [
+        {
+          "name": "Kund_Nr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Rechnungsnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Zahlungsdatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Zahlbetrag",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Gebucht",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "tmp_Bestell",
+      "included": false,
+      "group": "excluded",
+      "exclusionReason": "Temporäre Bestellauswahl; kein zusätzlicher Bestellbestand.",
+      "declaredRows": 3830,
+      "keys": [
+        "Bestellnr"
+      ],
+      "dateField": null,
+      "columns": [
+        {
+          "name": "Bestellnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "internal_business"
+        },
+        {
+          "name": "Datu",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "internal_business"
+        }
+      ]
+    },
+    {
+      "name": "Vertraege_verkauft",
+      "included": true,
+      "group": "contracts",
+      "exclusionReason": null,
+      "declaredRows": 15,
+      "keys": null,
+      "dateField": "Datum",
+      "columns": [
+        {
+          "name": "Bonnr",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "FilialID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KassenID",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Datum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "KUND_NR",
+          "type": "long",
+          "nativeTypeId": 4,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VertragNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VertragName",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Suchname",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VertragGrundprov",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VertragPerskaufProv",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VertragZusatzprov",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "ProvKZ",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Provision",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "personnel_restricted"
+        },
+        {
+          "name": "EAN",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Artikelbezeichnung",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "SollVK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Gerätenummer",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "SimNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "TelefonNr",
+          "type": "text",
+          "nativeTypeId": 10,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "WKZ",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "VertragsVK",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "AktivierungsDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Gesamtprämie",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "GutschriftDatum",
+          "type": "datetime",
+          "nativeTypeId": 8,
+          "dataClass": "customer_restricted"
+        },
+        {
+          "name": "Gutschriftbetrag",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "restricted_finance"
+        },
+        {
+          "name": "Offen",
+          "type": "double",
+          "nativeTypeId": 7,
+          "dataClass": "customer_restricted"
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "from": "BESTELLDETAILS",
+      "fields": [
+        "BestellNr"
+      ],
+      "to": "BESTELLUNGEN",
+      "keys": [
+        "BestellNr"
+      ],
+      "kind": "parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "BestellVerteilung",
+      "fields": [
+        "BestellId"
+      ],
+      "to": "BESTELLDETAILS",
+      "keys": [
+        "BestellId"
+      ],
+      "kind": "parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "Rechnungsdetails_Z",
+      "fields": [
+        "Rechnungsnr"
+      ],
+      "to": "Rechnung_Z",
+      "keys": [
+        "Rechnungsnr"
+      ],
+      "kind": "parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "Teilzahlungen",
+      "fields": [
+        "Rechnungsnr"
+      ],
+      "to": "Rechnung_Z",
+      "keys": [
+        "Rechnungsnr"
+      ],
+      "kind": "optional_parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "Ratenzahlungen",
+      "fields": [
+        "RechnungsNr"
+      ],
+      "to": "Rechnung_Z",
+      "keys": [
+        "Rechnungsnr"
+      ],
+      "kind": "optional_parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "ANGEBOTE_Details",
+      "fields": [
+        "AngebotNr",
+        "Filialid"
+      ],
+      "to": "ANGEBOTE",
+      "keys": [
+        "AngebotNr",
+        "Filialid"
+      ],
+      "kind": "parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "Auftrag_Details",
+      "fields": [
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "to": "Auftrag",
+      "keys": [
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "kind": "parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "Studio_Details",
+      "fields": [
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "to": "Studio",
+      "keys": [
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "kind": "parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "Reparatur_Bilder",
+      "fields": [
+        "ReparaturNr",
+        "FilialId"
+      ],
+      "to": "Reparatur",
+      "keys": [
+        "ReparaturNr",
+        "FilialId"
+      ],
+      "kind": "parent",
+      "targetSource": "bestell"
+    },
+    {
+      "from": "RichtTabelle",
+      "fields": [
+        "Idd",
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "to": "Auftrag_Details",
+      "keys": [
+        "Idd",
+        "Id",
+        "FilialId",
+        "KassenId"
+      ],
+      "kind": "optional_parent",
+      "targetSource": "bestell"
+    }
+  ]
+}

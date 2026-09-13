@@ -31,7 +31,7 @@ function report(rows, result) {
 
 test('effective cash rules preserve the sealed source contract and unrelated policies', () => {
   const old = original(), before = C.canonical(old), current = resolveCashSalesPolicy(old);
-  assert.equal(C.canonical(old), before); assert.equal(old.version, 1); assert.equal(current.version, 8);
+  assert.equal(C.canonical(old), before); assert.equal(old.version, 1); assert.equal(current.version, 9);
   assert.equal(current.id, 'cash-confirmed-20260911');
   assert.notEqual(current.fingerprint, old.fingerprint);
   assert.equal(resolveCashSalesPolicy(current), current);
@@ -81,6 +81,61 @@ test('voucher redemption is payment and does not reduce goods revenue, cash marg
   for (const metric of ['grossMargin', 'netRevenue', 'receiptCount', 'customerCount']) assert.equal(Number(paymentOnly.total.metrics[metric].current), 0);
   const changed = reconcile(head('0'), [rows[0], { ...rows[1], Sortiment: 170102 }]);
   assert.equal(changed.canAggregate, false, 'an unconfirmed advance-payment group is not inferred from voucher rules');
+});
+
+test('article 98 adds or subtracts revenue without goods quantity or margin in every confirmed flag combination', () => {
+  for (const AStorno of [false, true]) for (const SonderartikelS of [false, true]) for (const sign of [1, -1]) {
+    for (const RohertragDM of [null, '0', '999.99']) {
+      const rows = [line(1, { EAN: '0000000000098', Sortiment: 170102, AStorno, SonderartikelS,
+        VKMenge: String(sign * 2), VK_Preis: '150', RohertragDM })];
+      const before = C.canonical(rows), checked = reconcile(head(String(sign * 300)), rows), totals = report(rows, checked);
+      assert.equal(checked.canAggregate, true); assert.equal(checked.counts.deposits, 1); assert.equal(checked.counts.sales, 0);
+      assert.equal(checked.positions[0].status, 'deposit'); assert.equal(checked.totals.gross, sign === 1 ? '300.00' : '-300.00');
+      assert.equal(checked.totals.net, sign === 1 ? '250.00' : '-250.00');
+      for (const [metric, expected] of Object.entries({ grossMargin: '0.00', quantity: '0.000000', receiptCount: '1', customerCount: '1' })) {
+        assert.equal(totals.total.metrics[metric].current, expected, metric);
+      }
+      assert.equal(totals.coverage.current.marginMissing, 0); assert.equal(totals.coverage.current.excluded, 0);
+      assert.equal(C.canonical(rows), before);
+    }
+  }
+});
+
+test('deposit redemption reconciles a mixed camera receipt and retains each original cash margin', () => {
+  const rows = [
+    line(1, { EAN: '0000000100792', Sortiment: 10102, VK_Preis: '1449', RohertragDM: '255.60308102607814' }),
+    line(2, { VK_Preis: '749', RohertragDM: '133.31994202761456' }),
+    line(3, { VK_Preis: '0', RohertragDM: '-10.684334824346319' }),
+    line(4, { EAN: '0000000084461', Sortiment: 50301, VK_Preis: '79.90', RohertragDM: '38.58876699393196' }),
+    line(5, { VK_Preis: '29.99', RohertragDM: '13.639666669362756' }),
+    line(6, { Sortiment: 170101, MWST: '0', VK_Preis: '0', RohertragDM: null }),
+    line(7, { EAN: '0000000000098', Sortiment: 170102, SonderartikelS: true, VKMenge: '-1', VK_Preis: '300', RohertragDM: null })
+  ];
+  const h = head('2007.8900146484375'), checked = reconcile(h, rows), totals = report(rows, checked);
+  assert.equal(checked.canAggregate, true); assert.deepEqual(checked.issues, []); assert.equal(checked.reconciliation.difference, '0.00');
+  assert.equal(checked.totals.gross, '2007.89'); assert.equal(checked.totals.net, '1673.24');
+  assert.equal(totals.total.metrics.grossMargin.current, '430.47'); assert.equal(totals.total.metrics.quantity.current, '5.000000');
+  const byGroup = id => totals.rows.find(r => r.dimensions[0].id === id);
+  assert.equal(byGroup('10102').metrics.grossMargin.current, '255.60');
+  assert.equal(byGroup('50301').metrics.grossMargin.current, '38.59');
+  assert.equal(byGroup('170102').metrics.grossRevenue.current, '-300.00'); assert.equal(byGroup('170102').metrics.grossMargin.current, '0.00');
+  const noCoverage = reconcile(h, rows, { coverage: null }); assert.equal(noCoverage.canAggregate, false);
+  const wrongHead = reconcile(head('2307.89'), rows); assert.equal(wrongHead.canAggregate, false); assert.ok(wrongHead.issues.includes('RECEIPT_AMOUNT_MISMATCH'));
+});
+
+test('deposit confirmation does not classify another article, tax code or unconfirmed status as a deposit', () => {
+  const deposit = line(1, { EAN: '0000000000098', Sortiment: 170102, VK_Preis: '300', SonderartikelS: true });
+  for (const extra of [{ EAN: '0000000000099' }, { Sortiment: 999 }, { MWST: '0' }, { MWST: '10' }, { Ret: true },
+    { BStorno: true }, { R: true }, { N: true }, { ZR: true }, { set: true }, { Beratung: true }, { VKMenge: '0' }, { VK_Preis: '-300' }]) {
+    const checked = reconcile(head('300'), [{ ...deposit, ...extra }]);
+    assert.equal(checked.canAggregate, false, JSON.stringify(extra)); assert.equal(checked.positions, null);
+  }
+  const generic = reconcile(head('300'), [{ ...deposit, EAN: '0000000000099', SonderartikelS: false }]);
+  assert.equal(generic.positions[0].status, 'sale');
+  const { fingerprint, ...current } = policy();
+  const previous = R.defineTradeFotoSalesPolicy({ ...current, version: 8, statusRules: current.statusRules.filter(r => r.status !== 'deposit') });
+  const oldResult = reconcile(head('300'), [deposit], { policy: previous });
+  assert.equal(oldResult.canAggregate, false); assert.ok(oldResult.issues.includes('STATUS_REVIEW_REQUIRED'));
 });
 
 test('voucher issuance retains its source value while all goods metrics and cash margin stay zero', () => {

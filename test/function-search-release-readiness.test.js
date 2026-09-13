@@ -34,7 +34,7 @@ const FULL_ACCESS = Object.freeze({ authenticated: true, availableGateIds: ALL_G
 const FEATURE_CASES = Object.freeze([
   {
     id: "vacation",
-    removedGateIds: ["vacationsNavButton", "centralVacationsNavButton", "settingsVacationTab"],
+    removedGateIds: ["vacationsNavButton", "centralVacationsNavButton", "vacationSettings"],
     hiddenEntryIds: [
       "personnel.central-vacations",
       "personnel.vacation-accounts",
@@ -89,7 +89,7 @@ const FEATURE_CASES = Object.freeze([
   },
   {
     id: "integrations",
-    removedGateIds: ["settingsIntegrationsTab"],
+    removedGateIds: ["integrationSettings"],
     hiddenEntryIds: [
       "settings.export-profiles",
       "settings.import-profiles",
@@ -236,8 +236,8 @@ test("Block 5: Tastatur-, Screenreader-, Mobile- und Bewegungsreduktion sind vol
 
 test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenzfrei klassifiziert", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.92.42-beta");
-  assert.match(read("README.md"), /v0\.92\.42 Beta/);
+  assert.equal(packageJson.version, "0.92.43-beta");
+  assert.match(read("README.md"), /v0\.92\.43 Beta/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.36 Beta · Verkaufsberichte, Kassenklärung und Browsernavigation/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.34 Beta · PDF-Verkaufsanalysen und eigene Artikelbilder/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.31 Beta · Sichtbare Bewerbungsbewertungen im Mitarbeiterportal/);

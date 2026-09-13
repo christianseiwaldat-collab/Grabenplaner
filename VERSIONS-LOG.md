@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.43 Beta · Zentrale Datenbankimporte und geklärte Anzahlungen
+
+- Urlaub, Zeiterfassung und Import & Lohnverrechnung stehen kompakt als aufklappbare Gruppen unter Personal. Die drei Access-Datenbankquellen werden ausschließlich unter System → Datenbankimporte hochgeladen, geprüft und bewusst übernommen; alte Einstiege führen dorthin. Die technische Fußzeile zeigt die tatsächlich verwendete PostgreSQL-Version.
+- Die Bestell-Quelle ergänzt die bestehende geschützte Importhistorie. Reparaturfälle und ihre Herkunft bleiben bei späteren Exporten erhalten, auch wenn die Quelle sie nicht mehr enthält. Keine automatische Neuanlage von Umsatz oder CRM-/Personaldaten.
+- Anzahlungen verändern den Umsatz entsprechend dem Vorzeichen, erzeugen selbst keinen Waren-Rohertrag und lassen den Kassen-Rohertrag der Waren unverändert. Belegansicht und neue PDF-Berichte erklären die Behandlung; bereits erstellte PDFs bleiben erhalten.
+- PostgreSQL-Sicherungspaare unterstützen eine ausdrücklich konfigurierte Anzahl von Rückkehrpunkten. Der VPS behält zwei vollständige Paare; erst nach erfolgreicher neuer Sicherung und Integritätsprüfung wird der älteste Punkt entfernt. Nächtliche Wiederherstellungsprüfungen und die entfernte Offsite-Aufbewahrung bleiben bestehen.
+- Der App-Dienst erhält innerhalb fester Speichergrenzen ausreichend Platz für den Virenscanner. Die bisherige Grenze drosselte bereits dessen regelmäßige Funktionsprüfung und verursachte unter PostgreSQL Datenbank-Zeitüberschreitungen.
+
 ## v0.92.42 Beta · PostgreSQL-Prüfung unter laufender Nutzung
 
 - Kurze Pausen zwischen Abfragen einer offenen Transaktion gelten als normaler Betriebszustand. Der Monitor meldet weiterhin Transaktionen, die mindestens fünf Sekunden im Leerlauf bleiben, abgebrochene Transaktionen und Sperrwartezeiten. Fehlende oder widersprüchliche Messwerte ergeben einen Fehler.

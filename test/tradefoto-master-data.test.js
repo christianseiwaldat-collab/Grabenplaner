@@ -352,13 +352,15 @@ test("Block 3/6: bound records block unsafe undo; source floating decimals retai
   assert.equal((await f.engine.detail(precise.id, 1)).source.Punkte, "0.123456789012345");
 });
 
-test("Productive Block 1: master statements compile portably and registration does not activate an import", () => {
+test("Master statements compile portably; central source apply is explicit and Core mapping stays disabled", () => {
   assert.equal(SQLITE_IMPORT_MASTER_CATALOG.length, Object.keys(S).length);
   for (const entry of SQLITE_IMPORT_MASTER_CATALOG) assert.equal(compilePostgresqlDialectEntry(entry).strategy, "portable-generated", entry.statement.id);
   assert.ok(!/AUTOINCREMENT|PRAGMA|GLOB|json_|rowid|RAISE\(/iu.test(IMPORT_MASTER_SCHEMA_SQL));
   const catalog=require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG;
   assert.ok(SQLITE_IMPORT_MASTER_CATALOG.every(e=>catalog.some(c=>c.statement===e.statement)));
-  assert.match(fs.readFileSync(path.join(__dirname,'../server.js'),'utf8'),/createDataImportRuntime\(\{[^}]*allowApply: false/);
+  const serverSource=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  assert.match(serverSource,/createDataImportRuntime\(\{[^}]*allowApply: true[^}]*sharedPayloads: true/);
+  assert.match(serverSource,/createDataImportMappingRuntime\(\{[^}]*allowMapping: false/);
 });
 
 test('Productive Block 2: mapping directory is bounded, exact-keyed, class-protected and preserves leading zeros', async t => {

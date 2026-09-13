@@ -268,7 +268,7 @@ test('reviewed cash rules flow from an unchanged sealed publication through rece
   const { createCashPublications } = require('../lib/persistence/repositories/cash-publications');
   const publications = createCashPublications({ access: f.app.provider, protection: f.protection, scopeId: f.actor.scopeId });
   const publication = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
-  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 8);
+  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 9);
   const before = C.canonical(publication.row), runtime = f.history();
   const history = await runtime.run(f.get, w => w.search(f.query()));
   assert.equal(history.totals.gross, '1273.18'); assert.equal(history.coverage.counts.review, 0);
@@ -325,6 +325,50 @@ test('reviewed cash rules flow from an unchanged sealed publication through rece
   assert.deepEqual(await jobs.download(f.session, job.id), pdf);
   const after = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
   assert.equal(C.canonical(after.row), before); assert.equal(after.data.policy.version, 1);
+});
+
+test('deposit receipt and later redemption preserve revenue across dates and source margins through encrypted PDFs', async t => {
+  const f = await fixture(t), paid = rows(), redeemed = rows({ count: 2 });
+  const deposit = { EAN: '0000000000098', Sortiment: 170102, SonderartikelS: true, VK_Preis: '300', RohertragDM: null, UMarke: 'Deposits' };
+  paid.Umsatz_KASSE[0].RechnungsBetrag = '300'; Object.assign(paid.Umsatz_Kasse_Details[0], deposit);
+  Object.assign(redeemed.Umsatz_KASSE[0], { Bonnr: '2', Bondatum: '2010-02-02T00:00:00.000', RechnungsBetrag: '300' });
+  redeemed.Umsatz_Kasse_Details.forEach((item, i) => Object.assign(item, { Bonnr: '2', Bondatum: redeemed.Umsatz_KASSE[0].Bondatum,
+    RepID: '00000000-0000-0000-0000-' + String(i + 2).padStart(12, '0') }));
+  Object.assign(redeemed.Umsatz_Kasse_Details[0], { VK_Preis: '600', Sortiment: 130, UMarke: 'Sony', RohertragDM: '100', DEK_A: null });
+  Object.assign(redeemed.Umsatz_Kasse_Details[1], deposit, { VKMenge: '-1', RohertragDM: '999.99' });
+  const data = { Umsatz_KASSE: [paid, redeemed].flatMap(d => d.Umsatz_KASSE), Umsatz_Kasse_Details: [paid, redeemed].flatMap(d => d.Umsatz_Kasse_Details) };
+  const before = C.canonical(data), id = await f.build(data); await f.activate(f.request(id)); f.session.permissions.push('sales:analytics:margin:read');
+  const runtime = f.history(), metadata = await runtime.run(f.get, w => w.reports.metadata());
+  const reportQuery = extra => f.query({ groupBy: ['productGroup'], metrics: ['grossRevenue', 'netRevenue', 'grossMargin', 'quantity', 'receiptCount'], ...extra });
+  async function report(extra) {
+    const input = reportQuery(extra); let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
+    while (result.analysis.cursor) result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
+    return result.report;
+  }
+  const initial = await report({ dateTo: '2010-01-31' }), later = await report({ dateFrom: '2010-02-01' }), all = await report({});
+  for (const [metric, first, second, total] of [['grossRevenue', '300.00', '300.00', '600.00'], ['netRevenue', '250.00', '250.00', '500.00'],
+    ['grossMargin', '0.00', '100.00', '100.00'], ['quantity', '0.000000', '1.000000', '1.000000'], ['receiptCount', '1', '1', '2']]) {
+    assert.equal(initial.total.metrics[metric].current, first, metric); assert.equal(later.total.metrics[metric].current, second, metric); assert.equal(all.total.metrics[metric].current, total, metric);
+  }
+  assert.equal(all.coverage.current.review, 0); assert.equal(all.coverage.current.marginMissing, 0);
+  const sony = await report({ manufacturerIds: ['SONY'] });
+  assert.equal(sony.total.metrics.grossRevenue.current, '600.00'); assert.equal(sony.total.metrics.grossMargin.current, '100.00');
+  const search = await runtime.run(f.get, w => w.search(f.query())); assert.equal(search.coverage.counts.deposits, 2);
+  const receipts = await runtime.run(f.get, w => w.receipts.search(f.query({ kind: 'receipts' })));
+  const docs = await runtime.run(f.get, w => w.receipts.documents({ ids: receipts.items.map(item => item.id) }));
+  assert.equal(docs.items.flatMap(item => item.lines).filter(item => item.status === 'deposit').length, 2);
+  const receiptPdf = await require('../lib/receipt-info-pdf').createReceiptInfoPdf({ items: docs.items, sourceLabel: 'Synthetic deposits' });
+  assert.match(await reportPdfText(receiptPdf), /Anzahlung \/ Verrechnung · ohne Rohertrag/);
+  const jobs = require('../lib/persistence/repositories/sales-report-jobs').createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime, resolvePrincipal: f.get, scope: f.actor.scopeId });
+  const job = await jobs.create(f.session, { title: 'Synthetische Anzahlungsprüfung', query: reportQuery({}) });
+  await jobs.tick(); await jobs.tick(); const pdf = await jobs.download(f.session, job.id), text = await reportPdfText(pdf);
+  assert.match(text, /600,00/); assert.match(text, /100,00/); assert.doesNotMatch(text, /Offene Belegprüfungen/);
+  assert.equal(C.canonical(data), before);
+  if (process.env.CASH_DEPOSIT_PDF_PREVIEW_DIR) {
+    const fs = require('node:fs'), path = require('node:path'); fs.mkdirSync(process.env.CASH_DEPOSIT_PDF_PREVIEW_DIR, { recursive: true });
+    fs.writeFileSync(path.join(process.env.CASH_DEPOSIT_PDF_PREVIEW_DIR, 'receipt-deposit.pdf'), receiptPdf);
+    fs.writeFileSync(path.join(process.env.CASH_DEPOSIT_PDF_PREVIEW_DIR, 'sales-analysis-deposit.pdf'), pdf);
+  }
 });
 
 test('voucher issuance followed by a goods purchase and redemption counts the actual goods sale exactly once', async t => {

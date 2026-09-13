@@ -37,7 +37,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.42 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.43 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1552,7 +1552,6 @@
                 <button class="text-button" id="salesArticleSearchReset" type="button" title="Suche zurücksetzen" aria-label="Suche zurücksetzen">↺</button>
               </form>
               <button class="secondary-button hidden" id="salesArticleActionsLogButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog">Meine Aktionen</button>
-              <button class="secondary-button hidden" id="salesArticleImportButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleImportDialog">TradeFoto-Import</button>
               <button class="primary-button hidden" id="salesArticleCreateButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">+ Artikel anlegen</button>
             </div>
           </header>
@@ -2142,9 +2141,6 @@
             <button class="settings-tab active" id="settingsGeneralTab" data-settings-tab="general">Grundeinstellungen</button>
             <button class="settings-tab" id="settingsScheduleTab" data-settings-tab="schedule">Dienstplanung</button>
             <button class="settings-tab" id="settingsPersonnelTab" data-settings-tab="personnel">Personal</button>
-            <button class="settings-tab" id="settingsVacationTab" data-settings-tab="vacation">Urlaub</button>
-            <button class="settings-tab" id="settingsTimeTrackingTab" data-settings-tab="timeTracking">Zeiterfassung</button>
-            <button class="settings-tab" id="settingsIntegrationsTab" data-settings-tab="integrations">Import &amp; Lohnverrechnung</button>
             <button class="settings-tab" id="settingsAccessTab" data-settings-tab="access">Zugänge</button>
             <button class="settings-tab" id="settingsRightsTab" data-settings-tab="rights">Rechtemanagement</button>
             <button class="settings-tab hidden" id="settingsDataProtectionTab" data-settings-tab="dataProtection">Datenschutz</button>
@@ -2717,6 +2713,15 @@
           </section>
 
           <section id="backupSettings" class="settings-section settings-two-column">
+            <details class="settings-accordion full-settings-card hidden" id="databaseImportSettings">
+              <summary><span class="card-icon">Import</span><span class="settings-accordion-copy"><strong>Datenbankimporte</strong><small>Kasse, TradeFoto-Stammdaten und Bestelldaten sicher aktualisieren.</small></span><span class="settings-accordion-chevron" aria-hidden="true">›</span></summary>
+              <div class="settings-accordion-body">
+                <p class="settings-note">Die Access-Dateien werden zuerst geprüft. Übernahmen werden protokolliert; eigene Artikelbilder und manuelle GP-Daten bleiben erhalten.</p>
+                <div class="database-import-article-action"><button class="secondary-button hidden" id="salesArticleImportButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleImportDialog">TradeFoto-Artikelstamm aktualisieren</button><p class="settings-note">Artikel, Artikelnummern und Preise aus Trade_Daten.accdb vor der Übernahme vergleichen.</p></div>
+                <details id="dataImportPanel" class="data-import-panel hidden"><summary><strong>Quelldaten importieren</strong></summary><div data-import-body></div></details>
+                <details id="importMappingPanel" class="data-import-panel hidden"><summary><strong>Stammdaten-Zuordnungen</strong></summary><div data-mapping-body></div></details>
+              </div>
+            </details>
             <div class="settings-card full-settings-card server-diagnostics-card hidden" id="serverDiagnosticsCard">
               <div class="card-heading"><div class="card-icon">Server</div><div><h2>Serverzustand &amp; Wiederherstellbarkeit</h2><p>Zeigt Live- und Betriebsbereitschaft, lokale Sicherungen, verschlüsselte Offsite-Kopien sowie automatische Prüf- und Wiederherstellungsnachweise.</p></div></div>
               <div class="server-diagnostics" id="serverDiagnostics"><p class="settings-note">Diagnosedaten werden geladen.</p></div>

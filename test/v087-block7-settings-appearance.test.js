@@ -130,9 +130,10 @@ test("v0.87 Block 7: Grundeinstellungen verwenden Accordions und eine globale nu
   assert.doesNotMatch(script, /querySelectorAll\("button\[data-page-theme-choice\]"\)\.forEach\(\(button\) => button\.addEventListener/);
 
   assert.doesNotMatch(html, /data-settings-tab="usbProvisioning"/);
-  assert.match(script, /function integrateLegacyUsbProvisioning\(\)[\s\S]*elements\.backupSettings\.append\(details\)/);
+  assert.doesNotMatch(script, /Lokale Altinstallation auf USB-Stick/);
+  assert.match(html, /id="databaseImportSettings"[\s\S]*<strong>Datenbankimporte<\/strong>/);
   assert.match(script, /function initializeSettingsCardDisclosures\(\)[\s\S]*settings-field-disclosure-chevron[\s\S]*chevron\.textContent = "›"/);
-  assert.ok(script.indexOf("integrateLegacyUsbProvisioning();") < script.indexOf("initializeSettingsCardDisclosures();"));
+  assert.ok(script.indexOf("integratePersonnelSettings();") < script.indexOf("initializeSettingsCardDisclosures();"));
   assert.match(styles, /\.portal-active input\[type="checkbox"\] \{ width:18px; min-width:18px; height:18px; min-height:18px/);
   assert.match(styles, /\.portal-user-controls \{ display:grid; grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });

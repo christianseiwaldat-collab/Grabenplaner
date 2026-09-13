@@ -452,12 +452,65 @@ Rohertrag und die Grenzen der Steuerausnahme ab. Protokolle:
 `tmp/cash-used-goods-final-integration-tests.log`,
 `tmp/cash-used-goods-history-tests.log`, `tmp/cash-used-goods-probe.log`.
 
+## Ergänzung: bestätigte Anzahlungen, Artikel 98 (13.09.2026)
+
+Stand: lokal umgesetzt und geprüft, noch nicht veröffentlicht.
+
+Der Benutzer bestätigt für Artikel 98: Eine positive Menge erfasst eine bereits
+bezahlte Anzahlung als Umsatz. Eine negative Menge verrechnet die Anzahlung und
+vermindert den Umsatz dieses späteren Belegs. Beide Richtungen erzeugen keinen
+Rohertrag. Die historischen Kassen-Roherträge der Warenpositionen bleiben
+unverändert. Gutscheine behalten ihre gesonderte Behandlung als Zahlungsmittel.
+
+Die effektive Kassenregel `cash-confirmed-20260911`, Version 9, verwendet dafür
+den eigenen Status `deposit`. Sie gilt für die bestätigte Artikelnummer
+`0000000000098`, WGR 170102, Steuerkennzeichen 20 und die bestätigten
+Statuskombinationen. Andere Verrechnungsartikel und unbekannte Merkmale werden
+nicht durch diese Regel freigegeben. Die UID-Zwischenbuchung in derselben
+Warengruppe bleibt eigenständig. Der gespeicherte Steuerwert und alle
+Quellbeträge werden unverändert verwendet.
+
+Anzahlungen bleiben bei ihrer eigenen Warengruppe und Marke. Ihre signierten
+Umsätze und betroffenen Belege zählen zur jeweiligen Auswahl; sie zählen nicht
+als verkaufte Warenstücke. Ihr Rohertrag ist auch bei fehlenden oder abweichenden
+Quell-Rohertragswerten null. Die Belegansicht und Beleg-PDF kennzeichnen sie mit
+„Anzahlung / Verrechnung · ohne Rohertrag“. Berichts-PDFs erklären die Behandlung.
+
+Synthetisches Beispiel über zwei Buchungstage: Eine Anzahlung von 300 EUR bringt
+zunächst 300 EUR Bruttoumsatz und keinen Rohertrag. Bei einem späteren Warenkauf
+über 600 EUR mit 100 EUR Kassen-Rohertrag führt die Verrechnung von 300 EUR zu
+300 EUR Bruttoumsatz und weiterhin 100 EUR Rohertrag. Über beide Tage ergeben
+sich 600 EUR Umsatz, 100 EUR Rohertrag und ein verkauftes Warenstück. Eine reine
+Herstellerauswahl enthält die jeweils zugeordneten Warenpositionen; die
+Anzahlung wird nicht zusätzlich auf deren Hersteller verteilt.
+
+Die begrenzte lesende PostgreSQL-Prüfung vom 13.09.2026, 16:57:51 UTC, hat die
+lokalen Kandidatenmodule ausschließlich im Speicher eines eigenen Leseprozesses
+verwendet. Ergebnis: alle 40 passenden Positionen der zuvor geprüften
+Sony-Januarabfrage sind mit dieser Regel geklärt. Der bisher betroffene Beleg
+stimmt vollständig mit dem gespeicherten Kopf überein; seine Waren-Roherträge
+bleiben erhalten. Der versiegelte Quellstand und der vorhandene Berichtsauftrag
+wurden anschließend auf Unverändertheit geprüft. Keine Produktivdatei,
+Datenbankzeile oder gespeicherte PDF wurde geändert.
+
+Prüfung: 28 Regel-/Modelltests bestanden. Von 59 Integrations-, Beleglayout- und
+Berichts-PDF-Tests bestanden zunächst 58; der neue Test verwendete zunächst
+einen falschen Testaufruf für Belegdokumente. Nach Korrektur auf die bestehende
+Beleg-API bestand dieser gezielte Test einschließlich verschlüsselter PDF und
+beider Buchungstage. Damit sind alle 87 unterschiedlichen Tests erfolgreich
+abgedeckt; es gab keinen zusätzlichen vollständigen Wiederholungslauf.
+Beide synthetischen Belegseiten und alle sieben Berichtsseiten wurden gerendert
+und visuell geprüft. Der Persistenzaudit meldet keine Phasengrenzverletzungen.
+Die Kandidatenprüfung ist unter `tmp/build-cash-deposit-proof.py` nachvollziehbar;
+die PDF-Prüfmuster liegen in `tmp/pdfs/cash-deposit-20260913/`.
+
 ## Weiterer Stand
 
 Nicht bestätigte weitere Statuskombinationen, Steuercodes und Belegabweichungen
 werden weiterhin als Prüfgründe ausgewiesen. Die Regeln für Hersteller-Sofortrabatt
-und Gutscheineinlösung sowie die gesonderte UID-Zwischenbuchung werden nicht
-pauschal auf weitere Anzahlungen oder andere Verrechnungsartikel übertragen.
+und Gutscheineinlösung, die bestätigte Anzahlung für Artikel 98 sowie die
+gesonderte UID-Zwischenbuchung werden nicht pauschal auf weitere
+Verrechnungsartikel übertragen.
 
 Eine Benutzerfunktion zum fachlichen Klären oder Freigeben einzelner Belege
 gibt es derzeit nicht. „Kassenberichte & Belegsuche“ zeigt über „Öffnen“ die
