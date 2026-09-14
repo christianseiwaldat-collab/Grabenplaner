@@ -4,7 +4,7 @@
 
 Für ausdrücklich migrierte Ubuntu-Server verwenden GP und seine Hintergrundarbeiter zwei Datenbanken: `grabenplaner_core` für Planung, Personal, Rechte und CRM sowie `grabenplaner_sales` für Verkaufsdaten. Eine eigene PostgreSQL-18-Instanz läuft ausschließlich auf `127.0.0.1:55486` als `grabenplaner-db`; bestehende andere Datenbankinstanzen bleiben getrennt. Neue Standardinstallationen verwenden weiterhin SQLite. Die folgenden SQLite-Anleitungen gelten nur vor einer solchen Migration.
 
-Die root-geschützten Einstiege `server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh prepare` und `execute` erwarten als zweites Argument den SHA-256 des installierten `grabenplaner-server-manifest.json`. Vorher sind das offizielle Release und Offsite-Modul 9 einzuspielen. Das Wartungsfenster umfasst einen sauberen GP-Stopp, eine frische SQLite-/Dateiquelle, die vollständige Übernahme mit Inhaltsprüfung sowie die erste gemeinsame Sicherung. Der Ablauf veröffentlicht PostgreSQL erst nach diesem Sicherungspunkt. Eine alleinige Änderung von `DB_PROVIDER` ist kein Migrationsweg.
+Die root-geschützten Einstiege `server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh prepare` und `execute` erwarten als zweites Argument den SHA-256 des installierten `grabenplaner-server-manifest.json`. Vorher sind das offizielle Release und das dazugehörige Offsite-Modul einzuspielen; der Migrationsvertrag unterstützt Modul 9 und 10. Das Wartungsfenster umfasst einen sauberen GP-Stopp, eine frische SQLite-/Dateiquelle, die vollständige Übernahme mit Inhaltsprüfung sowie die erste gemeinsame Sicherung. Der Ablauf veröffentlicht PostgreSQL erst nach diesem Sicherungspunkt. Eine alleinige Änderung von `DB_PROVIDER` ist kein Migrationsweg.
 
 Die Daten liegen unter `/var/lib/grabenplaner-postgresql/data/cluster`; Schlüssel und Geschäftszugänge werden getrennt in `/etc/grabenplaner/postgresql-application.json` und `/etc/grabenplaner/postgresql-operations.json` verwaltet. Die Anwendung erhält vier Geschäftszugänge, keine administrativen Wiederherstellungsrechte. `/var/lib/grabenplaner/data/postgresql-pair.json` bindet beide Datenbanken an dieselbe Umgebung und Quelle. Diese Dateien sind keine Vorlagen zum manuellen Ausfüllen oder Kopieren aus Testumgebungen.
 
@@ -314,7 +314,7 @@ sudo grabenplaner-offsite-rebind-rclone \
   --yes
 ```
 
-Nach einer erfolgreich abgeschlossenen OAuth-Neuanbindung und nach einem erfolgreichen App-Update wird automatisch ein neuer Assurance-Lauf über systemd in die Warteschlange gestellt. Zusätzlich startet `grabenplaner-offsite-assurance.timer` täglich die feste Instanz `grabenplaner-offsite-assurance@scheduled-nightly.service`. Der persistente Timer holt einen verpassten Lauf nach und verteilt den Start über eine zufällige Verzögerung. Eine globale Assurance-Sperre sowie die bestehenden Wartungssperren verhindern Parallelbetrieb mit Update, Upload oder Wiederherstellung.
+Nach einer erfolgreich abgeschlossenen OAuth-Neuanbindung und nach einem erfolgreichen App-Update wird automatisch ein neuer Assurance-Lauf vorgemerkt. Kompatible kurze Deploys lassen den vollständigen Nachweis vom Nachtlauf abarbeiten; der volle Updateablauf startet ihn direkt. `grabenplaner-offsite-assurance.timer` startet täglich die feste Instanz `grabenplaner-offsite-assurance@scheduled-nightly.service`. Der persistente Timer holt einen verpassten Lauf nach und verteilt den Start über eine zufällige Verzögerung. Eine globale Assurance-Sperre sowie die bestehenden Wartungssperren verhindern Parallelbetrieb mit Update, Upload oder Wiederherstellung.
 
 Die nächtliche Ausführung bedeutet keine automatische produktive Wiederherstellung. Sie arbeitet nur im isolierten Testbereich, besitzt harte Zeitgrenzen und entfernt temporäre Laufdaten auch nach einem Fehler. Eine echte Rücksicherung in den Live-Pfad bleibt weiterhin ein ausdrücklich beaufsichtigter Root-Vorgang.
 
@@ -356,11 +356,14 @@ Die systemd-Dienste verwenden einen gemeinsamen Wartungs- und Repository-Lock. E
 
 | Aufgabe | systemd-Einheit | Standardzeit |
 |---|---|---|
-| verifizierten Sicherungspunkt vorbereiten | `grabenplaner-offsite-prepare.service` | durch Upload oder Vorab-Update ausgelöst |
-| verschlüsselt hochladen und Aufbewahrung anwenden | `grabenplaner-offsite-upload.timer` | täglich etwa 02:35 Uhr, mit zufälliger Verzögerung |
+| Sicherungspunkt, verschlüsselter Upload, Aufbewahrung und vollständiger Recovery-Assurance-Lauf samt App-Smoke | `grabenplaner-offsite-assurance.timer` | täglich ab 03:45 Uhr, bis 90 Minuten zufällige Verzögerung, persistent |
+| zusätzlicher täglicher Upload im Vorgängerbetrieb | `grabenplaner-offsite-upload.timer` | nur vor Abschluss des Übergangs auf Modul 10; anschließend deaktiviert |
 | Repository vollständig lesen und prüfen | `grabenplaner-offsite-check.timer` | monatlich am 1. etwa 04:15 Uhr, mit zufälliger Verzögerung |
 | isolierte Testwiederherstellung | `grabenplaner-offsite-restore-test.timer` | quartalsweise am 2. Januar, April, Juli und Oktober etwa 05:15 Uhr, mit zufälliger Verzögerung |
-| vollständiger Recovery-Assurance-Lauf samt App-Smoke | `grabenplaner-offsite-assurance.timer` | täglich, persistent und mit zufälliger Verzögerung |
+
+Der gemeinsame Nachtablauf gilt erst, wenn Anwendungspaket und installiertes Offsite-Modul beide Vertragsversion 10 besitzen. Der Installer erhält beim vorgelagerten Modulwechsel den alten Zeitplan. Der Updater prüft nach dem App-Tausch den aktivierten Assurance-Timer, bevor er den zusätzlichen Upload-Timer deaktiviert. Ein Code-Rollback stellt den zum Vorgänger passenden Zeitplan wieder her. Die Betriebsprüfung kontrolliert diese Kombination; Upload und Vorbereitung bleiben als interne Schritte des gemeinsamen Laufs verfügbar. Die zwei lokalen Sicherungspaare sowie Offsite-Aufbewahrung, Monats- und Quartalsprüfungen bleiben erhalten.
+
+Der Sicherungspunkt verwendet weiterhin einen kurzen kontrollierten GP-Dienststopp. Eine Sicherung ohne Webdienststopp benötigt einen gesonderten Konsistenznachweis und ist damit noch nicht eingeführt.
 
 Die feste Restic-Aufbewahrung beträgt **14 tägliche, 8 wöchentliche und 12 monatliche Sicherungsstände**. Upload, Vollprüfung und Restore-Test sind getrennte Dienste. Ein fehlgeschlagener Upload löst keine Aufräumaktion aus. Prüffehler werden nicht automatisch repariert; vor einem manuellen `unlock`, `forget`, `prune` oder einer Wiederherstellung muss ausgeschlossen sein, dass noch ein anderer Vorgang läuft.
 
@@ -553,7 +556,7 @@ Der Einrichtungsassistent erzeugt den AMU-Schlüssel bei einer neuen, leeren Ins
 
 Auch der Dienststeuerungs-Token wird zufällig erzeugt und bei einer erneuten Einrichtung beibehalten. WinSW verwendet ihn ausschließlich über den lokalen Stop-Helfer, damit der Server vor dem Dienstende ein Abschlussbackup und einen WAL-Checkpoint ausführt. Der normale Browserzugriff kann diesen Endpunkt nicht verwenden.
 
-Der Servermodus wird nicht im Browser aktiviert. Auch die öffentliche Adresse, Proxy-Vertrauen und Produktionskennung können dort nicht verändert werden. Updates, Neustarts und Datenbankimporte erfolgen ausschließlich in einem Wartungsfenster am Server.
+Der Servermodus wird nicht im Browser aktiviert. Auch die öffentliche Adresse, Proxy-Vertrauen und Produktionskennung können dort nicht verändert werden. Updates, Neustarts und Datenbankwiederherstellungen erfolgen ausschließlich als kontrollierte Serverwartung.
 
 ## Betriebsbereitschaft und Überwachung
 

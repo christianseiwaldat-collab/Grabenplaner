@@ -525,7 +525,7 @@ offsite_record_assurance_queue() {
 
 # A new offsite module can precede the matching application package. The
 # runtime-5/module-7 predecessor retains the full workflow; module 8 adds short
-# deploys and module 9 additionally requires the paired PostgreSQL operations.
+# deploys; modules 9/10 also require the paired PostgreSQL operations.
 offsite_core_deploy_workflow() {
   "$OFFSITE_NODE" - "$OFFSITE_APP_ROOT" <<'NODE'
 const fs = require("node:fs"), path = require("node:path");
@@ -537,7 +537,7 @@ const read = name => {
 };
 const runtime = read("server-tools/linux/runtime-schema.json");
 const moduleVersion = read("server-tools/linux/offsite/module-schema.json").moduleVersion;
-if (runtime.deploymentSchemaVersion !== 5 || ![7, 8, 9].includes(moduleVersion)) process.exit(1);
+if (runtime.deploymentSchemaVersion !== 5 || ![7, 8, 9, 10].includes(moduleVersion)) process.exit(1);
 if (moduleVersion >= 8) {
   for (const name of ["lib/backup-maintenance.js", "server-tools/linux/lib/deploy-policy.js",
     "server-tools/linux/lib/deferred-backups.js", "server-tools/linux/lib/backup-metadata.js"]) {
@@ -545,7 +545,7 @@ if (moduleVersion >= 8) {
     if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.uid !== 0 || (info.mode & 0o022)) process.exit(1);
   }
 }
-if (moduleVersion === 9) {
+if (moduleVersion >= 9) {
   for (const name of ['server-tools/linux/lib/postgresql-operations.js',
     'server-tools/linux/recovery/lib/postgresql-recovery.js',
     'server-tools/linux/recovery/lib/postgresql-recovery-worker.js']) {

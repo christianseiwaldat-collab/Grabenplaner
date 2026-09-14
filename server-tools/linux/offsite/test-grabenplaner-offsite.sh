@@ -113,7 +113,18 @@ if [[ -d "$OFFSITE_RECOVERY_SET_ROOT" && ! -L "$OFFSITE_RECOVERY_SET_ROOT" \
 else
   fail "Pending-Recovery-Sets" "Ablage fehlt oder besitzt unsichere Rechte"
 fi
-for timer in grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
+source "$OFFSITE_APP_ROOT/server-tools/linux/lib/common.sh"
+schedule=legacy
+if declare -F gp_nightly_schedule_mode >/dev/null; then
+  schedule="$(gp_nightly_schedule_mode "$OFFSITE_APP_ROOT" "$OFFSITE_NODE")" || fail "Sicherungszeitplan" "nicht verifizierbar"
+fi
+scheduled_timers=(grabenplaner-offsite-assurance.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
+if [[ "$schedule" == single ]]; then
+  if systemctl is-enabled --quiet grabenplaner-offsite-upload.timer || systemctl is-active --quiet grabenplaner-offsite-upload.timer; then
+    fail "Sicherungszeitplan" "zusaetzlicher taeglicher Lauf noch aktiv"
+  else ok "Sicherungszeitplan" "gemeinsamer naechtlicher Lauf"; fi
+else scheduled_timers+=(grabenplaner-offsite-upload.timer); fi
+for timer in "${scheduled_timers[@]}"; do
   if systemctl is-enabled --quiet "$timer" && systemctl is-active --quiet "$timer"; then ok "Timer $timer" "aktiv"; else fail "Timer $timer" "nicht aktiv"; fi
 done
 

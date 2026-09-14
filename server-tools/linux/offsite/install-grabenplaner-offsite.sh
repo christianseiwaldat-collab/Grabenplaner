@@ -258,7 +258,7 @@ if [[ -e "$OFFSITE_MODULE_ROOT" || -L "$OFFSITE_MODULE_ROOT" ]]; then
   installed_module_version="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/installed-contract.json" <<'NODE'
 const fs = require("node:fs");
 const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-if (![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(value.moduleVersion)) process.exit(1);
+if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(value.moduleVersion)) process.exit(1);
 process.stdout.write(String(value.moduleVersion));
 NODE
 )" || offsite_die "Die installierte Offsite-Modulversion ist nicht migrationsfaehig."
@@ -862,7 +862,14 @@ else
 fi
 systemctl daemon-reload
 systemctl enable --now grabenplaner-offsite-assurance-control.socket \
-  grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
+  grabenplaner-offsite-assurance.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
+# A module can precede its matching app. Keep the predecessor schedule until
+# the new Core is installed; the updater converges it after the application swap.
+if declare -F gp_configure_nightly_backups >/dev/null; then
+  gp_configure_nightly_backups "$OFFSITE_APP_ROOT" "$OFFSITE_NODE"
+else
+  systemctl enable --now grabenplaner-offsite-upload.timer >/dev/null
+fi
 if [[ "$validated_provider" == "google_drive" ]]; then
   systemctl enable --now grabenplaner-offsite-target-control.socket >/dev/null
 else

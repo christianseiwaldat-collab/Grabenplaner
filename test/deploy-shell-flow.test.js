@@ -54,7 +54,7 @@ printf '%s\\n' "$trusted_package_verifier" "$installed_runtime_verifier" "$verif
   });
 }
 
-for (const scenario of ["short", "full", "failed-readiness"]) {
+for (const scenario of ["short", "full", "failed-readiness", "failed-schedule"]) {
   test(`actual updater orchestration: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     assert.ok(source.indexOf(entry) > 0);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-shell-"));
@@ -107,6 +107,7 @@ finish_deploy_phase() { :; }
 gp_begin_update_backup_ownership() { printf 'owner\\n' >> "$EVENTS_FILE"; }
 gp_stop_service() { printf 'stop\\n' >> "$EVENTS_FILE"; }
 gp_start_service() { printf 'start\\n' >> "$EVENTS_FILE"; }
+gp_configure_nightly_backups() { printf 'schedule-converged\\n' >> "$EVENTS_FILE"; ${scenario === "failed-schedule" ? "return 1" : ":"}; }
 gp_wait_ready() { ${scenario === "failed-readiness" ? "return 1" : ":"}; }
 gp_apply_app_permissions() { :; }
 start_database_lock() { printf 'database-lock\\n' >> "$EVENTS_FILE"; }
@@ -127,7 +128,7 @@ ${workflow}
     write("run.sh", script);
     const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 15000 });
     const events = fs.readFileSync(path.join(root, "events"), "utf8").trim().split("\n");
-    if (scenario === "failed-readiness") {
+    if (["failed-readiness", "failed-schedule"].includes(scenario)) {
       assert.notEqual(result.status, 0); assert.ok(events.includes("failed")); assert.ok(!events.includes("commit")); assert.ok(!events.includes("queue-assurance"));
     } else {
       assert.equal(result.status, 0, result.stderr);
@@ -136,6 +137,8 @@ ${workflow}
       assert.equal(events.includes("offsite-transfer"), scenario === "full");
       assert.equal(events.includes("start-assurance"), scenario === "full");
       assert.ok(events.indexOf("owner") < events.indexOf("stop"));
+      assert.ok(events.indexOf("schedule-converged") > events.indexOf("start"));
+      assert.ok(events.indexOf("schedule-converged") < events.indexOf("short-checks"));
       assert.ok(events.indexOf("short-checks") < events.indexOf("success-receipt"));
       assert.ok(events.indexOf("commit") < events.indexOf("queue-assurance"));
       assert.ok(fs.existsSync(path.join(root, "previous/old.txt")));

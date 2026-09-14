@@ -36,8 +36,10 @@ async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}) 
   const state={session:base(),failAfter:0,messages:0},getSession=async()=>state.session,keyVault=vault();
   const readSource=options=>readTradeFotoFullSource({...options,send:async message=>{
     state.messages++;state.beforeMessage?.(message);if(state.failAfter&&state.messages===state.failAfter)throw new C.DataImportError('IMPORT_SOURCE_INTERRUPTED',409);
-    await options.onMessage(message);
+    const result=await options.onMessage(message);
+    await state.afterMessage?.(message);
     if(message.type==='complete'&&state.failAfterComplete)throw new C.DataImportError('IMPORT_SOURCE_INTERRUPTED',409);
+    return result;
   },readerFactory:readerFactory(kind,values,counts)});
   const options={access:app.provider,vault:keyVault,allowApply,readSource,clock:()=>TIME};
   let runtime=createDataImportRuntime(options);
@@ -311,6 +313,26 @@ test('Productive Block 1: interrupted staging resumes the same source across run
   const count=f.database.prepare('SELECT COUNT(*) n FROM data_import_runs').get().n;
   await f.upload();assert.equal(f.database.prepare('SELECT COUNT(*) n FROM data_import_runs').get().n,count);
 });
+test('maintenance persists an interrupted import, drains it, and resumes at the committed offset without duplicates',async t=>{
+  const {createDataImportLifecycle}=require('../lib/data-import-lifecycle');
+  const values={FILIALEN:Array.from({length:401},(_,i)=>rawMaster('FILIALEN',{FilialID:String(i+1)}))};
+  const f=await fixture(t,{values});f.options.lifecycle=createDataImportLifecycle();f.reload();
+  let release,started;const pending=new Promise(r=>release=r),entered=new Promise(r=>started=r);
+  f.state.afterMessage=async m=>{if(m.type==='rows'){started();await pending;}};
+  const rejected=assert.rejects(f.upload(),code('IMPORT_SOURCE_INTERRUPTED'));await entered;
+  const stopping=f.runtime.stop();let drained=false;void stopping.then(()=>{drained=true;});
+  await new Promise(r=>setImmediate(r));assert.equal(drained,false);
+  release();await rejected;await stopping;
+  let source=(await f.runtime.list(f.getSession)).items[0];
+  assert.equal(source.status,'interrupted');assert.equal(source.complete,false);
+  const first=source.tables.find(t=>t.name==='FILIALEN');assert.equal(first.run.receivedRows,200);
+  await assert.rejects(f.upload(),code('IMPORT_MAINTENANCE'));
+  f.state.afterMessage=null;const offsets=[];f.state.beforeMessage=m=>{if(m.type==='rows')offsets.push(m.startRow);};
+  f.options.lifecycle=createDataImportLifecycle();f.reload();source=await f.upload();
+  assert.equal(source.complete,true);assert.deepEqual(offsets,[201,401]);
+  assert.equal(f.database.prepare('SELECT COUNT(*) AS n FROM data_import_rows').get().n,401);
+});
+
 test('Productive Block 1: changed owners cannot list/read/advance another account source and revoked rights stop staging',async t=>{
   const f=await fixture(t);const source=await f.upload();f.state.session={...base(),employeeNumber:'synthetic-2',accountId:'personal-2'};
   assert.equal((await f.runtime.list(f.getSession)).items.length,0);

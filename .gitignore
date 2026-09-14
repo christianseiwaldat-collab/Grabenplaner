@@ -2,6 +2,7 @@ node_modules/
 runtime/
 release/
 data/
+import-jobs/
 backups/
 usb-backups/
 data/*.db

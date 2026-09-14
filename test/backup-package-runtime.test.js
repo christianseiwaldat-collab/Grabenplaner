@@ -12,7 +12,7 @@ const { createAmuStorage } = require("../lib/amu-storage");
 const root = path.resolve(__dirname, "..");
 const runtimeEntries = ["backup.js", "lib/backup-maintenance.js", "scripts/run-background-backup.js", "scripts/manage-local-backup-archive.js"];
 const excluded = ["scripts/verify-tradefoto-full-import.mjs", "scripts/unapproved.js", "scripts/run-background-backup.js/extra",
-  "scripts/run-background-backup.js.env", ".env", "data/private.db", "tmp/report.json"];
+  "scripts/run-background-backup.js.env", ".env", "data/private.db", "tmp/report.json", "import-jobs/private.source"];
 function verifierPolicy() {
   const source = fs.readFileSync(path.join(root, "server-tools/linux/lib/verify-package.js"), "utf8");
   const definitions = [source.match(/^const backupRuntimeScripts = new Set\([\s\S]*?^\]\);/m)?.[0] || ""];

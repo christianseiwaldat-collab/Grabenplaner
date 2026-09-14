@@ -318,6 +318,38 @@ process.stdout.write(String(compare(parse(current), parse(candidate))));
 NODE
 }
 
+# Module setup can precede the application swap. Only the matching pair uses
+# one nightly run. A rollback to the predecessor restores its expected timers.
+gp_nightly_schedule_mode() {
+  local app="${1:?App-Verzeichnis fehlt}" node="${2:?Node-Laufzeit fehlt}"
+  "$node" - "$app" <<'NODE'
+const fs=require('node:fs'),path=require('node:path');
+try {
+  const installed='/etc/grabenplaner/offsite/installed-contract.json';
+  if(!fs.existsSync(installed)){process.stdout.write('none');process.exit(0);}
+  function read(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==0||s.nlink!==1||(s.mode&0o022)||s.size>131072||fs.realpathSync(file)!==file)throw Error();return JSON.parse(fs.readFileSync(file,'utf8'));}
+  const core=read(path.join(process.argv[2],'server-tools/linux/offsite/module-schema.json')),module=read(installed);
+  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10].includes(core.moduleVersion)||![7,8,9,10].includes(module.moduleVersion))throw Error();
+  process.stdout.write(core.moduleVersion===10&&module.moduleVersion===10?'single':'legacy');
+}catch{process.stderr.write('Der Sicherungszeitplan konnte nicht verifiziert werden.\n');process.exitCode=1;}
+NODE
+}
+
+gp_configure_nightly_backups() {
+  local mode
+  mode="$(gp_nightly_schedule_mode "$1" "$2")" || return 1
+  [[ "$mode" != none ]] || return 0
+  # Verify the complete replacement BEFORE removing the standalone daily run.
+  systemctl enable --now grabenplaner-offsite-assurance.timer >/dev/null || return 1
+  systemctl is-enabled --quiet grabenplaner-offsite-assurance.timer \
+    && systemctl is-active --quiet grabenplaner-offsite-assurance.timer || return 1
+  if [[ "$mode" == single ]]; then
+    systemctl disable --now grabenplaner-offsite-upload.timer >/dev/null || return 1
+  else
+    systemctl enable --now grabenplaner-offsite-upload.timer >/dev/null || return 1
+  fi
+}
+
 gp_apply_app_permissions() {
   local path="$1"
   local group="${2:-$GP_DEFAULT_SERVICE_GROUP}"
