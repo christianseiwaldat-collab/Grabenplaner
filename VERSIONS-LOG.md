@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.47 Beta · Fortsetzbare Übernahme und Artikelscanner
+
+- Eine bewusst gestartete Datenübernahme arbeitet als gespeicherter Hintergrundauftrag weiter, auch bei geschlossenem GP. Pause, Fortsetzen und begrenzte automatische Wiederholungen verwenden die bestehenden Prüf- und Berechtigungsregeln.
+- Große Quelltabellen erneuern ihre Prüfpläne in kleinen Paketen. Fortschritt und aktuelle Tabelle bleiben sichtbar; bereits übernommene Zeilen werden nach einer Unterbrechung nicht doppelt angelegt.
+- Im Filialkonto öffnet „Scannen“ neben der Artikelsuche die Gerätekamera für EAN und Artikel-QR-Codes. Ein erkannter Artikelcode wird eingetragen und sofort gesucht. Die Erkennung erfolgt auf dem Gerät; Bilder werden nicht hochgeladen. Die Kamera stoppt nach einem Treffer, beim Schließen oder beim Verlassen der Ansicht.
+- Der Preis- und Zielrohertragsrechner nutzt den bestätigten durchschnittlichen Netto-EK auch aus bereits akzeptierten älteren Artikelimporten. Fehlt die separate Masterübernahme, liefern eindeutige Brutto-/Nettopaare den MwSt.-Satz. Preisfarben folgen dem Rohertrag; fehlende Werte werden getrennt erklärt.
+
 ## v0.92.46 Beta · Planung, Filialkonto und Einkauf
 
 - Wochen- und Urlaubswechsel laden den benötigten Zeitraum gezielt. Gemeinsame Pausen- und Krankheitsabfragen reduzieren wiederholte Datenbankarbeit; verspätete Browserantworten überschreiben keinen neueren Zeitraum.

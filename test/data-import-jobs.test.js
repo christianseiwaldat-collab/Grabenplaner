@@ -11,12 +11,13 @@ async function fixture(t){
  const vault=createIntegrationSecretVault({activeKeyId:'test',keys:{test:Buffer.alloc(32,7)}}),sources=new Map();
  const state={principal:session(),now:Date.now(),calls:0,failures:0,failCode:'IMPORT_SOURCE_READ_TIMEOUT',reviews:0},getSession=async()=>state.principal;
  const runtime={reserve:async(get,{buffer,kind})=>{const user=await get(),id=crypto.createHash('sha256').update(user.employeeNumber).update(kind).update(buffer).digest('hex');
-   if(!sources.has(id))sources.set(id,{id,kind,status:'queued',complete:false,revision:1,received:0});return {...sources.get(id)};},
+   if(!sources.has(id))sources.set(id,{id,kind,status:'queued',complete:false,activationEnabled:true,revision:1,received:0});return {...sources.get(id)};},
   upload:async(get,{buffer,signal})=>{assert.equal((await get()).employeeNumber,'synthetic');assert.ok(buffer.includes(Buffer.from('private synthetic input')));state.calls++;
    const s=[...sources.values()][0];if(state.block)await state.block(signal);s.received++;
    if(state.failures-->0)throw new C.DataImportError(state.failCode,409);
    s.complete=true;s.status='reviewing';return {...s};},
-  sourceOperation:async(get,id,action)=>{await get();const s=sources.get(id);if(action==='review'){state.reviews++;s.status='ready';}return {...s};}};
+  sourceOperation:async(get,id,action)=>{await get();const s=sources.get(id);if(action==='review'){state.reviews++;s.status='ready';}
+    if(action==='apply'){if(state.beforeApply)await state.beforeApply();s.applied=(s.applied||0)+1;s.revision++;s.status=s.applied>=3?'applied':'applying';}return {...s};}};
  let queue;const store=createDataImportJobStore({directory,vault,now:()=>state.now});
  const options={directory,vault,runtime,store,resolvePrincipal:getSession,now:()=>state.now};
  const make=()=>{queue=createDataImportJobs({...options,lifecycle:createDataImportLifecycle()});return queue;};make();
@@ -32,6 +33,33 @@ test('accepted file is encrypted and completes reading plus review with no brows
  assert.equal((await f.queue.overlay(source)).background.status,'queued');
  await f.queue.tick();assert.equal(f.state.calls,1);assert.equal(f.state.reviews,1);assert.deepEqual(await fsp.readdir(f.directory),[]);
  assert.equal(f.sources.get(source.id).status,'ready');
+});
+
+test('only an explicit takeover starts business writes and it resumes after a transient error plus restart',async t=>{
+  const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+  assert.equal(f.sources.get(source.id).applied,undefined);
+  const accepted=await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1});
+  assert.equal(accepted.background.phase,'applying');assert.equal(f.sources.get(source.id).applied,undefined);
+  await assert.rejects(f.queue.assertIdle(source.id),{code:'IMPORT_SOURCE_BUSY'});
+  assert.equal((await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1})).background.phase,'applying');
+  f.state.beforeApply=()=>{if(f.sources.get(source.id).applied===1)throw new C.DataImportError('IMPORT_RETRY_LATER',503);};
+  await f.queue.tick();assert.equal(f.sources.get(source.id).applied,1);
+  assert.equal((await f.queue.overlay(source)).background.status,'retrying');
+  await f.queue.stop();f.make();f.state.now+=30001;f.state.beforeApply=null;await f.queue.tick();
+  assert.equal(f.sources.get(source.id).applied,3);assert.equal(f.sources.get(source.id).status,'applied');
+  assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+
+test('takeover admission checks revision and current apply rights, and pause survives a completed packet',async t=>{
+  const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+  await assert.rejects(f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:2}),{code:'IMPORT_REVISION_CONFLICT'});
+  f.state.principal={...session(),permissions:session().permissions.filter(p=>p!==P.APPLY)};
+  await assert.rejects(f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1}),{code:'IMPORT_FORBIDDEN'});
+  f.state.principal=session();await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1});
+  f.state.beforeApply=async()=>{await f.queue.action(f.getSession,source.id,'pause');};
+  await f.queue.tick();assert.equal(f.sources.get(source.id).applied,1);assert.equal((await f.queue.overlay(source)).background.status,'paused');
+  await f.queue.action(f.getSession,source.id,'retry');f.state.principal={...session(),permissions:[]};await f.queue.tick();
+  assert.equal(f.sources.get(source.id).applied,1);assert.equal((await f.queue.overlay(source)).background.error,'IMPORT_FORBIDDEN');
 });
 test('timeout resumes automatically after process reconstruction and delay, without another upload',async t=>{
  const f=await fixture(t),source=await f.enqueue();f.state.failures=1;

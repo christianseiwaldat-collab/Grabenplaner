@@ -7,7 +7,7 @@ const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(
 const article = name => ({ articleNumber: "00042", description: name, active: true, primaryIdentifier: "4006381333931", retailGross: "249.9", internetGross: "239" });
 const result = name => ({ items: [article(name)], total: 1, offset: 0 });
 
-function harness(kind) {
+function harness(kind, extra = {}) {
   const elements = new Map(), requests = [], downloads = [], listeners = new Map();
   let html = "", current = user();
   const node = name => {
@@ -28,7 +28,7 @@ function harness(kind) {
     replaceChildren() { html = ""; elements.clear(); }, contains: () => true,
   };
   const workspace = UI.mount(root, { kind, api: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
-    getUser: () => current, lineFormat: Lines, download: (...args) => downloads.push(args) });
+    getUser: () => current, lineFormat: Lines, download: (...args) => downloads.push(args), ...extra });
   const click = data => { const button = { dataset: data }; listeners.get("click")?.({ target: { closest: () => button } }); };
   const load = async (extra = {}) => {
     const promise = workspace.load();
@@ -37,6 +37,17 @@ function harness(kind) {
   };
   return { workspace, requests, downloads, node, root, click, load, fireRoot(type, target) { return listeners.get(type)?.({ target }); }, setUser(value) { current = value; } };
 }
+
+test('Kamera übernimmt den Code ins oberste Artikelfeld, sucht sofort und wird beim Verlassen geschlossen',async()=>{
+  let callbacks,opens=0,closes=0,destroyed=false;
+  const f=harness('articles',{scannerFactory:options=>{callbacks=options;return {open(){opens++;},close(){closes++;},destroy(){destroyed=true;}};}});
+  await f.load();assert.equal(opens,0);assert.match(f.root.innerHTML,/EAN oder QR-Code mit Kamera scannen/);
+  f.node('scan').fire('click');assert.equal(opens,1);callbacks.onValue('0000042');
+  assert.equal(f.node('query').value,'0000042');assert.equal(new URL(f.requests[0].url,'https://example.test').searchParams.get('query'),'0000042');
+  f.requests[0].resolve(result('Gefunden'));await settle();f.workspace.suspend();assert.equal(closes,1);
+  f.setUser({...user(),accountId:'another'});callbacks.onValue('no-access');assert.equal(f.requests.length,1);
+  f.workspace.destroy();assert.equal(destroyed,true);
+});
 
 test("Die zwei Berechtigungen sind unabhängig, auf Filialkonten begrenzt und erhalten führende Nullen", () => {
   const actor = user(); assert.equal(branchSalesContext(actor, R).locationId, "00");

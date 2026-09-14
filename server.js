@@ -3767,7 +3767,8 @@ app.use((request, response, next) => {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
-  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  const portalCamera=request.path==='/portal'||request.path==='/portal/'||request.path==='/portal.html';
+  response.setHeader("Permissions-Policy", `camera=(${portalCamera?'self':''}), microphone=(), geolocation=()`);
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   response.setHeader("X-Permitted-Cross-Domain-Policies", "none");
@@ -3867,6 +3868,7 @@ const tesseractCoreDirectory = fs.realpathSync(path.join(path.dirname(tesseractP
 const tesseractGermanDataDirectory = fs.realpathSync(path.join(__dirname, "node_modules", "@tesseract.js-data", "deu", "4.0.0_best_int"));
 const pdfjsPackageDirectory = fs.realpathSync(path.dirname(require.resolve("pdfjs-dist/package.json")));
 const immutableVendorAssets = { maxAge: "365d", immutable: true, fallthrough: false };
+app.use('/vendor/zxing-browser-v0.2.1',express.static(path.join(path.dirname(require.resolve('@zxing/browser/package.json')),'umd'),immutableVendorAssets));
 app.use("/vendor/tesseract-v7", express.static(path.join(tesseractPackageDirectory, "dist"), immutableVendorAssets));
 app.use("/vendor/tesseract-core-v7", express.static(tesseractCoreDirectory, immutableVendorAssets));
 app.use("/vendor/tesseract-data-deu-v1", express.static(tesseractGermanDataDirectory, immutableVendorAssets));

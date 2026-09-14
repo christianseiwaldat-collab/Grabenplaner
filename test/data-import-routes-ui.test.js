@@ -62,6 +62,18 @@ test('background progress explains automatic retry without asking for another up
   assert.match(html,/kein erneuter Upload nötig/);assert.doesNotMatch(html,/Bitte denselben Dateistand erneut auswählen|<script>/);
   assert.match(html,/data-i-job="pause"/);
 });
+
+test('background takeover admission is a separate authenticated CSRF action, while its worker excludes interactive mutations',async t=>{
+  let admitted=0;
+  const jobs={async enqueueApply(get,id,input){await get();admitted++;return {id,background:{phase:'applying'},revision:input.expectedRevision};},
+    async assertIdle(){throw Object.assign(new Error(),{code:'IMPORT_SOURCE_BUSY',status:409});}};
+  const f=await fixture(t,{jobs}),url='/api/data-import/sources/'+'a'.repeat(64),options={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:4})};
+  assert.equal((await f.request(url+'/apply-background',options)).status,200);assert.equal(admitted,1);
+  f.state.csrf=false;assert.equal((await f.request(url+'/apply-background',options)).status,403);assert.equal(admitted,1);
+  f.state.csrf=true;assert.equal((await f.request(url+'/undo',options)).status,409);assert.equal(f.state.calls,0);
+  const html=UI.renderSource({kind:'trade',status:'applying',currentStep:{table:'ARTIKEL_BILDER_V2',phase:'rechecking'},tables:[{name:'table',declaredRows:100,run:{receivedRows:100,status:'applying',counts:{applied:25},gates:[]}}],background:{phase:'applying',status:'applying'}},{prepare:true,apply:true});
+  assert.match(html,/25 \/ 100 Zeilen/);assert.match(html,/Sie können den GP schließen/);assert.match(html,/Übernahme pausieren/);assert.match(html,/Prüfung wird vorbereitet/);
+});
 test('Productive Block 1: routes require personal company rights, CSRF and no-store, with no role-only grants',async t=>{
   const f=await fixture(t);let res=await f.request('/api/data-import/context');assert.equal(res.status,200);assert.match(res.headers.get('cache-control'),/no-store/);
   f.state.csrf=false;res=await f.request('/api/data-import/sources/search',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});assert.equal(res.status,403);

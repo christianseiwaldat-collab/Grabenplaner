@@ -1446,6 +1446,14 @@ html[data-portal-birthday-theme] #portalApp :is(.portal-tabs,.branch-mobile-acti
 .branch-search-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
 .branch-search-form label { min-width:0; max-width:100%; flex:1 1 180px; color:var(--ink); }
 .branch-search-form .branch-search-wide { flex:2 1 280px; }
+.branch-search-query { display:flex; align-items:end; gap:8px; min-width:0; }
+.branch-search-query > label { flex:1 1 auto; }
+.branch-scan-button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; flex:0 0 auto; min-width:54px; min-height:46px; padding:5px 9px; font-size:11px; line-height:1.2; }
+.branch-scan-button > span:first-child { font-size:19px; }
+.branch-scanner-dialog { width:min(440px,calc(100vw - 28px)); max-height:calc(100dvh - 32px); box-sizing:border-box; overflow:auto; border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--paper); color:var(--ink); }
+.branch-scanner-dialog::backdrop { background:#001a14b3; }
+.branch-scanner-dialog video { display:block; width:100%; max-height:50dvh; aspect-ratio:4/3; object-fit:contain; border-radius:9px; background:#06130f; }
+.branch-scanner-dialog [role=status] { font-size:14px; line-height:1.45; overflow-wrap:anywhere; }
 .branch-search-form input,.branch-search-form select { width:100%; min-width:0; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:11px 12px; }
 .branch-search-form :focus-visible,.branch-sales-workspace button:focus-visible,.branch-receipt-dialog button:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
 .branch-search-source { margin:14px 0; font-size:12px; overflow-wrap:anywhere; }
