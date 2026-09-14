@@ -186,7 +186,7 @@ test('Administration: late context responses cannot replace the most recent bran
   ctx.contextQuery = () => `&location=${ctx.state.locationId}`; ctx.showToast = () => {};
   ctx.state.weekStart = '2026-09-07'; ctx.state.vacationYear = 2026;
   ctx.canReadManagerRequests = ctx.canReadLoanManagement = ctx.canManageBranchOrders = () => false;
-  vm.runInContext('let loadAllGeneration = 0;\n' + functionSource(appSource, 'loadAll'), ctx);
+  vm.runInContext('let loadAllGeneration = 0; let planningPeriodController = null;\n' + functionSource(appSource, 'loadAll'), ctx);
   function initial() { const rows = pending.splice(0); for (const row of rows) row.resolve(row.url === '/api/locations' ? ctx.state.locations : row.url.endsWith('/status') ? {} : []); }
   function finish(rows, locationId) { for (const row of rows) row.resolve(row.url.startsWith('/api/schedule') ? { weekStart: '2026-09-07', context: { locationId }, settings: {} } : row.url.startsWith('/api/vacations') ? { year: 2026 } : []); }
   const first = ctx.loadAll({ restoreContext: false }); initial(); await new Promise(setImmediate);

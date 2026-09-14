@@ -784,7 +784,7 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionSearch", "positionListStatus", "positionTableHead", "positionList", "positionDeleteModal", "positionDeleteForm", "positionDeleteModalTitle", "positionDeleteModalCopy", "positionDeleteWarning", "positionDeleteWarningTitle", "positionDeleteWarningText", "positionDeleteName", "positionDeleteActiveCount", "positionDeleteHistoryCount", "positionDeleteMessage", "confirmPositionDeleteButton", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "adminAccessModeLabel", "accessSettings", "portalUserAccessCard", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
-    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountLearningDashboardRow", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountArticles", "organizationAccountArticlesRow", "organizationAccountReceipts", "organizationAccountReceiptsRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
+    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountLearningDashboardRow", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountArticles", "organizationAccountArticlesRow", "organizationAccountReceipts", "organizationAccountReceiptsRow", "organizationAccountTimeOff", "organizationAccountTimeOffRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
@@ -1231,13 +1231,15 @@ async function api(url, options = {}) {
   try {
     response = await fetch(url, { ...options, headers });
   } catch (error) {
-    throw window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname });
+    throw window.GrabenplanerApiErrors?.fromNetwork
+      ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
+      : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
   }
   if (!response.ok) {
-    const detail = await window.GrabenplanerApiErrors.fromResponse(response, {
+    const detail = window.GrabenplanerApiErrors?.fromResponse ? await window.GrabenplanerApiErrors.fromResponse(response, {
       hostname: location.hostname,
       fallback: "Die Aktion konnte nicht ausgeführt werden.",
-    });
+    }) : await response.json().then(data => ({message: data.error || "Die Anmeldung oder Aktion ist vorübergehend nicht möglich. Bitte erneut versuchen.", code: data.code || ""})).catch(() => ({message: "Der Grabenplaner ist vorübergehend nicht erreichbar. Bitte erneut versuchen.", code: ""}));
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
@@ -1255,13 +1257,15 @@ async function rawApi(url, options = {}) {
   try {
     response = await fetch(url, { ...options, method, headers });
   } catch (error) {
-    throw window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname });
+    throw window.GrabenplanerApiErrors?.fromNetwork
+      ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
+      : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
   }
   if (!response.ok) {
-    const detail = await window.GrabenplanerApiErrors.fromResponse(response, {
+    const detail = window.GrabenplanerApiErrors?.fromResponse ? await window.GrabenplanerApiErrors.fromResponse(response, {
       hostname: location.hostname,
       fallback: "Die Aktion konnte nicht ausgef\u00fchrt werden.",
-    });
+    }) : await response.json().then(data => ({message: data.error || "Die Anmeldung oder Aktion ist vorübergehend nicht möglich. Bitte erneut versuchen.", code: data.code || ""})).catch(() => ({message: "Der Grabenplaner ist vorübergehend nicht erreichbar. Bitte erneut versuchen.", code: ""}));
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
@@ -3279,8 +3283,11 @@ function scheduleAdminLoginBrandingPreview() {
 }
 
 let loadAllGeneration = 0;
+let planningPeriodController = null;
 async function loadAll({ restoreContext = true } = {}) {
   const generation = ++loadAllGeneration;
+  planningPeriodController?.abort();
+  planningPeriodController = null;
   try {
     const [locations, positions, portalStatus, roleData] = await Promise.all([
       api("/api/locations"),
@@ -3328,6 +3335,42 @@ async function loadAll({ restoreContext = true } = {}) {
     if (canManageBranchOrders() && state.currentView === "branchOrders") loadBranchOrdersManagement();
   } catch (error) {
     if (generation === loadAllGeneration) showToast(error.message, true);
+  }
+}
+
+async function loadPlanningPeriod(kind = "schedule") {
+  if (!state.data || !state.vacationData || !state.locations?.length) return loadAll();
+  const generation = ++loadAllGeneration;
+  planningPeriodController?.abort();
+  const controller = new AbortController();
+  planningPeriodController = controller;
+  const session = state.portalSession;
+  const locationId = state.locationId;
+  const departmentId = state.departmentId;
+  const vacation = kind === "vacation";
+  const url = vacation
+    ? `/api/vacations?year=${state.vacationYear}${contextQuery(session?.user?.role === "department_manager")}`
+    : `/api/schedule?week=${state.weekStart}${contextQuery(true)}`;
+  try {
+    const data = await api(url, { signal: controller.signal });
+    if (generation !== loadAllGeneration || controller.signal.aborted
+      || session !== state.portalSession || locationId !== state.locationId || departmentId !== state.departmentId) return;
+    if (vacation) {
+      state.vacationData = data;
+      state.vacationYear = data.year;
+    } else {
+      state.data = data;
+      state.allowPastWeekEditing = data.settings?.allow_past_week_editing === "1";
+      state.locations = data.locations || state.locations;
+      state.weekStart = data.weekStart;
+      state.locationId = data.context?.locationId || state.locationId;
+      state.departmentId = data.context?.departmentId ? String(data.context.departmentId) : "";
+    }
+    render();
+  } catch (error) {
+    if (generation === loadAllGeneration && !controller.signal.aborted) showToast(error.message, true);
+  } finally {
+    if (planningPeriodController === controller) planningPeriodController = null;
   }
 }
 
@@ -22479,6 +22522,11 @@ function syncOrganizationAccountPermissionControls() {
     }
     elements["organizationAccount" + name + "Row"]?.classList.toggle("hidden", !branchAccount);
   }
+  if (elements.organizationAccountTimeOff) {
+    if (!branchAccount) elements.organizationAccountTimeOff.checked = false;
+    elements.organizationAccountTimeOff.disabled = !branchAccount;
+  }
+  elements.organizationAccountTimeOffRow?.classList.toggle("hidden", !branchAccount);
 }
 
 function resetOrganizationAccountForm() {
@@ -22501,6 +22549,7 @@ function resetOrganizationAccountForm() {
   elements.organizationAccountBranchOrders.checked = false;
   elements.organizationAccountArticles.checked = false;
   elements.organizationAccountReceipts.checked = false;
+  elements.organizationAccountTimeOff.checked = false;
   syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = true;
   elements.organizationAccountCancel.classList.add("hidden");
@@ -22582,6 +22631,7 @@ function editOrganizationAccount(accountId) {
   elements.organizationAccountBranchOrders.checked = account.permissions?.includes("branch_orders:submit") === true;
   elements.organizationAccountArticles.checked = account.permissions?.includes("branch_articles:read") === true;
   elements.organizationAccountReceipts.checked = account.permissions?.includes("branch_receipts:read") === true;
+  elements.organizationAccountTimeOff.checked = account.permissions?.includes("branch_time_off:submit") === true;
   syncOrganizationAccountPermissionControls();
   elements.organizationAccountActive.checked = account.active === true;
   elements.organizationAccountCancel.classList.remove("hidden");
@@ -22600,6 +22650,7 @@ async function saveOrganizationAccount(event) {
     elements.organizationAccountBranchOrders.checked ? "branch_orders:submit" : "",
     elements.organizationAccountArticles.checked ? "branch_articles:read" : "",
     elements.organizationAccountReceipts.checked ? "branch_receipts:read" : "",
+    elements.organizationAccountTimeOff.checked ? "branch_time_off:submit" : "",
   ].filter(Boolean);
   const body = {
     loginName: elements.organizationAccountLoginName.value,
@@ -31816,6 +31867,7 @@ function syncSalesHistoryAccess() {
   const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
+  document.getElementById('tradeInsightsNavLink')?.classList.toggle('hidden', !user?.salesHistory?.read || !user?.permissions?.some(p => ['sales:analytics:inventory:read','crm:purchases:read'].includes(p)));
   salesReportJobUi?.reset();
   void salesReportJobUi?.refresh();
   receiptSearchWorkspace?.destroy(); receiptSearchWorkspace = null;
@@ -39222,13 +39274,13 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
 elements.employeeModal?.addEventListener("close", clearEmployeeProtectedRecord);
 elements.personnelRecordModal?.addEventListener("close", clearPersonnelRecordDialog);
-document.querySelector("#previousWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); loadAll(); });
-document.querySelector("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); loadAll(); });
-document.querySelector("#todayButton").addEventListener("click", () => { state.weekStart = getMonday(new Date()); loadAll(); });
+document.querySelector("#previousWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); loadPlanningPeriod(); });
+document.querySelector("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); loadPlanningPeriod(); });
+document.querySelector("#todayButton").addEventListener("click", () => { state.weekStart = getMonday(new Date()); loadPlanningPeriod(); });
 document.querySelector("#weekJumpDate").addEventListener("change", (event) => {
   if (!event.target.value) return;
   state.weekStart = getMonday(new Date(`${event.target.value}T12:00:00`));
-  loadAll();
+  loadPlanningPeriod();
 });
 elements.crossLocationScheduleButton?.addEventListener("click", () => {
   state.crossLocationScheduleOpen = !state.crossLocationScheduleOpen;
@@ -39296,7 +39348,7 @@ elements.vacationYear.addEventListener("change", () => {
   }
   state.vacationYear = year;
   void persistVacationCalendarView();
-  loadAll();
+  loadPlanningPeriod("vacation");
 });
 elements.vacationViewMode.addEventListener("change", () => {
   state.vacationViewMode = elements.vacationViewMode.value;

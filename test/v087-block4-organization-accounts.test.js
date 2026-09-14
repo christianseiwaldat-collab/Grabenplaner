@@ -341,7 +341,7 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
     assert.equal(catalog.response.status, 200, JSON.stringify(catalog.payload));
     assert.deepEqual(
       new Set(catalog.payload.permissionCatalog.map((permission) => permission.id)),
-      new Set(ALLOWED_PERMISSIONS),
+      new Set([...ALLOWED_PERMISSIONS, "branch_time_off:submit"]),
     );
     assert.deepEqual(
       new Set(catalog.payload.accountTypes.map((accountType) => accountType.id)),

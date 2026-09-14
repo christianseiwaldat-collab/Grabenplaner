@@ -30,12 +30,12 @@ function harness(kind) {
   const workspace = UI.mount(root, { kind, api: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
     getUser: () => current, lineFormat: Lines, download: (...args) => downloads.push(args) });
   const click = data => { const button = { dataset: data }; listeners.get("click")?.({ target: { closest: () => button } }); };
-  const load = async () => {
+  const load = async (extra = {}) => {
     const promise = workspace.load();
-    if (kind === "receipts") requests[0].resolve({ available: true, today: "2026-09-13", location: { id: "00", name: "Demo" }, sourceLabel: "Demo", coverageLabel: "13.09.2026" });
+    if (kind === "receipts") requests[0].resolve({ available: true, today: "2026-09-13", location: { id: "00", name: "Demo" }, sourceLabel: "Demo", coverageLabel: "13.09.2026", ...extra });
     await promise;
   };
-  return { workspace, requests, downloads, node, root, click, load, setUser(value) { current = value; } };
+  return { workspace, requests, downloads, node, root, click, load, fireRoot(type, target) { return listeners.get(type)?.({ target }); }, setUser(value) { current = value; } };
 }
 
 test("Die zwei Berechtigungen sind unabhängig, auf Filialkonten begrenzt und erhalten führende Nullen", () => {
@@ -51,11 +51,27 @@ test("Die zwei Berechtigungen sind unabhängig, auf Filialkonten begrenzt und er
 });
 test("Suchtreffer und Belegtexte werden maskiert, null-Preise bleiben erkennbar", () => {
   assert.doesNotMatch(UI.articleRows([article('<img src=x onerror="alert(1)">')]), /<img/);
-  assert.match(UI.articleRows([{ ...article("Kamera"), retailGross: null, internetGross: "0" }]), /Nicht hinterlegt/);
-  assert.match(UI.articleRows([{ ...article("Kamera"), internetGross: "0" }]), /0,00/);
+  assert.match(UI.articleBody({ ...article("Kamera"), retailGross: null, internetGross: "0" }), /Nicht hinterlegt/);
+  assert.match(UI.articleBody({ ...article("Kamera"), internetGross: "0" }), /0,00/);
   assert.doesNotMatch(UI.receiptRows([{ id: '"><img>', receipt: "<script>", location: "<img>", description: "<img>" }]), /<img|<script>/);
   const detail = UI.receiptDetail({ lines: [{ description: "<img>", quantity: "2", sourcePrice: "249.9", status: "review" }] }, Lines);
   assert.doesNotMatch(detail, /<img/); assert.match(detail, /499,80/);
+});
+test('Artikel werden einmal beim Aufklappen geladen; verspätete Details nach neuer Suche verworfen', async () => {
+  const f = harness('articles'); await f.load();
+  const body = { textContent: '', innerHTML: '' }, card = { open: true, dataset: { article: '00042' }, matches: () => true, querySelector: () => body };
+  const pending = f.fireRoot('toggle', card); await f.fireRoot('toggle', card);
+  assert.equal(f.requests.length, 1); assert.match(f.requests[0].url, /detail\?articleNumber=00042$/);
+  f.node('form').fire('input'); f.requests[0].resolve(article('Private alte Details')); await pending;
+  assert.equal(body.innerHTML, '');
+  const next = f.fireRoot('toggle', card); f.requests[1].resolve({ ...article('Kamera'), calculation: { available: true, purchaseNet: '100', vatPercent: 20 } }); await next;
+  assert.match(body.innerHTML, /VK brutto kalkulieren/); await f.fireRoot('toggle', card); assert.equal(f.requests.length, 2);
+});
+test('Ein Kontowechsel verhindert verspätete Artikeldetails und Berechnungsgrundlagen', async () => {
+  const f = harness('articles'); await f.load(); const body = { textContent: '', innerHTML: '' };
+  const pending = f.fireRoot('toggle', { open: true, dataset: { article: '00042' }, matches: () => true, querySelector: () => body });
+  f.setUser({ ...user(), accountId: 'other' }); f.requests[0].resolve({ ...article('Privat'), calculation: { purchaseNet: '100' } }); await pending;
+  assert.equal(body.innerHTML, '');
 });
 test("Eine alte Artikelsuche kann neue Suchangaben und Treffer nicht überschreiben", async () => {
   const f = harness("articles"); await f.load();
@@ -108,4 +124,34 @@ test("Eingaben während des Ladens verhindern die Initialisierung der Belegsuche
   f.node("query").value = "Kamera"; f.node("form").fire("input");
   f.requests[0].resolve({ available: true, today: "2026-09-13", location: { id: "00", name: "Demo" } }); await promise;
   assert.equal(f.node("search").disabled, false); assert.equal(f.node("query").value, "Kamera");
+});
+test('Belegfilter haben ein Kundenfeld, kombinierbare Filialgruppen und erhalten den eigenen Standard', async () => {
+  const f = harness('receipts'), Filters = require('../public/branch-receipt-filters');
+  await f.load({ location: { id: '18', name: 'Demo 18' }, defaultLocationIds: ['18'],
+    locations: [...Filters.STOCK, ...Filters.INTERNET, '94'].map(id => ({ id, label: id })) });
+  assert.equal((f.root.innerHTML.match(/data-b="customer"/g) || []).length, 1);
+  f.node('customer').value = 'Mia 6020'; f.node('sellers').value = '12, 34'; f.node('form').fire('submit');
+  let sent = JSON.parse(f.requests[1].options.body);
+  assert.deepEqual(sent.locations, ['18']); assert.equal(sent.customer, 'Mia 6020'); assert.equal(sent.sellers, '12, 34');
+  f.requests[1].resolve({ items: [], processed: 0, next: 'old-cursor' });
+  // A new location selection invalidates this response and its continuation.
+  f.node('form').fire('input', { target: { dataset: { locationGroup: 'internet' }, checked: true } });
+  await settle(); assert.equal(f.node('next').disabled, true);
+  f.node('form').fire('input', { target: { dataset: { locationGroup: 'stock' }, checked: true } });
+  f.node('form').fire('input', { target: { dataset: { location: '94' }, checked: true } });
+  f.node('form').fire('input', { target: { dataset: { location: '03' }, checked: false } });
+  f.node('form').fire('submit'); sent = JSON.parse(f.requests.at(-1).options.body);
+  assert.deepEqual(sent.locations, [...Filters.STOCK, ...Filters.INTERNET.filter(id => id !== '03'), '94'].sort());
+  assert.equal(sent.cursor, '');
+  f.requests.at(-1).resolve({ items: [], processed: 0, next: null }); await settle();
+  f.node('reset').fire('click'); f.node('form').fire('submit');
+  assert.deepEqual(JSON.parse(f.requests.at(-1).options.body).locations, ['18']);
+});
+test('Leere Filialauswahl und unvollständige Personalnummern senden keine Suchanfrage', async () => {
+  const f = harness('receipts'); await f.load();
+  f.node('sellers').value = '12,'; f.node('form').fire('submit'); await settle();
+  assert.equal(f.requests.length, 1); assert.match(f.node('message').textContent, /Personalnummern/);
+  f.node('sellers').value = ''; f.node('form').fire('input', { target: { dataset: { location: '00' }, checked: false } });
+  f.node('form').fire('submit'); await settle();
+  assert.equal(f.requests.length, 1); assert.match(f.node('message').textContent, /mindestens eine Filiale/);
 });

@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.46 Beta · Planung, Filialkonto und Einkauf
+
+- Wochen- und Urlaubswechsel laden den benötigten Zeitraum gezielt. Gemeinsame Pausen- und Krankheitsabfragen reduzieren wiederholte Datenbankarbeit; verspätete Browserantworten überschreiben keinen neueren Zeitraum.
+- Anmeldung funktioniert auch mit einem vorhandenen Sitzungscookie. Statische Hilfsdateien durchlaufen keine API-Anmeldung; parallele Sitzungsverlängerungen werden zusammengefasst. Aktuelle Rechte und Ablaufzeiten werden weiterhin bei jedem Aufruf geprüft.
+- PostgreSQL-Importe prüfen und übernehmen kürzere, fortsetzbare Pakete. Die Verknüpfungen der Importhistorie schützen ihre Quelldaten in derselben Verkaufsdatenbank, ohne eine zweite schreibende GP-Transaktion zu öffnen.
+- Das Filialkonto zeigt aufklappbare Artikeldetails mit geschütztem Produktbild, Links, Beständen und Preis-/Rohertragsrechner auf Basis des bestätigten durchschnittlichen Netto-EK. Zusätzliche Filial-, Belegverkäufer- und Kundenfilter ergänzen die Belegsuche. ZA-Anträge sind separat freischaltbar und verwenden die bestehende Genehmigung.
+- Einkauf & Bestand ergänzt Lieferstände, historische Filialversorgung, gebuchte Filialpreise sowie Bestandskennzahlen mit eigener WGR-/Sortimentsklassifikation. Fehlende Wareneingangsereignisse und unvollständige Kassenzeiträume werden kenntlich gemacht.
+- Kunden- und Gerätehistorien verbinden vorhandene Quellvorgänge. Reparaturen bleiben bei später fehlenden Quelldatensätzen erhalten; Abholbereit und Abgeholt werden getrennt vom TradeRepair-Status im GP gespeichert. Eigene Klassifikationen und Status liegen verschlüsselt in einer additiven Core-Tabelle.
+
 ## v0.92.45 Beta · Dauerhafte Datenbankimporte
 
 - Nach vollständig bestätigtem ACCDB-Upload laufen Einlesen und Prüfung automatisch am Server weiter. Verschlüsselte temporäre Dateien erlauben Wiederaufnahme nach Browserende, Dienstneustart und vorübergehenden Fehlern; Fortschritt bleibt erhalten. Produktive Übernahme bleibt eine bewusste Benutzeraktion.

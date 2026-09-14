@@ -25,9 +25,11 @@ test('Live PostgreSQL branch receipt search uses the shared worker protocol, sco
       const second = await run(w => w.receipts.search({ ...query, cursor: first.next })); assert.equal(second.items.length, 4);
       const id = first.items[0].id;
       const document = await run(w => w.receipts.documents({ ids: [id] })); assert.equal(document.items[0].lines.length, 1);
-      assert.doesNotMatch(JSON.stringify(document), /personnel|customer|grossMargin/);
+      assert.equal(document.items[0].personnel, '00002');
+      assert.doesNotMatch(JSON.stringify(document), /grossMargin/);
       current = { ...current, scopes: [{ locationId: '19' }] };
-      await assert.rejects(run(w => w.receipts.documents({ ids: [id] })), e => e.code === 'IMPORT_FORBIDDEN');
+      const foreign = await run(w => w.receipts.documents({ ids: [id] }));
+      assert.equal(foreign.items[0].locationId, '18');
       current = { ...current, scopes: [{ locationId: '18' }] }; revoke = true;
       await assert.rejects(run(w => w.receipts.documents({ ids: [id] })), e => e.status === 403);
     } finally { await workers.close(); }

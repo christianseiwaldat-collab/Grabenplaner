@@ -73,6 +73,11 @@ const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemaile
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
 // User-authorized 2026 migration blocks; isolated environment, never product activation.
 const MIGRATION_DEVELOPMENT_FILES = new Set([
+  'test/postgresql-trade-insights.test.js',
+  'test/postgresql-login-resilience.test.js',
+  'lib/persistence/postgresql/core/trade-annotations.js',
+  'lib/persistence/postgresql/reporting/branch-article-catalog.js',
+
   'lib/persistence/postgresql/runtime-binding.js',
   'lib/persistence/postgresql/productive-configuration.js',
   'lib/persistence/postgresql/lifecycle-control.js',
@@ -223,6 +228,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-migration-queries.test.js',
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
+  'server-tools/linux/lib/trade-annotations-migrate.js',
   'lib/persistence/postgresql/transfer/staging.js',
   'scripts/postgresql/activation-rehearsal-step.js',
   'server-tools/linux/postgresql/migration-host.js',
@@ -325,6 +331,16 @@ const PHASE_2_CLASSIFICATION = Object.freeze({
   laterPhase: "2-5",
 });
 const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
+  "lib/persistence/statements/branch-article-stock.js",
+  "lib/persistence/statements/branch-receipt.js",
+  "lib/persistence/statements/trade-insights.js",
+  "lib/persistence/statements/trade-annotations.js",
+  "lib/persistence/sqlite/branch-article-stock-catalog.js",
+  "lib/persistence/sqlite/branch-receipt-catalog.js",
+  "lib/persistence/sqlite/trade-insights-catalog.js",
+  "lib/persistence/sqlite/trade-annotations-catalog.js",
+  "lib/persistence/sqlite/operations/trade-annotations-schema.js",
+
   "lib/persistence/repositories/sales-article-images.js",
   "lib/persistence/statements/sales-article-images.js",
   "lib/persistence/sqlite/sales-article-images-catalog.js",
@@ -508,6 +524,11 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "test/branch-time-off-api.test.js",
+  "test/trade-stock.test.js",
+  "test/trade-insights-api.test.js",
+  "test/login-resilience-api.test.js",
+
   "test/branch-sales-api.test.js",
   "test/sales-article-images.test.js",
   "test/sales-report-jobs-routes.test.js",
@@ -687,10 +708,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1354;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1369;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 37;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1317;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1244;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1332;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1259;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -816,7 +837,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1239;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1254;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 115;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

@@ -727,6 +727,11 @@ const PERSONNEL_LEARNING_BRANCH_DASHBOARD_PERMISSION =
   "personnel_learning:location:dashboard";
 const BRANCH_ORDER_SUBMIT_PERMISSION = "branch_orders:submit";
 const { BRANCH_ARTICLES_PERMISSION, BRANCH_RECEIPTS_PERMISSION } = require("./lib/branch-sales-access");
+const {
+  BRANCH_TIME_OFF_PERMISSION, branchTimeOffContext, sameBranchTimeOffContext,
+  branchTimeOffEmployeeNumber, branchTimeOffPeriod, branchTimeOffScheduleWindow,
+  branchTimeOffEmployees, branchTimeOffSlots,
+} = require("./lib/branch-time-off");
 const BRANCH_ORDER_MANAGE_PERMISSION = "branch_orders:manage";
 const BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION = "branch_portal:display:manage";
 const MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION = "mobile_portal:location_display:manage";
@@ -765,7 +770,13 @@ const organizationAccountPermissionCatalog = Object.freeze([
   {
     id: BRANCH_RECEIPTS_PERMISSION,
     label: "Belegsuche und PDF-Download verwenden",
-    description: "Kassenbelege der zugewiesenen Filiale suchen und als Beleginformation herunterladen; kein Original-Rechnungsdokument.",
+    description: "Kassenbelege der freigegebenen Quellenfilialen und Internetkassen nach Belegverkäufer oder Kunde suchen und als Beleginformation herunterladen; die eigene Filiale ist vorausgewählt.",
+    accountTypes: ["branch"],
+  },
+  {
+    id: BRANCH_TIME_OFF_PERMISSION,
+    label: "ZA-Anträge für die Filiale erfassen",
+    description: "Teammitglied der zugewiesenen Filiale auswählen und einen regulären ZA-Antrag mit Dienstplanvorschau einreichen; die bestehende Genehmigung bleibt erforderlich.",
     accountTypes: ["branch"],
   },
   {
@@ -896,6 +907,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", description: "Wirtschaftlich sensible Kosten- und Rohertragswerte nur innerhalb einer wirksamen Filial- oder Gesamtfirmenprojektion lesen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", description: "TradeFoto-Statistikberichte prüfen, einer freigegebenen Filiale zuordnen und nach ausdrücklicher Bestätigung unveränderlich übernehmen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   ...SALES_HISTORY_PERMISSION_CATALOG,
+  ...require('./lib/tradefoto-bestell/access').BESTELL_PERMISSION_CATALOG,
   ...DATA_IMPORT_PERMISSION_CATALOG,
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", description: "Öffnet den geschützten CRM-Arbeitsbereich und gewährt allein noch keinen Zugriff auf Kundendaten.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", description: "Sucht und liest Kundendaten ausschließlich im CRM-Arbeitsbereich.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
@@ -1490,6 +1502,7 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, label: "Kosten und Rohertrag in Verkaufsanalysen lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
   ...SALES_HISTORY_PERMISSION_CATALOG,
+  ...require('./lib/tradefoto-bestell/access').BESTELL_PERMISSION_CATALOG,
   ...DATA_IMPORT_PERMISSION_CATALOG,
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
@@ -2694,6 +2707,7 @@ async function createDatabaseBackup(reason = "automatic", { deadlineMs = Date.no
 
 function createSchema() {
   ensureSqliteApplicationSchema(db);
+  require('./lib/persistence/sqlite/operations/trade-annotations-schema').ensureSqliteTradeAnnotationsSchema(db);
 }
 
 const startupSchemaMigrationState = postgresqlActive ? Object.freeze({
@@ -3809,10 +3823,13 @@ app.use((request, response, next) => {
 });
 app.use(express.json({ limit: "1mb" }));
 app.use(async (request, response, next) => {
-  if (!request.path.startsWith("/api")) return next();
+  if (request.path !== "/api" && !request.path.startsWith("/api/")) return next();
   try {
     await refreshPortalSettingsSnapshot();
-    request.portalSession = await loadPortalSessionFromRequest(request);
+    // A new login is authorized by its submitted credentials. An older cookie
+    // must not veto the transaction that replaces that very session.
+    request.portalSession = request.path === "/api/portal/v1/auth/login"
+      ? null : await loadPortalSessionFromRequest(request);
     request.portalSessionLoaded = true;
     if (request.portalSession) {
       const cookies = parseCookies(request);
@@ -4967,6 +4984,7 @@ function sessionPortalAccessScopeProjection(row = {}) {
   };
 }
 
+const renewPortalSession = require('./lib/portal-session-renewal').createPortalSessionRenewal();
 async function loadPortalSessionFromRequest(request, { touch = true, repository = portalAccessRepository } = {}) {
   const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
   if (!token) return null;
@@ -4982,9 +5000,10 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
   });
   if (session) {
     if (isReservedEmployeePrincipal(session.employee_number)) return null;
+    let effectiveExpiresAt = session.expires_at;
     if (touch) {
-      await repository.touchEmployeeSession({ id: session.id, expiresAt: refreshedExpiresAt });
-      session.expires_at = refreshedExpiresAt;
+      effectiveExpiresAt = await renewPortalSession({ session, kind: 'employee', now: currentDate.getTime(), expiresAt: refreshedExpiresAt,
+        timeoutMinutes, write: value => repository.touchEmployeeSession(value) });
     }
     const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session);
     const permissionState = effectivePortalPermissionState(
@@ -5024,15 +5043,16 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       amuLocalAccessMode: normalizedManagerAmuAccessMode(session.amu_local_access_mode),
       personnelFieldPermissions: parsePersonnelFieldPermissionProjection(session.personnel_field_permissions),
       mustChangePassword: Boolean(session.must_change_password),
-      expiresAt: session.expires_at,
+      expiresAt: effectiveExpiresAt,
     };
   }
   const organizationSession = await repository
     .getOrganizationSessionByToken({ tokenHash, now });
   if (!organizationSession) return null;
+  let organizationExpiresAt = organizationSession.expires_at;
   if (touch) {
-    await repository.touchOrganizationSession({ id: organizationSession.id, expiresAt: refreshedExpiresAt });
-    organizationSession.expires_at = refreshedExpiresAt;
+    organizationExpiresAt = await renewPortalSession({ session: organizationSession, kind: 'organization', now: currentDate.getTime(), expiresAt: refreshedExpiresAt,
+      timeoutMinutes, write: value => repository.touchOrganizationSession(value) });
   }
   const scopes = portalAccessScopesForPrincipal({
     role: "organization_account",
@@ -5068,7 +5088,7 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     permissionScopes: [],
     scopes,
     mustChangePassword: false,
-    expiresAt: organizationSession.expires_at,
+    expiresAt: organizationExpiresAt,
   };
 }
 
@@ -6328,6 +6348,11 @@ function installationFeaturesForApiPath(apiPath) {
   const requestPath = String(apiPath || "").toLowerCase();
   const required = new Set();
   if (/^\/portal\/v1\/branch-(?:articles|receipts)(?:\/|$)/.test(requestPath)) required.add("employeePortal");
+  if (/^\/portal\/v1\/branch-time-off(?:\/|$)/.test(requestPath)) {
+    required.add("requests");
+    required.add("employeePortal");
+    if (requestPath.endsWith("/schedule")) required.add("schedule");
+  }
   if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule|cross-location-schedules|cross-location-schedule-settings|staff-assignment-requests)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
   if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/personnel-vacations(?:\/|$)/.test(requestPath)) required.add("vacation");
@@ -16324,17 +16349,43 @@ async function sicknessCreditForEmployeeDate(employeeNumber, date) {
 }
 
 async function sicknessCreditsForRange(employeeNumber, dateFrom, dateTo) {
+  return (await sicknessCreditsForEmployeesInRange([employeeNumber], dateFrom, dateTo))
+    .map(({ employee_number, ...credit }) => credit);
+}
+
+async function sicknessCreditsForEmployeesInRange(employeeNumbers, dateFrom, dateTo) {
+  const casesByEmployee = new Map(employeeNumbers.map((number) => [String(number), []]));
+  if (!casesByEmployee.size) return [];
+  const rows = await sicknessAmuManagementRepository.listSicknessCasesForCredit({
+    statusLookups: ["reported", "aum_received", "recovered"].map(sicknessStatusLookup),
+  });
+  for (const row of rows) {
+    let payload;
+    try { payload = sicknessCasePayload(row); } catch { continue; }
+    casesByEmployee.get(String(payload.employeeNumber || ""))?.push({ row, payload });
+  }
   const credits = [];
-  for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
-    const credit = await sicknessCreditForEmployeeDate(employeeNumber, date);
-    if (credit.caseId != null) credits.push({ date, ...credit });
+  for (const [employeeNumber, cases] of casesByEmployee) {
+    for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+      const match = cases.find(({ payload }) => sicknessPayloadCoversDate(payload, date));
+      if (match) credits.push({
+        employee_number: employeeNumber,
+        date,
+        caseId: Number(match.row.id),
+        minutes: creditedMinutesForDate(match.payload.timeValuation, date),
+        valuationVersion: match.payload.timeValuation?.version || "",
+      });
+    }
   }
   return credits;
 }
 
 function sicknessCaseCoversDate(row, date) {
   if (!row) return false;
-  const payload = sicknessCasePayload(row);
+  return sicknessPayloadCoversDate(sicknessCasePayload(row), date);
+}
+
+function sicknessPayloadCoversDate(payload, date) {
   if (!payload.startDate || payload.startDate > date) return false;
   if (["reported", "aum_received"].includes(payload.status)) {
     return !isIsoDate(payload.expectedEnd) || date <= payload.expectedEnd;
@@ -19399,14 +19450,7 @@ async function overlappingWeekOption(employeeNumber, date, startTime, endTime) {
     .find((option) => optionOverlapsTime(option, startTime, endTime));
 }
 
-async function shiftMetrics(shift, settings, { legacyOnly = false } = {}) {
-  const saturdayContext = !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
-    ? await saturdayCreditService.status(shift.employee_number, shift.shift_date) : null;
-  const cutover = saturdayContext?.cutover;
-  if (cutover && shift.shift_date < cutover.effectiveDate) {
-    const saved = cutover.legacySettings[String(shift.location_id || '')] || cutover.legacySettings['*'];
-    if (saved) settings = { ...settings, saturday_bonus_enabled: saved.enabled ? '1' : '0', saturday_bonus_from: saved.from, saturday_bonus_factor: String(saved.factor) };
-  }
+async function plannedShiftBreaks(shift, settings) {
   const start = timeToMinutes(shift.start_time);
   let end = timeToMinutes(shift.end_time);
   if (end <= start) end += 24 * 60;
@@ -19432,6 +19476,18 @@ async function shiftMetrics(shift, settings, { legacyOnly = false } = {}) {
       )
     : 0;
   const breakMinutes = Math.max(ruleBreakMinutes, lunchBreakMinutes);
+  return { start, end, rawMinutes, breakMinutes, lunchBreakMinutes, dayConfig };
+}
+
+async function shiftMetrics(shift, settings, { legacyOnly = false } = {}) {
+  const saturdayContext = !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
+    ? await saturdayCreditService.status(shift.employee_number, shift.shift_date) : null;
+  const cutover = saturdayContext?.cutover;
+  if (cutover && shift.shift_date < cutover.effectiveDate) {
+    const saved = cutover.legacySettings[String(shift.location_id || '')] || cutover.legacySettings['*'];
+    if (saved) settings = { ...settings, saturday_bonus_enabled: saved.enabled ? '1' : '0', saturday_bonus_from: saved.from, saturday_bonus_factor: String(saved.factor) };
+  }
+  const { start, end, rawMinutes, breakMinutes, lunchBreakMinutes, dayConfig } = await plannedShiftBreaks(shift, settings);
 
   let countedMinutes = rawMinutes - breakMinutes;
   let bonusMinutes = 0;
@@ -20430,16 +20486,21 @@ async function scheduleWorkRuleFacts(weekStart, context, employees, candidateShi
     });
   }
 
+  // Rule facts need working intervals and breaks, not payroll/Saturday valuation.
+  // Share only this evaluation's location reads; a later request reads fresh data.
+  const locationSettings = new Map();
   const normalizedShifts = await Promise.all(shifts.map(async (shift) => {
-    const metrics = await shiftMetrics(shift, await settingsForLocation(shift.location_id || context.locationId));
+    const locationId = String(shift.location_id || context.locationId);
+    if (!locationSettings.has(locationId)) locationSettings.set(locationId, settingsForLocation(locationId));
+    const { breakMinutes, lunchBreakMinutes } = await plannedShiftBreaks(shift, await locationSettings.get(locationId));
     return {
       id: String(shift.id),
       employeeId: String(shift.employee_number),
       date: shift.shift_date,
       startTime: shift.start_time,
       endTime: shift.end_time,
-      breakMinutes: metrics.break_minutes,
-      breakSource: metrics.lunch_break_minutes > 0 ? "planned_window" : (metrics.break_minutes > 0 ? "configured_assumption" : "none"),
+      breakMinutes,
+      breakSource: lunchBreakMinutes > 0 ? "planned_window" : (breakMinutes > 0 ? "configured_assumption" : "none"),
       locationId: String(shift.location_id || ""),
       departmentId: shift.department_id ? Number(shift.department_id) : null,
       dutyCode: String(shift.duty_code || ""),
@@ -22260,12 +22321,10 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     soft_pending: true,
   }));
   weekOptions.push(...pendingTimeOff);
-  const sicknessCredits = (await Promise.all(employees.map(async (employee) => (
-    (await sicknessCreditsForRange(employee.personnel_number, weekStart, weekEnd))
-      .filter((credit) => !weekOptions.some((option) => option.employee_number === employee.personnel_number
-        && option.option_type === "sick" && credit.date >= option.date_from && credit.date <= option.date_to))
-      .map((credit) => ({ employee_number: employee.personnel_number, ...credit }))
-  )))).flat();
+  const sicknessCredits = (await sicknessCreditsForEmployeesInRange(
+    employees.map((employee) => employee.personnel_number), weekStart, weekEnd,
+  )).filter((credit) => !weekOptions.some((option) => option.employee_number === credit.employee_number
+    && option.option_type === "sick" && credit.date >= option.date_from && credit.date <= option.date_to));
 
   const totals = {};
   const plannedTotals = {};
@@ -25662,8 +25721,16 @@ require("./lib/receipt-search-routes").registerReceiptSearchRoutes(app, {
   runtime: managedSalesHistoryRuntime, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }), preferences: uiPreferencesRepository,
 });
+require('./lib/trade-insights-routes').registerTradeInsightRoutes(app, {
+  runtime: require('./lib/persistence/repositories/trade-insights').createTradeInsightRuntime({ access: persistenceProvider, vault: integrationSecretVault }),
+  ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+  requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
+  refreshSession: (request, executor) => loadPortalSessionFromRequest(request, { touch: false, ...(executor ? { repository: require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor) } : {}) }),
+});
 require("./lib/branch-sales-routes").registerBranchSalesRoutes(app, {
   catalog: salesArticleCatalogRepository,
+  articleDetail: require('./lib/branch-article-detail').createBranchArticleDetail({ access: persistenceProvider, vault: integrationSecretVault }),
+  images: require('./lib/persistence/repositories/sales-article-images').createSalesArticleImagesRepository(persistenceProvider),
   receipts: require("./lib/persistence/repositories/branch-receipt-runtime").createBranchReceiptRuntime({
     access: persistenceProvider, vault: integrationSecretVault,
     ...(postgresqlActive ? { cashBackendFactory: require("./lib/persistence/postgresql/reporting/receipt-prefetch").createPostgresqlCashHistoryBackend,
@@ -41633,7 +41700,7 @@ async function normalizedOrganizationAccountInput(body = {}, { existing = null }
   if (invalidPermissions.length) {
     throw httpError(
       403,
-      "Filial- und Terminalkonten dÃ¼rfen ausschlieÃŸlich die dafÃ¼r freigegebenen Lesefunktionen erhalten.",
+      "Filial- und Terminalkonten dürfen ausschließlich die dafür freigegebenen Funktionen erhalten.",
       "PORTAL_ORGANIZATION_PERMISSION_DENIED",
     );
   }
@@ -55759,6 +55826,113 @@ app.post("/api/portal/v1/me/time-off-check", async (request, response) => {
   response.json(await evaluateTimeOffRequest(session.employeeNumber, request.body));
 });
 
+// Branch accounts submit through the same approval workflow as personal accounts.
+// The employee is a separate subject; the authenticated account remains the actor.
+async function currentBranchTimeOffContext(request, expected = null, repository = portalAccessRepository) {
+  const context = branchTimeOffContext(await loadPortalSessionFromRequest(request, { touch: false, repository }));
+  if (expected) sameBranchTimeOffContext(expected, context);
+  return context;
+}
+
+async function assertBranchTimeOffEmployee(context, employeeNumber, date, repository = absenceManagementRepository) {
+  const employee = await repository.employeeReviewScope({ employeeNumber, date, includeInactive: 0 });
+  if (!employee || String(employee.home_location_id || "") !== context.locationId) {
+    throw httpError(403, "Bitte ein aktives Teammitglied dieser Filiale auswählen.", "BRANCH_TIME_OFF_EMPLOYEE_SCOPE");
+  }
+  return employee;
+}
+
+function assertBranchTimeOffResponsibility(context, responsibility) {
+  if (String(responsibility.locationId || "") !== context.locationId) {
+    throw httpError(403, "Für diesen Zeitraum ist eine andere Filiale zuständig.", "BRANCH_TIME_OFF_RESPONSIBILITY_SCOPE");
+  }
+}
+
+async function recheckBranchTimeOffTarget(request, context, employeeNumber, date, repository = absenceManagementRepository) {
+  const current = await currentBranchTimeOffContext(request, context, repository.portalAccess);
+  await assertBranchTimeOffEmployee(current, employeeNumber, date, repository);
+}
+
+app.get("/api/portal/v1/branch-time-off/employees", async (request, response) => {
+  requirePortalSession(request, BRANCH_TIME_OFF_PERMISSION);
+  const context = await currentBranchTimeOffContext(request);
+  const [rows, location] = await Promise.all([
+    organizationPersonnelRepository.listEmployees(),
+    validateLocationExists(context.locationId),
+  ]);
+  await currentBranchTimeOffContext(request, context);
+  response.json({
+    location: { id: location.id, name: location.name },
+    employees: branchTimeOffEmployees(rows, context.locationId),
+  });
+});
+
+app.get("/api/portal/v1/branch-time-off/schedule", async (request, response) => {
+  requirePortalSession(request, BRANCH_TIME_OFF_PERMISSION);
+  const context = await currentBranchTimeOffContext(request);
+  const employeeNumber = branchTimeOffEmployeeNumber(request.query.employeeNumber);
+  const window = branchTimeOffScheduleWindow(request.query.date, request.query.view || "week");
+  const employee = await assertBranchTimeOffEmployee(context, employeeNumber, window.anchor);
+  const parameters = { weekStart: window.from, weekEnd: window.to };
+  const [location, shifts, selectedShifts] = await Promise.all([
+    validateLocationExists(context.locationId),
+    planningSettingsRepository.listLocationDashboardScheduleShifts({ locationId: context.locationId, ...parameters }),
+    planningSettingsRepository.listMobileScheduleShifts({ employeeNumber, ...parameters }),
+  ]);
+  await recheckBranchTimeOffTarget(request, context, employeeNumber, window.anchor);
+  const publicShift = shift => ({
+    date: shift.shift_date, startTime: shift.start_time, endTime: shift.end_time,
+    area: shift.area || "", departmentName: shift.department_name || "",
+  });
+  response.json({
+    ...window,
+    location: { id: location.id, name: location.name },
+    employee: { employeeNumber, fullName: employee.full_name },
+    shifts: shifts.map(shift => ({ ...publicShift(shift), employeeName: shift.nickname || shift.full_name })),
+    employeeShifts: selectedShifts.filter(shift => String(shift.location_id) === context.locationId).map(publicShift),
+  });
+});
+
+app.get("/api/portal/v1/branch-time-off/slots", async (request, response) => {
+  requirePortalSession(request, BRANCH_TIME_OFF_PERMISSION);
+  const context = await currentBranchTimeOffContext(request);
+  const employeeNumber = branchTimeOffEmployeeNumber(request.query.employeeNumber);
+  const { anchor: date } = branchTimeOffScheduleWindow(request.query.date);
+  await assertBranchTimeOffEmployee(context, employeeNumber, date);
+  const slots = branchTimeOffSlots(await ownTimeOffSlots(employeeNumber, date), context.locationId);
+  await recheckBranchTimeOffTarget(request, context, employeeNumber, date);
+  response.json(slots);
+});
+
+app.post("/api/portal/v1/branch-time-off/check", async (request, response) => {
+  requirePortalSession(request, BRANCH_TIME_OFF_PERMISSION);
+  assertPortalCsrf(request);
+  const context = await currentBranchTimeOffContext(request);
+  const employeeNumber = branchTimeOffEmployeeNumber(request.body?.employeeNumber);
+  const input = normalizedTimeOffInput(request.body);
+  branchTimeOffPeriod(input);
+  await assertBranchTimeOffEmployee(context, employeeNumber, input.dateFrom);
+  const responsibility = await assertTimeOffResponsibility(employeeNumber, input);
+  assertBranchTimeOffResponsibility(context, responsibility);
+  const check = await evaluateTimeOffRequest(employeeNumber, input, responsibility);
+  await recheckBranchTimeOffTarget(request, context, employeeNumber, input.dateFrom);
+  response.json(check);
+});
+
+app.post("/api/portal/v1/branch-time-off/requests", async (request, response) => {
+  requirePortalSession(request, BRANCH_TIME_OFF_PERMISSION);
+  assertPortalCsrf(request);
+  const context = await currentBranchTimeOffContext(request);
+  const employeeNumber = branchTimeOffEmployeeNumber(request.body?.employeeNumber);
+  const input = normalizedTimeOffInput(request.body);
+  branchTimeOffPeriod(input);
+  const authorize = async (repository, responsibility) => {
+    await recheckBranchTimeOffTarget(request, context, employeeNumber, input.dateFrom, repository);
+    if (responsibility) assertBranchTimeOffResponsibility(context, responsibility);
+  };
+  response.status(201).json(await createOwnTimeOffRequest(context.session, input, { employeeNumber, authorize }));
+});
+
 app.get("/api/portal/v1/me/time-off-slots", async (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
   response.json(await ownTimeOffSlots(session.employeeNumber, String(request.query.date || "")));
@@ -57431,19 +57605,23 @@ function normalizedTimeOffInput(body = {}) {
   };
 }
 
-async function createOwnTimeOffRequest(session, body = {}) {
+async function createOwnTimeOffRequest(session, body = {}, { employeeNumber = session.employeeNumber, authorize = null } = {}) {
   const input = normalizedTimeOffInput(body);
+  const actor = portalActorId(session);
   return absenceManagementRepository.transaction(async (repository) => {
-    const context = await assertTimeOffResponsibility(session.employeeNumber, input, repository);
+    if (authorize) await authorize(repository);
+    const context = await assertTimeOffResponsibility(employeeNumber, input, repository);
+    if (authorize) await authorize(repository, context);
     const check = await evaluateTimeOffRequest(
-      session.employeeNumber,
+      employeeNumber,
       input,
       context,
       repository,
     );
     if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
+    if (authorize) await authorize(repository, context);
     const result = await repository.insertTimeOffRequest({
-      employeeNumber: session.employeeNumber,
+      employeeNumber,
       locationId: context.locationId,
       originLocationId: context.originLocationId,
       reviewDepartmentId: context.departmentId,
@@ -57462,16 +57640,18 @@ async function createOwnTimeOffRequest(session, body = {}) {
     const id = Number(result.rows[0]?.id);
     const entry = {
       id,
-      employee_number: session.employeeNumber,
+      employee_number: employeeNumber,
       location_id: context.locationId,
       origin_location_id: context.originLocationId,
       review_department_id: context.departmentId,
       lending_id: context.lendingId,
       date_from: input.dateFrom,
     };
-    await recordRequestDecision("time_off", id, "employee", "submit", session.employeeNumber, "", repository);
-    await notifyAbsenceRequestReviewers(repository, entry, "time_off", "local", session.employeeNumber);
-    await auditAbsence(repository, session.employeeNumber, "time_off.request.create", "time_off_request", String(id), JSON.stringify(check));
+    await recordRequestDecision("time_off", id, "employee", "submit", actor,
+      session.sessionKind === "organization" ? "Über Filialkonto erfasst" : "", repository);
+    await notifyAbsenceRequestReviewers(repository, entry, "time_off", "local", actor);
+    await auditAbsence(repository, actor, "time_off.request.create", "time_off_request", String(id), JSON.stringify(check));
+    if (authorize) await authorize(repository, context);
     return { id, status: "pending", check };
   });
 }
