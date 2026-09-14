@@ -1,9 +1,11 @@
 # ACCDB-Import und nächtliche Sicherung
 
-Stand: 14.09.2026, lokal umgesetzt, noch nicht veröffentlicht. Ausgangspunkt ist
+Stand: 14.09.2026, veröffentlicht mit [v0.92.45-beta](DEPLOY-RELEASE-v09245.md). Ausgangspunkt ist
 die [Untersuchung der Unterbrechungen](INCIDENT-IMPORT-2026-09-14.md) und die
 anschließende Freigabe, den mobilen Dateidialog und die übrigen Korrekturen
-weiterzubearbeiten. Produktiv bleibt v0.92.44, Runtime a498d00.
+weiterzubearbeiten. Die folgende Untersuchung und lokale Umsetzung erfolgten
+noch gegen den Vorgänger v0.92.44, Runtime a498d00; der Releaseabschluss ist
+im verlinkten Protokoll festgehalten.
 
 ## Dateiauswahl am Handy
 

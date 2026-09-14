@@ -1,12 +1,13 @@
 # Dauerhafte ACCDB-Hintergrundprüfung
 
-Stand: 14.09.2026. Lokal umgesetzt und geprüft, noch nicht veröffentlicht.
+Stand: 14.09.2026. Veröffentlicht mit [v0.92.45-beta](DEPLOY-RELEASE-v09245.md).
 Ausgangspunkt: v0.92.44-beta, Runtime `a498d00f0dc07fea69ae68e0b9d3eaa96bc17b4d`.
 Die vorherige [Import-/Wartungskorrektur](IMPORT-STABILITAET-2026-09-14.md) bleibt
-enthalten. Weder produktive Imports noch Neustarts, Timeränderungen oder ein
-Deploy wurden für diese Untersuchung ausgeführt.
+enthalten. Die ursprüngliche Untersuchung und lokale Umsetzung erfolgten ohne
+produktiven Import, Neustart oder Timeränderung. Die anschließend freigegebene
+Veröffentlichung ist im verlinkten Releaseprotokoll dokumentiert.
 
-## Aktueller Befund am VPS
+## Befund am VPS vor der Veröffentlichung
 
 Lesende SSH-, PostgreSQL- und HTTP-Prüfung am 14.09.2026 um 11:33 und 11:59 CEST:
 
@@ -114,4 +115,5 @@ Nachweise: `tmp/import-background-final-tests.log`,
 `tmp/import-background-chunk-test.log`, `tmp/import-background-browser-result.json`,
 `tmp/import-background-browser.cjs`, `tmp/import-background-syntax.json`,
 `tmp/import-background-final-audit.log`. Syntaxprüfung und Persistenzaudit ohne
-Befund; veröffentlichte Versionsnummer und produktive Daten unverändert.
+Befund. Diese Prüfungen erfolgten vor der Veröffentlichung; produktive Abnahme
+und aktuelle Version sind im verlinkten Releaseprotokoll dokumentiert.
