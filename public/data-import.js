@@ -2,21 +2,23 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const labels={queued:'Wartet auf Verarbeitung',retrying:'Automatischer Wiederholungsversuch geplant',paused:'Prüfung pausiert',failed:'Prüfung benötigt Aufmerksamkeit',reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',
+  const labels={queued:'Wartet auf Verarbeitung',retrying:'Automatischer Wiederholungsversuch geplant',paused:'Auftrag pausiert',failed:'Auftrag benötigt Aufmerksamkeit',reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',rechecking:'Prüfung wird vorbereitet',
     needs_review:'Prüfung erforderlich',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen'};
   const label=state=>labels[state]||'Prüfung erforderlich';
   const number=value=>Number(value||0).toLocaleString('de-AT');
   const sourceLabel=kind=>({cash:'Kassen-Umsätze',trade:'TradeFoto-Stamm und Historie',bestell:'TradeFoto-Bestellungen, Rechnungen und Reparaturen'})[kind]||'Unbekannte Quelle';
   function renderSource(source,projection={}) {
     const tables=source.tables||[], received=tables.reduce((n,t)=>n+(t.run?.receivedRows||0),0), expected=tables.reduce((n,t)=>n+t.declaredRows,0),job=source.background;
+    const applied=tables.reduce((n,t)=>n+(t.run?.status==='applied'?t.run.receivedRows:t.run?.counts?.applied||0),0),takingOver=job?.phase==='applying'||['applying','applied'].includes(source.status),jobName=job?.phase==='applying'?'Übernahme':'Prüfung';
     return `<header><h3>${escape(sourceLabel(source.kind))}</h3><p>${escape(label(job?.status||source.status))} · ${number(received)} gelesene / ${number(expected)} deklarierte Zeilen</p></header>
       <progress max="${Math.max(expected,received,1)}" value="${received}" aria-label="Bereitgestellte Quellzeilen"></progress>
+      ${takingOver?`<p>${number(applied)} / ${number(received)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied').length)} / ${number(tables.length)} Tabellen abgeschlossen.</p><progress max="${Math.max(received,1)}" value="${applied}" aria-label="Übernommene Quellzeilen"></progress>${source.currentStep&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}`:''}
       <p class="data-import-note">Dateifingerabdruck <code>${escape(source.fileSha256)}</code><br>Bereitstellung begonnen: ${escape(source.createdAt)}. Das ist kein Belegdatum.</p>
       ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>`<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(t.name)}</strong><p>${number(p.expectedRows)} lesbare / ${number(p.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert; keine Daten- oder Bestandskorrektur.</p><small>Freigabe: ${escape(p.approvalReference)} · Erfasst: ${escape(p.recordedAt)}<br>Prüfnachweis: ${escape(p.evidenceReference)} · ${escape(p.id)}</small></aside>`)).join('')}
       ${source.storage==='cash-compact-v1'?`<p class="data-import-note">Gesamte Kassenhistorie · alle Zeiträume. ${number(source.verifiedRows)} gespeicherte Zeilen vollständig zurückgelesen und verglichen.</p>`:''}
-      ${job?`<p role="status">${['queued','reading','reviewing'].includes(job.status)?'Der Server arbeitet selbstständig weiter. Sie können den GP schließen.':job.status==='retrying'?`Ein vorübergehender Fehler ist aufgetreten. Wiederholungsversuch ${number(job.retries)} von ${number(job.maxRetries)} ist für ${escape(new Date(job.nextAt).toLocaleString('de-AT'))} geplant; kein erneuter Upload nötig.`:job.status==='paused'?'Die Prüfung ist pausiert. Sie können sie ohne erneuten Upload fortsetzen.':'Die automatischen Versuche wurden angehalten. Sie können den Auftrag erneut versuchen; bei einer ungültigen oder abgelaufenen Datei diese bitte neu auswählen.'}</p>
+      ${job?`<p role="status">${['queued','reading','reviewing','applying'].includes(job.status)?'Der Server arbeitet selbstständig weiter. Sie können den GP schließen.':job.status==='retrying'?`Ein vorübergehender Fehler ist aufgetreten. Wiederholungsversuch ${number(job.retries)} von ${number(job.maxRetries)} ist für ${escape(new Date(job.nextAt).toLocaleString('de-AT'))} geplant; kein erneuter Upload nötig.`:job.status==='paused'?`Die ${jobName} ist pausiert. Sie können sie ohne erneuten Upload fortsetzen.`:'Die automatischen Versuche wurden angehalten. Sie können den Auftrag am gespeicherten Stand erneut versuchen.'}</p>
         ${job.error?`<details><summary>Technischer Hinweis</summary><p>${escape(job.error)}</p></details>`:''}
-        <div class="data-import-actions">${['paused','failed'].includes(job.status)?`<button type="button" data-i-job="retry" ${!projection.prepare?'disabled':''}>Prüfung fortsetzen</button>`:`<button type="button" data-i-job="pause" ${!projection.prepare?'disabled':''}>Prüfung pausieren</button>`}</div>`
+        <div class="data-import-actions">${['paused','failed'].includes(job.status)?`<button type="button" data-i-job="retry" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} fortsetzen</button>`:`<button type="button" data-i-job="pause" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} pausieren</button>`}</div>`
         :source.error?`<p role="status">Unterbrechung: ${escape(source.error)}. Bitte denselben Dateistand erneut auswählen; bereits geprüfte Pakete bleiben erhalten.</p>`:''}
       <div class="data-import-actions">
         ${source.storage==='cash-compact-v1'&&source.status==='ready'?'<button type="button" data-i-publish>Kassenstand für Auswertungen auswählen</button>':''}
@@ -70,6 +72,11 @@
       if(action!=='review'&&!confirmAction(action==='apply'?'Geprüfte Quelltabellen schrittweise übernehmen?':'Eigene Importänderungen schrittweise zurücknehmen? Spätere Änderungen und Abhängigkeiten werden vor jedem Paket erneut geprüft. Es kann nur ein Teil rücknehmbar sein.'))return;
       const ticket=generation;working=true;el('stop')?.removeAttribute('hidden');
       try {
+        if(action==='apply'&&context.backgroundEnabled){
+          const result=await post(`/api/data-import/sources/${selected.id}/apply-background`,{expectedRevision:selected.revision});
+          if(disposed||ticket!==generation)return;selected=result;renderSelected();working=false;
+          message('Die Übernahme läuft am Server weiter. Sie können den GP schließen.');await refresh();return;
+        }
         do {
           const result=await post(`/api/data-import/sources/${selected.id}/${action}`,{expectedRevision:selected.revision});
           if(disposed||ticket!==generation)return;selected=result;renderSelected();

@@ -67,6 +67,21 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
     assert.equal((await request("/api/sales/articles")).status, 403);
     assert.equal((await request("/api/receipt-search/context")).status, 403);
   });
+  await t.test('bestehender Artikelimport ermöglicht RE und Ziel-RE auch vor dem vollständigen Stammdatenimport',async()=>{
+    const storage=require('../lib/persistence/sqlite/provider').openSqliteApplicationPersistence({databasePath:process.env.DB_PATH,catalog:require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG});
+    try{
+      const articles=[{sourceArticleKey:'1',articleNumber:'00042',description:'Kamera Aurora',active:true,sourceUpdatedAt:null,identifiers:[],prices:[
+        {priceType:'average_purchase',priceBasis:'unknown',qualityStatus:'unresolved',sourceField:'DurchschnittEK',amount:'100',currency:'EUR'},
+        {priceType:'average_purchase',priceBasis:'unknown',qualityStatus:'unresolved',sourceField:'EuroEk',amount:'0',currency:'EUR'},
+        ...[['gross','150'],['net','125']].map(([priceBasis,amount])=>({priceType:'sales',priceBasis,amount,currency:'EUR',qualityStatus:'inferred',sourceField:priceBasis==='gross'?'Verkaufspreis':'eNvk'}))]}];
+      const digest=value=>crypto.createHash('sha256').update(value).digest('hex');
+      await require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(storage.provider).importSnapshot({snapshot:{sourceSystem:'tradefoto.artikel_stamm',sourceProfileVersion:'branch-legacy-demo',sourceSchemaSha256:digest('legacy-schema'),sourceFileSha256:digest('legacy-file'),contentSha256:require('../lib/sales-article-catalog').salesArticleImportContentSha256(articles),snapshotAt:'2026-09-12T12:00:00.000Z',articles},actor:'synthetic-demo',timestamp:'2026-09-12T12:00:00.000Z'});
+      const result=await request('/api/portal/v1/branch-articles/detail?articleNumber=00042');
+      assert.equal(result.status,200,JSON.stringify(result.data));assert.equal(result.data.calculation.available,true);
+      const calc=require('../public/branch-article-calculation');assert.equal(calc.margin(result.data.retailGross,result.data.calculation).percent,20);
+      assert.equal(calc.sellingPrice(3,result.data.calculation).gross,123.72);
+    }finally{await storage.provider.close();storage.database.close();}
+  });
   await t.test("Belegfreischaltung öffnet nur Belege und erklärt einen fehlenden Kassenstand", async () => {
     await enable([R]); assert.equal((await request("/api/portal/v1/branch-articles")).status, 403);
     const context = await request("/api/portal/v1/branch-receipts/context"); assert.equal(context.status, 200); assert.equal(context.data.available, false);

@@ -3,6 +3,29 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const Calc = require('../public/branch-article-calculation'), UI = require('../public/portal-branch-sales');
 const { businessStatus, productLinks, usablePrice } = require('../lib/branch-article-detail');
 const basis = { available: true, purchaseNet: '100', vatPercent: 20 };
+const {articleCalculation}=require('../lib/branch-article-basis');
+const legacyArticle=()=>({sourceSystem:'tradefoto.artikel_stamm',prices:[
+  {priceType:'average_purchase',sourceField:'DurchschnittEK',amount:'955.306884385816',currency:'EUR',priceBasis:'unknown',qualityStatus:'unresolved'},
+  {priceType:'average_purchase',sourceField:'EuroEk',amount:'0',currency:'EUR',priceBasis:'unknown',qualityStatus:'unresolved'},
+  ...[['gross','1329'],['net','1107.5']].map(([priceBasis,amount])=>({priceType:'sales',amount,priceBasis,currency:'EUR',qualityStatus:'inferred'}))]});
+test('already accepted legacy article prices supply the confirmed average EK before the separate master takeover',()=>{
+  const article=legacyArticle(),calculation=articleCalculation(article);
+  assert.equal(calculation.available,true);assert.equal(calculation.purchaseNet,'955.306884385816');assert.equal(calculation.vatPercent,20);
+  assert.equal(Calc.margin('1329',calculation).amount.toFixed(2),'152.19');
+  assert.equal(Calc.sellingPrice(10,calculation).gross,1273.75);
+  const html=UI.articleBody({stocks:[],description:'Synthetic legacy article',retailGross:'1329',internetGross:'1289',calculation});
+  assert.doesNotMatch(html,/data-calc="percent"[^>]*disabled|RE nicht verfügbar/);assert.match(html,/aus Brutto-\/Nettopreisen/);
+});
+test('ambiguous prices and quarantine do not enable RE; an applied master remains authoritative',()=>{
+  for(const change of [a=>a.prices.push({...a.prices[0]}),a=>a.prices[0].qualityStatus='quarantined',a=>a.prices[0].sourceField='NNPreis',a=>a.prices[3].amount='1000']){
+    const a=legacyArticle();change(a);assert.equal(articleCalculation(a).available,false);
+  }
+  assert.equal(articleCalculation(legacyArticle(),{DurchschnittEK:'100',MWST:2}).vatPercent,10);
+  assert.equal(articleCalculation(legacyArticle(),{DurchschnittEK:null,MWST:1}).available,false);
+  assert.equal(articleCalculation(legacyArticle(),{DurchschnittEK:'100',MWST:99}).available,false);
+  for(const rate of [0,10,19,20]){const a=legacyArticle();a.prices[2].amount=String(100*(1+rate/100));a.prices[3].amount='100';assert.equal(articleCalculation(a).vatPercent,rate);}
+  const small=legacyArticle();small.prices[2].amount='0.01';small.prices[3].amount='0.01';assert.equal(articleCalculation(small).available,false);
+});
 test('RE uses net proceeds, supports loss and a 3 percent target without a percentage markup', () => {
   assert.deepEqual(Calc.margin('150', basis), { gross: 150, net: 125, amount: 25, percent: 20 });
   assert.deepEqual(Calc.margin('96', basis), { gross: 96, net: 80, amount: -20, percent: -25 });
@@ -40,6 +63,7 @@ test('Article body renders negative RE, safe media, links and independent access
   const html = UI.articleBody({ description: '<script>x</script>', status: '<b>Stamm</b>', ownLocationId: '00', stocks: [{ id: '00', own: true, quantity: '0' }, { id: '18', quantity: '-2' }],
     retailGross: '96', internetGross: '150', calculation: basis, links: [{ label: 'bad', href: 'javascript:alert(1)' }, { label: 'Produkt', href: 'https://example.com/' }], imageUrl: 'https://evil.test/tracking' });
   assert.match(html, /-25,00/); assert.match(html, /-20,00 € netto/); assert.match(html, /branch-negative/);
+  assert.match(html, /<strong class="branch-negative">96,00 €/);
   assert.match(html, /data-calc="gross"/); assert.match(html, /data-calc="percent"/); assert.match(html, /aria-live="polite"/);
   assert.match(html, /Filiale 00/); assert.match(html, /Filiale 18/); assert.match(html, /&lt;b&gt;Stamm/);
   assert.doesNotMatch(html, /javascript:|evil\.test|<script>/);

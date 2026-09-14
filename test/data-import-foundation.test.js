@@ -475,6 +475,21 @@ test('Productive Block 1: dependency recheck never clears conflicting source key
   assert.equal(f.targets().length,0);
 });
 
+test('large recheck commits bounded resets, survives reconstruction and never applies a partial preview',async t=>{
+  const f=await fixture(t);let run=await f.ready(Array.from({length:405},(_,i)=>sourceRow(String(i+1))));
+  run=await f.engine.recheck(run.id,run.revision);
+  assert.equal(run.status,'ready');assert.equal(run.counts.staged,200);assert.equal(run.counts.create,205);
+  await assert.rejects(f.engine.apply(run.id,run.revision),permissionError('IMPORT_PREVIEW_INCOMPLETE'));
+  const resumed=createDataImportEngine(f.composition);
+  run=await resumed.recheck(run.id,run.revision);assert.equal(run.counts.staged,400);
+  run=await resumed.recheck(run.id,run.revision);assert.equal(run.status,'reviewing');assert.equal(run.counts.staged,405);
+  do{run=await resumed.review(run.id,run.revision);}while(run.status==='reviewing');
+  do{run=await resumed.apply(run.id,run.revision);}while(run.status==='applying');
+  assert.equal(run.status,'applied');assert.equal(f.targets().length,405);
+  const counts=f.database.prepare('SELECT state,count(*) count FROM data_import_rows WHERE run_id=? GROUP BY state ORDER BY state').all(run.id);
+  assert.deepEqual(counts,f.database.prepare('SELECT state,count FROM data_import_run_state_counts WHERE run_id=? ORDER BY state').all(run.id));
+});
+
 test("Block 2: stored source-manifest mutation cannot clear an import gate", async t => {
   const f = await fixture(t); const run = await f.ready([sourceRow()], { gates: ["SOURCE_REVIEW_REQUIRED"] });
   const stored = f.database.prepare("SELECT manifest FROM data_import_runs WHERE id=?").get(run.id);

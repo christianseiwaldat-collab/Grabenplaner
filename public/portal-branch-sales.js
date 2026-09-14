@@ -35,7 +35,7 @@
     const stockRows = others.map(s => `<div><span>Filiale ${esc(s.id)}</span><b class="${sign(s.quantity)}">${esc(s.ambiguous ? 'Unklar' : quantity(s.quantity))}</b></div>`).join('');
     const links = (row.links || []).filter(l => { try { const url = new URL(l.href); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; } });
     const image = typeof row.imageUrl === 'string' && row.imageUrl.startsWith('/api/portal/v1/branch-articles/image?articleNumber=') ? row.imageUrl : null;
-    const price = (label, value) => `<div class="branch-article-price"><span>${label}</span><strong class="${sign(value)}">${esc(euro(value))}</strong><small>${marginText(Calc.margin(value, row.calculation))}</small></div>`;
+    const price = (label, value) => `<div class="branch-article-price"><span>${label}</span><strong class="${sign(Calc.margin(value,row.calculation)?.amount)}">${esc(euro(value))}</strong><small>${marginText(Calc.margin(value, row.calculation))}</small></div>`;
     return `<div class="branch-article-layout"><div class="branch-article-info"><p class="branch-article-status">${esc(row.status || 'Status nicht hinterlegt')}</p>
       <p class="branch-article-ean">EAN / GTIN: ${esc(row.primaryIdentifier || 'Nicht hinterlegt')}</p>
       <div class="branch-article-stock"><button type="button" data-stock aria-expanded="false">Bestand · Filiale ${esc(row.ownLocationId)} <b class="${sign(ownValue)}">${esc(quantity(ownValue))}</b><span aria-hidden="true"> ⓘ</span></button>
@@ -44,11 +44,11 @@
       <div class="branch-article-media">${image ? `<img src="${esc(image)}" alt="${esc(row.description)}" width="88" height="76" loading="lazy" decoding="async">` : '<span class="branch-article-no-image">Kein Bild</span>'}
         <nav aria-label="Produktlinks">${links.map(l => `<a href="${esc(l.href)}" target="_blank" rel="noopener noreferrer">${esc(l.label)} ↗</a>`).join('') || '<span class="branch-article-note">Keine Produktlinks hinterlegt</span>'}</nav></div></div>
       <div class="branch-article-prices">${price('VK brutto', row.retailGross)}${price('Internet brutto', row.internetGross)}
-        <div class="branch-article-calculator"><label><span>VK brutto kalkulieren (€)</span><input data-calc="gross" class="${sign(row.retailGross)}" type="text" inputmode="decimal" maxlength="22" autocomplete="off" value="${row.retailGross == null ? '' : esc(money(row.retailGross))}" ${row.calculation?.available ? '' : 'disabled'}></label>
+        <div class="branch-article-calculator"><label><span>VK brutto kalkulieren (€)</span><input data-calc="gross" class="${sign(Calc.margin(row.retailGross,row.calculation)?.amount)}" type="text" inputmode="decimal" maxlength="22" autocomplete="off" value="${row.retailGross == null ? '' : esc(money(row.retailGross))}" ${row.calculation?.available ? '' : 'disabled'}></label>
           <output data-calc-result="gross" aria-live="polite">${marginText(Calc.margin(row.retailGross, row.calculation))}</output>
           <label><span>Ziel-RE (%)</span><input data-calc="percent" type="text" inputmode="decimal" maxlength="16" autocomplete="off" placeholder="z. B. 3" ${row.calculation?.available ? '' : 'disabled'}></label>
           <output data-calc-result="percent" aria-live="polite"><small>Gewünschten RE eingeben.</small></output>
-          <p class="branch-article-note">${row.calculation?.available ? 'Basis: ' + esc(row.calculation.basis) + ' · ' + esc(money(row.calculation.vatPercent)) + ' % MwSt.' : 'Netto-Einkaufspreis oder MwSt. nicht verfügbar.'}</p>
+          <p class="branch-article-note">${row.calculation?.available ? 'Basis: ' + esc(row.calculation.basis) + ' · ' + esc(money(row.calculation.vatPercent)) + ' % MwSt.' + (row.calculation.vatSource==='price_pairs'?' (aus Brutto-/Nettopreisen)':'') : esc(row.calculation?.unavailableReason||'Netto-Einkaufspreis oder MwSt. nicht verfügbar.')}</p>
         </div></div></div>`;
   }
   function receiptRows(items) {
@@ -74,12 +74,13 @@
         <p>${esc(row.quantity)} × ${esc(money(row.sourcePrice))} = <b>${esc(lines?.money(lines.total(row.sourcePrice, row.quantity)) || "–")}</b></p></article>`).join("")}</div>`;
   }
 
-  function mount(root, { kind, api, getUser, lineFormat, download = saveBlob }) {
+  function mount(root, { kind, api, getUser, lineFormat, download = saveBlob,
+    scannerFactory=options=>(typeof module==='object'&&module.exports?require('./article-code-scanner'):globalThis.GrabenplanerArticleScanner).create(options) }) {
     const tab = kind === "articles" ? "branchArticles" : "branchReceipts";
     const identity = owner(getUser());
     let disposed = false, generation = 0, busy = false, downloading = false, paused = false;
     let initialized = false, loading = null, available = false, offset = 0, total = 0, next = null, detailId = null;
-    let detailGeneration = 0, today = "", context = null;
+    let detailGeneration = 0, today = "", context = null, scanner = null;
     let selectedLocations = new Set();
     const articles = new Map(), pendingArticles = new WeakSet();
     const valid = ticket => !disposed && ticket === generation && owner(getUser()) === identity && allowed(tab, getUser());
@@ -87,6 +88,7 @@
     function message(text, error = false) { el("message").textContent = text; el("message").classList.toggle("error", error); }
     function actions() {
       el("search").disabled = busy || !available;
+      if(kind==='articles')el('scan').disabled=busy||!available;
       el("previous").disabled = busy || !available || offset <= 0;
       el("next").disabled = busy || !available || (kind === "articles" ? offset + 20 >= total : !next);
       el("pause").hidden = kind === "articles" || !busy;
@@ -100,8 +102,8 @@
     }
     function formMarkup() {
       root.innerHTML = `<form data-b="form" class="branch-search-form">
-        <label class="branch-search-wide"><span>${kind === "articles" ? "Artikelnummer, Bezeichnung oder EAN" : "Artikelnummer oder Bezeichnung im Beleg"}</span>
-          <input type="search" data-b="query" maxlength="160" autocomplete="off" placeholder="${kind === "articles" ? "z. B. Kamera oder 000042" : "z. B. Objektiv"}"></label>
+        <div class="branch-search-wide branch-search-query"><label><span>${kind === "articles" ? "Artikelnummer, Bezeichnung oder EAN" : "Artikelnummer oder Bezeichnung im Beleg"}</span>
+          <input type="search" data-b="query" maxlength="160" autocomplete="off" placeholder="${kind === "articles" ? "z. B. Kamera oder 000042" : "z. B. Objektiv"}"></label>${kind==='articles'?'<button type="button" class="text-button branch-scan-button" data-b="scan" aria-label="EAN oder QR-Code mit Kamera scannen"><span aria-hidden="true">📷</span><span>Scannen</span></button>':''}</div>
         ${kind === "articles" ? '<label><span>Status</span><select data-b="status"><option value="active">Aktiv</option><option value="all">Alle</option><option value="inactive">Archiviert</option></select></label>'
           : `<label class="branch-search-receipt"><span>Belegnummer / Rechnungsreferenz</span><input type="search" data-b="receipt" maxlength="80" autocomplete="off"></label>
             <label><span>Von</span><input type="date" data-b="from" required min="1900-01-01"></label><label><span>Bis</span><input type="date" data-b="to" required min="1900-01-01"></label>
@@ -114,7 +116,15 @@
         <button class="text-button" data-b="previous" type="button" ${kind === "receipts" ? "hidden" : ""}>Zurück</button>
         <button class="text-button" data-b="next" type="button">${kind === "articles" ? "Weiter" : "Suche fortsetzen"}</button>
         <button class="text-button" data-b="pause" type="button" hidden>Suche pausieren</button></nav>
-        ${kind === "receipts" ? '<dialog class="branch-receipt-dialog" data-b="dialog" aria-labelledby="branchReceiptDetailTitle"><div class="branch-search-dialog-heading"><h2 id="branchReceiptDetailTitle" data-b="detail-title">Beleg</h2><button class="text-button" data-b="close" type="button" aria-label="Beleg schließen">Schließen</button></div><p class="branch-search-source">Informationsauszug aus dem Kassenstand. Kein Ersatz für den Originalbeleg.</p><div data-b="detail-body"></div><button class="primary" data-b="detail-pdf" type="button">PDF herunterladen</button></dialog>' : ""}`;
+        ${kind === "receipts" ? '<dialog class="branch-receipt-dialog" data-b="dialog" aria-labelledby="branchReceiptDetailTitle"><div class="branch-search-dialog-heading"><h2 id="branchReceiptDetailTitle" data-b="detail-title">Beleg</h2><button class="text-button" data-b="close" type="button" aria-label="Beleg schließen">Schließen</button></div><p class="branch-search-source">Informationsauszug aus dem Kassenstand. Kein Ersatz für den Originalbeleg.</p><div data-b="detail-body"></div><button class="primary" data-b="detail-pdf" type="button">PDF herunterladen</button></dialog>'
+          : '<dialog class="branch-scanner-dialog" data-b="scan-dialog" aria-labelledby="branchScannerTitle"><div class="branch-search-dialog-heading"><h2 id="branchScannerTitle">EAN / QR scannen</h2><button type="button" class="text-button" data-b="scan-close">Schließen</button></div><video data-b="scan-video" autoplay muted playsinline aria-label="Kameravorschau"></video><p data-b="scan-status" role="status" aria-live="polite"></p><p class="branch-article-note">Die Erkennung erfolgt auf diesem Gerät. Es werden keine Kamerabilder hochgeladen.</p></dialog>'}`;
+      if(kind==='articles'){
+        scanner=scannerFactory({dialog:el('scan-dialog'),video:el('scan-video'),status:el('scan-status'),active:()=>valid(generation),onValue:value=>{
+          if(!valid(generation))return;invalidate();el('query').value=value;void search(0);
+        }});
+        el('scan').addEventListener('click',()=>{if(!busy&&available&&valid(generation))void scanner.open();});
+        el('scan-close').addEventListener('click',()=>scanner.close());
+      }
       el("form").addEventListener("submit", event => { event.preventDefault(); void search(0); });
       el("form").addEventListener("input", event => { locationInput(event.target); invalidate(); message("Suchangaben geändert. Suche starten."); });
       el("reset").addEventListener("click", () => { invalidate(); el("form").reset(); dates(); resetLocations(); message("Suchangaben zurückgesetzt."); });
@@ -265,10 +275,10 @@
       if (!row) return;
       const value = Calc.input(input.value), result = input.dataset.calc === 'gross' ? Calc.margin(value, row.calculation) : Calc.sellingPrice(value, row.calculation);
       input.classList.remove('branch-positive', 'branch-negative');
-      const color = sign(value); if (color) input.classList.add(color);
+      const color = sign(result?.amount); if (color) input.classList.add(color);
       const output = card.querySelector(`[data-calc-result="${input.dataset.calc}"]`);
       if (input.dataset.calc === 'gross') output.innerHTML = result ? marginText(result) : 'Bitte einen gültigen Brutto-VK ab 0 € eingeben.';
-      else output.innerHTML = result ? `<strong class="${sign(result.gross)}">${esc(euro(result.gross))} brutto</strong><small>${marginText(result)}</small>`
+      else output.innerHTML = result ? `<strong class="${sign(result.amount)}">${esc(euro(result.gross))} brutto</strong><small>${marginText(result)}</small>`
         : '<small>' + (value == null ? 'Gewünschten RE eingeben.' : Number(row.calculation.purchaseNet) === 0 ? 'Bei 0 € Einkauf ist kein eindeutiger Zielpreis berechenbar.' : 'Bitte einen Ziel-RE unter 100 % eingeben.') + '</small>';
     }
     function stockKey(event) {
@@ -291,7 +301,8 @@
       if (button.dataset.detail) void detail(button.dataset.detail);
       if (button.dataset.pdf) void pdf(button.dataset.pdf);
     }
-    return { load, suspend() { paused = true; closeDetail(); }, destroy() {
+    return { load, suspend() { paused = true; closeDetail(); scanner?.close(); }, destroy() {
+      scanner?.destroy();scanner=null;
       disposed = true; generation++; closeDetail(); articles.clear(); root.removeEventListener("click", click);
       root.removeEventListener('toggle', articleToggle, true); root.removeEventListener('input', calculate); root.replaceChildren(); context = null;
       root.removeEventListener('keydown', stockKey); root.removeEventListener('mouseout', stockLeave);
