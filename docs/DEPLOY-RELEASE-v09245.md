@@ -91,7 +91,20 @@ fehlgeschlagenen Systemdienste, kein automatischer GP-Neustart. Die 24
 vorbestehenden historischen Fehlzustände wurden weder verändert noch quittiert.
 Boot-ID, PostgreSQL-, Caddy- und Lebensatlas-Prozesse bleiben unverändert.
 
-Die angemeldete Chrome-Sichtprüfung bleibt offen: Die vorhandene GP-Sitzung ist abgelaufen; eine zusätzliche automatisierte Nachladung wurde von Chrome mit ERR_BLOCKED_BY_CLIENT blockiert. Das wird als Grenze der Browserprüfung festgehalten, nicht als nachgewiesener GP-Serverfehler. Anmeldung und Browserschutz wurden nicht umgangen. Die unabhängigen HTTP- und isolierten Anwendungstests sind oben getrennt dokumentiert.
+Die angemeldete Chrome-Sichtprüfung wurde nach erneuter Anmeldung durch den
+Benutzer am 14.09.2026 um 13:13 CEST abgeschlossen. Die veröffentlichte Importseite
+zeigt v0.92.45 Beta, alle drei ACCDB-Datenquellen und den Hinweis auf automatische
+Serververarbeitung nach vollständigem Upload. Die Desktopansicht stellt Auswahl,
+Dateifeld, Kennwort, Fortschritt und Aktionen lesbar dar. Beide alten Unterbrechungen
+zeigen ihren erhaltenen Fortschritt; Fortsetzung und Übernahme bleiben bis zur
+erneuten Bereitstellung beziehungsweise vollständigen Prüfung gesperrt. Die
+ursprüngliche Trade-Ansicht wurde nach lesender Prüfung der Bestelldaten
+wiederhergestellt. Kein produktiver Upload oder Übernahmevorgang wurde ausgelöst.
+
+Die zunächst abgelaufene Sitzung und die automatisierte Chrome-Blockierung bleiben
+im ursprünglichen Nachweis erhalten. Sie waren Grenzen der damaligen Sichtprüfung,
+kein nachgewiesener GP-Serverfehler. Die erfolgreiche Sichtprüfung ergänzt diesen
+Nachweis separat; Anmeldung und Browserschutz wurden nicht umgangen.
 
 Der native Android-/Drive-Dateidialog und ein erneuter vollständiger produktiver
 Großimport sind nicht als getestet ausgewiesen. Die 89 gezielten Linux-Tests
@@ -110,6 +123,13 @@ Dauerhafte Nachweise:
 `/var/lib/grabenplaner-assurance/maintenance-evidence/v09245-20260914`.
 Lokale Kopie: `tmp/v09245-evidence`.
 Nachweismanifest SHA-256: `6f3404960f9f3881667a817369ffdfd29e9fecf29adb90d964adcb86d7208fdc`.
+
+Ergänzung zur angemeldeten Sichtprüfung im selben Nachweisordner:
+`ui-verification-authenticated-20260914.json`, SHA-256
+`6770866869a9733f31ccbf38af09ee4cffe638652ef1cebbfd95974931051d11`.
+Lokale und geschützte VPS-Kopie stimmen überein; ursprüngliches Manifest und
+ursprüngliche Sichtprüfungsdatei wurden nicht verändert. Für diese Ergänzung
+wurden weder Deploy noch Sicherungs- oder Wiederherstellungslauf wiederholt.
 
 Aus v0.92.44 unterbrochene Dateien benötigen nach Veröffentlichung einmalig einen
 erneuten Upload desselben Dateistands. Die alte Version hatte keine Quelldatei
