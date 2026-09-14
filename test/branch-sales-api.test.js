@@ -53,7 +53,7 @@ test.after(async () => {
 
 test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
   await t.test("beide Funktionen sind standardmäßig aus und erfordern eine Anmeldung", async () => {
-    for (const route of ["/api/portal/v1/branch-articles", "/api/portal/v1/branch-receipts/context"]) {
+    for (const route of ["/api/portal/v1/branch-articles", "/api/portal/v1/branch-articles/detail?articleNumber=00042", "/api/portal/v1/branch-articles/image?articleNumber=00042", "/api/portal/v1/branch-receipts/context"]) {
       assert.equal((await request(route)).status, 403); assert.equal((await request(route, { session: null })).status, 401);
     }
     for (const suffix of ["search", "documents", "export.pdf"]) assert.equal((await post(suffix, {})).status, 403);
@@ -89,24 +89,87 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
     const archive = await request("/api/portal/v1/branch-articles?status=inactive"); assert.equal(archive.data.total, 1); assert.equal(archive.data.items[0].active, false);
     assert.equal((await request("/api/portal/v1/branch-articles?query=not-existing")).data.total, 0);
   });
-  await t.test("Belegkontext, Nummern- und Positionssuche bleiben auf die Konto-Filiale begrenzt", async () => {
+  await t.test('Artikeldetails zeigen RE-Basis, Quellstatus, neueste Filialbestände und geschützte Bilder', async () => {
+    const result = await request('/api/portal/v1/branch-articles/detail?articleNumber=00042');
+    assert.equal(result.status, 200, JSON.stringify(result.data));
+    const row = result.data;
+    assert.equal(row.status, 'Abverkauf'); assert.equal(row.calculation.available, true);
+    assert.equal(Number(row.calculation.purchaseNet), 123.456789); assert.equal(row.calculation.vatPercent, 20);
+    assert.equal(row.calculation.basis, 'Durchschnitts-EK netto');
+    const noAverage = (await request('/api/portal/v1/branch-articles/detail?articleNumber=00043')).data;
+    assert.equal(noAverage.calculation.purchaseNet, null); assert.equal(noAverage.calculation.available, false);
+    assert.equal(row.stocks.length, 5); assert.equal(row.stocks.filter(s => s.own).length, 1);
+    assert.equal(row.stocks.find(s => s.own).quantity, '3'); assert.equal(row.stocks.find(s => s.id === '00').quantity, '0');
+    assert.equal(row.stocks.find(s => s.id === '77').quantity, '-1');
+    assert.equal(row.stockAt, '2026-09-13T12:00:00.000Z'); assert.equal(row.links.length, 3);
+    assert.doesNotMatch(JSON.stringify(row), /SECRET|Provision|fileSha256|sourceArticleKey|ownerId|productId|currentRevision/);
+    const image = await request(row.imageUrl, { raw: true }); assert.equal(image.status, 200);
+    assert.match(image.headers.get('content-type'), /image\/webp/); assert.match(image.headers.get('cache-control'), /no-store/);
+    assert.equal(image.data.toString('ascii', 8, 12), 'WEBP');
+    assert.equal((await request('/api/portal/v1/branch-articles/image?articleNumber=00043')).status, 404);
+    assert.equal((await request('/api/portal/v1/branch-articles/detail?articleNumber=missing')).status, 404);
+    assert.equal((await request('/api/portal/v1/branch-articles/detail?articleNumber=00042&locationId=94')).status, 422);
+    const missing = (await request('/api/portal/v1/branch-articles/detail?articleNumber=00046')).data;
+    assert.equal(missing.calculation.available, false); assert.equal(missing.status, 'Status nicht hinterlegt');
+  });
+  await t.test("Belegkontext bietet feste Gruppen und sucht standardmäßig nur in der eigenen Filiale", async () => {
     const context = await request("/api/portal/v1/branch-receipts/context"); assert.equal(context.data.location.id, "93");
-    assert.doesNotMatch(JSON.stringify(context.data), /94|customer|personnel/);
+    assert.deepEqual(context.data.defaultLocationIds, ['93']);
+    assert.deepEqual(context.data.locationGroups, { stock: ['05', '11', '13', '18', '77', '99'], internet: ['00', '03', '70', '90'] });
+    assert.ok(context.data.locations.some(l => l.id === '94')); assert.doesNotMatch(JSON.stringify(context.data), /UNKNOWN|customer|personnel/);
     const result = await post("search", query); assert.equal(result.status, 200, JSON.stringify(result.data));
     assert.equal(result.data.items.length, 20); assert.ok(result.data.next);
     const second = await post("search", { ...query, cursor: result.data.next }); assert.equal(second.data.items.length, 5); assert.equal(second.data.next, null);
     for (const rows of [result.data.items, second.data.items]) assert.ok(rows.every(item => item.locationId === "93"));
-    assert.doesNotMatch(JSON.stringify(result.data.items), /FOREIGN|090077|090078|personnel|customer/);
+    assert.doesNotMatch(JSON.stringify(result.data.items), /UNKNOWN|UNASSIGNED-CUSTOMER-SECRET/);
     for (const filter of [{ receipt: "10001" }, { receipt: "5001" }, { query: "00042" }]) {
       const found = await post("search", { ...query, ...filter }); assert.equal(found.status, 200); assert.ok(found.data.items.length);
     }
     assert.equal((await post("search", { ...query, receipt: "10025" })).data.items.length, 0);
-    assert.ok((await post("search", { ...query, query: "FOREIGN-RECEIPT-SECRET" })).data.items.length === 0);
+    assert.ok((await post("search", { ...query, query: "Kamera Demo" })).data.items.length === 0);
   });
-  await t.test("Detail und PDF enthalten vollständige eigene Positionen ohne Kunden- und Personaldaten", async () => {
+  await t.test('Filialen sind einzeln, mehrfach und unabhängig von zusammengefassten GP-Standorten suchbar', async () => {
+    for (const locations of [['94'], ['03'], ['70'], ['00'], ['05', '11', '13', '18', '77', '99'], ['00', '03', '70', '90'], ['03', '18', '77']]) {
+      const found = await post('search', { ...query, locations }); assert.equal(found.status, 200, JSON.stringify(found.data));
+      assert.deepEqual(found.data.items.map(r => r.locationId).sort(), [...locations].sort());
+      assert.doesNotMatch(JSON.stringify(found.data), /UNKNOWN|UNASSIGNED-CUSTOMER-SECRET/);
+    }
+    const foreign = await post('documents', { ids: [ids.foreignId] }); assert.equal(foreign.status, 200);
+    assert.equal(foreign.data.items[0].locationId, '94');
+    assert.equal((await post('export.pdf', { ids: [ids.foreignId] }, { raw: true })).status, 200);
+  });
+  await t.test('Belegverkäufer: exakte Nummern, führende Nullen und Oder-Auswahl; keine Positionsverkäufer', async () => {
+    for (const [sellers, receipts] of [['12', ['10000']], ['00012, 34,12', ['10000', '10001']], ['112', ['10002']], ['999', []]]) {
+      const found = await post('search', { ...query, sellers }); assert.equal(found.status, 200, JSON.stringify(found.data));
+      assert.deepEqual(found.data.items.map(r => r.receipt).sort(), receipts);
+    }
+  });
+  await t.test('Ein Kundenfilter durchsucht Namen, Straße, PLZ, Ort, Nummern, Telefon und E-Mail auch ohne CRM-Verknüpfung', async () => {
+    for (const customer of ['Mia Muster', 'Musterstrasse 12', '6020', 'Innsbruck', '090078', '8801', '43512123456', '43660111222', 'mia.muster@example.test', 'Mia 6020']) {
+      const found = await post('search', { ...query, customer, sellers: '12' });
+      assert.equal(found.status, 200, JSON.stringify(found.data)); assert.deepEqual(found.data.items.map(r => r.receipt), ['10000'], customer);
+    }
+    const found = await post('search', { ...query, customer: 'Noah Wien', sellers: '12,34' });
+    assert.deepEqual(found.data.items.map(r => r.receipt), ['10001']);
+    const mobile = await post('search', { ...query, customer: '43660333444' });
+    assert.deepEqual(mobile.data.items.map(r => r.receipt), ['10001']);
+    assert.equal(mobile.data.items[0].customerStatus, 'Kundenstamm verknüpft');
+    assert.match(mobile.data.items[0].customerPhone, /987654.*333444/);
+    for (const customer of ['Mia Wien', 'anonymous@example.test', 'UNASSIGNED-CUSTOMER-SECRET']) {
+      assert.equal((await post('search', { ...query, customer })).data.items.length, 0, customer);
+    }
+  });
+  await t.test('Suchfortsetzung ist an Filialen, Verkäufer und Kundenfilter gebunden', async () => {
+    const first = await post('search', query); assert.ok(first.data.next);
+    for (const change of [{ locations: ['94'] }, { sellers: '12' }, { customer: 'Mia' }]) {
+      assert.equal((await post('search', { ...query, ...change, cursor: first.data.next })).status, 409);
+    }
+  });
+  await t.test("Detail und PDF enthalten Positionen, Belegverkäufer und zugeordnete Kundendaten", async () => {
     const detail = await post("documents", { ids: [ids.ownId] }); assert.equal(detail.status, 200, JSON.stringify(detail.data));
     assert.equal(detail.data.items[0].lines.length, 1); assert.equal(detail.data.items[0].lines[0].quantity, "2");
-    assert.doesNotMatch(JSON.stringify(detail.data), /090077|090078|personnel|customer|FOREIGN/);
+    assert.equal(detail.data.items[0].personnel, '090077'); assert.equal(detail.data.items[0].customerName, 'Mia Muster');
+    assert.doesNotMatch(JSON.stringify(detail.data), /UNKNOWN|UNASSIGNED-CUSTOMER-SECRET/);
     const pdf = await post("export.pdf", { ids: [ids.ownId] }, { raw: true }); assert.equal(pdf.status, 200);
     assert.equal(pdf.data.subarray(0, 5).toString(), "%PDF-"); assert.match(pdf.headers.get("content-type"), /application\/pdf/);
     assert.match(pdf.headers.get("content-disposition"), /attachment/); assert.match(pdf.headers.get("cache-control"), /no-store/);
@@ -114,16 +177,18 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
     const task = getDocument({ data: new Uint8Array(pdf.data), isEvalSupported: false }), document = await task.promise;
     const text = (await (await document.getPage(1)).getTextContent()).items.map(item => item.str).join(" "); await task.destroy();
     assert.match(text, /Beleginformation - keine Rechnung/); assert.match(text, /499,80/); assert.match(text, /Kamera Aurora/);
-    assert.doesNotMatch(text, /090077|090078|FOREIGN|Personalnummer/);
+    assert.match(text, /090077/); assert.match(text, /Mia Muster/); assert.match(text, /mia.muster@example.test/);
+    assert.doesNotMatch(text, /UNKNOWN|UNASSIGNED-CUSTOMER-SECRET/);
     if (process.env.BRANCH_SALES_PDF_QA) { fs.mkdirSync(path.dirname(process.env.BRANCH_SALES_PDF_QA), { recursive: true }); fs.writeFileSync(process.env.BRANCH_SALES_PDF_QA, pdf.data); }
   });
-  await t.test("fremde Beleg-IDs, fehlendes CSRF und manipulierte Filter werden abgewiesen", async () => {
+  await t.test("nicht zuordenbare Beleg-IDs, fehlendes CSRF und manipulierte Filter werden abgewiesen", async () => {
     for (const suffix of ["documents", "export.pdf"]) {
-      assert.equal((await post(suffix, { ids: [ids.foreignId] })).status, 403);
+      assert.equal((await post(suffix, { ids: [ids.unassignedId] })).status, 403);
       assert.equal((await post(suffix, { ids: [ids.ownId] }, { session: { cookie: branch.cookie } })).status, 403);
       assert.equal((await post(suffix, { ids: [ids.ownId, ids.foreignId] })).status, 422);
     }
-    for (const spoof of [{ locationId: "94" }, { sourceId: "another" }, { kind: "journal" }, { seller: "090077" }, { customer: "090078" }, { projection: { company: true } }]) {
+    for (const spoof of [{ locationId: "94" }, { sourceId: "another" }, { kind: "journal" }, { seller: "090077" }, { customer: {} }, { projection: { company: true } },
+      { locations: [] }, { locations: ['255'] }, { locations: ['03,70'] }, { locations: '03' }, { locations: ['3'] }, { sellers: '12,' }, { sellers: '12,,34' }, { sellers: 'abc' }, { sellers: '12;34' }, { sellers: 12 }]) {
       assert.equal((await post("search", { ...query, ...spoof })).status, 422);
     }
     for (const route of ["?locationId=94", "?query[]=x", "?offset=-1", "?sort=purchaseNet"]) {
@@ -175,9 +240,10 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
       const second = await run(w => w.receipts.search({ ...search, cursor: first.next })); assert.equal(second.items.length, 5);
       assert.ok([...first.items, ...second.items].every(item => item.locationId === "93"));
       const detail = await run(w => w.receipts.documents({ ids: [ids.ownId] })); assert.equal(detail.items[0].lines.length, 1);
-      assert.doesNotMatch(JSON.stringify(detail), /FOREIGN|090077|090078/);
+      assert.equal(detail.items[0].personnel, "090077");
+      assert.doesNotMatch(JSON.stringify(detail), /UNKNOWN|UNASSIGNED-CUSTOMER-SECRET/);
       await assert.rejects(read({ ...sent, sourceRevision: "outdated" }), e => e.code === "IMPORT_HISTORY_RESULTS_CHANGED");
-      await assert.rejects(run(w => w.receipts.documents({ ids: [ids.foreignId] })), e => e.code === "IMPORT_FORBIDDEN");
+      await assert.rejects(run(w => w.receipts.documents({ ids: [ids.unassignedId] })), e => e.code === "IMPORT_FORBIDDEN");
       revoke = true;
       await assert.rejects(run(w => w.receipts.documents({ ids: [ids.ownId] })), e => e.status === 403);
     } finally { await Promise.all(workers.map(worker => worker.stop())); await reader.provider.close(); reader.database.close(); }

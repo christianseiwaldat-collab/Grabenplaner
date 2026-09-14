@@ -30,6 +30,7 @@ async function withCoreFixture(work){
   try {
     await verifyEnvironment(migrator,{purpose:'migrator'});
     if((await migrator.query("SELECT to_regclass('gp.boundary_migration_history') AS name")).rows[0].name)tableNames.push('import_master_bindings','import_master_events','import_master_holds','trade_source_references','trade_source_reference_versions','sales_audit_inbox');
+    if((await migrator.query("SELECT to_regclass('gp.trade_annotations') AS name")).rows[0].name)tableNames.push('trade_annotations');
     const occupied=(await migrator.query(tableNames.map(t=>`SELECT EXISTS(SELECT 1 FROM gp."${t}") occupied`).join(' UNION ALL '))).rows;
     assert.ok(occupied.every(r=>!r.occupied),'Parity fixture requires empty development application tables');
     const operations=[];seedCoreFixture({exec(sql){if(!['BEGIN','COMMIT'].includes(sql))operations.push(sql);},prepare(sql){return{run(...params){let i=0;operations.push(sql.replace(/\?/g,()=>quote(params[i++])));}};}},3);
@@ -43,7 +44,7 @@ async function withCoreFixture(work){
     await work({sqlite,sqliteProvider,postgres:application.provider,sqliteRepositories:coreRepositories(sqliteProvider),postgresRepositories:application.repositories,application,migrator});
   }finally{
     await application?.close();await sqliteProvider?.close();sqlite?.close();
-    await migrator.query('ROLLBACK');
+    await migrator.query('ROLLBACK');await migrator.query('RESET ROLE');
     if(owned){
       await verifyEnvironment(migrator,{purpose:'migrator'});
       const marker=(await migrator.query("SELECT value FROM gp.settings WHERE key='migration-test-owner'")).rows;

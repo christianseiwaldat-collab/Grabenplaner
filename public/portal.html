@@ -71,7 +71,7 @@
           <div class="portal-card branch-sales-workspace" id="branchArticlesWorkspace"></div>
         </section>
         <section class="portal-view" id="branchReceiptsView" role="tabpanel" aria-labelledby="branchReceiptsTab">
-          <div class="view-heading"><div><span class="eyebrow">Filialkonto</span><h1>Belegsuche</h1><p>Kassenbelege der zugewiesenen Filiale suchen, ansehen und als Beleginformation herunterladen.</p></div></div>
+          <div class="view-heading"><div><span class="eyebrow">Filialkonto</span><h1>Belegsuche</h1><p>Kassenbelege suchen, ansehen und als Beleginformation herunterladen. Die eigene Filiale ist vorausgewählt; weitere freigegebene Filialen stehen in der Auswahl.</p></div></div>
           <div class="portal-card branch-sales-workspace" id="branchReceiptsWorkspace"></div>
         </section>
 
@@ -376,10 +376,12 @@
 
         <section class="portal-view" id="timeOffView" role="tabpanel">
           <button class="text-button request-back-button hidden" type="button" data-request-tab="history">← Meine Anträge</button>
-          <div class="view-heading"><div><span class="eyebrow">Selbstverwaltung</span><h1>Zeitausgleich beantragen</h1><p>Die Ampel prüft den aktuellen Dienstplan und zeigt sofort, ob der Zeitraum möglich ist.</p></div></div>
+          <div class="view-heading"><div><span class="eyebrow" id="timeOffContextLabel">Selbstverwaltung</span><h1>Zeitausgleich beantragen</h1><p>Die Ampel prüft den aktuellen Dienstplan. Der Antrag wird anschließend zur Genehmigung eingereicht.</p></div></div>
           <div class="vacation-layout">
             <form class="portal-card request-form" id="timeOffRequestForm">
               <h2 id="timeOffFormTitle">Neuer ZA-Antrag</h2>
+              <label class="hidden" id="branchTimeOffEmployeeField"><span>Teammitglied der Filiale</span><select id="branchTimeOffEmployee"><option value="">Bitte auswählen</option></select></label>
+              <fieldset class="time-off-fields" id="timeOffFields">
               <fieldset class="request-mode"><legend>Zeitraum</legend><label><input type="radio" name="timeOffMode" value="hours" checked /> Stundenweise</label><label><input type="radio" name="timeOffMode" value="day" /> Ganztägig</label><label><input type="radio" name="timeOffMode" value="range" /> Mehrtägig</label></fieldset>
               <div class="date-fields"><label><span id="timeOffDateLabel">Datum</span><input id="timeOffDate" type="date" required /></label><label class="hidden" id="timeOffDateToField"><span>Bis</span><input id="timeOffDateTo" type="date" /></label></div>
               <div class="date-fields" id="timeOffTimeFields"><label><span>Von</span><select id="timeOffStart" required disabled><option value="">Datum wählen</option></select></label><label><span>Bis</span><select id="timeOffEnd" required disabled><option value="">Beginn wählen</option></select></label></div>
@@ -389,8 +391,21 @@
               <p class="message hidden" id="timeOffMessage"></p>
               <button class="primary" id="timeOffSubmitButton" type="submit" disabled>Antrag absenden</button>
               <button class="text-button hidden" id="cancelTimeOffEdit" type="button">Bearbeitung abbrechen</button>
+              </fieldset>
             </form>
-            <section class="portal-card"><div class="list-heading"><h2>Meine ZA-Anträge</h2><button class="text-button" id="timeOffArchiveToggle" type="button">Archiv</button></div><div class="request-list" id="timeOffRequestList"></div></section>
+            <section class="portal-card hidden branch-time-off-schedule" id="branchTimeOffSchedule" aria-labelledby="branchTimeOffScheduleTitle">
+              <div class="list-heading"><div><h2 id="branchTimeOffScheduleTitle">Dienstplan zum Antrag</h2><p id="branchTimeOffScheduleLocation"></p></div><button class="text-button" id="branchTimeOffScheduleRefresh" type="button">Aktualisieren</button></div>
+              <div class="branch-time-off-calendar-controls">
+                <div class="branch-time-off-period-toggle" role="group" aria-label="Dienstplanansicht"><button type="button" id="branchTimeOffWeek" aria-pressed="true">Woche</button><button type="button" id="branchTimeOffMonth" aria-pressed="false">Monat</button></div>
+                <div class="branch-time-off-calendar-nav"><button type="button" id="branchTimeOffPrevious" aria-label="Vorheriger Zeitraum">←</button><button type="button" id="branchTimeOffAnchor">Zum Antrag</button><button type="button" id="branchTimeOffNext" aria-label="Nächster Zeitraum">→</button></div>
+              </div>
+              <h3 id="branchTimeOffSchedulePeriod"></h3>
+              <p class="branch-time-off-schedule-status" id="branchTimeOffScheduleStatus" role="status">Bitte zuerst ein Teammitglied auswählen.</p>
+              <div id="branchTimeOffScheduleGrid"></div>
+              <div id="branchTimeOffScheduleDetail"></div>
+              <p class="branch-time-off-schedule-note">Angezeigt werden die bereits erfassten Dienste dieser Filiale. Ohne Einteilung ist der Planungsstand offen. Der markierte ZA-Zeitraum ist noch kein genehmigter Zeitausgleich.</p>
+            </section>
+            <section class="portal-card" id="timeOffHistoryCard"><div class="list-heading"><h2>Meine ZA-Anträge</h2><button class="text-button" id="timeOffArchiveToggle" type="button">Archiv</button></div><div class="request-list" id="timeOffRequestList"></div></section>
           </div>
         </section>
 
@@ -820,7 +835,10 @@
     <script src="/credential-boundaries.js"></script>
     <script src="/navigation-history.js"></script>
     <script src="/receipt-line-format.js"></script>
+    <script src="/branch-article-calculation.js"></script>
+    <script src="/branch-receipt-filters.js"></script>
     <script src="/portal-branch-sales.js"></script>
+    <script src="/portal-branch-time-off.js"></script>
     <script src="/portal.js"></script>
   </body>
 </html>

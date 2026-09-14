@@ -2,6 +2,7 @@ const portalState = {
   session: null,
   weekStart: mondayOf(new Date()),
   timeOffCheck: null,
+  timeOffSubmitting: false,
   vacationCheck: null,
   vacationChange: null,
   timeOffChange: null,
@@ -240,6 +241,7 @@ const el = Object.fromEntries([
   "leadershipRequestDialog", "leadershipRequestForm", "leadershipRequestTitle", "leadershipRequestSummary", "leadershipRequestHistory", "leadershipRequestDocuments", "leadershipSicknessFields", "leadershipSicknessExpectedEnd", "leadershipSicknessReturnDate", "leadershipCorrectionEntries", "addLeadershipCorrectionEntry", "leadershipRequestNote", "leadershipRequestMessage", "leadershipRequestActions",
   "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
   "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
+  "timeOffFields", "timeOffDateLabel", "timeOffContextLabel", "timeOffHistoryCard", "branchTimeOffEmployeeField", "branchTimeOffEmployee", "branchTimeOffSchedule", "branchTimeOffScheduleTitle", "branchTimeOffScheduleLocation", "branchTimeOffScheduleRefresh", "branchTimeOffSchedulePeriod", "branchTimeOffScheduleStatus", "branchTimeOffScheduleGrid", "branchTimeOffScheduleDetail", "branchTimeOffWeek", "branchTimeOffMonth", "branchTimeOffPrevious", "branchTimeOffNext", "branchTimeOffAnchor",
   "timeOffSubmitButton", "cancelTimeOffEdit", "timeOffArchiveToggle", "timeOffRequestList", "vacationRequestForm", "vacationFormTitle", "vacationDateFrom", "vacationDateTo", "vacationNote",
   "vacationCheck", "vacationMessage", "vacationSubmitButton", "cancelVacationEdit", "vacationRequestList", "approvedVacationList", "passwordDialog",
   "passwordForm", "passwordChangeUsername", "currentPassword", "newPassword", "repeatPassword", "passwordMessage", "vacationChangeDialog", "timeOffChangeDialog",
@@ -403,13 +405,15 @@ async function api(url, options = {}) {
   try {
     response = await fetch(url, { ...fetchOptions, headers });
   } catch (error) {
-    throw window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname });
+    throw window.GrabenplanerApiErrors?.fromNetwork
+      ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
+      : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
   }
   if (!response.ok) {
-    const detail = await window.GrabenplanerApiErrors.fromResponse(response, {
+    const detail = window.GrabenplanerApiErrors?.fromResponse ? await window.GrabenplanerApiErrors.fromResponse(response, {
       hostname: location.hostname,
       fallback: "Die Aktion konnte nicht ausgeführt werden.",
-    });
+    }) : await response.json().then(data => ({message: data.error || "Die Anmeldung oder Aktion ist vorübergehend nicht möglich. Bitte erneut versuchen.", code: data.code || ""})).catch(() => ({message: "Der Grabenplaner ist vorübergehend nicht erreichbar. Bitte erneut versuchen.", code: ""}));
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
@@ -901,7 +905,9 @@ function portalTabAllowed(tab, user = portalUser()) {
   }
   if (tab === "leadershipMore") return !isOrganizationAccount(user);
   if (tab === "timeTracking") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
-  if (tab === "timeOff") return permissions.includes("own_vacation:request");
+  if (tab === "timeOff") return isOrganizationAccount(user)
+    ? user.accountType === "branch" && permissions.includes("branch_time_off:submit")
+    : permissions.includes("own_vacation:request");
   if (tab === "vacation") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request"].includes(permission));
   if (tab === "history") {
     return permissions.some((permission) => [
@@ -1102,7 +1108,7 @@ function applyMobileLeadershipLayout() {
       button.classList.add("hidden");
       button.classList.add("mobile-navigation-hidden");
     });
-    ["home", "schedule", "branchArticles", "branchReceipts", "learningDashboard", "branchOrders", "loan", "branchVacation"]
+    ["home", "schedule", "timeOff", "branchArticles", "branchReceipts", "learningDashboard", "branchOrders", "loan", "branchVacation"]
       .filter((tab) => portalTabAllowed(tab))
       .forEach((tab, index) => {
         const button = document.querySelector(`[data-tab="${tab}"]`);
@@ -2250,6 +2256,7 @@ function showLogin(error = "") {
   resetPersonalActionsState("");
   portalState.session = null;
   resetBranchSalesWorkspaces();
+  resetBranchTimeOffState();
   clearCandidateEvaluationState();
   portalState.personnelLearningDashboard = null;
   portalState.personnelLearningDashboardAvailable = false;
@@ -2268,6 +2275,7 @@ function showLogin(error = "") {
 
 function applySelfServiceVisibility() {
   syncBranchSalesWorkspaces(portalState.activeTab);
+  configureBranchTimeOffForm();
   const canCreatePrivacyRequest = hasPortalPermission("own_privacy_requests:create");
   const canReadPrivacyRequests = hasPortalPermission("own_privacy_requests:read");
   const canReadPrivacyExports = hasPortalPermission("own_privacy_export:read");
@@ -2344,6 +2352,7 @@ function populateVacationAccountYears() {
 
 function showPortal(session) {
   if (window.GrabenplanerBranchSales?.owner(portalUser()) !== window.GrabenplanerBranchSales?.owner(session?.user)) resetBranchSalesWorkspaces();
+  if (timeOffOwnerKey() !== timeOffOwnerKey(session?.user)) resetBranchTimeOffState();
   const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
     || processTaskActorFingerprint(portalUser());
   const nextPersonalActionsActor = portalPersonalActionsActorKey(session?.user);
@@ -2582,8 +2591,8 @@ function setTab(tab) {
   if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
   const tabChanged = portalState.activeTab !== tab;
   portalState.activeTab = tab;
-  syncBranchSalesWorkspaces(tab);
   rememberPortalTab(tab);
+  syncBranchSalesWorkspaces(tab);
   document.body.classList.toggle("portal-settings-active", tab === "settings" && isMobileUi());
   syncPortalTabButtons(tab);
   el.portalSettingsShortcut?.classList.toggle("active", tab === "settings");
@@ -4466,6 +4475,24 @@ function updateTraffic(node, result, emptyText) {
 }
 
 let timeOffCheckTimer;
+let timeOffCheckGeneration = 0;
+let timeOffSlotsGeneration = 0;
+
+function invalidateTimeOffCheck() {
+  clearTimeout(timeOffCheckTimer);
+  timeOffCheckGeneration += 1;
+  portalState.timeOffCheck = null;
+  portalState.timeOffCheckFingerprint = "";
+  el.timeOffSubmitButton.disabled = true;
+}
+
+function timeOffFormFingerprint() {
+  return JSON.stringify([timeOffOwnerKey(), timeOffPayload(), portalState.editingTimeOffId]);
+}
+
+function timeOffSlotsKey() {
+  return JSON.stringify([timeOffOwnerKey(), el.branchTimeOffEmployee.value, el.timeOffDate.value, timeOffMode()]);
+}
 function timeOffMode() {
   return document.querySelector('input[name="timeOffMode"]:checked')?.value || "hours";
 }
@@ -4473,6 +4500,7 @@ function timeOffMode() {
 function timeOffPayload() {
   const mode = timeOffMode();
   return {
+    ...(isBranchTimeOffAccount() ? { employeeNumber: el.branchTimeOffEmployee.value } : {}),
     date: el.timeOffDate.value,
     dateFrom: el.timeOffDate.value,
     dateTo: mode === "range" ? el.timeOffDateTo.value : el.timeOffDate.value,
@@ -4487,37 +4515,47 @@ function timeOffPayload() {
 function updateTimeOffMode() {
   const mode = timeOffMode();
   const hourly = mode === "hours";
+  el.timeOffDateLabel.textContent = mode === "range" ? "Von" : "Datum";
   el.timeOffTimeFields.classList.toggle("hidden", !hourly);
   [el.timeOffStart, el.timeOffEnd].forEach((field) => {
     field.required = hourly;
-    field.disabled = !hourly || !el.timeOffDate.value || (field === el.timeOffEnd && !el.timeOffStart.value);
+    field.disabled = !hourly || !el.timeOffDate.value || !portalState.timeOffSlots
+      || portalState.timeOffSlotsKey !== timeOffSlotsKey() || (field === el.timeOffEnd && !el.timeOffStart.value);
   });
   el.timeOffDateToField.classList.toggle("hidden", mode !== "range");
   el.timeOffDateTo.required = mode === "range";
   el.timeOffDateTo.min = el.timeOffDate.value || new Date().toISOString().slice(0, 10);
   if (mode === "range" && (!el.timeOffDateTo.value || el.timeOffDateTo.value < el.timeOffDate.value)) el.timeOffDateTo.value = el.timeOffDate.value;
   checkTimeOff();
+  renderBranchTimeOffSchedule();
 }
 
 async function checkTimeOff() {
-  clearTimeout(timeOffCheckTimer);
+  invalidateTimeOffCheck();
+  const generation = timeOffCheckGeneration;
+  const fingerprint = timeOffFormFingerprint();
   const payload = timeOffPayload();
-  if (!payload.dateFrom || (timeOffMode() === "range" && !payload.dateTo) || (timeOffMode() === "hours" && (!payload.startTime || !payload.endTime))) {
-    portalState.timeOffCheck = null;
-    el.timeOffSubmitButton.disabled = true;
-    updateTraffic(el.timeOffCheck, null, "Danach wird die aktuelle Planung geprüft.");
+  if ((isBranchTimeOffAccount() && !payload.employeeNumber) || !payload.dateFrom
+    || (timeOffMode() === "range" && !payload.dateTo) || (timeOffMode() === "hours" && (!payload.startTime || !payload.endTime))) {
+    updateTraffic(el.timeOffCheck, null, isBranchTimeOffAccount() && !payload.employeeNumber
+      ? "Bitte zuerst ein Teammitglied auswählen." : "Danach wird die aktuelle Planung geprüft.");
     return;
   }
+  updateTraffic(el.timeOffCheck, null, "Zeitraum wird geprüft …");
   timeOffCheckTimer = setTimeout(async () => {
+    if (generation !== timeOffCheckGeneration || fingerprint !== timeOffFormFingerprint()) return;
     try {
-      const result = await api("/api/portal/v1/me/time-off-check", {
+      const result = await api(isBranchTimeOffAccount() ? "/api/portal/v1/branch-time-off/check" : "/api/portal/v1/me/time-off-check", {
         method: "POST",
-        body: JSON.stringify({ ...payload, excludeRequestId: portalState.editingTimeOffId }),
+        body: JSON.stringify(isBranchTimeOffAccount() ? payload : { ...payload, excludeRequestId: portalState.editingTimeOffId }),
       });
+      if (generation !== timeOffCheckGeneration || fingerprint !== timeOffFormFingerprint()) return;
       portalState.timeOffCheck = result;
-      el.timeOffSubmitButton.disabled = !result.allowed;
+      portalState.timeOffCheckFingerprint = fingerprint;
+      el.timeOffSubmitButton.disabled = !result.allowed || portalState.timeOffSubmitting;
       updateTraffic(el.timeOffCheck, result, "");
     } catch (error) {
+      if (generation !== timeOffCheckGeneration || fingerprint !== timeOffFormFingerprint()) return;
       portalState.timeOffCheck = { trafficLight: "red", allowed: false, reason: error.message };
       el.timeOffSubmitButton.disabled = true;
       updateTraffic(el.timeOffCheck, portalState.timeOffCheck, "");
@@ -4526,28 +4564,47 @@ async function checkTimeOff() {
 }
 
 async function loadTimeOffSlots() {
+  const generation = ++timeOffSlotsGeneration;
+  const key = timeOffSlotsKey();
+  invalidateTimeOffCheck();
+  portalState.timeOffSlots = null;
+  portalState.timeOffSlotsKey = "";
   const date = el.timeOffDate.value;
+  el.timeOffStart.innerHTML = '<option value="">Datum wählen</option>';
+  el.timeOffEnd.innerHTML = '<option value="">Beginn wählen</option>';
   if (timeOffMode() !== "hours") {
     el.timeOffStart.disabled = true;
     el.timeOffEnd.disabled = true;
+    checkTimeOff();
     return;
   }
   el.timeOffStart.disabled = true;
   el.timeOffEnd.disabled = true;
   el.timeOffStart.innerHTML = '<option value="">Zeiten werden geladen</option>';
   el.timeOffEnd.innerHTML = '<option value="">Beginn wählen</option>';
-  if (!date) return;
+  if (!date || (isBranchTimeOffAccount() && !el.branchTimeOffEmployee.value)) {
+    el.timeOffStart.innerHTML = '<option value="">Person und Datum wählen</option>';
+    return;
+  }
   try {
-    const data = await api(`/api/portal/v1/me/time-off-slots?date=${encodeURIComponent(date)}`);
+    const query = new URLSearchParams({ date });
+    if (isBranchTimeOffAccount()) query.set("employeeNumber", el.branchTimeOffEmployee.value);
+    const route = isBranchTimeOffAccount() ? "/api/portal/v1/branch-time-off/slots" : "/api/portal/v1/me/time-off-slots";
+    const data = await api(`${route}?${query}`);
+    if (generation !== timeOffSlotsGeneration || key !== timeOffSlotsKey()) return;
     if (data.closed) {
+      el.timeOffStart.innerHTML = '<option value="">Keine Zeiten verfügbar</option>';
       updateTraffic(el.timeOffCheck, { trafficLight: "red", allowed: false, reason: data.reason }, "");
       return;
     }
     portalState.timeOffSlots = data;
+    portalState.timeOffSlotsKey = key;
     el.timeOffStart.innerHTML = `<option value="">Von wählen</option>${data.startTimes.map((time) => `<option value="${esc(time)}">${esc(time)}</option>`).join("")}`;
     el.timeOffStart.disabled = false;
     updateTraffic(el.timeOffCheck, null, `Möglicher Zeitraum: ${data.start}–${data.end} Uhr.`);
   } catch (error) {
+    if (generation !== timeOffSlotsGeneration || key !== timeOffSlotsKey()) return;
+    el.timeOffStart.innerHTML = '<option value="">Zeiten nicht verfügbar</option>';
     updateTraffic(el.timeOffCheck, { trafficLight: "red", allowed: false, reason: error.message }, "");
   }
 }
@@ -4561,10 +4618,13 @@ function updateTimeOffEndSlots() {
 }
 
 async function loadTimeOffRequests() {
+  if (isOrganizationAccount()) return loadBranchTimeOffEmployees();
+  const owner = timeOffOwnerKey();
   const [data, approvedData] = await Promise.all([
     api("/api/portal/v1/me/time-off-requests"),
     api("/api/portal/v1/me/approved-time-off"),
   ]);
+  if (owner !== timeOffOwnerKey()) return;
   const approvedRequests = (approvedData.requests || []).map((item) => ({
     ...item,
     date_from: item.date_from || item.dateFrom || item.request_date,
@@ -4627,34 +4687,57 @@ async function editTimeOff(id) {
 }
 
 function resetTimeOffForm() {
+  const selected = isBranchTimeOffAccount() ? el.branchTimeOffEmployee.value : "";
   portalState.editingTimeOffId = null;
   el.timeOffRequestForm.reset();
+  el.branchTimeOffEmployee.value = selected;
   document.querySelector('input[name="timeOffMode"][value="hours"]').checked = true;
   el.timeOffFormTitle.textContent = "Neuer ZA-Antrag";
   el.timeOffSubmitButton.textContent = "Antrag absenden";
   el.cancelTimeOffEdit.classList.add("hidden");
   updateTimeOffMode();
+  configureBranchTimeOffForm();
 }
 
 async function submitTimeOff(event) {
   event.preventDefault();
-  if (!portalState.timeOffCheck?.allowed) return;
+  if (portalState.timeOffSubmitting || !portalState.timeOffCheck?.allowed
+    || portalState.timeOffCheckFingerprint !== timeOffFormFingerprint()) return;
+  const owner = timeOffOwnerKey();
+  const branch = isBranchTimeOffAccount();
+  const payload = timeOffPayload();
+  const employeeName = branchTimeOffState.employees.find(person => person.employeeNumber === payload.employeeNumber)?.fullName;
+  portalState.timeOffSubmitting = true;
+  el.timeOffSubmitButton.disabled = true;
+  el.branchTimeOffEmployee.disabled = true;
+  configureBranchTimeOffForm();
   try {
-    await api(portalState.editingTimeOffId ? `/api/portal/v1/me/time-off-requests/${portalState.editingTimeOffId}` : "/api/portal/v1/me/time-off-requests", {
-      method: portalState.editingTimeOffId ? "PUT" : "POST",
-      body: JSON.stringify(timeOffPayload()),
+    const result = await api(branch ? "/api/portal/v1/branch-time-off/requests"
+      : portalState.editingTimeOffId ? `/api/portal/v1/me/time-off-requests/${portalState.editingTimeOffId}` : "/api/portal/v1/me/time-off-requests", {
+      method: !branch && portalState.editingTimeOffId ? "PUT" : "POST",
+      body: JSON.stringify(payload),
     });
+    if (owner !== timeOffOwnerKey()) return;
     resetTimeOffForm();
     portalState.timeOffCheck = null;
     el.timeOffSubmitButton.disabled = true;
     el.timeOffStart.disabled = true;
     el.timeOffEnd.disabled = true;
     updateTraffic(el.timeOffCheck, null, "Danach wird die aktuelle Planung geprüft.");
-    message(el.timeOffMessage, "Der ZA-Antrag wurde gespeichert und erneut zur Genehmigung eingereicht.");
+    message(el.timeOffMessage, branch
+      ? `ZA-Antrag Nr. ${result.id} für ${employeeName} wurde zur Genehmigung eingereicht.`
+      : "Der ZA-Antrag wurde gespeichert und erneut zur Genehmigung eingereicht.");
     await loadTimeOffRequests();
   } catch (error) {
+    if (owner !== timeOffOwnerKey()) return;
     message(el.timeOffMessage, error.message, true);
     await checkTimeOff();
+  } finally {
+    if (owner === timeOffOwnerKey()) {
+      portalState.timeOffSubmitting = false;
+      el.branchTimeOffEmployee.disabled = branch && !branchTimeOffState.employees.length;
+      configureBranchTimeOffForm();
+    }
   }
 }
 
@@ -7869,7 +7952,14 @@ el.timeOffRequestForm.addEventListener("submit", submitTimeOff);
 el.timeOffDate.addEventListener("change", loadTimeOffSlots);
 el.timeOffDate.addEventListener("change", updateTimeOffMode);
 el.timeOffDateTo.addEventListener("change", checkTimeOff);
-document.querySelectorAll('input[name="timeOffMode"]').forEach((input) => input.addEventListener("change", updateTimeOffMode));
+document.querySelectorAll('input[name="timeOffMode"]').forEach((input) => input.addEventListener("change", () => {
+  updateTimeOffMode();
+  loadTimeOffSlots();
+}));
+[el.timeOffDate, el.timeOffDateTo].forEach(input => input.addEventListener("input", invalidateTimeOffCheck));
+el.timeOffNote.addEventListener("input", checkTimeOff);
+document.querySelectorAll('input[name="timeOffApprovalType"]').forEach(input => input.addEventListener("change", checkTimeOff));
+bindBranchTimeOffEvents();
 el.timeOffStart.addEventListener("change", updateTimeOffEndSlots);
 el.timeOffEnd.addEventListener("change", checkTimeOff);
 el.timeOffRequestList.addEventListener("click", (event) => {

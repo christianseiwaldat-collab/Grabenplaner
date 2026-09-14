@@ -89,6 +89,21 @@ async function fixture(t, { databasePath = ":memory:", withWriter = true, profil
   return { ...application, engine, composition, profile, context, repository, protection, writer, start, ready, manifest, targets, close };
 }
 
+test('Small import transactions retain every checkpoint and resume to the identical result', async t => {
+ const f=await fixture(t),engine=createDataImportEngine({...f.composition,operationBatchSize:2,operationBudgetMs:1000});
+ const rows=Array.from({length:7},(_,i)=>sourceRow(String(i+1)));
+ let run=await engine.start({profileHash:f.profile.fingerprint,manifest:f.manifest(rows.length)});
+ run=await engine.stage(run.id,{expectedRevision:run.revision,startRow:1,rows});run=await engine.seal(run.id,run.revision);
+ run=await engine.review(run.id,run.revision);assert.equal(run.status,'reviewing');
+ do{run=await engine.review(run.id,run.revision);}while(run.status==='reviewing');
+ run=await engine.apply(run.id,run.revision);assert.equal(f.targets().length,2);assert.equal(run.status,'applying');
+ const resumed=createDataImportEngine({...f.composition,operationBatchSize:2,operationBudgetMs:1});
+ do{run=await resumed.apply(run.id,run.revision);}while(run.status==='applying');
+ assert.equal(f.targets().length,7);
+ do{run=await resumed.undo(run.id,run.revision);}while(run.status==='reverting');
+ assert.deepEqual(f.targets(),[]);
+});
+
 test('Q01: trusted exact snapshot tolerance preserves evidence, idempotence, restart, revocation and undo', async t => {
   const f = await fixture(t), manifest = f.manifest(1, { declaredRows: 2 });
   const input = { id: 'synthetic-count-approval', recordedAt: f.context.time, approvalReference: 'synthetic-user-approval', reason: 'Synthetic test, no source correction',

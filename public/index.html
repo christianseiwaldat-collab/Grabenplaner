@@ -37,7 +37,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.45 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.46 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -189,6 +189,7 @@
               <button class="nav-item nav-module-route hidden" data-view="articleCatalog" id="salesArticleCatalogNavButton">
                 <span class="nav-symbol article-catalog-nav-symbol" aria-hidden="true">Art</span><span>Artikelstamm</span>
               </button>
+              <a class="nav-item nav-module-route hidden" href="/trade-insights.html" id="tradeInsightsNavLink"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf &amp; Bestand</span></a>
               <button class="nav-item nav-module-route hidden" data-view="crm" id="crmNavButton">
                 <span class="nav-symbol crm-nav-symbol" aria-hidden="true">CRM</span><span>CRM</span>
               </button>
@@ -2507,8 +2508,9 @@
                   <label class="switch-row"><span><strong>Dienstplan des Standorts ansehen</strong><small>Reduzierte Ansicht ohne Bearbeitungs-, Personal- oder Abwesenheitsfunktionen; alle vergangenen, aktuelle und kommende Kalenderwochen sind nur lesbar.</small></span><input id="organizationAccountScheduleView" type="checkbox" checked /></label>
                   <label class="switch-row" id="organizationAccountLearningDashboardRow"><span><strong>Schulungsdashboard des Standorts verwenden</strong><small>Zeigt standortgebundene Schulungsfortschritte und Fähigkeitsstufen. Das Filialkonto kann Schritte dokumentieren, aber keine Abschlüsse bewerten oder korrigieren.</small></span><input id="organizationAccountLearningDashboard" type="checkbox" checked /></label>
                   <label class="switch-row" id="organizationAccountBranchOrdersRow"><span><strong>Filialbestellungen erfassen</strong><small>Optional für dieses Filialkonto: Person auswählen, Mengen erfassen und E-Mail-Übergabe dokumentieren.</small></span><input id="organizationAccountBranchOrders" type="checkbox" /></label>
-                  <label class="switch-row" id="organizationAccountArticlesRow"><span><strong>Artikelsuche verwenden</strong><small>Optional: Gemeinsamer Artikelstamm mit Artikelnummer, Bezeichnung, EAN sowie Verkaufs- und Internetpreisen. Nur lesbar.</small></span><input id="organizationAccountArticles" type="checkbox" /></label>
+                  <label class="switch-row" id="organizationAccountArticlesRow"><span><strong>Artikelsuche verwenden</strong><small>Optional: Artikel, Filialbestände, Bilder, Verkaufspreise und Rohertragsrechner auf Basis des Durchschnitts-EK netto. Nur lesbar.</small></span><input id="organizationAccountArticles" type="checkbox" /></label>
                   <label class="switch-row" id="organizationAccountReceiptsRow"><span><strong>Belegsuche und PDF-Download verwenden</strong><small>Unabhängig von der Artikelsuche: Kassenbelege der zugewiesenen Filiale suchen, ansehen und als Beleginformation herunterladen.</small></span><input id="organizationAccountReceipts" type="checkbox" /></label>
+                  <label class="switch-row" id="organizationAccountTimeOffRow"><span><strong>ZA-Anträge für die Filiale erfassen</strong><small>Optional: Teammitglied auswählen und ZA stundenweise, ganztägig oder mehrtägig beantragen. Die bestehende Genehmigung bleibt erforderlich.</small></span><input id="organizationAccountTimeOff" type="checkbox" /></label>
                   <label class="switch-row"><span><strong>Konto aktiv</strong><small>Deaktivieren beendet bestehende Sitzungen sofort.</small></span><input id="organizationAccountActive" type="checkbox" checked /></label>
                 </div>
                 <div class="form-actions-inline">

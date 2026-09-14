@@ -11,7 +11,7 @@ const {createSalesReportJobs}=require('../../lib/persistence/repositories/sales-
 const {createSalesReportBatchWorker}=require('../../lib/sales-report-batch-worker');
 const {cashFixture}=require('./cash-fixture');
 const today=()=> '2026-09-12';
-async function withReportFixture(work){return withCoreFixture(core=>withSalesFixture(8,async sales=>{
+async function withReportFixture(work,{warmWorkers=true}={}){return withCoreFixture(core=>withSalesFixture(8,async sales=>{
   await core.migrator.query('SET ROLE gp_core_owner');await core.migrator.query('UPDATE gp.portal_users SET must_change_password=0');await core.migrator.query('RESET ROLE');
   const poolMetrics=[];
   const authority=await require('../../lib/persistence/postgresql/core/application').openCoreDevelopmentApplication({profile:'core-migration-development',databaseUrl:process.env.GP_CORE_READER_URL,purpose:'reader',tlsMode:'disable-local-only'});
@@ -32,7 +32,7 @@ async function withReportFixture(work){return withCoreFixture(core=>withSalesFix
     const worker=createSalesReportBatchWorker({keyConfiguration,scopeId:'synthetic-migration',today:today(),workerFile:path.resolve(__dirname,'../../lib/persistence/postgresql/reporting/worker.js'),workerConfiguration:{coreUrl:process.env.GP_CORE_READER_URL,salesUrl:process.env.GP_SALES_READER_URL},timeoutMs:120000});
     const jobs=createSalesReportJobs({access:app.provider,vault,runtime,resolvePrincipal,batchWorker:worker,scope:'synthetic-migration',onError:code=>errors.push(code),...options});queues.push(jobs);return {jobs,worker};
   }
-  try{const workerReadiness=await receiptWorkers.warm('00001');const {jobs,worker}=makeQueue();await work({...sales,core,app,access:app.provider,protection,vault,resolvePrincipal,runtime,runtimeOptions,makeRuntime,worker,jobs,makeQueue,errors,poolMetrics,workerReadiness,cash:cashFixture(app.provider,protection,{actualTargets:true})});}
+  try{const workerReadiness=warmWorkers?await receiptWorkers.warm('00001'):[];const {jobs,worker}=makeQueue();await work({...sales,core,app,access:app.provider,protection,vault,resolvePrincipal,runtime,runtimeOptions,makeRuntime,worker,jobs,makeQueue,errors,poolMetrics,workerReadiness,cash:cashFixture(app.provider,protection,{actualTargets:true})});}
   finally{for(const queue of queues)await queue.stop();await receiptWorkers.close();protection.destroy();await app.close();await authority.close();}
 }));}
 const reportQuery={reportVersion:3,sourceId:'compact-cash',dateFrom:'2026-08-01',dateTo:'2026-08-31',locationIds:['18'],manufacturerIds:['sony'],productGroupIds:[],sellerIds:[],groupBy:['manufacturer'],metrics:['grossRevenue','netRevenue','grossMargin','quantity','receiptCount','customerCount'],changes:['absolute','percent'],chartMetric:'grossRevenue',chartType:'bars',orientation:'landscape'};
