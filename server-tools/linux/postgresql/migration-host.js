@@ -141,7 +141,7 @@ async function main() {
         for (const target of Object.values(templates).filter(file => !file.endsWith('/' + DB_UNIT))) if (fs.existsSync(target)) throw new Error('PG_MIGRATION_UNIT_EXISTS');
         assertFile('/etc/grabenplaner/offsite/installed-contract.json');
         const offsite = JSON.parse(fs.readFileSync('/etc/grabenplaner/offsite/installed-contract.json', 'utf8'));
-        if (offsite.moduleVersion !== 9) throw new Error('PG_MIGRATION_OFFSITE_V9_REQUIRED');
+        if (![9,10].includes(offsite.moduleVersion)) throw new Error('PG_MIGRATION_OFFSITE_V9_REQUIRED');
         await run('/usr/bin/node', [APP + '/server-tools/linux/offsite/lib/offsite-contract.js', 'verify-installed-bound',
           '/opt/grabenplaner-offsite/module', '/etc/grabenplaner/offsite/installed-contract.json']);
       },

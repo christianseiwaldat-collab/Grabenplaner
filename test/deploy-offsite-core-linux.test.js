@@ -3,7 +3,7 @@ const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-test("offsite module 9 preserves predecessors and requires the complete paired recovery entrypoints", {
+test("offsite module 10 preserves predecessors and requires the complete paired recovery entrypoints", {
   skip: process.platform !== "linux" || process.getuid?.() !== 0,
 }, t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-core-"));
@@ -29,6 +29,8 @@ test("offsite module 9 preserves predecessors and requires the complete paired r
   for (const name of ['server-tools/linux/lib/postgresql-operations.js',
     'server-tools/linux/recovery/lib/postgresql-recovery.js',
     'server-tools/linux/recovery/lib/postgresql-recovery-worker.js']) write(name, '// synthetic');
+  assert.equal(run().stdout, 'current');
+  write(moduleName, JSON.stringify({ moduleVersion: 10 }));
   assert.equal(run().stdout, 'current');
   fs.chmodSync(path.join(root, "server-tools/linux/lib/deploy-policy.js"), 0o666);
   assert.notEqual(run().status, 0);

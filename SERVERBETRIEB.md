@@ -4,7 +4,7 @@
 
 Für ausdrücklich migrierte Ubuntu-Server verwenden GP und seine Hintergrundarbeiter zwei Datenbanken: `grabenplaner_core` für Planung, Personal, Rechte und CRM sowie `grabenplaner_sales` für Kassa und TradeFoto. Eine eigene PostgreSQL-18-Instanz läuft ausschließlich auf `127.0.0.1:55486` als `grabenplaner-db`; bestehende andere Datenbankinstanzen bleiben getrennt. Neue Standardinstallationen verwenden weiterhin SQLite. Die folgenden SQLite-Anleitungen gelten nur vor einer solchen Migration.
 
-Die root-geschützten Einstiege `server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh prepare` und `execute` erwarten als zweites Argument den SHA-256 des installierten `grabenplaner-server-manifest.json`. Vorher sind das offizielle Release und Offsite-Modul 9 einzuspielen. Das Wartungsfenster umfasst einen sauberen GP-Stopp, eine frische SQLite-/Dateiquelle, die vollständige Übernahme mit Inhaltsprüfung sowie die erste gemeinsame Sicherung. Der Ablauf veröffentlicht PostgreSQL erst nach diesem Sicherungspunkt. Eine alleinige Änderung von `DB_PROVIDER` ist kein Migrationsweg.
+Die root-geschützten Einstiege `server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh prepare` und `execute` erwarten als zweites Argument den SHA-256 des installierten `grabenplaner-server-manifest.json`. Vorher sind das offizielle Release und das dazugehörige Offsite-Modul einzuspielen; der Migrationsvertrag unterstützt Modul 9 und 10. Das Wartungsfenster umfasst einen sauberen GP-Stopp, eine frische SQLite-/Dateiquelle, die vollständige Übernahme mit Inhaltsprüfung sowie die erste gemeinsame Sicherung. Der Ablauf veröffentlicht PostgreSQL erst nach diesem Sicherungspunkt. Eine alleinige Änderung von `DB_PROVIDER` ist kein Migrationsweg.
 
 Die Daten liegen unter `/var/lib/grabenplaner-postgresql/data/cluster`; Schlüssel und Geschäftszugänge werden getrennt in `/etc/grabenplaner/postgresql-application.json` und `/etc/grabenplaner/postgresql-operations.json` verwaltet. Die Anwendung erhält vier Geschäftszugänge, keine administrativen Wiederherstellungsrechte. `/var/lib/grabenplaner/data/postgresql-pair.json` bindet beide Datenbanken an dieselbe Umgebung und Quelle. Diese Dateien sind keine Vorlagen zum manuellen Ausfüllen oder Kopieren aus Testumgebungen.
 
@@ -314,7 +314,7 @@ sudo grabenplaner-offsite-rebind-rclone \
   --yes
 ```
 
-Nach einer erfolgreich abgeschlossenen OAuth-Neuanbindung und nach einem erfolgreichen App-Update wird automatisch ein neuer Assurance-Lauf über systemd in die Warteschlange gestellt. Zusätzlich startet `grabenplaner-offsite-assurance.timer` täglich die feste Instanz `grabenplaner-offsite-assurance@scheduled-nightly.service`. Der persistente Timer holt einen verpassten Lauf nach und verteilt den Start über eine zufällige Verzögerung. Eine globale Assurance-Sperre sowie die bestehenden Wartungssperren verhindern Parallelbetrieb mit Update, Upload oder Wiederherstellung.
+Nach einer erfolgreich abgeschlossenen OAuth-Neuanbindung und nach einem erfolgreichen App-Update wird automatisch ein neuer Assurance-Lauf vorgemerkt. Kompatible kurze Deploys lassen den vollständigen Nachweis vom Nachtlauf abarbeiten; der volle Updateablauf startet ihn direkt. `grabenplaner-offsite-assurance.timer` startet täglich die feste Instanz `grabenplaner-offsite-assurance@scheduled-nightly.service`. Der persistente Timer holt einen verpassten Lauf nach und verteilt den Start über eine zufällige Verzögerung. Eine globale Assurance-Sperre sowie die bestehenden Wartungssperren verhindern Parallelbetrieb mit Update, Upload oder Wiederherstellung.
 
 Die nächtliche Ausführung bedeutet keine automatische produktive Wiederherstellung. Sie arbeitet nur im isolierten Testbereich, besitzt harte Zeitgrenzen und entfernt temporäre Laufdaten auch nach einem Fehler. Eine echte Rücksicherung in den Live-Pfad bleibt weiterhin ein ausdrücklich beaufsichtigter Root-Vorgang.
 
@@ -356,11 +356,14 @@ Die systemd-Dienste verwenden einen gemeinsamen Wartungs- und Repository-Lock. E
 
 | Aufgabe | systemd-Einheit | Standardzeit |
 |---|---|---|
-| verifizierten Sicherungspunkt vorbereiten | `grabenplaner-offsite-prepare.service` | durch Upload oder Vorab-Update ausgelöst |
-| verschlüsselt hochladen und Aufbewahrung anwenden | `grabenplaner-offsite-upload.timer` | täglich etwa 02:35 Uhr, mit zufälliger Verzögerung |
+| Sicherungspunkt, verschlüsselter Upload, Aufbewahrung und vollständiger Recovery-Assurance-Lauf samt App-Smoke | `grabenplaner-offsite-assurance.timer` | täglich ab 03:45 Uhr, bis 90 Minuten zufällige Verzögerung, persistent |
+| zusätzlicher täglicher Upload im Vorgängerbetrieb | `grabenplaner-offsite-upload.timer` | nur vor Abschluss des Übergangs auf Modul 10; anschließend deaktiviert |
 | Repository vollständig lesen und prüfen | `grabenplaner-offsite-check.timer` | monatlich am 1. etwa 04:15 Uhr, mit zufälliger Verzögerung |
 | isolierte Testwiederherstellung | `grabenplaner-offsite-restore-test.timer` | quartalsweise am 2. Januar, April, Juli und Oktober etwa 05:15 Uhr, mit zufälliger Verzögerung |
-| vollständiger Recovery-Assurance-Lauf samt App-Smoke | `grabenplaner-offsite-assurance.timer` | täglich, persistent und mit zufälliger Verzögerung |
+
+Der gemeinsame Nachtablauf gilt erst, wenn Anwendungspaket und installiertes Offsite-Modul beide Vertragsversion 10 besitzen. Der Installer erhält beim vorgelagerten Modulwechsel den alten Zeitplan. Der Updater prüft nach dem App-Tausch den aktivierten Assurance-Timer, bevor er den zusätzlichen Upload-Timer deaktiviert. Ein Code-Rollback stellt den zum Vorgänger passenden Zeitplan wieder her. Die Betriebsprüfung kontrolliert diese Kombination; Upload und Vorbereitung bleiben als interne Schritte des gemeinsamen Laufs verfügbar. Die zwei lokalen Sicherungspaare sowie Offsite-Aufbewahrung, Monats- und Quartalsprüfungen bleiben erhalten.
+
+Der Sicherungspunkt verwendet weiterhin einen kurzen kontrollierten GP-Dienststopp. Laufende ACCDB-Imports werden dabei nach dem aktuellen Datenbankpaket unterbrochen und mit gespeichertem Fortschritt beendet, bevor die Verbindungen schließen. Neue Imports werden während der angekündigten Wartung zurückgewiesen. Danach dieselbe ACCDB-Datei erneut auswählen: Dateifingerabdruck, Profil und Tabellenplan müssen übereinstimmen; bereits bestätigte Zeilen werden übersprungen. Ein Import hat eine Stillstandsgrenze von zwei Minuten und zusätzlich eine Gesamtlaufzeitgrenze von sechs Stunden. Eine Sicherung ohne Webdienststopp benötigt einen gesonderten Konsistenznachweis und ist damit noch nicht eingeführt.
 
 Die feste Restic-Aufbewahrung beträgt **14 tägliche, 8 wöchentliche und 12 monatliche Sicherungsstände**. Upload, Vollprüfung und Restore-Test sind getrennte Dienste. Ein fehlgeschlagener Upload löst keine Aufräumaktion aus. Prüffehler werden nicht automatisch repariert; vor einem manuellen `unlock`, `forget`, `prune` oder einer Wiederherstellung muss ausgeschlossen sein, dass noch ein anderer Vorgang läuft.
 
@@ -553,7 +556,19 @@ Der Einrichtungsassistent erzeugt den AMU-Schlüssel bei einer neuen, leeren Ins
 
 Auch der Dienststeuerungs-Token wird zufällig erzeugt und bei einer erneuten Einrichtung beibehalten. WinSW verwendet ihn ausschließlich über den lokalen Stop-Helfer, damit der Server vor dem Dienstende ein Abschlussbackup und einen WAL-Checkpoint ausführt. Der normale Browserzugriff kann diesen Endpunkt nicht verwenden.
 
-Der Servermodus wird nicht im Browser aktiviert. Auch die öffentliche Adresse, Proxy-Vertrauen und Produktionskennung können dort nicht verändert werden. Updates, Neustarts und Datenbankimporte erfolgen ausschließlich in einem Wartungsfenster am Server.
+Der Servermodus wird nicht im Browser aktiviert. Auch die öffentliche Adresse, Proxy-Vertrauen und Produktionskennung können dort nicht verändert werden. Updates, Neustarts und Datenbankwiederherstellungen erfolgen ausschließlich als kontrollierte Serverwartung.
+
+### ACCDB-Dateien im Hintergrund prüfen
+
+Der zentrale Fachimport unter **Einstellungen → System → Datenbankimporte** nimmt die drei bekannten ACCDB-Quellen an. HTTP 202 wird erst nach geschützter Dateispeicherung und dauerhafter Auftragserfassung gesendet. Anschließend laufen Einlesen und Prüfung unabhängig von geöffneten Browserseiten oder einer abgelaufenen Sitzung. Die aktuellen Rechte und die Aktivität des persönlichen Benutzerkontos werden vor jeder Verarbeitung erneut geprüft. Die produktive Übernahme beziehungsweise Auswahl eines Kassenstands bleibt eine ausdrückliche, getrennt geprüfte Aktion.
+
+Die temporäre Ablage `import-jobs` liegt direkt unter dem konfigurierten Datenhauptverzeichnis, im Linux-Serverbetrieb also unter `/var/lib/grabenplaner/import-jobs`. Die bestehende Dienstfreigabe für dieses Verzeichnis genügt; zusätzliche öffentliche Endpunkte, Ports oder Betriebssystemrechte sind nicht notwendig. Dateien werden mit AES-256-GCM verschlüsselt, individuelle Dateischlüssel und ein eventuell erforderliches Access-Kennwort in der bestehenden Schlüsselverwaltung geschützt. Verzeichnis und Dateien erhalten unter Linux 0700 beziehungsweise 0600. Einlesen erfolgt erst nach Integritätsprüfung. Die Dateikopie und das Kennwort werden nach abgeschlossenem Einlesen entfernt. Bei Unterbrechung oder Pause erfolgt die Bereinigung nach 72 Stunden im nächsten ausführbaren Bereinigungslauf. Ein ausgeschalteter Server kann keine Bereinigung ausführen.
+
+Gleichzeitig wird höchstens eine große Quelldatei hochgeladen oder eingelesen; Prüftransaktionen laufen in begrenzten Paketen. Höchstens sechs temporäre Aufträge, 1,5 GiB Dateiablage und mindestens 1 GiB verbleibender freier Speicher begrenzen den zusätzlichen Bedarf. Die bestehende Grenze von 512 MiB je Quelldatei bleibt erhalten. Die Ablage wird weder in Releasepakete noch in die gemeinsamen PostgreSQL-Geschäftsdatensicherungen aufgenommen. Sie dient der Wiederaufnahme nach Dienst- oder Serverneustarts auf derselben erhaltenen Datenablage; nach Verlust dieses Datenträgers muss die Originaldatei erneut bereitgestellt werden.
+
+Vorübergehende Lese- und Datenbankfehler werden bis zu dreimal nach 30 Sekunden, zwei Minuten und zehn Minuten erneut versucht. Bereits bestätigte Zeilen werden anhand derselben Datei und der gespeicherten Tabellenstände übersprungen. Schema-, Integritäts- oder Berechtigungsfehler lösen keine automatische Wiederholung aus. Die Oberfläche zeigt Wartezustand, nächsten Versuch sowie **Prüfung pausieren/fortsetzen**. Geplante Wartung stoppt die Verarbeitung nach dem laufenden Datenbankpaket und lässt den Auftrag für die nächste Instanz bestehen. Die Stillstandsgrenze beträgt zwei Minuten, die zusätzliche Höchstlaufzeit je Leseversuch sechs Stunden.
+
+Aus alten Programmständen unterbrochene Uploads besitzen noch keine solche Dateikopie. Für diese ist nach dem Update einmalig derselbe Dateistand erneut auszuwählen. Der bereits gespeicherte Zeilenfortschritt bleibt dabei maßgeblich. Änderungen vom 14.09.2026 und lokale Prüfgrenzen: [Hintergrundimport](docs/IMPORT-HINTERGRUND-2026-09-14.md).
 
 ## Betriebsbereitschaft und Überwachung
 

@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.45 Beta · Dauerhafte Datenbankimporte
+
+- Nach vollständig bestätigtem ACCDB-Upload laufen Einlesen und Prüfung automatisch am Server weiter. Verschlüsselte temporäre Dateien erlauben Wiederaufnahme nach Browserende, Dienstneustart und vorübergehenden Fehlern; Fortschritt bleibt erhalten. Produktive Übernahme bleibt eine bewusste Benutzeraktion.
+- Drei gestaffelte Wiederholungsversuche, Pause und Fortsetzen sowie begrenzte Dateiaufbewahrung und Ressourcen ersetzen die feste 25-Minuten-Gesamtfrist. Schema-, Integritäts- und Rechtefehler werden weiterhin ausdrücklich geprüft.
+- Die Dateiauswahl aus mobilen Cloudspeichern erhält keinen ausschließenden MIME-Filter; ein Hintergrundwechsel entfernt die gewählte Datei nicht.
+- Offsite-Modul 10 führt die beiden bisherigen täglichen Sicherungsstarts in einem gemeinsamen Nachtlauf zusammen. Bestehende Sicherungspaare, entfernte Aufbewahrung und vollständige Wiederherstellungsprüfungen bleiben erhalten. Der Übergang berücksichtigt Vorgängerversionen und Code-Rollback.
+
+
 ## v0.92.44 Beta · Berichtsvorlagen, Grafiken und Filialkonto-Suche
 
 - Verkaufsanalysen erlauben getrennte WGR- und Sortimentsfilter. Persönliche Berichtsvorlagen speichern die vollständigen Einstellungen, lassen sich erneut laden, anpassen und kopieren. Der Titel unterstützt Monat und Jahr als Platzhalter.

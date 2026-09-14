@@ -331,7 +331,14 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]
   offsite_status_reader="$app_dir/lib/offsite-backup-status.js"
   offsite_status_gid="$(getent group "$offsite_status_group" | awk -F: '{print $3}')"
   offsite_timer_ok=1
-  for offsite_timer in grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
+  offsite_schedule="$(gp_nightly_schedule_mode "$app_dir" "$node")" || offsite_timer_ok=0
+  offsite_timers=(grabenplaner-offsite-assurance.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
+  if [[ "$offsite_schedule" == single ]]; then
+    if systemctl is-enabled --quiet grabenplaner-offsite-upload.timer || systemctl is-active --quiet grabenplaner-offsite-upload.timer; then offsite_timer_ok=0; fi
+  else
+    offsite_timers+=(grabenplaner-offsite-upload.timer)
+  fi
+  for offsite_timer in "${offsite_timers[@]}"; do
     if ! systemctl is-enabled --quiet "$offsite_timer" || ! systemctl is-active --quiet "$offsite_timer"; then
       offsite_timer_ok=0
     fi

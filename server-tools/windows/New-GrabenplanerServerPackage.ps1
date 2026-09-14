@@ -33,7 +33,7 @@ function Test-ExcludedRelativePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
     if ($normalized -cin @('scripts/run-background-backup.js', 'scripts/manage-local-backup-archive.js')) { return $false }
     $top = ($normalized -split '/', 2)[0].ToLowerInvariant()
-    if ($top -in @('.git', '.github', '.devcontainer', 'backups', 'data', 'demo', 'docs', 'node_modules', 'output', 'release', 'runtime', 'scripts', 'test', 'tmp', 'usb-backups')) { return $true }
+    if ($top -in @('.git', '.github', '.devcontainer', 'backups', 'data', 'demo', 'docs', 'import-jobs', 'node_modules', 'output', 'release', 'runtime', 'scripts', 'test', 'tmp', 'usb-backups')) { return $true }
     if ($normalized -match '(^|/)(\.env($|\.)|\.npmrc$|\.pnpm-store($|/)|__pycache__($|/))') { return $true }
     if ($normalized -match '\.(db|sqlite|sqlite3|amu|pfx|p12|pem|key)$') { return $true }
     if ($normalized -match '(^|/)(branding-kits?|customer-branding|kundenbranding)(/|$)') { return $true }

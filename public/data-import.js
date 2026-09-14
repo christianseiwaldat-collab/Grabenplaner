@@ -2,22 +2,25 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const labels={reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',
+  const labels={queued:'Wartet auf Verarbeitung',retrying:'Automatischer Wiederholungsversuch geplant',paused:'Prüfung pausiert',failed:'Prüfung benötigt Aufmerksamkeit',reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',
     needs_review:'Prüfung erforderlich',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen'};
   const label=state=>labels[state]||'Prüfung erforderlich';
   const number=value=>Number(value||0).toLocaleString('de-AT');
   const sourceLabel=kind=>({cash:'Kassen-Umsätze',trade:'TradeFoto-Stamm und Historie',bestell:'TradeFoto-Bestellungen, Rechnungen und Reparaturen'})[kind]||'Unbekannte Quelle';
   function renderSource(source,projection={}) {
-    const tables=source.tables||[], received=tables.reduce((n,t)=>n+(t.run?.receivedRows||0),0), expected=tables.reduce((n,t)=>n+t.declaredRows,0);
-    return `<header><h3>${escape(sourceLabel(source.kind))}</h3><p>${escape(label(source.status))} · ${number(received)} gelesene / ${number(expected)} deklarierte Zeilen</p></header>
+    const tables=source.tables||[], received=tables.reduce((n,t)=>n+(t.run?.receivedRows||0),0), expected=tables.reduce((n,t)=>n+t.declaredRows,0),job=source.background;
+    return `<header><h3>${escape(sourceLabel(source.kind))}</h3><p>${escape(label(job?.status||source.status))} · ${number(received)} gelesene / ${number(expected)} deklarierte Zeilen</p></header>
       <progress max="${Math.max(expected,received,1)}" value="${received}" aria-label="Bereitgestellte Quellzeilen"></progress>
       <p class="data-import-note">Dateifingerabdruck <code>${escape(source.fileSha256)}</code><br>Bereitstellung begonnen: ${escape(source.createdAt)}. Das ist kein Belegdatum.</p>
       ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>`<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(t.name)}</strong><p>${number(p.expectedRows)} lesbare / ${number(p.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert; keine Daten- oder Bestandskorrektur.</p><small>Freigabe: ${escape(p.approvalReference)} · Erfasst: ${escape(p.recordedAt)}<br>Prüfnachweis: ${escape(p.evidenceReference)} · ${escape(p.id)}</small></aside>`)).join('')}
       ${source.storage==='cash-compact-v1'?`<p class="data-import-note">Gesamte Kassenhistorie · alle Zeiträume. ${number(source.verifiedRows)} gespeicherte Zeilen vollständig zurückgelesen und verglichen.</p>`:''}
-      ${source.error?`<p role="status">Unterbrechung: ${escape(source.error)}. Bitte denselben Dateistand erneut auswählen; bereits geprüfte Pakete bleiben erhalten.</p>`:''}
+      ${job?`<p role="status">${['queued','reading','reviewing'].includes(job.status)?'Der Server arbeitet selbstständig weiter. Sie können den GP schließen.':job.status==='retrying'?`Ein vorübergehender Fehler ist aufgetreten. Wiederholungsversuch ${number(job.retries)} von ${number(job.maxRetries)} ist für ${escape(new Date(job.nextAt).toLocaleString('de-AT'))} geplant; kein erneuter Upload nötig.`:job.status==='paused'?'Die Prüfung ist pausiert. Sie können sie ohne erneuten Upload fortsetzen.':'Die automatischen Versuche wurden angehalten. Sie können den Auftrag erneut versuchen; bei einer ungültigen oder abgelaufenen Datei diese bitte neu auswählen.'}</p>
+        ${job.error?`<details><summary>Technischer Hinweis</summary><p>${escape(job.error)}</p></details>`:''}
+        <div class="data-import-actions">${['paused','failed'].includes(job.status)?`<button type="button" data-i-job="retry" ${!projection.prepare?'disabled':''}>Prüfung fortsetzen</button>`:`<button type="button" data-i-job="pause" ${!projection.prepare?'disabled':''}>Prüfung pausieren</button>`}</div>`
+        :source.error?`<p role="status">Unterbrechung: ${escape(source.error)}. Bitte denselben Dateistand erneut auswählen; bereits geprüfte Pakete bleiben erhalten.</p>`:''}
       <div class="data-import-actions">
         ${source.storage==='cash-compact-v1'&&source.status==='ready'?'<button type="button" data-i-publish>Kassenstand für Auswertungen auswählen</button>':''}
-        <button type="button" data-i-action="review" ${!projection.prepare||!source.complete||source.active||source.status!=='reviewing'?'disabled':''}>Prüfung fortsetzen</button>
+        ${job?'':`<button type="button" data-i-action="review" ${!projection.prepare||!source.complete||source.active||source.status!=='reviewing'?'disabled':''}>Prüfung fortsetzen</button>`}
         ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="apply" ${!projection.apply||!source.activationEnabled||!source.complete||source.active||!['ready','needs_review','applying'].includes(source.status)?'disabled':''}>Übernehmen</button>
         <button type="button" data-i-action="undo" ${!projection.undo||source.active||!['applied','applying','reverting'].includes(source.status)?'disabled':''}>Rücknahme starten / fortsetzen</button>`}
       </div>
@@ -32,7 +35,7 @@
     const el=name=>body.querySelector(`[data-i="${name}"]`);
     const containers=[];
     for(let node=root.parentElement;node;node=node.parentElement) if(node.matches?.('.view,.settings-section,details')) containers.push(node);
-    const visible=()=>root.open && !globalThis.document?.hidden && containers.every(node=>!node.classList.contains('hidden')
+    const visible=()=>root.open && containers.every(node=>!node.classList.contains('hidden')
       && (node.matches('details')?node.open:node.classList.contains('active')));
     const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;};
     async function request(url,options={}) {return api(url,{...options,signal:controller?.signal});}
@@ -44,9 +47,9 @@
       const result=await post('/api/data-import/sources/search',next&&cursor?cursor:{});
       if(disposed||ticket!==generation)return;
       cursor=result.next;el('next').hidden=!cursor;
-      el('sources').innerHTML=result.items.map(s=>`<button type="button" data-i-source="${s.id}">${escape(sourceLabel(s.kind))} · ${escape(s.createdAt)} · ${escape(label(s.status))}</button>`).join('')||'<p>Noch keine eigenen Datenbankimporte.</p>';
+      el('sources').innerHTML=result.items.map(s=>`<button type="button" data-i-source="${s.id}">${escape(sourceLabel(s.kind))} · ${escape(s.createdAt)} · ${escape(label(s.background?.status||s.status))}</button>`).join('')||'<p>Noch keine eigenen Datenbankimporte.</p>';
       if(selected) {const selectedId=selected.id;const latest=await request(`/api/data-import/sources/${selectedId}`);if(disposed||ticket!==generation||selected?.id!==selectedId)return;selected=latest;renderSelected();}
-      if(!working && visible() && (selected?.active||result.items.some(s=>s.active))) timer=setTimeout(()=>refresh().catch(e=>message(e.message)),2500);
+      if(!working && visible() && !globalThis.document?.hidden && (selected?.active||result.items.some(s=>s.active))) timer=setTimeout(()=>refresh().catch(e=>message(e.message)),2500);
     }
     async function load() {
       if(disposed||!visible())return;cancel();const ticket=generation;controller=new AbortController();body.textContent='Importanbindung wird geprüft …';
@@ -54,9 +57,9 @@
         context=await request('/api/data-import/context');if(disposed||ticket!==generation)return;
         body.innerHTML=`<p>${escape(context.message)}</p>
           <form data-i="form" class="data-import-form" autocomplete="off"><label>Datenquelle<select data-i="kind" aria-describedby="dataImportSourceHint"><option value="trade">Trade_Daten.accdb</option><option value="cash">Kassen_Umsätze.accdb</option><option value="bestell">Trade_DatenBestell.accdb</option></select><small data-i="kind-hint" id="dataImportSourceHint">${sourceLabel('trade')}</small></label>
-          <label>ACCDB-Datei<input data-i="file" type="file" accept=".accdb" required></label><label>Dateikennwort (falls erforderlich)<input data-i="password" type="password" autocomplete="new-password" maxlength="256"></label>
+          <label>ACCDB-Datei<input data-i="file" type="file" required aria-describedby="dataImportFileHint"><small id="dataImportFileHint">Eine .accdb-Datei vom Gerät oder aus Ihrem Cloudspeicher auswählen.</small></label><label>Dateikennwort (falls erforderlich)<input data-i="password" type="password" autocomplete="new-password" maxlength="256"></label>
           <button type="submit" ${!context.available||!context.projection.prepare?'disabled':''}>Datei prüfen</button></form><p data-i="file-name" class="data-import-note" aria-live="polite"></p>
-          <p class="data-import-note">Maximal 512 MiB. Originaldatei und Kennwort werden nicht gespeichert. Nach einer Unterbrechung dieselbe Datei erneut auswählen. Bereits bereitgestellte Datensätze bleiben verschlüsselt; Rücknahmefrist: 30 Tage.</p>
+          <p class="data-import-note">Maximal 512 MiB. ${context.backgroundEnabled?'Nach vollständigem Upload laufen Einlesen und Prüfung automatisch am Server. Datei und erforderliches Kennwort werden dafür vorübergehend verschlüsselt gespeichert. Nach dem Einlesen wird die Dateikopie gelöscht, bei Unterbrechungen spätestens im Bereinigungslauf nach 72 Stunden.':'Originaldatei und Kennwort werden nicht gespeichert. Nach einer Unterbrechung dieselbe Datei erneut auswählen.'} Bereits bereitgestellte Datensätze bleiben verschlüsselt; Rücknahmefrist: 30 Tage.</p>
           <p data-i="message" role="status" aria-live="polite"></p><div class="data-import-actions"><button type="button" data-i-refresh>Aktualisieren</button><button type="button" data-i="stop" data-i-stop hidden>Anhalten</button></div>
           <div data-i="sources" class="data-import-sources"></div><button type="button" data-i="next" hidden>Ältere Importe</button><section data-i="detail"></section><section data-i="publication"></section><section data-i="log"></section>`;
         if(context.available)await refresh();
@@ -72,7 +75,7 @@
           if(disposed||ticket!==generation)return;selected=result;renderSelected();
           message(action==='review'?'Quelltabellen werden geprüft …':action==='undo'?'Rücknahme wird geprüft und ausgeführt …':'Quelltabellen werden übernommen …');
           await new Promise(resolve=>setTimeout(resolve,30));
-        }while(working&&visible()&&selected.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));
+        }while(working&&visible()&&!globalThis.document?.hidden&&selected.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));
         message(label(selected.status));
       }catch(error){if(!disposed&&ticket===generation)message(error.message);}
       finally{if(!disposed&&ticket===generation){working=false;el('stop')?.setAttribute('hidden','');}}
@@ -94,6 +97,7 @@
       try {
         if(target.hasAttribute('data-i-publish')&&selected){publicationView?.destroy();publicationView=globalThis.GrabenplanerCashPublication?.mount(el('publication'),{api,source:selected,confirmAction});return;}
         if(target.hasAttribute('data-i-stop')){working=false;message('Nach dem laufenden Paket angehalten.');return;}
+        if(target.dataset.iJob&&selected){selected=await post(`/api/data-import/sources/${selected.id}/${target.dataset.iJob}`);renderSelected();await refresh();return;}
         if(target.dataset.iAction)return await runAction(target.dataset.iAction);
         if(target.hasAttribute('data-i-refresh')){clearTimeout(timer);return await refresh();}
         if(target===el('next'))return await refresh(true);
@@ -114,7 +118,7 @@
         const result=await request(`/api/data-import/upload/${el('kind').value}`,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Import-Password':passwordHeader},body:file});
         if(disposed||ticket!==generation)return;el('file').value='';
         const source=await request(`/api/data-import/sources/${result.id}`);if(disposed||ticket!==generation)return;selected=source;working=false;
-        message('Datei angenommen. Der Fortschritt wird laufend aktualisiert.');await refresh();
+        message(context.backgroundEnabled?'Datei sicher angenommen. Der Server liest und prüft sie automatisch; Sie können den GP jetzt schließen.':'Datei angenommen. Der Fortschritt wird laufend aktualisiert.');await refresh();
       }catch(error){if(!disposed&&ticket===generation)message(error.message);}
       finally{password='';if(!disposed&&ticket===generation)working=false;}
     }
@@ -129,11 +133,19 @@
       if(event.target===el('file')) el('file-name').textContent=el('file').files[0]?.name||'';
     };
     root.addEventListener('toggle',visibility);body.addEventListener('click',click);body.addEventListener('submit',submit);body.addEventListener('change',change);
-    globalThis.document?.addEventListener('visibilitychange',visibility);
+    // Android opens its document picker outside Chrome. Keep the actual file
+    // input and an in-flight upload alive when the document temporarily hides.
+    // Navigation/account teardown still calls cancel() and destroys this form.
+    const documentVisibility=()=>{
+      clearTimeout(timer);
+      if(!globalThis.document?.hidden&&visible()&&context?.available&&el('form')&&!working)
+        void refresh().catch(e=>message(e.message));
+    };
+    globalThis.document?.addEventListener('visibilitychange',documentVisibility);
     const observer=containers.length&&globalThis.MutationObserver?new MutationObserver(visibility):null;
     for(const container of containers) observer?.observe(container,{attributes:true,attributeFilter:['class','open']});
     visibility();
-    return {destroy(){disposed=true;cancel();publicationView?.destroy();observer?.disconnect();root.removeEventListener('toggle',visibility);body.removeEventListener('click',click);body.removeEventListener('submit',submit);body.removeEventListener('change',change);globalThis.document?.removeEventListener('visibilitychange',visibility);body.replaceChildren();selected=null;logState=null;}};
+    return {destroy(){disposed=true;cancel();publicationView?.destroy();observer?.disconnect();root.removeEventListener('toggle',visibility);body.removeEventListener('click',click);body.removeEventListener('submit',submit);body.removeEventListener('change',change);globalThis.document?.removeEventListener('visibilitychange',documentVisibility);body.replaceChildren();selected=null;logState=null;}};
   }
   return {mount,renderSource};
 }));

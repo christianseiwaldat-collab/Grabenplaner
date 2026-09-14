@@ -6,13 +6,36 @@ const {streamTradeFotoFullSource}=require('../lib/tradefoto-full-import-reader')
 const UI=require('../public/data-import');
 const MappingUI=require('../public/import-mappings');
 const session=()=>({employeeNumber:'synthetic',accountId:'synthetic-account',permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read']});
-async function fixture(t) {
+test('shutdown drains upload work after HTTP 202, blocks admission and records only sanitized errors',async t=>{
+  const {createDataImportLifecycle}=require('../lib/data-import-lifecycle');
+  const {DataImportError}=require('../lib/data-import-contract');
+  const lifecycle=createDataImportLifecycle(),app=express(),logged=[];
+  let release,saved=false,bytes;
+  const checkpoint=new Promise(r=>release=r);
+  const runtime={context:async()=>({available:true}),upload:async(_get,{buffer,onStarted})=>lifecycle.run(async signal=>{
+    bytes=buffer;onStarted({id:'b'.repeat(64),status:'reading'});
+    await new Promise(r=>{if(signal.aborted)r();else signal.addEventListener('abort',r,{once:true});});
+    await checkpoint;saved=true;throw new DataImportError('IMPORT_SOURCE_INTERRUPTED',409);
+  })};
+  const routes=registerDataImportRoutes(app,{runtime,lifecycle,onBackgroundError:code=>logged.push(code),requireSession:session,refreshSession:session,assertCsrf:()=>{}});
+  const listener=app.listen(0,'127.0.0.1');await new Promise(r=>listener.once('listening',r));
+  t.after(async()=>{release();await routes.stop();await new Promise(r=>listener.close(r));});
+  const upload=()=>fetch(`http://127.0.0.1:${listener.address().port}/api/data-import/upload/trade`,{
+    method:'POST',headers:{'Content-Type':'application/octet-stream'},body:Buffer.alloc(4096,3)});
+  const response=await upload();assert.equal(response.status,202);await response.json();
+  let drained=false;const stopping=routes.stop().then(()=>{drained=true;});
+  await new Promise(r=>setImmediate(r));assert.equal(drained,false);assert.equal(saved,false);
+  const rejected=await upload();assert.equal(rejected.status,503);assert.equal((await rejected.json()).code,'IMPORT_MAINTENANCE');
+  release();await stopping;await new Promise(r=>setImmediate(r));
+  assert.equal(saved,true);assert.ok(bytes.every(b=>b===0));assert.deepEqual(logged,['IMPORT_SOURCE_INTERRUPTED']);
+});
+async function fixture(t,{jobs=null}={}) {
   const state={session:session(),calls:0,csrf:true,available:true,password:null},app=express();app.use(express.json({limit:'16kb'}));
-  const runtime={context:async get=>({available:state.available,projection:buildDataImportProjection(await get())}),
+  const runtime={context:async get=>({available:state.available,projection:buildDataImportProjection(await get()),message:state.available?'ready':'Protected key unavailable'}),
     list:async get=>{await get();return {items:[]};},sourceOperation:async(get,_id,action,body)=>{await get();state.calls++;return {action,body};},
     upload:async(get,{buffer,kind,password,onStarted})=>{await get();state.calls++;state.kind=kind;state.password=password;assert.ok(Buffer.isBuffer(buffer));onStarted({id:'a'.repeat(64),status:'reading'});buffer.fill(0);}};
   const mappings={operation:async(get,action,body)=>{await get();state.calls++;return {action,body};}};
-  registerDataImportRoutes(app,{runtime,mappings,requireSession(_r,permission){if(!state.session)throw Object.assign(new Error('private'),{status:401});
+  registerDataImportRoutes(app,{runtime,mappings,jobs,requireSession(_r,permission){if(!state.session)throw Object.assign(new Error('private'),{status:401});
     if(!state.session.permissions.includes(permission))throw Object.assign(new Error('private'),{status:403});return state.session;},
     refreshSession:async()=>state.session,assertCsrf(){if(!state.csrf)throw Object.assign(new Error('csrf-secret'),{status:403});}});
   const listener=app.listen(0,'127.0.0.1');await new Promise(r=>listener.once('listening',r));
@@ -20,6 +43,25 @@ async function fixture(t) {
   const request=(url,options={})=>fetch(`http://127.0.0.1:${listener.address().port}${url}`,options);
   return {state,request};
 }
+
+test('background upload acknowledges durable acceptance before any reader work and protects its controls',async t=>{
+  let durable=false,admitted=false,held=false,released=false;
+  const jobs={beginUpload(){admitted=true;held=true;return ()=>{held=false;released=true;};},
+    async enqueue(get,{buffer}){assert.ok(held);assert.ok(Buffer.isBuffer(buffer));await get();durable=true;return {id:'a'.repeat(64),status:'queued',background:{status:'queued'}};},
+    overlay:async source=>source,async action(get,id,action){await get();return {id,action};}};
+  const f=await fixture(t,{jobs}),res=await f.request('/api/data-import/upload/trade',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:Buffer.alloc(4096)});
+  assert.equal(res.status,202);assert.equal((await res.json()).background.status,'queued');assert.ok(durable&&admitted&&released);assert.equal(f.state.calls,0);
+  f.state.available=false;const context=await (await f.request('/api/data-import/context')).json();
+  assert.equal(context.available,false);assert.equal(context.message,'Protected key unavailable');
+  f.state.csrf=false;assert.equal((await f.request('/api/data-import/sources/'+ 'a'.repeat(64)+'/pause',{method:'POST'})).status,403);
+  assert.equal((await f.request('/api/data-import/sources/'+ 'a'.repeat(64)+'/retry',{method:'POST'})).status,403);
+});
+
+test('background progress explains automatic retry without asking for another upload and escapes its error',()=>{
+  const html=UI.renderSource({kind:'trade',status:'interrupted',error:'IMPORT_SOURCE_READ_TIMEOUT',tables:[],background:{status:'retrying',retries:1,maxRetries:3,nextAt:'2026-09-14T10:00:00.000Z',error:'<script>bad</script>'}},{prepare:true});
+  assert.match(html,/kein erneuter Upload nötig/);assert.doesNotMatch(html,/Bitte denselben Dateistand erneut auswählen|<script>/);
+  assert.match(html,/data-i-job="pause"/);
+});
 test('Productive Block 1: routes require personal company rights, CSRF and no-store, with no role-only grants',async t=>{
   const f=await fixture(t);let res=await f.request('/api/data-import/context');assert.equal(res.status,200);assert.match(res.headers.get('cache-control'),/no-store/);
   f.state.csrf=false;res=await f.request('/api/data-import/sources/search',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});assert.equal(res.status,403);

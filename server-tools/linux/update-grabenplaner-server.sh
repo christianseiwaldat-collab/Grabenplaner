@@ -470,6 +470,7 @@ rollback_update() {
   fi
   rollback_public_ok=0
   if (( rollback_app_ok == 1 && rollback_data_ok == 1 )) && [[ -d "$app_dir" && ! -L "$app_dir" ]]; then
+    gp_configure_nightly_backups "$app_dir" "$node" || gp_warn "Der Sicherungszeitplan muss nach der Rueckkehr geprueft werden."
     systemctl start "$service"
     if gp_wait_ready "$internal_ready_url" "$health_timeout" && gp_wait_ready "$public_ready_url" "$health_timeout"; then
       rollback_public_ok=1
@@ -865,6 +866,7 @@ release_database_lock
 new_service_started=1
 begin_deploy_phase application-start
 gp_start_service "$service"
+gp_configure_nightly_backups "$app_dir" "$node" || gp_die "Der gemeinsame naechtliche Sicherungsablauf konnte nicht aktiviert werden."
 gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Die neue App wurde intern nicht rechtzeitig betriebsbereit."
 gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der oeffentliche HTTPS-Readinesscheck ist fehlgeschlagen."
 begin_deploy_phase deployment-checks

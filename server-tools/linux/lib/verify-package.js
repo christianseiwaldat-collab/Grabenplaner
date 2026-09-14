@@ -128,7 +128,7 @@ function isForbiddenRuntimePath(relative) {
   if (backupRuntimeScripts.has(relative)) return false;
   const normalized = relative.toLowerCase();
   const top = normalized.split("/", 1)[0];
-  if ([".git", ".github", ".devcontainer", "backups", "data", "demo", "docs", "node_modules", "output", "release", "runtime", "scripts", "test", "tmp", "usb-backups"].includes(top)) return true;
+  if ([".git", ".github", ".devcontainer", "backups", "data", "demo", "docs", "import-jobs", "node_modules", "output", "release", "runtime", "scripts", "test", "tmp", "usb-backups"].includes(top)) return true;
   if (/(^|\/)(\.env($|\.)|\.npmrc$|\.pnpm-store($|\/)|__pycache__($|\/))/.test(normalized)) return true;
   if (/\.(db|sqlite|sqlite3|amu|pfx|p12|pem|key|crt)$/.test(normalized)) return true;
   if (/(^|\/)(branding-kits?|customer-branding|kundenbranding)(\/|$)/.test(normalized)) return true;
@@ -300,7 +300,7 @@ function readOffsiteModuleContract() {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der optionale Offsite-Modulvertrag fehlt oder ist unzulaessig.");
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || !(runtimeOnly ? [6, 7, 8, 9] : [9]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
+    || !(runtimeOnly ? [6, 7, 8, 9, 10] : [10]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedOffsiteArtifacts.length
     || expectedOffsiteArtifacts.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");

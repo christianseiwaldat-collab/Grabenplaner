@@ -25618,8 +25618,18 @@ app.delete("/api/integrations/personnel-import/sessions/:id", (request, response
 
 // Source data is staged and reviewed before explicit, permission-checked apply.
 // Core mappings and cash publication remain distinct reviewed decisions.
-registerDataImportRoutes(app, {
-  runtime: createDataImportRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowApply: true, sharedPayloads: true, compactCash: true }),
+const dataImportLifecycle=require('./lib/data-import-lifecycle').createDataImportLifecycle({
+  maintenanceActive:()=>serverModeActive&&require('./lib/backup-maintenance').ownsLifecycleBackup(databasePath),
+});
+const dataImportRuntime=createDataImportRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowApply: true, sharedPayloads: true, compactCash: true,lifecycle:dataImportLifecycle });
+const dataImportJobs=require('./lib/data-import-jobs').createDataImportJobs({
+  directory:path.join(dataRootDirectory,'import-jobs'),vault:integrationSecretVault,runtime:dataImportRuntime,
+  lifecycle:dataImportLifecycle,resolvePrincipal:resolveSalesReportPrincipal,
+  onError:code=>console.warn('Datenbankimport-Auftrag:',code),
+});
+const dataImportRoutes=registerDataImportRoutes(app, {
+  lifecycle:dataImportLifecycle,
+  runtime:dataImportRuntime,jobs:dataImportJobs,
   mappings: createDataImportMappingRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowMapping: false }),
   cashPublications: createCashPublicationRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: true, policies: CASH_SOURCE_POLICIES }),
   requireSession: requireEmployeePortalSession,
@@ -63512,7 +63522,7 @@ async function startServer() {
       for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
     }
     scheduleAutomaticBackups();
-    if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== 'recovery-smoke') salesReportJobs.start();
+    if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== 'recovery-smoke') {salesReportJobs.start();dataImportJobs.start();}
     try { await reconcileInterruptedIntegrationDeliveries(); } catch (error) { console.error("Unterbrochene Lohnübergaben konnten nicht abgeglichen werden:", error); }
     try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
     try { await runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
@@ -63601,12 +63611,16 @@ function maintenanceOwnsLifecycleBackup() {
 function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) {
   if (shutdownStarted) return;
   shutdownStarted = true;
+  // HTTP 202 uploads outlive their response. Stop admission/reading now, then
+  // persist the last acknowledged checkpoint before closing PostgreSQL pools.
+  const importDrain=Promise.all([dataImportJobs.stop(),dataImportRoutes.stop()]);
   const deadlineMs = Date.now() + 1400000;
   let finished = false;
   let serverClosed = !server;
   const finish = async () => {
     if (finished) return;
     finished = true;
+    await importDrain;
     await salesReportJobs.stop().catch(() => {});
     await postgresqlReceiptWorkers?.close().catch(() => {});
     if (!databaseClosed) {

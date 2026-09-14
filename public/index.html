@@ -37,7 +37,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.44 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.45 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -3066,7 +3066,7 @@
           <div><h3 id="salesArticleImportSourceTitle">TradeFoto-Datei</h3><p>Eine <strong>.accdb</strong>-Datenbank wird ausschließlich lesend und nur für diese Prüfung verarbeitet. Alternativ bleibt das vorbereitete Grabenplaner-JSON verfügbar.</p></div>
           <div class="sales-article-import-file-actions">
             <label class="secondary-button sales-article-import-file-button" for="salesArticleImportFile">Datei auswählen</label>
-            <input id="salesArticleImportFile" type="file" accept="application/vnd.ms-access,application/vnd.grabenplaner.tradefoto-articles+accdb,application/vnd.grabenplaner.tradefoto-articles+json,.accdb,.json" />
+            <input id="salesArticleImportFile" type="file" aria-describedby="salesArticleImportSourceTitle" />
             <button class="primary-button" id="salesArticleImportPreviewButton" type="button" disabled>Vorschau prüfen</button>
           </div>
           <p class="sales-article-import-file-name" id="salesArticleImportFileName">Noch keine Datei ausgewählt.</p>
