@@ -76,5 +76,37 @@ dem errechneten RE; ein positiver Verkaufspreis mit Verlust erscheint rot.
 
 Die Freigabe umfasst das bestehende Updateverfahren mit frischem gekoppeltem
 Rückkehrpunkt und dem automatisch bestimmten Prüfmodus. Kein VPS-/PostgreSQL-
-Neustart und keine Änderung an Netzwerkzugängen. Der produktive Abschluss
-wird nach erfolgter Veröffentlichung ergänzt.
+Neustart und keine Änderung an Netzwerkzugängen.
+
+## Produktiver Abschluss
+
+Der bestehende Updater installierte Commit
+`dd34cc861322a727f9fcb615948bab8980dba2a9` erfolgreich am 14.09.2026 um
+22:43:18 UTC. Der Versionswechsel mit Paketprüfung und Sicherung benötigte
+rund 15 Minuten. Alle 697 ausgelieferten Dateien wurden am VPS geprüft;
+Core-/Sales-Strukturen, Datenbankautorität und fremde Dienste blieben erhalten.
+
+Die tatsächlich installierte Artikeldetailfunktion wurde anschließend mit den
+vier genannten produktiven Artikeln und reinen Leserechten geprüft: RE und
+Ziel-RE verfügbar, Eingabefeld aktiviert, Scannerdateien erreichbar und
+Kameraberechtigung auf das Portal begrenzt. Die bestehende Chrome-Anmeldung
+blieb gültig. Ein echter Handy-Kamerascan wurde weiterhin nicht durchgeführt.
+
+Die vollständige externe Wiederherstellung einschließlich Anwendungstest
+bestand am 14.09.2026 um 23:04:21 UTC, Run
+`cac17d37-89e8-4b46-8f1c-6387f6db69f0`. Ein frischer Monitorlauf bestätigte
+alle 24 Betriebsprüfungen ohne automatischen Neustart. Zwei gekoppelte
+Sicherungspaare blieben erhalten; temporäre Release- und native Testkopien
+wurden nach Sicherung der Belege entfernt. Die Belege wurden lokal mit
+Hashprüfung übernommen.
+
+Der bereits begonnene Trade-Auftrag wurde über die angemeldete GP-Oberfläche
+am gespeicherten Stand fortgesetzt. Die frühere Problemstelle mit 30.567 Zeilen
+bestand Vorbereitung und Prüfung; um 23:06 UTC waren 15.032 dieser Zeilen
+übernommen. Der Auftrag lief nach Verlassen der Importseite weiter,
+ohne Wiederholungsfehler. Die vollständigen 396.466 Zeilen waren zu diesem
+Zeitpunkt noch nicht übernommen.
+
+Der zusätzliche Live-Nachweis des verschlüsselten Auftrags deckte eine
+Millisekundenabweichung der Ablaufzeit auf. Die Korrektur und der Nachweis
+der Wiederaufnahme sind in [v0.92.48](DEPLOY-RELEASE-v09248.md) dokumentiert.

@@ -108,7 +108,7 @@
         if(target.dataset.iAction)return await runAction(target.dataset.iAction);
         if(target.hasAttribute('data-i-refresh')){clearTimeout(timer);return await refresh();}
         if(target===el('next'))return await refresh(true);
-        if(target.dataset.iSource){publicationView?.destroy();publicationView=null;const result=await request(`/api/data-import/sources/${target.dataset.iSource}`);if(disposed||ticket!==generation)return;selected=result;logState=null;el('log').replaceChildren();renderSelected();return;}
+        if(target.dataset.iSource){publicationView?.destroy();publicationView=null;const result=await request(`/api/data-import/sources/${target.dataset.iSource}`);if(disposed||ticket!==generation)return;selected=result;logState=null;el('log').replaceChildren();renderSelected();await refresh();return;}
         if(target.dataset.iLog)return await log('events',target.dataset.iLog);
         if(target.dataset.iRows)return await log('rows',target.dataset.iRows);
         if(target.dataset.iUndoPreview)return await log('undo-preview',target.dataset.iUndoPreview);

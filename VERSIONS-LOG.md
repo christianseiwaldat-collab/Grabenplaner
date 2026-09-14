@@ -1,5 +1,9 @@
 # Grabenplaner Versions-Log
 
+## v0.92.49 Beta · Laufender Importfortschritt
+
+- Beim Öffnen eines gespeicherten Importauftrags wird die automatische Fortschrittsanzeige wieder aufgenommen. Der Hintergrundauftrag selbst läuft weiterhin unabhängig von der geöffneten Seite.
+
 ## v0.92.48 Beta · Wiederaufnahme gespeicherter Importaufträge
 
 - Importaufträge verwenden einen gemeinsamen Erstellungszeitpunkt für ihre Aufbewahrungsfrist. Bereits gespeicherte Aufträge mit einer kleinen Zeitabweichung zwischen den früher getrennten Uhrabfragen bleiben nach einem Dienstneustart fortsetzbar. Die Aufbewahrung wird dabei auf die ursprünglichen 72 Stunden begrenzt.
