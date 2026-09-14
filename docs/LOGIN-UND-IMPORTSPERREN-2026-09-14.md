@@ -57,3 +57,14 @@ Protokolle: `tmp/integration-release-tests.log`, `tmp/integration-final-audit.lo
 `tmp/v09246-evidence/native-dependency-qualified.log`. Produktive
 Ladezeitmessungen und der tatsächliche Releaseabschluss werden getrennt im
 Release-Nachweis ergänzt.
+
+## Produktiver Abschluss
+
+v0.92.46-beta wurde am 14.09.2026 veröffentlicht und vollständig abgenommen.
+Der Benutzer meldete sich in Chrome erfolgreich an (643 ms Serverantwort).
+Die Sitzung blieb nach dem kontrollierten Sicherungs-/Wartungsstart gültig;
+`/api-errors.js` ist ohne Anmeldung mit HTTP 200 verfügbar. Eine Loginantwort
+502 während des dokumentierten Wartungsfensters wurde von den erfolgreichen
+Betriebsprüfungen getrennt. Die isolierte Wiederherstellung einschließlich
+Anwendungsanmeldung und PDF-Bericht war ebenfalls erfolgreich. Details und
+Nachweise: `docs/DEPLOY-RELEASE-v09246.md`.
