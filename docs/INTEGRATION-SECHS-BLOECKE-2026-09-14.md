@@ -20,8 +20,8 @@ Es werden keine alten Speicher-/Importprototypen über den aktuellen Stand geleg
 - Block 1 lokal integriert. 34 gezielte Tests bestanden, ohne Überspringen:
   Rechner, Artikelclient, echter Filialportal-HTTP-Zugang, Quellbestände,
   Bildzugriff und Rechteentzug. Protokoll: `tmp/integration-block1-tests.log`.
-- Native PostgreSQL-, Browser- und gemeinsame Releaseabnahme folgen nach
-  Abschluss der Integrationen. Ein lokales Testergebnis ist kein Deploynachweis.
+- Die nachfolgende native PostgreSQL-, Browser- und gemeinsame Releaseabnahme
+  wurde abgeschlossen. Der produktive Wechsel ist separat nachgewiesen.
 
 ## Fachliche Grenzen
 
@@ -35,7 +35,7 @@ der Artikelrechner verwendet ausschließlich den bestätigten Durchschnitts-EK.
 - Block 3 lokal integriert: ZA-Opt-in, Filialmitarbeiter, Vorschau und bestehende
   Genehmigung. Ein veralteter Navigationstest wurde durch Wiederherstellung der
   bisherigen Setter-Reihenfolge behoben; 23 betroffene Navigation-/Planungstests
-  bestanden. Gemeinsamer Lauf steht noch aus.
+  bestanden; der gemeinsame Lauf ist weiter unten dokumentiert.
 - Block 4: geschützte, fortsetzbare Einkaufs- und Versorgungsansichten integriert;
   zwei echte SQLite-Import-/Berechtigungs- und SQL-Übersetzungstests bestanden.
 - Blöcke 5 und 6 integriert. Eigene Klassifikationen und Reparaturstatus liegen

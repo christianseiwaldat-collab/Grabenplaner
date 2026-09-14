@@ -100,3 +100,18 @@ Lokale Diagnoseartefakte unter `tmp/`: `planning-performance-vps-20260914-result
 `planning-performance-sample-20260914-result.json`,
 `planning-performance-query-plans-20260914-result.json`,
 `planning-performance-regressions.log` und `planning-performance-persistence-audit.log`.
+
+## Nachmessung nach Veröffentlichung
+
+Am 14.09.2026 mit v0.92.46-beta im angemeldeten Chrome geprüft. Für Filiale 18
+dauerten die reinen Wochenwechsel auf 21.09. und 28.09.2026 2051 bzw. 1802 ms.
+Der Wechsel des Urlaubsjahres auf 2027 benötigte 256 ms und rief ausschließlich
+die Urlaubsabfrage ab. Die Anzeige wurde jeweils bestätigt und 2026 danach
+wieder eingestellt (270 ms für den Rückabruf). Die Seiten- und Filialerstaufrufe
+lagen bei 1348–3648 ms je einzelner Planungs-/Urlaubsabfrage. Browser-Zurück blieb
+im GP.
+
+Das sind Serverzeiten aus den Caddy-Anfrageprotokollen, keine garantierten
+Gesamtzeiten des Bildaufbaus. Gleichzeitig lief die externe Folgeprüfung des
+Deploys. Deren kontrolliertes Wartungsfenster wurde bei diesen erfolgreichen
+Messungen ausgeschlossen. Rohbeleg: `tmp/planning-performance-after-v09246-result.json`.
