@@ -1,5 +1,9 @@
 # Grabenplaner Versions-Log
 
+## v0.92.48 Beta · Wiederaufnahme gespeicherter Importaufträge
+
+- Importaufträge verwenden einen gemeinsamen Erstellungszeitpunkt für ihre Aufbewahrungsfrist. Bereits gespeicherte Aufträge mit einer kleinen Zeitabweichung zwischen den früher getrennten Uhrabfragen bleiben nach einem Dienstneustart fortsetzbar. Die Aufbewahrung wird dabei auf die ursprünglichen 72 Stunden begrenzt.
+
 ## v0.92.47 Beta · Fortsetzbare Übernahme und Artikelscanner
 
 - Eine bewusst gestartete Datenübernahme arbeitet als gespeicherter Hintergrundauftrag weiter, auch bei geschlossenem GP. Pause, Fortsetzen und begrenzte automatische Wiederholungen verwenden die bestehenden Prüf- und Berechtigungsregeln.

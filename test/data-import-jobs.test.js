@@ -6,7 +6,7 @@ const C=require('../lib/data-import-contract'),{DATA_IMPORT_PERMISSIONS:P}=requi
 const session=()=>({employeeNumber:'synthetic',accountId:null,isEmployee:true,permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read']});
 const sourceBuffer=()=>{const b=Buffer.alloc(4096);b.write('Standard ACE DB',4);b[0x14]=3;b.write('private synthetic input',256);return b;};
 const turn=()=>new Promise(r=>setImmediate(r));
-async function fixture(t){
+async function fixture(t,{advancingClock=false}={}){
  const parent=await fsp.mkdtemp(path.join(os.tmpdir(),'gp-import-jobs-')),directory=path.join(parent,'spool');
  const vault=createIntegrationSecretVault({activeKeyId:'test',keys:{test:Buffer.alloc(32,7)}}),sources=new Map();
  const state={principal:session(),now:Date.now(),calls:0,failures:0,failCode:'IMPORT_SOURCE_READ_TIMEOUT',reviews:0},getSession=async()=>state.principal;
@@ -18,8 +18,9 @@ async function fixture(t){
    s.complete=true;s.status='reviewing';return {...s};},
   sourceOperation:async(get,id,action)=>{await get();const s=sources.get(id);if(action==='review'){state.reviews++;s.status='ready';}
     if(action==='apply'){if(state.beforeApply)await state.beforeApply();s.applied=(s.applied||0)+1;s.revision++;s.status=s.applied>=3?'applied':'applying';}return {...s};}};
- let queue;const store=createDataImportJobStore({directory,vault,now:()=>state.now});
- const options={directory,vault,runtime,store,resolvePrincipal:getSession,now:()=>state.now};
+ let queue;const now=()=>advancingClock?state.now++:state.now;
+ const store=createDataImportJobStore({directory,vault,now});
+ const options={directory,vault,runtime,store,resolvePrincipal:getSession,now};
  const make=()=>{queue=createDataImportJobs({...options,lifecycle:createDataImportLifecycle()});return queue;};make();
  const enqueue=()=>queue.enqueue(getSession,{buffer:sourceBuffer(),kind:'trade',password:'synthetic-password'});
  t.after(async()=>{await queue.stop();assert.equal(path.dirname(await fsp.realpath(parent)),await fsp.realpath(os.tmpdir()));await fsp.rm(parent,{recursive:true,force:true});});
@@ -33,6 +34,33 @@ test('accepted file is encrypted and completes reading plus review with no brows
  assert.equal((await f.queue.overlay(source)).background.status,'queued');
  await f.queue.tick();assert.equal(f.state.calls,1);assert.equal(f.state.reviews,1);assert.deepEqual(await fsp.readdir(f.directory),[]);
  assert.equal(f.sources.get(source.id).status,'ready');
+});
+
+test('upload and takeover survive reconstruction when the clock advances between every call',async t=>{
+ const f=await fixture(t,{advancingClock:true}),source=await f.enqueue();
+ assert.equal((await f.store.read(source.id)).expires-(await f.store.read(source.id)).created,RETENTION_MS);
+ await f.queue.stop();f.make();await f.queue.tick();assert.equal(f.sources.get(source.id).status,'ready');
+ await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1});
+ const job=await f.store.read(source.id);assert.equal(job.expires-job.created,RETENTION_MS);
+ await f.queue.stop();f.make();await f.queue.tick();
+ assert.equal(f.sources.get(source.id).applied,3);assert.equal(f.sources.get(source.id).status,'applied');
+});
+
+test('legacy millisecond expiry drift is normalized and does not prevent takeover resumption',async t=>{
+ const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+ await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1});
+ const job=await f.store.read(source.id);
+ for(const drift of [1,17,1000]){
+  await f.store.save({...job,expires:job.created+RETENTION_MS+drift});
+  assert.equal((await f.store.read(source.id)).expires,job.created+RETENTION_MS);
+ }
+ for(const drift of [-1,1001]){
+  await f.store.save({...job,expires:job.created+RETENTION_MS+drift});
+  await assert.rejects(f.store.read(source.id),{code:'IMPORT_JOB_STATE_INVALID'});
+ }
+ await f.store.save({...job,expires:job.created+RETENTION_MS+1});
+ await f.queue.stop();f.make();await f.queue.tick();
+ assert.equal(f.sources.get(source.id).applied,3);assert.deepEqual(await fsp.readdir(f.directory),[]);
 });
 
 test('only an explicit takeover starts business writes and it resumes after a transient error plus restart',async t=>{
