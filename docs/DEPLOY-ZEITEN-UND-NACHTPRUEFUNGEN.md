@@ -1,5 +1,30 @@
 # Kürzere Bereitstellung und nächtliche Wiederherstellungsprüfung
 
+## Ergänzung 15.09.2026: normaler PostgreSQL-Aufruf
+
+Für normale Folgeupdates mit unverändertem Runtime-/Offsite-Vertrag den
+installierten Updater `/opt/grabenplaner/app/server-tools/linux/update-grabenplaner-server.sh`
+beziehungsweise seinen bestehenden `grabenplaner-update`-Einstieg verwenden.
+Paketpfad, Paket-SHA256 und `--verification auto` bleiben erforderlich; die
+bestehende Wartungssperre und alle normalen Vorbedingungen gelten weiterhin.
+`--package-verifier-sha256` ist ausschließlich für den belegten Sonderfall
+eines Prüfer-/Vertragswechsels vorgesehen und erzwingt die Vollvariante.
+
+Bei v0.92.49 wurde der Updater aus dem zusätzlich entpackten Kandidaten
+aufgerufen. Dort waren keine Produktionsabhängigkeiten installiert. Seine
+relative `deploy-policy.js` konnte das PostgreSQL-Modul nicht laden
+(`MODULE_NOT_FOUND`) und fiel korrekt auf `VERIFICATION_UNAVAILABLE`/`full`
+zurück. Der vorangegangene Aufruf aus der installierten Anwendung hatte
+denselben Kandidaten und den gültigen v0.92.47-Recoverynachweis als `short`
+bewertet. Ein grüner Vorabentscheid allein belegt deshalb keinen kurzen
+tatsächlichen Deploy: maßgeblich sind Auswahlgrund und Phasen im Updatebeleg.
+
+Keine Sicherheitsprüfung wird umgangen und kein kurzer Ablauf erzwungen.
+Nach Abschluss eines laufenden Wartungsvorgangs den regulären Aufruf aus dem
+installierten Baum prüfen; während nativer Sicherungen kann eine zusätzliche
+parallele Identitätsprüfung an den begrenzten Wartungsverbindungen scheitern.
+Die folgenden älteren Messwerte dokumentieren den damaligen SQLite-/Modulstand.
+
 Stand: 12.09.2026. **v0.92.37-beta ist installiert**, einschließlich des
 ausdrücklichen Wechsels auf Offsite-Modul 8. Der Kernupdate-Beleg vom
 12.09.2026, 03:47:11 UTC, bestätigt den erfolgreichen vollständigen Ablauf.
