@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.92.50 Beta · PostgreSQL-Importabfragen
+
+- Die Arbeitslisten großer Datenbankimporte verwenden die vorhandenen PostgreSQL-Indizes auch bei der Wiederprüfung, Übernahme und Wiederaufnahme. Reihenfolge, kleine Transaktionen, Datenprüfung und Rücknahmebelege bleiben erhalten.
+- Ein vom PostgreSQL-Treiber gemeldetes Lesezeitlimit wird als vorübergehender Fehler erkannt. Der Hintergrundauftrag kann mit den bereits gespeicherten Paketen und den begrenzten Wiederholungen weiterarbeiten.
+
 ## v0.92.49 Beta · Laufender Importfortschritt
 
 - Beim Öffnen eines gespeicherten Importauftrags wird die automatische Fortschrittsanzeige wieder aufgenommen. Der Hintergrundauftrag selbst läuft weiterhin unabhängig von der geöffneten Seite.

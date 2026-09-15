@@ -70,7 +70,10 @@ test('only an explicit takeover starts business writes and it resumes after a tr
   assert.equal(accepted.background.phase,'applying');assert.equal(f.sources.get(source.id).applied,undefined);
   await assert.rejects(f.queue.assertIdle(source.id),{code:'IMPORT_SOURCE_BUSY'});
   assert.equal((await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1})).background.phase,'applying');
-  f.state.beforeApply=()=>{if(f.sources.get(source.id).applied===1)throw new C.DataImportError('IMPORT_RETRY_LATER',503);};
+  f.state.beforeApply=()=>{if(f.sources.get(source.id).applied===1){
+    const failure=require('../lib/persistence/postgresql/provider').mapPostgresqlError(new Error('Query read timeout'));
+    require('../lib/data-import-errors').importFailure(failure);
+  }};
   await f.queue.tick();assert.equal(f.sources.get(source.id).applied,1);
   assert.equal((await f.queue.overlay(source)).background.status,'retrying');
   await f.queue.stop();f.make();f.state.now+=30001;f.state.beforeApply=null;await f.queue.tick();
