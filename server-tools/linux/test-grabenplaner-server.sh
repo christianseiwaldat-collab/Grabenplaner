@@ -343,6 +343,40 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]
       offsite_timer_ok=0
     fi
   done
+  # A recovery fix cannot clear a previous restore failure until its candidate
+  # code is installed. Re-test that exact failure before judging the candidate;
+  # never suppress/reset the status or run this work from the regular monitor.
+  if (( deploy_checks == 1 && failures == 0 && offsite_timer_ok == 1 )) \
+    && [[ -f "$offsite_status_reader" && ! -L "$offsite_status_reader" ]] \
+    && [[ "$("$node" - "$offsite_status_reader" "$offsite_status_file" <<'NODE'
+const [restoreReaderPath, restoreStatusPath] = process.argv.slice(2);
+const d = require(restoreReaderPath).readOffsiteBackupStatus({ configured: true, statusPath: restoreStatusPath, requireRootOwner: true });
+const fresh = value => Number.isFinite(value) && value >= 0 && value <= 36;
+const needed = d.statusAvailable === true && d.blocksMainReadiness === false && d.state === "error"
+  && d.unresolvedFailures?.backup === false && d.unresolvedFailures?.fullCheck === false
+  && d.unresolvedFailures?.restoreTest === true
+  && fresh(d.agesHours?.backup) && fresh(d.agesHours?.repositoryCheck);
+process.stdout.write(needed ? "restore-required" : "none");
+NODE
+    )" == restore-required ]]; then
+    offsite_restore_command="/usr/local/sbin/grabenplaner-offsite-restore-test"
+    if [[ "$(readlink -f -- "/proc/${BASHPID:-$$}/fd/9" 2>/dev/null || true)" != "/run/grabenplaner/maintenance.lock" ]] \
+      || ! flock --nonblock 9; then
+      check_fail "Offsite-Wiederherstellung" "kontrollierte Update-Wartungssperre fehlt"
+    elif [[ ! -x "$offsite_restore_command" \
+      || "$(readlink -f -- "$offsite_restore_command")" != "/opt/grabenplaner-offsite/module/grabenplaner-offsite-restore-test.sh" ]]; then
+      check_fail "Offsite-Wiederherstellung" "geschuetzter Wiederherstellungstest fehlt"
+    else
+      gp_info "Pruefe den offenen Restore-Fehler mit der neuen Anwendung vor dem Deploy-Abschluss erneut."
+      # The restore command acquires its own repository/workspace locks. FD9
+      # remains held by the updater; --lock-already-held would mean FD8, not FD9.
+      if "$offsite_restore_command"; then
+        check_ok "Offsite-Wiederherstellung" "offener Restore-Fehler durch vollstaendige Wiederherstellung nachgeprueft"
+      else
+        check_fail "Offsite-Wiederherstellung" "erneute Wiederherstellung fehlgeschlagen"
+      fi
+    fi
+  fi
   offsite_status_current=0
   if [[ "$offsite_status_gid" =~ ^[0-9]+$ && -f "$offsite_status_file" && ! -L "$offsite_status_file" \
     && "$(stat --format='%u:%g:%a:%h' -- "$offsite_status_file")" == "0:$offsite_status_gid:640:1" \
