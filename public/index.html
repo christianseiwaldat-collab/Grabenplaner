@@ -9,6 +9,7 @@
     <link rel="apple-touch-icon" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/learning-library.css" />
     <link rel="stylesheet" href="/sales-history.css" />
     <link rel="stylesheet" href="/receipt-search.css" />
     <link rel="stylesheet" href="/data-import.css" />
@@ -37,7 +38,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.51 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.52 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -53,7 +54,6 @@
             <span>Darkmode</span><i aria-hidden="true"><b></b></i>
           </button>
         </div>
-
         <section class="function-search hidden" id="functionSearch" aria-label="Funktionen durchsuchen">
           <label class="visually-hidden" for="functionSearchInput">Funktion suchen</label>
           <div class="function-search-field">
@@ -907,15 +907,12 @@
           <section class="personnel-administration-section personnel-learning-catalog" id="personnelLearningSection" role="tabpanel" aria-labelledby="personnelLearningTab">
             <div class="employee-toolbar personnel-learning-heading">
               <div><span class="eyebrow">Transparente Lernorganisation</span><h2>Schulung &amp; Wissen</h2><p>Prozessvorlagen und definierte Fähigkeiten nachvollziehbar und versioniert verwalten.</p></div>
-              <div class="personnel-learning-heading-actions"><button class="secondary-button hidden" id="addPersonnelLearningSkillButton" type="button">+ Fähigkeit anlegen</button><button class="primary-button hidden" id="addPersonnelLearningModuleButton" type="button">+ Prozess anlegen</button></div>
+
             </div>
-            <article class="personnel-lifecycle-boundary personnel-learning-boundary">
-              <strong>Kataloge, Mitarbeiterprofile und Durchführung bleiben getrennt</strong>
-              <p>Prozessvorlagen, Fähigkeiten, Kompetenzstände, Schulungszuweisungen und Durchführungshistorien bleiben revisionsgebunden getrennt. Dashboard und Fähigkeitsbaum sind datensparsame Ansichten derselben Belege und keine zweite Wahrheit. Dateinachweise bleiben außerhalb dieses Blocks.</p>
-            </article>
+            <p class="personnel-learning-introduction">Schulungen vorbereiten, Wissen nachschlagen und Lernfortschritte begleiten. Veröffentlichte Fassungen und bisherige Abschlüsse bleiben nachvollziehbar erhalten.</p>
             <section class="personnel-learning-dashboard" id="personnelLearningDashboardPanel" aria-labelledby="personnelLearningDashboardTitle">
               <header class="personnel-learning-dashboard-heading">
-                <div><span class="eyebrow">Block 7 · Transparente Übersicht</span><h3 id="personnelLearningDashboardTitle">Schulungsdashboard &amp; Fähigkeitsbaum</h3><p>Fortschritte, Klärungsbedarf und vorhandene Fähigkeiten im aktuell freigegebenen Bereich.</p></div>
+                <div><span class="eyebrow">Übersicht</span><h3 id="personnelLearningDashboardTitle">Schulungsdashboard &amp; Fähigkeitsbaum</h3><p>Fortschritte, Klärungsbedarf und vorhandene Fähigkeiten im aktuell freigegebenen Bereich.</p></div>
                 <button class="secondary-button" id="refreshPersonnelLearningDashboardButton" type="button">Dashboard aktualisieren</button>
               </header>
               <p class="personnel-learning-status" id="personnelLearningDashboardStatus" role="status" aria-live="polite">Das Schulungsdashboard wird beim Öffnen geladen.</p>
@@ -931,8 +928,12 @@
                 </section>
               </div>
             </section>
+            <details class="personnel-learning-area" data-learning-area="team"><summary><strong>Team · Soll und Ist</strong><span>Kompetenzmatrix und Pflichtschulungen</span></summary><section class="personnel-learning-catalog-panel" id="personnelLearningTeam"></section></details>
+            <details class="personnel-learning-area" data-learning-area="knowledge"><summary><strong>Wissensbibliothek</strong><span>Nachschlagen, suchen und Wissen pflegen</span></summary><section class="personnel-learning-catalog-panel" id="personnelKnowledgeLibrary"></section></details>
+            <details class="personnel-learning-area" data-learning-area="processes">
+              <summary><strong>Vorlagen</strong><span>Schulungen und Lernschritte vorbereiten</span></summary>
             <section class="personnel-learning-catalog-panel" id="personnelLearningProcessesPanel" aria-labelledby="personnelLearningProcessesTitle">
-              <div class="personnel-learning-subheading"><div><span class="eyebrow">Versionierte Abläufe</span><h3 id="personnelLearningProcessesTitle">Prozessvorlagen</h3></div><p>Schulungs- und Wissensabläufe mit geordneten Schritten.</p></div>
+              <div class="personnel-learning-subheading"><div><span class="eyebrow">Versionierte Abläufe</span><h3 id="personnelLearningProcessesTitle">Prozessvorlagen</h3><button class="primary-button hidden" id="addPersonnelLearningModuleButton" type="button">+ Prozess anlegen</button><button type="button" class="secondary-button" data-learning-preset="training">Kassa-Einschulung vorbereiten</button></div><p>Schulungs- und Wissensabläufe mit geordneten Schritten.</p></div>
               <div class="personnel-learning-summary" id="personnelLearningSummary" aria-label="Zusammenfassung des Schulungs- und Wissenskatalogs"></div>
               <div class="personnel-learning-toolbar" aria-label="Schulungs- und Wissensprozesse filtern">
                 <label class="field"><span>Suche</span><input id="personnelLearningSearch" type="search" autocomplete="off" placeholder="Titel, Code, Lernziel oder Schlagwort" /></label>
@@ -945,8 +946,11 @@
                 <p class="personnel-workflow-empty">Noch keine Prozessvorlagen geladen.</p>
               </div>
             </section>
+            </details>
+            <details class="personnel-learning-area" data-learning-area="skills">
+              <summary><strong>Fähigkeiten</strong><span>Stufen und Lernziele definieren</span></summary>
             <section class="personnel-learning-catalog-panel personnel-learning-skills-panel" id="personnelLearningSkillsPanel" aria-labelledby="personnelLearningSkillsTitle">
-              <div class="personnel-learning-subheading"><div><span class="eyebrow">Block 3 · Fähigkeitsmodell</span><h3 id="personnelLearningSkillsTitle">Fähigkeitskatalog</h3></div><p>Jede Version definiert die vollständige Entwicklung von Stufe 1 bis Stufe 10.</p></div>
+              <div class="personnel-learning-subheading"><div><span class="eyebrow">Fähigkeiten</span><h3 id="personnelLearningSkillsTitle">Fähigkeitskatalog</h3><button class="secondary-button hidden" id="addPersonnelLearningSkillButton" type="button">+ Fähigkeit anlegen</button><button type="button" class="secondary-button" data-learning-preset="skill">Kassa-Fähigkeit vorbereiten</button></div><p>Jede Version definiert die vollständige Entwicklung von Stufe 1 bis Stufe 10.</p></div>
               <div class="personnel-learning-summary" id="personnelLearningSkillSummary" aria-label="Zusammenfassung des Fähigkeitskatalogs"></div>
               <div class="personnel-learning-toolbar personnel-learning-skill-toolbar" aria-label="Fähigkeiten filtern">
                 <label class="field"><span>Suche</span><input id="personnelLearningSkillSearch" type="search" autocomplete="off" placeholder="Fähigkeit, Kategorie, Code oder Schlagwort" /></label>
@@ -958,8 +962,11 @@
                 <p class="personnel-workflow-empty">Noch keine Fähigkeiten geladen.</p>
               </div>
             </section>
+            </details>
+            <details class="personnel-learning-area" data-learning-area="competencies">
+              <summary><strong>Kompetenzprofile</strong><span>Fähigkeiten und Trainerfreigaben zuordnen</span></summary>
             <section class="personnel-learning-catalog-panel personnel-learning-competency-panel" id="personnelLearningCompetenciesPanel" aria-labelledby="personnelLearningCompetenciesTitle">
-              <div class="personnel-learning-subheading"><div><span class="eyebrow">Block 4 · Mitarbeiterprofil</span><h3 id="personnelLearningCompetenciesTitle">Kompetenzprofile &amp; Trainerfreigaben</h3></div><p>Mehrere Fähigkeiten je Mitarbeiter mit verbindlicher Stufe und transparenter Trainerfreigabe.</p></div>
+              <div class="personnel-learning-subheading"><div><span class="eyebrow">Mitarbeiterprofile</span><h3 id="personnelLearningCompetenciesTitle">Kompetenzprofile &amp; Trainerfreigaben</h3></div><p>Mehrere Fähigkeiten je Mitarbeiter mit verbindlicher Stufe und transparenter Trainerfreigabe.</p></div>
               <div class="personnel-learning-summary" id="personnelLearningCompetencySummary" aria-label="Zusammenfassung der Kompetenzprofile"></div>
               <div class="personnel-learning-toolbar personnel-learning-competency-toolbar" aria-label="Kompetenzprofile filtern">
                 <label class="field"><span>Suche</span><input id="personnelLearningCompetencySearch" type="search" autocomplete="off" placeholder="Mitarbeiter, Fähigkeit, Kategorie oder Filiale" /></label>
@@ -974,8 +981,11 @@
                 <p class="personnel-workflow-empty">Noch keine Kompetenzprofile geladen.</p>
               </div>
             </section>
+            </details>
+            <details class="personnel-learning-area" data-learning-area="assignments">
+              <summary><strong>Schulungen</strong><span>Zuweisen und Fortschritt begleiten</span></summary>
             <section class="personnel-learning-catalog-panel personnel-learning-assignment-panel" id="personnelLearningAssignmentsPanel" aria-labelledby="personnelLearningAssignmentsTitle">
-              <div class="personnel-learning-subheading"><div><span class="eyebrow">Block 5 + 6 · Durchführung</span><h3 id="personnelLearningAssignmentsTitle">Schulungen zuordnen &amp; durchführen</h3></div><p>Lernende und Trainer verbinden, Schrittfortschritt erfassen sowie Abschlüsse und begründete Korrekturen revisionssicher dokumentieren.</p></div>
+              <div class="personnel-learning-subheading"><div><span class="eyebrow">Durchführung</span><h3 id="personnelLearningAssignmentsTitle">Schulungen zuordnen &amp; durchführen</h3></div><p>Lernende und Trainer verbinden, Schrittfortschritt erfassen sowie Abschlüsse und begründete Korrekturen revisionssicher dokumentieren.</p></div>
               <div class="personnel-learning-summary" id="personnelLearningAssignmentSummary" aria-label="Zusammenfassung der Schulungszuweisungen"></div>
               <div class="personnel-learning-toolbar personnel-learning-assignment-toolbar" aria-label="Schulungszuweisungen filtern">
                 <label class="field"><span>Suche</span><input id="personnelLearningAssignmentSearch" type="search" autocomplete="off" placeholder="Lernende, Prozess, Trainer, Fähigkeit oder Filiale" /></label>
@@ -989,6 +999,7 @@
                 <p class="personnel-workflow-empty">Noch keine Schulungszuweisungen geladen.</p>
               </div>
             </section>
+            </details>
           </section>
 
           <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks" id="personnelTasksSection" role="tabpanel" aria-labelledby="personnelTasksTab">
@@ -3831,9 +3842,14 @@
           <label class="field modal-span-3"><span>Lernziel</span><textarea id="personnelLearningObjective" rows="3" minlength="3" maxlength="800" placeholder="Was soll nach diesem Prozess sicher beherrscht werden?" required></textarea></label>
           <label class="field"><span>Geplante Dauer</span><div class="field-with-suffix"><input id="personnelLearningEstimatedMinutes" type="number" min="5" max="1440" step="5" value="30" required /><span>Minuten</span></div></label>
           <label class="field"><span>Abschlussprüfung</span><select id="personnelLearningVerificationMode"><option value="trainer_confirmation">Bestätigung durch einschulende Person</option><option value="self_confirmation">Selbstbestätigung</option><option value="knowledge_check">Wissenskontrolle</option><option value="practical_check">Praxisprüfung</option></select></label>
+          <label class="field"><span>Zielkompetenz (optional)</span><select id="personnelLearningTargetSkill"><option value="">Ohne Zielkompetenz</option></select></label>
+          <label class="field"><span>Zielstufe</span><input id="personnelLearningTargetLevel" type="number" min="1" max="10" value="4" /></label>
+          <label class="field"><span>Trainer mindestens Stufe</span><input id="personnelLearningTrainerLevel" type="number" min="1" max="10" value="8" /></label>
+          <p class="calculation-note modal-span-3">Lernende können Schritte selbst vorbereiten und dokumentieren. Der Abschluss mit Zielkompetenz wird fachlich geprüft; die Kompetenzstufe wird anschließend gesondert freigegeben. Ein Abschluss erteilt keine Trainerberechtigung.</p>
           <label class="field"><span>Schlagwörter</span><input id="personnelLearningTags" maxlength="500" placeholder="z. B. Kassa, Sicherheit, Einstieg" /><small>Mit Beistrich trennen; höchstens zwölf.</small></label>
           <label class="field modal-span-3"><span>Versionshinweis</span><textarea id="personnelLearningVersionNote" rows="2" maxlength="300" placeholder="Was wurde in dieser Version geändert?"></textarea></label>
         </div>
+        <section id="personnelLearningAssessmentEditor"></section>
         <section class="personnel-learning-step-editor" aria-labelledby="personnelLearningStepsHeading">
           <div class="personnel-learning-step-heading"><div><span class="eyebrow">Geordneter Ablauf</span><h3 id="personnelLearningStepsHeading">Prozessschritte</h3><p>Die Reihenfolge wird mit dieser Version revisionssicher eingefroren.</p></div><button type="button" class="secondary-button" id="addPersonnelLearningStepButton">Schritt hinzufügen</button></div>
           <div class="personnel-learning-steps" id="personnelLearningSteps"></div>
@@ -3891,7 +3907,11 @@
         <input id="personnelLearningAssignmentExpectedReceipt" type="hidden" />
         <div class="modal-grid personnel-learning-assignment-form-grid">
           <label class="field"><span>Prozess</span><select id="personnelLearningAssignmentProcess" required></select><small>Nur veröffentlichte Prozesse im freigegebenen Bereich.</small></label>
-          <label class="field"><span>Lernende Person</span><select id="personnelLearningAssignmentLearner" required></select><small>Die Person muss in den Geltungsbereich des Prozesses fallen.</small></label>
+          <div class="field"><span>Lernende auswählen</span><select id="personnelLearningAssignmentLearner" multiple hidden></select><div class="learning-learner-choices" id="personnelLearningLearnerChoices"></div><small>Bis zu 50 Personen; alle Zuweisungen werden gemeinsam geprüft und gespeichert.</small></div>
+          <label class="field"><span>Fällig am</span><input id="personnelLearningDueDate" type="date" min="2000-01-01" max="2200-12-31" /></label>
+          <label class="field"><span>Wiederholung nach Abschluss</span><select id="personnelLearningRepeatMonths"><option value="0">Keine regelmäßige Wiederholung</option><option value="1">Monatlich</option><option value="3">Alle 3 Monate</option><option value="6">Halbjährlich</option><option value="12">Jährlich</option><option value="24">Alle 2 Jahre</option></select></label>
+          <label class="field"><span>Im GP erinnern</span><div class="field-with-suffix"><input id="personnelLearningRemindDays" type="number" min="0" max="60" value="7" /><span>Tage vorher</span></div><small>Im Schulungsdashboard sichtbar; keine externen Nachrichten.</small></label>
+          <input id="personnelLearningRepeatOf" type="hidden" /><input id="personnelLearningScheduleReceipt" type="hidden" />
         </div>
         <section class="personnel-learning-assignment-trainers" aria-labelledby="personnelLearningAssignmentTrainersTitle">
           <div class="personnel-learning-step-heading"><div><span class="eyebrow">Fachbezogene Trainerfreigaben</span><h3 id="personnelLearningAssignmentTrainersTitle">Trainerfähigkeiten auswählen</h3><p>Mehrere Fähigkeiten und mehrere Trainerpersonen sind möglich. Eine Person kann mehrere Fähigkeiten beitragen.</p></div><span class="status-badge" id="personnelLearningAssignmentTrainerCount">0 ausgewählt</span></div>
@@ -4280,6 +4300,10 @@
     <script src="/sales-report-jobs.js"></script>
     <script src="/sales-article-image.js"></script>
     <script src="/navigation-history.js"></script>
+    <script src="/personnel-learning-presets.js"></script>
+    <script src="/learning-library.js"></script>
+    <script src="/learning-assessment.js"></script>
+    <script src="/learning-team.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

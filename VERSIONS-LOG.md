@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.52 Beta · Schulung und Wissen
+
+- Eine gemeinsame Wissensbibliothek bietet versionierte Artikel, Kategorien und Suche in Verwaltung und Mitarbeiterportal. Vorbereitete Kasseninhalte bleiben bewusst bearbeitbare Entwürfe.
+- Schulungsdurchgänge erhalten eigene Historien, Sammelzuweisung, Fälligkeit und Wiederholung. Kursziele binden eine konkrete veröffentlichte Fähigkeitsfassung; Abschlüsse erteilen keine automatische Kompetenz- oder Trainerfreigabe.
+- Optionale Prüfungen werden am Server ausgewertet. Begrenzte Dateinachweise liegen verschlüsselt in Core; Bestätigungs-PDFs setzen einen aktuell gültigen erfolgreichen Abschluss voraus.
+- Konfigurierbare Team-Anforderungen und eine nach Berechtigungen gefilterte Übersicht zeigen den Schulungsstand. Seitenbegrenzung und gemeinsame Katalogabfragen halten die Datenmenge klein; Quote und CSV beziehen sich auf die sichtbare Seite.
+- Die PostgreSQL-Erweiterung ergänzt sechs Core-Tabellen in einer kontrollierten Transaktion. Bestehende Lernbelege sowie Kassa- und TradeFoto-Daten bleiben erhalten.
+
 ## v0.92.51 Beta · Kassenstand freigeben
 
 - Die Freigabe eines geprüften Kassenstands lädt Artikelzuordnungen und Quellpositionen in begrenzten Paketen. Verschlüsselte Zuordnungen werden gemeinsam gespeichert; die Aktivierung erfolgt weiterhin atomar mit erneuter Prüfung des Vorschauplans.

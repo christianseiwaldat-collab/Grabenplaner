@@ -1,3 +1,4 @@
+let personnelLearningAssessmentEditor=null, personnelLearningAssessmentPanel=null, personnelLearningTeam=null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -2745,6 +2746,12 @@ function applyRoleVisibility() {
   elements.candidatePreboardingTab?.classList.toggle("hidden", !candidatePreboardingAccess);
   elements.workflowCenterTab?.classList.toggle("hidden", !workflowCenterAccess);
   elements.personnelLearningTab?.classList.toggle("hidden", !personnelLearningAccess);
+  if (!personnelLearningAccess) personnelKnowledgeLibrary?.clear();
+    personnelLearningAssessmentPanel?.clear();
+    personnelLearningTeam?.clear();
+  document.querySelector('[data-learning-area="team"]')?.classList.toggle("hidden", !personnelLearningCompetencyAccess);
+  if (!personnelLearningCompetencyAccess) personnelLearningTeam?.clear();
+  document.querySelectorAll("[data-learning-preset]").forEach(button => button.classList.toggle("hidden", !canManagePersonnelLearningCatalog()));
   elements.addPersonnelLearningModuleButton?.classList.toggle(
     "hidden",
     !canManagePersonnelLearningCatalog()
@@ -2768,6 +2775,8 @@ function applyRoleVisibility() {
     "hidden",
     !personnelLearningAssignmentAccess,
   );
+  elements.personnelLearningCompetenciesPanel?.closest("details")?.classList.toggle("hidden", !personnelLearningCompetencyAccess);
+  elements.personnelLearningAssignmentsPanel?.closest("details")?.classList.toggle("hidden", !personnelLearningAssignmentAccess);
   elements.addPersonnelLearningAssignmentButton?.classList.toggle(
     "hidden",
     !personnelLearningAssignmentAccess
@@ -17930,7 +17939,58 @@ function setPersonnelLearningMessage(message = "", error = false) {
   elements.personnelLearningMessage.classList.toggle("error", Boolean(error));
 }
 
-function openPersonnelLearningEditor(module = null) {
+function populatePersonnelLearningTargets(target = null) {
+  const select = document.getElementById("personnelLearningTargetSkill");
+  const skills = (state.personnelLearningSkillCatalog?.skills || []).filter(s => s.publishedVersion && !s.archived);
+  select.innerHTML = '<option value="">Ohne Zielkompetenz</option>' + skills.map(skill => `<option value="${escapeHtmlAttribute(skill.id)}" data-version="${Number(skill.publishedVersion.versionNumber)}">${escapeHtml(skill.publishedVersion.title)} · Fassung ${Number(skill.publishedVersion.versionNumber)}</option>`).join("");
+  if (target) {
+    let option = [...select.options].find(o => o.value === target.skillModuleId && Number(o.dataset.version) === target.skillVersionNumber);
+    if (!option) { option = new Option("Bisherige Fähigkeitsfassung – vor dem Speichern prüfen", target.skillModuleId); option.dataset.version = String(target.skillVersionNumber); select.add(option); }
+    option.selected = true;
+  }
+  document.getElementById("personnelLearningTargetLevel").value = target?.targetLevel || 4;
+  document.getElementById("personnelLearningTrainerLevel").value = target?.minimumTrainerLevel || 8;
+}
+
+function personnelLearningTargetInput() {
+  const select = document.getElementById("personnelLearningTargetSkill");
+  return !select.value ? null : { skillModuleId:select.value, skillVersionNumber:Number(select.selectedOptions[0].dataset.version), targetLevel:Number(document.getElementById("personnelLearningTargetLevel").value), minimumTrainerLevel:Number(document.getElementById("personnelLearningTrainerLevel").value) };
+}
+
+async function preparePersonnelLearningPreset(kind) {
+  if (!canManagePersonnelLearningCatalog()) return;
+  const preset = globalThis.GrabenplanerLearningPresets[kind];
+  if (kind === "skill") {
+    await loadPersonnelLearningSkillCatalog();
+    const existing = state.personnelLearningSkillCatalog?.skills?.find(s => s.skillCode === preset.skillCode);
+    if (existing?.archived) throw new Error("Die vorhandene Kassa-Fähigkeit zuerst wiederherstellen.");
+    openPersonnelLearningSkillEditor(existing || null);
+    elements.personnelLearningSkillCode.value = preset.skillCode;
+    elements.personnelLearningSkillTitle.value = preset.title;
+    elements.personnelLearningSkillCategory.value = preset.category;
+    elements.personnelLearningSkillSummaryInput.value = preset.summary;
+    elements.personnelLearningSkillTags.value = preset.tags.join(", ");
+    elements.personnelLearningSkillVersionNote.value = preset.versionNote;
+    state.personnelLearningSkillEditorLevels = preset.levelDefinitions.map(level => ({...level}));
+    renderPersonnelLearningSkillLevelEditor();
+    setPersonnelLearningSkillMessage("Vorschlag: Stufen fachlich prüfen und als Entwurf speichern. Es werden keine Mitarbeiterqualifikationen vergeben.");
+  } else {
+    await loadPersonnelLearningCatalog();
+    const existing = state.personnelLearningCatalog?.modules?.find(m => m.moduleCode === preset.moduleCode);
+    if (existing?.archived) throw new Error("Die vorhandene Kassa-Einschulung zuerst wiederherstellen.");
+    await openPersonnelLearningEditor(existing || null);
+    elements.personnelLearningModuleCode.value = preset.moduleCode;
+    for (const [key,id] of Object.entries({title:"personnelLearningTitle",summary:"personnelLearningSummaryInput",objective:"personnelLearningObjective",estimatedMinutes:"personnelLearningEstimatedMinutes",verificationMode:"personnelLearningVerificationMode",versionNote:"personnelLearningVersionNote"})) elements[id].value = preset[key];
+    elements.personnelLearningTags.value = preset.tags.join(", ");
+    state.personnelLearningEditorSteps = preset.steps.map(step => ({...step})); renderPersonnelLearningStepEditor();
+    const skill = state.personnelLearningSkillCatalog?.skills?.find(s => s.skillCode === "kassa.bedienung" && s.publishedVersion && !s.archived);
+    populatePersonnelLearningTargets(skill ? {skillModuleId:skill.id,skillVersionNumber:Number(skill.publishedVersion.versionNumber),targetLevel:4,minimumTrainerLevel:8} : null);
+    setPersonnelLearningMessage(skill ? "Entwurf vorbereitet. Örtliche Abläufe ergänzen und fachlich prüfen; die bisherige Fassung bleibt erhalten." : "Entwurf vorbereitet. Zuerst die Kassa-Fähigkeit prüfen und veröffentlichen, anschließend hier die Zielkompetenz auswählen.");
+  }
+}
+
+async function openPersonnelLearningEditor(module = null) {
+  await loadPersonnelLearningSkillCatalog();
   if (!elements.personnelLearningModal || !state.personnelLearningCatalog) return;
   const version = module?.latestVersion || null;
   const content = version?.content || {};
@@ -17945,6 +18005,8 @@ function openPersonnelLearningEditor(module = null) {
   elements.personnelLearningObjective.value = content.objective || "";
   elements.personnelLearningEstimatedMinutes.value = Number(content.estimatedMinutes || 30);
   elements.personnelLearningVerificationMode.value = content.verificationMode || "trainer_confirmation";
+  populatePersonnelLearningTargets(content.learningTarget);
+  personnelLearningAssessmentEditor.set(content.assessment);
   elements.personnelLearningTags.value = Array.isArray(content.tags) ? content.tags.join(", ") : "";
   elements.personnelLearningVersionNote.value = content.versionNote || "";
   populatePersonnelLearningScopes(version?.scope || null);
@@ -17976,6 +18038,8 @@ function personnelLearningEditorPayload() {
     objective: elements.personnelLearningObjective.value,
     estimatedMinutes: Number(elements.personnelLearningEstimatedMinutes.value),
     verificationMode: elements.personnelLearningVerificationMode.value,
+    learningTarget: personnelLearningTargetInput(),
+    assessment: personnelLearningAssessmentEditor.get(),
     tags: elements.personnelLearningTags.value.split(",").map((tag) => tag.trim()).filter(Boolean),
     versionNote: elements.personnelLearningVersionNote.value,
     scope: {
@@ -18940,6 +19004,7 @@ function renderPersonnelLearningDashboard() {
           || (assignment.trainers || []).some((trainer) => trainer.currentEligible !== true);
         return `<article class="personnel-learning-dashboard-assignment${attention ? " attention" : ""}">
           <header><div><span>${escapeHtml(assignment.learner?.fullName || assignment.learner?.employeeNumber)}</span><h5>${escapeHtml(assignment.process?.title || "Schulung")}</h5></div><strong>${escapeHtml(personnelLearningProgressStatusLabel(progress))}</strong></header>
+          ${personnelLearningScheduleMarkup(assignment)}
           <div class="personnel-learning-progress-track" aria-label="${Number(progress.percent || 0)} Prozent abgeschlossen"><span style="width:${Math.max(0, Math.min(100, Number(progress.percent || 0)))}%"></span></div>
           <p>${Number(progress.completedStepCount || 0)} von ${Number(progress.totalStepCount || 0)} Schritten · Prozessversion ${Number(assignment.process?.versionNumber || 0)}</p>
           <footer><small>${escapeHtml((assignment.trainers || []).map((trainer) => `${trainer.trainerName} · ${trainer.skillTitle}`).join(" · ") || "Keine Trainerbindung")}</small>${dashboard.capabilities?.canManageAssignments ? `<button class="secondary-button" type="button" data-personnel-learning-dashboard-progress="${escapeHtmlAttribute(assignment.id)}">Fortschritt öffnen</button>` : ""}</footer>
@@ -19064,6 +19129,14 @@ function renderPersonnelLearningAssignmentLearnerFilter() {
     state.personnelLearningAssignmentLearnerFilter;
 }
 
+function personnelLearningScheduleMarkup(assignment) {
+  const r=assignment.reminder,parts=[`Durchgang ${Number(assignment.runNumber||1)}`];
+  const date=value=>String(value).split('-').reverse().join('.');
+  if(assignment.schedule?.dueDate)parts.push(`Fällig: ${date(assignment.schedule.dueDate)}`);
+  if(r)parts.push(`${r.kind==="repeat"?"Wiederholung":"Schulung"} ${r.status==="overdue"?"überfällig":r.status==="due"?"heute fällig":"bald fällig"}: ${date(r.dueDate)}`);
+  return `<p class="learning-schedule-note${r?' attention':''}">${escapeHtml(parts.join(" · "))}</p>`;
+}
+
 function renderPersonnelLearningAssignment(assignment) {
   const progressAttention = ["follow_up_required", "not_passed"].includes(
     assignment.progress?.result,
@@ -19080,10 +19153,16 @@ function renderPersonnelLearningAssignment(assignment) {
       <small>${escapeHtml([binding.trainerLocationName, binding.trainerDepartmentName].filter(Boolean).join(" · "))} · Fähigkeitsversion ${Number(binding.skillVersionNumber)}${binding.currentEligible ? "" : " · aktueller Trainerbeleg erforderlich"}</small>
     </article>`).join("");
   const actions = [
+    `<button type="button" class="secondary-button" data-learning-proof="${escapeHtmlAttribute(assignment.id)}">Prüfungen & Nachweise</button>`,
+    assignment.progress?.finalized && !assignment.hasNextRun && assignment.capabilities?.canEdit
+      ? `<button type="button" class="secondary-button" data-personnel-learning-assignment-action="repeat" data-assignment-id="${escapeHtmlAttribute(assignment.id)}">Wiederholung zuweisen</button>` : "",
+
+    assignment.learningTarget && assignment.progress?.result === "passed" && assignment.progress?.finalized && assignment.capabilities?.canEdit
+      ? `<button type="button" class="secondary-button" data-personnel-learning-assignment-action="target" data-assignment-id="${escapeHtmlAttribute(assignment.id)}">Zielkompetenz prüfen · Stufe ${Number(assignment.learningTarget.targetLevel)}</button>` : "",
     assignment.capabilities?.canRecordProgress || assignment.capabilities?.canCorrectProgress
       ? `<button type="button" class="primary-button" data-personnel-learning-assignment-action="progress" data-assignment-id="${escapeHtmlAttribute(assignment.id)}">${assignment.progress?.hasFinalizedRevision ? "Fortschritt korrigieren" : "Fortschritt eintragen"}</button>` : "",
     assignment.capabilities?.canEdit && assignment.active
-      ? `<button type="button" class="secondary-button" data-personnel-learning-assignment-action="edit" data-assignment-id="${escapeHtmlAttribute(assignment.id)}">Trainer ändern</button>` : "",
+      ? `<button type="button" class="secondary-button" data-personnel-learning-assignment-action="edit" data-assignment-id="${escapeHtmlAttribute(assignment.id)}">Trainer / Frist ändern</button>` : "",
     assignment.capabilities?.canCancel
       ? `<button type="button" class="secondary-button danger-outline" data-personnel-learning-assignment-action="cancel" data-assignment-id="${escapeHtmlAttribute(assignment.id)}">Zuweisung abbrechen</button>` : "",
     assignment.capabilities?.canRestore
@@ -19098,6 +19177,7 @@ function renderPersonnelLearningAssignment(assignment) {
     <section class="personnel-learning-progress-card" aria-label="Schulungsfortschritt"><div><span><strong>${escapeHtml(personnelLearningProgressStatusLabel(progress))}</strong><small>${Number(progress.completedStepCount || 0)} von ${Number(progress.totalStepCount || 0)} Schritten · ${progressPercent} %</small></span><span class="personnel-learning-progress-result ${progressAttention ? "attention" : ""}">${escapeHtml(progress.finalized ? personnelLearningProgressResultLabel(progress.result) : "Fortschritt")}</span></div><div class="personnel-learning-progress-track"><span style="width:${progressPercent}%"></span></div></section>
     ${assignment.active && !assignment.trainersCurrent ? '<div class="personnel-learning-objective"><strong>Klärung erforderlich</strong><p>Mindestens ein gebundener Trainerbeleg ist nicht mehr aktuell. Vor der weiteren Durchführung bitte die Trainerbindung prüfen und revisionssicher aktualisieren.</p></div>' : ""}
     ${progressAttention ? '<div class="personnel-learning-objective"><strong>Fachliche Nachverfolgung erforderlich</strong><p>Das dokumentierte Abschlussergebnis verlangt Nachschulung oder eine erneute fachliche Prüfung.</p></div>' : ""}
+    ${personnelLearningScheduleMarkup(assignment)}
     <div class="personnel-learning-assignment-trainer-bindings">${trainers}</div>
     <details class="personnel-learning-details"><summary>${history.length} sichtbare Zuweisungsrevision${history.length === 1 ? "" : "en"}</summary><div class="personnel-learning-history">${history.map((revision) => `<span><strong>${escapeHtml(personnelLearningAssignmentChangeLabel(revision.changeType))}</strong><small>Prozessversion ${Number(revision.processVersionNumber)} · ${Number(revision.trainerBindingCount)} Trainerfähigkeiten · ${escapeHtml(personnelWorkflowTimestamp(revision.changedAt))}</small>${revision.receiptSha256 ? `<code>${escapeHtml(String(revision.receiptSha256).slice(0, 16))}…</code>` : ""}</span>`).join("")}</div></details>
     ${actions ? `<footer>${actions}</footer>` : ""}
@@ -19217,6 +19297,7 @@ function populatePersonnelLearningAssignmentLearners(selected = "") {
     ? selected : learners[0]?.employeeNumber || "";
   elements.personnelLearningAssignmentLearner.value = preferred;
   elements.personnelLearningAssignmentLearner.disabled = Boolean(assignment);
+  document.getElementById("personnelLearningLearnerChoices").innerHTML = learners.map(learner => `<label class="choice-row"><input type="checkbox" data-learning-learner="${escapeHtmlAttribute(learner.employeeNumber)}" ${learner.employeeNumber===preferred?'checked':''} ${assignment?'disabled':''} /><span>${escapeHtml(learner.fullName)}<small>${escapeHtml([learner.locationName,learner.departmentName].filter(Boolean).join(" · "))}</small></span></label>`).join("");
 }
 
 function renderPersonnelLearningAssignmentTrainerOptions() {
@@ -19226,7 +19307,10 @@ function renderPersonnelLearningAssignmentTrainerOptions() {
     .trim().toLocaleLowerCase("de-AT");
   const selected = personnelLearningAssignmentSelectedTrainerSet();
   const trainers = (state.personnelLearningAssignmentCatalog?.trainers || []).filter((trainer) => {
-    if (trainer.trainerEmployeeNumber === learnerNumber) return false;
+    if ([...elements.personnelLearningAssignmentLearner.selectedOptions].some(option=>option.value===trainer.trainerEmployeeNumber)) return false;
+    const existing=personnelLearningAssignmentById(elements.personnelLearningAssignmentId?.value);
+    const target=existing ? existing.learningTarget : selectedPersonnelLearningAssignmentProcess()?.learningTarget;
+    if(target && (target.skillModuleId!==trainer.skillModuleId || target.skillVersionNumber!==trainer.skillVersionNumber || trainer.competencyLevel<target.minimumTrainerLevel)) return false;
     if (!search) return true;
     return [trainer.trainerName, trainer.trainerLocationName, trainer.trainerDepartmentName,
       trainer.skillTitle, trainer.skillCategory, trainer.skillCode]
@@ -19235,9 +19319,13 @@ function renderPersonnelLearningAssignmentTrainerOptions() {
   elements.personnelLearningAssignmentTrainerList.innerHTML = trainers.length
     ? trainers.map((trainer) => `<label class="personnel-learning-assignment-trainer-option"><input type="checkbox" value="${escapeHtmlAttribute(trainer.competencyId)}" ${selected.has(trainer.competencyId) ? "checked" : ""} /><span><strong>${escapeHtml(trainer.trainerName)} · ${escapeHtml(trainer.skillTitle)}</strong><small>${escapeHtml([trainer.trainerLocationName, trainer.trainerDepartmentName, trainer.skillCategory].filter(Boolean).join(" · "))} · Fähigkeitsversion ${Number(trainer.skillVersionNumber)}</small></span><span class="personnel-learning-assignment-level">Stufe ${Number(trainer.competencyLevel)}</span></label>`).join("")
     : '<p class="personnel-workflow-empty">Keine passende aktuell freigegebene Trainerfähigkeit verfügbar.</p>';
-  const selectedRows = (state.personnelLearningAssignmentCatalog?.trainers || []).filter((trainer) => (
-    selected.has(trainer.competencyId) && trainer.trainerEmployeeNumber !== learnerNumber
-  ));
+  const selectedRows = (state.personnelLearningAssignmentCatalog?.trainers || []).filter((trainer) => {
+    const existing=personnelLearningAssignmentById(elements.personnelLearningAssignmentId?.value);
+    const target=existing ? existing.learningTarget : selectedPersonnelLearningAssignmentProcess()?.learningTarget;
+    return selected.has(trainer.competencyId)
+      && ![...elements.personnelLearningAssignmentLearner.selectedOptions].some(option=>option.value===trainer.trainerEmployeeNumber)
+      && (!target || target.skillModuleId===trainer.skillModuleId && target.skillVersionNumber===trainer.skillVersionNumber && trainer.competencyLevel>=target.minimumTrainerLevel);
+  });
   if (selectedRows.length !== selected.size) {
     state.personnelLearningAssignmentSelectedTrainerIds = selectedRows.map((row) => row.competencyId);
   }
@@ -19254,6 +19342,11 @@ function renderPersonnelLearningAssignmentTrainerOptions() {
 }
 
 function openPersonnelLearningAssignmentEditor(assignment = null) {
+  document.getElementById("personnelLearningRepeatOf").value = "";
+  document.getElementById("personnelLearningScheduleReceipt").value = assignment?.schedule?.receiptSha256 || "";
+  document.getElementById("personnelLearningDueDate").value = assignment?.schedule?.dueDate || "";
+  document.getElementById("personnelLearningRepeatMonths").value = String(assignment?.schedule?.repeatEveryMonths || 0);
+  document.getElementById("personnelLearningRemindDays").value = String(assignment?.schedule?.remindDaysBefore ?? 7);
   const catalog = state.personnelLearningAssignmentCatalog;
   if (!elements.personnelLearningAssignmentModal || !catalog) return;
   const processes = assignment
@@ -19285,10 +19378,10 @@ function openPersonnelLearningAssignmentEditor(assignment = null) {
   state.personnelLearningAssignmentTrainerSearch = "";
   elements.personnelLearningAssignmentTrainerSearch.value = "";
   elements.personnelLearningAssignmentModalTitle.textContent = assignment
-    ? assignment.active ? "Trainerbindung bearbeiten" : "Schulungszuweisung wiederherstellen"
+    ? assignment.active ? "Trainer und Frist bearbeiten" : "Schulungszuweisung wiederherstellen"
     : "Schulung zuweisen";
   elements.savePersonnelLearningAssignmentButton.textContent = assignment?.active
-    ? "Trainerbindung speichern" : assignment ? "Zuweisung wiederherstellen" : "Schulung zuweisen";
+    ? "Änderungen speichern" : assignment ? "Zuweisung wiederherstellen" : "Schulung zuweisen";
   setPersonnelLearningAssignmentMessage();
   renderPersonnelLearningAssignmentTrainerOptions();
   elements.personnelLearningAssignmentModal.showModal();
@@ -19307,12 +19400,15 @@ async function savePersonnelLearningAssignment(event) {
     );
     return;
   }
-  const body = { active: true, trainerCompetencyIds };
+  const learners=[...elements.personnelLearningAssignmentLearner.selectedOptions].map(option=>option.value);
+  if (!assignmentId && (!learners.length || learners.length>50)) {setPersonnelLearningAssignmentMessage("Bitte 1 bis 50 Lernende auswählen.",true);return;}
+  const body = { active: true, trainerCompetencyIds, schedule:{dueDate:document.getElementById("personnelLearningDueDate").value,repeatEveryMonths:Number(document.getElementById("personnelLearningRepeatMonths").value),remindDaysBefore:Number(document.getElementById("personnelLearningRemindDays").value)},expectedScheduleReceipt:document.getElementById("personnelLearningScheduleReceipt").value };
   if (assignmentId) {
     body.expectedRevisionReceipt = elements.personnelLearningAssignmentExpectedReceipt.value;
   } else {
     body.processId = elements.personnelLearningAssignmentProcess.value;
-    body.learnerEmployeeNumber = elements.personnelLearningAssignmentLearner.value;
+    body.learnerEmployeeNumbers = learners;
+    body.repeatOfAssignmentId = document.getElementById("personnelLearningRepeatOf").value;
   }
   state.personnelLearningAssignmentMutationPending = true;
   elements.savePersonnelLearningAssignmentButton.disabled = true;
@@ -19320,7 +19416,7 @@ async function savePersonnelLearningAssignment(event) {
   try {
     await api(assignmentId
       ? `/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignmentId)}`
-      : "/api/portal/v1/personnel-learning/assignments", {
+      : "/api/portal/v1/personnel-learning/assignments/batch", {
       method: assignmentId ? "PUT" : "POST",
       body: JSON.stringify(body),
     });
@@ -19330,7 +19426,7 @@ async function savePersonnelLearningAssignment(event) {
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
     showToast(assignmentId
-      ? "Die Trainerbindung wurde revisionssicher aktualisiert."
+      ? "Trainerbindung und Frist wurden gespeichert."
       : "Die Schulung wurde revisionssicher zugewiesen.");
   } catch (error) {
     setPersonnelLearningAssignmentMessage(error.message, true);
@@ -19541,6 +19637,31 @@ function handlePersonnelLearningAssignmentListAction(event) {
   if (!button) return;
   const assignment = personnelLearningAssignmentById(button.dataset.assignmentId);
   if (!assignment) return;
+  if (button.dataset.personnelLearningAssignmentAction === "repeat") {
+    openPersonnelLearningAssignmentEditor(assignment);
+    if (!elements.personnelLearningAssignmentModal?.open) return;
+    elements.personnelLearningAssignmentId.value="";
+    elements.personnelLearningAssignmentExpectedReceipt.value="";
+    document.getElementById("personnelLearningScheduleReceipt").value="";
+    document.getElementById("personnelLearningRepeatOf").value=assignment.id;
+    renderPersonnelLearningAssignmentTrainerOptions();
+    elements.personnelLearningAssignmentModalTitle.textContent=`Wiederholung · Durchgang ${Number(assignment.runNumber||1)+1}`;
+    elements.savePersonnelLearningAssignmentButton.textContent="Neuen Durchgang zuweisen";
+    const months=assignment.schedule?.repeatEveryMonths||0;
+    const anchor=assignment.schedule?.dueDate || String(assignment.progress?.updatedAt||assignment.updatedAt||"").slice(0,10);
+    if (months && /^\d{4}-\d{2}-\d{2}$/.test(anchor)) {
+      const [y,m,d]=anchor.split("-").map(Number),first=new Date(Date.UTC(y,m-1+months,1,12));
+      first.setUTCDate(Math.min(d,new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate()));
+      document.getElementById("personnelLearningDueDate").value=first.toISOString().slice(0,10);
+    }
+    setPersonnelLearningAssignmentMessage("Dieser Durchgang beginnt mit eigenem Fortschritt. Der vorherige Abschluss bleibt erhalten; Trainerfreigaben werden erneut geprüft.");
+    return;
+  }
+
+  if (button.dataset.personnelLearningAssignmentAction === "target") {
+    reviewPersonnelLearningTarget(assignment).catch(error => showToast(error.message, true));
+    return;
+  }
   if (button.dataset.personnelLearningAssignmentAction === "cancel") {
     cancelPersonnelLearningAssignment(assignment);
     return;
@@ -19552,6 +19673,24 @@ function handlePersonnelLearningAssignmentListAction(event) {
   if (["edit", "restore"].includes(button.dataset.personnelLearningAssignmentAction)) {
     openPersonnelLearningAssignmentEditor(assignment);
   }
+}
+
+async function reviewPersonnelLearningTarget(assignment) {
+  if (!assignment.learningTarget || assignment.progress?.result !== "passed" || !assignment.capabilities?.canEdit) return;
+  await loadPersonnelLearningCompetencyCatalog({ force:true });
+  const employeeNumber = assignment.learner.employeeNumber;
+  const target = assignment.learningTarget;
+  const existing = state.personnelLearningCompetencyCatalog?.competencies?.find(c => c.employeeNumber === employeeNumber && c.skillId === target.skillModuleId);
+  const skill = personnelLearningCompetencySkill(target.skillModuleId);
+  if (!skill || Number(skill.publishedVersionNumber) !== target.skillVersionNumber) {
+    throw new Error("Die Fähigkeitsfassung hat sich geändert. Bitte die Zielkompetenz im Kompetenzprofil fachlich prüfen.");
+  }
+  state.personnelLearningCompetencyEmployeeNumber = employeeNumber;
+  openPersonnelLearningCompetencyEditor(existing || null);
+  elements.personnelLearningCompetencySkill.value = target.skillModuleId;
+  populatePersonnelLearningCompetencyLevels(skill, Math.max(existing?.active ? existing.level : 0, target.targetLevel));
+  renderPersonnelLearningCompetencyLevelPreview();
+  setPersonnelLearningCompetencyMessage("Vorschlag aus dem bestandenen Kurs. Die tatsächliche Stufe prüfen und bewusst speichern. Die Trainerfreigabe bleibt eine eigene Entscheidung.");
 }
 
 function clearPersonnelLifecycleOnboardingTaskState(message = "") {
@@ -21072,6 +21211,26 @@ function navigateFromPersonnelDashboard(itemId) {
   closeMobileNavigation({ restoreFocus: false });
 }
 
+let personnelKnowledgeLibrary = null;
+async function loadPersonnelKnowledgeLibrary() {
+  personnelKnowledgeLibrary ||= globalThis.GrabenplanerLearningLibrary.mount(document.getElementById("personnelKnowledgeLibrary"), {api});
+  return personnelKnowledgeLibrary.load();
+}
+
+async function loadPersonnelLearningArea(area) {
+  if (!area.open || !canReadPersonnelLearningCatalog()) return;
+  const loaders = {
+    team: () => { personnelLearningTeam ||= GrabenplanerLearningTeam.mount(document.getElementById("personnelLearningTeam"), {api}); return personnelLearningTeam.load(); },
+    knowledge: loadPersonnelKnowledgeLibrary,
+    processes: loadPersonnelLearningCatalog,
+    skills: loadPersonnelLearningSkillCatalog,
+    competencies: loadPersonnelLearningCompetencyCatalog,
+    assignments: loadPersonnelLearningAssignmentCatalog,
+  };
+  try { await loaders[area.dataset.learningArea]?.(); }
+  catch (error) { showToast(error.message, true); }
+}
+
 function setPersonnelAdministrationTab(tab) {
   const normalized = canOpenPersonnelAdministrationTab(tab)
     ? tab
@@ -21140,12 +21299,7 @@ function setPersonnelAdministrationTab(tab) {
   }
   if (normalized === "learning" && canReadPersonnelLearningCatalog()) {
     loadPersonnelLearningDashboard().catch((error) => showToast(error.message, true));
-    loadPersonnelLearningCatalog().catch((error) => showToast(error.message, true));
-    loadPersonnelLearningSkillCatalog().catch((error) => showToast(error.message, true));
-    if (canWritePersonnelLearningCompetencies()) {
-      loadPersonnelLearningCompetencyCatalog().catch((error) => showToast(error.message, true));
-      loadPersonnelLearningAssignmentCatalog().catch((error) => showToast(error.message, true));
-    }
+    document.querySelectorAll("[data-learning-area][open]").forEach(loadPersonnelLearningArea);
   }
   if (normalized === "ruleDrafts") loadCustomWorkRuleRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
@@ -39921,6 +40075,17 @@ elements.personnelLearningStatusFilter?.addEventListener("change", (event) => {
   state.personnelLearningStatusFilter = event.target.value;
   renderPersonnelLearningCatalog();
 });
+document.getElementById("personnelLearningLearnerChoices")?.addEventListener("change", () => {
+  const selected=new Set([...document.querySelectorAll("#personnelLearningLearnerChoices input:checked")].map(input=>input.dataset.learningLearner));
+  for(const option of elements.personnelLearningAssignmentLearner.options)option.selected=selected.has(option.value);
+  const forbidden=new Set((state.personnelLearningAssignmentCatalog?.trainers||[]).filter(trainer=>selected.has(trainer.trainerEmployeeNumber)).map(trainer=>trainer.competencyId));
+  state.personnelLearningAssignmentSelectedTrainerIds=state.personnelLearningAssignmentSelectedTrainerIds.filter(id=>!forbidden.has(id));
+  renderPersonnelLearningAssignmentTrainerOptions();
+});
+document.querySelectorAll("[data-learning-preset]").forEach(button => button.addEventListener("click", () => preparePersonnelLearningPreset(button.dataset.learningPreset).catch(error => showToast(error.message, true))));
+document.querySelectorAll("[data-learning-area]").forEach((area) => {
+  area.addEventListener("toggle", () => loadPersonnelLearningArea(area));
+});
 elements.refreshPersonnelLearningButton?.addEventListener("click", () => {
   state.personnelLearningCatalog = null;
   loadPersonnelLearningCatalog({ force: true }).catch((error) => showToast(error.message, true));
@@ -40921,3 +41086,6 @@ setInterval(() => {
 window.addEventListener("focus", () => {
   if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests();
 });
+
+personnelLearningAssessmentEditor=GrabenplanerLearningAssessment.editor(document.getElementById("personnelLearningAssessmentEditor"));
+personnelLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api});
