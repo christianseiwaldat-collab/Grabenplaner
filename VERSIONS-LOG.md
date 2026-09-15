@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.53 Beta – 15.09.2026
+
+- PostgreSQL-Wiederherstellung: Die 18 Triggerfunktionen der additiven Lernmigration behalten ihre impliziten Standardrechte. Die Wiederherstellung bindet diese Ausnahme an den unveränderten, geprüften Migrationsplan; Schema-Fingerprint, Tabellen und Zähler müssen weiterhin exakt mit der Sicherung übereinstimmen.
+- Behebt den beim Abschluss von v0.92.52 erkannten `PG_PAIR_RESTORE_CHECKPOINT_MISMATCH`. Keine Änderung produktiver Daten, Berechtigungen oder Migrationshistorien.
+- Sieben gezielte Regressionstests; isolierte Wiederherstellung des betroffenen Sicherungspaars vor dem Folgeupdate sowie vollständige Live-Assurance anschließend.
+
 ## v0.92.52 Beta · Schulung und Wissen
 
 - Eine gemeinsame Wissensbibliothek bietet versionierte Artikel, Kategorien und Suche in Verwaltung und Mitarbeiterportal. Vorbereitete Kasseninhalte bleiben bewusst bearbeitbare Entwürfe.
