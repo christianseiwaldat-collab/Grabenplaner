@@ -1,3 +1,4 @@
+let portalLearningAssessmentPanel=null;
 const portalState = {
   session: null,
   weekStart: mondayOf(new Date()),
@@ -1847,15 +1848,24 @@ function renderPersonnelLearningDashboardPortal() {
           || progress.capabilities?.canCorrect === true;
         return `<article class="portal-learning-assignment${attention ? " attention" : ""}">
           <header><div><span>${esc(assignment.learner?.fullName || assignment.learner?.employeeNumber)}</span><h3>${esc(assignment.process?.title || "Schulung")}</h3></div><strong>${esc(portalLearningProgressStatusLabel(progress))}</strong></header>
+          <p class="learning-schedule-note">Durchgang ${Number(assignment.runNumber||1)}${assignment.schedule?.dueDate?` · Fällig: ${esc(assignment.schedule.dueDate.split('-').reverse().join('.'))}`:""}${assignment.reminder?` · ${assignment.reminder.kind==="repeat"?"Wiederholung":"Schulung"} ${assignment.reminder.status==="overdue"?"überfällig":assignment.reminder.status==="due"?"heute fällig":"bald fällig"}: ${esc(assignment.reminder.dueDate.split('-').reverse().join('.'))}`:""}</p>
           <div class="portal-learning-progress-track"><span style="width:${Math.max(0, Math.min(100, Number(progress.percent || 0)))}%"></span></div>
           <p>${Number(progress.completedStepCount || 0)} von ${Number(progress.totalStepCount || 0)} Schritten · ${Number(progress.percent || 0)} %</p>
           <small>${esc((assignment.trainers || []).map((trainer) => `${trainer.trainerName} · ${trainer.skillTitle}`).join(" · ") || "Keine Trainerbindung")}</small>
+          ${assignment.participantRole!=="branch_account"?`<button type="button" class="text-button" data-learning-proof="${esc(assignment.id)}">Prüfungen & Nachweise</button>`:""}
           <button class="${mayWrite ? "primary" : "text-button"}" data-portal-learning-progress="${esc(assignment.id)}" type="button">${mayWrite ? "Fortschritt erfassen" : "Fortschritt ansehen"}</button>
         </article>`;
       }).join("")
     : '<p class="empty-state">Im sichtbaren Bereich gibt es noch keine Schulungszuweisung.</p>';
   renderPortalLearningSkillTree();
 }
+
+let portalKnowledgeLibrary = null;
+document.getElementById("portalKnowledgeArea")?.addEventListener("toggle", async event => {
+  if (!event.target.open) return;
+  portalKnowledgeLibrary ||= globalThis.GrabenplanerLearningLibrary.mount(document.getElementById("portalKnowledgeLibrary"), {api});
+  await portalKnowledgeLibrary.load();
+});
 
 async function loadPersonnelLearningDashboard({ force = false } = {}) {
   if (portalState.personnelLearningDashboardLoading) return;
@@ -2247,6 +2257,8 @@ function neutralizeCredentialDialogsForLogin() {
 }
 
 function showLogin(error = "") {
+  portalLearningAssessmentPanel?.clear();
+  portalKnowledgeLibrary?.clear();
   globalThis.grabenplanerNavigation?.stop();
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
@@ -8110,3 +8122,5 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
 });
 initializeDateRangeCalendar();
 initialize();
+
+portalLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api});

@@ -131,10 +131,14 @@ function template({
   versionNote = "Erstfassung",
   verificationMode = "practical_check",
   steps = null,
+  assessment = null,
+  learningTarget = null,
 } = {}) {
   return {
     moduleCode: code,
     moduleType: "training",
+    ...(learningTarget ? { learningTarget } : {}),
+    ...(assessment ? { assessment } : {}),
     title,
     summary: "Transparente Grundlagen und Praxisprüfung.",
     objective,
@@ -236,6 +240,89 @@ async function assignTrainerCompetency(auth, employeeNumber, skillId, level = 7)
   assert.equal(assigned.response.status, 201, JSON.stringify(assigned.payload));
   return assigned.payload.competency;
 }
+
+test("Kassa target enforces trainer qualification; learner completion never grants competence", async () => {
+  const auth = session(DEVELOPER);
+  const skillEntry = await createPublishedSkill(auth, "pilot.kassa.target");
+  const target = {skillModuleId:skillEntry.id,skillVersionNumber:1,targetLevel:4,minimumTrainerLevel:8};
+  const process = await createPublishedProcess(auth, "pilot.kassa.process", {learningTarget:target});
+  const trainer = await assignTrainerCompetency(auth, BLOCK6_TRAINER, skillEntry.id, 7);
+  const createBody = {processId:process.id,learnerEmployeeNumber:BLOCK6_LEARNER,trainerCompetencyIds:[trainer.id]};
+  const denied = await request("/api/portal/v1/personnel-learning/assignments", {method:"POST",auth,body:createBody});
+  assert.equal(denied.response.status,400,JSON.stringify(denied.payload));
+  assert.equal(denied.payload.code,"PERSONNEL_LEARNING_TARGET_INVALID");
+  const upgrade = await request(`/api/portal/v1/personnel-learning/competencies/${BLOCK6_TRAINER}/${encodeURIComponent(skillEntry.id)}`, {method:"PUT",auth,body:{level:8,trainerAuthorized:true,expectedRevisionReceipt:trainer.currentRevisionReceipt}});
+  assert.equal(upgrade.response.status,200,JSON.stringify(upgrade.payload));
+  const created = await request("/api/portal/v1/personnel-learning/assignments", {method:"POST",auth,body:createBody});
+  assert.equal(created.response.status,201,JSON.stringify(created.payload));
+  const assignment = created.payload.assignment;
+  const body = {expectedAssignmentRevisionReceipt:assignment.currentRevisionReceipt,expectedProgressRevisionReceipt:"",completedStepIds:["start"],finalized:true,result:"passed",assessmentNote:"Praxis geprüft."};
+  const learnerDenied = await request(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignment.id)}/progress`, {method:"PUT",auth:session(BLOCK6_LEARNER),body});
+  assert.equal(learnerDenied.response.status,403,JSON.stringify(learnerDenied.payload));
+  const done = await request(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignment.id)}/progress`, {method:"PUT",auth:session(BLOCK6_TRAINER),body});
+  assert.equal(done.response.status,200,JSON.stringify(done.payload));
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_employee_competencies WHERE employee_number=? AND skill_module_id=?").get(BLOCK6_LEARNER,skillEntry.id).count,0);
+});
+
+test("knowledge library separates drafts, reader scopes and immutable published versions", async () => {
+  const auth=session(DEVELOPER),learner=session(BLOCK6_LEARNER),foreign=session(FOREIGN_MANAGER);
+  const body={...template({code:"knowledge.kassa.confirmed"}),moduleType:"knowledge",article:{category:"Kassa",body:"Bestätigter fachlicher Wissenstext als erste Fassung."}};
+  const create=await request("/api/portal/v1/personnel-learning/modules",{method:"POST",auth,body});
+  assert.equal(create.response.status,201,JSON.stringify(create.payload));
+  const id=create.payload.module.id, base=`/api/portal/v1/personnel-learning/modules/${encodeURIComponent(id)}`;
+  const read=async who=>{const result=await request("/api/portal/v1/personnel-learning/knowledge",{auth:who});assert.equal(result.response.status,200,JSON.stringify(result.payload));return result.payload.modules.find(m=>m.id===id);};
+  assert.equal(await read(learner),undefined);
+  assert.ok(await read(auth));
+  const published=await request(base+"/publish",{method:"POST",auth,body:{versionNumber:1,expectedEventReceipt:create.payload.module.currentEventReceipt}});
+  assert.equal(published.response.status,200,JSON.stringify(published.payload));
+  assert.equal((await read(learner)).latestVersion.content.article.body,body.article.body);
+  assert.equal(await read(foreign),undefined);
+  const next=await request(base+"/versions",{method:"POST",auth,body:{...body,article:{...body.article,body:"Neue Fassung, die noch nicht veröffentlicht werden darf."},expectedEventReceipt:published.payload.module.currentEventReceipt}});
+  assert.equal(next.response.status,200,JSON.stringify(next.payload));
+  assert.equal((await read(learner)).versions.length,1);
+  assert.equal((await read(learner)).latestVersion.content.article.body,body.article.body);
+  const processes=await request("/api/portal/v1/personnel-learning/modules",{auth});
+  assert.equal(processes.payload.modules.some(m=>m.id===id),false);
+  const forbidden=await request(base+"/versions",{method:"POST",auth:learner,body:{...body,expectedEventReceipt:next.payload.module.currentEventReceipt}});
+  assert.equal(forbidden.response.status,403);
+  const archive=await request(base+"/archive",{method:"POST",auth,body:{expectedEventReceipt:next.payload.module.currentEventReceipt}});
+  assert.equal(archive.response.status,200,JSON.stringify(archive.payload));
+  assert.equal(await read(learner),undefined);
+});
+
+test("batch assignments are atomic; repeated courses keep independent completion history and due dates", async () => {
+  const auth=session(MANAGER),trainerAuth=session(BLOCK6_TRAINER);
+  const skillEntry=await createPublishedSkill(auth,"schedule.batch.skill");
+  const trainer=await assignTrainerCompetency(auth,BLOCK6_TRAINER,skillEntry.id,8);
+  const process=await createPublishedProcess(auth,"schedule.batch.process");
+  const body={processId:process.id,trainerCompetencyIds:[trainer.id],learnerEmployeeNumbers:[BLOCK6_LEARNER,FOREIGN_MANAGER],schedule:{dueDate:"2026-09-01",repeatEveryMonths:1,remindDaysBefore:7}};
+  const invalid=await request("/api/portal/v1/personnel-learning/assignments/batch",{method:"POST",auth,body});
+  assert.equal(invalid.response.status,403,JSON.stringify(invalid.payload));
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_assignments WHERE process_module_id=?").get(process.id).count,0,"No partial batch persisted");
+  const assigned=await request("/api/portal/v1/personnel-learning/assignments/batch",{method:"POST",auth,body:{...body,learnerEmployeeNumbers:[BLOCK6_LEARNER,DEPARTMENT_MANAGER]}});
+  assert.equal(assigned.response.status,201,JSON.stringify(assigned.payload));assert.equal(assigned.payload.assignments.length,2);
+  const first=assigned.payload.assignments[0];assert.equal(first.schedule.dueDate,"2026-09-01");assert.equal(first.runNumber,1);
+  const repeatBody={...body,learnerEmployeeNumbers:[BLOCK6_LEARNER],repeatOfAssignmentId:first.id,schedule:{...body.schedule,dueDate:"2026-10-01"}};
+  const premature=await request("/api/portal/v1/personnel-learning/assignments/batch",{method:"POST",auth,body:repeatBody});
+  assert.equal(premature.response.status,409,JSON.stringify(premature.payload));
+  const completed=await request(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(first.id)}/progress`,{method:"PUT",auth:trainerAuth,body:{expectedAssignmentRevisionReceipt:first.currentRevisionReceipt,expectedProgressRevisionReceipt:"",completedStepIds:["start"],finalized:true,result:"passed",assessmentNote:"Geprüft."}});
+  assert.equal(completed.response.status,200,JSON.stringify(completed.payload));
+  const repeat=await request("/api/portal/v1/personnel-learning/assignments/batch",{method:"POST",auth,body:repeatBody});
+  assert.equal(repeat.response.status,201,JSON.stringify(repeat.payload));
+  const second=repeat.payload.assignments[0];assert.notEqual(second.id,first.id);assert.equal(second.runNumber,2);assert.equal(second.progress.finalized,false);assert.equal(second.schedule.previousAssignmentId,first.id);
+  const duplicate=await request("/api/portal/v1/personnel-learning/assignments/batch",{method:"POST",auth,body:repeatBody});assert.equal(duplicate.response.status,409);
+  const afterRepeat=await request("/api/portal/v1/personnel-learning/assignments",{auth});
+  assert.equal(afterRepeat.payload.assignments.find(item=>item.id===first.id).hasNextRun,true);
+  const secondCompleted=await request(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(second.id)}/progress`,{method:"PUT",auth:trainerAuth,body:{expectedAssignmentRevisionReceipt:second.currentRevisionReceipt,expectedProgressRevisionReceipt:"",completedStepIds:["start"],finalized:true,result:"follow_up_required",assessmentNote:"Noch einmal üben."}});
+  assert.equal(secondCompleted.response.status,200,JSON.stringify(secondCompleted.payload));
+  const originalProgress=await request(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(first.id)}/progress`,{auth});
+  assert.equal(originalProgress.payload.assignment.progress.result,"passed");
+  const changed=await request(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(second.id)}`,{method:"PUT",auth,body:{active:true,trainerCompetencyIds:[trainer.id],expectedRevisionReceipt:second.currentRevisionReceipt,expectedScheduleReceipt:second.schedule.receiptSha256,schedule:{...body.schedule,dueDate:"2026-10-20"}}});
+  assert.equal(changed.response.status,200,JSON.stringify(changed.payload));assert.equal(changed.payload.assignment.schedule.revisionNumber,2);
+  const stale=await request(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(second.id)}`,{method:"PUT",auth,body:{active:true,trainerCompetencyIds:[trainer.id],expectedRevisionReceipt:second.currentRevisionReceipt,expectedScheduleReceipt:second.schedule.receiptSha256,schedule:{...body.schedule,dueDate:"2026-10-21"}}});assert.equal(stale.response.status,409);
+  const dashboard=await request("/api/portal/v1/personnel-learning/dashboard",{auth:session(BLOCK6_LEARNER)});
+  assert.equal(dashboard.response.status,200);assert.ok(dashboard.payload.assignments.some(a=>a.id===second.id&&a.runNumber===2));
+});
 
 test.before(async () => {
   db.prepare(`
@@ -1843,6 +1930,8 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
   assert.equal(progressRevisionCount(), revisionsBeforeSecurityChecks);
 
   const branchAccountId = String(createdBranch.payload.account.id);
+  db.prepare("UPDATE portal_organization_sessions SET expires_at = ? WHERE account_id = ?")
+    .run(new Date(Date.now() + 60000).toISOString(), branchAccountId);
   db.exec(`
     CREATE TRIGGER test_block8_learning_branch_live_account
     AFTER UPDATE OF expires_at ON portal_organization_sessions
@@ -1859,6 +1948,8 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
     );
   } finally {
     db.exec("DROP TRIGGER test_block8_learning_branch_live_account");
+    assert.equal(db.prepare("SELECT active FROM portal_organization_accounts WHERE id = ?")
+      .get(branchAccountId).active, 0, "The concurrent account revocation must execute");
     db.prepare("UPDATE portal_organization_accounts SET active = 1 WHERE id = ?")
       .run(branchAccountId);
   }
@@ -1868,6 +1959,8 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
     JSON.stringify(disabledDuringRequest.payload),
   );
 
+  db.prepare("UPDATE portal_organization_sessions SET expires_at = ? WHERE account_id = ?")
+    .run(new Date(Date.now() + 60000).toISOString(), branchAccountId);
   db.exec(`
     CREATE TRIGGER test_block8_learning_branch_live_scope
     AFTER UPDATE OF expires_at ON portal_organization_sessions
@@ -1884,6 +1977,8 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
     );
   } finally {
     db.exec("DROP TRIGGER test_block8_learning_branch_live_scope");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_organization_account_scopes WHERE account_id = ?")
+      .get(branchAccountId).count, 0, "The concurrent scope revocation must execute");
     db.prepare(`
       INSERT INTO portal_organization_account_scopes
         (account_id, location_id, department_id, assigned_by)
@@ -1988,4 +2083,107 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
   assert.equal(itDashboard.response.status, 200, JSON.stringify(itDashboard.payload));
   assert.equal(itDashboard.payload.assignments.length, 0);
   assert.equal(itDashboard.payload.profiles.length, 0);
+});
+
+
+test("Block 5: quiz, encrypted evidence and PDF obey completion, scope and history rules",async()=>{
+ employee("proof-unrelated","Pia Unbeteiligt","employee",LOCATION_B);
+ const lead=session(DEVELOPER),learner=session(BLOCK6_LEARNER),trainerAuth=session(BLOCK6_TRAINER),foreign=session("proof-unrelated");
+ const skill=await createPublishedSkill(lead,"proof.kassa.skill"),trainer=await assignTrainerCompetency(lead,BLOCK6_TRAINER,skill.id,8);
+ const assessment={passingPercent:80,maxAttempts:1,requireEvidence:true,questions:[{id:"one",prompt:"Wie wird ein Gutschein eingelöst?",points:2,options:[{id:"a",text:"Als Zahlungsmittel"},{id:"b",text:"Als Rabatt"}],correctOptionId:"a"}]};
+ const process=await createPublishedProcess(lead,"proof.kassa",{assessment});
+ const created=await request("/api/portal/v1/personnel-learning/assignments",{method:"POST",auth:lead,body:{processId:process.id,learnerEmployeeNumber:BLOCK6_LEARNER,trainerCompetencyIds:[trainer.id]}});
+ assert.equal(created.response.status,201,JSON.stringify(created.payload));const assignment=created.payload.assignment,base=`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignment.id)}`;
+ const read=async()=>{const result=await request(base+"/assessment",{auth:learner});assert.equal(result.response.status,200,JSON.stringify(result.payload));return result.payload;};
+ let view=await read();assert.equal(JSON.stringify(view).includes("correctOptionId"),false);
+ assert.equal((await request(base+"/assessment",{auth:foreign})).response.status,403);
+ const branchLogin=await request("/api/portal/v1/auth/login",{method:"POST",body:{loginName:BLOCK7_BRANCH_LOGIN,password:BLOCK7_BRANCH_PASSWORD}});
+ assert.equal((await request(base+"/assessment",{auth:responseSession(branchLogin.response)})).response.status,403);
+ const finishBody={expectedAssignmentRevisionReceipt:assignment.currentRevisionReceipt,expectedProgressRevisionReceipt:"",completedStepIds:["start"],finalized:true,result:"passed"};
+ assert.equal((await request(base+"/progress",{method:"PUT",auth:trainerAuth,body:finishBody})).response.status,409);
+ const answer=async(auth,choice)=>request(base+"/assessment/attempt",{method:"POST",auth,body:{answers:{one:choice},expectedReceipt:view.expectedReceipt}});
+ assert.equal((await answer(lead,"a")).response.status,403);
+ assert.equal((await answer(learner,"b")).payload.passed,false);view=await read();assert.equal(view.canAttempt,false);
+ assert.equal((await answer(learner,"a")).response.status,409);
+ assert.equal((await request(base+"/assessment/reset",{method:"POST",auth:learner,body:{reason:"Nachschulung",expectedReceipt:view.expectedReceipt}})).response.status,403);
+ assert.equal((await request(base+"/assessment/reset",{method:"POST",auth:trainerAuth,body:{reason:"Gemeinsam geübt",expectedReceipt:view.expectedReceipt}})).response.status,201);view=await read();
+ assert.equal((await answer(learner,"a")).payload.passed,true);view=await read();
+ assert.equal((await request(base+"/progress",{method:"PUT",auth:trainerAuth,body:finishBody})).response.status,409);
+ const image="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aAuoAAAAASUVORK5CYII=";
+ const uploaded=await request(base+"/evidence",{method:"POST",auth:learner,body:{fileName:"Praxisnachweis.png",data:image,expectedReceipt:view.expectedReceipt}});
+ assert.equal(uploaded.response.status,201,JSON.stringify(uploaded.payload));view=await read();assert.equal(view.evidence.length,1);
+ const stored=db.prepare("SELECT * FROM personnel_learning_assessment_records WHERE id=?").get(uploaded.payload.id);
+ assert.equal(stored.protected_payload.includes(image),false);assert.match(stored.protected_payload,/^enc:v2:/);
+ assert.throws(()=>db.prepare("UPDATE personnel_learning_assessment_records SET kind='exam_reset' WHERE id=?").run(stored.id));
+ const file=await fetch(baseUrl+base+"/evidence/"+uploaded.payload.id,{headers:{Cookie:learner.cookie}});assert.equal(file.status,200);assert.deepEqual(Buffer.from(await file.arrayBuffer()),Buffer.from(image,"base64"));
+ assert.equal((await request(base+"/evidence/"+uploaded.payload.id,{auth:foreign})).response.status,403);
+ assert.equal((await request(base+"/progress",{method:"PUT",auth:trainerAuth,body:finishBody})).response.status,200);
+ const pdf=await fetch(baseUrl+base+"/confirmation.pdf",{headers:{Cookie:learner.cookie}});assert.equal(pdf.status,200);const pdfBytes=Buffer.from(await pdf.arrayBuffer());assert.equal(pdfBytes.subarray(0,5).toString(),"%PDF-");
+ if(globalThis.process.env.GP_LEARNING_PDF_QA){fs.mkdirSync(path.dirname(globalThis.process.env.GP_LEARNING_PDF_QA),{recursive:true});fs.writeFileSync(globalThis.process.env.GP_LEARNING_PDF_QA,pdfBytes);}
+ view=await read();assert.equal((await request(base+"/evidence/"+uploaded.payload.id+"/withdraw",{method:"POST",auth:learner,body:{reason:"Entfernen",expectedReceipt:view.expectedReceipt}})).response.status,403);
+ const progress=await request(base+"/progress",{auth:lead});
+ const corrected=await request(base+"/progress",{method:"PUT",auth:lead,body:{...finishBody,expectedProgressRevisionReceipt:progress.payload.assignment.progress.currentRevisionReceipt,result:"not_passed",correctionReason:"Praxisprüfung wurde korrigiert"}});
+ assert.equal(corrected.response.status,200,JSON.stringify(corrected.payload));assert.equal((await request(base+"/confirmation.pdf",{auth:learner})).response.status,409);
+});
+
+
+test("Block 6: scoped paged team matrix, requirements, corrections and CSV", async () => {
+ const base="/api/portal/v1/personnel-learning", lead=session(DEVELOPER), learner=session(BLOCK6_LEARNER);
+ assert.equal((await request(base+"/team",{auth:learner})).response.status,403);
+ const skill=await createPublishedSkill(lead,"team.skill");
+ await assignTrainerCompetency(lead,BLOCK6_LEARNER,skill.id,3);
+ const input={title:"Kassa Soll-Stufe",type:"skill",moduleId:skill.id,minLevel:4,scope:{type:"location",locationId:LOCATION_A},validMonths:0,expectedReceipt:""};
+ let saved=await request(base+"/requirements",{method:"POST",auth:lead,body:input});
+ assert.equal(saved.response.status,201,JSON.stringify(saved.payload));const rule=saved.payload.requirement;
+ let view=await request(base+"/team?search="+BLOCK6_LEARNER,{auth:lead});
+ assert.equal(view.response.status,200,JSON.stringify(view.payload));
+ assert.equal(view.payload.total,1);assert.equal(view.payload.people.length,1);assert.equal(view.payload.summaryScope,"page");
+ assert.equal(view.payload.people[0].cells.find((c,i)=>view.payload.rules[i].id===rule.id).status,"lowerLevel");
+ assert.equal(JSON.stringify(view.payload).includes("correctOptionId"),false);assert.equal(JSON.stringify(view.payload).includes("protectedPayload"),false);
+ assert.equal((await request(base+"/requirements/"+rule.id,{method:"PUT",auth:lead,body:{...input,minLevel:2}})).response.status,409);
+ saved=await request(base+"/requirements/"+rule.id,{method:"PUT",auth:lead,body:{...input,minLevel:2,expectedReceipt:rule.receiptSha256}});
+ assert.equal(saved.response.status,200,JSON.stringify(saved.payload));assert.equal(saved.payload.requirement.revision,2);
+ view=await request(base+"/team?search="+BLOCK6_LEARNER,{auth:lead});assert.equal(view.payload.people[0].cells[0].status,"fulfilled");
+ assert.throws(()=>db.prepare("DELETE FROM personnel_learning_requirement_revisions WHERE id=?").run(rule.id));
+ assert.equal((await request(base+"/requirements",{method:"POST",auth:lead,body:{...input,title:"Ungültige Rolle",roleId:"missing-role"}})).response.status,400);
+ assert.equal((await request(base+"/requirements",{method:"POST",auth:lead,body:{...input,scope:{type:"organization"}}})).response.status,400);
+ const foreign=session(FOREIGN_MANAGER);
+ assert.equal((await request(base+"/requirements/"+rule.id,{method:"PUT",auth:foreign,body:{...input,expectedReceipt:saved.payload.requirement.receiptSha256}})).response.status,403);
+ const options=await request(base+"/team/options",{auth:lead});assert.equal(options.response.status,200,JSON.stringify(options.payload));assert.ok(options.payload.modules.some(m=>m.id===skill.id));
+ // SQL pagination and filtering apply before reading personnel histories.
+ const insert=db.prepare("INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,target_workdays_per_week,fixed_workdays,home_location_id,active) VALUES(?,?,?,'#26785f',38.5,5,'',?,1)");
+ for(let i=0;i<510;i++)insert.run("team-page-"+i,"Team Page "+String(i).padStart(4,"0"),"QA",i<500?LOCATION_A:LOCATION_B);
+ const page=await request(base+"/team?search=team-page-&locationId="+LOCATION_A+"&pageSize=10&offset=490",{auth:lead});
+ assert.equal(page.response.status,200,JSON.stringify(page.payload));assert.equal(page.payload.total,500);assert.equal(page.payload.people.length,10);assert.equal(page.payload.summary.required,10);
+ const csv=await request(base+"/team.csv?search=team-page-&locationId="+LOCATION_A+"&pageSize=10&offset=490",{auth:lead});
+ assert.equal(csv.response.status,200);assert.equal(csv.payload.raw.includes("team-page-499"),true);assert.equal(csv.payload.raw.includes("team-page-500"),false);
+ assert.equal((await request(base+"/team?pageSize=101",{auth:lead})).response.status,400);
+ const al=session(DEPARTMENT_MANAGER);
+ const scoped=await request(base+"/team?locationId="+LOCATION_B,{auth:al});assert.equal(scoped.response.status,200);assert.equal(scoped.payload.total,0);
+ const rolePage=await request(base+"/team?roleId=developer&locationId="+LOCATION_A,{auth:lead});assert.equal(rolePage.response.status,200);assert.ok(rolePage.payload.people.every(p=>p.roleId==="developer"));
+});
+
+
+test("Block 6: mandatory completion follows current correction and requirement audit rolls back",async()=>{
+ const base="/api/portal/v1/personnel-learning",lead=session(DEVELOPER),trainerAuth=session(BLOCK6_TRAINER);
+ const skill=await createPublishedSkill(lead,"team.training.skill"),trainer=await assignTrainerCompetency(lead,BLOCK6_TRAINER,skill.id,8);
+ const learning=await createPublishedProcess(lead,"team.training.course");
+ const input={title:"Kassa Pflichtschulung",type:"training",moduleId:learning.id,scope:{type:"location",locationId:LOCATION_A},expectedReceipt:"",validMonths:12};
+ const saved=await request(base+"/requirements",{method:"POST",auth:lead,body:input});assert.equal(saved.response.status,201,JSON.stringify(saved.payload));const rule=saved.payload.requirement;
+ const created=await request(base+"/assignments",{method:"POST",auth:lead,body:{processId:learning.id,learnerEmployeeNumber:BLOCK6_LEARNER,trainerCompetencyIds:[trainer.id]}});assert.equal(created.response.status,201);
+ const assignment=created.payload.assignment,progressPath=base+"/assignments/"+encodeURIComponent(assignment.id)+"/progress";
+ const status=async()=>{const r=await request(base+"/team?kind=training&search="+BLOCK6_LEARNER,{auth:lead});assert.equal(r.response.status,200,JSON.stringify(r.payload));return r.payload.people[0].cells[r.payload.rules.findIndex(r=>r.id===rule.id)].status;};
+ assert.equal(await status(),"inProgress");
+ const body={expectedAssignmentRevisionReceipt:assignment.currentRevisionReceipt,expectedProgressRevisionReceipt:"",completedStepIds:["start"],finalized:true,result:"passed"};
+ assert.equal((await request(progressPath,{method:"PUT",auth:trainerAuth,body})).response.status,200);assert.equal(await status(),"fulfilled");
+ const progress=await request(progressPath,{auth:lead});
+ const correction=await request(progressPath,{method:"PUT",auth:lead,body:{...body,expectedProgressRevisionReceipt:progress.payload.assignment.progress.currentRevisionReceipt,result:"not_passed",correctionReason:"Die Praxisbewertung war falsch."}});assert.equal(correction.response.status,200);assert.equal(await status(),"notPassed");
+ const blockedAuth=session(DEVELOPER),count=db.prepare("SELECT COUNT(*) AS n FROM personnel_learning_requirement_revisions").get().n;
+ db.exec("CREATE TRIGGER qa_requirement_audit_failure BEFORE INSERT ON audit_log WHEN NEW.action='personnel.learning.requirement.saved' BEGIN SELECT RAISE(ABORT,'requirement audit rejected'); END");
+ try{
+  const failed=await request(base+"/requirements",{method:"POST",auth:blockedAuth,body:{...input,title:"Synthetic rollback requirement"}});assert.equal(failed.response.status,500,JSON.stringify(failed.payload));
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM personnel_learning_requirement_revisions").get().n,count);
+ }finally{db.exec("DROP TRIGGER qa_requirement_audit_failure");}
+ const archived=await request(base+"/requirements/"+rule.id,{method:"PUT",auth:lead,body:{...input,active:false,expectedReceipt:rule.receiptSha256}});assert.equal(archived.response.status,200);
+ const view=await request(base+"/team?search="+BLOCK6_LEARNER,{auth:lead});assert.equal(view.payload.rules.some(r=>r.id===rule.id),false);
 });

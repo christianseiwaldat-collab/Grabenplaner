@@ -1,0 +1,47 @@
+"use strict";
+const test = require("node:test"), assert = require("node:assert/strict");
+const T = require("../lib/personnel-learning-team");
+const {contains} = require("../lib/personnel-learning-team-routes");
+const person = {employeeNumber:"one", fullName:"Eva Beispiel", locationId:"18", departmentId:3, positionId:"sales", roleId:"employee"};
+const make = (input = {}) => ({payload:{type:"skill", moduleId:"kassa", moduleVersionNumber:2, minLevel:4, validMonths:12, scope:{type:"location", locationId:"18"}, active:true, ...input}});
+test("team requirements bind scope, position and role without implicit training grants", () => {
+  const normalized = T.normalize({title:"Kassa bedienen", type:"skill", moduleId:"kassa", minLevel:4, scope:{type:"organization"}});
+  assert.equal(normalized.active, true);
+  assert.throws(()=>T.normalize({title:"Kassa",type:"skill",moduleId:"kassa",minLevel:0,scope:{type:"organization"}}));
+  assert.equal(T.cell(make(), person, {today:"2026-09-15"}).actual, null);
+  assert.equal(T.applies(make({roleId:"manager"}), person), false);
+  assert.equal(T.applies(make({positionId:"other"}), person), false);
+  assert.equal(T.applies(make({scope:{type:"department", locationId:"18", departmentId:4}}), person), false);
+  assert.equal(T.applies(make({positionId:"sales", roleId:"employee"}), person), true);
+  assert.equal(contains({type:"location", locationId:"18"}, {type:"organization"}), false);
+  assert.equal(contains({type:"organization"}, {type:"department", locationId:"18", departmentId:3}), true);
+  const data = {today:"2026-09-15", competencies:[{employeeNumber:"one", moduleId:"kassa", active:true, level:5, version:1, changedAt:"2026-01-01"}]};
+  assert.equal(T.cell(make(), person, data).status, "otherVersion");
+  data.competencies[0].version = 2; data.competencies[0].level = 3;
+  assert.equal(T.cell(make(), person, data).status, "lowerLevel");
+  data.competencies[0].level = 5; data.competencies[0].changedAt = "2025-09-15";
+  assert.equal(T.cell(make(), person, data).status, "dueSoon");
+  data.today = "2026-09-16";
+  assert.equal(T.cell(make(), person, data).status, "expired");
+  assert.equal(T.cell(make({validMonths:0}), person, data).status, "fulfilled");
+});
+test("a valid earlier pass survives a pending repetition, not an explicit correction", () => {
+  const rule = make({type:"training"}), passed = {employeeNumber:"one", moduleId:"kassa", version:2, active:true, result:"passed", changedAt:"2026-01-01"};
+  const data = {today:"2026-09-15", trainings:[passed, {...passed, result:"pending", changedAt:"2026-09-15"}]};
+  assert.equal(T.cell(rule, person, data).status, "fulfilled");
+  passed.result = "not_passed";
+  assert.equal(T.cell(rule, person, data).status, "notPassed");
+  passed.active = false;
+  assert.equal(T.cell(rule, person, data).status, "inProgress");
+  assert.equal(T.cell(rule, {...person, locationId:"other"}, data).status, "notApplicable");
+});
+test("requirements retain immutable history and CSV escapes formulas and multiline names", () => {
+  const row = {id:"one", revision:1, payload:make().payload, previousReceipt:"", changedBy:"lead", changedAt:"2026-09-15"};
+  row.receiptSha256 = T.receipt(row);
+  assert.equal(T.rules([row]).length, 1);
+  assert.throws(() => T.rules([{...row, payload:{...row.payload, minLevel:1}}]));
+  assert.throws(() => T.rules([{...row, revision:2}]));
+  const csv = T.csv({rules:[], people:[{...person, fullName:'\t=SUM(1;1)\n"Name"', cells:[]}]});
+  assert.ok(csv.startsWith("\uFEFF")); assert.ok(csv.includes("'\t=SUM")); assert.ok(csv.includes('""Name""'));
+  assert.deepEqual(T.summarize([{cells:[{status:"fulfilled"}, {status:"dueSoon"}, {status:"missing"}, {status:"notApplicable"}]}]), {required:3, fulfilled:2, open:1, dueSoon:1, percent:67});
+});

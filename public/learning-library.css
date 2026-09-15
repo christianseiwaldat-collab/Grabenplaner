@@ -1,0 +1,58 @@
+.learning-library-toolbar,.learning-library-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); gap:12px; align-items:end; }
+.learning-library-toolbar label,.learning-library-fields label { display:grid; gap:5px; min-width:0; }
+.learning-library-toolbar input,.learning-library-toolbar select,.learning-library-fields input,.learning-library-fields select,.learning-library-fields textarea { width:100%; min-width:0; box-sizing:border-box; font:inherit; color:inherit; background:var(--surface,#fff); border:1px solid var(--border,#cbd5d1); border-radius:9px; padding:10px; }
+.learning-library-card { border:1px solid var(--border,#cbd5d1); border-radius:12px; padding:14px; margin:10px 0; background:var(--surface,#fff); overflow-wrap:anywhere; }
+.learning-library-card span { display:block; font-size:.88em; margin-top:4px; }
+.learning-library-card p { margin:8px 0; }
+.learning-library-card footer,.learning-library-dialog footer { display:flex; gap:8px; flex-wrap:wrap; }
+.learning-library-toolbar button,.learning-library-card button,.learning-library-dialog button,.learning-library-drafts button { font:inherit; color:inherit; border:1px solid var(--border,#cbd5d1); background:var(--surface,#fff); border-radius:9px; padding:10px 14px; cursor:pointer; overflow-wrap:anywhere; min-height:44px; }
+.learning-library-dialog { width:min(860px,calc(100vw - 28px)); max-height:90dvh; box-sizing:border-box; overflow:auto; border:1px solid var(--border,#cbd5d1); border-radius:16px; padding:20px; color:var(--text,#142b23); background:var(--surface,#fff); }
+.learning-library-dialog::backdrop { background:rgba(0,0,0,.4); }
+.learning-library-dialog header { display:flex; align-items:start; justify-content:space-between; gap:16px; }
+.learning-library-dialog h2 { margin:0 0 15px; overflow-wrap:anywhere; }
+.learning-library-text { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.65; }
+.learning-library-fields .wide { grid-column:1/-1; }
+.learning-library-fields textarea { resize:vertical; }
+.learning-library-drafts { margin-top:20px; }
+.learning-library-drafts button { margin:4px; }
+@media(max-width:600px) { .learning-library-dialog { padding:14px; } .learning-library-toolbar { grid-template-columns:1fr; } }
+
+.learning-question { min-width:0; border:1px solid var(--border,#cbd5d1); border-radius:10px; padding:12px; margin:14px 0; }
+.learning-question legend { max-width:100%; overflow-wrap:anywhere; font-weight:600; }
+.learning-question>label { display:grid; gap:5px; margin:8px 0; }
+.learning-question textarea { width:100%; box-sizing:border-box; font:inherit; }
+.learning-question .learning-answer { display:flex; align-items:flex-start; gap:9px; line-height:1.5; }
+.learning-answer input { flex:0 0 auto; margin-top:5px; }
+.learning-evidence { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0; overflow-wrap:anywhere; }
+
+#personnelLearningTeam { min-width:0; max-width:100%; }
+.learning-team-filters,.learning-team-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr)); gap:12px; align-items:end; }
+.learning-team-filters label,.learning-team-fields label { display:grid; gap:5px; min-width:0; }
+.learning-team-filters input,.learning-team-filters select,.learning-team-fields input,.learning-team-fields select { width:100%; min-width:0; box-sizing:border-box; font:inherit; padding:9px; border-radius:8px; border:1px solid var(--border,#cbd5d1); color:var(--text,#142b23); background:var(--surface,#fff); min-height:44px; }
+.learning-team-table { overflow:auto; max-width:100%; max-height:65vh; border:1px solid var(--border,#cbd5d1); margin:16px 0; }
+.learning-team-table table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; }
+.learning-team-table th,.learning-team-table td { width:190px; min-width:190px; max-width:250px; padding:12px; white-space:normal; overflow-wrap:anywhere; text-align:left; border-bottom:1px solid var(--border,#cbd5d1); border-right:1px solid var(--border,#cbd5d1); vertical-align:top; }
+.learning-team-table th { background:var(--surface,#fff); color:var(--text,#142b23); }
+.learning-team-table thead th { position:sticky; top:0; z-index:2; }
+.learning-team-table th:first-child { position:sticky; left:0; z-index:1; }
+.learning-team-table thead th:first-child { z-index:3; }
+.learning-team-table small,.learning-team-rule small { display:block; margin-top:6px; font-weight:normal; white-space:normal; overflow-wrap:anywhere; }
+.learning-team-status { font-weight:600; }
+.learning-team-status[data-status="fulfilled"] { color:var(--success,#1b7053); }
+.learning-team-status[data-status="notApplicable"] { font-weight:normal; }
+.learning-team-pagination,.learning-team-rule { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:12px 0; }
+.learning-team-rule { justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border,#cbd5d1); }
+.learning-team-rule>span { flex:1 1 220px; min-width:0; overflow-wrap:anywhere; }
+#personnelLearningTeam button,.learning-team-dialog button { font:inherit; border:1px solid var(--border,#cbd5d1); color:var(--text,#142b23); background:var(--surface,#fff); border-radius:8px; padding:10px 14px; min-height:44px; cursor:pointer; overflow-wrap:anywhere; }
+#personnelLearningTeam button:disabled { opacity:.5; cursor:default; }
+.learning-team-requirements { margin-top:22px; }
+.learning-team-requirements>summary { padding:12px 0; cursor:pointer; }
+.learning-team-dialog { width:min(760px,calc(100vw - 28px)); max-height:90dvh; box-sizing:border-box; overflow:auto; border:1px solid var(--border,#cbd5d1); border-radius:16px; padding:20px; color:var(--text,#142b23); background:var(--surface,#fff); }
+.learning-team-dialog::backdrop { background:rgba(0,0,0,.4); }
+.learning-team-dialog p { overflow-wrap:anywhere; }
+@media(max-width:600px) { .learning-team-dialog { padding:14px; } .learning-team-table th,.learning-team-table td { min-width:150px; width:150px; } }
+
+.learning-question .learning-answer { min-height:44px; align-items:center; font-size:16px; }
+.learning-question .learning-answer input[type="radio"] { flex:0 0 22px; width:22px; min-width:22px; max-width:22px; height:22px; min-height:22px; padding:0; margin:0; accent-color:var(--green,#17634e); }
+.learning-question .learning-answer span { min-width:0; flex:1; overflow-wrap:anywhere; font-size:inherit; }
+.learning-team-fields [data-module-caption] { white-space:normal; overflow-wrap:anywhere; font-weight:normal; }

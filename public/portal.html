@@ -7,6 +7,7 @@
     <title>Grabenplaner · Mitarbeiterportal</title>
     <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/portal.css" />
+    <link rel="stylesheet" href="/learning-library.css" />
     <link rel="stylesheet" href="/mobile-refinements.css" />
   </head>
   <body>
@@ -342,6 +343,7 @@
         <section class="portal-view portal-learning-dashboard-view" id="personnelLearningDashboardView" role="tabpanel" aria-labelledby="personnelLearningDashboardTab">
           <div class="view-heading portal-learning-dashboard-heading"><div><span class="eyebrow">Transparentes Lernen</span><h1>Schulungen &amp; Fähigkeiten</h1><p id="portalLearningDashboardScope">Sichtbar sind ausschließlich deine eigenen oder die im aktuell freigegebenen Bereich liegenden Schulungen.</p></div><button class="text-button" id="refreshPortalLearningDashboard" type="button">Aktualisieren</button></div>
           <p class="message hidden" id="portalLearningDashboardMessage" role="status" aria-live="polite"></p>
+          <details class="portal-card" id="portalKnowledgeArea"><summary><strong>Wissensbibliothek</strong></summary><section id="portalKnowledgeLibrary"></section></details>
           <div class="portal-learning-summary" id="portalLearningDashboardSummary" aria-label="Zusammenfassung der Schulungen"></div>
           <div class="portal-learning-grid">
             <section class="portal-card portal-learning-assignments" aria-labelledby="portalLearningAssignmentsTitle">
@@ -840,6 +842,8 @@
     <script src="/branch-receipt-filters.js"></script>
     <script src="/portal-branch-sales.js"></script>
     <script src="/portal-branch-time-off.js"></script>
+    <script src="/learning-library.js"></script>
+    <script src="/learning-assessment.js"></script>
     <script src="/portal.js"></script>
   </body>
 </html>

@@ -236,8 +236,8 @@ test("Block 5: Tastatur-, Screenreader-, Mobile- und Bewegungsreduktion sind vol
 
 test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenzfrei klassifiziert", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.92.49-beta");
-  assert.match(read("README.md"), /v0\.92\.49 Beta/);
+  assert.match(packageJson.version, /^\d+\.\d+\.\d+-beta$/);
+  assert.ok(read("README.md").includes(`v${packageJson.version.replace("-beta", " Beta")}`));
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.36 Beta · Verkaufsberichte, Kassenklärung und Browsernavigation/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.34 Beta · PDF-Verkaufsanalysen und eigene Artikelbilder/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.92\.31 Beta · Sichtbare Bewerbungsbewertungen im Mitarbeiterportal/);

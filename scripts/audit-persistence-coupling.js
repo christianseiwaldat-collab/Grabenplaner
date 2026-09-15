@@ -67,7 +67,7 @@ const BASELINE_PACKAGE_DEPENDENCY_NAMES = Object.freeze([
   "tedious",
   "tesseract.js",
 ]);
-const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer"]);
+const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer", "@zxing/browser"]);
 // A read-only SQLite snapshot is the source of the user-authorized Block 9
 // transfer. This exception does not permit application fallback to SQLite.
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
@@ -76,6 +76,11 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-trade-insights.test.js',
   'test/postgresql-login-resilience.test.js',
   'lib/persistence/postgresql/core/trade-annotations.js',
+  'lib/persistence/postgresql/core/personnel-learning-runs.js',
+  'lib/persistence/postgresql/sales/cash-publication-batches.js',
+  'lib/persistence/postgresql/sales/import-recheck-catalog.js',
+  'lib/persistence/postgresql/sales/import-work-queues.js',
+  'test/personnel-learning-postgresql.test.js',
   'lib/persistence/postgresql/reporting/branch-article-catalog.js',
 
   'lib/persistence/postgresql/runtime-binding.js',
@@ -229,6 +234,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
   'server-tools/linux/lib/trade-annotations-migrate.js',
+  'server-tools/linux/lib/personnel-learning-runs-migrate.js',
   'lib/persistence/postgresql/transfer/staging.js',
   'scripts/postgresql/activation-rehearsal-step.js',
   'server-tools/linux/postgresql/migration-host.js',
@@ -335,6 +341,11 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/branch-receipt.js",
   "lib/persistence/statements/trade-insights.js",
   "lib/persistence/statements/trade-annotations.js",
+  "lib/persistence/statements/personnel-learning-runs.js",
+  "lib/persistence/statements/cash-publication-batches.js",
+  "lib/persistence/statements/data-import-recheck.js",
+  "lib/persistence/sqlite/personnel-learning-runs-catalog.js",
+  "lib/persistence/sqlite/operations/personnel-learning-runs-schema.js",
   "lib/persistence/sqlite/branch-article-stock-catalog.js",
   "lib/persistence/sqlite/branch-receipt-catalog.js",
   "lib/persistence/sqlite/trade-insights-catalog.js",
@@ -524,6 +535,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "test-support/personnel-learning/fixture.js",
   "test/branch-time-off-api.test.js",
   "test/trade-stock.test.js",
   "test/trade-insights-api.test.js",

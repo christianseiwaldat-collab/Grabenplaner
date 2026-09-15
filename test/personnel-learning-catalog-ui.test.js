@@ -39,9 +39,6 @@ test("Learning-Katalog ist als eigener berechtigungsgebundener Personalbereich v
 
 test("Learning-Editor legt Versionen an und überschreibt keine veröffentlichte Vorlage", () => {
   assert.match(html, /Änderungen an bestehenden Prozessen werden als neue, unveränderliche Version gespeichert/);
-  assert.match(html, /Kataloge, Mitarbeiterprofile und Durchführung bleiben getrennt/);
-  assert.match(html, /Dashboard und Fähigkeitsbaum sind datensparsame Ansichten derselben Belege/);
-  assert.match(html, /Dateinachweise bleiben außerhalb dieses Blocks/);
   assert.match(app, /\/api\/portal\/v1\/personnel-learning\/modules\/\$\{encodeURIComponent\(moduleId\)\}\/versions/);
   assert.match(app, /expectedEventReceipt: module\.currentEventReceipt/);
   assert.match(app, /data-personnel-learning-action="archive"/);

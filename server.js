@@ -11295,8 +11295,9 @@ function personnelLearningCatalogScopeOptions(actor) {
 async function personnelLearningModuleBundle(
   moduleId,
   repository = personnelLearningRepository,
+  preloaded = null,
 ) {
-  const module = await repository.getModule(moduleId);
+  const module = preloaded?.module || await repository.getModule(moduleId);
   if (!module) {
     throw httpError(
       404,
@@ -11304,7 +11305,7 @@ async function personnelLearningModuleBundle(
       "PERSONNEL_LEARNING_MODULE_NOT_FOUND",
     );
   }
-  const [versions, events] = await Promise.all([
+  const [versions, events] = preloaded ? [preloaded.versions, preloaded.events] : await Promise.all([
     repository.listVersions(moduleId),
     repository.listEvents(moduleId),
   ]);
@@ -11324,6 +11325,9 @@ async function personnelLearningModuleBundle(
       catalogEntity = "skill";
       state = buildPersonnelLearningSkillState({ module, versions, events });
     } else {
+      const articles = versions.filter(v => require("./lib/personnel-learning-knowledge").isKnowledgeArticle(v.content)).length;
+      if (articles && articles !== versions.length) throw new PersonnelLearningCatalogError("PERSONNEL_LEARNING_HISTORY_INVALID", "Gemischte Wissenshistorie.");
+      if (articles) catalogEntity = "article";
       state = buildPersonnelLearningModuleState({ module, versions, events });
     }
   } catch (error) {
@@ -11337,6 +11341,15 @@ async function personnelLearningModuleBundle(
     throw error;
   }
   return Object.freeze({ module, versions, events, state, catalogEntity });
+}
+
+async function personnelLearningModuleBundles(repository = personnelLearningRepository) {
+  const [modules, versions, events] = await Promise.all([repository.listModules(), repository.listAllVersions(), repository.listAllEvents()]);
+  const group = rows => { const result = new Map(); for (const row of rows) { const list = result.get(row.moduleId) || []; list.push(row); result.set(row.moduleId, list); } return result; };
+  const byVersion = group(versions), byEvent = group(events);
+  return Promise.all(modules.map(module => personnelLearningModuleBundle(module.id, repository, {
+    module, versions: byVersion.get(module.id) || [], events: byEvent.get(module.id) || [],
+  })));
 }
 
 function assertPersonnelLearningCatalogEntity(bundle, expectedEntity) {
@@ -11354,7 +11367,7 @@ function assertPersonnelLearningCatalogEntity(bundle, expectedEntity) {
   return bundle;
 }
 
-function publicPersonnelLearningVersion(version, { audit = false } = {}) {
+function publicPersonnelLearningVersion(version, { audit = false, solutions = false } = {}) {
   if (!version) return null;
   const scopeSnapshot = version.scopeSnapshot && typeof version.scopeSnapshot === "object"
     ? version.scopeSnapshot
@@ -11362,7 +11375,7 @@ function publicPersonnelLearningVersion(version, { audit = false } = {}) {
   const projected = {
     versionNumber: Number(version.versionNumber),
     title: String(version.title || ""),
-    content: version.content,
+    content: version.content?.assessment && !solutions ? {...version.content,assessment:require("./lib/personnel-learning-assessment").publicAssessment(version.content.assessment)} : version.content,
     scope: {
       type: String(version.scopeType || ""),
       locationId: version.scopeLocationId === null ? null : String(version.scopeLocationId || ""),
@@ -11423,11 +11436,11 @@ function publicPersonnelLearningModule(bundle, actor) {
     publishedVersionNumber: state.publishedVersionNumber,
     currentEventReceipt: canManage ? state.currentEventReceipt : null,
     latestVersion: canManage
-      ? publicPersonnelLearningVersion(state.latestVersion, { audit })
-      : publicPersonnelLearningVersion(state.publishedVersion, { audit }),
-    publishedVersion: publicPersonnelLearningVersion(state.publishedVersion, { audit }),
+      ? publicPersonnelLearningVersion(state.latestVersion, { audit, solutions: canManage })
+      : publicPersonnelLearningVersion(state.publishedVersion, { audit, solutions: canManage }),
+    publishedVersion: publicPersonnelLearningVersion(state.publishedVersion, { audit, solutions: canManage }),
     versions: visibleVersions.map((version) => ({
-      ...publicPersonnelLearningVersion(version, { audit }),
+      ...publicPersonnelLearningVersion(version, { audit, solutions: canManage }),
       published: Number(version.versionNumber) === state.publishedVersionNumber,
       latest: Number(version.versionNumber) === state.latestVersionNumber,
     })),
@@ -11457,12 +11470,11 @@ async function personnelLearningCatalogPayload(
   repository = personnelLearningRepository,
 ) {
   assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
-  const modules = await repository.listModules();
-  const projected = (await Promise.all(modules.map(async (module) => {
-    const bundle = await personnelLearningModuleBundle(module.id, repository);
+  const bundles = await personnelLearningModuleBundles(repository);
+  const projected = bundles.map((bundle) => {
     if (bundle.catalogEntity !== "process") return null;
     return publicPersonnelLearningModule(bundle, actor);
-  }))).filter(Boolean).sort((left, right) => (
+  }).filter(Boolean).sort((left, right) => (
     String(left.latestVersion?.title || left.moduleCode)
       .localeCompare(String(right.latestVersion?.title || right.moduleCode), "de-AT", {
         sensitivity: "base",
@@ -11509,11 +11521,10 @@ async function personnelLearningSkillCatalogPayload(
   repository = personnelLearningRepository,
 ) {
   assertPersonnelLearningCatalogCapability(actor, "canReadCatalog");
-  const modules = await repository.listModules();
-  const projected = (await Promise.all(modules.map(async (module) => {
-    const bundle = await personnelLearningModuleBundle(module.id, repository);
+  const bundles = await personnelLearningModuleBundles(repository);
+  const projected = bundles.map((bundle) => {
     return publicPersonnelLearningSkill(bundle, actor);
-  }))).filter(Boolean).sort((left, right) => (
+  }).filter(Boolean).sort((left, right) => (
     String(left.latestVersion?.title || left.skillCode)
       .localeCompare(String(right.latestVersion?.title || right.skillCode), "de-AT", {
         sensitivity: "base",
@@ -11696,9 +11707,9 @@ async function personnelLearningCompetencyPayload(
   } = {},
 ) {
   assertPersonnelLearningCompetencyCapability(actor);
-  const [employees, modules, competencies, revisions] = await Promise.all([
+  const [employees, moduleBundles, competencies, revisions] = await Promise.all([
     organizationRepository.listEmployees(),
-    learningRepository.listModules(),
+    personnelLearningModuleBundles(learningRepository),
     learningRepository.listCompetencies(),
     learningRepository.listCompetencyRevisions(),
   ]);
@@ -11710,9 +11721,8 @@ async function personnelLearningCompetencyPayload(
     employee,
   ]));
   const bundles = new Map();
-  for (const module of modules) {
-    const bundle = await personnelLearningModuleBundle(module.id, learningRepository);
-    if (bundle.catalogEntity === "skill") bundles.set(String(module.id), bundle);
+  for (const bundle of moduleBundles) {
+    if (bundle.catalogEntity === "skill") bundles.set(String(bundle.module.id), bundle);
   }
   const revisionsByCompetency = new Map();
   for (const revision of revisions) {
@@ -12118,6 +12128,7 @@ function personnelLearningAssignmentProcessProjection(bundle) {
   const version = bundle.state.publishedVersion;
   if (!version || bundle.catalogEntity !== "process") return null;
   return {
+    learningTarget: version.content?.learningTarget || null,
     id: String(bundle.module.id),
     moduleCode: String(bundle.module.moduleCode || ""),
     moduleType: String(bundle.module.moduleType || ""),
@@ -12170,27 +12181,22 @@ async function personnelLearningAssignmentProjectionContext(
   } = {},
 ) {
   if (requireCapability) assertPersonnelLearningCompetencyCapability(actor);
-  const [employees, modules, competencies, competencyRevisions, assignments,
-    assignmentRevisions, progressRevisions] = await Promise.all([
+  const [employees, moduleBundles, competencies, competencyRevisions, assignments,
+    assignmentRevisions, progressRevisions, schedules] = await Promise.all([
     organizationRepository.listEmployees(),
-    learningRepository.listModules(),
+    personnelLearningModuleBundles(learningRepository),
     learningRepository.listCompetencies(),
     learningRepository.listCompetencyRevisions(),
     learningRepository.listAssignments(),
     learningRepository.listAssignmentRevisions(),
     learningRepository.listProgressRevisions(),
+    learningRepository.listSchedules(),
   ]);
   const employeeByNumber = new Map(employees.map((employee) => [
     String(employee.personnel_number),
     employee,
   ]));
-  const bundles = new Map();
-  for (const module of modules) {
-    bundles.set(
-      String(module.id),
-      await personnelLearningModuleBundle(module.id, learningRepository),
-    );
-  }
+  const bundles = new Map(moduleBundles.map(bundle => [String(bundle.module.id), bundle]));
   const competencyRevisionsById = new Map();
   for (const revision of competencyRevisions) {
     const rows = competencyRevisionsById.get(revision.competencyId) || [];
@@ -12232,6 +12238,7 @@ async function personnelLearningAssignmentProjectionContext(
     competencyById,
     competencyStateById,
     assignments: Object.freeze(assignments),
+    schedules: new Map(schedules.map(row => [row.assignmentId, require("./lib/personnel-learning-schedules").projection(row)])),
     assignmentRevisionsById,
     progressRevisionsByAssignmentId,
   });
@@ -12468,6 +12475,14 @@ function publicPersonnelLearningAssignment(assignment, state, context) {
     processTitle: String(processVersion.title || ""),
     processSummary: String(processVersion.content?.summary || ""),
     processVerificationMode: String(processVersion.content?.verificationMode || ""),
+    schedule: context.schedules.get(String(assignment.id)) || null,
+    runNumber: context.schedules.get(String(assignment.id))?.runNumber || 1,
+    hasNextRun: [...context.schedules.values()].some(p => p.previousAssignmentId === String(assignment.id)),
+    reminder: require("./lib/personnel-learning-schedules").reminder(context.schedules.get(String(assignment.id)), {
+      active:state.active,completed:progressState?.finalized,completedAt:progressState?.current?.changedAt,
+      hasSuccessor:[...context.schedules.values()].some(p => p.previousAssignmentId === String(assignment.id)),
+    }),
+    learningTarget: processVersion.content?.learningTarget || null,
     processVersionNumber: Number(state.current.processVersionNumber),
     currentPublishedVersionNumber: Number(processBundle.state.publishedVersionNumber || 0) || null,
     usesCurrentPublishedVersion: Number(state.current.processVersionNumber)
@@ -39842,6 +39857,53 @@ app.get("/api/portal/v1/personnel-learning/modules", async (request, response) =
   response.json(await personnelLearningCatalogPayload(actor));
 });
 
+function assertPersonnelLearningDocument(bundle) {
+  if (!["process","article"].includes(bundle?.catalogEntity)) return assertPersonnelLearningCatalogEntity(bundle, "process");
+  return bundle;
+}
+
+app.get("/api/portal/v1/personnel-learning/knowledge", async (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(request, []);
+  const actor = await personnelLearningCatalogActor(session);
+  const administrative = actor.access.canReadCatalog === true;
+  const branch = actor.access.branchDashboard === true;
+  const employee = !administrative && !branch && actor.user?.active
+    ? (await organizationPersonnelRepository.listEmployees()).find(e => String(e.personnel_number) === String(actor.session.employeeNumber)) : null;
+  if (!administrative && !branch && !employee?.active) throw httpError(403, "Die Wissensbibliothek ist für dieses Konto nicht freigegeben.", "PERSONNEL_LEARNING_KNOWLEDGE_DENIED");
+  const modules = [];
+  for (const bundle of await personnelLearningModuleBundles()) {
+    const module = bundle.module;
+    if (bundle.catalogEntity !== "article") continue;
+    if (administrative) {
+      const projection = publicPersonnelLearningModule(bundle, actor);
+      if (projection) modules.push(projection);
+      continue;
+    }
+    const version = bundle.state.publishedVersion;
+    if (!version || bundle.state.archived) continue;
+    const scope = personnelLearningScopeFromVersion(version);
+    const allowed = branch ? scope.type === "organization" || scope.type === "location" && scope.locationId === actor.access.branchDashboardLocationId
+      : personnelLearningProcessAppliesToEmployee(version, employee, actor);
+    if (!allowed) continue;
+    // Only the already-authorized published version is projected for readers.
+    const published = publicPersonnelLearningVersion(version);
+    modules.push({id:module.id,moduleCode:module.moduleCode,moduleType:"knowledge",status:"published",archived:false,latestVersion:published,publishedVersion:published,versions:[published],capabilities:{}});
+  }
+  const scopes = administrative ? personnelLearningCatalogScopeOptions(actor) : [];
+  response.json({modules,scopes,capabilities:{canCreate:actor.access.canManageCatalog === true && scopes.length > 0}});
+});
+
+async function validatePersonnelLearningTarget(input, actor, repository) {
+  const target = input.content.learningTarget;
+  if (!target) return;
+  const bundle = assertPersonnelLearningCatalogEntity(await personnelLearningModuleBundle(target.skillModuleId, repository), "skill");
+  const version = bundle.state.publishedVersion;
+  if (bundle.state.archived || !version || Number(version.versionNumber) !== target.skillVersionNumber
+    || !personnelLearningScopeAccess(actor.access, personnelLearningScopeFromVersion(version))) {
+    throw httpError(400, "Die Zielkompetenz muss auf einer aktuell veröffentlichten, freigegebenen Fähigkeit beruhen.", "PERSONNEL_LEARNING_TARGET_INVALID");
+  }
+}
+
 app.post("/api/portal/v1/personnel-learning/modules", async (request, response) => {
   const session = requirePortalAnyPermissionOrLocal(
     request,
@@ -39857,6 +39919,7 @@ app.post("/api/portal/v1/personnel-learning/modules", async (request, response) 
     );
     assertPersonnelLearningCatalogCapability(actor, "canManageCatalog");
     const occurredAt = new Date().toISOString();
+    await validatePersonnelLearningTarget(input, actor, repositories.personnelLearning);
     const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
     const module = personnelLearningModuleRow({
       id: moduleId,
@@ -39938,7 +40001,7 @@ app.post("/api/portal/v1/personnel-learning/modules/:moduleId/versions", async (
       moduleId,
       repositories.personnelLearning,
     );
-    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningDocument(current);
     assertPersonnelLearningEventRevision(current.state, expectedReceipt);
     if (current.state.archived) {
       throw httpError(
@@ -39959,6 +40022,8 @@ app.post("/api/portal/v1/personnel-learning/modules/:moduleId/versions", async (
       moduleCode: current.module.moduleCode,
       moduleType: current.module.moduleType,
     });
+    await validatePersonnelLearningTarget(input, actor, repositories.personnelLearning);
+    if ((current.catalogEntity === "article") !== Boolean(input.content.article)) throw httpError(400, "Die Art eines bestehenden Eintrags bleibt erhalten.", "PERSONNEL_LEARNING_ENTITY_MISMATCH");
     const scopeSnapshot = personnelLearningCatalogScopeSnapshot(input.scope, actor);
     const occurredAt = new Date().toISOString();
     const version = personnelLearningVersionRow({
@@ -40044,7 +40109,7 @@ app.post("/api/portal/v1/personnel-learning/modules/:moduleId/publish", async (r
       moduleId,
       repositories.personnelLearning,
     );
-    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningDocument(current);
     assertPersonnelLearningEventRevision(current.state, expectedReceipt);
     if (current.state.archived) {
       throw httpError(
@@ -40126,7 +40191,7 @@ async function changePersonnelLearningModuleLifecycle(request, response, eventTy
       moduleId,
       repositories.personnelLearning,
     );
-    assertPersonnelLearningCatalogEntity(current, "process");
+    assertPersonnelLearningDocument(current);
     assertPersonnelLearningEventRevision(current.state, expectedReceipt);
     const latest = current.state.latestVersion;
     if (!personnelLearningScopeAccess(
@@ -40768,16 +40833,47 @@ app.get("/api/portal/v1/personnel-learning/assignments", async (request, respons
   response.json(await personnelLearningAssignmentPayload(actor));
 });
 
-async function mutatePersonnelLearningAssignment(request, response, { create = false } = {}) {
+async function storePersonnelLearningSchedule(repositories,assignmentId,body,actor,current,{previousAssignmentId="",runNumber=1,newAssignment=false}={}) {
+  const model=require("./lib/personnel-learning-schedules");
+  if (!newAssignment && body?.schedule === undefined) return current;
+  const next=model.normalizeSchedule(body?.schedule || current || {});
+  const payload={...next,previousAssignmentId:current?.previousAssignmentId || previousAssignmentId,runNumber:current?.runNumber || runNumber};
+  if (current && stablePersonnelLearningJson(payload)===stablePersonnelLearningJson({dueDate:current.dueDate,repeatEveryMonths:current.repeatEveryMonths,remindDaysBefore:current.remindDaysBefore,previousAssignmentId:current.previousAssignmentId,runNumber:current.runNumber})) return current;
+  if (!newAssignment && String(body?.expectedScheduleReceipt || "") !== String(current?.receiptSha256 || "")) throw httpError(409,"Die Schulungsfrist wurde zwischenzeitlich geändert. Bitte neu laden.","PERSONNEL_LEARNING_SCHEDULE_CONFLICT");
+  const row={assignmentId,revisionNumber:Number(current?.revisionNumber || 0)+1,payload,previousReceiptSha256:current?.receiptSha256 || "",changedBy:actor.actorId,changedAt:new Date().toISOString()};
+  row.receiptSha256=model.receipt(row);
+  await repositories.personnelLearning.insertSchedule(row);
+  if (!newAssignment) await repositories.organizationPersonnel.insertAudit(actor.actorId,"personnel.learning.schedule.update","personnel_learning_assignment",assignmentId,JSON.stringify({revisionNumber:row.revisionNumber,receiptSha256:row.receiptSha256}));
+  return model.projection(row);
+}
+
+app.post("/api/portal/v1/personnel-learning/assignments/batch", async (request,response) => {
+  requirePortalAnyPermissionOrLocal(request,[PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],{csrf:true});
+  const learners=request.body?.learnerEmployeeNumbers;
+  if(!Array.isArray(learners)||learners.length<1||learners.length>50||learners.some(n=>typeof n!=="string"||!n.trim())||new Set(learners.map(n=>n.trim())).size!==learners.length||request.body?.repeatOfAssignmentId && learners.length!==1) throw httpError(400,"Bitte 1 bis 50 unterschiedliche Lernende auswählen; Wiederholungen werden einzeln zugeordnet.","PERSONNEL_LEARNING_BATCH_INVALID");
+  const result=await personnelLearningCatalogSerializableTransaction(async repositories=>{
+    const assignments=[];
+    for(const learnerEmployeeNumber of learners) {
+      const result=await mutatePersonnelLearningAssignment(request,null,{create:true,inputBody:{...request.body,learnerEmployeeNumber},transactionRepositories:repositories});
+      assignments.push(result.assignment);
+    }
+    return assignments;
+  });
+  response.status(201).json({assignments:result});
+});
+
+async function mutatePersonnelLearningAssignment(request, response, { create = false, inputBody = request.body, transactionRepositories = null } = {}) {
   const session = requirePortalAnyPermissionOrLocal(
     request,
     [PERSONNEL_LEARNING_PERMISSIONS.ASSIGNMENTS_WRITE],
     { csrf: true },
   );
+  const repeatOf = create ? String(inputBody?.repeatOfAssignmentId || "").trim() : "";
+  if (repeatOf.length > 180 || repeatOf.includes("\0")) throw httpError(400,"Ungültiger Wiederholungsbezug.","PERSONNEL_LEARNING_REPEAT_INVALID");
   const requestedAssignmentId = String(request.params.assignmentId || "").trim();
-  const requestedProcessId = String(request.body?.processId || "").trim();
+  const requestedProcessId = String(inputBody?.processId || "").trim();
   const requestedLearnerEmployeeNumber = String(
-    request.body?.learnerEmployeeNumber || "",
+    inputBody?.learnerEmployeeNumber || "",
   ).trim();
   if ((!create && (!requestedAssignmentId || requestedAssignmentId.length > 180
       || requestedAssignmentId.includes("\0")))
@@ -40792,7 +40888,7 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
       "PERSONNEL_LEARNING_ASSIGNMENT_TARGET_INVALID",
     );
   }
-  const mutation = await personnelLearningCatalogSerializableTransaction(
+  const mutation = await (transactionRepositories ? work => work(transactionRepositories) : personnelLearningCatalogSerializableTransaction)(
     async (repositories) => {
       const actor = await personnelLearningCatalogActor(
         session,
@@ -40804,7 +40900,7 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
         organizationRepository: repositories.organizationPersonnel,
       });
       let assignment = create
-        ? await repositories.personnelLearning.getAssignmentForLearner(
+        ? repeatOf ? null : await repositories.personnelLearning.getAssignmentForLearner(
             requestedProcessId,
             requestedLearnerEmployeeNumber,
           )
@@ -40841,6 +40937,19 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
           "PERSONNEL_LEARNING_ASSIGNMENT_SCOPE_DENIED",
         );
       }
+      let previousSchedule = null;
+      if (repeatOf) {
+        const previous = context.assignments.find(a => a.id === repeatOf && a.processModuleId === processId && a.learnerEmployeeNumber === learnerEmployeeNumber);
+        if (!previous) throw httpError(404,"Der vorherige Schulungsdurchlauf wurde nicht gefunden.","PERSONNEL_LEARNING_REPEAT_INVALID");
+        const previousState = personnelLearningAssignmentStateOrUnavailable(previous,context.assignmentRevisionsById.get(previous.id)||[]);
+        const previousProgress = (context.progressRevisionsByAssignmentId.get(previous.id)||[]).at(-1);
+        if (previousState.active && !previousProgress?.finalized) throw httpError(409,"Den laufenden Durchgang zuerst abschließen oder abbrechen.","PERSONNEL_LEARNING_REPEAT_NOT_READY");
+        if ([...context.schedules.values()].some(plan=>plan.previousAssignmentId===repeatOf)) throw httpError(409,"Für diesen Durchgang ist bereits eine Wiederholung vorhanden.","PERSONNEL_LEARNING_REPEAT_EXISTS");
+        const unfinished = context.assignments.some(a=>a.id!==repeatOf && a.processModuleId===processId && a.learnerEmployeeNumber===learnerEmployeeNumber
+          && context.assignmentRevisionsById.get(a.id)?.at(-1)?.active && !context.progressRevisionsByAssignmentId.get(a.id)?.at(-1)?.finalized);
+        if (unfinished) throw httpError(409,"Es besteht bereits ein laufender Durchgang.","PERSONNEL_LEARNING_REPEAT_EXISTS");
+        previousSchedule = context.schedules.get(repeatOf);
+      }
       const processBundle = assertPersonnelLearningCatalogEntity(
         context.bundles.get(processId),
         "process",
@@ -40857,7 +40966,7 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
       }
       if (assignment) {
         const expectedReceipt = personnelLearningAssignmentExpectedReceipt(
-          request.body?.expectedRevisionReceipt,
+          inputBody?.expectedRevisionReceipt,
         );
         if (String(current.receiptSha256 || "") !== expectedReceipt) {
           throw httpError(
@@ -40869,7 +40978,7 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
       }
       const currentTrainerCompetencyIds = current
         ? current.trainerBindings.map((binding) => binding.competencyId) : [];
-      const input = normalizePersonnelLearningAssignmentInput(request.body, {
+      const input = normalizePersonnelLearningAssignmentInput(inputBody, {
         current: { trainerCompetencyIds: currentTrainerCompetencyIds },
       });
       let processVersion;
@@ -40918,6 +41027,10 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
             context,
           })
         : normalizePersonnelLearningTrainerBindings(current.trainerBindings);
+      if (input.active) {
+        try { require("./lib/personnel-learning-targets").assertTargetTrainerBindings(processVersion.content?.learningTarget, trainerBindings); }
+        catch (error) { throw httpError(400, error.message, error.code); }
+      }
       const noChange = Boolean(current)
         && Boolean(current.active) === Boolean(input.active)
         && stablePersonnelLearningJson(trainerBindings)
@@ -40929,6 +41042,8 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
           .filter((revision) => revision.assignmentId === assignment.id)
         : [];
       if (noChange) {
+        const plan = await storePersonnelLearningSchedule(repositories, assignment.id, inputBody, actor, context.schedules.get(assignment.id));
+        if (plan) context.schedules.set(assignment.id, plan);
         const state = personnelLearningAssignmentStateOrUnavailable(
           assignment,
           existingRevisions,
@@ -40940,7 +41055,7 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
       }
       const occurredAt = new Date().toISOString();
       const identity = assignment || personnelLearningAssignmentIdentityRow({
-        id: `learning-assignment:${crypto.randomUUID()}`,
+        id: `${repeatOf ? "learning-run" : "learning-assignment"}:${crypto.randomUUID()}`,
         processModuleId: processId,
         learnerEmployeeNumber,
         actorId: actor.actorId,
@@ -40967,6 +41082,9 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
       });
       if (!assignment) await repositories.personnelLearning.insertAssignment(identity);
       await repositories.personnelLearning.insertAssignmentRevision(revision);
+      await storePersonnelLearningSchedule(repositories,identity.id,inputBody,actor,context.schedules.get(identity.id),{
+        previousAssignmentId:repeatOf,runNumber:repeatOf ? Number(previousSchedule?.runNumber || 1)+1 : 1,newAssignment:!assignment,
+      });
       const auditActions = {
         assigned: "personnel.learning.assignment.assign",
         trainers_updated: "personnel.learning.assignment.trainers.update",
@@ -41005,6 +41123,7 @@ async function mutatePersonnelLearningAssignment(request, response, { create = f
       };
     },
   );
+  if (transactionRepositories) return mutation;
   response.status(mutation.created ? 201 : 200).json({
     assignment: mutation.assignment,
   });
@@ -41129,6 +41248,12 @@ function publicPersonnelLearningProgressAssignment(bundle) {
   });
   return {
     id: String(bundle.assignment.id),
+    schedule: require("./lib/personnel-learning-schedules").publicSchedule(bundle.context.schedules.get(String(bundle.assignment.id))),
+    runNumber: bundle.context.schedules.get(String(bundle.assignment.id))?.runNumber || 1,
+    reminder: require("./lib/personnel-learning-schedules").reminder(bundle.context.schedules.get(String(bundle.assignment.id)),{
+      active:bundle.assignmentState.active,completed:bundle.progressState?.finalized,completedAt:bundle.progressState?.current?.changedAt,
+      hasSuccessor:[...bundle.context.schedules.values()].some(p=>p.previousAssignmentId===String(bundle.assignment.id)),
+    }),
     active: Boolean(bundle.assignmentState.active),
     currentAssignmentRevisionReceipt: String(bundle.assignmentState.currentReceipt || ""),
     process: {
@@ -41434,6 +41559,8 @@ app.put(
             "PERSONNEL_LEARNING_PROGRESS_FINALIZATION_DENIED",
           );
         }
+        if(input.finalized) require("./lib/personnel-learning-assessment").assertCompletion(bundle.processVersion.content?.assessment,input.result,
+          await repositories.personnelLearning.listAssessmentRecords(assignmentId),bundle.processVersion.receiptSha256);
         const current = bundle.progressState.current;
         const noChange = current
           ? stablePersonnelLearningJson(current.stepStates)
@@ -41493,6 +41620,22 @@ app.put(
     response.json({ assignment: mutation });
   },
 );
+
+require("./lib/personnel-learning-team-routes").register(app, {
+  session: (request, csrf) => requirePortalAnyPermissionOrLocal(request, [], {csrf}), actor: personnelLearningCatalogActor,
+  repository: personnelLearningRepository, organization: organizationPersonnelRepository,
+  transaction: personnelLearningCatalogSerializableTransaction, bundles: personnelLearningModuleBundles,
+  scopeAccess: personnelLearningScopeAccess, scope: personnelLearningScopeFromVersion,
+  scopeSnapshot: personnelLearningCatalogScopeSnapshot, scopes: personnelLearningCatalogScopeOptions,
+  competencyState: personnelLearningCompetencyStateOrUnavailable,
+  assignmentState: personnelLearningAssignmentStateOrUnavailable, progressState: personnelLearningProgressStateOrUnavailable,
+});
+
+require("./lib/personnel-learning-assessment-routes").register(app,{
+  session:(request,csrf)=>requirePortalAnyPermissionOrLocal(request,[],{csrf}),actor:personnelLearningCatalogActor,
+  bundle:personnelLearningProgressAssignmentBundle,repository:personnelLearningRepository,
+  transaction:personnelLearningCatalogSerializableTransaction,storage:requireAmuStorage,audit:auditPortal,
+});
 
 app.get("/api/portal/v1/personnel-learning/cross-location-delegates", async (request, response) => {
   const session = requirePortalSession(request);

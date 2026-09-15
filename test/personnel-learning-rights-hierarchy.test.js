@@ -435,15 +435,24 @@ function sqliteText(value) {
 
 function installSessionTouchRaceMutation(auth, statements) {
   const triggerName = `test_learning_actor_race_${crypto.randomBytes(8).toString("hex")}`;
+  // Force renewal: ordinary requests deliberately coalesce expiry writes.
+  db.prepare("UPDATE portal_sessions SET expires_at = ? WHERE id = ?")
+    .run(new Date(Date.now() + 60000).toISOString(), auth.id);
+  db.exec(`CREATE TABLE ${triggerName}_proof (fired INTEGER NOT NULL)`);
   db.exec(`
     CREATE TRIGGER ${triggerName}
     AFTER UPDATE OF expires_at ON portal_sessions
     WHEN NEW.id = ${sqliteText(auth.id)}
     BEGIN
+      INSERT INTO ${triggerName}_proof VALUES (1);
       ${statements}
     END
   `);
-  return () => db.exec(`DROP TRIGGER IF EXISTS ${triggerName}`);
+  return () => {
+    const fired = db.prepare(`SELECT COUNT(*) AS count FROM ${triggerName}_proof`).get().count;
+    db.exec(`DROP TRIGGER IF EXISTS ${triggerName}; DROP TABLE ${triggerName}_proof`);
+    assert.ok(fired > 0, "The concurrent actor mutation must actually execute");
+  };
 }
 
 async function assertScopeMutationDenied({
