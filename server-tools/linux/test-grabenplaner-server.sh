@@ -359,18 +359,25 @@ const needed = d.statusAvailable === true && d.blocksMainReadiness === false && 
 process.stdout.write(needed ? "restore-required" : "none");
 NODE
     )" == restore-required ]]; then
-    offsite_restore_command="/usr/local/sbin/grabenplaner-offsite-restore-test"
+    offsite_restore_command="/opt/grabenplaner-offsite/module/grabenplaner-offsite-restore-test.sh"
+    offsite_restore_unit="grabenplaner-offsite-restore-test.service"
     if [[ "$(readlink -f -- "/proc/${BASHPID:-$$}/fd/9" 2>/dev/null || true)" != "/run/grabenplaner/maintenance.lock" ]] \
       || ! flock --nonblock 9; then
       check_fail "Offsite-Wiederherstellung" "kontrollierte Update-Wartungssperre fehlt"
     elif [[ ! -x "$offsite_restore_command" \
-      || "$(readlink -f -- "$offsite_restore_command")" != "/opt/grabenplaner-offsite/module/grabenplaner-offsite-restore-test.sh" ]]; then
+      || "$(readlink -f -- "$offsite_restore_command")" != "/opt/grabenplaner-offsite/module/grabenplaner-offsite-restore-test.sh" \
+      || "$(systemctl show "$offsite_restore_unit" -p ExecStart --value)" != *"path=$offsite_restore_command ;"* ]]; then
       check_fail "Offsite-Wiederherstellung" "geschuetzter Wiederherstellungstest fehlt"
+    elif [[ "$(systemctl show "$offsite_restore_unit" -p ActiveState --value)" != inactive \
+      && "$(systemctl show "$offsite_restore_unit" -p ActiveState --value)" != failed ]]; then
+      check_fail "Offsite-Wiederherstellung" "ein Wiederherstellungstest laeuft bereits"
     else
       gp_info "Pruefe den offenen Restore-Fehler mit der neuen Anwendung vor dem Deploy-Abschluss erneut."
-      # The restore command acquires its own repository/workspace locks. FD9
-      # remains held by the updater; --lock-already-held would mean FD8, not FD9.
-      if "$offsite_restore_command"; then
+      # Use the installed service for its LoadCredential and isolation contract.
+      # It acquires repository/workspace locks while the updater keeps FD9.
+      offsite_restore_invocation="$(systemctl show "$offsite_restore_unit" -p InvocationID --value)"
+      if systemctl start "$offsite_restore_unit" \
+        && [[ "$(systemctl show "$offsite_restore_unit" -p InvocationID --value)" != "$offsite_restore_invocation" ]]; then
         check_ok "Offsite-Wiederherstellung" "offener Restore-Fehler durch vollstaendige Wiederherstellung nachgeprueft"
       else
         check_fail "Offsite-Wiederherstellung" "erneute Wiederherstellung fehlgeschlagen"
