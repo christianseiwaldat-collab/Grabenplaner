@@ -44,7 +44,7 @@ Bei einem fachlichen oder endgültigen Fehler werden der gespeicherte Stand
 und ein Hinweis zur weiteren Bearbeitung erhalten. Die ursprüngliche
 verschlüsselte Arbeitskopie wird nach erfolgreichem Abschluss entfernt.
 
-## Kassendatenbank: noch blockiert
+## Kassendatenbank: Transfer gelöst, Integration vorgemerkt
 
 `Kassen_Umsätze.accdb`, Drive-ID `1iog-Kf0DniLCgs_bDbieuJBoqE2cCwHb`,
 hat 331.485.184 Bytes. Die Codex-Drive-Anbindung lehnt den Rohabruf oberhalb
@@ -53,8 +53,37 @@ begrenzt und meldet für beide manuell hochgeladenen Dateien bei Abruf über
 ihre bekannten IDs `404/notFound`. Ihre Berechtigungen wurden nicht verändert.
 Der Download über Chrome wurde blockiert und auf Benutzerwunsch beendet.
 
-Für die Kassendatei ist daher eine passende Lesefreigabe der Serveranbindung
-oder ein anderer vom Benutzer freigegebener direkter Transferweg erforderlich.
-Es wurde weder ein älterer Kassenstand übernommen noch die Datei als importiert
-gemeldet. Die Freigabe soll erst geklärt werden, wenn der Benutzer wieder
-verfügbar ist.
+Der spätere Zugriff über das bereits authentifizierte Drive-Laufwerk des PCs
+funktionierte. Die Datei wurde von dort per SSH direkt zum VPS gestreamt;
+eine lokale Arbeitskopie oder Bestätigung in Chrome war nicht erforderlich.
+Die serverseitige Speicherung wurde um 07:28:10 UTC abgeschlossen. Trotz
+anschließendem Timeout der Übertragungsverbindung bestätigte eine vollständige
+Entschlüsselungs- und Hashprüfung alle 331.485.184 Byte:
+`2046785de1e3459ea586573e0bfd07b0f3a274d94bd3974ae3d7db4774071f10`.
+OAuth-Berechtigungen und bestehende Anmeldungen wurden nicht verändert.
+
+Die verschlüsselte Datei liegt unter
+`/var/lib/grabenplaner-import-drive-cash-20260915`. Die Einmal-Unit
+`grabenplaner-drive-cash-20260915.service` wartet auf den verifizierten
+Bestellabschluss. Sie verwendet anschließend die bestehenden Prüfungen und
+die atomare Kassenfreigabe mit den vorhandenen Filial-/Mitarbeiterzuordnungen
+und eindeutigen Trade-Artikelnummern. Fachliche Prüfsperren werden nicht übergangen.
+Der bereits aktive Kassenstand vom 04.09.2026 bleibt bis zur erfolgreichen
+Freigabe des neuen Stands verfügbar. Der Datei-Transfer alleine bedeutet noch
+keine abgeschlossene Integration; dafür müssen Quelle und aktiver Kassenstand
+denselben neuen Dateihash nachweisen.
+
+Weitere Diagnose und Messungen: [Importprüfung vom 15.09.2026](IMPORT-DIAGNOSE-2026-09-15.md).
+
+## Stand nach den Importkorrekturen
+
+Die installierte Version ist v0.92.51-beta. Ihre vollständigen Release- und
+Wiederherstellungsprüfungen sind erfolgreich abgeschlossen. Die wartende
+Kassen-Unit wurde auf diesen geprüften Versionsstand aktualisiert; bei einer
+fachlichen Prüfsperre meldet sie den konkreten Entscheidungsbedarf.
+
+Am 15.09.2026 um 08:48 UTC ist Trade noch nicht vollständig übernommen:
+66 von 102 Tabellen sind abgeschlossen. Die beiden nachfolgenden Units sind
+aktiv und warten ohne Datenbankverbindungen. Für beide liegt noch kein
+`completed.json` vor. Dieser Stand darf weder als drei erfolgreiche Importe
+noch als fehlender Datei-Upload beschrieben werden.

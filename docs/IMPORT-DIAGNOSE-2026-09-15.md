@@ -86,3 +86,42 @@ Sicherung, isolierte Wiederherstellung und Anwendungstest waren erfolgreich,
 der gesamte Assurance-Lauf wurde trotzdem korrekt als fehlgeschlagen protokolliert.
 Der GP blieb erreichbar. Die abschließende Wiederholung nach Veröffentlichung
 der Paketverarbeitung muss ohne parallele Datenbankdiagnosen stattfinden.
+
+## Veröffentlichter Stand und Abschlussprüfungen
+
+v0.92.51-beta, Commit `b49158fbbc8a8b570bfe6026d1832fbf3dcf9556`, ist seit
+08:22 UTC installiert. Die vollständige Wiederholungsprüfung endete um
+08:44:30 UTC erfolgreich: Sicherung, Archivprüfung, isolierte Wiederherstellung,
+Anwendungstest und letzte Serverprüfung sind bestanden. Der signierte Lauf lautet
+`52e8a667-a9ac-4d96-b806-1a6bcbe85032`. Die vorherige fehlgeschlagene Prüfung bleibt
+mit ihrer Ursache dokumentiert.
+
+Die nachfolgenden Kontrollen bestätigten alle 700 Paketdateien, PostgreSQL 18.6,
+unveränderte Schema-Prüfsummen, vier erfolgreiche Live-/Bereitschaftsabfragen und
+alle 24 Servermonitor-Prüfungen. Es verbleiben genau zwei vollständige lokale
+Sicherungspaare. Temporäre Deploy- und Prüfkopien wurden nach Sicherung der
+Nachweise entfernt. Der nächste gewöhnliche, nicht datenbankkritische Deploy
+erfüllt wieder die Bedingungen für den kurzen Prüfpfad.
+
+Die Nachweise liegen unter
+`/var/lib/grabenplaner-assurance/maintenance-evidence/release-v09251-b49158f-20260915`
+und wurden zusätzlich lokal mit Hashvergleich gesichert.
+
+## Importstand nach Veröffentlichung
+
+Um 08:48 UTC war die aktuelle Trade-Quelle weiterhin in der Übernahme:
+134.896 von 396.466 Zeilen und 66 von 102 Tabellen waren vollständig übernommen.
+Die große Tabelle `ARTIKEL_FILIALEN` wurde erneut geprüft; um 08:47:43 UTC waren
+112.716 von 233.197 Zeilen geprüft, gegenüber 36.237 um 07:59 UTC. Die aktuelle
+Tabellenrevision wurde fortlaufend erhöht. Die Prüfung läuft, ist aber noch
+kein Abschluss dieser Tabelle oder der gesamten Quelle.
+
+Eine Folgemessung um 08:50:46 UTC bestätigte 120.057 geprüfte Zeilen bei
+Revision 11.173. Der Hintergrundauftrag meldete keinen Fehler und keine
+Wiederholungsversuche. Beide nachfolgenden Units waren weiterhin aktiv wartend.
+
+Bestell ist vollständig als verschlüsselte Quelldatei bereitgestellt und wartet
+auf Trade. Der ältere, unterbrochene Einlesestand von 204.181 Zeilen wird danach
+wiederaufgenommen. Die neue Kassendatei ist ebenfalls vollständig bereitgestellt
+und wartet auf Bestell; sie ist noch nicht als neuer Kassenstand freigegeben.
+Ein erneuter Upload ist für diese drei vorhandenen Dateistände nicht erforderlich.
