@@ -188,10 +188,12 @@ und doppelte Abschlusswahrheiten vermeiden. Eine externe LMS-Anbindung benötigt
 separat vereinbarte Quelle, Identitätszuordnung, zulässige Daten, Versions- und
 Widerrufsregeln. In diesem Auftrag ist keine solche Integration aktiviert.
 
-Vor dem nächsten ausdrücklich beauftragten Deploy sind die additive Migration
-(sechs Core-Tabellen) sowie die bekannten allgemeinen Release-Prüfbefunde in die
-bestehende geschützte Freigabekette einzuordnen; siehe Migrationsdokument. Für den
-fachlichen Kassa-Piloten bleiben benannte Trainer und erste Lernende offen.
+Der ausdrücklich beauftragte Deploy einschließlich additiver Migration der sechs
+Core-Tabellen ist am 15.09.2026 abgeschlossen. Die Korrektur des dabei gefundenen
+Restore-Problems und der erfolgreiche vollständige Sicherungsnachweis sind unter
+[v0.92.53](DEPLOY-RELEASE-v09253.md) dokumentiert. Bekannte allgemeine Audit-Altbefunde
+bleiben getrennt ausgewiesen. Für den fachlichen Kassa-Piloten bleiben benannte
+Trainer und erste Lernende offen.
 
 Abschließend: 40 geänderte/neue JavaScript-Dateien syntaktisch geprüft,
 `git diff --check` ohne Befund. Drei Team-Fachtests nach letzter Normalisierung
