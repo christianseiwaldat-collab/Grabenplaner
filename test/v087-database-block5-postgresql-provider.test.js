@@ -18,6 +18,13 @@ function hasPersistenceCode(code) {
   return (error) => error?.code === code;
 }
 
+test('pg client read timeout without SQLSTATE stays retryable for import recovery, unknown errors stay closed',()=>{
+  assert.equal(mapPostgresqlError(new Error('Query read timeout')).code,PERSISTENCE_ERROR_CODES.TIMEOUT);
+  assert.equal(mapPostgresqlError(new Error('some query timeout in application code')).code,PERSISTENCE_ERROR_CODES.UNKNOWN);
+  const sourceError=Object.assign(new Error('Query read timeout'),{code:'23514'});
+  assert.equal(mapPostgresqlError(sourceError).code,PERSISTENCE_ERROR_CODES.CHECK_VIOLATION);
+});
+
 function deferred() {
   let resolve;
   let reject;
