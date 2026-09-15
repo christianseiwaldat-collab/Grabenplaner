@@ -3,6 +3,7 @@
 ## v0.92.53 Beta – 15.09.2026
 
 - PostgreSQL-Wiederherstellung: Die 18 Triggerfunktionen der additiven Lernmigration behalten ihre impliziten Standardrechte. Die Wiederherstellung bindet diese Ausnahme an den unveränderten, geprüften Migrationsplan; Schema-Fingerprint, Tabellen und Zähler müssen weiterhin exakt mit der Sicherung übereinstimmen.
+- Ein offener Restore-Fehler wird im kontrollierten Deploy vor dessen Abschluss mit der neuen Anwendung vollständig nachgeprüft. Der Fehlerstatus wird erst durch einen erfolgreichen Restore aufgelöst; gewöhnliche Monitorprüfungen bleiben kurz.
 - Behebt den beim Abschluss von v0.92.52 erkannten `PG_PAIR_RESTORE_CHECKPOINT_MISMATCH`. Keine Änderung produktiver Daten, Berechtigungen oder Migrationshistorien.
 - Sieben gezielte Regressionstests; isolierte Wiederherstellung des betroffenen Sicherungspaars vor dem Folgeupdate sowie vollständige Live-Assurance anschließend.
 

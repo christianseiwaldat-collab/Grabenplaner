@@ -31,4 +31,24 @@ Hintergrund zu den beiden Darstellungen:
 - Nach Installation: vollständige Assurance über das verschlüsselte Archiv,
   Live-/Ready-Prüfungen, Dienste, Importfortsetzung und Speicherbereinigung.
 
-Status: Korrektur lokal geprüft; native Vorprüfung und Live-Abschluss laufen.
+## Erster Installationsversuch und Wiederaufnahme
+
+Die native Vorprüfung des betroffenen Paars bestand vollständig. Der erste
+Installationsversuch mit Commit `dba47ef` wurde am 15.09.2026 um 16:27 UTC
+vom Updater zurückgerollt: Die Betriebsprüfung lehnte den noch offenen alten
+Restore-Fehler ab, bevor der korrigierte Code ihn regulär nachprüfen konnte.
+Der Rückweg auf v0.92.52 war um 16:28 UTC bestätigt. PostgreSQL-Daten blieben
+unverändert erhalten; die Fehlerbelege werden nicht überschrieben.
+
+Der Deploy-Modus führt deshalb bei einem isolierten offenen Restore-Fehler
+vor seiner Abschlussentscheidung den installierten vollständigen Offsite-
+Wiederherstellungstest aus. Voraussetzung sind aktuelle erfolgreiche externe
+Sicherungs-/Repositoryprüfungen, alle übrigen erfolgreichen Betriebsprüfungen,
+aktive Timer und die vom Updater gehaltene Wartungssperre. Monitor- und
+Nachtmodus erhalten dadurch keine neue automatische Aktion. Andere Fehler
+werden nicht übergangen. Ein erneuter Fehler lässt den Deploy weiterhin
+scheitern; erst der echte erfolgreiche Restore löst den offenen Status auf.
+
+Status: 30 gezielte Restore-/Deploytests bestanden, Bash-Syntax geprüft.
+Wiederaufnahme des transaktionalen Deploys folgt mit aktualisiertem Paket.
+

@@ -187,3 +187,22 @@ test("deploy accepts a pending first full proof only with fresh successful exter
     assert.notEqual(probe({ ...pending, ...delta }).status, 0);
   }
 });
+
+test("only an isolated current restore failure selects a real pre-commit recovery recheck", t => {
+  const directory=temporary(t);
+  const source=fs.readFileSync(path.join(root,"server-tools/linux/test-grabenplaner-server.sh"),"utf8").replace(/\r\n/g,"\n");
+  const begin=source.indexOf('const [restoreReaderPath, restoreStatusPath]');assert.ok(begin>0);
+  const code=source.slice(begin,source.indexOf('\nNODE',begin));
+  const reader=path.join(directory,'reader.cjs'),status=path.join(directory,'status.json');
+  fs.writeFileSync(reader,'exports.readOffsiteBackupStatus=({statusPath,requireRootOwner})=>{if(requireRootOwner!==true)throw Error();return JSON.parse(require("node:fs").readFileSync(statusPath));};');
+  const failure={statusAvailable:true,blocksMainReadiness:false,state:'error',agesHours:{backup:0.1,repositoryCheck:1},unresolvedFailures:{backup:false,fullCheck:false,restoreTest:true}};
+  function probe(value){fs.writeFileSync(status,JSON.stringify(value));const r=spawnSync(process.execPath,['-',reader,status],{input:code,encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);return r.stdout;}
+  assert.equal(probe(failure),'restore-required');
+  for(const delta of [{statusAvailable:false},{blocksMainReadiness:true},{state:'ok'},{state:'warning'},{unresolvedFailures:{backup:true,fullCheck:false,restoreTest:true}},{unresolvedFailures:{backup:false,fullCheck:true,restoreTest:true}},{unresolvedFailures:{backup:false,fullCheck:false,restoreTest:false}}])assert.equal(probe({...failure,...delta}),'none');
+  for(const field of ['backup','repositoryCheck'])for(const age of [null,-1,36.01])assert.equal(probe({...failure,agesHours:{...failure.agesHours,[field]:age}}),'none');
+  const shell=source.slice(source.indexOf('# A recovery fix'),source.indexOf('  offsite_status_current=0'));
+  assert.match(shell,/deploy_checks == 1 && failures == 0 && offsite_timer_ok == 1/);
+  assert.match(shell,/maintenance\.lock/);assert.match(shell,/flock --nonblock 9/);
+  assert.match(shell,/if "\$offsite_restore_command"; then/);
+  assert.doesNotMatch(shell,/offsite_status restore-test|reset-failed|restoreTest\s*=\s*false/);
+});
