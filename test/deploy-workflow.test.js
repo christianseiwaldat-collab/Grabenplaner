@@ -203,6 +203,15 @@ test("only an isolated current restore failure selects a real pre-commit recover
   const shell=source.slice(source.indexOf('# A recovery fix'),source.indexOf('  offsite_status_current=0'));
   assert.match(shell,/deploy_checks == 1 && failures == 0 && offsite_timer_ok == 1/);
   assert.match(shell,/maintenance\.lock/);assert.match(shell,/flock --nonblock 9/);
-  assert.match(shell,/if "\$offsite_restore_command"; then/);
+  assert.match(shell,/if systemctl start "\$offsite_restore_unit"/);
+  assert.match(shell,/offsite_restore_unit="grabenplaner-offsite-restore-test.service"/);
+  assert.match(shell,/InvocationID --value/);
+  assert.match(shell,/path=\$offsite_restore_command ;/);
+  const restoreCommand=/offsite_restore_command="([^"]+)"/.exec(shell)[1];
+  const unit=fs.readFileSync(path.join(root,'server-tools/linux/offsite/systemd/grabenplaner-offsite-restore-test.service.in'),'utf8');
+  assert.match(unit,/ExecStart=.*\/grabenplaner-offsite-restore-test\.sh/);
+  assert.equal(restoreCommand,'/opt/grabenplaner-offsite/module/grabenplaner-offsite-restore-test.sh');
+  for(const name of ['repository','repository-id','installation-id','restic-password','rclone-config-password']) assert.ok(unit.includes(`LoadCredential=${name}:/etc/grabenplaner/offsite/${name}`));
+  assert.doesNotMatch(shell,/if "\$offsite_restore_command"/,'direct execution omits the service credentials');
   assert.doesNotMatch(shell,/offsite_status restore-test|reset-failed|restoreTest\s*=\s*false/);
 });

@@ -49,6 +49,13 @@ Nachtmodus erhalten dadurch keine neue automatische Aktion. Andere Fehler
 werden nicht übergangen. Ein erneuter Fehler lässt den Deploy weiterhin
 scheitern; erst der echte erfolgreiche Restore löst den offenen Status auf.
 
+Der zweite Versuch mit Commit `3d50b03` wurde um 16:54 UTC ebenfalls
+vollständig auf v0.92.52 zurückgerollt. Der Prüfschritt hatte einen nicht
+installierten Befehlsalias verwendet. Die Korrektur verwendet den vorhandenen
+Systemdienst `grabenplaner-offsite-restore-test.service`: dessen tatsächlicher
+ExecStart wird geprüft, seine LoadCredential-Konfiguration liefert die
+geschützten Zugangsdaten, und seine Isolation bleibt erhalten. Eine bereits
+laufende Prüfung wird nicht als neuer erfolgreicher Test gewertet.
+
 Status: 30 gezielte Restore-/Deploytests bestanden, Bash-Syntax geprüft.
 Wiederaufnahme des transaktionalen Deploys folgt mit aktualisiertem Paket.
-
