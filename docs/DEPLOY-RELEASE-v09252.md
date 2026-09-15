@@ -42,4 +42,27 @@ neue Anwendungsversion gebunden; keine doppelte Quellenanlage oder Freigabe.
 Zwei vollständige lokale Sicherungspaare bleiben die Aufbewahrungsregel.
 Host-Neustart und Änderungen an Netzwerk-/Zugangsregeln gehören nicht dazu.
 
-Status: Release vorbereitet; Live-Nachweise werden nach Abschluss ergänzt.
+Status am 15.09.2026: Anwendung 0.92.52 und additive Lernmigration installiert.
+Die erste vollständige Abschluss-Assurance scheiterte bei der isolierten
+Wiederherstellung; deshalb wird der Gesamtablauf noch nicht als abgeschlossen
+gewertet. Die Behebung erfolgt mit dem Folgeupdate v0.92.53.
+
+## Zwischenstand des Live-Deploys
+
+- Runtime-Commit `2ac82cb517f98190baf8acc71d0eda8ee8041922`, 718 Paketdateien.
+- App-Update am 15.09.2026 um 15:19:16 UTC bestätigt; Lernmigration um
+  15:19:26 UTC abgeschlossen. Core-Fingerprint danach
+  `55a02942056314c6297e207cd0c7e0247a75fbb23304223a3c8ad02374e1fbb1`;
+  Sales-Fingerprint unverändert.
+- Vier Live-/Ready-Prüfungen HTTP 200; Lernrepository mit produktivem
+  Lesezugang geprüft; neue Routen ohne Sitzung gesperrt. Host-Boot-ID,
+  Caddy und andere Anwendungen unverändert.
+- Der wartende Kassenimport musste nach dem Versionswechsel mit identischen
+  Ressourcenlimits neu als kurzlebiger Dienst angelegt werden. Der erste
+  Wrapper-Exit 1 bleibt dokumentiert; `release-completion.json` bestätigt
+  die erfolgreiche Fortsetzung. Kein Importcheckpoint wurde zurückgesetzt.
+- Assurance-Lauf `71f85de1-a607-4c3d-afc2-8419c7f4a0a1`: Sicherung und
+  Repository-Prüfung bestanden, Restore am 15:46:33 UTC fehlgeschlagen.
+  Tabellen und Sequenzwerte der Prüfkopie stimmen exakt; ausschließlich
+  18 Funktions-ACLs weichen in der Darstellung NULL/ausdrücklicher Standard ab.
+  Diagnose und unveränderter Fehlernachweis bleiben beim Release archiviert.
