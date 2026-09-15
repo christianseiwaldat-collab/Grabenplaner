@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.92.51 Beta · Kassenstand freigeben
+
+- Die Freigabe eines geprüften Kassenstands lädt Artikelzuordnungen und Quellpositionen in begrenzten Paketen. Verschlüsselte Zuordnungen werden gemeinsam gespeichert; die Aktivierung erfolgt weiterhin atomar mit erneuter Prüfung des Vorschauplans.
+- Vorschau und Referenzsuche verwenden lesende Transaktionen. Ein Fehler beim Speichern nimmt sämtliche neuen Zuordnungen zurück; der bisher aktive Kassenstand bleibt erhalten.
+
 ## v0.92.50 Beta · PostgreSQL-Importabfragen
 
 - Die Arbeitslisten großer Datenbankimporte verwenden die vorhandenen PostgreSQL-Indizes auch bei der Wiederprüfung, Übernahme und Wiederaufnahme. Reihenfolge, kleine Transaktionen, Datenprüfung und Rücknahmebelege bleiben erhalten.

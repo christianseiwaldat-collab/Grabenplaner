@@ -23,6 +23,39 @@ function rows({ count = 1, price = '12', seller = '07', location = '018', unknow
     RepID: '00000000-0000-0000-0000-' + String(i + 1).padStart(12, '0'), EAN: '00042', VKMenge: '1', VK_Preis: price,
     MWST: '20', Verkäuferid: seller, Artikelbezeichnung: 'Synthetic article', ...flags, ...(unknown ? { Beratung: true } : {}) })) };
 }
+// Exercise the PostgreSQL repository branch through a real transactional
+// synthetic database. The adapter delegates each batch to equivalent scalar
+// statements; native PostgreSQL SQL is checked separately.
+function publicationBatchFixture(base){
+  const {createPersistenceProviderFacade}=require('../lib/persistence/contract');
+  const {POSTGRESQL_CAPABILITIES}=require('../lib/persistence/postgresql/provider');
+  const {CASH_PUBLICATION_BATCHES:B}=require('../lib/persistence/statements/cash-publication-batches');
+  const M=require('../lib/persistence/statements/import-master-data').IMPORT_MASTER_STATEMENTS;
+  const S=require('../lib/persistence/statements/cash-publications').CASH_PUBLICATION_STATEMENTS;
+  const state={options:[],queries:[],batches:0,failBatch:0};
+  async function query(tx,s,p){
+    state.queries.push(s.id);
+    if(s===B.articles){const result=[];for(const sourceArticleKey of p.keys){const target=await tx.queryOne(M.articleBySource,{sourceSystem:p.sourceSystem,sourceArticleKey});if(target)result.push({sourceArticleKey,...target});}return result;}
+    const index=B.rows.indexOf(s);
+    if(index>=0){const result=[];for(const sourceRow of p.rows){const row=await tx.queryOne(TABLES[index].statements.row,{datasetSlot:p.datasetSlot,sourceRow});if(row)result.push(row);}return result;}
+    if(s.operation==='queryOne'){const row=await tx.queryOne(s,p);return row?[row]:[];}return tx.queryAll(s,p);
+  }
+  async function execute(tx,s,p){
+    if(s!==B.bindings)return tx.execute(s,p);
+    assert.ok(p.rows.length>0&&p.rows.length<=200);state.batches++;
+    for(const row of p.rows)await tx.execute(S.insertBinding,{...row,sourceKey:Buffer.from(row.sourceKey,'hex')});
+    return {rowsAffected:p.rows.length-(state.failBatch===state.batches?1:0),returnedRows:[]};
+  }
+  const access=createPersistenceProviderFacade({providerId:'postgresql',capabilities:POSTGRESQL_CAPABILITIES,
+    query:(s,p)=>query(base,s,p),execute:(s,p)=>execute(base,s,p),close:async()=>{},
+    async beginTransaction(options){
+      state.options.push(options);let ready,finish,cancel;
+      const opened=new Promise(resolve=>{ready=resolve;}),ending=new Promise((resolve,reject)=>{finish=resolve;cancel=reject;});ending.catch(()=>{});
+      const done=base.transaction(async tx=>{ready(tx);await ending;},options);done.catch(()=>{});const tx=await opened;
+      return {query:(s,p)=>query(tx,s,p),execute:(s,p)=>execute(tx,s,p),async commit(){finish();await done;},async rollback(){cancel(new Error('Synthetic rollback'));try{await done;}catch{}}};
+    }});
+  return {access,state};
+}
 async function fixture(t, options = {}) {
   const app = openSqliteApplicationPersistence({ databasePath: options.databasePath || ':memory:', catalog: SQLITE_APPLICATION_CATALOG });
   ensureSqliteDataImportRuntimeSchema(app.database); app.database.exec('PRAGMA foreign_keys=ON');
@@ -93,6 +126,38 @@ test('durable report jobs complete both periods and encrypt PDF results, with pe
   const reduced = { ...f.session, permissions: f.session.permissions.filter(p => p !== 'sales:history:sellers:read') };
   await assert.rejects(jobs.download(reduced, job.id), code('IMPORT_FORBIDDEN'));
   await jobs.remove(f.session, job.id); assert.equal((await jobs.list(f.session)).length, 0);
+});
+
+test('batched publication preserves the scalar plan and rolls back every binding if a later batch fails',async t=>{
+  const f=await fixture(t),data=rows({count:201});
+  data.Umsatz_Kasse_Details.forEach((r,i)=>{r.EAN='article-'+i;});const id=await f.build(data);
+  f.app.database.exec('CREATE TABLE sales_articles(product_id TEXT,current_revision INTEGER,article_number TEXT); CREATE TABLE sales_article_revisions(product_id TEXT,revision INTEGER,active INTEGER); CREATE TABLE sales_article_source_links(product_id TEXT,source_system TEXT,source_article_key TEXT);');
+  const system=require('../lib/tradefoto-article-source-profile').TRADEFOTO_ARTICLE_SOURCE_SYSTEM;
+  for(let i=0;i<201;i++){
+    f.app.database.prepare('INSERT INTO sales_articles VALUES(?,1,?)').run('product-'+i,'article-'+i);
+    f.app.database.prepare('INSERT INTO sales_article_revisions VALUES(?,1,?)').run('product-'+i,i?1:0);
+    f.app.database.prepare('INSERT INTO sales_article_source_links VALUES(?,?,?)').run('product-'+i,system,'article-'+i);
+  }
+  f.session.permissions.push('sales:articles:access','sales:articles:read','sales:articles:import');
+  const request={...f.request(id),resolveArticles:true};
+  const legacy=await f.publish.operation(f.get,'preview',{request});
+  const {access,state}=publicationBatchFixture(f.app.provider);t.after(()=>access.close());
+  const runtime=createCashPublicationRuntime({access,vault:f.vault,policies:f.policies,scopeId:f.actor.scopeId,enabled:true,clock:()=>TIME});
+  const preview=await runtime.operation(f.get,'preview',{request});assert.deepEqual(preview,legacy);assert.equal(preview.bindings,204);
+  assert.ok(state.options.every(o=>o.readOnly));assert.ok(state.queries.includes('cash-publication-batches.articles'));
+  assert.ok(!state.queries.includes('import-master.article.by-source'));
+  state.failBatch=2;
+  await assert.rejects(runtime.operation(f.get,'activate',{request,planHash:preview.planHash}),code('IMPORT_HISTORY_INTEGRITY'));
+  for(const table of ['cash_publications','cash_publication_bindings','cash_publication_state'])assert.equal(f.app.database.prepare('SELECT COUNT(*) AS n FROM '+table).get().n,0);
+  state.failBatch=0;state.batches=0;
+  f.app.database.exec("UPDATE sales_article_revisions SET active=1 WHERE product_id='product-0'");
+  await assert.rejects(runtime.operation(f.get,'activate',{request,planHash:preview.planHash}),code('IMPORT_PREVIEW_CHANGED'));
+  f.app.database.exec("UPDATE sales_article_revisions SET active=0 WHERE product_id='product-0'");
+  const result=await runtime.operation(f.get,'activate',{request,planHash:preview.planHash});assert.equal(result.revision,1);assert.equal(state.batches,2);
+  assert.equal(f.app.database.prepare('SELECT COUNT(*) AS n FROM cash_publication_bindings').get().n,204);
+  assert.equal(f.app.database.prepare("SELECT historical FROM cash_publication_bindings WHERE target_id='product-0'").get().historical,1);
+  const context=await runtime.operation(f.get,'context',{sourceId:id});assert.equal(context.state.active.id,result.active);
+  f.session.permissions=[];await assert.rejects(runtime.operation(f.get,'preview',{request:{...request,expectedRevision:1}}),code('IMPORT_FORBIDDEN'));
 });
 
 test('the real background worker reads a separate file connection and produces the same PDF totals', async t => {
