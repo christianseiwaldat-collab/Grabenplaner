@@ -44,8 +44,8 @@ Host-Neustart und Änderungen an Netzwerk-/Zugangsregeln gehören nicht dazu.
 
 Status am 15.09.2026: Anwendung 0.92.52 und additive Lernmigration installiert.
 Die erste vollständige Abschluss-Assurance scheiterte bei der isolierten
-Wiederherstellung; deshalb wird der Gesamtablauf noch nicht als abgeschlossen
-gewertet. Die Behebung erfolgt mit dem Folgeupdate v0.92.53.
+Wiederherstellung. Die Behebung und der erfolgreiche Gesamtnachweis erfolgten mit
+dem Folgeupdate v0.92.53; siehe [Abschlussnachweis](DEPLOY-RELEASE-v09253.md).
 
 ## Zwischenstand des Live-Deploys
 

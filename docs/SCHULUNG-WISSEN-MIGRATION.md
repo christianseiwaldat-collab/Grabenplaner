@@ -1,7 +1,8 @@
 # Schulung und Wissen: additive PostgreSQL-Erweiterung
 
-Stand: 15.09.2026. Vorbereitung für einen später ausdrücklich beauftragten Deploy.
-Diese Datei erteilt keine Freigabe zur Ausführung auf dem VPS.
+Stand: 15.09.2026. Im ausdrücklich beauftragten VPS-Deploy ausgeführt;
+vollständiger Abschlussnachweis unter [v0.92.53](DEPLOY-RELEASE-v09253.md).
+Diese Datei erteilt keine eigenständige Freigabe für eine erneute Ausführung.
 
 ## Umfang
 
@@ -21,11 +22,11 @@ Umgebungsprüfung, Advisory-Lock, Vorher-/Nachher-Fingerabdruck und Planbeleg.
 Wiederholte Ausführung prüft den vorhandenen Vertrag und ändert nichts mehr.
 App und Leser dürfen die Historie nicht ändern oder löschen.
 
-## Einbindung in den nächsten Release
+## Einbindung in den Release
 
 Die etablierte geschützte Release-Kette bleibt erforderlich: Paket/Manifest,
 frischer verifizierter Rückkehrpunkt beider Datenbanken und Wartungssperre.
-Der neue, noch nicht veröffentlichte Helfer
+Der mit v0.92.52 veröffentlichte Helfer
 `server-tools/linux/lib/personnel-learning-runs-migrate.js` folgt dem bereits
 vorhandenen `trade-annotations-migrate.js`-Ablauf. Der gebundene Release-Wrapper
 muss ihn nach dem bestätigten atomaren App-Tausch und vor der abschließenden
