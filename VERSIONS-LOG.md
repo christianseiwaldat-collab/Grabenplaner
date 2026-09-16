@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.56 Beta – 16.09.2026
+
+- Datenbankimporte zeigen den ursprünglichen Dateinamen und das jüngste fachliche Datum aus der Quelle in einer kompakten Tabelle. Uploadfelder stehen untereinander; technische Details sind eingeklappt.
+- Der normale Trade-Import aktualisiert zusätzlich den Artikelkatalog mit wiederaufnehmbaren Paketen. Manuelle Änderungen bleiben geschützt. Der zusätzliche Artikelimport-Button und die manuelle Stammdaten-Zuordnung entfallen im Importbereich.
+- Hochgeladene Access-Kopien werden nach dem Einlesen entfernt und lassen sich bei pausierter Verarbeitung gezielt löschen. Bereits gespeicherte GP-Daten, Importstände und Protokolle bleiben erhalten.
+- Einkauf & Bestand ist in Hauptmenü, Verkaufsübersicht und Funktionssuche integriert. Alte Links öffnen die GP-Ansicht; Tab-Wechsel verwenden die gemeinsame Browsernavigation und Darstellung.
+- Gezielte Funktions-, Wiederaufnahme-, Rechte-, Paket- und Oberflächenprüfungen. Die vollständige Importdauer auf dem VPS ist weiterhin nicht nachgewiesen; der ausdrücklich abgebrochene Laufzeittest wurde nicht wiederholt.
+
 ## v0.92.55 Beta – 16.09.2026
 
 - Datenbankimporte zeigen hochgeladene Dateien in einer kompakten Tabelle mit Originaldateiname, Status und letztem Bearbeitungsstand im GP. Neue Dateinamen werden verschlüsselt gespeichert; bestehende Importidentitäten und Fortschritte bleiben erhalten.

@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/learning-library.css" />
     <link rel="stylesheet" href="/sales-history.css" />
     <link rel="stylesheet" href="/receipt-search.css" />
+    <link rel="stylesheet" href="/trade-insights.css" />
     <link rel="stylesheet" href="/data-import.css" />
     <link rel="stylesheet" href="/mobile-refinements.css" />
   </head>
@@ -38,7 +39,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.55 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.56 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -189,7 +190,7 @@
               <button class="nav-item nav-module-route hidden" data-view="articleCatalog" id="salesArticleCatalogNavButton">
                 <span class="nav-symbol article-catalog-nav-symbol" aria-hidden="true">Art</span><span>Artikelstamm</span>
               </button>
-              <a class="nav-item nav-module-route hidden" href="/trade-insights.html" id="tradeInsightsNavLink"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf &amp; Bestand</span></a>
+              <button class="nav-item nav-module-route hidden" type="button" data-view="tradeInsights" id="tradeInsightsNavButton"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf &amp; Bestand</span></button>
               <button class="nav-item nav-module-route hidden" data-view="crm" id="crmNavButton">
                 <span class="nav-symbol crm-nav-symbol" aria-hidden="true">CRM</span><span>CRM</span>
               </button>
@@ -1536,6 +1537,7 @@
                 <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
               </button>
               <button class="personnel-dashboard-card hidden" id="receiptSearchDashboardCard" type="button" data-sales-dashboard-view="receiptSearch"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▤</span><span class="personnel-dashboard-card-copy"><small>Belege &amp; Kassenbuchungen</small><strong>Kassenberichte &amp; Belegsuche</strong><span>Belege suchen, Spalten anpassen und Beleginformationen als PDF speichern.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
+              <button class="personnel-dashboard-card hidden" id="tradeInsightsDashboardCard" type="button" data-sales-dashboard-view="tradeInsights"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▦</span><span class="personnel-dashboard-card-copy"><small>Einkauf &amp; Warenbewegungen</small><strong>Einkauf &amp; Bestand</strong><span>Lieferstände, Filialversorgung, Bestände und Gerätehistorien auswerten.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="crmDashboardCard" type="button" data-sales-dashboard-view="crm">
                 <span class="personnel-dashboard-card-symbol" aria-hidden="true">CRM</span>
                 <span class="personnel-dashboard-card-copy"><small>Kunden &amp; Kontakte</small><strong>CRM</strong><span>Kunden gezielt suchen und die freigegebene Kundenkartei öffnen.</span></span>
@@ -1543,6 +1545,11 @@
               </button>
             </div>
           </section>
+        </section>
+
+        <section id="tradeInsightsView" class="view" aria-labelledby="tradeInsightsTitle">
+          <header class="topbar"><div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="tradeInsightsTitle">Einkauf &amp; Bestand</h1><p class="subtitle">Einkauf, Bestände und Gerätehistorien aus den übernommenen Quelldaten.</p></div></header>
+          <section class="card trade-insights-workspace" id="tradeInsightsWorkspace" aria-label="Einkauf und Bestand auswerten" tabindex="-1"></section>
         </section>
 
         <section id="receiptSearchView" class="view" aria-labelledby="receiptSearchTitle">
@@ -2742,9 +2749,7 @@
               <summary><span class="card-icon">Import</span><span class="settings-accordion-copy"><strong>Datenbankimporte</strong><small>Kasse, TradeFoto-Stammdaten und Bestelldaten sicher aktualisieren.</small></span><span class="settings-accordion-chevron" aria-hidden="true">›</span></summary>
               <div class="settings-accordion-body">
                 <p class="settings-note">Die Access-Dateien werden zuerst geprüft. Übernahmen werden protokolliert; eigene Artikelbilder und manuelle GP-Daten bleiben erhalten.</p>
-                <div class="database-import-article-action"><button class="secondary-button hidden" id="salesArticleImportButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleImportDialog">TradeFoto-Artikelstamm aktualisieren</button><p class="settings-note">Artikel, Artikelnummern und Preise aus Trade_Daten.accdb vor der Übernahme vergleichen.</p></div>
-                <details id="dataImportPanel" class="data-import-panel hidden"><summary><strong>Quelldaten importieren</strong></summary><div data-import-body></div></details>
-                <details id="importMappingPanel" class="data-import-panel hidden"><summary><strong>Stammdaten-Zuordnungen</strong></summary><div data-mapping-body></div></details>
+                <details id="dataImportPanel" class="data-import-panel hidden" open><summary><strong>Quelldaten importieren</strong></summary><div data-import-body></div></details>
               </div>
             </details>
             <div class="settings-card full-settings-card server-diagnostics-card hidden" id="serverDiagnosticsCard">
@@ -4286,6 +4291,7 @@
     <script src="/sales-history.js"></script>
     <script src="/receipt-line-format.js"></script>
     <script src="/receipt-search.js"></script>
+    <script src="/trade-insights.js"></script>
     <script src="/data-import.js"></script>
     <script src="/cash-publication.js"></script>
     <script src="/import-mappings.js"></script>

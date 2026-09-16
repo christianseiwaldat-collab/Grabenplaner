@@ -304,6 +304,7 @@ const state = {
     personnel: "light",
     salesAdministration: "light",
     salesAnalytics: "light",
+    tradeInsights: "light",
     loans: "light",
     branchOrders: "light",
     rightsDashboard: "light",
@@ -760,7 +761,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 
 const elements = Object.fromEntries(
   [
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchIdentifier", "salesArticleSearchStatusFilter", "salesArticleSearchSourceSystem", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
@@ -1834,6 +1835,12 @@ function canAccessSalesAnalytics() {
     || state.portalSession?.user?.salesAnalytics?.workspace === true;
 }
 
+function canAccessTradeInsights() {
+  const user = state.portalSession?.user;
+  return Boolean(user?.salesHistory?.read && (user.salesHistory.customerPurchases
+    || user.salesAnalytics?.inventory));
+}
+
 function canAccessCrm() {
   return !state.portalStatus?.portalEnabled
     || (state.portalSession?.user?.crm?.workspace === true
@@ -1881,7 +1888,7 @@ function canImportSalesArticles() {
 }
 
 function canOpenSalesAdministrationModule() {
-  return canAccessSalesAnalytics() || canAccessCrm() || canAccessSalesArticleCatalog();
+  return canAccessSalesAnalytics() || canAccessCrm() || canAccessSalesArticleCatalog() || canAccessTradeInsights();
 }
 
 function canReadVacationAccounts() {
@@ -2619,7 +2626,7 @@ function applyRoleVisibility() {
   const salesArticleCatalogReadAccess = canReadSalesArticles();
   const salesArticleCatalogWriteAccess = canWriteSalesArticles();
   const salesArticleCatalogImportAccess = canImportSalesArticles();
-  const salesModuleAccess = salesAnalyticsAccess || crmAccess || salesArticleCatalogAccess;
+  const salesModuleAccess = salesAnalyticsAccess || crmAccess || salesArticleCatalogAccess || canAccessTradeInsights();
   syncSalesHistoryAccess();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || positionWriteAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelLearningAccess || personnelTasksAccess;
@@ -4742,12 +4749,13 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "articleCatalog", "crm"].includes(state.currentView);
+  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm"].includes(state.currentView);
   elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
   setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
   setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
   setNavigationCurrent(elements.receiptSearchNavButton, state.currentView === "receiptSearch");
+  setNavigationCurrent(elements.tradeInsightsNavButton, state.currentView === "tradeInsights");
   setNavigationCurrent(elements.salesArticleCatalogNavButton, state.currentView === "articleCatalog");
   setNavigationCurrent(elements.crmNavButton, state.currentView === "crm");
 }
@@ -23288,6 +23296,7 @@ const UI_APPEARANCE_VIEWS = Object.freeze([
   "personnel",
   "salesAdministration",
   "salesAnalytics",
+  "tradeInsights",
   "loans",
   "branchOrders",
   "rightsDashboard",
@@ -23425,6 +23434,7 @@ function pageViewElement(view) {
     salesAdministration: elements.salesAdministrationView,
     salesAnalytics: elements.salesAnalyticsView,
     receiptSearch: elements.receiptSearchView,
+    tradeInsights: elements.tradeInsightsView,
     articleCatalog: elements.salesArticleCatalogView,
     crm: elements.crmView,
     loans: elements.loansView,
@@ -31982,13 +31992,32 @@ let dataImportWorkspace = null;
 let importMappingWorkspace = null;
 let crmPurchaseWorkspace = null;
 let receiptSearchWorkspace = null;
+let tradeInsightsWorkspace = null;
+let tradeInsightsTab = "purchasing";
 let salesHistoryActorKey = "";
 function syncSalesHistoryAccess() {
   const user = state.portalSession?.user;
   const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
-  document.getElementById('tradeInsightsNavLink')?.classList.toggle('hidden', !user?.salesHistory?.read || !user?.permissions?.some(p => ['sales:analytics:inventory:read','crm:purchases:read'].includes(p)));
+  tradeInsightsWorkspace?.destroy(); tradeInsightsWorkspace = null;
+  const tradeInsightsAccess = canAccessTradeInsights();
+  elements.tradeInsightsNavButton?.classList.toggle("hidden", !tradeInsightsAccess);
+  elements.tradeInsightsDashboardCard?.classList.toggle("hidden", !tradeInsightsAccess);
+  if (tradeInsightsAccess) tradeInsightsWorkspace = window.GrabenplanerTradeInsights?.mount(document.getElementById("tradeInsightsWorkspace"), {
+    api,
+    onTabChange(tab, { replace = false } = {}) {
+      tradeInsightsTab = tab;
+      if (state.currentView === "tradeInsights") {
+        if (replace) globalThis.grabenplanerNavigation?.replace();
+        else globalThis.grabenplanerNavigation?.record();
+      }
+    },
+  });
+  if (state.currentView === "tradeInsights") {
+    if (tradeInsightsAccess) void tradeInsightsWorkspace?.activate(tradeInsightsTab);
+    else setView("startDashboard");
+  }
   salesReportJobUi?.reset();
   void salesReportJobUi?.refresh();
   receiptSearchWorkspace?.destroy(); receiptSearchWorkspace = null;
@@ -34395,6 +34424,7 @@ function setView(view) {
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
+    || (view === "tradeInsights" && !canAccessTradeInsights())
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
     || (view === "crm" && !canAccessCrm())
@@ -34445,6 +34475,8 @@ function setView(view) {
   elements.salesAnalyticsView?.classList.toggle("active", view === "salesAnalytics");
   elements.receiptSearchView?.classList.toggle("active", view === "receiptSearch");
   if (view === "receiptSearch") void receiptSearchWorkspace?.load(); else receiptSearchWorkspace?.suspend();
+  elements.tradeInsightsView?.classList.toggle("active", view === "tradeInsights");
+  if (view === "tradeInsights") void tradeInsightsWorkspace?.activate(tradeInsightsTab); else tradeInsightsWorkspace?.suspend();
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
   elements.crmView?.classList.toggle("active", view === "crm");
   elements.personnelView.classList.toggle("active", view === "personnel");
@@ -34485,7 +34517,7 @@ function setView(view) {
 function applyRequestedView({ fromHistory = false } = {}) {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }
@@ -34494,6 +34526,7 @@ function applyRequestedView({ fromHistory = false } = {}) {
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   }
+  if (requestedView === "tradeInsights") tradeInsightsTab = window.GrabenplanerTradeInsights.normalizeTab(parameters.get("section"));
   if (requestedView === "salesAnalytics") {
     const requestedSection = parameters.get("section");
     if (["create", "reports", "graphics", "pdf"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
@@ -34545,6 +34578,7 @@ function currentAdministrationRoute() {
   if (view === "personnelAdministration") route.section = state.personnelAdministrationTab;
   if (view === "personnel") route.section = state.personnelTab;
   if (view === "salesAnalytics") route.section = state.salesAnalytics.tab;
+  if (view === "tradeInsights") route.section = tradeInsightsTab;
   if (view === "requests") route.kind = state.requestKindTab;
   if (view === "rightsDashboard") {
     route.dashboard = state.rightsDashboardMode;

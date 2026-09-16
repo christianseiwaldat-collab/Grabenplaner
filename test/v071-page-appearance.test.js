@@ -251,6 +251,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   const defaults = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(defaults.response.status, 200, JSON.stringify(defaults.payload));
   assert.equal(defaults.payload.pageThemes.startDashboard, "light");
+  assert.equal(defaults.payload.pageThemes.tradeInsights, "light");
   assert.equal(defaults.payload.pageThemes.filialAdministration, "light");
   assert.equal(defaults.payload.pageThemes.planning, "light");
   assert.equal(defaults.payload.pageThemes.personnelAdministration, "light");
@@ -314,6 +315,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
         personnel: "dark",
         salesAdministration: "dark",
         salesAnalytics: "dark",
+        tradeInsights: "dark",
         loans: "dark",
         branchOrders: "dark",
         rightsDashboard: "dark",
@@ -330,6 +332,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   assert.equal(changed.payload.pageThemes.filialAdministration, "dark");
   assert.equal(changed.payload.pageThemes.startDashboard, "dark");
+  assert.equal(changed.payload.pageThemes.tradeInsights, "dark");
   assert.equal(changed.payload.pageThemes.planning, "dark");
   assert.equal(changed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(changed.payload.pageThemes.rightsDashboard, "dark");
@@ -343,6 +346,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   const refreshed = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(refreshed.payload.pageThemes.filialAdministration, "dark");
   assert.equal(refreshed.payload.pageThemes.startDashboard, "dark");
+  assert.equal(refreshed.payload.pageThemes.tradeInsights, "dark");
   assert.equal(refreshed.payload.pageThemes.planning, "dark");
   assert.equal(refreshed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(refreshed.payload.appFontScalePercent, 115);

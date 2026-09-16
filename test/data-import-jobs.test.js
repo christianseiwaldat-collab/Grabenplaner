@@ -36,6 +36,78 @@ test('accepted file is encrypted and completes reading plus review with no brows
  assert.equal(f.sources.get(source.id).status,'ready');
 });
 
+test('deleting a paused Access copy removes bytes and password, but never writes GP import state',async t=>{
+ const f=await fixture(t),source=await f.enqueue();
+ await assert.rejects(f.queue.deleteUpload(f.getSession,source.id,{expectedRevision:1}),{code:'IMPORT_SOURCE_BUSY'});
+ await f.queue.action(f.getSession,source.id,'pause');
+ const before=JSON.stringify([...f.sources]),job=await f.store.read(source.id);
+ await assert.rejects(f.queue.deleteUpload(f.getSession,source.id,{expectedRevision:2}),{code:'IMPORT_REVISION_CONFLICT'});
+ f.state.principal={...session(),permissions:session().permissions.filter(p=>p!==P.PREPARE)};
+ await assert.rejects(f.queue.deleteUpload(f.getSession,source.id,{expectedRevision:1}),{code:'IMPORT_FORBIDDEN'});
+ f.state.principal=session();
+ const result=await f.queue.deleteUpload(f.getSession,source.id,{expectedRevision:1});
+ assert.equal(result.uploadFileAvailable,false);assert.equal(JSON.stringify([...f.sources]),before);assert.equal(f.state.calls,0);assert.equal(f.state.reviews,0);
+ assert.equal(fs.existsSync(path.join(f.directory,job.blob.name)),false);
+ const saved=await f.store.read(source.id);assert.equal(saved.blob,null);assert.equal(saved.password,'');assert.equal(saved.error,'IMPORT_JOB_FILE_DELETED');
+ await assert.rejects(f.queue.action(f.getSession,source.id,'retry'),{code:'IMPORT_JOB_FILE_DELETED'});
+ await f.queue.stop();f.make();await f.queue.tick();assert.equal(JSON.stringify([...f.sources]),before);
+ await f.queue.deleteUpload(f.getSession,source.id,{expectedRevision:1});
+ await f.enqueue();await f.queue.tick();assert.equal(f.sources.get(source.id).status,'ready');
+});
+
+test('content-date backfill survives a restart and never authorizes apply or reuploads a file',async t=>{
+ const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+ let dates=0;const original=f.runtime.sourceOperation;
+ f.runtime.sourceOperation=async(get,id,action,input)=>{
+  if(action==='content-date'){await get();dates++;const s=f.sources.get(id);s.contentDate={status:'complete',value:'2026-09-03T23:59:00.000'};return {...s};}
+  return original(get,id,action,input);
+ };
+ await f.queue.enqueueContentDate(f.getSession,source.id);assert.equal((await f.queue.overlay(source)).background.status,'dating');
+ assert.equal((await f.store.read(source.id)).blob,null);
+ await f.queue.stop();f.make();await f.queue.tick();
+ assert.equal(dates,1);assert.equal(f.state.calls,1);assert.equal(f.state.reviews,1);assert.equal(f.sources.get(source.id).applied,undefined);
+ assert.equal((await f.queue.overlay(f.sources.get(source.id))).background,undefined);
+ await f.queue.enqueueContentDate(f.getSession,source.id);assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+
+test('failed Access-file cleanup keeps its reference and retries deletion without rereading completed GP data',async t=>{
+ const f=await fixture(t),source=await f.enqueue(),remove=f.store.remove;
+ let fail=true;f.store.remove=async name=>{if(name.endsWith('.source')&&fail){fail=false;throw Object.assign(new Error('synthetic unlink failure'),{code:'EACCES'});}return remove(name);};
+ await f.queue.tick();
+ const failed=await f.store.read(source.id);assert.equal(failed.phase,'reviewing');assert.equal(failed.password,'');assert.ok(failed.blob);
+ assert.equal((await f.queue.overlay(f.sources.get(source.id))).uploadFileAvailable,true);assert.equal(f.state.calls,1);
+ await f.queue.stop();f.make();await f.queue.action(f.getSession,source.id,'retry');await f.queue.tick();
+ assert.equal(f.state.calls,1);assert.equal(f.sources.get(source.id).status,'ready');assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+
+test('optional date backfill yields its saved page when a requested takeover arrives',async t=>{
+ const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+ const second={id:'c'.repeat(64),kind:'trade',status:'ready',complete:true,activationEnabled:true,revision:1,received:1};f.sources.set(second.id,second);
+ let dates=0;const original=f.runtime.sourceOperation;
+ f.runtime.sourceOperation=async(get,id,action,input)=>{
+  if(action==='content-date'){
+   await get();dates++;const s=f.sources.get(id);s.contentDate={status:dates===2?'complete':'pending',value:'2026-09-03T23:59:00.000'};
+   if(dates===1)await f.queue.enqueueApply(f.getSession,second.id,{expectedRevision:1});
+   return {...s};
+  }
+  return original(get,id,action,input);
+ };
+ await f.queue.enqueueContentDate(f.getSession,source.id);await f.queue.tick();
+ assert.equal(dates,1);assert.equal(f.sources.get(second.id).applied,undefined);
+ assert.equal((await f.store.read(source.id)).status,'queued');
+ await f.queue.tick();assert.equal(f.sources.get(second.id).status,'applied');assert.equal(dates,1);
+ await f.queue.tick();assert.equal(dates,2);assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+
+test('deleting a remaining Access copy after reading preserves the GP checkpoint and allows review without reupload',async t=>{
+ const f=await fixture(t),source=await f.enqueue(),remove=f.store.remove;
+ f.store.remove=async name=>{if(name.endsWith('.source'))throw new Error('synthetic cleanup failure');return remove(name);};
+ await f.queue.tick();const before=JSON.stringify([...f.sources]);f.store.remove=remove;
+ const cleared=await f.queue.deleteUpload(f.getSession,source.id,{expectedRevision:1});
+ assert.equal(JSON.stringify([...f.sources]),before);assert.equal(cleared.uploadFileAvailable,false);assert.equal(cleared.background.status,'paused');
+ await f.queue.action(f.getSession,source.id,'retry');await f.queue.tick();assert.equal(f.state.calls,1);assert.equal(f.sources.get(source.id).status,'ready');
+});
+
 test('upload and takeover survive reconstruction when the clock advances between every call',async t=>{
  const f=await fixture(t,{advancingClock:true}),source=await f.enqueue();
  assert.equal((await f.store.read(source.id)).expires-(await f.store.read(source.id)).created,RETENTION_MS);

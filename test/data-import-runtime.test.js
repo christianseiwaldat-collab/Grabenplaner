@@ -66,6 +66,142 @@ test('original upload names remain encrypted and survive reservation, background
   }
 });
 
+test('all three imports persist business dates during reading and can backfill legacy sources without changing GP rows',async t=>{
+ const B=require('../lib/tradefoto-bestell/profiles');
+ const inputs={
+  trade:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'0000000000017','Änderungsdatum':new Date('2026-09-03T23:58:00Z'),ZukunftsUVPab:new Date('2027-01-01T00:00:00Z')})]},
+  cash:{KassenJournal:[rawHistory('KassenJournal',{Vorgang:'1',Datum:new Date('2026-09-03T23:58:00Z')})]},
+  bestell:{Auftrag:[{...Object.fromEntries(B.tableFor('Auftrag').columns.map(c=>[c.name,null])),Anlegedatum:new Date('2026-09-03T23:58:00Z'),Liefertermin:new Date('2027-01-01T00:00:00Z')}]}
+ };
+ for(const kind of ['trade','cash','bestell']) {
+  const f=await fixture(t,{kind,values:inputs[kind]});f.options.sharedPayloads=true;f.options.compactCash=true;f.reload();
+  let source=await f.upload();assert.equal(source.contentDate.status,'complete');assert.equal(source.contentDate.value,'2026-09-03T23:58:00.000');
+  assert.ok(source.contentDate.evidence.table);assert.equal(source.contentDate.positions,undefined);
+  const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+  const row=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id),context=['source',row.scope_id,row.owner_id,row.id,row.revision];
+  const data=protection.open(row.payload,context);delete data.contentDate;
+  f.database.prepare('UPDATE data_import_sources SET payload=? WHERE id=?').run(protection.seal(data,context),source.id);protection.destroy();
+  const tables=f.database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'data_import_%' OR name LIKE 'import_%' OR name LIKE 'cash_%') AND name<>'data_import_sources' ORDER BY name").all();
+  const state=()=>JSON.stringify(tables.map(({name})=>[name,f.database.prepare('SELECT * FROM "'+name+'"').all()]));
+  const before=state();f.reload();let calls=0;
+  do {source=await f.runtime.sourceOperation(f.getSession,source.id,'content-date');assert.ok(++calls<80);}while(source.contentDate.status!=='complete');
+  assert.equal(source.contentDate.value,'2026-09-03T23:58:00.000');assert.equal(state(),before);
+  assert.equal(source.status,'reviewing');
+  f.state.session.permissions=f.state.session.permissions.filter(p=>p!==P.PREPARE);
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'content-date'),code('IMPORT_FORBIDDEN'));
+ }
+});
+
+test('content dates exclude scheduled dates, time-only values, invalid dates and far-future outliers',()=>{
+ const dates=require('../lib/data-import-content-date'),profile=M.profileFor('ARTIKEL_STAMM'),result=dates.empty();
+ dates.accumulate(result,profile,[{'Änderungsdatum':'2026-02-30T10:00:00.000'}, {'Änderungsdatum':'1899-12-30T12:00:00.000'},
+  {'Änderungsdatum':'2099-01-01T00:00:00.000'}, {'ZukunftsUVPab':'2026-09-05T23:59:00.000'},
+  {'Änderungsdatum':'2026-09-03T23:58:00'}],TIME);
+ assert.equal(result.value,'2026-09-03T23:58:00.000');
+ assert.deepEqual(result.evidence,{table:'ARTIKEL_STAMM',field:'Änderungsdatum'});
+ assert.equal(dates.civil('2026-09-03T23:58:00.000Z'),null);
+});
+
+test('legacy date backfill stops on missing stored rows instead of keeping a background job busy indefinitely',async t=>{
+ const f=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'0000000000017','Änderungsdatum':new Date('2026-09-03T13:00:00Z')})]}});
+ let source=await f.upload();
+ const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+ const row=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id),context=['source',row.scope_id,row.owner_id,row.id,row.revision];
+ const data=protection.open(row.payload,context);delete data.contentDate;
+ f.database.prepare('UPDATE data_import_sources SET payload=? WHERE id=?').run(protection.seal(data,context),source.id);protection.destroy();
+ f.database.prepare('DELETE FROM data_import_rows WHERE run_id=?').run(source.tables.find(t=>t.name==='ARTIKEL_STAMM').run.id);
+ f.reload();
+ await assert.rejects(async()=>{for(let n=0;n<80;n++)source=await f.runtime.sourceOperation(f.getSession,source.id,'content-date');},code('IMPORT_SOURCE_INTEGRITY'));
+ assert.notEqual((await f.runtime.sourceOperation(f.getSession,source.id,'read')).contentDate.status,'complete');
+});
+
+test('a lost date checkpoint resumes the file and backfills earlier committed rows instead of reporting an incomplete maximum',async t=>{
+ const rows=Array.from({length:201},(_,i)=>rawMaster('ARTIKEL_STAMM',{EAN:String(i+1).padStart(13,'0'),'Änderungsdatum':new Date(i===0?'2026-09-03T23:58:00Z':'2020-01-01T00:00:00Z')}));
+ const f=await fixture(t,{values:{ARTIKEL_STAMM:rows}});
+ f.state.beforeMessage=message=>{if(message.type==='rows'&&message.startRow===201)throw new C.DataImportError('IMPORT_SOURCE_INTERRUPTED',409);};
+ await assert.rejects(f.upload(),code('IMPORT_SOURCE_INTERRUPTED'));
+ const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+ const row=f.database.prepare('SELECT * FROM data_import_sources').get(),context=['source',row.scope_id,row.owner_id,row.id,row.revision];
+ const data=protection.open(row.payload,context);data.contentDate=require('../lib/data-import-content-date').empty();
+ f.database.prepare('UPDATE data_import_sources SET payload=? WHERE id=?').run(protection.seal(data,context),row.id);protection.destroy();
+ f.state.beforeMessage=null;f.reload();let source=await f.upload();assert.equal(source.contentDate.status,'pending');
+ let n=0;do{source=await f.runtime.sourceOperation(f.getSession,source.id,'content-date');assert.ok(++n<80);}while(source.contentDate.status!=='complete');
+ assert.equal(source.contentDate.value,'2026-09-03T23:58:00.000');
+ assert.equal(source.tables.find(t=>t.name==='ARTIKEL_STAMM').run.receivedRows,201);
+});
+
+test('unified Trade takeover persists its intent before catalog writes and resumes a lost checkpoint without duplicate articles',async t=>{
+ const rows=Array.from({length:43},(_,i)=>rawMaster('ARTIKEL_STAMM',{EAN:String(i+17).padStart(13,'0'),Artikelbezeichnung:'Synthetischer Artikel '+i,MWST:1,'Änderungsdatum':new Date('2026-09-03T13:00:00Z'),Verkaufspreis:12,eNvk:10}));
+ const values={ARTIKEL_STAMM:rows,ARTIKEL_ZWEITEAN:[rawMaster('ARTIKEL_ZWEITEAN',{EAN:rows[0].EAN,ZweitEAN:'4006381333931',Rang:1})]};
+ const f=await fixture(t,{values});
+ f.database.exec('CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,detail TEXT NOT NULL,created_at TEXT NOT NULL)');
+ require('../lib/persistence/sqlite/operations/sales-article-catalog-schema').ensureSqliteSalesArticleCatalogSchema(f.database);
+ f.options.syncArticleCatalog=true;f.options.sharedPayloads=true;f.reload();
+ const catalog=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.provider);
+ let source=await f.upload();source=await f.finish(source,'review');
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'apply',{expectedRevision:source.revision}),code('IMPORT_ARTICLE_CATALOG_FORBIDDEN'));
+ assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,0);
+ f.state.session.permissions.push('sales:articles:access','sales:articles:read','sales:articles:import');
+ // Sales commits independently of the Core checkpoint. Its durable intent
+ // must survive a lost acknowledgement and produce an idempotent replay.
+ f.database.exec("CREATE TRIGGER synthetic_catalog_atomic BEFORE UPDATE ON data_import_sources WHEN (SELECT count(*) FROM sales_articles)>0 BEGIN SELECT RAISE(ABORT,'synthetic checkpoint failure'); END");
+ await assert.rejects(f.finish(source,'apply'));
+ assert.equal(f.database.prepare('SELECT count(*) n FROM sales_articles').get().n,40);
+ const pendingSource=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+ assert.equal(pendingSource.catalog.pending,undefined);assert.doesNotMatch(JSON.stringify(pendingSource),/"sourceArticleKey"|"expectedStateSha256"/);
+ f.database.exec('DROP TRIGGER synthetic_catalog_atomic');
+ source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
+ assert.equal(source.catalog.complete,true);assert.equal(source.catalog.changed,43);assert.equal(source.catalog.batches.length,2);assert.equal(source.catalogUpdatePending,false);
+ const article=await catalog.getByArticleNumber('000017');assert.equal(article.description,'Synthetischer Artikel 0');
+ assert.ok(article.identifiers.some(i=>i.canonicalGtin14==='04006381333931'));
+ assert.ok(article.prices.some(p=>p.priceType==='sales'&&p.priceBasis==='gross'&&Number(p.amount)===12));
+ const counts=f.database.prepare('SELECT count(*) n FROM sales_article_revisions').get().n;
+ source=await f.runtime.sourceOperation(f.getSession,source.id,'apply',{expectedRevision:source.revision});
+ assert.equal(f.database.prepare('SELECT count(*) n FROM sales_article_revisions').get().n,counts);
+ f.database.exec("CREATE TRIGGER synthetic_catalog_undo_checkpoint BEFORE UPDATE ON data_import_sources WHEN EXISTS(SELECT 1 FROM sales_article_import_snapshots WHERE source_system='tradefoto.article.import.undo') BEGIN SELECT RAISE(ABORT,'synthetic undo checkpoint failure'); END");
+ await assert.rejects(f.finish(source,'undo'));
+ const undoCount=()=>f.database.prepare("SELECT count(*) n FROM sales_article_import_snapshots WHERE source_system='tradefoto.article.import.undo'").get().n;
+ assert.equal(undoCount(),1);
+ f.database.exec('DROP TRIGGER synthetic_catalog_undo_checkpoint');
+ f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'undo');assert.equal(source.status,'reverted');
+ assert.equal(undoCount(),2);
+ assert.ok(source.catalog.batches.every(b=>b.reverted));assert.equal((await catalog.getByArticleNumber('000017')).active,false);
+});
+
+test('a manual catalog change after planning invalidates the saved intent and is preserved on resume',async t=>{
+ const rows=[17,18].map(i=>rawMaster('ARTIKEL_STAMM',{EAN:String(i).padStart(13,'0'),Artikelbezeichnung:'Trade '+i,MWST:1,'Änderungsdatum':new Date('2026-09-03T13:00:00Z')}));
+ const f=await fixture(t,{values:{ARTIKEL_STAMM:rows}});
+ f.database.exec('CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,detail TEXT NOT NULL,created_at TEXT NOT NULL)');
+ require('../lib/persistence/sqlite/operations/sales-article-catalog-schema').ensureSqliteSalesArticleCatalogSchema(f.database);
+ const catalog=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.provider);
+ f.options.syncArticleCatalog=true;f.reload();f.state.session.permissions.push('sales:articles:access','sales:articles:read','sales:articles:import');
+ let source=await f.upload();source=await f.finish(source,'review');let steps=0;
+ do {source=await f.runtime.sourceOperation(f.getSession,source.id,'apply',{expectedRevision:source.revision});assert.ok(++steps<700);}while(source.currentStep?.table!=='Artikelkatalog');
+ assert.equal(f.database.prepare('SELECT count(*) n FROM sales_articles').get().n,0);
+ await catalog.createManual({input:{articleNumber:'000017',description:'Nach Planung manuell angelegt',identifiers:[]},actor:'synthetic-1',timestamp:TIME,mutationId:crypto.randomUUID()});
+ f.reload();source=await f.finish(source,'apply');
+ assert.equal(source.status,'applied');assert.equal(source.catalog.changed,1);assert.equal(source.catalog.blocked,1);
+ assert.equal((await catalog.getByArticleNumber('000017')).description,'Nach Planung manuell angelegt');
+ assert.equal((await catalog.getByArticleNumber('000018')).description,'Trade 18');
+});
+
+test('unified catalog import preserves manual heads and quarantines ambiguous source barcodes',async t=>{
+ const rows=[17,18,19,20].map(i=>rawMaster('ARTIKEL_STAMM',{EAN:String(i).padStart(13,'0'),Artikelbezeichnung:'Trade '+i,MWST:1,'Änderungsdatum':new Date('2026-09-03T13:00:00Z')}));
+ rows[2].Verkaufspreis=12;rows[2].eNvk=11;
+ const f=await fixture(t,{values:{ARTIKEL_STAMM:rows,ARTIKEL_ZWEITEAN:[rawMaster('ARTIKEL_ZWEITEAN',{EAN:rows[1].EAN,ZweitEAN:'4006381333931',Rang:1})]}});
+ f.database.exec('CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,detail TEXT NOT NULL,created_at TEXT NOT NULL)');
+ require('../lib/persistence/sqlite/operations/sales-article-catalog-schema').ensureSqliteSalesArticleCatalogSchema(f.database);
+ const catalog=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.provider);
+ await catalog.createManual({input:{articleNumber:'000017',description:'Manuell gepflegt',identifiers:[]},actor:'synthetic-1',timestamp:TIME,mutationId:require('node:crypto').randomUUID()});
+ await catalog.createManual({input:{articleNumber:'EXTERN',description:'Bestehender Barcode-Eigentümer',identifiers:[{identifierValue:'4006381333931',isPrimary:true}]},actor:'synthetic-1',timestamp:TIME,mutationId:require('node:crypto').randomUUID()});
+ f.options.syncArticleCatalog=true;f.reload();f.state.session.permissions.push('sales:articles:access','sales:articles:read','sales:articles:import');
+ let source=await f.upload();source=await f.finish(source,'review');source=await f.finish(source,'apply');
+ assert.equal(source.catalog.changed,1);assert.equal(source.catalog.blocked,3);
+ assert.equal((await catalog.getByArticleNumber('000017')).description,'Manuell gepflegt');
+ assert.equal(await catalog.getByArticleNumber('000018'),null);assert.equal(await catalog.getByArticleNumber('000019'),null);
+ assert.equal((await catalog.getByArticleNumber('000020')).description,'Trade 20');
+});
+
 test('Bestell: full staged source, exact values, replay, changed snapshot and undo preserve the prior version',async t=>{
   const B=require('../lib/tradefoto-bestell/profiles');
   const {createImportHistoryService}=require('../lib/persistence/repositories/import-history');

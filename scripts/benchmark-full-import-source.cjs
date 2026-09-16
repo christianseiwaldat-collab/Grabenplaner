@@ -13,6 +13,7 @@ const {DATA_IMPORT_PERMISSIONS:P}=require('../lib/data-import-access');
 async function main(){
  const [configPath,sourceInput,selection='cash']=process.argv.slice(2),config=JSON.parse(fs.readFileSync(path.resolve(configPath),'utf8'));
  const publishCash=process.argv.includes('--publish-cash');
+ const syncArticleCatalog=process.argv.includes('--sync-catalog');
  if(!['trade','bestell','cash','all'].includes(selection))throw new Error('Known source kind required');
  const files=selection==='all' ? [['trade','Trade_Daten.accdb'],['bestell','Trade_DatenBestell.accdb'],['cash','Kassen_Umsätze.accdb']]
   .map(([kind,name])=>({kind,sourcePath:path.join(sourceInput,name)})) : [{kind:selection,sourcePath:sourceInput}];
@@ -26,12 +27,12 @@ async function main(){
   const app=await openTwoDatabaseDevelopmentApplication({coreUrl:process.env.GP_CORE_APP_URL,salesUrl:process.env.GP_SALES_APP_URL,stage:8,authorize:async()=>true});
   await core.application.close();await f.application.close();
   const session={employeeNumber:'00001',isEmployee:true,permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read',
-   ...(publishCash?['locations:write','sales:articles:access','sales:articles:read','sales:articles:import']:[])]};
+   ...(publishCash?['locations:write']:[]),...(publishCash||syncArticleCatalog?['sales:articles:access','sales:articles:read','sales:articles:import']:[])]};
   const vault=createIntegrationSecretVault({activeKeyId:'ephemeral-import-benchmark',keys:{'ephemeral-import-benchmark':crypto.randomBytes(32)}}),reports=[];
   try{for(const {kind,sourcePath} of files){
   const buffer=fs.readFileSync(path.resolve(sourcePath)),sha256=crypto.createHash('sha256').update(buffer).digest('hex'),bytes=buffer.length;
   let rows=0,last=performance.now(),maxPacketMs=0;
-  const runtime=createDataImportRuntime({access:app.provider,vault,sharedPayloads:true,compactCash:true,allowApply:kind!=='cash',
+  const runtime=createDataImportRuntime({access:app.provider,vault,sharedPayloads:true,compactCash:true,allowApply:kind!=='cash',syncArticleCatalog,
    readSource:options=>streamTradeFotoFullSource({...options,onMessage:async message=>{
     const start=performance.now(),result=await options.onMessage(message);
     maxPacketMs=Math.max(maxPacketMs,performance.now()-start);
@@ -85,10 +86,11 @@ async function main(){
     totalMs:Math.round(repeated-started),identicalFileMs:Math.round(performance.now()-repeated),maxPacketMs:Math.round(maxPacketMs),maxOperationMs:Math.round(maxOperationMs),
     phaseTimesMs:Object.fromEntries(Object.entries(phaseTimes).map(([key,value])=>[key,Math.round(value)])),databaseBytes:Number(dbBytes),
     ...(publication?{publication}:{}),
-    includes:['worker-reader','encrypted-staging','full-source-verification','checkpoints',...(kind==='cash'?[]:['local-application']),...(publication?['local-cash-publication']:[])],
+    contentDate:source.contentDate, ...(source.catalog?{catalog:{total:source.catalog.total,changed:source.catalog.changed,unchanged:source.catalog.unchanged,blocked:source.catalog.blocked,complete:source.catalog.complete}}:{}),
+    includes:['worker-reader','encrypted-staging','full-source-verification','checkpoints',...(kind==='cash'?[]:['local-application']),...(syncArticleCatalog&&kind==='trade'?['article-catalog-sync']:[]),...(publication?['local-cash-publication']:[])],
     excludes:['network-upload','background-job-loop','encrypted-upload-spool','production-principal-resolution','existing-production-targets',...(publication?[]:['cash-publication']),'VPS-qualification']};
    reports.push(report);process.stderr.write(JSON.stringify({kind,completed:true,rows,totalMs:report.totalMs})+'\n');
-   fs.writeFileSync(path.join(path.dirname(path.resolve(configPath)),kind+'-full-source-'+(publication?'published':'final')+'.json'),JSON.stringify(report,null,2));
+   fs.writeFileSync(path.join(path.dirname(path.resolve(configPath)),kind+'-full-source-'+(syncArticleCatalog?'unified-catalog':publication?'published':'final')+'.json'),JSON.stringify(report,null,2));
   }
   console.log(JSON.stringify(reports.length===1?reports[0]:reports,null,2));
   }finally{await app.close();}
