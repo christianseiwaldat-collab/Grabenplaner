@@ -99,6 +99,32 @@ test('timeout resumes automatically after process reconstruction and delay, with
  await f.queue.tick();assert.equal(f.state.calls,1);f.state.now+=30001;await f.queue.tick();
  assert.equal(f.state.calls,2);assert.equal(f.sources.get(source.id).status,'ready');assert.deepEqual(await fsp.readdir(f.directory),[]);
 });
+
+test('successive takeover packets reuse acknowledged progress and verify durable completion',async t=>{
+ const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+ await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1});
+ const original=f.runtime.sourceOperation;let reads=0,applies=0;
+ f.runtime.sourceOperation=async(get,id,action,input)=>{
+  if(action==='read')reads++;
+  if(action==='apply'){applies++;assert.equal(input.expectedRevision,f.sources.get(id).revision);}
+  return original(get,id,action,input);
+ };
+ await f.queue.tick();assert.equal(applies,3);assert.equal(reads,2);
+ assert.equal(f.sources.get(source.id).status,'applied');assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+
+test('reusing import progress never reuses a permission grant between packets',async t=>{
+ const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+ await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1});
+ const original=f.runtime.sourceOperation;
+ f.runtime.sourceOperation=async(...args)=>{
+  const result=await original(...args);
+  if(args[2]==='apply')f.state.principal={...session(),permissions:session().permissions.filter(p=>p!==P.APPLY)};
+  return result;
+ };
+ await f.queue.tick();assert.equal(f.sources.get(source.id).applied,1);
+ assert.equal((await f.queue.overlay(source)).background.error,'IMPORT_FORBIDDEN');
+});
 test('retries are bounded and can be explicitly resumed with the retained encrypted file',async t=>{
  const f=await fixture(t),source=await f.enqueue();f.state.failures=4;
  for(let i=0;i<4;i++){await f.queue.tick();f.state.now+=600001;}

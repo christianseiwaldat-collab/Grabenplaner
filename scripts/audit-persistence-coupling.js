@@ -80,6 +80,11 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/sales/cash-publication-batches.js',
   'lib/persistence/postgresql/sales/import-recheck-catalog.js',
   'lib/persistence/postgresql/sales/import-work-queues.js',
+  'lib/persistence/postgresql/import-reader-batches.js',
+  'lib/persistence/postgresql/core/import-reader-batches.js',
+  'lib/persistence/postgresql/sales/import-reader-batches.js',
+  'lib/persistence/postgresql/sales/import-batches.js',
+  'scripts/benchmark-data-import.cjs',
   'test/personnel-learning-postgresql.test.js',
   'lib/persistence/postgresql/reporting/branch-article-catalog.js',
 
@@ -233,6 +238,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-migration-queries.test.js',
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
+  'scripts/benchmark-data-import.cjs',
   'server-tools/linux/lib/trade-annotations-migrate.js',
   'server-tools/linux/lib/personnel-learning-runs-migrate.js',
   'lib/persistence/postgresql/transfer/staging.js',
@@ -343,6 +349,8 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/trade-annotations.js",
   "lib/persistence/statements/personnel-learning-runs.js",
   "lib/persistence/statements/cash-publication-batches.js",
+  "lib/persistence/statements/import-batches.js",
+  "lib/persistence/statements/import-reader-batches.js",
   "lib/persistence/statements/data-import-recheck.js",
   "lib/persistence/sqlite/personnel-learning-runs-catalog.js",
   "lib/persistence/sqlite/operations/personnel-learning-runs-schema.js",

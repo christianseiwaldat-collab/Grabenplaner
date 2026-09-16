@@ -50,7 +50,7 @@ test("actual server availability guard checks the default protected socket witho
   const start = server.indexOf("function currentHostManagedRebootAvailable()");
   const end = server.indexOf("const hostBootGeneration =", start);
   const context = {
-    process: { platform: "linux" }, serverModeActive: true, hostBootGeneration: "verified-boot",
+    process: { platform: "linux" }, serverModeActive: true, postgresqlActive: false, hostBootGeneration: "verified-boot",
     assertSafeHostRebootSocket: protectedClient.assertSafeSocket,
   };
   const available = vm.runInNewContext(`${server.slice(start, end)}; currentHostManagedRebootAvailable`, context);

@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.54 Beta – 16.09.2026
+
+- Datenbankimporte bündeln PostgreSQL-Abfragen und Schreibzugriffe für Trade-, Bestell- und Kassendaten. Wiederholte Referenzprüfungen verwenden bereits authentifizierte Werte ausschließlich innerhalb derselben Transaktion.
+- Neue Stammdaten und historische Datensätze werden in begrenzten Paketen übernommen und anschließend aus der Datenbank zurückgelesen und geprüft. Konflikte oder Fehler rollen das gesamte Paket zurück; Rücknahmebelege, Berechtigungen und Wiederaufnahme bleiben erhalten.
+- Hintergrundaufträge verwenden den bestätigten Fortschritt des vorherigen Pakets. Jeder weitere Schritt prüft Rechte und Revision erneut; der Abschluss wird nochmals aus dem gespeicherten Zustand gelesen.
+- Keine neue Datenbankmigration oder zusätzliche Abhängigkeit. Die dokumentierten Vollimport-Messungen sind lokale Nachweise; eine halbe Stunde pro Datenbank auf dem VPS ist noch nicht belegt. Tabellen ohne stabile Quellschlüssel benötigen weiterhin einen gesonderten Abgleich.
+
 ## v0.92.53 Beta – 15.09.2026
 
 - PostgreSQL-Wiederherstellung: Die 18 Triggerfunktionen der additiven Lernmigration behalten ihre impliziten Standardrechte. Die Wiederherstellung bindet diese Ausnahme an den unveränderten, geprüften Migrationsplan; Schema-Fingerprint, Tabellen und Zähler müssen weiterhin exakt mit der Sicherung übereinstimmen.

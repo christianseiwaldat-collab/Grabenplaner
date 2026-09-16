@@ -155,6 +155,7 @@ test("shutdown shares one deadline with drain and does not release the instance 
   for (const code of [null, "BACKGROUND_BACKUP_TREE_UNVERIFIED", "BACKGROUND_BACKUP_ARCHIVE_RECOVERY_REQUIRED"]) {
     const events = [], deadlines = [];
     const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false, maintenanceOwnsLifecycleBackup: () => false,
+      dataImportJobs: { stop: async () => {} }, dataImportRoutes: { stop: async () => {} },
       salesReportJobs: { stop: async () => {} },
       postgresqlReceiptWorkers: null,
       backupInterval: null, retentionInterval: null, scannerProbeInterval: null, sicknessSweepInterval: null,
