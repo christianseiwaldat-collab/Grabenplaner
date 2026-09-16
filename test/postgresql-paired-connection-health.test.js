@@ -69,6 +69,10 @@ test('the actual operations CLI accepts ordinary pauses and rejects every unheal
   await vm.runInNewContext(source,{process:processStub,require(name){
    if(name.endsWith('/runtime'))return {loadConfiguration:()=>({clusterId:'123'}),monitor:async()=>{if(scenario==='monitor-failed')throw new Error('PG_PROBE_FAILED');return states;}};
    if(name.endsWith('/paired-monitor'))return {connectionStateReasons};
+   if(name.endsWith('/paired-retention'))return {
+    configuredPairedRetention:()=>assert.fail('A connection probe must not select a retention policy'),
+    prunePairedSnapshots:()=>assert.fail('A connection probe must not prune backups'),
+   };
    throw new Error('Unexpected module '+name);
   }});
   if(scenario==='healthy'){assert.deepEqual(JSON.parse(stdout),{verified:true});assert.equal(stderr,'');assert.equal(processStub.exitCode,undefined);}

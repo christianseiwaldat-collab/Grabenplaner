@@ -57,6 +57,8 @@ test("updater-owned shutdown still drains work and closes persistence before rel
   const start = source.indexOf("function shutdown("), end = source.indexOf("if (require.main === module)", start);
   const events = [];
   const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false,
+    dataImportJobs: { stop: async () => events.push("imports-stop") },
+    dataImportRoutes: { stop: async () => events.push("import-routes-stop") },
     salesReportJobs: { stop: async () => events.push("reports-stop") },
     postgresqlReceiptWorkers: {close:async()=>events.push('receipt-workers-stop')},
     backupInterval: null, retentionInterval: null, scannerProbeInterval: null, sicknessSweepInterval: null,
@@ -69,5 +71,5 @@ test("updater-owned shutdown still drains work and closes persistence before rel
     releaseInstanceLock: () => events.push("release"), process: { exit: code => events.push(`exit-${code}`) }, console };
   const stop = vm.runInNewContext(`${source.slice(start, end)}; shutdown`, dependencies);
   stop(); await new Promise(setImmediate);
-  assert.deepEqual(events, ["reports-stop", "receipt-workers-stop", "drain", "persistence-close", "checkpoint", "database-close", "release", "exit-0"]);
+  assert.deepEqual(events, ["imports-stop", "import-routes-stop", "reports-stop", "receipt-workers-stop", "drain", "persistence-close", "checkpoint", "database-close", "release", "exit-0"]);
 });
