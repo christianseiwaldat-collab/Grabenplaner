@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.55 Beta – 16.09.2026
+
+- Datenbankimporte zeigen hochgeladene Dateien in einer kompakten Tabelle mit Originaldateiname, Status und letztem Bearbeitungsstand im GP. Neue Dateinamen werden verschlüsselt gespeichert; bestehende Importidentitäten und Fortschritte bleiben erhalten.
+- Der gesamte Kassenstand wird gemeinsam geprüft und aktiviert. Filialen werden in einer Tabelle vorhandenen GP-Standorten zugeordnet. Gültige bisherige Zuordnungen werden wiederverwendet, eindeutige Filialnummern vorgeschlagen und ungültige Ziele weiterhin am Server abgelehnt.
+- Die Bestellkonfiguration kann unter PostgreSQL wieder neue Einheiten, Positionen und Gruppen speichern. Die Normalisierung wartet auf die vorhandenen IDs; bestehende Bestellungen und atomare Rücknahme bleiben erhalten.
+- Die zusätzlichen Buttons „Kassa-Einschulung vorbereiten“ und „Kassa-Fähigkeit vorbereiten“ entfallen. Vorhandene Prozesse, Fähigkeiten und die allgemeinen Anlegefunktionen bleiben bestehen.
+- Keine neue Datenbankmigration oder zusätzliche Abhängigkeit.
+
 ## v0.92.54 Beta – 16.09.2026
 
 - Datenbankimporte bündeln PostgreSQL-Abfragen und Schreibzugriffe für Trade-, Bestell- und Kassendaten. Wiederholte Referenzprüfungen verwenden bereits authentifizierte Werte ausschließlich innerhalb derselben Transaktion.

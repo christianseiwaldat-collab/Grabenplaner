@@ -106,6 +106,52 @@ async function reportPdfText(buffer) {
   } finally { await loading.destroy(); }
 }
 
+test('all cash branches are proposed together, reuse valid prior bindings and leave ambiguous or inactive targets open',async t=>{
+  const f=await fixture(t);await f.activate();
+  f.app.database.exec("INSERT INTO locations VALUES ('19','New branch',1),('77','Inactive branch',0),('99','Ambiguous A',1),('0099','Ambiguous B',1),('22','Two source numbers',1)");
+  const combined={Umsatz_KASSE:[],Umsatz_Kasse_Details:[]};
+  for(const [index,location] of ['018','019','077','099','022','0022'].entries()) {
+    const data=rows({location});data.Umsatz_Kasse_Details[0].RepID='00000000-0000-0000-0000-'+String(index+20).padStart(12,'0');
+    for(const key of Object.keys(combined))combined[key].push(...data[key]);
+  }
+  const id=await f.build(combined),context=await f.publish.operation(f.get,'context',{sourceId:id}),setup=context.mappingSetup;
+  assert.deepEqual(Object.fromEntries(setup.locations.map(m=>[m.sourceId,[m.targetId,m.match]])),{
+    '018':['branch-a','previous'],'019':['19','same_id'],'077':['',null],'099':['',null],'022':['',null],'0022':['',null]});
+  assert.equal(setup.mappings.length,2);assert.ok(setup.mappings.every(m=>m.kind==='MITARBEITER'));
+  const request={...f.request(id,context.state.revision),mappings:[...require('../public/cash-publication').locationMappings(setup.locations,setup.targets),...setup.mappings]};
+  const result=await f.activate(request);assert.equal(result.revision,2);
+  assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM cash_publication_bindings WHERE publication_id=? AND kind=\'FILIALEN\'').get(result.active).n,2);
+  const count=f.app.database.prepare('SELECT COUNT(*) n FROM cash_publications').get().n;
+  for(const m of [{sourceId:'9999',targetId:'branch-a'},{sourceId:'018',targetId:'fantasy-9999'}]) {
+    const bad={...request,expectedRevision:2,mappings:[{kind:'FILIALEN',historical:false,...m}]};
+    await assert.rejects(f.publish.operation(f.get,'preview',{request:bad}),e=>['IMPORT_MAPPING_SOURCE_UNAVAILABLE','IMPORT_MAPPING_TARGET_MISSING'].includes(e.code));
+  }
+  assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM cash_publications').get().n,count);
+  const batch=publicationBatchFixture(f.app.provider);t.after(()=>batch.access.close());
+  const runtime=createCashPublicationRuntime({access:batch.access,vault:f.vault,policies:f.policies,scopeId:f.actor.scopeId,enabled:true,clock:()=>TIME});
+  const batched=await runtime.operation(f.get,'context',{sourceId:id});
+  assert.deepEqual(batched.mappingSetup.locations.map(m=>[m.sourceId,m.targetId]),setup.locations.map(m=>[m.sourceId,m.targetId]));
+  assert.ok(batch.state.options.every(o=>o.readOnly));
+});
+
+test('mapping suggestions enforce current rights and never silently reuse newly inactive GP targets',async t=>{
+  const f=await fixture(t);await f.activate();
+  f.app.database.exec("UPDATE locations SET active=0 WHERE id='branch-a'");
+  let setup=(await f.publish.operation(f.get,'context',{sourceId:f.id})).mappingSetup;
+  assert.equal(setup.locations[0].targetId,'');assert.equal(setup.omitted,1);
+  f.session.permissions=f.session.permissions.filter(p=>p!=='locations:write'&&p!=='personnel:central:write');
+  setup=(await f.publish.operation(f.get,'context',{sourceId:f.id})).mappingSetup;
+  assert.deepEqual(setup,{locations:[],targets:[],mappings:[],omitted:0});
+});
+
+test('cash branch controls only offer known GP targets and reject a tampered selection',()=>{
+  const UI=require('../public/cash-publication'),locations=[{sourceId:'<img>',targetId:'gp-18',historical:false,match:'previous'}],targets=[{id:'gp-18',label:'<script>',active:true}];
+  const html=UI.renderLocations(locations,targets);assert.doesNotMatch(html,/<img>|<script>|type="text"/);
+  assert.match(html,/<select data-c-location="0"/);assert.match(html,/Bisherige Zuordnung/);
+  assert.equal(UI.locationMappings(locations,targets).length,1);
+  assert.throws(()=>UI.locationMappings([{...locations[0],targetId:'invented'}],targets),/vorhandenen GP-Standort/);
+});
+
 test('durable report jobs complete both periods and encrypt PDF results, with personal ownership and fresh download rights', async t => {
   const f = await fixture(t, { count: 205 }); await f.activate();
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
