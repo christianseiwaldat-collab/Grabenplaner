@@ -1,7 +1,7 @@
 # Einkauf & Bestand innerhalb des Grabenplaners
 
-Lokaler, unveröffentlichter Stand vom 16.09.2026 auf Basis von v0.92.55-beta.
-Noch kein Commit, Push oder Deploy für diese Änderungen.
+Umsetzung vom 16.09.2026, mit v0.92.56-beta veröffentlicht.
+Der [Releasebericht](DEPLOY-RELEASE-v09256.md) enthält Commit, Paket- und VPS-Nachweise.
 
 ## Verhalten
 
@@ -52,4 +52,4 @@ GP-Daten, Importstände und Protokolle werden dadurch nicht gelöscht.
 Der vollständige Import-Laufzeittest wurde auf Nutzerwunsch abgebrochen und nicht
 wiederholt. Die Umsetzung ist funktional geprüft; 30–45 Minuten Gesamtlaufzeit
 auf dem VPS sind damit weiterhin nicht nachgewiesen. Versionsvergabe, Paketbau
-und die normalen VPS-Releaseprüfungen gehören zum noch ausstehenden Deployablauf.
+und die normalen VPS-Releaseprüfungen sind im Releasebericht abgeschlossen dokumentiert.

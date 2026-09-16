@@ -1,7 +1,7 @@
 # Datenbankimporte: vereinfachte Bedienung und gemeinsamer Trade-Abgleich
 
-Stand: 16.09.2026. Lokaler, noch nicht veröffentlichter Arbeitsstand auf Basis
-von v0.92.55-beta. Dieser Bericht ersetzt keinen Deploynachweis.
+Umsetzung vom 16.09.2026, mit v0.92.56-beta veröffentlicht.
+Der [Releasebericht](DEPLOY-RELEASE-v09256.md) enthält den vollständigen Deploynachweis.
 
 ## Bedienung
 
@@ -109,7 +109,7 @@ Lauf nicht bestätigt.
 
 Der Testprozess ist beendet, seine isolierten Testdaten wurden durch die
 Fixture-Bereinigung entfernt und das eigene lokale PostgreSQL-Testsystem wurde
-ordnungsgemäß gestoppt. Die Implementierung bleibt lokal und unveröffentlicht.
+ordnungsgemäß gestoppt. Die Implementierung wurde anschließend mit v0.92.56 veröffentlicht.
 
 ### Reproduzierbare Prüfungen
 
@@ -132,4 +132,4 @@ gestartete vollständige Lauf mit der echten Trade-Datei wurde wie beschrieben
 abgebrochen.
 
 Der Produktivserver und die Originaldateien wurden bei diesen Prüfungen nicht
-verändert. Der neue Stand ist nicht deployed.
+verändert. Die spätere Veröffentlichung ist im Releasebericht getrennt dokumentiert.
