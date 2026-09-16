@@ -22,6 +22,7 @@
     "salesAdministration",
     "salesAnalytics",
     "receiptSearch",
+    "tradeInsights",
     "articleCatalog",
     "crm",
     "rightsDashboard",
@@ -585,6 +586,15 @@
       ["meine berichte", "beauftragte berichte", "berichtstatus", "fertige berichte", "hintergrundberichte"],
       ["salesAnalyticsNavButton"],
       { view: "salesAnalytics", salesAnalyticsTab: "reports", focusId: "salesAnalyticsReportsPanel" },
+    ),
+    entry(
+      "sales.trade-insights",
+      "Einkauf & Bestand öffnen",
+      ["Verkaufsverwaltung", "Einkauf & Bestand"],
+      "Lieferstände, Filialversorgung, Bestände, Preisvergleiche und Gerätehistorien auswerten.",
+      ["einkauf", "bestellungen", "lieferstände", "filialversorgung", "bestand", "langsamdreher", "reparaturen", "gerätehistorie", "kundenhistorie", "filialpreisvergleich"],
+      ["tradeInsightsNavButton"],
+      { view: "tradeInsights", focusId: "tradeInsightsWorkspace" },
     ),
     entry(
       "sales.receipt-search",

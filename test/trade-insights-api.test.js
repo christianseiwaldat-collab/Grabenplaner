@@ -26,3 +26,15 @@ test('Trade views use actual session authority, CSRF and protected read/write co
  assert.equal((await request('repair-save',{id:r.id,state:'ready',expectedRevision:0})).status,409);
  db.prepare("UPDATE portal_users SET active=0 WHERE employee_number='insights-user'").run();assert.ok([401,403].includes((await request('repair-detail',{id:r.id})).status));
 });
+
+test('Legacy trade links enter the GP shell with the requested supported tab',async()=>{
+ for(const tab of ['purchasing','transfers','inventory','prices','repairs','customer-history','device-history']){
+  const response=await fetch(url+'/trade-insights.html?tab='+tab,{redirect:'manual'});
+  assert.equal(response.status,302);assert.equal(response.headers.get('location'),'/?view=tradeInsights&section='+tab);
+ }
+ const response=await fetch(url+'/trade-insights.html?tab=unknown&view=outside',{redirect:'manual'});
+ assert.equal(response.headers.get('location'),'/?view=tradeInsights&section=purchasing');
+ const html=await (await fetch(url+'/trade-insights.html?tab=purchasing')).text();
+ assert.match(html,/id="mainSidebar"/);assert.match(html,/id="tradeInsightsView"/);
+ assert.match(html,/data-view="tradeInsights" id="tradeInsightsNavButton"/);
+});

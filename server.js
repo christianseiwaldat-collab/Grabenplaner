@@ -3877,6 +3877,9 @@ app.use("/vendor/pdfjs-v6.2.108/cmaps", express.static(path.join(pdfjsPackageDir
 app.use("/vendor/pdfjs-v6.2.108/standard_fonts", express.static(path.join(pdfjsPackageDirectory, "standard_fonts"), immutableVendorAssets));
 app.use("/vendor/pdfjs-v6.2.108/wasm", express.static(path.join(pdfjsPackageDirectory, "wasm"), immutableVendorAssets));
 app.use("/vendor/pdfjs-v6.2.108/iccs", express.static(path.join(pdfjsPackageDirectory, "iccs"), immutableVendorAssets));
+app.get("/trade-insights.html", (req, res) => {
+  res.redirect(302, require("./public/trade-insights").legacyUrl(new URL(req.originalUrl, "http://localhost").search));
+});
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/api", enforceAdminApiAccess);
 app.use("/api", enforceInstallationFeatures);
@@ -25697,7 +25700,7 @@ app.delete("/api/integrations/personnel-import/sessions/:id", (request, response
 const dataImportLifecycle=require('./lib/data-import-lifecycle').createDataImportLifecycle({
   maintenanceActive:()=>serverModeActive&&require('./lib/backup-maintenance').ownsLifecycleBackup(databasePath),
 });
-const dataImportRuntime=createDataImportRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowApply: true, sharedPayloads: true, compactCash: true,lifecycle:dataImportLifecycle });
+const dataImportRuntime=createDataImportRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowApply: true, sharedPayloads: true, compactCash: true, syncArticleCatalog: true,lifecycle:dataImportLifecycle });
 const dataImportJobs=require('./lib/data-import-jobs').createDataImportJobs({
   directory:path.join(dataRootDirectory,'import-jobs'),vault:integrationSecretVault,runtime:dataImportRuntime,
   lifecycle:dataImportLifecycle,resolvePrincipal:resolveSalesReportPrincipal,
@@ -33649,6 +33652,7 @@ const UI_PREFERENCE_VIEWS = Object.freeze([
   "personnel",
   "salesAdministration",
   "salesAnalytics",
+  "tradeInsights",
   "loans",
   "branchOrders",
   "rightsDashboard",

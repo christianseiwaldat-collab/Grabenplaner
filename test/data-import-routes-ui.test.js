@@ -120,19 +120,35 @@ test('upload preserves a Unicode basename for both direct and background imports
   assert.equal(received,'Kassen_Umsätze.accdb');
 });
 
-test('uploaded database table uses original names, actual last-update times, safe markup and an honest legacy fallback',()=>{
-  const items=[{id:'one',kind:'cash',fileName:'Kasse <script>.accdb',createdAt:'2026-09-14T10:00:00.000Z',updatedAt:'2026-09-16T11:12:00.000Z',status:'ready'},
+test('source overview shows two columns with the date from contents, never the processing or upload date',()=>{
+  const items=[{id:'one',kind:'cash',fileName:'Kasse <script>.accdb',createdAt:'2026-09-14T10:00:00.000Z',updatedAt:'2026-09-16T11:12:00.000Z',status:'ready',complete:true,contentDate:{status:'complete',value:'2026-09-12T23:58:01.000'}},
     {id:'two',kind:'bestell',createdAt:'2026-09-13T10:00:00.000Z',status:'reading'}];
   const html=UI.renderSources(items,'one');
-  assert.match(html,/<th scope="col">Originaldatei<\/th><th scope="col">Status<\/th><th scope="col">Letzte Aktualisierung/);
-  assert.match(html,/datetime="2026-09-16T11:12:00.000Z"/);assert.match(html,/aria-current="true"/);
-  assert.match(html,/Trade_DatenBestell.accdb/);assert.match(html,/Originalname bei diesem älteren Import nicht erfasst/);
-  assert.match(html,/nicht das Datum des letzten Umsatzes/);assert.doesNotMatch(html,/<script>/);
+  assert.match(html,/<th scope="col">Datenquelle<\/th><th scope="col">Datenstand<\/th>/);
+  assert.match(html,/datetime="2026-09-12T23:58:01.000">12.09.2026/);assert.match(html,/aria-current="true"/);
+  assert.match(html,/Trade_DatenBestell.accdb/);assert.match(html,/ohne Originalnamen/);
+  assert.doesNotMatch(html,/14.09.2026|16.09.2026|2026-09-16|2026-09-14|<script>/);
   assert.match(UI.renderSources([]),/Noch keine/);
+  assert.equal(UI.contentDate({complete:true}), 'Noch nicht ermittelt');
+  assert.equal(UI.contentDate({complete:true,active:true,background:{phase:'content-date'}}), 'Wird ermittelt …');
+  assert.equal(UI.contentDate({complete:true,active:false,background:{phase:'content-date',status:'failed'}}), 'Noch nicht ermittelt');
+  assert.equal(UI.contentDate({complete:true,contentDate:{status:'complete',value:null}}),'Kein fachliches Datum');
+});
+
+test('temporary file deletion uses its own CSRF-protected route, without a GP-source deletion operation',async t=>{
+  let calls=0;
+  const f=await fixture(t,{jobs:{deleteUpload:async(get,id,input)=>{await get();calls++;return{id,revision:input.expectedRevision,uploadFileAvailable:false};}}});
+  const url='/api/data-import/sources/'+'a'.repeat(64)+'/delete-upload',options={method:'POST',headers:{'Content-Type':'application/json'},body:'{"expectedRevision":4}'};
+  f.state.csrf=false;assert.equal((await f.request(url,options)).status,403);assert.equal(calls,0);
+  f.state.csrf=true;const result=await f.request(url,options);assert.equal(result.status,200);assert.equal((await result.json()).uploadFileAvailable,false);
+  assert.equal(f.state.calls,0);assert.equal(calls,1);
+  const html=UI.renderSource({kind:'trade',status:'interrupted',tables:[],uploadFileAvailable:true,background:{status:'paused',phase:'reading'}},{prepare:true});
+  assert.match(html,/>Access-Datei löschen<\/button>/);assert.match(html,/Daten und Importprotokolle im GP bleiben erhalten/);
+  assert.doesNotMatch(UI.renderSource({kind:'trade',status:'applied',complete:true,tables:[],uploadFileAvailable:false},{prepare:true}),/data-i-delete-upload/);
 });
 
 test('selecting an older uploaded database retains its table page and selected row',async()=>{
-  const fields=Object.fromEntries(['next','sources','detail','message','log'].map(name=>[name,{hidden:true,innerHTML:'',textContent:'',dataset:{},hasAttribute:()=>false,replaceChildren(){}}]));
+  const fields=Object.fromEntries(['next','sources','detail','message','log'].map(name=>[name,{hidden:true,innerHTML:'',textContent:'',dataset:{},hasAttribute:()=>false,querySelector:()=>null,replaceChildren(){}}]));
   const handlers={},requests=[],next={beforeAt:'2026-09-15T00:00:00.000Z',beforeId:'a'.repeat(64)};
   const source={id:'b'.repeat(64),kind:'trade',createdAt:'2026-09-14T00:00:00.000Z',status:'ready',tables:[]};
   const body={innerHTML:'',querySelector:s=>fields[/data-i="([^"]+)"/.exec(s)?.[1]],addEventListener:(n,h)=>handlers[n]=h,removeEventListener(){},replaceChildren(){}};

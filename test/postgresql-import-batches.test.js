@@ -43,6 +43,33 @@ async function start(e,count,sha='a'.repeat(64)){
 async function finish(e,run,action){let calls=0;do{run=await e[action](run.id,run.revision);if(++calls>100)throw new Error('Unbounded test');}while(run.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));return run;}
 async function unlocked(f){assert.equal((await f.core.migrator.query("SELECT count(*)::int n FROM pg_locks WHERE locktype='advisory' AND objid=9261207 AND granted")).rows[0].n,0);}
 
+test('Native unified Trade import: dates, catalog batches, replay and undo share the production PostgreSQL facade',{skip:!enabled},()=>fixture(async f=>{
+ const {definitions,readTradeFotoFullSource}=require('../lib/tradefoto-full-import-source');
+ const defs=definitions('trade'),raw={...Object.fromEntries(M.tableFor('ARTIKEL_STAMM').columns.map(c=>[c.name,null])),
+  EAN:'0000000000017',Artikelbezeichnung:'Synthetic native catalog',MWST:1,Verkaufspreis:12,eNvk:10,'Änderungsdatum':new Date('2026-09-14T23:58:00Z')};
+ const readerFactory=()=>({getTableNames:()=>defs.map(d=>d.name),getTable:name=>{
+  const table=defs.find(d=>d.name===name),rows=name==='ARTIKEL_STAMM'?[raw]:[];
+  return {rowCount:rows.length,getColumnNames:()=>table.columns.map(c=>c.name),getColumns:()=>table.columns.map(c=>({name:c.name,type:c.type})),
+   getData:({columns,rowOffset=0,rowLimit=Infinity})=>rows.slice(rowOffset,rowOffset+rowLimit).map(row=>Object.fromEntries(columns.map(key=>[key,row[key]??null])))};
+ }});
+ const vault=require('../lib/integration-secret-vault').createIntegrationSecretVault({activeKeyId:'native-synthetic',keys:{'native-synthetic':Buffer.alloc(32,71)}});
+ const P=require('../lib/data-import-access').DATA_IMPORT_PERMISSIONS;
+ const get=async()=>({employeeNumber:'00001',accountId:'synthetic-personal',isEmployee:true,permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read','sales:articles:access','sales:articles:read','sales:articles:import']});
+ const runtime=require('../lib/persistence/repositories/data-import-runtime').createDataImportRuntime({access:f.access,vault,scopeId:'synthetic-native-unified',allowApply:true,sharedPayloads:true,syncArticleCatalog:true,clock:()=>TIME,
+  readSource:options=>readTradeFotoFullSource({...options,readerFactory,send:options.onMessage})});
+ const buffer=Buffer.alloc(4096);buffer.write('Standard ACE DB',4);buffer[0x14]=3;
+ let source=await runtime.upload(get,{buffer,kind:'trade',fileName:'Trade_Daten.accdb'});
+ assert.equal(source.contentDate.value,'2026-09-14T23:58:00.000');
+ const advance=async action=>{let n=0;do{source=await runtime.sourceOperation(get,source.id,action,{expectedRevision:source.revision});assert.ok(++n<500);}while(source.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));};
+ await advance('review');await advance('apply');
+ assert.equal(source.status,'applied');assert.equal(source.catalog.changed,1);
+ const catalog=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.access);
+ assert.equal((await catalog.getByArticleNumber('000017')).description,'Synthetic native catalog');
+ source=await runtime.sourceOperation(get,source.id,'apply',{expectedRevision:source.revision});assert.equal(source.catalog.batches.length,1);
+ await advance('undo');assert.equal(source.status,'reverted');assert.equal((await catalog.getByArticleNumber('000017')).active,false);
+ await runtime.stop();await unlocked(f);
+},{deferred:true}));
+
 test('Native import packets: cross-packet duplicates/conflicts, lost acknowledgements and encrypted block tampering remain fail-closed',{skip:!enabled},()=>fixture(async f=>{
  const e=engine(f);let run=await start(e,203);
  const rows=Array.from({length:200},(_,i)=>repair(i+1));
