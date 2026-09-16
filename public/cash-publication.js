@@ -4,8 +4,18 @@
   const escape = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const names = { FILIALEN: 'Filiale', MITARBEITER: 'Verkäufer', KUNDEN: 'Kunde', ARTIKEL_STAMM: 'Artikel' };
   function renderMappings(items) { return items.map((m, i) => `<li>${escape(names[m.kind])} ${escape(m.sourceId)} → GP ${escape(m.targetId)}${m.historical ? ' (historisch)' : ''} <button type="button" data-c-remove="${i}" aria-label="Zuordnung entfernen">Entfernen</button></li>`).join(''); }
+  function renderLocations(locations, targets) {
+    if (!locations.length) return '<p>Keine zuordenbaren Kassenfilialen vorhanden oder keine Berechtigung zur Standortzuordnung.</p>';
+    return `<div class="data-import-scroll cash-location-mappings" tabindex="0" role="region" aria-label="Alle Kassenfilialen zuordnen"><table><thead><tr><th scope="col">Kassenfiliale</th><th scope="col">GP-Standort</th><th scope="col">Zuordnung</th></tr></thead><tbody>${locations.map((m, i) => `<tr><th scope="row">${escape(m.sourceId)}</th><td><select data-c-location="${i}" aria-label="GP-Standort für Kassenfiliale ${escape(m.sourceId)}"><option value="">Ohne GP-Standort</option>${targets.map(t => `<option value="${escape(t.id)}"${t.id === m.targetId ? ' selected' : ''}>${escape(t.id)} · ${escape(t.label)}${t.active ? '' : ' (inaktiv)'}</option>`).join('')}</select></td><td><small data-c-match="${i}">${m.match === 'previous' ? 'Bisherige Zuordnung' : m.match === 'same_id' ? 'Passende Filialnummer · bitte prüfen' : 'Noch nicht zugeordnet'}</small><label><input type="checkbox" data-c-historical="${i}"${m.historical ? ' checked' : ''}>Historisches / inaktives Ziel</label></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function locationMappings(locations, targets) {
+    return locations.filter(m => m.targetId).map(m => {
+      if (!targets.some(t => t.id === m.targetId)) throw new Error('Bitte einen vorhandenen GP-Standort auswählen.');
+      return { kind: 'FILIALEN', sourceId: m.sourceId, targetId: m.targetId, historical: m.historical };
+    });
+  }
   function mount(root, { api, source, confirmAction = message => globalThis.confirm(message) }) {
-    let disposed = false, generation = 0, formRevision = 0, context, mappings = [], prepared = null, working = false, referenceCursor = null;
+    let disposed = false, generation = 0, formRevision = 0, context, mappings = [], locations = [], targets = [], prepared = null, working = false, referenceCursor = null;
     const controller = new AbortController(), el = name => root.querySelector(`[data-c="${name}"]`);
     const post = (action, body) => api('/api/data-import/cash/' + action, { method: 'POST', body: JSON.stringify(body), signal: controller.signal });
     const message = value => { if (el('message')) el('message').textContent = value; };
@@ -14,20 +24,28 @@
       const ticket = ++generation; root.textContent = 'Kassenstand wird geladen …';
       try {
         const result = await post('context', { sourceId: source.id }); if (disposed || ticket !== generation) return; context = result;
+        locations = (context.mappingSetup?.locations || []).map(m => ({ ...m }));
+        targets = context.mappingSetup?.targets || [];
+        mappings = (context.mappingSetup?.mappings || []).map(m => ({ ...m }));
+        const otherKinds = context.mappingProjection.tables.filter(t => t.write && t.table !== 'FILIALEN');
         root.innerHTML = `<h3>Kassenstand für Auswertungen</h3><p>Aktuell verwendet: ${escape(context.state.active?.label || 'Noch kein Kassenstand')}.</p>
-          <p>Alle Zeiträume bleiben erhalten. Ein neuer Datenstand wird erst mit „Aktivieren“ verwendet. Bestehende Dienstplan- und Personaldaten werden dabei nicht ersetzt.</p>
-          <label>Bezeichnung<input data-c="label" maxlength="160" value="Kasse · ${escape(source.createdAt.slice(0, 10))}"></label>
+          <p><strong>Alle Filialen und alle Zeiträume sind bereits gemeinsam eingelesen.</strong> Die Zuordnung unten steuert nur die Standortauswertung. Mit einer Prüfung und Aktivierung verwenden Sie den gesamten Kassenstand.</p>
+          <p>Gültige bisherige Zuordnungen werden wiederverwendet. Passende Filialnummern werden vorgeschlagen. Nicht zugeordnete Daten bleiben vollständig erhalten; sie gehören zu keiner regulären GP-Standortauswertung.</p>
+          <div class="data-import-form"><label>Bezeichnung<input data-c="label" maxlength="160" value="Kasse · ${escape((source.createdAt || context.source?.createdAt || '').slice(0, 10))}"></label>
           <label>Geprüfte Rechenregeln<select data-c="policy">${context.policies.map(p => `<option value="${escape(p.id)}">${escape(p.label)}</option>`).join('')}</select></label>
+          </div>
           ${!context.policies.length ? '<p>Für diesen Dateistand fehlt noch ein bestätigtes Regelprofil. Die Quelldaten bleiben erhalten.</p>' : ''}
-          <p>Quellnummern werden ausdrücklich GP-Zielen zugeordnet. Nicht zugeordnete Filialen bleiben außerhalb der regulären Standortauswertung.</p>
-          <div class="data-import-form"><label>Bereich<select data-c="kind">${context.mappingProjection.tables.filter(t => t.write).map(t => `<option value="${t.table}">${escape(t.label)}</option>`).join('')}</select></label>
+          <h4>Filialen gemeinsam zuordnen</h4>${renderLocations(locations, targets)}
+          ${context.mappingSetup?.omitted ? '<p role="status">Ein bisheriges GP-Ziel fehlt oder ist inzwischen inaktiv. Bitte die offenen Zuordnungen prüfen.</p>' : ''}
+          ${otherKinds.length ? `<details><summary>Weitere Zuordnungen · ${mappings.length} bisherige Zuordnungen übernommen</summary>
+          <div class="data-import-form"><label>Bereich<select data-c="kind">${otherKinds.map(t => `<option value="${t.table}">${escape(t.label)}</option>`).join('')}</select></label>
           <label>Quellnummer<input data-c="source" maxlength="255" autocomplete="off"></label><label>GP-Ziel<input data-c="target" maxlength="128" autocomplete="off" list="cash-publication-targets"></label>
           <datalist id="cash-publication-targets" data-c="targets"></datalist><label><input type="checkbox" data-c="historical">Historisches / inaktives Ziel ausdrücklich verwenden</label>
           <button type="button" data-c-add>Zuordnung hinzufügen</button><button type="button" data-c-references>Quellnummern anzeigen</button><button type="button" data-c-targets>GP-Ziele anzeigen</button></div>
-          <p data-c="references"></p><button type="button" data-c-reference-next hidden>Weitere Quellnummern</button><ul data-c="mappings"></ul>
+          <p data-c="references"></p><button type="button" data-c-reference-next hidden>Weitere Quellnummern</button><ul data-c="mappings">${renderMappings(mappings)}</ul></details>` : ''}
           <label><input type="checkbox" data-c="articles" ${context.mappingProjection.tables.some(t => t.table === 'ARTIKEL_STAMM' && t.write) ? 'checked' : 'disabled'}>Vorhandene bestätigte Artikelbindungen verwenden; keine neuen Artikel anlegen</label>
-          <div class="data-import-actions"><button type="button" data-c-preview ${!context.available || !context.projection.apply || !context.policies.length ? 'disabled' : ''}>Aktivierung prüfen</button>
-          <button type="button" data-c="activate" disabled>Geprüften Kassenstand aktivieren</button>
+          <div class="data-import-actions"><button type="button" data-c-preview ${!context.available || !context.projection.apply || !context.policies.length ? 'disabled' : ''}>Gesamten Kassenstand prüfen</button>
+          <button type="button" data-c="activate" disabled>Gesamten Kassenstand aktivieren</button>
           <button type="button" data-c-rollback ${!context.available || !context.projection.undo || !context.state.previous ? 'disabled' : ''}>Zum vorherigen Kassenstand zurückkehren</button></div>
           <p data-c="message" role="status" aria-live="polite"></p>`;
       } catch (error) { if (!disposed && ticket === generation) root.textContent = error.message || 'Der Kassenstand ist nicht verfügbar.'; }
@@ -57,13 +75,14 @@
           message(result.items.map(r => `${r.id}: ${r.label}${r.active ? '' : ' (inaktiv)'}`).join(' · ') || 'Kein passendes GP-Ziel.');
         } else if (button.hasAttribute('data-c-preview')) {
           invalidate(); const request = { sourceId: source.id, expectedRevision: context.state.revision, label: el('label').value.trim(), policyId: el('policy').value,
-            mappings: mappings.map(m => ({ ...m })), resolveArticles: el('articles').checked };
+            mappings: [...locationMappings(locations, targets), ...mappings.map(m => ({ ...m }))], resolveArticles: el('articles').checked };
           const checkedFormRevision = formRevision;
           message('Zuordnungen und Datenstand werden geprüft …'); const result = await post('preview', { request });
           if (disposed || ticket !== generation) return;
           if (checkedFormRevision !== formRevision) { message('Die Eingaben wurden während der Prüfung geändert. Bitte die Aktivierung erneut prüfen.'); return; }
           prepared = { request, planHash: result.planHash }; el('activate').disabled = false;
-          message(`${result.bindings} Zuordnungen geprüft. ${result.message}`);
+          const unassigned = locations.filter(m => !m.targetId).length;
+          message(`${locations.length - unassigned} von ${locations.length} Kassenfilialen einem GP-Standort zugeordnet. ${unassigned ? `Ohne GP-Standort: ${unassigned}. Auch diese Daten sind vollständig eingelesen. ` : ''}${result.bindings} Zuordnungen geprüft. ${result.message}`);
         } else if (button === el('activate')) {
           if (!prepared || !confirmAction('Diesen geprüften Kassenstand jetzt für Auswertungen aktivieren? Der bisherige Stand bleibt erhalten.')) return;
           const result = await post('activate', prepared); if (disposed || ticket !== generation) return;
@@ -77,9 +96,20 @@
       } catch (error) { if (!disposed && ticket === generation) message(error.message); }
       finally { working = false; }
     }
-    function changed(event) { event.stopPropagation(); invalidate(); if (event.target === el('kind')) { referenceCursor = null; el('references').textContent = ''; el('targets').replaceChildren(); } }
+    function changed(event) {
+      event.stopPropagation(); invalidate();
+      message('Eingaben geändert. Bitte den gesamten Kassenstand erneut prüfen.');
+      const index = event.target.dataset?.cLocation, historical = event.target.dataset?.cHistorical;
+      if (index !== undefined && locations[index]) {
+        locations[index].targetId = event.target.value; locations[index].match = null;
+        const note = root.querySelector(`[data-c-match="${index}"]`);
+        if (note) note.textContent = event.target.value ? 'Manuell ausgewählt' : 'Ohne GP-Standort';
+      }
+      if (historical !== undefined && locations[historical]) locations[historical].historical = event.target.checked;
+      if (event.target === el('kind')) { referenceCursor = null; el('references').textContent = ''; el('targets').replaceChildren(); }
+    }
     root.addEventListener('click', click); root.addEventListener('input', changed); void load();
-    return { destroy() { disposed = true; generation++; controller.abort(); root.removeEventListener('click', click); root.removeEventListener('input', changed); root.replaceChildren(); mappings = []; prepared = null; } };
+    return { destroy() { disposed = true; generation++; controller.abort(); root.removeEventListener('click', click); root.removeEventListener('input', changed); root.replaceChildren(); mappings = []; locations = []; targets = []; prepared = null; } };
   }
-  return { mount, renderMappings };
+  return { mount, renderMappings, renderLocations, locationMappings };
 }));

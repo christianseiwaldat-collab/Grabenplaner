@@ -51,6 +51,21 @@ async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}) 
   return {...app,state,getSession,keyVault,options,upload,reload,finish,get runtime(){return runtime;}};
 }
 
+test('original upload names remain encrypted and survive reservation, background reading and reconstruction for all three databases',async t=>{
+  for(const kind of ['trade','cash','bestell']) {
+    const f=await fixture(t,{kind});
+    f.options.compactCash=true;f.reload();
+    const fileName=`Original_${kind}_Ü.accdb`;
+    const reserved=await f.runtime.reserve(f.getSession,{buffer:sourceBuffer(),kind,fileName});
+    assert.equal(reserved.fileName,fileName);
+    assert.ok(f.database.prepare('SELECT payload FROM data_import_sources').all().every(row=>!row.payload.includes(fileName)));
+    const completed=await f.upload();assert.equal(completed.fileName,fileName);
+    const runtime=f.reload();assert.equal((await runtime.list(f.getSession)).items[0].fileName,fileName);
+    const repeated=await runtime.upload(f.getSession,{buffer:sourceBuffer(),kind,fileName:'Renamed.accdb'});
+    assert.equal(repeated.id,completed.id);assert.equal(repeated.fileName,fileName);
+  }
+});
+
 test('Bestell: full staged source, exact values, replay, changed snapshot and undo preserve the prior version',async t=>{
   const B=require('../lib/tradefoto-bestell/profiles');
   const {createImportHistoryService}=require('../lib/persistence/repositories/import-history');

@@ -75,6 +75,7 @@ const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresq
 const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-trade-insights.test.js',
   'test/postgresql-login-resilience.test.js',
+  'test/postgresql-branch-order-settings.test.js',
   'lib/persistence/postgresql/core/trade-annotations.js',
   'lib/persistence/postgresql/core/personnel-learning-runs.js',
   'lib/persistence/postgresql/sales/cash-publication-batches.js',

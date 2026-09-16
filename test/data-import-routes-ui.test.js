@@ -33,7 +33,7 @@ async function fixture(t,{jobs=null}={}) {
   const state={session:session(),calls:0,csrf:true,available:true,password:null},app=express();app.use(express.json({limit:'16kb'}));
   const runtime={context:async get=>({available:state.available,projection:buildDataImportProjection(await get()),message:state.available?'ready':'Protected key unavailable'}),
     list:async get=>{await get();return {items:[]};},sourceOperation:async(get,_id,action,body)=>{await get();state.calls++;return {action,body};},
-    upload:async(get,{buffer,kind,password,onStarted})=>{await get();state.calls++;state.kind=kind;state.password=password;assert.ok(Buffer.isBuffer(buffer));onStarted({id:'a'.repeat(64),status:'reading'});buffer.fill(0);}};
+    upload:async(get,{buffer,kind,fileName,password,onStarted})=>{await get();state.calls++;state.kind=kind;state.fileName=fileName;state.password=password;assert.ok(Buffer.isBuffer(buffer));onStarted({id:'a'.repeat(64),status:'reading'});buffer.fill(0);}};
   const mappings={operation:async(get,action,body)=>{await get();state.calls++;return {action,body};}};
   registerDataImportRoutes(app,{runtime,mappings,jobs,requireSession(_r,permission){if(!state.session)throw Object.assign(new Error('private'),{status:401});
     if(!state.session.permissions.includes(permission))throw Object.assign(new Error('private'),{status:403});return state.session;},
@@ -105,6 +105,49 @@ test('Central imports: all three source kinds use the same protected upload rout
   f.state.csrf=false;
   assert.equal((await f.request('/api/data-import/upload/bestell',options)).status,403);
   assert.equal(f.state.calls,3);
+});
+
+test('upload preserves a Unicode basename for both direct and background imports and rejects malformed names',async t=>{
+  const send=(f,name)=>f.request('/api/data-import/upload/cash',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Import-File-Name':name},body:Buffer.alloc(4096)});
+  const direct=await fixture(t);
+  assert.equal((await send(direct,encodeURIComponent('C:\\fakepath\\Kassen_Umsätze 16.09.accdb'))).status,202);
+  assert.equal(direct.state.fileName,'Kassen_Umsätze 16.09.accdb');
+  for(const name of ['%broken',encodeURIComponent('wrong.txt'),encodeURIComponent('Kasse\u0000.accdb')])assert.equal((await send(direct,name)).status,422);
+  assert.equal(direct.state.calls,1);
+  let received;
+  const background=await fixture(t,{jobs:{beginUpload(){return()=>{};},async enqueue(get,input){await get();received=input.fileName;return{id:'a'.repeat(64),status:'queued'};}}});
+  assert.equal((await send(background,encodeURIComponent('Kassen_Umsätze.accdb'))).status,202);
+  assert.equal(received,'Kassen_Umsätze.accdb');
+});
+
+test('uploaded database table uses original names, actual last-update times, safe markup and an honest legacy fallback',()=>{
+  const items=[{id:'one',kind:'cash',fileName:'Kasse <script>.accdb',createdAt:'2026-09-14T10:00:00.000Z',updatedAt:'2026-09-16T11:12:00.000Z',status:'ready'},
+    {id:'two',kind:'bestell',createdAt:'2026-09-13T10:00:00.000Z',status:'reading'}];
+  const html=UI.renderSources(items,'one');
+  assert.match(html,/<th scope="col">Originaldatei<\/th><th scope="col">Status<\/th><th scope="col">Letzte Aktualisierung/);
+  assert.match(html,/datetime="2026-09-16T11:12:00.000Z"/);assert.match(html,/aria-current="true"/);
+  assert.match(html,/Trade_DatenBestell.accdb/);assert.match(html,/Originalname bei diesem älteren Import nicht erfasst/);
+  assert.match(html,/nicht das Datum des letzten Umsatzes/);assert.doesNotMatch(html,/<script>/);
+  assert.match(UI.renderSources([]),/Noch keine/);
+});
+
+test('selecting an older uploaded database retains its table page and selected row',async()=>{
+  const fields=Object.fromEntries(['next','sources','detail','message','log'].map(name=>[name,{hidden:true,innerHTML:'',textContent:'',dataset:{},hasAttribute:()=>false,replaceChildren(){}}]));
+  const handlers={},requests=[],next={beforeAt:'2026-09-15T00:00:00.000Z',beforeId:'a'.repeat(64)};
+  const source={id:'b'.repeat(64),kind:'trade',createdAt:'2026-09-14T00:00:00.000Z',status:'ready',tables:[]};
+  const body={innerHTML:'',querySelector:s=>fields[/data-i="([^"]+)"/.exec(s)?.[1]],addEventListener:(n,h)=>handlers[n]=h,removeEventListener(){},replaceChildren(){}};
+  const root={open:true,querySelector:()=>body,addEventListener(){},removeEventListener(){}};
+  const view=UI.mount(root,{api:async(url,options)=>{
+    if(url.endsWith('/context'))return{available:true,projection:{read:true},message:'Test'};
+    if(url.endsWith('/sources/search')){const input=JSON.parse(options.body);requests.push(input);return{items:input.beforeId?[source]:[],next:input.beforeId?null:next};}
+    return source;
+  }});
+  await new Promise(r=>setImmediate(r));
+  await handlers.click({target:{closest:()=>fields.next}});
+  const button={hasAttribute:()=>false,dataset:{iSource:source.id}};
+  await handlers.click({target:{closest:()=>button}});
+  assert.deepEqual(requests,[{},next,next]);assert.match(fields.sources.innerHTML,/aria-current="true"/);
+  view.destroy();
 });
 test('Productive Block 1: real isolated reader reports malformed ACE files without leaking reader internals',async()=>{
   const buffer=Buffer.alloc(4096);buffer.write('Standard ACE DB',4);buffer[0x14]=3;

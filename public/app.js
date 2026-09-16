@@ -2751,7 +2751,6 @@ function applyRoleVisibility() {
     personnelLearningTeam?.clear();
   document.querySelector('[data-learning-area="team"]')?.classList.toggle("hidden", !personnelLearningCompetencyAccess);
   if (!personnelLearningCompetencyAccess) personnelLearningTeam?.clear();
-  document.querySelectorAll("[data-learning-preset]").forEach(button => button.classList.toggle("hidden", !canManagePersonnelLearningCatalog()));
   elements.addPersonnelLearningModuleButton?.classList.toggle(
     "hidden",
     !canManagePersonnelLearningCatalog()
@@ -17955,38 +17954,6 @@ function populatePersonnelLearningTargets(target = null) {
 function personnelLearningTargetInput() {
   const select = document.getElementById("personnelLearningTargetSkill");
   return !select.value ? null : { skillModuleId:select.value, skillVersionNumber:Number(select.selectedOptions[0].dataset.version), targetLevel:Number(document.getElementById("personnelLearningTargetLevel").value), minimumTrainerLevel:Number(document.getElementById("personnelLearningTrainerLevel").value) };
-}
-
-async function preparePersonnelLearningPreset(kind) {
-  if (!canManagePersonnelLearningCatalog()) return;
-  const preset = globalThis.GrabenplanerLearningPresets[kind];
-  if (kind === "skill") {
-    await loadPersonnelLearningSkillCatalog();
-    const existing = state.personnelLearningSkillCatalog?.skills?.find(s => s.skillCode === preset.skillCode);
-    if (existing?.archived) throw new Error("Die vorhandene Kassa-Fähigkeit zuerst wiederherstellen.");
-    openPersonnelLearningSkillEditor(existing || null);
-    elements.personnelLearningSkillCode.value = preset.skillCode;
-    elements.personnelLearningSkillTitle.value = preset.title;
-    elements.personnelLearningSkillCategory.value = preset.category;
-    elements.personnelLearningSkillSummaryInput.value = preset.summary;
-    elements.personnelLearningSkillTags.value = preset.tags.join(", ");
-    elements.personnelLearningSkillVersionNote.value = preset.versionNote;
-    state.personnelLearningSkillEditorLevels = preset.levelDefinitions.map(level => ({...level}));
-    renderPersonnelLearningSkillLevelEditor();
-    setPersonnelLearningSkillMessage("Vorschlag: Stufen fachlich prüfen und als Entwurf speichern. Es werden keine Mitarbeiterqualifikationen vergeben.");
-  } else {
-    await loadPersonnelLearningCatalog();
-    const existing = state.personnelLearningCatalog?.modules?.find(m => m.moduleCode === preset.moduleCode);
-    if (existing?.archived) throw new Error("Die vorhandene Kassa-Einschulung zuerst wiederherstellen.");
-    await openPersonnelLearningEditor(existing || null);
-    elements.personnelLearningModuleCode.value = preset.moduleCode;
-    for (const [key,id] of Object.entries({title:"personnelLearningTitle",summary:"personnelLearningSummaryInput",objective:"personnelLearningObjective",estimatedMinutes:"personnelLearningEstimatedMinutes",verificationMode:"personnelLearningVerificationMode",versionNote:"personnelLearningVersionNote"})) elements[id].value = preset[key];
-    elements.personnelLearningTags.value = preset.tags.join(", ");
-    state.personnelLearningEditorSteps = preset.steps.map(step => ({...step})); renderPersonnelLearningStepEditor();
-    const skill = state.personnelLearningSkillCatalog?.skills?.find(s => s.skillCode === "kassa.bedienung" && s.publishedVersion && !s.archived);
-    populatePersonnelLearningTargets(skill ? {skillModuleId:skill.id,skillVersionNumber:Number(skill.publishedVersion.versionNumber),targetLevel:4,minimumTrainerLevel:8} : null);
-    setPersonnelLearningMessage(skill ? "Entwurf vorbereitet. Örtliche Abläufe ergänzen und fachlich prüfen; die bisherige Fassung bleibt erhalten." : "Entwurf vorbereitet. Zuerst die Kassa-Fähigkeit prüfen und veröffentlichen, anschließend hier die Zielkompetenz auswählen.");
-  }
 }
 
 async function openPersonnelLearningEditor(module = null) {
@@ -40082,7 +40049,6 @@ document.getElementById("personnelLearningLearnerChoices")?.addEventListener("ch
   state.personnelLearningAssignmentSelectedTrainerIds=state.personnelLearningAssignmentSelectedTrainerIds.filter(id=>!forbidden.has(id));
   renderPersonnelLearningAssignmentTrainerOptions();
 });
-document.querySelectorAll("[data-learning-preset]").forEach(button => button.addEventListener("click", () => preparePersonnelLearningPreset(button.dataset.learningPreset).catch(error => showToast(error.message, true))));
 document.querySelectorAll("[data-learning-area]").forEach((area) => {
   area.addEventListener("toggle", () => loadPersonnelLearningArea(area));
 });
