@@ -176,9 +176,9 @@ test("hardening stays separate from the current core runtime and binds its exact
   // The explicit large-backup timeout delta changes both managed app units.
   // Production adoption still requires the separate runtime migration gate.
   assert.equal(result.fingerprint, "e5e8edd4e7710263ce1b89a5a1214a18a2b7f8a6d37a9248dcccaeb5ca074ef9");
-  // Bounded staging hashes, the 1500-second ready check and serialized
-  // copy work change the pinned Offsite module independently of Hardening.
-  assert.equal(result.offsiteModule.fingerprint, "5dbf1f91a08883656c3cd2f24287bcb8cc5d01ddc8e993cc53951d9cf67c06ed");
+  // Includes the reviewed isolated-smoke support for protected learning
+  // assessments. Adoption still requires the explicit Offsite module update.
+  assert.equal(result.offsiteModule.fingerprint, "58e577b200ad734ade73cb70763b0a894057d9333c4b8d6ced5136a4a0121848");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 

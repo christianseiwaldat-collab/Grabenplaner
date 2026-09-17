@@ -123,6 +123,14 @@ test("archive export creates a new private verified raw pair without overwriting
   if (process.platform !== "win32") {
     assert.equal(fs.statSync(result.exportDirectory).mode & 0o777, 0o700);
     assert.equal(fs.statSync(copied.databasePath).mode & 0o777, 0o600);
+    const privateEntries = directory => {
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        const target = path.join(directory, entry.name);
+        assert.equal(fs.statSync(target).mode & 0o777, entry.isDirectory() ? 0o700 : 0o600, entry.name);
+        if (entry.isDirectory()) privateEntries(target);
+      }
+    };
+    privateEntries(result.exportDirectory);
   }
   const again = manage(["export", f.backups, f.snapshot, f.destination], f.dependencies);
   assert.notEqual(again.exportDirectory, result.exportDirectory);

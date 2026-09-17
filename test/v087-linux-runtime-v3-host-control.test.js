@@ -378,6 +378,7 @@ readonly manifest_result_file="$4"
 readonly TEST_INSTALLED_OFFSITE_RECEIPT="$5"
 readonly service_group="grabenplaner"
 readonly GRABENPLANER_OFFSITE_CONFIGURED=1
+readonly runtime_v5_transition=""
 gp_die() { printf '%s\\n' "$1" >&2; exit 97; }
 getent() {
   [[ "\${1:-}" == "group" && "\${2:-}" == "$service_group" ]] || return 1

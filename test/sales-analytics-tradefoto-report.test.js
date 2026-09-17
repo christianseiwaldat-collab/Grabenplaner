@@ -162,7 +162,8 @@ async function rasterOnlyPdf(sourcePdf) {
     data: new Uint8Array(sourcePdf),
     disableWorker: true,
     isEvalSupported: false,
-    useSystemFonts: true,
+    useSystemFonts: false,
+    standardFontDataUrl: `${path.join(path.dirname(require.resolve("pdfjs-dist/package.json")), "standard_fonts").replaceAll("\\", "/")}/`,
   });
   try {
     const source = await loadingTask.promise;
@@ -254,6 +255,16 @@ test("TradeFoto-PDF: überkomplexe Textschichten werden vor der fachlichen Auswe
       && error.code === "TRADEFOTO_REPORT_COMPLEXITY_LIMIT"
       && error.details.reason === "text_item_characters",
   );
+});
+
+test("TradeFoto-PDF: OCR rendert nicht eingebettete Standardschriften aus lokalen Paketdateien", async () => {
+  const preview = await inspectTradeFotoOcrReportBuffer(await syntheticTradeFotoReport(), {
+    fileName: "synthetische-standardschrift.pdf",
+  });
+  assert.equal(preview.report.externalBranchId, "18");
+  assert.equal(preview.productGroups[0].externalProductGroupId, "101");
+  assert.equal(preview.productGroups[0].horizons.period.current.netRevenue, "100.0000");
+  assert.equal(preview.confirmation.ocrReviewRequired, true);
 });
 
 test("TradeFoto-PDF: lokale OCR erkennt eine reine Rasterseite nur als bearbeitbaren Vorschlag", async () => {

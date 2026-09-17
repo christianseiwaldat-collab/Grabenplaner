@@ -83,8 +83,8 @@ test("v0.92.5: Browser-Sitzungen erhalten bei Aktivität ein neues Ablaufdatum",
 test("v0.92.5: Server verlängert DB-Sitzung und beide Browser-Cookies gemeinsam", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   assert.match(source, /function portalSessionTimeoutMinutes\(\)[\s\S]*?session_timeout_minutes \|\| 480/);
-  assert.match(source, /touchEmployeeSession\(\{ id: session\.id, expiresAt: refreshedExpiresAt \}\)/);
-  assert.match(source, /touchOrganizationSession\(\{ id: organizationSession\.id, expiresAt: refreshedExpiresAt \}\)/);
+  assert.match(source, /renewPortalSession\(\{ session, kind: 'employee'[\s\S]*?expiresAt: refreshedExpiresAt,[\s\S]*?write: value => repository\.touchEmployeeSession\(value\)/);
+  assert.match(source, /renewPortalSession\(\{ session: organizationSession, kind: 'organization'[\s\S]*?expiresAt: refreshedExpiresAt,[\s\S]*?write: value => repository\.touchOrganizationSession\(value\)/);
   assert.match(source, /PORTAL_SESSION_COOKIE,[\s\S]*?\{ httpOnly: true, maxAge \}/);
   assert.match(source, /PORTAL_CSRF_COOKIE,[\s\S]*?\{ maxAge \}/);
 });

@@ -166,9 +166,18 @@ test("PostgreSQL product documentation requires the separately authorized manage
     /ausdrücklich migrierte Ubuntu-Server[\s\S]*grabenplaner_core[\s\S]*grabenplaner_sales[\s\S]*ein einzelner Umgebungsparameter aktiviert ihn nicht/,
   );
 
+  const app = read("public/app.js");
+  // A migrated server may display its provider. Only this read-only system-info
+  // template is exempt; no provider selector or browser activation is allowed.
+  const infoStart = app.indexOf("elements.systemData.innerHTML = `");
+  const infoEnd = app.indexOf("state.serverStatus = info.serverStatus", infoStart);
+  assert.ok(infoStart >= 0 && infoEnd > infoStart);
+  const systemInfoMarkup = app.slice(infoStart, infoEnd);
+  assert.match(systemInfoMarkup, /info\.databaseProvider === "postgresql" \? "PostgreSQL" : "SQLite"/);
+  assert.doesNotMatch(systemInfoMarkup, /\b(?:api|fetch)\s*\(|\bDB_PROVIDER\b|<input|<select|<button/i);
   const productSurface = [
     read("public/index.html"),
-    read("public/app.js"),
+    app.slice(0, infoStart) + app.slice(infoEnd),
     read("public/styles.css"),
   ].join("\n");
   assert.doesNotMatch(productSurface, /\bPostgreSQL\b|\bpostgresql\b/i);

@@ -171,6 +171,13 @@ function moveExclusiveEntry(source, destination) {
   fs.renameSync(source, destination);
   const moved = checkedPath(destination, original.isDirectory() ? "directory" : "file").stat;
   if (moved.dev !== original.dev || moved.ino !== original.ino) fail("MOVE_IDENTITY_CHANGED");
+  restrictPrivateEntry(destination);
+}
+function restrictPrivateEntry(target) {
+  const directory = fs.lstatSync(target).isDirectory();
+  checkedPath(target, directory ? "directory" : "file");
+  fs.chmodSync(target, directory ? 0o700 : 0o600);
+  if (directory) for (const name of fs.readdirSync(target)) restrictPrivateEntry(path.join(target, name));
 }
 function synchronousVerifier(verifyPair = verifyStandaloneBackupPair, environment = process.env) {
   return (pair, marker) => {
