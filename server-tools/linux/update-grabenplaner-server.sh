@@ -522,12 +522,14 @@ create_exact_local_backup() {
   local backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
   local backup_app_dir="$app_dir"
   local -a retention_args=()
-  if [[ -n "$runtime_v5_transition" ]]; then
+  if [[ -n "$runtime_v5_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 )); then
     # This complete candidate tree has already passed manifest, dependency,
-    # ClamAV and permission checks. Never mix its helpers with old libraries.
+    # ClamAV and permission checks. The Xoffi release also carries the bounded
+    # backup query budget needed by large existing pairs. Never mix its helpers
+    # with old libraries.
     backup_app_dir="$extract_root"
     backup_script="$backup_app_dir/server-tools/linux/backup-grabenplaner.sh"
-    retention_args=(--preserve-existing-backups)
+    if [[ -n "$runtime_v5_transition" ]]; then retention_args=(--preserve-existing-backups); fi
   elif [[ "$deploy_mode" == short ]]; then
     retention_args=(--defer-archive)
   fi

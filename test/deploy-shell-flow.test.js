@@ -13,6 +13,32 @@ const workflow = source.slice(source.indexOf(entry))
   .replaceAll("/usr/local/sbin/grabenplaner-offsite-pre-update", "$TEST_MODULE_ROOT/grabenplaner-offsite-pre-update.sh")
   .replaceAll("/opt/grabenplaner-offsite/module", "$TEST_MODULE_ROOT");
 
+for (const scenario of ["ordinary", "xoffi", "runtime-v5"]) {
+  test(`backup source and retention selection: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
+    const start = source.indexOf("create_exact_local_backup() {");
+    const selection = source.slice(start, source.indexOf('  [[ -x "$backup_script" ]]', start));
+    assert.ok(start > 0 && selection.includes('backup_app_dir="$extract_root"'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-backup-selection-"));
+    t.after(() => { assert.equal(path.dirname(fs.realpathSync(root)), fs.realpathSync(os.tmpdir())); fs.rmSync(root, { recursive: true, force: true }); });
+    fs.writeFileSync(path.join(root,"run.sh"), `set -Eeuo pipefail
+app_dir=/installed
+extract_root=/verified-candidate
+runtime_v5_transition=${scenario === "runtime-v5" ? "bound-transition" : "''"}
+xoffi_snapshots_migration=${scenario === "xoffi" ? 1 : 0}
+deploy_mode=full
+${selection}
+  printf '%s\\n' "$backup_app_dir" "$backup_script" "\${retention_args[*]}"
+}
+create_exact_local_backup
+`);
+    const result=spawnSync(bash,["--noprofile","--norc","run.sh"],{cwd:root,encoding:"utf8",timeout:10000});
+    assert.equal(result.status,0,result.stderr);
+    const lines=result.stdout.split(/\r?\n/),expected=scenario==="ordinary"?"/installed":"/verified-candidate";
+    assert.equal(lines[0],expected);assert.equal(lines[1],expected+"/server-tools/linux/backup-grabenplaner.sh");
+    assert.equal(lines[2],scenario==="runtime-v5"?"--preserve-existing-backups":"");
+  });
+}
+
 for (const scenario of ["default", "pinned", "wrong-hash", "writable", "non-root", "migration-conflict"]) {
   test(`explicit package verifier trust: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-verifier-"));

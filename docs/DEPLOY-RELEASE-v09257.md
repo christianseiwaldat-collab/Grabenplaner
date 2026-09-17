@@ -40,10 +40,43 @@ Start der neuen Anwendung. Siehe [Migrationsablauf](XOFFI-MHTML-UND-FILIALEINSAT
   Linux-spezifische Tests unter Windows übersprungen. Alle drei nativen
   PostgreSQL-Tests am endgültigen Code erneut bestanden, einschließlich des
   Schema-Upgrades über den Recovery-Worker. Bash-/JavaScript-Syntax geprüft.
+- Der Linux-CI-Lauf für den Release-Commit umfasst 3695 Tests: 3592 bestanden,
+  dieselben 26 Fehler wie im oben genannten Lauf und 77 übersprungen. Die vier
+  zusätzlichen Release-Tests bestehen; es gibt gegenüber diesem Lauf keine
+  zusätzlichen fehlgeschlagenen Testfälle.
+
+## Erster Paketstand und Korrektur
+
+- Version: `0.92.57-beta`
+- Runtime-Commit: `9ae1ea24d0769d6e39635793b99ff8083a7be6a9`
+- Paket: `Grabenplaner-Server-v0.92.57-beta-linux-x64.zip`
+- Paket-SHA-256: `5b23d9e56f81286a2d66591f64fd48173ddf0cfcc555838473fc3b1cb1b63619`
+- Manifest-SHA-256: `4e793ff0cd11ea11eb76a2e9e00d1f61a972fa6601f850340bbdb2f026e6d4ba`
+- 746 Manifestdateien unabhängig gegen die Paketierung geprüft.
+- Beim ersten Stagingversuch fehlte die erforderliche Dienstgruppe an einem
+  Prüfhelfer. Der Updater brach vor dem Anhalten der App und vor Datenänderungen
+  ab. Nach Anwendung der bestehenden Paket-Berechtigungsroutine und erneuter
+  Paketprüfung wurde derselbe Release-Auftrag erneut gestartet. Die erste
+  Fehlermeldung bleibt in den Nachweisen erhalten.
+- Der anschließende Updateversuch wurde vor dem App-Tausch beim Erstellen des
+  Rückkehrpunkts abgebrochen: PostgreSQL meldete `57014` (Statement-Timeout).
+  Die Sicherungsverbindungen übernahmen das 30-Sekunden-Limit ihrer Rollen.
+  Der bisherige GP wurde wieder gestartet; die Xoffi-Migration lief noch nicht.
+- Vollständige Prüfabfragen innerhalb der gesperrten Sicherung erhalten nun
+  maximal fünf Minuten. Das Limit ist transaktionslokal; die normalen Limits
+  werden nach Commit und Rollback wieder wirksam. Ein nativer PostgreSQL-Test
+  weist beide Fälle mit einer absichtlich langsamen Abfrage nach. Zusätzlich
+  bestehen 32 gezielte Regressionstests; ein Linux-spezifischer Test ist unter
+  Windows unverändert übersprungen.
+- Für diesen expliziten Xoffi-Deploy nutzt der Updater bereits vor dem App-Tausch
+  die vollständige, verifizierte Paketversion des Sicherungswerkzeugs. Dadurch
+  gilt die Korrektur auch für den erforderlichen Rückkehrpunkt. Paketprüfung,
+  Virenscan und Berechtigungsprüfung finden zuvor unverändert statt.
 
 ## Veröffentlichungsstatus
 
-Paketierung, Installation und abschließende VPS-Verifikation stehen noch aus.
+Der erste Paketstand wurde nicht installiert. Das korrigierte Paket und seine
+abschließende VPS-Verifikation stehen noch aus.
 Die Veröffentlichung wird erst nach den tatsächlichen Belegen als abgeschlossen
 dokumentiert. Die umfangreichen Access-Import-Laufzeittests werden nicht erneut
 gestartet.
