@@ -14,7 +14,14 @@ test("Native PostgreSQL: MHTML migration, upload, employee mapping, retained vac
   await migrator.query("SET search_path=pg_catalog,gp");
   try {
     const migration = require("../lib/persistence/postgresql/core/xoffi-snapshots");
-    await migration.migrate(migrator);
+    const restoredSchema = await require("../server-tools/linux/recovery/lib/postgresql-recovery-worker").prepareRestoredSchema({
+      config: { domains: [{ domain: "core", database: "gp_migration_core" }] },
+      connect(database, role) {
+        assert.equal(database, "gp_migration_core"); assert.equal(role, "gp_core_migrator");
+        return new Client({ connectionString: process.env.GP_CORE_MIGRATOR_URL });
+      },
+    });
+    assert.equal(restoredSchema.xoffi.digest, migration.digest);
     assert.equal((await migration.migrate(migrator)).applied, false);
     await require("../lib/persistence/postgresql/boundary/migrate").verifyCoreSchema(migrator);
   } finally { await migrator.end(); }

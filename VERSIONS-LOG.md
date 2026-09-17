@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.57 Beta – 18.09.2026
+
+- Dienstplan und Urlaubsplaner laden gezielt und bündeln PostgreSQL-Lesezugriffe. Die RAM-Anzeige berücksichtigt verfügbaren Linux-Speicher; isolierte Wiederherstellungstests erhalten bis zu 30 Minuten.
+- PDF-Analysen merken sich die persönliche Berichtsauswahl. Das Startdashboard wechselt zwischen Umsatz, RE, RE%, Kunden, €/Kunde und Menge.
+- Xoffi-Wochen lassen sich aus einer MHTML-Datei importieren. Zeitkonto und Urlaubsguthaben bleiben datierte Quellenwerte; GP-Urlaubsansprüche werden nicht überschrieben.
+- Filialeinsatz-Anfragen sind sechs Monate voraus möglich; für heute endet die Frist drei Stunden vor Ladenschluss der Zielfiliale.
+- Artikelstamm mit Suche links und Details rechts, Preisübersicht, Filialbeständen, Produktlinks und Suche nach Hersteller- oder Lieferantenbestellnummern.
+- Die additive Xoffi-Migration wird unter Wartungssperre vor dem App-Start ausgeführt und protokolliert. Ältere Sicherungen erhalten die Erweiterung ausschließlich in ihrer verifizierten isolierten Restore-Testkopie.
+
 ## v0.92.56 Beta – 16.09.2026
 
 - Datenbankimporte zeigen den ursprünglichen Dateinamen und das jüngste fachliche Datum aus der Quelle in einer kompakten Tabelle. Uploadfelder stehen untereinander; technische Details sind eingeklappt.
