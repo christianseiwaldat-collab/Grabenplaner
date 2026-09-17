@@ -317,14 +317,16 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // explicit SQLite operations; the synthetic benchmark is a test entrypoint.
   // The explicitly classified historical transfer, paired recovery and full application
   // rehearsal adapters extend the frozen pre-migration inventory. Unknown files still fail.
-  assert.equal(report.summary.productionDirectFiles, 93);
+  // The explicit Xoffi snapshot migration is an additional classified adapter.
+  assert.equal(report.summary.productionDirectFiles, 94);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
   // The workspace lease reuses the existing lock adapter; Offsite staging
   // reads only the configured database path, not business records.
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 18);
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 15);
+  // Session revocation fixtures share one classified SQLite test adapter.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 16);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);
@@ -437,7 +439,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1354);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1405);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -454,7 +456,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1354,
+    requiredReceiptCount: 1405,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {

@@ -290,9 +290,9 @@ test("Block 5/7: der reale 1257er SQLite-Katalog wird vollständig und geschloss
   const portable = compiled.filter((entry) => entry.strategy === "portable-generated");
   const blocked = compiled.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(compiled.length, 1354);
-  assert.equal(portable.length, 1239);
-  assert.equal(blocked.length, 115);
+  assert.equal(compiled.length, 1405);
+  assert.equal(portable.length, 1280);
+  assert.equal(blocked.length, 125);
   assert.ok(portable.every((entry) => (
     typeof entry.compiledSql === "string"
     && /^[a-f0-9]{64}$/.test(entry.compiledSqlFingerprint)
@@ -310,10 +310,10 @@ test("Block 5/7: der reale 1257er SQLite-Katalog wird vollständig und geschloss
       blockerCounts.set(feature, (blockerCounts.get(feature) || 0) + 1);
     }
   }
-  assert.equal(blockerCounts.get("sqlite.json-functions"), 30);
+  assert.equal(blockerCounts.get("sqlite.json-functions"), 38);
   assert.equal(blockerCounts.get("sqlite.insert-or-ignore"), 18);
   assert.equal(blockerCounts.get("sqlite.collate-nocase"), 27);
   assert.equal(blockerCounts.get("sqlite.rowid-pseudocolumn"), 3);
-  assert.equal(blockerCounts.get("sqlite.like-operator"), 9);
+  assert.equal(blockerCounts.get("sqlite.like-operator"), 11);
   assert.equal(blockerCounts.get("sqlite.cast-integer"), 27);
 });

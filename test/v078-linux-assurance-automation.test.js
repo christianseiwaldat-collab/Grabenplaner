@@ -935,6 +935,52 @@ test("application smoke accepts the complete O2 through O5 lifecycle schema", ()
   }
 });
 
+test("application smoke clears immutable learning assessments only in the isolated copy", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-learning-"));
+  const original = path.join(directory, "original.db");
+  const copy = path.join(directory, "smoke.db");
+  const { TABLES, TRIGGERS } = require("../lib/persistence/sqlite/operations/personnel-learning-runs-schema");
+  let database = new DatabaseSync(original);
+  try {
+    database.exec(`
+      CREATE TABLE personnel_learning_assignments (id TEXT PRIMARY KEY);
+      CREATE TABLE personnel_learning_runs (id TEXT PRIMARY KEY);
+      INSERT INTO personnel_learning_runs VALUES ('learning-run');
+    `);
+    database.exec(TABLES.find(entry => entry.name === "personnel_learning_assessment_records").sql);
+    const triggers = TRIGGERS.filter(entry => entry.name.startsWith("trg_learning_assessment_"));
+    for (const trigger of triggers) database.exec(trigger.sql);
+    const insert = database.prepare(`
+      INSERT INTO personnel_learning_assessment_records
+        (id, assignment_id, sequence_number, kind, payload_json, protected_payload,
+         previous_receipt, receipt_sha256, changed_by, changed_at)
+      VALUES (?, 'learning-run', ?, ?, '{}', ?, ?, ?, 'synthetic-actor', '2026-09-18T00:00:00Z')
+    `);
+    insert.run("exam", 1, "exam_attempt", "enc:v3:synthetic-exam-secret", "", "a".repeat(64));
+    insert.run("evidence", 2, "evidence", "enc:v3:synthetic-evidence-secret", "a".repeat(64), "b".repeat(64));
+    assert.throws(() => database.exec("DELETE FROM personnel_learning_assessment_records"), /immutable/);
+    const triggerSql = database.prepare("SELECT name, sql FROM sqlite_master WHERE type='trigger' ORDER BY name").all();
+    database.close();
+    database = null;
+    const originalBytes = fs.readFileSync(original);
+    fs.copyFileSync(original, copy);
+
+    assert.equal(sanitizeSmokeDatabase(copy), true);
+    assert.deepEqual(fs.readFileSync(original), originalBytes);
+    database = new DatabaseSync(copy);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM personnel_learning_assessment_records").get().count, 0);
+    assert.equal(database.prepare("SELECT id FROM personnel_learning_runs").get().id, "learning-run");
+    assert.deepEqual(database.prepare("SELECT name, sql FROM sqlite_master WHERE type='trigger' ORDER BY name").all(), triggerSql);
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map(row => Object.values(row)[0]), ["ok"]);
+    assert.equal(fs.readFileSync(copy).includes(Buffer.from("synthetic-exam-secret")), false);
+    assert.equal(fs.readFileSync(copy).includes(Buffer.from("synthetic-evidence-secret")), false);
+  } finally {
+    if (database) database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("application smoke accepts and clears the prior O2 lifecycle delete guards", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-lifecycle-o2-"));
   const databaseFile = path.join(directory, "dienstplan.db");

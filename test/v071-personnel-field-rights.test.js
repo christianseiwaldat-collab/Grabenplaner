@@ -130,16 +130,7 @@ function sqliteText(value) {
 }
 
 function installSessionTouchRaceMutation(auth, statements) {
-  const triggerName = `test_personnel_field_actor_race_${crypto.randomBytes(8).toString("hex")}`;
-  db.exec(`
-    CREATE TRIGGER ${triggerName}
-    AFTER UPDATE OF expires_at ON portal_sessions
-    WHEN NEW.id = ${sqliteText(auth.id)}
-    BEGIN
-      ${statements}
-    END
-  `);
-  return () => db.exec(`DROP TRIGGER IF EXISTS ${triggerName}`);
+  return require("../test-support/session-touch-race").installSessionTouchRaceMutation(db, auth, statements);
 }
 
 async function request(route, { method = "GET", auth = null, body } = {}) {
