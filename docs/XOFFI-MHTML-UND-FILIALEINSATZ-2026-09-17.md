@@ -97,10 +97,16 @@ Die Erweiterung läuft mit Umgebungsprüfung, Advisory-Lock, einer serialisierba
 Transaktion sowie verifizierten Vorher-/Nachher-Fingerabdrücken. Wiederholung
 prüft den vorhandenen Vertrag und verändert nichts.
 
-Der neue Helfer `server-tools/linux/lib/xoffi-snapshots-migrate.js` gehört beim
-nächsten ausdrücklich beauftragten Release in den bestehenden geschützten
-Release-Wrapper: **nach dem atomaren App-Tausch, vor Freigabe des App-Verkehrs**,
-unter der weiterhin gehaltenen Wartungssperre auf Dateideskriptor 9.
+Der Helfer `server-tools/linux/lib/xoffi-snapshots-migrate.js` wird im geschützten
+Release-Wrapper über die ausdrücklich gesetzte Updater-Option
+`--xoffi-snapshots-migration` ausgeführt: **nach dem atomaren App-Tausch, vor dem
+Start der neuen App**, unter der weiterhin gehaltenen Wartungssperre auf
+Dateideskriptor 9. Diese Option erzwingt die vollständige Prüfung und akzeptiert
+nur PostgreSQL mit übernommener Wartungssperre. Der Updatebeleg enthält das
+Migrationsergebnis. Weil v0.92.56 diese Option noch nicht kennt, wird für diesen
+Übergang der unabhängig geprüfte Updater aus dem vollständigen Kandidatenpaket
+verwendet; Paketprüfung und Runtimeprüfung erfolgen durch die installierten
+Verifikationswerkzeuge. Es gibt keinen Vertrauenswechsel des Paketprüfers.
 Argumente: geprüfter SHA-256 des installierten Servermanifests und
 `--maintenance-lock-held`. Er akzeptiert nur Linux/root im installierten
 `/opt/grabenplaner/app`, prüft Manifest und Quelldateien sowie einen höchstens
@@ -113,6 +119,14 @@ gültiger Core-Fingerabdruck, unveränderte Sales-Datenbank, normaler Dienstplan
 und Xoffi-Import. Der Linux-Helfer wurde in diesem Block nicht auf dem VPS
 ausgeführt. Ein Rückweg benötigt die bestehende gekoppelte Wiederherstellung;
 ein bloßer Code-Rollback kennt den neuen Schema-Fingerabdruck nicht.
+
+Beim isolierten Restore eines älteren Sicherungspunktes werden zunächst dessen
+ursprüngliche Struktur, Daten, Sequenzen und geschützte Inhalte vollständig
+geprüft. Anschließend ergänzt der Recovery-Worker die Xoffi-Struktur nur in der
+privaten Testkopie für die Prüfung der neuen Anwendung. Das Ergebnis ist als
+`application.schemaUpgrades.xoffi` ausgewiesen. Quellarchiv und Produktivdatenbank
+werden dadurch nicht verändert; bei bereits aktuellem Schema erfolgt keine
+erneute Änderung.
 
 ## Verifikation und Grenzen
 

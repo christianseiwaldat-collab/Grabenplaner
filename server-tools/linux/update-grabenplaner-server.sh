@@ -36,6 +36,9 @@ Ein frischer, vollstaendig gepruefter Rueckkehrpunkt bleibt immer erforderlich.
                                  geprueften Paketpruefer neben diesem Skript;
                                  erzwingt full. Installierter Runtimevertrag,
                                  Paket-Hashes und Modulgrenzen bleiben geprueft.
+  --xoffi-snapshots-migration    Freigegebene PostgreSQL-Xoffi-Erweiterung nach
+                                 dem App-Tausch und vor dem App-Start; verlangt
+                                 eine uebernommene Wartungssperre und full.
 EOF
 }
 
@@ -66,6 +69,7 @@ commit_marker_arg=""
 runtime_v5_transition=""
 verification_policy="auto"
 package_verifier_sha256=""
+xoffi_snapshots_migration=0
 deploy_mode="full"
 deploy_decision='{"mode":"full","reason":"VERIFICATION_UNAVAILABLE"}'
 deploy_started_at="$(date --utc '+%Y-%m-%dT%H:%M:%S.%3NZ')"
@@ -104,6 +108,7 @@ while (($#)); do
     --runtime-v5-transition) runtime_v5_transition="${2:?Wert fuer --runtime-v5-transition fehlt}"; shift 2 ;;
     --verification) verification_policy="${2:?Wert fuer --verification fehlt}"; shift 2 ;;
     --package-verifier-sha256) package_verifier_sha256="${2:?Wert fuer --package-verifier-sha256 fehlt}"; shift 2 ;;
+    --xoffi-snapshots-migration) xoffi_snapshots_migration=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -125,6 +130,11 @@ gp_load_env_file "$env_file"
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
 database_provider="${DB_PROVIDER:-sqlite}"
+if (( xoffi_snapshots_migration == 1 )); then
+  [[ "$database_provider" == postgresql && "$lock_already_held" -eq 1 ]] \
+    || gp_die "Die Xoffi-Erweiterung verlangt PostgreSQL und die uebernommene Wartungssperre."
+  verification_policy=full
+fi
 if [[ "$database_provider" == postgresql ]]; then
   [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] || gp_die 'Der PostgreSQL-Paarbezug ist ungueltig.'
   database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" 'PostgreSQL-Paarbezug')"
@@ -297,6 +307,7 @@ rollback_data_ok=1
 rollback_public_ok=1
 rollback_app_ok=1
 rollback_stop_ok=1
+schema_migration_result="$maintenance_root/schema-migration.json"
 
 write_receipt() {
   local status="$1"
@@ -305,9 +316,13 @@ write_receipt() {
   local receipt="$history_dir/update-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
   "$node" - "$receipt" "$status" "$old_version" "$candidate_version" "$(basename -- "$package")" "$actual_package_sha256" \
     "$backup_database" "$error_text" "$rollback_stop_ok" "$rollback_app_ok" "$rollback_data_ok" "$rollback_public_ok" \
-    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" <<'NODE'
+    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" "$schema_migration_result" <<'NODE'
 const fs = require("node:fs");
-const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile] = process.argv.slice(2);
+const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile, migrationFile] = process.argv.slice(2);
+let schemaMigration = null;
+if (fs.existsSync(migrationFile) && fs.statSync(migrationFile).size) {
+  try { schemaMigration = JSON.parse(fs.readFileSync(migrationFile, "utf8")); } catch { schemaMigration = { verified: false }; }
+}
 const phases = fs.readFileSync(phasesFile, "utf8").trim().split("\n").filter(Boolean).map(line => {
   const [phase, seconds] = line.split("\t");
   if (!/^[a-z-]+$/.test(phase) || !/^\d+$/.test(seconds)) throw new Error("UPDATE_TIMING_INVALID");
@@ -318,6 +333,7 @@ fs.writeFileSync(file, `${JSON.stringify({
   startedAt,
   verification: JSON.parse(decision),
   phases,
+  schemaMigration,
   completedAt: new Date().toISOString(),
   previousVersion,
   requestedVersion: requestedVersion || null,
@@ -863,7 +879,19 @@ mv -- "$extract_root" "$app_dir"
 gp_apply_app_permissions "$app_dir" "$service_group"
 release_database_lock
 
+# Treat any schema change as a data-touching start attempt for the existing
+# PostgreSQL rollback compatibility guard, even when migration fails before
+# systemd starts the replacement. No old app may reopen an incompatible pair.
 new_service_started=1
+if (( ${xoffi_snapshots_migration:-0} == 1 )); then
+  begin_deploy_phase xoffi-schema-migration
+  installed_manifest_sha256="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.json")"
+  "$node" "$app_dir/server-tools/linux/lib/xoffi-snapshots-migrate.js" \
+    "$installed_manifest_sha256" --maintenance-lock-held >"$schema_migration_result" \
+    || gp_die "Die freigegebene Xoffi-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
+  "$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$schema_migration_result" \
+    || gp_die "Der Xoffi-Migrationsnachweis ist unvollstaendig."
+fi
 begin_deploy_phase application-start
 gp_start_service "$service"
 gp_configure_nightly_backups "$app_dir" "$node" || gp_die "Der gemeinsame naechtliche Sicherungsablauf konnte nicht aktiviert werden."

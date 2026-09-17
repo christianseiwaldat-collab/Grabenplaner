@@ -54,7 +54,7 @@ printf '%s\\n' "$trusted_package_verifier" "$installed_runtime_verifier" "$verif
   });
 }
 
-for (const scenario of ["short", "full", "failed-readiness", "failed-schedule"]) {
+for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi"]) {
   test(`actual updater orchestration: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     assert.ok(source.indexOf(entry) > 0);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-shell-"));
@@ -64,6 +64,13 @@ for (const scenario of ["short", "full", "failed-readiness", "failed-schedule"])
     };
     write("app/old.txt", "old application");
     write("candidate/server-tools/linux/test-grabenplaner-server.sh", '#!/usr/bin/env bash\nprintf "short-checks\\n" >> "$EVENTS_FILE"\n');
+    const xoffi = scenario.includes("xoffi");
+    if (xoffi) write("candidate/server-tools/linux/lib/xoffi-snapshots-migrate.js", `
+const fs=require('node:fs');
+fs.appendFileSync(process.env.EVENTS_FILE, 'schema-migration\\n');
+require('node:assert/strict').deepEqual(process.argv.slice(2), ['${"a".repeat(64)}','--maintenance-lock-held']);
+${scenario === "failed-xoffi" ? "process.exit(42);" : `console.log(JSON.stringify({verified:${scenario !== "invalid-xoffi"},salesUnchanged:true}));`}
+`);
     write("module/grabenplaner-offsite-pre-update.sh", '#!/usr/bin/env bash\nprintf "offsite-transfer\\n" >> "$EVENTS_FILE"\n');
     write("module/lib/offsite-common.sh", `offsite_acquire_assurance_lock() { :; }
 offsite_assert_runtime_binaries() { :; }
@@ -98,6 +105,8 @@ runtime_v5_transition=""
 GRABENPLANER_OFFSITE_CONFIGURED=1
 GRABENPLANER_OFFSITE_STATUS_FILE=/var/lib/grabenplaner-offsite/status.json
 deploy_mode=${scenario === "full" ? "full" : "short"}
+xoffi_snapshots_migration=${xoffi ? 1 : 0}
+schema_migration_result="$PWD/migration.json"
 backup_count=0
 gp_info() { :; }
 gp_warn() { printf 'warning\\n' >> "$EVENTS_FILE"; }
@@ -110,6 +119,7 @@ gp_start_service() { printf 'start\\n' >> "$EVENTS_FILE"; }
 gp_configure_nightly_backups() { printf 'schedule-converged\\n' >> "$EVENTS_FILE"; ${scenario === "failed-schedule" ? "return 1" : ":"}; }
 gp_wait_ready() { ${scenario === "failed-readiness" ? "return 1" : ":"}; }
 gp_apply_app_permissions() { :; }
+gp_sha256() { printf '${"a".repeat(64)}'; }
 start_database_lock() { printf 'database-lock\\n' >> "$EVENTS_FILE"; }
 release_database_lock() { :; }
 create_exact_local_backup() {
@@ -128,8 +138,9 @@ ${workflow}
     write("run.sh", script);
     const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 15000 });
     const events = fs.readFileSync(path.join(root, "events"), "utf8").trim().split("\n");
-    if (["failed-readiness", "failed-schedule"].includes(scenario)) {
+    if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi"].includes(scenario)) {
       assert.notEqual(result.status, 0); assert.ok(events.includes("failed")); assert.ok(!events.includes("commit")); assert.ok(!events.includes("queue-assurance"));
+      if (xoffi) { assert.ok(events.includes("schema-migration")); assert.ok(!events.includes("start")); }
     } else {
       assert.equal(result.status, 0, result.stderr);
       assert.equal(events.filter(event => event === "verified-backup").length, scenario === "full" ? 2 : 1);
@@ -142,6 +153,11 @@ ${workflow}
       assert.ok(events.indexOf("short-checks") < events.indexOf("success-receipt"));
       assert.ok(events.indexOf("commit") < events.indexOf("queue-assurance"));
       assert.ok(fs.existsSync(path.join(root, "previous/old.txt")));
+      if (xoffi) {
+        assert.ok(events.indexOf("schema-migration") > events.indexOf("database-lock"));
+        assert.ok(events.indexOf("schema-migration") < events.indexOf("start"));
+        assert.equal(JSON.parse(fs.readFileSync(path.join(root,"migration.json"),"utf8")).verified,true);
+      }
     }
   });
 }
