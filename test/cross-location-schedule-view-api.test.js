@@ -16,6 +16,7 @@ process.env.GRABENPLANER_HOST = "127.0.0.1";
 process.env.GRABENPLANER_FORCE_PORTAL = "1";
 process.env.GRABENPLANER_SEED_DEMO = "1";
 process.env.GRABENPLANER_TEST_TODAY = "2026-08-19";
+process.env.GRABENPLANER_TEST_REQUEST_TIME = "10:00:00";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
@@ -688,7 +689,7 @@ test("Block 4 API: fremde Zielabteilung, fremdes Wunsch-Teammitglied und ferner 
   for (const [patch, expectedStatus, expectedCode] of [
     [{ destinationDepartmentId: foreignDepartment }, 409, "STAFF_ASSIGNMENT_REQUEST_TOPOLOGY_CHANGED"],
     [{ preferredEmployeeNumber: MANAGER }, 409, "STAFF_ASSIGNMENT_REQUEST_PREFERRED_EMPLOYEE_INVALID"],
-    [{ periodStartDate: "2026-08-31", periodEndDate: "2026-08-31" }, 400, "STAFF_ASSIGNMENT_REQUEST_PERIOD_OUT_OF_RANGE"],
+    [{ periodStartDate: "2027-02-20", periodEndDate: "2027-02-20" }, 400, "STAFF_ASSIGNMENT_REQUEST_PERIOD_OUT_OF_RANGE"],
   ]) {
     const result = await mutate(
       "/api/portal/v1/staff-assignment-requests",
@@ -708,6 +709,21 @@ test("Block 4 API: fremde Zielabteilung, fremdes Wunsch-Teammitglied und ferner 
     assert.equal(result.payload.code, expectedCode);
   }
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM staff_assignment_requests").get().count, before);
+});
+
+test("Einsatzanfragen: sechs Monate einschließlich Grenztag, unabhängig vom Anzeigehorizont", async () => {
+  const auth = session(MANAGER);
+  const view = await request(`/api/portal/v1/cross-location-schedules?locationId=${FOREIGN_LOCATION}`, auth);
+  assert.equal(view.response.status,200,JSON.stringify(view.payload));
+  assert.equal(view.payload.requestPeriod.minimum,"2026-08-19");
+  assert.equal(view.payload.requestPeriod.maximum,"2027-02-19");
+  for (const [from,to] of [["2026-08-31","2026-08-31"],["2027-02-19","2027-02-19"],["2026-11-01","2026-12-10"]]) {
+    const result=await mutate('/api/portal/v1/staff-assignment-requests',auth,{
+      sourceLocationId:FOREIGN_LOCATION,destinationDepartmentId:homeDepartment,periodStartDate:from,periodEndDate:to,
+      timeKind:from===to?'full_day':'multi_day',preferredEmployeeNumber:FOREIGN_EMPLOYEE,requestReason:'Synthetische langfristige Anfrage',
+    });
+    assert.equal(result.response.status,201,JSON.stringify(result.payload));
+  }
 });
 
 test("Block 6 API: Genehmigung bindet Anfrage und temporären Filialeinsatz atomar", async () => {
@@ -1129,6 +1145,53 @@ test("Block 12: zwei parallele Entscheidungen erzeugen genau einen verbindlichen
     WHERE action = 'staff-assignment-request.email' AND entity_id = ?
       AND json_extract(detail, '$.kind') = 'accepted'
   `).get(requestId).count, 1);
+});
+
+test("Einsatzanfragen: heutige Frist nutzt die Zielfiliale, wird frisch geprüft und erlaubt morgen", async () => {
+  const previousTime = process.env.GRABENPLANER_TEST_REQUEST_TIME;
+  const previousToday = process.env.GRABENPLANER_TEST_TODAY;
+  const ownDays = db.prepare("SELECT day_settings_json FROM locations WHERE id=?").get(homeLocation).day_settings_json;
+  const foreignDays = db.prepare("SELECT day_settings_json FROM locations WHERE id=?").get(FOREIGN_LOCATION).day_settings_json;
+  const auth = session(MANAGER);
+  const input = { sourceLocationId:FOREIGN_LOCATION, destinationDepartmentId:homeDepartment,
+    periodStartDate:"2026-08-19",periodEndDate:"2026-08-19",timeKind:"full_day",requestReason:"Synthetische Prüfung der Tagesfrist" };
+  try {
+    db.prepare("UPDATE locations SET day_settings_json=? WHERE id=?").run(JSON.stringify({wednesday:{open:true,start:"09:00",end:"18:00"}}),homeLocation);
+    db.prepare("UPDATE locations SET day_settings_json=? WHERE id=?").run(JSON.stringify({wednesday:{open:true,start:"09:00",end:"22:00"}}),FOREIGN_LOCATION);
+    process.env.GRABENPLANER_TEST_REQUEST_TIME="14:59:59";
+    const before = await request("/api/portal/v1/staff-assignment-requests/period",auth);
+    assert.equal(before.payload.requestPeriod.sameDay.cutoffTime,"15:00");
+    assert.equal(before.payload.requestPeriod.minimum,"2026-08-19");
+    const submitted = await mutate("/api/portal/v1/staff-assignment-requests",auth,input);
+    assert.equal(submitted.response.status,201,JSON.stringify(submitted.payload));
+    process.env.GRABENPLANER_TEST_REQUEST_TIME="15:00:00";
+    assert.equal((await request("/api/portal/v1/staff-assignment-requests/period",auth)).payload.requestPeriod.sameDay.allowed,true);
+    process.env.GRABENPLANER_TEST_REQUEST_TIME="15:00:01";
+    const after = await request("/api/portal/v1/staff-assignment-requests/period?locationId="+FOREIGN_LOCATION,auth);
+    assert.equal(after.payload.requestPeriod.minimum,"2026-08-20");
+    assert.equal(after.payload.requestPeriod.maximum,"2027-02-19");
+    const count = db.prepare("SELECT COUNT(*) n FROM staff_assignment_requests").get().n;
+    const denied = await mutate("/api/portal/v1/staff-assignment-requests",auth,{...input, requestPeriod:before.payload.requestPeriod});
+    assert.equal(denied.response.status,409);
+    assert.equal(denied.payload.code,"STAFF_ASSIGNMENT_REQUEST_SAME_DAY_CLOSED");
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM staff_assignment_requests").get().n,count);
+    const tomorrow = await mutate("/api/portal/v1/staff-assignment-requests",auth,{...input,periodStartDate:"2026-08-20",periodEndDate:"2026-08-20"});
+    assert.equal(tomorrow.response.status,201,JSON.stringify(tomorrow.payload));
+    process.env.GRABENPLANER_TEST_REQUEST_TIME="12:00:00";
+    db.prepare("UPDATE locations SET day_settings_json=? WHERE id=?").run(JSON.stringify({wednesday:{open:true,start:"08:00",end:"14:00"}}),homeLocation);
+    assert.equal((await request("/api/portal/v1/staff-assignment-requests/period",auth)).payload.requestPeriod.sameDay.cutoffTime,"11:00");
+    db.prepare("UPDATE locations SET day_settings_json=? WHERE id=?").run(JSON.stringify({wednesday:{open:false,start:"09:00",end:"18:00"}}),homeLocation);
+    assert.equal((await request("/api/portal/v1/staff-assignment-requests/period",auth)).payload.requestPeriod.sameDay.reason,"closed");
+    process.env.GRABENPLANER_TEST_TODAY="2026-10-26";
+    assert.equal((await request("/api/portal/v1/staff-assignment-requests/period",auth)).payload.requestPeriod.minimum,"2026-10-27");
+    assert.equal((await request("/api/portal/v1/staff-assignment-requests/period",session(EMPLOYEE))).response.status,403);
+    assert.equal((await request("/api/portal/v1/staff-assignment-requests/period")).response.status,401);
+  } finally {
+    process.env.GRABENPLANER_TEST_REQUEST_TIME=previousTime;
+    process.env.GRABENPLANER_TEST_TODAY=previousToday;
+    db.prepare("UPDATE locations SET day_settings_json=? WHERE id=?").run(ownDays,homeLocation);
+    db.prepare("UPDATE locations SET day_settings_json=? WHERE id=?").run(foreignDays,FOREIGN_LOCATION);
+  }
 });
 
 test("Block 12: fünf gleichzeitige persönliche Benutzeraktionen bleiben SQLite-stabil", async () => {

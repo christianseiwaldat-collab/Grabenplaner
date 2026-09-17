@@ -63,6 +63,7 @@ const {
   XoffiTimeImportError,
   inspectXoffiImageBuffer,
 } = require("./lib/xoffi-time-import");
+const { inspectXoffiMhtmlBuffer, matchEmployee: matchXoffiEmployee } = require("./lib/xoffi-mhtml-import");
 const {
   SalesAnalyticsReportSeriesError,
   aggregateSalesAnalyticsReportSeries,
@@ -485,6 +486,7 @@ const {
   crossLocationScheduleSettingsValuesFromInput,
   crossLocationScheduleOperationAllowed,
   allowedCrossLocationScheduleWeek,
+  staffAssignmentRequestPeriod,
   projectCrossLocationScheduleView,
 } = require("./lib/cross-location-schedule-access");
 const {
@@ -13317,7 +13319,9 @@ async function saturdayActualContext(employeeNumber, date, now, repository) {
 }
 
 async function employeeXoffiDayMetrics(employeeNumber, row, date, settings, locationId, persist = false) {
-  const legacy = xoffiDayMetrics(row), context = await saturdayCreditService.status(employeeNumber, date);
+  const legacy = xoffiDayMetrics(row);
+  if (row.sourceSnapshot?.kind === "mhtml") return legacy;
+  const context = await saturdayCreditService.status(employeeNumber, date);
   if (!context.cutover || date < context.cutover.effectiveDate || new Date(date + 'T12:00:00Z').getUTCDay() !== 6) return legacy;
   const whole = await saturdayActualContext(employeeNumber, date, new Date(), timeTrackingRepository);
   const valued = await saturdayCreditService.evaluate({ employeeNumber, workDate: date, source: 'actual',
@@ -13511,6 +13515,9 @@ async function evaluateTimeDay(
     departmentId: departmentId || context.departmentId || null,
   });
   const useXoffiActual = Number(xoffiDay?.use_as_actual || 0) === 1;
+  if (useXoffiActual) {
+    xoffiDay.sourceSnapshot = (await repository.getXoffiSnapshot({ importId: xoffiDay.import_id, employeeNumber }))?.snapshot || null;
+  }
   const planned = await plannedDayMetrics(
     employeeNumber,
     date,
@@ -13537,7 +13544,8 @@ async function evaluateTimeDay(
   const todayAfterPlannedEnd = date === today && plannedEndTime && viennaNowLocal(now).slice(11, 16) >= plannedEndTime;
   const bookingWindowEnded = isPast || todayAfterPlannedEnd;
   const toleranceMinutes = Math.max(0, Number(location.time_tracking_variance_minutes ?? 15));
-  const absenceCreditedMinutes = Math.max(0, finiteScheduleMinutes(excused.creditedMinutes));
+  const absenceCreditedMinutes = useXoffiActual && xoffiDay.sourceSnapshot?.kind === "mhtml"
+    ? 0 : Math.max(0, finiteScheduleMinutes(excused.creditedMinutes));
   const differenceMinutes = actual.workedMinutes - planned.netMinutes;
   const valuedMinutes = actual.valuedMinutes + absenceCreditedMinutes;
   const valuedDifferenceMinutes = valuedMinutes - planned.valuedMinutes;
@@ -18190,8 +18198,9 @@ async function validateDepartmentPayload(body, existingId = null) {
 }
 
 async function resolvePlanningContext(input = {}) {
-  (await ensureDefaultLocation());
+  if (!postgresqlActive) await ensureDefaultLocation();
   const locations = await organizationPersonnelRepository.listLocations(true);
+  if (postgresqlActive && !locations.length) throw new Error('PG_APPLICATION_LOCATION_REQUIRED');
   const activeLocations = locations.filter((location) => location.active);
   const fallbackLocation = activeLocations[0] || locations[0];
   let locationId = String(input.locationId || input.location || "").trim();
@@ -19500,9 +19509,10 @@ async function plannedShiftBreaks(shift, settings) {
 }
 
 async function shiftMetrics(shift, settings, { legacyOnly = false } = {}) {
-  const saturdayContext = !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
-    ? await saturdayCreditService.status(shift.employee_number, shift.shift_date) : null;
-  const cutover = saturdayContext?.cutover;
+  // The dated employee assignment is needed only when evaluating Saturday
+  // credit below. Ordinary workdays need the immutable cutover alone.
+  const cutover = !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
+    ? await saturdayCreditService.cutover() : null;
   if (cutover && shift.shift_date < cutover.effectiveDate) {
     const saved = cutover.legacySettings[String(shift.location_id || '')] || cutover.legacySettings['*'];
     if (saved) settings = { ...settings, saturday_bonus_enabled: saved.enabled ? '1' : '0', saturday_bonus_from: saved.from, saturday_bonus_factor: String(saved.factor) };
@@ -20724,6 +20734,11 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
     ...await listWorkRuleAssignments(workRuleStoreRepository),
     ...await listGovernedWorkRuleAssignments(workRuleGovernanceRepository),
   ];
+  const profileVersions = new Map();
+  const profileVersion = (id) => {
+    if (!profileVersions.has(id)) profileVersions.set(id, getWorkRuleProfileVersion(workRuleStoreRepository, id));
+    return profileVersions.get(id);
+  };
   const employeeResults = await Promise.all(evaluationEmployees.map(async (employee) => {
     const employeeNumber = String(employee.personnel_number);
     const sensitive = await personnelSensitiveProfile(employeeNumber);
@@ -20735,10 +20750,7 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
       sensitive.identity.birthDate || "",
     );
     const profileEvaluations = await Promise.all(groups.map(async (group) => {
-      const version = await getWorkRuleProfileVersion(
-        workRuleStoreRepository,
-        group.profileVersionId,
-      );
+      const version = await profileVersion(group.profileVersionId);
       const profile = version?.profile || getBuiltinWorkRuleProfile(
         version?.profileId || String(group.profileVersionId || "").split("@")[0],
       );
@@ -21029,6 +21041,23 @@ async function crossLocationScheduleSettingsFromRepository(repository = planning
   return normalizeCrossLocationScheduleSettings(
     settingsObjectFromRows(await repository.listSettings()),
   );
+}
+
+async function staffAssignmentRequestPeriodForLocation(location, repository = planningSettingsRepository, now = new Date()) {
+  const today = viennaTodayIso(now);
+  const testTime = process.env.NODE_ENV === "test" ? String(process.env.GRABENPLANER_TEST_REQUEST_TIME || "") : "";
+  const localTime = testTime || `${viennaNowLocal(now).slice(11)}:${String(now.getUTCSeconds()).padStart(2, "0")}`;
+  const [settingsRows, blocks] = await Promise.all([repository.listSettings(), repository.listGlobalDayBlocks()]);
+  const settings = { ...defaultSettings, ...settingsObjectFromRows(settingsRows) };
+  const key = dayKeyForDate(today);
+  const days = location?.day_settings || daySettingsFromStoredJson(location?.day_settings_json);
+  const day = key ? days[key] : null;
+  const blocked = publicHolidayName(today) || blocks.some((block) => block.block_date === today
+    && String(block.location_id) === String(location?.id));
+  return staffAssignmentRequestPeriod(today, { localTime,
+    open: Boolean(location?.active && key && !blocked && (day ? day.open !== false : settings[`${key}_open`] !== "0")),
+    closingTime: day ? day.end : settings[`${key}_end_time`],
+  });
 }
 
 async function assertCrossLocationScheduleSettingsManagement(
@@ -21328,6 +21357,8 @@ async function crossLocationSchedulePayload(session, input = {}) {
       cancellationPolicy: configuration.cancellationPolicy,
     },
     selectedLocationId: selectedLocation?.id ? String(selectedLocation.id) : null,
+    requestPeriod: requestDestination ? await staffAssignmentRequestPeriodForLocation(destinationLocation)
+      : staffAssignmentRequestPeriod(viennaTodayIso()),
     requestDestination,
     schedule,
   };
@@ -21873,18 +21904,20 @@ async function submitStaffAssignmentRequest(session, input = {}) {
         decisionReason: "",
       }, { requestStatus: "submitted" });
       const today = viennaTodayIso();
-      const maximum = addDays(
-        currentWeekStart(),
-        configuration.horizonWeeks * 7 - 1,
-      );
+      const period = await staffAssignmentRequestPeriodForLocation(destinationLocation, repositories.planningSettings);
+      const { maximum } = period;
       if (normalized.periodStartDate < today || normalized.periodEndDate > maximum) {
         throw httpError(
           400,
-          configuration.horizonWeeks === 1
-            ? "Einsatzanfragen sind nur ab heute bis zum Ende der aktuellen Kalenderwoche möglich."
-            : "Einsatzanfragen sind nur ab heute bis zum Ende der nächsten Kalenderwoche möglich.",
+          "Einsatzanfragen sind ab heute bis zu sechs Kalendermonate im Voraus möglich.",
           "STAFF_ASSIGNMENT_REQUEST_PERIOD_OUT_OF_RANGE",
         );
+      }
+      if (normalized.periodStartDate < period.minimum) {
+        throw httpError(409, period.sameDay.reason === "closed"
+          ? "Die Zielfiliale ist heute geschlossen. Bitte einen Einsatz ab morgen auswählen."
+          : `Anfragen für heute waren bis ${period.sameDay.cutoffTime || "zum Beginn des Tages"} Uhr möglich (drei Stunden vor Ladenschluss). Bitte einen Einsatz ab morgen auswählen.`,
+        "STAFF_ASSIGNMENT_REQUEST_SAME_DAY_CLOSED");
       }
       let sourceDepartmentId = null;
       if (normalized.preferredEmployeeNumber) {
@@ -22265,7 +22298,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     filterDepartment: context.departmentId ? 1 : 0,
     weekStart,
   };
-  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows] = await Promise.all([
+  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
@@ -22274,6 +22307,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     timeTrackingRepository.listActiveXoffiWeekRows(xoffiQuery),
     timeTrackingRepository.listActiveXoffiWeekDays(xoffiQuery),
     timeTrackingRepository.listLatestXoffiBalances(xoffiQuery),
+    timeTrackingRepository.listXoffiSnapshots({ locationId: context.locationId, departmentId: Number(context.departmentId || 0), weekStart }),
   ]);
   const employees = employeeRows.map(serializeEmployee);
   const visibleEmployeeNumbers = new Set(employees.map((employee) => employee.personnel_number));
@@ -22531,6 +22565,14 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       weekStart: row.balance_week_start,
     };
   }
+  const xoffiSnapshotByEmployee = {};
+  for (const row of xoffiSnapshots) {
+    if (!visibleEmployeeNumbers.has(row.employeeNumber) || xoffiSnapshotByEmployee[row.employeeNumber]) continue;
+    xoffiSnapshotByEmployee[row.employeeNumber] = row.snapshot;
+    if (xoffiWeekByEmployee[row.employeeNumber]?.importId === row.importId) {
+      xoffiWeekByEmployee[row.employeeNumber].snapshot = row.snapshot;
+    }
+  }
 
   return {
     weekStart,
@@ -22563,6 +22605,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     sicknessCreditTotals,
     saturdayStats,
     xoffiTime: {
+      snapshotByEmployee: xoffiSnapshotByEmployee,
       weekByEmployee: xoffiWeekByEmployee,
       balanceByEmployee: xoffiBalanceByEmployee,
     },
@@ -22624,12 +22667,21 @@ async function getVacationPlan(yearValue, contextInput = {}, session = null) {
   for (const holiday of globalHolidayBlocks) {
     if (!vacationHolidays.some((item) => item.date === holiday.date)) vacationHolidays.push(holiday);
   }
-  const [employeeRows, entitlementRows, optionRows] = await Promise.all([
+  const [employeeRows, entitlementRows, optionRows, xoffiSnapshots] = await Promise.all([
     planningSettingsRepository.listVacationEmployees(vacationQuery),
     planningSettingsRepository.listVacationEntitlements(vacationQuery),
     planningSettingsRepository.listVacationOptions(vacationQuery),
+    timeTrackingRepository.listXoffiSnapshots({ locationId: context.locationId, departmentId: Number(context.departmentId || 0),
+      weekStart: yearEnd < viennaTodayIso() ? yearEnd : viennaTodayIso() }),
   ]);
   const employees = employeeRows.map(serializeEmployee);
+  const visibleEmployees = new Set(employees.map((employee) => employee.personnel_number));
+  const xoffiVacationByEmployee = {};
+  for (const row of xoffiSnapshots) {
+    if (!visibleEmployees.has(row.employeeNumber) || xoffiVacationByEmployee[row.employeeNumber]) continue;
+    xoffiVacationByEmployee[row.employeeNumber] = { balanceDate: row.snapshot.balanceDate,
+      remainingVacationDays: row.snapshot.remainingVacationDays };
+  }
   const entitlements = Object.fromEntries(employees.map((employee) => [employee.personnel_number, 0]));
   const entitlementsSaved = Object.fromEntries(employees.map((employee) => [employee.personnel_number, false]));
   for (const row of entitlementRows) {
@@ -22713,6 +22765,7 @@ async function getVacationPlan(yearValue, contextInput = {}, session = null) {
     entitlementsSaved,
     vacations,
     totals,
+    xoffiVacationByEmployee,
     publicHolidays: vacationHolidays.sort((a, b) => a.date.localeCompare(b.date)),
   };
 }
@@ -25785,6 +25838,27 @@ function salesAnalyticsRequestContext(request, { importManagement = false, csrf 
 }
 
 const SALES_ANALYTICS_PREFERENCES_KEY = "sales_analytics_preferences_v1";
+const SALES_ANALYTICS_SELECTION_KEY = "sales_analytics_selection_v1";
+const { normalizeSalesAnalysisSelection } = require('./lib/sales-analysis-selection');
+
+app.get('/api/sales-analytics/selection', async (request, response) => {
+  const { session, projection } = salesAnalyticsRequestContext(request);
+  const stored = await uiPreferencesRepository.get(session.employeeNumber, SALES_ANALYTICS_SELECTION_KEY);
+  let selection = null;
+  try { if (stored) selection = normalizeSalesAnalysisSelection(JSON.parse(stored.value), projection); } catch {}
+  response.setHeader('Cache-Control', 'private, no-store');
+  response.json({ selection });
+});
+
+app.put('/api/sales-analytics/selection', async (request, response) => {
+  const { session, projection } = salesAnalyticsRequestContext(request, { csrf: true });
+  let selection;
+  try { selection = normalizeSalesAnalysisSelection(request.body, projection); }
+  catch { throw httpError(400, 'Die Berichtsauswahl ist ungültig.', 'SALES_ANALYSIS_SELECTION_INVALID'); }
+  await uiPreferencesRepository.upsert(session.employeeNumber, SALES_ANALYTICS_SELECTION_KEY, JSON.stringify(selection));
+  response.setHeader('Cache-Control', 'private, no-store');
+  response.json({ selection });
+});
 const SALES_ANALYTICS_CHART_TYPES = Object.freeze([
   "ranking",
   "change",
@@ -26020,7 +26094,7 @@ function tradeFotoReportHttpError(error) {
 function xoffiTimeImportHttpError(error) {
   if (!(error instanceof XoffiTimeImportError)) return error;
   const messages = {
-    XOFFI_IMAGE_SIZE_INVALID: "Die Bilddatei ist leer oder größer als 18 MB.",
+    XOFFI_IMAGE_SIZE_INVALID: "Die Datei ist leer oder größer als 18 MB.",
     XOFFI_IMAGE_INVALID: "Die Datei ist kein lesbares JPG-, PNG- oder WebP-Bild.",
     XOFFI_IMAGE_LAYOUT_INVALID: "Das Bild ist für eine sichere xoffi-Auswertung zu klein oder ungeeignet.",
     XOFFI_WEEK_NOT_DETECTED: "Die Kalenderwoche konnte im xoffi-Bild nicht sicher erkannt werden.",
@@ -26029,6 +26103,11 @@ function xoffiTimeImportHttpError(error) {
     XOFFI_DAY_COLUMNS_NOT_DETECTED: "Die sieben Tagesspalten konnten im xoffi-Bild nicht sicher erkannt werden.",
     XOFFI_OCR_BUSY: "Die lokale Bilderkennung ist ausgelastet. Bitte den Import in Kürze erneut starten.",
     XOFFI_OCR_TIMEOUT: "Die lokale Bilderkennung hat das Zeitlimit erreicht.",
+    XOFFI_MHTML_INVALID: "Die MHTML-Datei ist unvollständig oder hat kein unterstütztes Format. Bitte die vollständige Xoffi-Seite erneut speichern.",
+    XOFFI_MHTML_ENCODING_INVALID: "Die Zeichenkodierung der MHTML-Datei ist nicht lesbar. Bitte die Seite erneut speichern.",
+    XOFFI_MHTML_DATA_MISSING: "Die MHTML-Datei enthält keine eindeutige vollständige Xoffi-Wochentabelle.",
+    XOFFI_MHTML_WEEK_INVALID: "Kalenderwoche und Sonntag-Stichtag der Xoffi-Datei passen nicht zusammen.",
+    XOFFI_MHTML_VALUES_INVALID: "Mindestens ein Tages- oder Wochenwert ist unvollständig oder widersprüchlich. Bitte die vollständige Xoffi-Woche erneut speichern.",
   };
   const status = error.code === "XOFFI_OCR_BUSY" ? 429
     : error.code === "XOFFI_OCR_TIMEOUT" ? 503
@@ -26067,7 +26146,8 @@ function xoffiCandidateProjection(rows = []) {
 
 function xoffiInteger(value, minimum, maximum, code = "XOFFI_REVIEW_INVALID") {
   const number = Number(value);
-  if (!Number.isInteger(number) || number < minimum || number > maximum) {
+  if (!["number", "string"].includes(typeof value) || String(value).trim() === ""
+    || !Number.isInteger(number) || number < minimum || number > maximum) {
     throw httpError(400, "Bitte alle erkannten xoffi-Werte vollständig prüfen.", code);
   }
   return number;
@@ -26075,7 +26155,7 @@ function xoffiInteger(value, minimum, maximum, code = "XOFFI_REVIEW_INVALID") {
 
 function validateXoffiReviewedRows(inputRows, preview) {
   if (!Array.isArray(inputRows) || inputRows.length !== preview.employees.length || inputRows.length > 250) {
-    throw httpError(400, "Die geprüften Teamzeilen stimmen nicht mit der OCR-Vorschau überein.", "XOFFI_REVIEW_INVALID");
+    throw httpError(400, "Die geprüften Teamzeilen stimmen nicht mit der Importvorschau überein.", "XOFFI_REVIEW_INVALID");
   }
   const candidates = new Set(preview.candidates.map((employee) => employee.employeeNumber));
   const employeeNumbers = new Set();
@@ -26098,7 +26178,11 @@ function validateXoffiReviewedRows(inputRows, preview) {
       }
       dates.add(workDate);
       const intervals = Array.isArray(day.intervals) ? day.intervals.map((value) => String(value).trim()) : [];
-      if (intervals.length > 12 || intervals.some((value) => !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(value))) {
+      intervals.sort();
+      if (intervals.length > 12 || intervals.some((value, intervalIndex) =>
+        !/^(?:[01]\d|2[0-3]):[0-5]\d-(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)
+        || value.slice(0, 5) >= value.slice(6)
+        || (intervalIndex > 0 && value.slice(0, 5) < intervals[intervalIndex - 1].slice(6)))) {
         throw httpError(400, "Mindestens ein xoffi-Zeitintervall ist ungültig.", "XOFFI_REVIEW_INVALID");
       }
       return {
@@ -26107,28 +26191,49 @@ function validateXoffiReviewedRows(inputRows, preview) {
         valuedMinutes: xoffiInteger(day.valuedMinutes, 0, 2880),
         surchargeMinutes: xoffiInteger(day.surchargeMinutes, 0, 1440),
         intervals: [...new Set(intervals)],
-        absence: String(day.absence || "") === "sick" ? "sick" : "",
+        absence: ["sick", "vacation"].includes(String(day.absence || "")) ? String(day.absence) : "",
         confidence: xoffiInteger(day.confidence ?? 0, 0, 100),
       };
     });
     const closingBalanceValue = row.closingBalanceMinutes;
     const closingBalanceMinutes = closingBalanceValue === null || closingBalanceValue === "" || closingBalanceValue === undefined
       ? null : xoffiInteger(closingBalanceValue, -600000, 600000);
-    return {
+    const reviewed = {
       sourceName,
       employeeNumber,
       matchConfidence: employeeNumber === original?.employeeNumber ? xoffiInteger(original.matchConfidence || 0, 0, 100) : 0,
       weeklyActualMinutes: xoffiInteger(row.weeklyActualMinutes, 0, 10080),
       weeklyValuedMinutes: xoffiInteger(row.weeklyValuedMinutes, 0, 20160),
       weeklySurchargeMinutes: xoffiInteger(row.weeklySurchargeMinutes, 0, 10080),
-      closingBalanceMinutes,
+      closingBalanceMinutes: original?.snapshot ? null : closingBalanceMinutes,
+      snapshot: original?.snapshot || null,
       days,
     };
+    if (reviewed.snapshot) {
+      const clockMinutes = (clock) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+      const invalidDay = days.some((day) => day.actualMinutes !== day.intervals.reduce((sum, value) =>
+        sum + clockMinutes(value.slice(6)) - clockMinutes(value.slice(0, 5)), 0)
+        || day.actualMinutes + day.surchargeMinutes > day.valuedMinutes + 2);
+      const invalidWeek = [["actualMinutes", "weeklyActualMinutes"], ["valuedMinutes", "weeklyValuedMinutes"],
+        ["surchargeMinutes", "weeklySurchargeMinutes"]].some(([dayKey, weekKey]) =>
+        Math.abs(days.reduce((sum, day) => sum + day[dayKey], 0) - reviewed[weekKey]) > 7);
+      if (invalidDay || invalidWeek) throw httpError(400,
+        "Die Tagesintervalle, Tagesstunden und Wochensummen passen nicht zusammen. Bitte die geänderten Werte prüfen.", "XOFFI_REVIEW_INVALID");
+    }
+    return reviewed;
   });
 }
 
 function assertXoffiScreenshotWeekConfirmation(preview, input = {}) {
   const resolution = preview?.weekResolution;
+  if (resolution?.source === "mhtml_kw_snapshot" && preview.engineVersion === "xoffi-mhtml-v1"
+    && resolution.status === "matched" && resolution.confirmationRequired === false
+    && isIsoDate(preview.weekStart) && getMonday(preview.weekStart) === preview.weekStart
+    && preview.weekEnd === addDays(preview.weekStart, 6)
+    && resolution.detectedWeekStart === preview.weekStart && resolution.detectedWeekEnd === preview.weekEnd
+    && resolution.selectedWeekStart === preview.weekStart && resolution.selectedWeekEnd === preview.weekEnd
+    && preview.employees.length > 0 && preview.employees.every((row) => row.snapshot?.kind === "mhtml"
+      && row.snapshot.balanceDate === addDays(preview.weekStart, -1))) return resolution;
   const selectedWeekValid = isIsoDate(preview?.weekStart)
     && getMonday(preview.weekStart) === preview.weekStart
     && preview.weekEnd === addDays(preview.weekStart, 6)
@@ -26173,6 +26278,16 @@ async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual,
   await persistenceProvider.transaction(async (executor) => {
     const repositories = createApplicationRepositories(executor);
     const repository = repositories.timeTracking;
+    const previousRows = await repository.listActiveXoffiWeekRows({
+      locationId: preview.context.locationId, weekStart: preview.weekStart,
+      departmentId: departmentId || 0, filterDepartment: departmentId ? 1 : 0,
+    });
+    const reviewedEmployees = new Set(reviewedRows.map((row) => row.employeeNumber));
+    if (previousRows.some((row) => Number(row.department_id || 0) === (departmentId || 0)
+      && !reviewedEmployees.has(row.employee_number))) {
+      throw httpError(409, "Für diese Woche wurden bereits weitere Teammitglieder importiert. Bitte die vollständige Xoffi-Datei dieses Bereichs hochladen, damit deren Stunden erhalten bleiben.",
+        "XOFFI_REIMPORT_INCOMPLETE");
+    }
     await repository.supersedeActiveXoffiImport({
       locationId: preview.context.locationId,
       weekStart: preview.weekStart,
@@ -26206,6 +26321,7 @@ async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual,
       });
       const employeeRowId = Number(inserted.inserted?.id || 0);
       if (!employeeRowId) throw new Error("XOFFI_ROW_INSERT_FAILED");
+      if (row.snapshot) await repository.insertXoffiSnapshot({ employeeRowId, snapshotJson: JSON.stringify(row.snapshot) });
       for (const day of row.days) {
         await repository.insertXoffiDay({
           employeeRowId,
@@ -31426,9 +31542,16 @@ app.post("/api/work-rules/exceptions/:id/revoke", async (request, response) => {
   response.json({ id, state: "revoked" });
 });
 
-app.get("/api/schedule", async (request, response) => {
-  response.json(await getSchedule(request.query.week, request.query, request.portalSession));
-});
+function readModelResponse(build) {
+  return async (request, response) => {
+    const read = () => build(request);
+    // The response is sent only after the snapshot's final authority check.
+    response.json(await (postgresqlActive ? applicationPersistence.readSnapshot(read) : read()));
+  };
+}
+
+app.get("/api/schedule", readModelResponse(request =>
+  getSchedule(request.query.week, request.query, request.portalSession)));
 
 app.put("/api/schedule/manual-lock", async (request, response) => {
   const requestedLocationId = String(
@@ -31588,6 +31711,20 @@ app.put("/api/portal/v1/cross-location-schedule-settings", async (request, respo
     { csrf: true },
   );
   response.json(await updateCrossLocationScheduleSettings(session, request.body || {}));
+});
+
+app.get("/api/portal/v1/staff-assignment-requests/period", async (request, response) => {
+  const session = requireEmployeePortalSession(request, CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE);
+  const access = createCrossLocationScheduleAccessSnapshot(await crossLocationSchedulePrincipal(session));
+  const configuration = await crossLocationScheduleSettingsFromRepository();
+  if (!crossLocationScheduleOperationAllowed(access, configuration, "create")) {
+    throw httpError(403, "Für neue Einsatzanfragen fehlt die Berechtigung.", "STAFF_ASSIGNMENT_REQUEST_SCOPE_DENIED");
+  }
+  const location = (await organizationPersonnelRepository.listLocations(false)).find((row) => row.active
+    && String(row.id) === String(access.organizationScope?.locationId || ""));
+  if (!location) throw httpError(409, "Die Zielfiliale ist nicht verfügbar.", "STAFF_ASSIGNMENT_REQUEST_TOPOLOGY_CHANGED");
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json({ requestPeriod: await staffAssignmentRequestPeriodForLocation(location) });
 });
 
 app.post("/api/portal/v1/staff-assignment-requests", async (request, response) => {
@@ -37464,7 +37601,7 @@ app.get("/api/sales/articles", async (request, response) => {
   setSalesArticleCatalogPrivateHeaders(response);
   try {
     const allowedQueryKeys = new Set([
-      "query", "identifier", "status", "sourceSystem", "sort", "direction", "limit", "offset",
+      "query", "identifier", "orderNumber", "status", "sourceSystem", "sort", "direction", "limit", "offset",
     ]);
     if (Object.keys(request.query || {}).some((key) => !allowedQueryKeys.has(key))) {
       throw new SalesArticleCatalogError(
@@ -37484,16 +37621,10 @@ app.get("/api/sales/articles", async (request, response) => {
     });
     const priceSort = require('./lib/sales-article-table').PRICE_SEARCH_FIELDS.find(p => p.id === search.sort);
     if (priceSort && !projection[priceSort.permission]) throw httpError(403, 'Für diese Preisspalte fehlt die Berechtigung.', 'SALES_ARTICLE_CATALOG_PERMISSION_DENIED');
-    const result = await salesArticleCatalogRepository.search({
-      query: search.query,
-      identifier: search.identifier,
-      status: search.status,
-      sourceSystem: search.sourceSystem,
-      sort: search.sort,
-      direction: search.direction,
-      limit: search.limit,
-      offset: search.offset,
-    }, projection);
+    const orderNumber = normalizeSalesArticleSearch({ query: request.query?.orderNumber }).query;
+    const result = await require('./lib/persistence/repositories/sales-article-workspace').searchSalesArticleWorkspace({
+      access: persistenceProvider, vault: integrationSecretVault, search, orderNumber, projection,
+    });
     await assertFreshSalesArticleRead(request, session, projection);
     response.json(result);
   } catch (error) {
@@ -37703,7 +37834,7 @@ app.get("/api/sales/articles/detail", async (request, response) => {
     const revisions = await salesArticleCatalogRepository.listRevisions(article.productId);
     const projection = salesArticleCatalogProjectionForSession(session);
     const result = await projectSalesArticleDetail(article, revisions, projection);
-    result.article.sourceSections = await require('./lib/sales-article-detail-source').loadSalesArticleSourceSections({ access: persistenceProvider, vault: integrationSecretVault, article, projection });
+    Object.assign(result.article, await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection }));
     await assertFreshSalesArticleRead(request, session, projection);
     response.json(result);
   } catch (error) {
@@ -38328,21 +38459,13 @@ async function systemCenterUpdateStatus() {
 function systemCenterResourceSummary(diagnostics) {
   let databaseBytes = null;
   try { databaseBytes = fs.statSync(databasePath).size; } catch { databaseBytes = null; }
-  const totalMemoryBytes = os.totalmem();
-  const freeMemoryBytes = os.freemem();
   return {
     uptimeSeconds: Math.max(0, Math.floor(process.uptime())),
     cpu: {
       logicalProcessors: os.cpus().length,
       loadAverageOneMinute: process.platform === "linux" ? Number(os.loadavg()[0].toFixed(2)) : null,
     },
-    memory: {
-      totalBytes: totalMemoryBytes,
-      freeBytes: freeMemoryBytes,
-      usedPercent: totalMemoryBytes > 0
-        ? Math.max(0, Math.min(100, Math.round(((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100)))
-        : null,
-    },
+    memory: require('./lib/system-memory').systemMemorySummary(),
     storage: {
       freeBytes: Number.isFinite(diagnostics.storage?.data?.freeBytes)
         ? diagnostics.storage.data.freeBytes : null,
@@ -49130,7 +49253,7 @@ app.post("/api/portal/v1/me/sickness-cases/:id/return-to-work", async (request, 
   response.json(await returnToWorkOwnSicknessCase(session, request.params.id, request.body || {}));
 });
 
-app.get("/api/portal/v1/sickness-cases", async (request, response) => {
+app.get("/api/portal/v1/sickness-cases", readModelResponse(async (request) => {
   const session = requirePortalAnyPermissionOrLocal(request, ["sickness:read", "sickness:manage"]);
   const rows = (await sicknessAmuManagementRepository.listAllSicknessCases({})).filter((row) => {
     try { assertSicknessCaseScope(session, row); return true; } catch { return false; }
@@ -49139,12 +49262,12 @@ app.get("/api/portal/v1/sickness-cases", async (request, response) => {
     includeNote: actorCanReadAmuSensitiveMetadata(session),
     session,
   });
-  response.json({
+  return {
     cases,
     pendingCount: cases.filter((entry) => ["reported", "aum_received"].includes(entry.status)
       || ["yellow", "red", "warning"].includes(entry.severity)).length,
-  });
-});
+  };
+}));
 
 app.get("/api/portal/v1/sickness-cases/:id", async (request, response) => {
   const session = requirePortalAnyPermissionOrLocal(request, ["sickness:read", "sickness:manage"]);
@@ -55770,16 +55893,16 @@ async function applyAmuReportAction(report, session, {
   return amuReportMetadata(report.id);
 }
 
-app.get("/api/portal/v1/amu-reports", async (request, response) => {
+app.get("/api/portal/v1/amu-reports", readModelResponse(async (request) => {
   const session = requirePortalReadOrLocal(request, "sickness:read");
   const canListReports = actorCanListAmuReports(session);
   const canOpenFiles = canListReports && actorCanReadAmuFiles(session);
   const canReview = canListReports && actorCanReviewAmuReports(session);
   if (!canListReports) {
-    return response.json({
+    return {
       reports: [], pendingCount: 0, canOpenFiles: false, canReview: false,
       access: { available: false, mode: "status_only", label: "AUM-Status ohne Dokumentzugriff" },
-    });
+    };
   }
   const rows = await sicknessAmuManagementRepository.listAllAmuReports({});
   const scopedRows = rows.filter((row) => sessionCanListAmuReport(session, row));
@@ -55809,7 +55932,7 @@ app.get("/api/portal/v1/amu-reports", async (request, response) => {
       ),
     }))
     .map((report) => redactAmuReportFileMetadata(report, session));
-  response.json({
+  return {
     reports,
     pendingCount: reports.filter((item) => ["submitted", "returned"].includes(item.status)
       && item.responsibility?.assigned_to_me).length,
@@ -55820,8 +55943,8 @@ app.get("/api/portal/v1/amu-reports", async (request, response) => {
       mode: sessionHasLocalAmuAccess(session) ? "local_manager" : "protected_global",
       label: sessionHasLocalAmuAccess(session) ? "Filialleitung im eigenen Bereich" : "Geschützter Gesamtzugriff",
     },
-  });
-});
+  };
+}));
 
 app.get("/api/portal/v1/amu-reports/:id", async (request, response) => {
   const session = requirePortalReadOrLocal(request, "sickness:read");
@@ -56369,7 +56492,7 @@ async function absenceEntryCapabilities(session, entry) {
   };
 }
 
-app.get("/api/portal/v1/absence-requests", async (request, response) => {
+app.get("/api/portal/v1/absence-requests", readModelResponse(async (request) => {
   const session = requirePortalAnyPermissionOrLocal(request, [
     "vacation:read", "vacation:approve", "time:read", "time:review",
   ]);
@@ -56411,7 +56534,7 @@ app.get("/api/portal/v1/absence-requests", async (request, response) => {
     return session.role !== "hr" || ["developer", "admin"].includes(session.role)
       || isLocalSystemSession(session);
   });
-  response.json({
+  return {
     requests,
     counts: {
       vacation: actionable.filter((entry) => !entry.kind.startsWith("time_off")).length,
@@ -56419,8 +56542,8 @@ app.get("/api/portal/v1/absence-requests", async (request, response) => {
       total: actionable.length,
     },
     vacationHrApprovalRequired: vacationHrApprovalRequired(),
-  });
-});
+  };
+}));
 
 async function prepareVacationRequestFinalization(entry) {
   const vacation = await validateVacationEntry({
@@ -58484,30 +58607,36 @@ app.get("/api/portal/v1/time-summary", async (request, response) => {
 });
 
 app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
-  type: ["image/jpeg", "image/png", "image/webp", "application/octet-stream"],
+  type: ["image/jpeg", "image/png", "image/webp", "application/octet-stream", "multipart/related", "message/rfc822", "application/x-mimearchive"],
   limit: XOFFI_IMAGE_MAX_BYTES,
 }), async (request, response) => {
   const session = requirePortalSession(request, XOFFI_TIME_IMPORT_PERMISSION);
   assertPortalCsrf(request);
-  const expectedWeekStart = assertPastXoffiWeek(String(request.query?.weekStart || ""));
   const context = await xoffiTimeImportContext(session, request.query || {});
-  const candidateRows = await planningSettingsRepository.listScheduleEmployees({
-    locationId: context.locationId,
-    departmentId: context.departmentId || null,
-    weekStart: expectedWeekStart,
-    weekEnd: addDays(expectedWeekStart, 6),
-  });
   let fileName = String(request.get("X-Import-Filename") || "xoffi.png");
   try { fileName = decodeURIComponent(fileName); } catch {}
+  const isMhtml = /\.mht(?:ml)?$/i.test(fileName) || /^(?:multipart\/related|message\/rfc822|application\/x-mimearchive)(?:;|$)/i.test(request.get("Content-Type") || "");
+  let expectedWeekStart = isMhtml ? "" : assertPastXoffiWeek(String(request.query?.weekStart || ""));
   let inspected;
   try {
-    inspected = await inspectXoffiImageBuffer(request.body, {
-      fileName,
-      selectedWeekStart: expectedWeekStart,
-      employees: candidateRows,
-    });
+    if (isMhtml) inspected = inspectXoffiMhtmlBuffer(request.body, { fileName });
   } catch (error) {
     throw xoffiTimeImportHttpError(error);
+  }
+  if (isMhtml) expectedWeekStart = assertPastXoffiWeek(inspected.weekStart);
+  const candidateRows = await planningSettingsRepository.listScheduleEmployees({
+    locationId: context.locationId, departmentId: context.departmentId || null,
+    weekStart: expectedWeekStart, weekEnd: addDays(expectedWeekStart, 6),
+  });
+  if (isMhtml) {
+    for (const row of inspected.employees) {
+      row.employeeNumber = matchXoffiEmployee(row.sourceName, candidateRows);
+      row.matchConfidence = row.employeeNumber ? 100 : 0;
+      if (row.employeeNumber) row.warnings = [];
+    }
+  } else {
+    try { inspected = await inspectXoffiImageBuffer(request.body, { fileName, selectedWeekStart: expectedWeekStart, employees: candidateRows }); }
+    catch (error) { throw xoffiTimeImportHttpError(error); }
   }
   if (inspected.locationCode) {
     let detectedLocationId = "";
@@ -58536,6 +58665,7 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
   response.setHeader("Cache-Control", "private, no-store");
   response.json({
     previewId: previewSession.id,
+    sourceKind: inspected.sourceKind || "image",
     weekStart: inspected.weekStart,
     weekEnd: inspected.weekEnd,
     calendarWeek: getIsoWeek(inspected.weekStart),
@@ -58573,6 +58703,13 @@ app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => 
     throw httpError(403, "Der geprüfte Import liegt nicht mehr im freigegebenen Bereich.", "XOFFI_SCOPE_CHANGED");
   }
   const reviewedRows = validateXoffiReviewedRows(request.body?.employees, preview);
+  const currentCandidates = new Set((await planningSettingsRepository.listScheduleEmployees({
+    locationId: context.locationId, departmentId: context.departmentId || null,
+    weekStart: preview.weekStart, weekEnd: preview.weekEnd,
+  })).map((employee) => employee.personnel_number));
+  if (reviewedRows.some((row) => !currentCandidates.has(row.employeeNumber))) {
+    throw httpError(409, "Die Mitarbeiterzuordnung hat sich geändert. Bitte die Datei erneut einlesen.", "XOFFI_SCOPE_CHANGED");
+  }
   const importId = await storeXoffiTimeImport(
     session,
     preview,
@@ -60657,9 +60794,8 @@ app.delete("/api/global-day-blocks/:id", async (request, response) => {
   response.status(204).end();
 });
 
-app.get("/api/vacations", async (request, response) => {
-  response.json(await getVacationPlan(request.query.year, request.query, request.portalSession));
-});
+app.get("/api/vacations", readModelResponse(request =>
+  getVacationPlan(request.query.year, request.query, request.portalSession)));
 
 app.get("/api/personnel-vacations", async (request, response) => {
   const actor = requireAdminHrOrLocal(request, "personnel:central:read");

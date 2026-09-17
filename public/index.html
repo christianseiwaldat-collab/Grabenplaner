@@ -292,7 +292,7 @@
                   <button class="start-dashboard-card-link" type="button" data-start-dashboard-card-view="salesAdministration"><span><small>Freigegebener Bericht</small><strong>Verkaufsverwaltung</strong><em>Kennzahlen und stärkste Warengruppen</em></span><b aria-hidden="true">→</b></button>
                   <div class="start-dashboard-widget-grid">
                     <section class="start-dashboard-widget" data-start-dashboard-widget="salesKpis"><span>Aktuelle Kennzahlen</span><div id="startDashboardSalesKpis"><p>Verkaufsdaten werden geladen.</p></div></section>
-                    <section class="start-dashboard-widget" data-start-dashboard-widget="salesTopGroups"><span>Stärkste Warengruppen</span><div id="startDashboardSalesTopGroups"><p>Verkaufsdaten werden geladen.</p></div></section>
+                    <section class="start-dashboard-widget" data-start-dashboard-widget="salesTopGroups"><span>Stärkste Warengruppen</span><div class="start-dashboard-scope-switcher start-dashboard-metric-switcher"><button type="button" id="startDashboardPreviousSalesMetric" aria-label="Vorherige Kennzahl">←</button><select id="startDashboardSalesMetric" aria-label="Warengruppen nach Kennzahl sortieren"></select><button type="button" id="startDashboardNextSalesMetric" aria-label="Nächste Kennzahl">→</button></div><div id="startDashboardSalesTopGroups"><p>Verkaufsdaten werden geladen.</p></div></section>
                   </div>
                 </section>
               </div>
@@ -462,6 +462,7 @@
                 <div class="inline-fields staff-assignment-request-times hidden" id="staffAssignmentRequestTimes"><label class="field"><span>Von</span><input id="staffAssignmentRequestStartTime" type="time" step="300" /></label><label class="field"><span>Bis</span><input id="staffAssignmentRequestEndTime" type="time" step="300" /></label></div>
                 <label class="field staff-assignment-request-reason"><span>Begründung</span><textarea id="staffAssignmentRequestReason" maxlength="2000" placeholder="Wofür wird die Unterstützung benötigt?" required></textarea></label>
               </div>
+              <p class="staff-assignment-request-deadline" id="staffAssignmentRequestDeadline" aria-live="polite"></p>
               <p class="staff-assignment-request-message" id="staffAssignmentRequestMessage" role="status" aria-live="polite"></p>
               <div class="modal-actions"><span></span><button class="secondary-button" id="staffAssignmentRequestCancel" type="button">Abbrechen</button><button class="primary-button" id="staffAssignmentRequestSubmit" type="submit">Anfrage senden</button></div>
             </form>
@@ -573,13 +574,13 @@
         <dialog class="modal xoffi-import-modal" id="xoffiImportDialog">
           <form id="xoffiImportForm">
             <div class="modal-header">
-              <div><span class="eyebrow">Vergangene Kalenderwoche</span><h2>xoffi-Zeiterfassung importieren</h2><p>Das Bild wird lokal ausgelesen. Erst die ausdrücklich bestätigte Vorschau wird gespeichert; die Bilddatei selbst wird nicht aufbewahrt.</p></div>
+              <div><span class="eyebrow">Abgeschlossene Kalenderwoche</span><h2>xoffi-Zeiterfassung importieren</h2><p>Die gespeicherte Xoffi-Seite als einzelne MHTML-Datei hochladen. Namen, Kalenderwoche und Stichtagswerte werden automatisch erkannt. Nach Prüfung übernehmen; die Quelldatei wird nicht aufbewahrt.</p></div>
               <button type="button" class="close-button" id="xoffiImportClose" aria-label="Dialog schließen">×</button>
             </div>
             <div class="xoffi-import-source">
-              <label>Bilddatei<input type="file" id="xoffiImportFile" accept="image/jpeg,image/png,image/webp" /></label>
-              <button type="button" class="secondary-button" id="xoffiInspectButton">Bild auslesen</button>
-              <p class="settings-note" id="xoffiImportStatus">Öffnen Sie zuerst die betreffende vergangene Woche im Dienstplan.</p>
+              <label>Xoffi-Datei<input type="file" id="xoffiImportFile" accept=".mhtml,.mht,message/rfc822,multipart/related,image/jpeg,image/png,image/webp" /></label>
+              <button type="button" class="secondary-button" id="xoffiInspectButton">Datei auslesen</button>
+              <p class="settings-note" id="xoffiImportStatus">MHTML erkennt die Woche automatisch. Für Bilder zuerst die betreffende vergangene Woche im Dienstplan öffnen.</p>
             </div>
             <div class="xoffi-import-preview" id="xoffiImportPreview"></div>
             <div class="xoffi-import-confirmation hidden" id="xoffiImportConfirmation">
@@ -1565,28 +1566,28 @@
           <header class="topbar sales-article-catalog-topbar">
             <div class="sales-article-catalog-heading"><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p><p class="sales-article-last-import" id="salesArticleLastImport" aria-live="polite"><span>Letzter TradeFoto-Import</span><time id="salesArticleLastImportValue">Wird geladen …</time></p></div>
             <div class="topbar-actions sales-article-topbar-actions">
-              <form class="sales-article-search-form sales-article-header-search" id="salesArticleSearchForm">
-                <label class="field sales-article-search-query"><span>Artikelnummer oder Bezeichnung</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="z. B. Sony A7* 24-105mm" /></label>
-                <button class="primary-button" id="salesArticleSearchSubmit" type="submit">Suchen</button>
-                <button class="text-button" id="salesArticleSearchReset" type="button" title="Suche zurücksetzen" aria-label="Suche zurücksetzen">↺</button>
-              </form>
               <button class="secondary-button hidden" id="salesArticleActionsLogButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog">Meine Aktionen</button>
               <button class="primary-button hidden" id="salesArticleCreateButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">+ Artikel anlegen</button>
             </div>
           </header>
 
           <div class="sales-article-catalog-workspace">
+            <div class="sales-article-search-column">
             <section class="sales-article-search-shell" aria-labelledby="salesArticleSearchTitle">
               <div class="sales-article-search-heading visually-hidden">
                 <div><span class="eyebrow">Artikelsuche</span><h2 id="salesArticleSearchTitle">Artikel finden</h2><p>Die Liste wird erst nach einer ausdrücklichen Suche geladen.</p></div>
               </div>
+              <form class="sales-article-search-form sales-article-header-search" id="salesArticleSearchForm">
+                <label class="field sales-article-search-query"><span>Artikelnr., Bezeichnung oder EAN</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="Artikel suchen …" /></label>
+                <button class="primary-button" id="salesArticleSearchSubmit" type="submit">Suchen</button>
+                <button class="text-button" id="salesArticleSearchReset" type="button" title="Suche zurücksetzen" aria-label="Suche zurücksetzen">↺</button>
+              </form>
               <details class="sales-article-advanced-search" id="salesArticleAdvancedSearch">
-                <summary><span>Erweiterte Suche</span><small>EAN/GTIN, Status und Quelle</small></summary>
+                <summary><span>Erweiterte Suche</span><small>Bestellnummer und Status</small></summary>
                 <p class="settings-note">Alle Begriffe werden unabhängig von der Reihenfolge gesucht. * ist ein Joker, ? steht für ein Zeichen. Leerzeichen und Trennzeichen werden tolerant behandelt.</p>
                 <div class="sales-article-advanced-fields">
-                  <label class="field"><span>EAN / GTIN oder Teil davon</span><input id="salesArticleSearchIdentifier" form="salesArticleSearchForm" type="search" inputmode="numeric" pattern="[0-9]{1,14}" maxlength="14" autocomplete="off" placeholder="Bis zu 14 Ziffern" /></label>
+                  <label class="field"><span>Bestellnummer</span><input id="salesArticleSearchOrderNumber" form="salesArticleSearchForm" type="search" maxlength="160" autocomplete="off" placeholder="Hersteller oder Lieferant" /></label>
                   <label class="field"><span>Status</span><select id="salesArticleSearchStatusFilter" form="salesArticleSearchForm"><option value="active">Nur aktive Artikel</option><option value="all">Aktive und inaktive</option><option value="inactive">Nur inaktive Artikel</option></select></label>
-                  <label class="field"><span>Quelle</span><select id="salesArticleSearchSourceSystem" form="salesArticleSearchForm"><option value="">Alle Quellen</option><option value="manual.article-catalog">Manuelle Pflege</option><option value="tradefoto.artikel_stamm">TradeFoto-Artikelstamm</option><option value="tradefoto">TradeFoto</option><option value="legacy.loan_articles">Übernommene Leihartikel</option><option value="manual.loan">Manuell angelegte Leihartikel</option><option value="shopware.storefront">Shopware-Storefront</option></select></label>
                 </div>
               </details>
               <p class="sales-article-search-status" id="salesArticleSearchStatus" role="status" aria-live="polite">Suchbegriff eingeben oder die erweiterte Suche verwenden.</p>
@@ -1609,10 +1610,9 @@
                 <div class="sales-article-results-footer"><p class="sales-article-load-status" id="salesArticleLoadStatus">Noch keine Artikel geladen.</p><span id="salesArticleVisibleRowsLabel">10 Artikel sichtbar</span><button type="button" id="salesArticleResizeHandle" class="sales-article-resize-handle" role="slider" aria-label="Höhe der Artikelliste, ziehen oder Pfeiltasten verwenden" aria-valuemin="5" aria-valuemax="20" aria-valuenow="10" aria-orientation="vertical" title="Ziehen: 5 bis 20 Artikel sichtbar">◢</button></div>
               </div>
             </section>
-
+            </div>
             <section class="sales-article-detail" id="salesArticleDetail" aria-labelledby="salesArticleDetailTitle" aria-busy="false">
               <header class="sales-article-detail-heading">
-                <button type="button" class="sales-article-detail-symbol sales-article-image-button" id="salesArticleImageButton" aria-label="Eigenes Artikelbild hinzufügen" aria-haspopup="dialog" aria-controls="salesArticleImageDialog" disabled><span aria-hidden="true">▧</span></button>
                 <div class="sales-article-detail-heading-copy">
                   <span class="eyebrow">Artikelansicht</span>
                   <h2 id="salesArticleDetailTitle" tabindex="-1">Artikelstamm im Detail</h2>
@@ -1620,6 +1620,10 @@
                 </div>
                 <div class="sales-article-detail-heading-meta hidden" id="salesArticleDetailMeta" aria-label="Status des ausgewählten Artikels"></div>
               </header>
+              <section class="sales-article-photo-card hidden" id="salesArticlePhotoCard" aria-label="Artikelfoto">
+                <h3>Artikelfoto</h3>
+                <button type="button" class="sales-article-detail-symbol sales-article-image-button" id="salesArticleImageButton" aria-label="Eigenes Artikelbild hinzufügen" aria-haspopup="dialog" aria-controls="salesArticleImageDialog" disabled><span aria-hidden="true">▧</span></button>
+              </section>
               <div class="sales-article-detail-actions hidden" id="salesArticleDetailActions" aria-label="Aktionen für den ausgewählten Artikel">
                 <button class="text-button" id="salesArticleEditButton" type="button" data-sales-article-action="edit" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Bearbeiten</button>
                 <button class="text-button" id="salesArticleCopyButton" type="button" data-sales-article-action="copy" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Kopieren</button>
@@ -1627,9 +1631,8 @@
               </div>
               <nav class="sales-article-detail-navigation hidden" id="salesArticleDetailNavigation" aria-label="Bereiche der Artikelansicht">
                 <a href="#salesArticleMasterDataSection">Stammdaten</a>
-                <a href="#salesArticleIdentifiersSection">EAN / GTIN</a>
                 <a href="#salesArticlePricesSection">Preise</a>
-                <a href="#salesArticleHistorySection">Herkunft &amp; Verlauf</a>
+                <a href="#salesArticleIdentifiersSection">Kennungen &amp; Verlauf</a>
               </nav>
               <div class="sales-article-detail-body" id="salesArticleDetailBody">
                 <div class="sales-article-detail-empty">
@@ -2344,7 +2347,7 @@
             <div class="settings-card" id="crossLocationScheduleSettingsCard">
               <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Standortübergreifende Dienstplanung</h2><p>Steuert die datensparsame Fremdansicht und wer Einsatzanfragen für die eigene Filiale stellen oder prüfen darf.</p></div></div>
               <label class="switch-row"><span><strong>Fremde Dienstpläne lesend anzeigen</strong><small>Zeigt nur Planzeiten und neutrale Nichtverfügbarkeit; Wochenstunden, Zeitkonten und Regelprüfungen bleiben ausgeblendet.</small></span><input id="crossLocationScheduleEnabled" type="checkbox" /></label>
-              <label class="field"><span>Erlaubter Anzeigezeitraum</span><select id="crossLocationScheduleHorizonWeeks"><option value="1">Nur aktuelle Kalenderwoche</option><option value="2">Aktuelle und nächste Kalenderwoche</option></select><small>Begrenzt zugleich den spätesten Zeitraum neuer Einsatzanfragen.</small></label>
+              <label class="field"><span>Erlaubter Anzeigezeitraum</span><select id="crossLocationScheduleHorizonWeeks"><option value="1">Nur aktuelle Kalenderwoche</option><option value="2">Aktuelle und nächste Kalenderwoche</option></select><small>Fremde Dienstplanansicht. Einsatzanfragen sind unabhängig davon bis zu sechs Kalendermonate im Voraus möglich.</small></label>
               <label class="switch-row"><span><strong>Filialleitungen dürfen Anfragen stellen</strong><small>Anfragen bleiben immer an die eigene Zielfiliale gebunden.</small></span><input id="staffAssignmentManagerCreateEnabled" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Abteilungsleitungen dürfen Anfragen stellen</strong><small>Zusätzlich ist das ausdrücklich erteilte Anfragerecht erforderlich; Ziel bleibt die eigene Abteilung.</small></span><input id="staffAssignmentDepartmentManagerCreateEnabled" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Abteilungsleitungen dürfen Anfragen entscheiden</strong><small>Zusätzlich ist das ausdrücklich erteilte Prüfungsrecht erforderlich; Entscheidungen bleiben im eigenen Fachbereich.</small></span><input id="staffAssignmentDepartmentManagerReviewEnabled" type="checkbox" /></label>
@@ -4303,8 +4306,10 @@
     <script src="/schedule-duty.js"></script>
     <script src="/permission-defaults.js"></script>
     <script src="/sales-report-controls.js"></script>
+    <script src="/sales-dashboard-metrics.js"></script>
     <script src="/sales-report-jobs.js"></script>
     <script src="/sales-article-image.js"></script>
+    <script src="/sales-article-layout.js"></script>
     <script src="/navigation-history.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>

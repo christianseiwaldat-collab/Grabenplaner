@@ -124,6 +124,7 @@ function administration() {
     setSettingsTab(tab) { settings.forEach(item => item.classList.toggle('active', item.dataset.settingsTab === tab)); },
     employeeProfileIsOpen: () => false, accessibleDashboardModes: () => ['rights', 'processes'],
     restoreRememberedOverallContext: () => false, loadAll: options => calls.push({ load: options }),
+    loadPlanningPeriod: period => calls.push({ period }),
     closeMobileNavigation: () => calls.push('closeNavigation'),
     setPersonnelAdministrationTab: tab => { ctx.state.personnelAdministrationTab = tab; },
     setSalesAnalyticsTab: tab => { ctx.state.salesAnalytics.tab = tab; },
@@ -134,7 +135,7 @@ function administration() {
   for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'syncCrmCustomerWorkspace']) ctx[name] = () => {};
   for (const name of ['loadSalesArticleTablePreferences', 'loadSalesArticleLastImport', 'loadCrmPreferences']) ctx[name] = async () => {};
   vm.createContext(ctx);
-  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
+  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
   ctx.grabenplanerNavigation = create({ window: win, app: 'admin', keys: ['view', 'section', 'kind', 'dashboard', 'process', 'location', 'department'],
     read: ctx.currentAdministrationRoute, apply: () => ctx.applyRequestedView({ fromHistory: true }) });
   ctx.grabenplanerNavigation.start(); return { ctx, win, calls };
@@ -198,7 +199,7 @@ test('Administration: Back restores the recorded branch, not the last stored bra
   ctx.restoreRememberedOverallContext = () => { throw Error('History must use its own branch'); };
   win.history.go(-1); assert.equal(ctx.state.locationId, '18'); assert.equal(ctx.state.departmentId, '');
   win.history.go(1); assert.equal(ctx.state.locationId, '20'); assert.equal(ctx.state.departmentId, '2');
-  assert.equal(calls.filter(call => call.load?.restoreContext === false).length, 2);
+  assert.equal(calls.filter(call => call.period === 'schedule').length, 2);
   win.history.replaceState(null, '', '?view=planning&location=unknown&department=99'); ctx.applyRequestedView({ fromHistory: true });
   assert.equal(ctx.state.locationId, '20'); assert.equal(ctx.state.departmentId, '2');
 });

@@ -242,7 +242,7 @@ test("Detailroute hält Stammdaten, Verkaufs- und Kostenpreise serverseitig getr
   assert.match(base.response.headers.get("cache-control") || "", /private/);
   assert.deepEqual(Object.keys(base.payload).sort(), ["article", "capabilities", "revisions"]);
   assert.deepEqual(Object.keys(base.payload.article).sort(), [
-    "active", "articleNumber", "currentRevision", "description", "identifiers", "image", "prices", "provenance", "sourceSections",
+    "active", "articleNumber", "branchStock", "currentRevision", "description", "identifiers", "image", "priceMatrix", "prices", "provenance", "sourceSections",
   ]);
   assert.equal(base.payload.article.articleNumber, ARTICLE_NUMBER);
   assert.deepEqual(base.payload.article.identifiers, [{
@@ -252,6 +252,8 @@ test("Detailroute hält Stammdaten, Verkaufs- und Kostenpreise serverseitig getr
     verifiedAt: TIMESTAMP,
   }]);
   assert.deepEqual(base.payload.article.prices, { sales: null, costs: null });
+  assert.equal(base.payload.article.priceMatrix.sales, null);
+  assert.equal(base.payload.article.priceMatrix.purchase, null);
   assert.deepEqual(base.payload.capabilities, {
     pricesRead: false,
     costsRead: false,

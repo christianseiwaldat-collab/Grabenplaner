@@ -148,8 +148,8 @@ test("GET-API ist persönlich, privat, read-only und validiert eine feste Query-
   assert.match(route, /salesArticleCatalogSession\(request, SALES_ARTICLE_CATALOG_PERMISSIONS\.READ\)/);
   assert.match(route, /setSalesArticleCatalogPrivateHeaders\(response\)/);
   assert.match(route, /normalizeSalesArticleSearch/);
-  assert.match(route, /salesArticleCatalogRepository\.search/);
-  assert.match(route, /"query", "identifier", "status", "sourceSystem", "sort", "direction", "limit", "offset"/);
+  assert.match(route, /searchSalesArticleWorkspace/);
+  assert.match(route, /"query", "identifier", "orderNumber", "status", "sourceSystem", "sort", "direction", "limit", "offset"/);
   assert.doesNotMatch(route, /assertPortalCsrf|\.importSnapshot|\.execute\(/i);
   assert.match(route, /projection\[priceSort.permission\]/);
   assert.match(route, /assertFreshSalesArticleRead/);

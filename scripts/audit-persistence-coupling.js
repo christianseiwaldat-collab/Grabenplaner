@@ -67,7 +67,7 @@ const BASELINE_PACKAGE_DEPENDENCY_NAMES = Object.freeze([
   "tedious",
   "tesseract.js",
 ]);
-const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer", "@zxing/browser"]);
+const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer", "@zxing/browser", "htmlparser2"]);
 // A read-only SQLite snapshot is the source of the user-authorized Block 9
 // transfer. This exception does not permit application fallback to SQLite.
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
@@ -78,6 +78,9 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-branch-order-settings.test.js',
   'lib/persistence/postgresql/core/trade-annotations.js',
   'lib/persistence/postgresql/core/personnel-learning-runs.js',
+  'lib/persistence/postgresql/core/xoffi-snapshots.js',
+  'server-tools/linux/lib/xoffi-snapshots-migrate.js',
+  'test/postgresql-xoffi-mhtml.test.js',
   'lib/persistence/postgresql/sales/cash-publication-batches.js',
   'lib/persistence/postgresql/sales/import-recheck-catalog.js',
   'lib/persistence/postgresql/sales/import-work-queues.js',
@@ -88,6 +91,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'scripts/benchmark-data-import.cjs',
   'test/personnel-learning-postgresql.test.js',
   'lib/persistence/postgresql/reporting/branch-article-catalog.js',
+  'lib/persistence/postgresql/reporting/sales-article-workspace-catalog.js',
+  'test/postgresql-sales-article-workspace.test.js',
 
   'lib/persistence/postgresql/runtime-binding.js',
   'lib/persistence/postgresql/productive-configuration.js',
@@ -120,6 +125,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'scripts/postgresql/application-fault-child.js',
   'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
   'lib/persistence/postgresql/application.js',
+  'lib/persistence/postgresql/read-scope.js',
   'lib/persistence/postgresql/rehearsal-configuration.js',
   'lib/persistence/postgresql/application-operations/access.js',
   'lib/persistence/postgresql/application-operations/async-collections.js',
@@ -242,6 +248,7 @@ const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
   'scripts/benchmark-data-import.cjs',
   'server-tools/linux/lib/trade-annotations-migrate.js',
   'server-tools/linux/lib/personnel-learning-runs-migrate.js',
+  'server-tools/linux/lib/xoffi-snapshots-migrate.js',
   'lib/persistence/postgresql/transfer/staging.js',
   'scripts/postgresql/activation-rehearsal-step.js',
   'server-tools/linux/postgresql/migration-host.js',
@@ -349,6 +356,12 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/trade-insights.js",
   "lib/persistence/statements/trade-annotations.js",
   "lib/persistence/statements/personnel-learning-runs.js",
+  "lib/persistence/statements/xoffi-snapshots.js",
+  "lib/persistence/statements/sales-article-workspace.js",
+  "lib/persistence/sqlite/sales-article-workspace-catalog.js",
+  "lib/persistence/repositories/sales-article-workspace.js",
+  "lib/persistence/sqlite/xoffi-snapshots-catalog.js",
+  "lib/persistence/sqlite/operations/xoffi-snapshots-schema.js",
   "lib/persistence/statements/cash-publication-batches.js",
   "lib/persistence/statements/import-batches.js",
   "lib/persistence/statements/import-reader-batches.js",
@@ -2589,6 +2602,7 @@ function architectureBoundaryViolationsForText(file, text) {
   ]);
   const persistenceInternalFiles = new Set([
     'lib/persistence/postgresql/application.js',
+    'lib/persistence/postgresql/read-scope.js',
     ...PHASE_2_CONTRACT_FILES,
     ...PHASE_3_SQLITE_PROVIDER_FILES,
     ...PHASE_4_PERSISTENCE_FILES,
