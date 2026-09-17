@@ -486,6 +486,91 @@ test("xoffi: Import und Wochenbestätigungs-Audit rollen bei einem Auditfehler g
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action = 'xoffi-time.import.apply' AND detail LIKE ?").get(`%${sourceSha256}%`).count, 0);
 });
 
+test("MHTML API: automatic week and employee, persistent snapshots, unchanged vacation and no duplicate credits", async () => {
+  const { fixtureHtml, mhtml } = require("../test-support/xoffi-mhtml");
+  const auth = createSession(MANAGER);
+  const employeeBefore = db.prepare("SELECT * FROM employees WHERE personnel_number=?").get(MANAGER);
+  const vacationsBefore = db.prepare("SELECT * FROM week_options WHERE employee_number=?").all(MANAGER);
+  async function inspect(body, session = auth) {
+    const response = await fetch(`${baseUrl}/api/portal/v1/xoffi-time-import/inspect?locationId=${LOCATION}&departmentId=${departmentId}`, {
+      method: "POST", headers: { Cookie: session.cookie, "X-CSRF-Token": session.csrf, "Content-Type": "application/octet-stream", "X-Import-Filename": "test.mhtml" }, body,
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  const preview = await inspect(mhtml(fixtureHtml()));
+  assert.equal(preview.status, 200, JSON.stringify(preview.body));
+  assert.equal(preview.body.weekStart, "2026-09-07");
+  assert.equal(preview.body.employees[0].employeeNumber, MANAGER);
+  const applyBody = { previewId: preview.body.previewId, confirmed: true, useAsActual: true, employees: preview.body.employees };
+  // A client cannot overwrite the source snapshot or mislabel it as a closing balance.
+  applyBody.employees[0].snapshot.remainingVacationDays = 999;
+  applyBody.employees[0].closingBalanceMinutes = 999;
+  const response = await fetch(`${baseUrl}/api/portal/v1/xoffi-time-import/apply`, { method: "POST",
+    headers: { Cookie: auth.cookie, "X-CSRF-Token": auth.csrf, "Content-Type": "application/json" }, body: JSON.stringify(applyBody) });
+  const applied = await response.json();
+  assert.equal(response.status, 201, JSON.stringify(applied));
+  const imported = applied.schedule.xoffiTime.weekByEmployee[MANAGER];
+  assert.equal(imported.days.length, 7);
+  assert.equal(imported.useAsActual, true);
+  assert.equal(imported.snapshot.remainingVacationDays, 37.5);
+  assert.equal(imported.snapshot.openingBalanceMinutes, 180);
+  assert.equal(imported.closingBalanceMinutes, null);
+  const vacationPlan = await fetch(`${baseUrl}/api/vacations?year=2026&locationId=${LOCATION}&departmentId=${departmentId}`, {headers:{Cookie:auth.cookie}});
+  assert.equal(vacationPlan.status,200);
+  assert.deepEqual((await vacationPlan.json()).xoffiVacationByEmployee, {
+    [MANAGER]: {balanceDate:"2026-09-06",remainingVacationDays:37.5},
+  });
+  const previousYear = await fetch(`${baseUrl}/api/vacations?year=2025&locationId=${LOCATION}`, {headers:{Cookie:auth.cookie}});
+  assert.deepEqual((await previousYear.json()).xoffiVacationByEmployee,{});
+  assert.deepEqual(db.prepare("SELECT * FROM employees WHERE personnel_number=?").get(MANAGER), employeeBefore);
+  assert.deepEqual(db.prepare("SELECT * FROM week_options WHERE employee_number=?").all(MANAGER), vacationsBefore);
+  const evaluation = await subject.evaluateTimeDay(MANAGER, "2026-09-08", new Date("2026-09-14T12:00:00Z"), departmentId, null, { locationId: LOCATION, filterLocation: true });
+  assert.equal(evaluation.actualMinutes, 90);
+  assert.equal(evaluation.actualValuedMinutes, 384);
+  const vacation = await subject.evaluateTimeDay(MANAGER, "2026-09-09", new Date("2026-09-14T12:00:00Z"), departmentId, null, { locationId: LOCATION, filterLocation: true });
+  assert.equal(vacation.actualMinutes, 0);
+  assert.equal(vacation.actualValuedMinutes, 384);
+  const saturday = await subject.evaluateTimeDay(MANAGER, "2026-09-12", new Date("2026-09-14T12:00:00Z"), departmentId, null, { locationId: LOCATION, filterLocation: true });
+  assert.equal(saturday.actualValuedMinutes, 180);
+  assert.throws(() => db.prepare("UPDATE xoffi_time_snapshots SET snapshot_json='{}'").run(), /immutable/);
+  assert.throws(() => db.prepare("DELETE FROM xoffi_time_snapshots").run(), /immutable/);
+  const current = currentMonday(), previous = new Date(current + 'T12:00:00Z');previous.setUTCDate(previous.getUTCDate()-1);
+  const weekDate = new Date(current + 'T12:00:00Z');weekDate.setUTCDate(weekDate.getUTCDate()+3);
+  const kw = Math.ceil((((weekDate - Date.UTC(weekDate.getUTCFullYear(),0,1,12))/86400000)+1)/7);
+  const date = previous.toISOString().slice(0,10).split('-').reverse().join('.');
+  const rejected = await inspect(mhtml(fixtureHtml({ week: kw, balanceDate: date })));
+  assert.equal(rejected.status, 409);
+  assert.equal(rejected.body.code, "XOFFI_WEEK_NOT_PAST");
+  async function apply(previewBody, employees = previewBody.employees) {
+    const result = await fetch(`${baseUrl}/api/portal/v1/xoffi-time-import/apply`, { method: "POST",
+      headers: { Cookie: auth.cookie, "X-CSRF-Token": auth.csrf, "Content-Type": "application/json" },
+      body: JSON.stringify({ previewId: previewBody.previewId, confirmed: true, useAsActual: true, employees }) });
+    return { status: result.status, body: await result.json() };
+  }
+  const reviewed = await inspect(mhtml());
+  for (const alter of [rows => { rows[0].days[0].actualMinutes = ""; },
+    rows => { rows[0].days[0].intervals = ["09:99-12:30"]; },
+    rows => { rows[0].weeklyValuedMinutes += 60; }]) {
+    const rows = structuredClone(reviewed.body.employees); alter(rows);
+    const invalid = await apply(reviewed.body, rows);
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.code, "XOFFI_REVIEW_INVALID");
+  }
+  const fullInput = mhtml(fixtureHtml() + fixtureHtml({ name: "Alina Abteilungsleitung" }));
+  for (let repeat = 0; repeat < 2; repeat++) {
+    const full = await inspect(fullInput);
+    const result = await apply(full.body);
+    assert.equal(result.status, 201, JSON.stringify(result.body));
+    assert.equal(Object.keys(result.body.schedule.xoffiTime.weekByEmployee).length, 2);
+  }
+  const partial = await inspect(mhtml());
+  const incomplete = await apply(partial.body);
+  assert.equal(incomplete.status, 409);
+  assert.equal(incomplete.body.code, "XOFFI_REIMPORT_INCOMPLETE");
+  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM xoffi_time_employee_rows r JOIN xoffi_time_imports i ON i.id=r.import_id
+    WHERE i.location_id=? AND i.week_start='2026-09-07' AND i.status='active'`).get(LOCATION).n, 2);
+});
+
 test("v0.92.5: xoffi-Rohdaten bleiben revisionssicher und funktionieren auch bei deaktivierter Live-Zeiterfassung", async () => {
   for (const table of ["xoffi_time_imports", "xoffi_time_employee_rows", "xoffi_time_days"]) {
     assert.equal(db.prepare("SELECT type FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)?.type, "table");

@@ -390,9 +390,9 @@ const state = {
     limit: 50,
     nextOffset: 0,
     query: "",
-    identifier: "",
+    orderNumber: "",
     status: "active",
-    sourceSystem: "",
+
     sort: "articleNumber",
     direction: "asc",
     searchStarted: false,
@@ -761,8 +761,9 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 
 const elements = Object.fromEntries(
   [
+    "staffAssignmentRequestDeadline",
     "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchIdentifier", "salesArticleSearchStatusFilter", "salesArticleSearchSourceSystem", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
+    "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchOrderNumber", "salesArticleSearchStatusFilter", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
@@ -1726,7 +1727,7 @@ function applyFunctionSearchNavigationState(target) {
     if (state.rightsDashboardMode !== target.dashboardMode) return false;
   }
   if (target.requestKind && !setManagerRequestKindTab(target.requestKind)) return false;
-  if (contextChanged) loadAll();
+  if (contextChanged || planningContextNeedsReload(target.view)) loadPlanningView(target.view);
   return true;
 }
 
@@ -3353,9 +3354,25 @@ async function loadAll({ restoreContext = true } = {}) {
   }
 }
 
+function planningContextNeedsReload(view) {
+  if (!["planning", "vacations"].includes(view)) return false;
+  const vacation = view === "vacations";
+  const data = vacation ? state.vacationData : state.data;
+  const department = !vacation || state.portalSession?.user?.role === "department_manager" ? state.departmentId : "";
+  return !data || data.context?.locationId !== state.locationId
+    || String(data.context?.departmentId || "") !== String(department || "");
+}
+
+function loadPlanningView(view) {
+  return ["planning", "vacations"].includes(view)
+    ? loadPlanningPeriod(view === "vacations" ? "vacation" : "schedule")
+    : loadAll({ restoreContext: false });
+}
+
 async function loadPlanningPeriod(kind = "schedule") {
   if (!state.data || !state.vacationData || !state.locations?.length) return loadAll();
   const generation = ++loadAllGeneration;
+  const started = globalThis.performance?.now();
   planningPeriodController?.abort();
   const controller = new AbortController();
   planningPeriodController = controller;
@@ -3373,6 +3390,7 @@ async function loadPlanningPeriod(kind = "schedule") {
     if (vacation) {
       state.vacationData = data;
       state.vacationYear = data.year;
+      state.locations = data.locations || state.locations;
     } else {
       state.data = data;
       state.allowPastWeekEditing = data.settings?.allow_past_week_editing === "1";
@@ -3381,7 +3399,20 @@ async function loadPlanningPeriod(kind = "schedule") {
       state.locationId = data.context?.locationId || state.locationId;
       state.departmentId = data.context?.departmentId ? String(data.context.departmentId) : "";
     }
-    render();
+    render({ period: vacation ? "vacation" : "schedule" });
+    if (Number.isFinite(started) && globalThis.requestAnimationFrame && globalThis.performance?.measure) {
+      // A bounded, anonymous browser timing includes rendering and the next
+      // painted frame. Useful for verifying week switches on the real VPS.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (generation !== loadAllGeneration) return;
+        const name = vacation ? "gp.vacation-year" : "gp.schedule-week";
+        const end = performance.now();
+        performance.clearMeasures(name);
+        performance.measure(name, { start: started, end });
+        if (!vacation && elements.timeline) elements.timeline.dataset.weekLoadMilliseconds = String(Math.round(end - started));
+        if (vacation && elements.vacationCalendar) elements.vacationCalendar.dataset.loadMilliseconds = String(Math.round(end - started));
+      }));
+    }
   } catch (error) {
     if (generation === loadAllGeneration && !controller.signal.aborted) showToast(error.message, true);
   } finally {
@@ -3389,7 +3420,13 @@ async function loadPlanningPeriod(kind = "schedule") {
   }
 }
 
-function render() {
+function render({ period = null } = {}) {
+  if (period === "vacation") {
+    applyShellBranding(hasManagementBrandingAccess() ? {} : state.vacationData?.settings || {});
+    renderContextNavigation();
+    renderVacations();
+    return;
+  }
   applyShellBranding(hasManagementBrandingAccess() ? {} : state.data?.settings || {});
   renderContextNavigation();
   renderHeader();
@@ -3401,6 +3438,7 @@ function render() {
   renderTimeline();
   renderRemarks();
   renderHoursOverview();
+  if (period === "schedule") return;
   renderStartDashboard();
   renderFilialDashboard();
   renderVacations();
@@ -4933,25 +4971,40 @@ function renderStaffAssignmentRequestFormState() {
 
 function staffAssignmentRequestCalendarBounds() {
   const payload = state.crossLocationSchedulePayload;
-  const minimum = [toIsoDate(new Date()), payload?.weeks?.[0]?.weekStart || ""]
-    .filter(Boolean).sort().at(-1) || toIsoDate(new Date());
-  const maximum = payload?.weeks?.at(-1)?.weekEnd || addDays(minimum, 13);
+  const minimum = payload?.requestPeriod?.minimum || toIsoDate(new Date());
+  const maximum = payload?.requestPeriod?.maximum || minimum;
   return { minimum, maximum };
 }
 
-function openStaffAssignmentRequestDateRangeCalendar() {
+async function refreshStaffAssignmentRequestPeriod() {
+  const context = state.crossLocationSchedulePayload;
+  const response = await api("/api/portal/v1/staff-assignment-requests/period");
+  if (context !== state.crossLocationSchedulePayload) return false;
+  context.requestPeriod = response.requestPeriod;
+  const rule = response.requestPeriod.sameDay;
+  elements.staffAssignmentRequestDeadline.textContent = rule.allowed
+    ? `Für heute bis ${rule.cutoffTime} Uhr anfragen · Ladenschluss der Zielfiliale: ${rule.closingTime} Uhr. Spätere Einsätze bis sechs Monate voraus.`
+    : rule.reason === "closed"
+      ? "Die Zielfiliale ist heute geschlossen. Einsätze sind ab morgen bis sechs Monate voraus anfragbar."
+      : `Für heute ist die Frist um ${rule.cutoffTime || "00:00"} Uhr abgelaufen (Ladenschluss ${rule.closingTime} Uhr). Bitte einen Einsatz ab morgen auswählen.`;
+  return true;
+}
+
+async function openStaffAssignmentRequestDateRangeCalendar() {
   if (!state.staffAssignmentRequestDateRangeCalendar) {
     showToast("Der Zeitraumkalender konnte nicht geladen werden.", true);
     return;
   }
+  try { if (!await refreshStaffAssignmentRequestPeriod()) return; }
+  catch (error) { elements.staffAssignmentRequestMessage.textContent = error.message; return; }
   const timeKind = staffAssignmentRequestTimeKind();
   const { minimum, maximum } = staffAssignmentRequestCalendarBounds();
   state.staffAssignmentRequestDateRangeCalendar.open({
-    start: elements.staffAssignmentRequestDateFrom.value,
-    end: elements.staffAssignmentRequestDateTo.value,
+    start: elements.staffAssignmentRequestDateFrom.value < minimum ? minimum : elements.staffAssignmentRequestDateFrom.value,
+    end: elements.staffAssignmentRequestDateTo.value < minimum ? minimum : elements.staffAssignmentRequestDateTo.value,
     min: minimum,
     max: maximum,
-    maxEndDays: timeKind === "multi_day" ? 13 : 0,
+    ...(timeKind === "multi_day" ? {} : { maxEndDays: 0 }),
     allowOpenEnd: false,
     onCommit(dateFrom, dateTo) {
       elements.staffAssignmentRequestDateFrom.value = dateFrom;
@@ -4988,7 +5041,10 @@ function initializeStaffAssignmentRequestDateRangeCalendar() {
   );
 }
 
-function openStaffAssignmentRequestDialog({ date = "", preferredEmployeeNumber = "" } = {}) {
+async function openStaffAssignmentRequestDialog({ date = "", preferredEmployeeNumber = "" } = {}) {
+  if (!canCreateStaffAssignmentRequestFromSchedule()) return;
+  try { if (!await refreshStaffAssignmentRequestPeriod()) return; }
+  catch (error) { showToast(error.message, true); return; }
   const payload = state.crossLocationSchedulePayload;
   const schedule = payload?.schedule;
   const destination = payload?.requestDestination;
@@ -5694,6 +5750,13 @@ function scheduleEmployeeAccessibleLabel(employee) {
   return [fullName, employee.personnel_number, position].filter(Boolean).join(" · ");
 }
 
+function xoffiImportedBadge(employeeNumber) {
+  const imported = state.data?.xoffiTime?.weekByEmployee?.[employeeNumber];
+  if (!state.data?.isPastWeek || !imported?.useAsActual || imported.days?.length !== 7) return "";
+  const label = `xoffi-Stunden für KW ${state.data.calendarWeek} übernommen`;
+  return `<span class="xoffi-imported-check" role="img" aria-label="${escapeHtmlAttribute(label)}" title="${escapeHtmlAttribute(label)}">✓</span>`;
+}
+
 function scheduleHasSundayEntries() {
   const sunday = addDays(state.weekStart, 6);
   return (state.data.shifts || []).some(shift => shift.shift_date === sunday)
@@ -5758,7 +5821,7 @@ function renderTimeline() {
     const headers = dayEmployees.length
       ? dayEmployees.map((employee) => `
           <div class="employee-strip" style="background:${employee.color};color:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" aria-label="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" tabindex="0">
-            <strong>${escapeHtml(window.GPScheduleDuty.scheduleEmployeeInitials(employee))}</strong><small>${escapeHtml(employee.personnel_number)}</small>
+            <strong>${escapeHtml(window.GPScheduleDuty.scheduleEmployeeInitials(employee))}${xoffiImportedBadge(employee.personnel_number)}</strong><small>${escapeHtml(employee.personnel_number)}</small>
           </div>`).join("")
       : '<div class="employee-strip" style="background:#d7ddda;color:#65716c"><strong>Kein Team</strong></div>';
 
@@ -5879,11 +5942,8 @@ function hoursOverviewValue(value) {
 function renderHoursOverview() {
   const showSaturdayStats = state.data.settings.show_saturday_service_stats !== "0";
   if (elements.xoffiImportButton) {
-    const eligibleWeek = state.data.isPastWeek === true && canImportXoffiTime();
-    elements.xoffiImportButton.disabled = !eligibleWeek;
-    elements.xoffiImportButton.title = eligibleWeek
-      ? "xoffi-Bild für diese abgeschlossene Kalenderwoche auslesen"
-      : "Der xoffi-Import ist ausschließlich in vergangenen Kalenderwochen verfügbar.";
+    elements.xoffiImportButton.disabled = !canImportXoffiTime();
+    elements.xoffiImportButton.title = "MHTML-Datei einer abgeschlossenen Kalenderwoche importieren; die Woche wird automatisch erkannt.";
   }
   let hasEstimatedSaturdayStats = false;
   elements.hoursOverview.innerHTML = state.data.employees.map((employee) => {
@@ -5900,6 +5960,7 @@ function renderHoursOverview() {
     const saturdayStats = state.data.saturdayStats?.byEmployee?.[employee.personnel_number] || null;
     const xoffi = state.data.xoffiTime?.weekByEmployee?.[employee.personnel_number] || null;
     const xoffiBalance = state.data.xoffiTime?.balanceByEmployee?.[employee.personnel_number] || null;
+    const xoffiSnapshot = xoffi?.snapshot || state.data.xoffiTime?.snapshotByEmployee?.[employee.personnel_number];
     if (saturdayStats?.fourWeeksEstimated || saturdayStats?.threeMonthsEstimated) hasEstimatedSaturdayStats = true;
     const saturdayStatsHtml = showSaturdayStats && saturdayStats ? `
       <div class="hours-saturday-stats">
@@ -5922,7 +5983,7 @@ function renderHoursOverview() {
     return `<article class="hours-card">
       <div class="hours-person">
         <span class="hours-color" style="background:${employee.color}"></span>
-        <div><strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.full_name)}</small></div>
+        <div><strong>${escapeHtml(employee.nickname)} ${xoffiImportedBadge(employee.personnel_number)}</strong><small>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.full_name)}</small></div>
       </div>
       <div class="hours-values">
         <span><small>Eingeteilt gesamt</small><strong>${hoursOverviewValue(planned)}</strong></span>
@@ -5933,7 +5994,7 @@ function renderHoursOverview() {
       </div>
       ${calculationError ? '<p class="calculation-note">Die Wochenstunden konnten nicht vollständig berechnet werden. Bitte den Dienstplan neu laden.</p>' : ""}
       ${xoffiHtml}
-      ${balanceHtml}
+      ${xoffiSnapshot ? `<div class="xoffi-source-snapshot"><strong>xoffi · Stand ${formatDate(xoffiSnapshot.balanceDate)}</strong><span>Zeitkonto: ${formatHours(xoffiSnapshot.openingBalanceMinutes)}</span><span>Resturlaub: ${Number(xoffiSnapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</span><small>Ohne künftig fixierte Urlaube · separater Quellenstand</small>${xoffi?.snapshot ? `<span>Mehrstunden dieser Woche: ${formatHours(xoffiSnapshot.weeklyBalanceDeltaMinutes)}</span>` : ""}</div>` : balanceHtml}
       ${saturdayStatsHtml}
       <div class="hours-progress"><span style="width:${percentage}%;background:${employee.color}"></span></div>
     </article>`;
@@ -6082,6 +6143,7 @@ function renderVacations() {
   );
   elements.vacationSummary.innerHTML = employees.length ? employees.map((employee) => {
     const totals = state.vacationData.totals[employee.personnel_number] || { entitlement: 0, used: 0, remaining: 0 };
+    const xoffi = state.vacationData.xoffiVacationByEmployee?.[employee.personnel_number];
     return `<article class="vacation-summary-card">
       <div class="vacation-summary-head">
         <span class="vacation-color" style="background:${employee.color}"></span>
@@ -6091,6 +6153,10 @@ function renderVacations() {
         <div><span>Jahresurlaub</span><strong>${formatDays(totals.entitlement)}</strong></div>
         <div><span>Verplant</span><strong>${formatDays(totals.planned ?? totals.used)}</strong></div>
         <div><span>Rest</span><strong>${formatDays(totals.remaining)}</strong></div>
+      </div>
+      <div class="vacation-xoffi-balance"><span>Xoffi-Urlaubsguthaben</span>
+        ${xoffi ? `<strong>${Number(xoffi.remainingVacationDays).toLocaleString("de-AT", { maximumFractionDigits: 2 })} ${Math.abs(Number(xoffi.remainingVacationDays)) === 1 ? "Tag" : "Tage"}</strong><small>Stand ${formatDate(xoffi.balanceDate)} · ohne künftig fixierte Urlaube</small>`
+          : '<small>Noch kein Xoffi-Stand importiert</small>'}
       </div>
       ${showEntitlementInputs ? `<label class="vacation-entitlement"><span>Jahresurlaub per 1.1.</span><input data-vacation-entitlement="${escapeHtml(employee.personnel_number)}" type="number" min="0" max="365" step="0.5" value="${Number(totals.entitlement || 0)}" /></label>` : ""}
     </article>`;
@@ -20305,6 +20371,24 @@ function cycleStartDashboardSalesLocation(direction) {
   ));
 }
 
+function startDashboardSalesMetric() {
+  const metrics = GrabenplanerSalesDashboardMetrics.definitions(state.startDashboardSalesDetail);
+  let saved = "";
+  try { saved = localStorage.getItem(`${startDashboardPreferencesStorageKey()}:metric`); } catch {}
+  return metrics.find(metric => metric.id === saved) || metrics[0];
+}
+
+function changeStartDashboardSalesMetric(value) {
+  const metrics = GrabenplanerSalesDashboardMetrics.definitions(state.startDashboardSalesDetail);
+  const current = startDashboardSalesMetric();
+  const selected = typeof value === "number"
+    ? metrics[(metrics.findIndex(metric => metric.id === current.id) + value + metrics.length) % metrics.length]
+    : metrics.find(metric => metric.id === value);
+  if (!selected) return;
+  try { localStorage.setItem(`${startDashboardPreferencesStorageKey()}:metric`, selected.id); } catch {}
+  renderStartDashboardSalesWidgets();
+}
+
 function renderStartDashboardSalesWidgets() {
   renderStartDashboardSalesLocationOptions();
   const detail = state.startDashboardSalesDetail;
@@ -20323,19 +20407,29 @@ function renderStartDashboardSalesWidgets() {
     }
   }
   if (elements.startDashboardSalesTopGroups) {
+    const selectedMetric = startDashboardSalesMetric();
+    const metricSelect = document.getElementById("startDashboardSalesMetric");
+    if (metricSelect) {
+      metricSelect.innerHTML = GrabenplanerSalesDashboardMetrics.definitions(detail)
+        .map(metric => `<option value="${metric.id}">${escapeHtml(metric.label)}</option>`).join("");
+      metricSelect.value = selectedMetric.id;
+      metricSelect.disabled = !detail || state.startDashboardSalesLoading;
+    }
+    for (const id of ["startDashboardPreviousSalesMetric", "startDashboardNextSalesMetric"]) {
+      const button = document.getElementById(id);
+      if (button) button.disabled = !detail || state.startDashboardSalesLoading;
+    }
     if (state.startDashboardSalesLoading) {
       elements.startDashboardSalesTopGroups.innerHTML = '<p class="start-dashboard-empty">Warengruppen werden geladen.</p>';
     } else if (state.startDashboardSalesError) {
       elements.startDashboardSalesTopGroups.innerHTML = `<p class="start-dashboard-empty error">${escapeHtml(state.startDashboardSalesError)}</p>`;
     } else {
-      const rows = (detail?.productGroups || []).map((group) => ({
+      const { metric, rows: ranked } = GrabenplanerSalesDashboardMetrics.ranking(detail, selectedMetric.id);
+      const rows = ranked.map(({ group, amount }) => ({
         title: `${group.externalProductGroupId} · ${group.label}`,
-        amount: salesMetricNumber(group.horizons?.period, "netRevenue", "current"),
-      })).filter((entry) => entry.amount !== null)
-        .sort((left, right) => right.amount - left.amount)
-        .slice(0, 5)
-        .map((entry) => ({ title: entry.title, detail: formatSalesDecimal(entry.amount, { currency: true }) }));
-      elements.startDashboardSalesTopGroups.innerHTML = startDashboardListMarkup(rows, "Noch keine Warengruppen verfügbar.");
+        detail: formatSalesDecimal(amount, { currency: metric.currency, maximumFractionDigits: metric.id === "customerCount" ? 0 : 2 }) + (metric.percent ? " %" : ""),
+      }));
+      elements.startDashboardSalesTopGroups.innerHTML = startDashboardListMarkup(rows, `Keine Werte für ${metric.label} verfügbar.`);
     }
   }
 }
@@ -20608,7 +20702,7 @@ async function navigateFromStartDashboardCard(button) {
     }
     rememberOverallContext(view, locationId, departmentId);
     setView(view);
-    await loadAll({ restoreContext: false });
+    await loadPlanningView(view);
   } else if (view === "loans") {
     state.loanManagementLocationId = locationId;
     setView(view);
@@ -22368,14 +22462,14 @@ async function loadMobilePortalLocationDisplay() {
 }
 
 function xoffiHoursInput(minutes) {
-  return Number.isFinite(Number(minutes)) ? (Number(minutes) / 60).toFixed(2) : "";
+  return minutes !== null && minutes !== undefined && Number.isFinite(Number(minutes)) ? (Number(minutes) / 60).toFixed(2) : "";
 }
 
 function xoffiMinutesInput(input, { nullable = false } = {}) {
   const value = String(input?.value || "").trim().replace(",", ".");
   if (!value && nullable) return null;
   const hours = Number(value);
-  if (!Number.isFinite(hours)) throw new Error("Bitte alle xoffi-Stundenwerte vollständig prüfen.");
+  if (!value || !Number.isFinite(hours)) throw new Error("Bitte alle xoffi-Stundenwerte vollständig prüfen.");
   return Math.round(hours * 60);
 }
 
@@ -22389,7 +22483,7 @@ function resetXoffiImport() {
   if (elements.xoffiImportPreview) elements.xoffiImportPreview.innerHTML = "";
   elements.xoffiImportConfirmation?.classList.add("hidden");
   if (elements.xoffiApplyButton) elements.xoffiApplyButton.disabled = true;
-  if (elements.xoffiImportStatus) elements.xoffiImportStatus.textContent = `KW ${state.data?.calendarWeek || getIsoWeek(state.weekStart)} · Bilddatei auswählen und lokal auslesen.`;
+  if (elements.xoffiImportStatus) elements.xoffiImportStatus.textContent = "MHTML-Datei auswählen. Mitarbeiter und abgeschlossene Kalenderwoche werden aus der Datei ermittelt.";
 }
 
 function xoffiWeekRangeLabel(weekStart, weekEnd = addDays(weekStart, 6)) {
@@ -22421,14 +22515,14 @@ function renderXoffiImportPreview() {
     <div class="xoffi-preview-rows">${preview.employees.map((employee, rowIndex) => `
       <article class="xoffi-preview-row" data-xoffi-row="${rowIndex}" data-source-name="${escapeHtmlAttribute(employee.sourceName)}" data-match-confidence="${Number(employee.matchConfidence || 0)}">
         <div class="xoffi-row-heading">
-          <div><strong>${escapeHtml(employee.sourceName)}</strong><small>OCR-Zuordnung ${Number(employee.matchConfidence || 0)} %</small></div>
+          <div><strong>${escapeHtml(employee.sourceName)}</strong><small>${employee.employeeNumber ? "Automatisch zugeordnet" : "Zuordnung erforderlich"}</small></div>
           <label>Teammitglied<select data-xoffi-employee><option value="">Bitte zuordnen</option>${candidateOptions(employee.employeeNumber)}</select></label>
         </div>
         <div class="xoffi-week-values">
           <label>Ist gesamt (h)<input data-xoffi-week-actual type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklyActualMinutes)}" /></label>
           <label>Gewertet (h)<input data-xoffi-week-valued type="number" step="0.01" min="0" max="336" value="${xoffiHoursInput(employee.weeklyValuedMinutes)}" /></label>
           <label>Zuschläge (h)<input data-xoffi-week-surcharge type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklySurchargeMinutes)}" /></label>
-          <label>Stundenkonto (h)<input data-xoffi-balance type="number" step="0.01" min="-10000" max="10000" value="${xoffiHoursInput(employee.closingBalanceMinutes)}" /></label>
+          ${employee.snapshot ? `<div class="xoffi-source-snapshot"><strong>Stand ${formatDate(employee.snapshot.balanceDate)}</strong><span>Zeitkonto: ${xoffiHoursInput(employee.snapshot.openingBalanceMinutes)} h</span><span>Resturlaub: ${Number(employee.snapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</span><span>Vertrag: ${employee.snapshot.workdaysPerWeek} × ${xoffiHoursInput(employee.snapshot.dailyTargetMinutes)} h = ${xoffiHoursInput(employee.snapshot.dailyTargetMinutes * employee.snapshot.workdaysPerWeek)} h/Woche</span><span>Mehrstunden dieser Woche: ${xoffiHoursInput(employee.snapshot.weeklyBalanceDeltaMinutes)} h</span><small>Resturlaub am Stichtag, ohne künftig fixierte Urlaube. Der GP-Urlaubsstand und der GP-Vertrag bleiben erhalten.</small></div>` : `<label>Stundenkonto (h)<input data-xoffi-balance type="number" step="0.01" min="-10000" max="10000" value="${xoffiHoursInput(employee.closingBalanceMinutes)}" /></label>`}
         </div>
         <div class="xoffi-days">${employee.days.map((day, dayIndex) => `
           <div class="xoffi-day" data-xoffi-day="${dayIndex}" data-work-date="${escapeHtmlAttribute(day.workDate)}" data-confidence="${Number(day.confidence || 0)}">
@@ -22458,16 +22552,16 @@ function renderXoffiImportPreview() {
 async function inspectXoffiImportFile() {
   const file = elements.xoffiImportFile?.files?.[0];
   if (!file) {
-    elements.xoffiImportStatus.textContent = "Bitte zuerst eine JPG-, PNG- oder WebP-Datei auswählen.";
+    elements.xoffiImportStatus.textContent = "Bitte zuerst eine MHTML-Datei oder eine JPG-, PNG- oder WebP-Datei auswählen.";
     return;
   }
-  if (!state.data?.isPastWeek) {
+  if (!/\.mht(?:ml)?$/i.test(file.name) && !state.data?.isPastWeek) {
     elements.xoffiImportStatus.textContent = "Der Import ist nur in einer vergangenen Kalenderwoche möglich.";
     return;
   }
   elements.xoffiInspectButton.disabled = true;
   elements.xoffiApplyButton.disabled = true;
-  elements.xoffiImportStatus.textContent = "Bild wird lokal ausgelesen. Das kann kurz dauern.";
+  elements.xoffiImportStatus.textContent = "Datei wird ausgelesen und der abgeschlossenen Kalenderwoche zugeordnet.";
   try {
     const parameters = new URLSearchParams({
       weekStart: state.data.weekStart,
@@ -22487,7 +22581,7 @@ async function inspectXoffiImportFile() {
     renderXoffiImportPreview();
     elements.xoffiImportStatus.textContent = xoffiWeekConfirmationRequired()
       ? "OCR-Vorschlag erstellt. Kalenderwoche sowie sämtliche Werte und Zuordnungen müssen ausdrücklich geprüft werden."
-      : "Datumsspalten und GP-Kalenderwoche stimmen überein. Bitte sämtliche Werte und Zuordnungen prüfen.";
+      : "Mitarbeiter und Kalenderwoche erkannt. Bitte die Zuordnung und Werte vor der Übernahme prüfen.";
   } catch (error) {
     state.xoffiImportPreview = null;
     elements.xoffiImportPreview.innerHTML = "";
@@ -22501,7 +22595,7 @@ async function inspectXoffiImportFile() {
 
 function collectXoffiReviewedRows() {
   const preview = state.xoffiImportPreview;
-  if (!preview) throw new Error("Bitte das Bild zuerst auslesen.");
+  if (!preview) throw new Error("Bitte die Datei zuerst auslesen.");
   return [...elements.xoffiImportPreview.querySelectorAll("[data-xoffi-row]")].map((row) => ({
     sourceName: row.dataset.sourceName,
     employeeNumber: row.querySelector("[data-xoffi-employee]").value,
@@ -24510,7 +24604,7 @@ function systemCenterResourceCards(resources) {
   const metrics = [
     { label: "Serverlaufzeit", value: systemCenterUptimeLabel(resources.uptimeSeconds), detail: "Seit dem letzten App-Start" },
     { label: "CPU", value: Number.isFinite(resources.cpu?.loadAverageOneMinute) ? `${resources.cpu.loadAverageOneMinute} Last` : "Aktiv", detail: `${Number(resources.cpu?.logicalProcessors || 0)} logische Prozessoren` },
-    { label: "Arbeitsspeicher", value: Number.isFinite(resources.memory?.usedPercent) ? `${resources.memory.usedPercent}% belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.freeBytes)} frei` },
+    { label: "Arbeitsspeicher", value: Number.isFinite(resources.memory?.usedPercent) ? `${resources.memory.usedPercent}% belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.availableBytes ?? resources.memory?.freeBytes)} verfügbar` },
     { label: "Freier Speicher", value: systemCenterByteLabel(resources.storage?.freeBytes), detail: `Datenbank ${systemCenterByteLabel(resources.storage?.databaseBytes)}` },
   ];
   return `<section class="system-center-resources" aria-label="Aktuelle technische Ressourcen">${metrics.map((metric) => `<article><small>${escapeHtml(metric.label)}</small><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span></article>`).join("")}</section>`;
@@ -26770,8 +26864,24 @@ async function saveApprovalDelegation(event) {
   } catch (error) { showToast(error.message, true); }
 }
 
-async function loadManagerVacationRequests() {
+let managerRequestsInFlight = null;
+let managerRequestsLastRefresh = 0;
+async function loadManagerVacationRequests({ background = false } = {}) {
   if (!elements.managerVacationRequestList) return;
+  if (background && (document.hidden || planningPeriodController || Date.now() - managerRequestsLastRefresh < 10000)) return;
+  const session = state.portalSession;
+  if (managerRequestsInFlight?.session === session) return managerRequestsInFlight.pending;
+  const pending = refreshManagerVacationRequests(session);
+  const load = { session, pending };
+  managerRequestsInFlight = load;
+  try { await pending; }
+  finally {
+    if (managerRequestsInFlight === load) managerRequestsInFlight = null;
+    if (session === state.portalSession) managerRequestsLastRefresh = Date.now();
+  }
+}
+
+async function refreshManagerVacationRequests(session) {
   try {
     const sicknessEnabled = state.portalStatus?.installationFeatures?.sicknessAmu !== false;
     const [requestsResult, workflowResult, amuResult, sicknessResult] = await Promise.allSettled([
@@ -26780,6 +26890,7 @@ async function loadManagerVacationRequests() {
       sicknessEnabled ? api("/api/portal/v1/amu-reports") : Promise.resolve({ reports: [], pendingCount: 0, canOpenFiles: false }),
       sicknessEnabled ? api("/api/portal/v1/sickness-cases") : Promise.resolve({ cases: [], pendingCount: 0 }),
     ]);
+    if (session !== state.portalSession) return;
     const firstUnexpectedError = [requestsResult, workflowResult, amuResult, sicknessResult]
       .find((entry) => entry.status === "rejected" && entry.reason?.status !== 403);
     if (firstUnexpectedError) throw firstUnexpectedError.reason;
@@ -29570,7 +29681,7 @@ function changeSalesArticleColumns(id, move = 0) {
   if (sortChanged && catalog.searchStarted) void loadSalesArticleCatalog({ reset: true, preserveDetail: true });
 }
 function applySalesArticleDetailTabs() {
-  const panels = ['salesArticleOverviewPanel','salesArticleIdentifiersSection','salesArticlePricesSection','salesArticleHistorySection'];
+  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleIdentifiersSection'];
   const active = panels.includes(state.salesArticleCatalog.detailTab) ? state.salesArticleCatalog.detailTab : panels[0];
   const nav = elements.salesArticleDetailNavigation; if (!nav) return;
   nav.setAttribute('role', 'tablist');
@@ -29823,6 +29934,8 @@ function normalizeSalesArticleDetailPayload(payload = {}) {
       articleNumber: String(articleValue.articleNumber || ""),
       description: String(articleValue.description || ""),
       sourceSections: Array.isArray(articleValue.sourceSections) ? articleValue.sourceSections : [],
+      branchStock: articleValue.branchStock || { rows: [], sourceAt: null },
+      priceMatrix: window.SalesArticleLayout.restrictPrices(articleValue.priceMatrix, effectiveCapabilities),
       image: articleValue.image && typeof articleValue.image === 'object' ? articleValue.image : null,
       active: articleValue.active === true,
       currentRevision: Math.max(0, Number(articleValue.currentRevision || 0)),
@@ -30883,7 +30996,7 @@ async function refreshSalesArticleAfterMutation(payload, message, {
   }
   const detail = normalizeSalesArticleDetailPayload(payload);
   const catalog = state.salesArticleCatalog;
-  // Mutation replies update the editable article fields; import-only sections are unchanged.
+  // Keep source descriptions until the enriched detail is reloaded below.
   if (!Array.isArray(payload?.article?.sourceSections)
     && catalog.detail?.article?.articleNumber === detail.article.articleNumber
     && catalog.detail.article.provenance?.originSourceSystem === detail.article.provenance.originSourceSystem) {
@@ -30901,6 +31014,13 @@ async function refreshSalesArticleAfterMutation(payload, message, {
   if (canReadSalesArticles()) await loadSalesArticleCatalog({ reset: true, preserveDetail: true });
   if (!salesArticleMutationContextIsCurrent(expectedContext, { requireWrite })) {
     return discardStaleSalesArticleMutationResponse(expectedContext, { reloadArticleNumber });
+  }
+  if (catalog.selectedArticleNumber === detail.article.articleNumber && canReadSalesArticles()) {
+    await loadSalesArticleCatalogDetail(detail.article.articleNumber);
+    if (!salesArticleMutationContextIsCurrent(expectedContext, { requireWrite })) {
+      return discardStaleSalesArticleMutationResponse(expectedContext, { reloadArticleNumber });
+    }
+    if (!catalog.detailError) setSalesArticleCatalogDetailStatus(message);
   }
   if (refreshPersonalActions) invalidateAdminPersonalActionsAfterMutation();
   if (focusDetail) requestAnimationFrame(() => elements.salesArticleDetailTitle?.focus());
@@ -31050,6 +31170,8 @@ function renderSalesArticleCatalogDetail() {
   elements.salesArticleDetailMeta?.classList.add("hidden");
   elements.salesArticleDetailNavigation?.classList.add("hidden");
   renderSalesArticleManagementActions();
+  const photo = document.getElementById('salesArticlePhotoCard');
+  if (photo) { elements.salesArticleDetail.append(photo); photo.classList.add('hidden'); }
   if (window.createSalesArticleImageUi && document.getElementById('salesArticleImageButton')) {
     catalog.imageUi ||= window.createSalesArticleImageUi({ api, accessKey: currentSalesArticleCatalogDetailAccessKey,
       onSaved(articleNumber, image) {
@@ -31099,53 +31221,30 @@ function renderSalesArticleCatalogDetail() {
   elements.salesArticleDetailNavigation?.classList.remove("hidden");
   renderSalesArticleManagementActions();
   const provenance = article.provenance;
-  elements.salesArticleDetailBody.innerHTML = `<div class="sales-article-detail-content">
-    <section id="salesArticleOverviewPanel" class="sales-article-detail-tab-panel">
-    <div class="sales-article-detail-overview">
-      <section class="sales-article-detail-card" id="salesArticleMasterDataSection" aria-labelledby="salesArticleMasterDataTitle">
-        <header><div><h3 id="salesArticleMasterDataTitle">Stammdaten</h3><p>Aktuelle, revisionssicher gespeicherte Fassung.</p></div></header>
-        <dl class="sales-article-detail-data">
-          <div><dt>Artikelnummer</dt><dd class="numeric"><strong>${escapeHtml(article.articleNumber || "–")}</strong></dd></div>
-          <div><dt>Status</dt><dd>${article.active ? "Aktiv" : "Inaktiv"}</dd></div>
-          <div class="wide"><dt>Bezeichnung</dt><dd>${escapeHtml(article.description || "–")}</dd></div>
-          <div><dt>Aktuelle Revision</dt><dd>${article.currentRevision || "–"}</dd></div>
-          <div><dt>Primäre Kennung</dt><dd class="numeric">${escapeHtml(article.identifiers.find((identifier) => identifier.isPrimary)?.identifierValue || "–")}</dd></div>
-        </dl>
-      </section>
-      <section class="sales-article-detail-card" aria-labelledby="salesArticleDataStateTitle">
-        <header><div><h3 id="salesArticleDataStateTitle">Datenherkunft</h3><p>Freigegebene Herkunft und Aktualität.</p></div></header>
-        <dl class="sales-article-detail-data">
-          <div class="wide"><dt>Ursprungsquelle</dt><dd>${escapeHtml(salesArticleCatalogSourceLabel(provenance.originSourceSystem))}</dd></div>
-          <div class="wide"><dt>Aktuelle Datenquelle</dt><dd>${escapeHtml(salesArticleCatalogSourceLabel(provenance.currentSourceSystem || provenance.originSourceSystem))}</dd></div>
-          <div><dt>Quelle aktualisiert</dt><dd>${escapeHtml(salesArticleCatalogTimestamp(provenance.sourceUpdatedAt))}</dd></div>
-          <div><dt>Im Grabenplaner aktualisiert</dt><dd>${escapeHtml(salesArticleCatalogTimestamp(provenance.updatedAt))}</dd></div>
-        </dl>
-      </section>
-    </div>
-    ${(article.sourceSections || []).length ? `<div class="sales-article-source-sections">${article.sourceSections.map(section => `<section class="sales-article-detail-card sales-article-source-${escapeHtmlAttribute(section.id)}"><header><h3>${escapeHtml(section.title)}</h3></header><dl class="sales-article-detail-data">${section.fields.map(field => `<div><dt>${escapeHtml(field.label)}</dt><dd>${renderSalesArticleSourceFieldValue(field)}</dd></div>`).join('')}</dl></section>`).join('')}</div>` : ''}
-    </section>
-    <section class="sales-article-detail-card" id="salesArticleIdentifiersSection" aria-labelledby="salesArticleIdentifiersTitle">
-      <header><div><h3 id="salesArticleIdentifiersTitle">EAN / GTIN</h3><p>Primäre und weitere bestätigte Artikelkennungen.</p></div><span class="sales-article-detail-count">${article.identifiers.length}</span></header>
-      ${renderSalesArticleDetailIdentifiers(article.identifiers)}
-    </section>
-    <section class="sales-article-detail-price-grid" id="salesArticlePricesSection" aria-label="Freigegebene Preisbereiche">
-      ${renderSalesArticleDetailPriceGroup(article.prices.sales, {
-    title: "Verkaufspreise",
-    description: "Verkauf, UVP und freigegebene Absatzpreise.",
-    protectedMessage: "Verkaufspreise sind für diesen Zugriff nicht freigegeben.",
-  })}
-      ${renderSalesArticleDetailPriceGroup(article.prices.costs, {
-    title: "EK & Kalkulation",
-    description: "Geschützte Einkaufs- und Kalkulationswerte.",
-    protectedMessage: "Einkaufs- und Kalkulationswerte sind für diesen Zugriff nicht freigegeben.",
-  })}
-    </section>
-    <details class="sales-article-history" id="salesArticleHistorySection">
-      <summary><span>Herkunft &amp; Versionsverlauf</span><small>${revisions.length} ${revisions.length === 1 ? "Fassung" : "Fassungen"}</small></summary>
-      ${renderSalesArticleDetailHistory(revisions, article.currentRevision)}
-    </details>
-  </div>`;
-
+  const layout = window.SalesArticleLayout;
+  const formats = { money: salesArticleCatalogMoney, timestamp: salesArticleCatalogTimestamp,
+    date: value => value ? formatDate(String(value).slice(0,10)) : '–' };
+  const matrixTypes = new Set(['upe','future_upe','sales','wholesale','internet_1','internet_2','internet_3','internet_4','internet_5',
+    'list_purchase','invoice_purchase','net_net_purchase','special','average_purchase','dek_a','order_purchase','future_purchase']);
+  const additionalPrices = [...(article.prices.sales || []), ...(article.prices.costs || [])]
+    .filter(price => price.currency !== 'EUR' || !matrixTypes.has(price.priceType));
+  elements.salesArticleDetailBody.innerHTML = '<div class="sales-article-detail-content">'
+    + '<section id="salesArticleOverviewPanel" class="sales-article-detail-tab-panel">' + layout.overview(article, formats) + '</section>'
+    + '<section id="salesArticlePricesSection" aria-label="Freigegebene Preisbereiche">'
+    + (article.priceMatrix ? layout.prices(article.priceMatrix, formats)
+      + (additionalPrices.length ? renderSalesArticleDetailPriceGroup(additionalPrices, {title:'Weitere Preisangaben',description:''}) : '')
+      : renderSalesArticleDetailPriceGroup(article.prices.sales, {title:'Verkaufspreise',description:'',protectedMessage:'Verkaufspreise sind nicht freigegeben.'})
+      + renderSalesArticleDetailPriceGroup(article.prices.costs, {title:'EK & Kalkulation',description:'',protectedMessage:'Einkaufswerte sind nicht freigegeben.'})) + '</section>'
+    + '<section id="salesArticleIdentifiersSection" class="sales-article-identifiers-history" aria-labelledby="salesArticleIdentifiersTitle">'
+    + '<section class="sales-article-detail-card"><header><h3 id="salesArticleIdentifiersTitle">EAN / GTIN</h3></header>'
+    + renderSalesArticleDetailIdentifiers(article.identifiers) + '</section>'
+    + '<section class="sales-article-detail-card"><header><h3>Herkunft</h3></header><dl class="sales-article-detail-data">'
+    + '<div><dt>Ursprungsquelle</dt><dd>' + escapeHtml(salesArticleCatalogSourceLabel(provenance.originSourceSystem)) + '</dd></div>'
+    + '<div><dt>Aktuelle Datenquelle</dt><dd>' + escapeHtml(salesArticleCatalogSourceLabel(provenance.currentSourceSystem || provenance.originSourceSystem)) + '</dd></div>'
+    + '<div><dt>Quelle aktualisiert</dt><dd>' + escapeHtml(salesArticleCatalogTimestamp(provenance.sourceUpdatedAt)) + '</dd></div></dl></section>'
+    + '<section class="sales-article-detail-card" id="salesArticleHistorySection"><header><h3>Versionsverlauf</h3></header>'
+    + renderSalesArticleDetailHistory(revisions, article.currentRevision) + '</section></section></div>';
+  if (photo) { document.getElementById('salesArticlePhotoSlot').append(photo); photo.classList.remove('hidden'); }
   applySalesArticleDetailTabs();
   if (catalog.detailMoveFocus) {
     catalog.detailMoveFocus = false;
@@ -31366,9 +31465,9 @@ function salesArticleCatalogFormValues() {
   const status = String(elements.salesArticleSearchStatusFilter?.value || "active");
   return {
     query: String(elements.salesArticleSearchQuery?.value || "").trim(),
-    identifier: String(elements.salesArticleSearchIdentifier?.value || "").replace(/\s+/g, "").trim(),
+    orderNumber: String(elements.salesArticleSearchOrderNumber?.value || "").trim(),
     status: ["active", "inactive", "all"].includes(status) ? status : "active",
-    sourceSystem: String(elements.salesArticleSearchSourceSystem?.value || "").trim(),
+
   };
 }
 
@@ -31376,9 +31475,9 @@ function salesArticleCatalogSearchParameters(offset) {
   const catalog = state.salesArticleCatalog;
   const parameters = new URLSearchParams();
   if (catalog.query) parameters.set("query", catalog.query);
-  if (catalog.identifier) parameters.set("identifier", catalog.identifier);
+  if (catalog.orderNumber) parameters.set("orderNumber", catalog.orderNumber);
   parameters.set("status", catalog.status);
-  if (catalog.sourceSystem) parameters.set("sourceSystem", catalog.sourceSystem);
+
   parameters.set("sort", catalog.sort);
   parameters.set("direction", catalog.direction);
   parameters.set("limit", String(catalog.limit));
@@ -31471,9 +31570,9 @@ function resetSalesArticleCatalogSearch(
     limit: 50,
     nextOffset: 0,
     query: "",
-    identifier: "",
+    orderNumber: "",
     status: "active",
-    sourceSystem: "",
+
     sort: "articleNumber",
     direction: "asc",
     searchStarted: false,
@@ -31563,9 +31662,8 @@ function applySalesArticleCatalogReadState(canRead = canReadSalesArticles()) {
     elements.salesArticleSearchQuery,
     elements.salesArticleSearchReset,
     elements.salesArticleSearchSubmit,
-    elements.salesArticleSearchIdentifier,
+    elements.salesArticleSearchOrderNumber,
     elements.salesArticleSearchStatusFilter,
-    elements.salesArticleSearchSourceSystem,
   ].forEach((control) => { if (control) control.disabled = !canRead; });
   elements.salesArticleAdvancedSearch?.classList.toggle("access-disabled", !canRead);
   if (canRead && !state.salesArticleCatalog.searchStarted) {
@@ -33336,9 +33434,9 @@ function renderSalesAnalyticsEmpty(container, title, message) {
   container.replaceChildren(empty);
 }
 
-function renderSalesAnalyticsMetricOptions(hasGrossMargin) {
+function renderSalesAnalyticsMetricOptions(hasGrossMargin, { pending = false } = {}) {
   const definitions = salesAnalyticsMetricDefinitions(hasGrossMargin);
-  if (!definitions.some((definition) => definition.id === state.salesAnalytics.chartMetric)) {
+  if (!pending && !definitions.some((definition) => definition.id === state.salesAnalytics.chartMetric)) {
     state.salesAnalytics.chartMetric = "netRevenue";
   }
   if (elements.salesReportChartMetric) {
@@ -33350,6 +33448,7 @@ function renderSalesAnalyticsMetricOptions(hasGrossMargin) {
     });
     elements.salesReportChartMetric.replaceChildren(...options);
     elements.salesReportChartMetric.value = state.salesAnalytics.chartMetric;
+    elements.salesReportChartMetric.disabled = pending;
   }
   return definitions;
 }
@@ -33839,7 +33938,7 @@ function renderSalesAnalyticsReport() {
   }[state.salesAnalytics.chartType];
   if (elements.salesAnalyticsChartEyebrow) elements.salesAnalyticsChartEyebrow.textContent = chartPresentation.eyebrow;
   if (elements.salesAnalyticsChartTitle) elements.salesAnalyticsChartTitle.textContent = chartPresentation.title;
-  const metricDefinitions = renderSalesAnalyticsMetricOptions(hasGrossMargin);
+  const metricDefinitions = renderSalesAnalyticsMetricOptions(hasGrossMargin, { pending: !detail });
   renderSalesAnalyticsKpis(detail, horizon, hasGrossMargin);
   renderSalesAnalyticsTable(detail, horizon, hasGrossMargin);
   if (!detail) {
@@ -33942,6 +34041,7 @@ async function loadSalesReportDetail(reportId = state.salesAnalytics.selectedRep
   if (!reportId) {
     state.salesAnalytics.selectedReport = null;
     renderSalesAnalyticsReport();
+    void saveSalesAnalyticsSelection();
     return;
   }
   const requestedId = reportId;
@@ -33952,6 +34052,7 @@ async function loadSalesReportDetail(reportId = state.salesAnalytics.selectedRep
       || state.salesAnalytics.selectedReportId !== requestedId) return;
     state.salesAnalytics.selectedReport = detail;
     renderSalesAnalyticsReport();
+    void saveSalesAnalyticsSelection();
   } catch (error) {
     if (!salesAnalyticsActorIsCurrent(actorKey)
       || state.salesAnalytics.selectedReportId !== requestedId) return;
@@ -33959,6 +34060,45 @@ async function loadSalesReportDetail(reportId = state.salesAnalytics.selectedRep
     renderSalesAnalyticsReport();
     showToast(error.message, true);
   }
+}
+
+let salesAnalysisSelectionRevision = 0;
+let salesAnalysisSelectionSave = null;
+
+async function loadSalesAnalyticsSelection() {
+  if (state.salesAnalytics.selectionLoaded) return;
+  const actorKey = currentSalesAnalyticsActorKey(), revision = salesAnalysisSelectionRevision;
+  try {
+    const { selection } = await api("/api/sales-analytics/selection");
+    if (!salesAnalyticsActorIsCurrent(actorKey) || revision !== salesAnalysisSelectionRevision) return;
+    if (selection) Object.assign(state.salesAnalytics, {
+      selectedReportId: selection.reportId, locationFilter: selection.locationFilter,
+      dateFrom: selection.dateFrom, dateTo: selection.dateTo, horizon: selection.horizon,
+      chartType: selection.chartType, chartMetric: selection.chartMetric,
+    });
+    state.salesAnalytics.selectionLoaded = true;
+  } catch (error) {
+    if (salesAnalyticsActorIsCurrent(actorKey)) showToast(`Letzte Berichtsauswahl konnte nicht geladen werden: ${error.message}`, true);
+  }
+}
+
+async function saveSalesAnalyticsSelection() {
+  if (!state.salesAnalytics.loaded || !state.salesAnalytics.selectionLoaded || salesReportDateRangeInvalid()) return;
+  const actorKey = currentSalesAnalyticsActorKey(), session = state.portalSession;
+  const revision = ++salesAnalysisSelectionRevision;
+  const s = state.salesAnalytics;
+  const selection = { version: 1, reportId: s.selectedReportId, locationFilter: s.locationFilter,
+    dateFrom: s.dateFrom, dateTo: s.dateTo, horizon: s.horizon, chartType: s.chartType, chartMetric: s.chartMetric };
+  const previous = salesAnalysisSelectionSave;
+  const pending = (async () => {
+    await previous;
+    if (revision !== salesAnalysisSelectionRevision || session !== state.portalSession || !salesAnalyticsActorIsCurrent(actorKey)) return;
+    try { await api("/api/sales-analytics/selection", { method: "PUT", keepalive: true, body: JSON.stringify(selection) }); }
+    catch (error) { if (salesAnalyticsActorIsCurrent(actorKey) && session === state.portalSession) showToast(`Berichtsauswahl konnte nicht gespeichert werden: ${error.message}`, true); }
+  })();
+  salesAnalysisSelectionSave = pending;
+  await pending;
+  if (salesAnalysisSelectionSave === pending) salesAnalysisSelectionSave = null;
 }
 
 function applySalesAnalyticsPreferences(value) {
@@ -33996,6 +34136,7 @@ function resetSalesAnalyticsActorState(actorKey) {
     pdfOptions: normalizeSalesAnalyticsPdfOptions(),
     pdfOptionsDraft: null,
     preferencesLoaded: false,
+    selectionLoaded: false,
     preferencesLoading: false,
     preferencesSaving: false,
     preferencesError: "",
@@ -34011,6 +34152,7 @@ function resetSalesAnalyticsActorState(actorKey) {
     loading: false,
   });
   state.salesAnalytics.preferencesRequestId += 1;
+  salesAnalysisSelectionRevision += 1;
   state.salesAnalytics.seriesRequestId += 1;
   if (elements.salesReportPdfOptionsModal?.open) elements.salesReportPdfOptionsModal.close();
   const requestQuery = document.getElementById("salesAnalyticsRequestQuery");
@@ -34140,6 +34282,7 @@ async function loadSalesAnalytics({ selectReportId = "" } = {}) {
         ? api("/api/sales-analytics/report-import/context")
         : Promise.resolve(null),
       loadSalesAnalyticsPreferences(),
+      loadSalesAnalyticsSelection(),
     ]);
     if (!salesAnalyticsActorIsCurrent(actorKey)) return;
     state.salesAnalytics.reports = reportPayload.reports || [];
@@ -34151,7 +34294,20 @@ async function loadSalesAnalytics({ selectReportId = "" } = {}) {
       : state.salesAnalytics.archiveSelection.filter((reportId) => knownReportIds.has(reportId));
     state.salesAnalytics.reportSeries = null;
     state.salesAnalytics.seriesError = "";
-    const preferredId = selectReportId || state.salesAnalytics.selectedReportId;
+    let preferredId = selectReportId || state.salesAnalytics.selectedReportId;
+    const selectionRevision = salesAnalysisSelectionRevision;
+    if (preferredId && !state.salesAnalytics.reports.some(report => report.id === preferredId)) {
+      try {
+        const detail = await api(`/api/sales-analytics/reports/${encodeURIComponent(preferredId)}`);
+        if (!salesAnalyticsActorIsCurrent(actorKey)) return;
+        state.salesAnalytics.reports.push(detail.report);
+      } catch (error) {
+        if (![403, 404].includes(error.status)) throw error;
+        if (salesAnalyticsActorIsCurrent(actorKey)) showToast("Der zuletzt gewählte Bericht ist nicht mehr verfügbar.");
+      }
+    }
+    if (!salesAnalyticsActorIsCurrent(actorKey)) return;
+    if (selectionRevision !== salesAnalysisSelectionRevision) preferredId = state.salesAnalytics.selectedReportId;
     state.salesAnalytics.selectedReportId = state.salesAnalytics.reports.some((report) => report.id === preferredId)
       ? preferredId
       : state.salesAnalytics.reports[0]?.id || "";
@@ -34569,7 +34725,7 @@ function applyRequestedView({ fromHistory = false } = {}) {
   }
   if (state.currentView === "rightsDashboard") setRightsDashboardMode(state.rightsDashboardMode);
   if (fromHistory) closeMobileNavigation({ restoreFocus: false });
-  if (contextChanged) loadAll({ restoreContext: false });
+  if (contextChanged || planningContextNeedsReload(requestedView)) loadPlanningView(requestedView);
 }
 
 function currentAdministrationRoute() {
@@ -38154,7 +38310,7 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   }
   const contextChanged = restoreRememberedOverallContext(view);
   setView(view);
-  if (contextChanged) loadAll();
+  if (contextChanged || planningContextNeedsReload(view)) loadPlanningView(view);
   closeMobileNavigation({ restoreFocus: false });
 }));
 document.getElementById("salesAnalyticsTabs")?.addEventListener("click", (event) => {
@@ -38214,6 +38370,7 @@ elements.salesReportArchiveBody?.addEventListener("click", (event) => {
   state.salesAnalytics.selectedReportId = button.dataset.salesOpenReport;
   state.salesAnalytics.selectedReport = null;
   renderSalesAnalytics();
+  void saveSalesAnalyticsSelection();
   loadSalesReportDetail();
 });
 elements.salesReportSeriesAnalyzeButton?.addEventListener("click", analyzeSalesReportSeries);
@@ -38227,6 +38384,7 @@ elements.salesReportLocationFilter?.addEventListener("change", () => {
   state.salesAnalytics.selectedReport = null;
   renderSalesAnalyticsFilters();
   renderSalesAnalyticsReport();
+  void saveSalesAnalyticsSelection();
   loadSalesReportDetail();
 });
 elements.salesReportDateFrom?.addEventListener("change", () => {
@@ -38235,6 +38393,7 @@ elements.salesReportDateFrom?.addEventListener("change", () => {
   state.salesAnalytics.selectedReport = null;
   renderSalesAnalyticsFilters();
   renderSalesAnalyticsReport();
+  void saveSalesAnalyticsSelection();
   loadSalesReportDetail();
 });
 elements.salesReportDateTo?.addEventListener("change", () => {
@@ -38243,6 +38402,7 @@ elements.salesReportDateTo?.addEventListener("change", () => {
   state.salesAnalytics.selectedReport = null;
   renderSalesAnalyticsFilters();
   renderSalesAnalyticsReport();
+  void saveSalesAnalyticsSelection();
   loadSalesReportDetail();
 });
 elements.salesReportResetFilters?.addEventListener("click", () => {
@@ -38253,6 +38413,7 @@ elements.salesReportResetFilters?.addEventListener("click", () => {
   state.salesAnalytics.selectedReport = null;
   renderSalesAnalyticsFilters();
   renderSalesAnalyticsReport();
+  void saveSalesAnalyticsSelection();
   loadSalesReportDetail();
 });
 elements.salesReportSelect?.addEventListener("change", () => {
@@ -38260,21 +38421,29 @@ elements.salesReportSelect?.addEventListener("change", () => {
   state.salesAnalytics.selectedReportId = elements.salesReportSelect.value;
   state.salesAnalytics.selectedReport = null;
   renderSalesAnalyticsReport();
+  void saveSalesAnalyticsSelection();
   loadSalesReportDetail();
 });
+document.getElementById("startDashboardSalesMetric")?.addEventListener("change", event => changeStartDashboardSalesMetric(event.target.value));
+document.getElementById("startDashboardPreviousSalesMetric")?.addEventListener("click", () => changeStartDashboardSalesMetric(-1));
+document.getElementById("startDashboardNextSalesMetric")?.addEventListener("click", () => changeStartDashboardSalesMetric(1));
+
 elements.salesReportHorizon?.addEventListener("change", () => {
   state.salesAnalytics.horizon = elements.salesReportHorizon.value === "year_to_date"
     ? "year_to_date"
     : "period";
   renderSalesAnalyticsReport();
+  void saveSalesAnalyticsSelection();
 });
 elements.salesReportChartMetric?.addEventListener("change", () => {
   state.salesAnalytics.chartMetric = elements.salesReportChartMetric.value;
   renderSalesAnalyticsReport();
+  void saveSalesAnalyticsSelection();
 });
 elements.salesReportChartType?.addEventListener("change", () => {
   state.salesAnalytics.chartType = elements.salesReportChartType.value;
   renderSalesAnalyticsReport();
+  void saveSalesAnalyticsSelection();
 });
 elements.salesReportChartPdfButton?.addEventListener("click", openSalesAnalyticsPdfOptions);
 elements.salesReportPdfOptionsForm?.addEventListener("submit", submitSalesAnalyticsPdfOptions);
@@ -38574,7 +38743,7 @@ elements.delegationList?.addEventListener("click", async (event) => {
 });
 elements.refreshRequestsButton?.addEventListener("click", loadManagerVacationRequests);
 elements.xoffiImportButton?.addEventListener("click", () => {
-  if (!state.data?.isPastWeek) return;
+  if (!canImportXoffiTime()) return;
   resetXoffiImport();
   elements.xoffiImportDialog?.showModal();
 });
@@ -39424,7 +39593,7 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
   state.departmentId = button.dataset.departmentId || "";
   rememberOverallContext(button.dataset.contextView, state.locationId, state.departmentId);
   setView(button.dataset.contextView);
-  loadAll();
+  loadPlanningView(button.dataset.contextView);
 });
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
 elements.employeeModal?.addEventListener("close", clearEmployeeProtectedRecord);
@@ -41078,13 +41247,13 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
 });
 bootstrapApplication();
 setInterval(() => {
-  if (!document.body.classList.contains("portal-locked")) loadSystemInfo();
+  if (!document.hidden && !planningPeriodController && !document.body.classList.contains("portal-locked")) loadSystemInfo();
 }, 30000);
 setInterval(() => {
-  if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests();
+  if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests({ background: true });
 }, 45000);
 window.addEventListener("focus", () => {
-  if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests();
+  if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests({ background: true });
 });
 
 personnelLearningAssessmentEditor=GrabenplanerLearningAssessment.editor(document.getElementById("personnelLearningAssessmentEditor"));

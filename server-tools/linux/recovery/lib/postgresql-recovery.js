@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const {verifyPairBundle}=require('../../../../lib/persistence/postgresql/operations/paired-bundle');
 const BASE='/var/lib/grabenplaner-offsite/postgresql-recovery';
 const ACCOUNT='grabenplaner-offsite';
+const RECOVERY_RUNTIME_SECONDS=30*60;
 function ownTree(root,uid,gid){
  for(const name of fs.readdirSync(root)){const file=path.join(root,name),info=fs.lstatSync(file);if(info.isSymbolicLink()||!info.isDirectory()&&(!info.isFile()||info.nlink!==1))throw new Error('PG_RECOVERY_TREE');if(info.isDirectory())ownTree(file,uid,gid);else{fs.chownSync(file,uid,gid);fs.chmodSync(file,0o600);}}
  fs.chownSync(root,uid,gid);fs.chmodSync(root,0o700);
@@ -11,7 +12,7 @@ function recoveryUnitProperties(root){
  if(typeof root!=='string'||path.dirname(root)!==BASE||! /^[a-f0-9-]{36}$/.test(path.basename(root)))throw new Error('PG_RECOVERY_UNIT_ROOT');
  // As in the SQLite smoke service, group access exists only inside this
  // process. Live files and maintenance sockets remain inaccessible.
- return ['User='+ACCOUNT,'Group='+ACCOUNT,'SupplementaryGroups=grabenplaner','PrivateNetwork=yes','PrivateTmp=yes','NoNewPrivileges=yes','ProtectSystem=strict','ProtectHome=yes','ProtectProc=invisible','RestrictSUIDSGID=yes','RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK','UMask=0077','KillMode=control-group','MemoryMax=1536M','CPUQuota=100%','Nice=15','RuntimeMaxSec=900','ReadOnlyPaths=/opt/grabenplaner/app','ReadWritePaths='+root,'InaccessiblePaths=-/var/lib/grabenplaner -/var/lib/grabenplaner-postgresql -/etc/grabenplaner -/var/backups/grabenplaner -/var/backups/grabenplaner-postgresql -/var/log/grabenplaner -/var/lib/grabenplaner-assurance -/run/postgresql -/run/grabenplaner -/run/grabenplaner-offsite -/run/grabenplaner-assurance-control -/var/lib/grabenplaner-offsite/credentials -/var/lib/grabenplaner-offsite/uploader-home -/var/lib/grabenplaner-offsite/staging -/var/lib/grabenplaner-offsite/restore-tests -/var/lib/grabenplaner-offsite/status.json'];
+ return ['User='+ACCOUNT,'Group='+ACCOUNT,'SupplementaryGroups=grabenplaner','PrivateNetwork=yes','PrivateTmp=yes','NoNewPrivileges=yes','ProtectSystem=strict','ProtectHome=yes','ProtectProc=invisible','RestrictSUIDSGID=yes','RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK','UMask=0077','KillMode=control-group','MemoryMax=1536M','CPUQuota=100%','Nice=15','RuntimeMaxSec='+RECOVERY_RUNTIME_SECONDS,'ReadOnlyPaths=/opt/grabenplaner/app','ReadWritePaths='+root,'InaccessiblePaths=-/var/lib/grabenplaner -/var/lib/grabenplaner-postgresql -/etc/grabenplaner -/var/backups/grabenplaner -/var/backups/grabenplaner-postgresql -/var/log/grabenplaner -/var/lib/grabenplaner-assurance -/run/postgresql -/run/grabenplaner -/run/grabenplaner-offsite -/run/grabenplaner-assurance-control -/var/lib/grabenplaner-offsite/credentials -/var/lib/grabenplaner-offsite/uploader-home -/var/lib/grabenplaner-offsite/staging -/var/lib/grabenplaner-offsite/restore-tests -/var/lib/grabenplaner-offsite/status.json'];
 }
 async function verifyPostgresqlRecovery({stageOutput,stage,sourcePackage,targetPackage,sourceRuntime,targetRuntime,frozenFiles}){
  if(process.platform!=='linux'||process.getuid()!==0)throw new Error('PG_RECOVERY_ROOT_REQUIRED');

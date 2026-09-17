@@ -1,0 +1,34 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const R=require('../../../lib/persistence/postgresql/operations/runtime');
+const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
+async function main(args=process.argv.slice(2)){
+ const [expectedManifest,lease]=args,app='/opt/grabenplaner/app';
+ if(process.platform!=='linux'||process.getuid()!==0||args.length!==2||! /^[a-f0-9]{64}$/.test(expectedManifest||'')
+   ||lease!=='--maintenance-lock-held'||fs.realpathSync(path.resolve(__dirname,'../../..'))!==app)throw new Error('PG_XOFFI_MIGRATION_INSTALLED_SCOPE');
+ if(fs.realpathSync('/proc/self/fd/9')!=='/run/grabenplaner/maintenance.lock'
+   ||require('node:child_process').spawnSync('/usr/bin/flock',['--nonblock','9'],{stdio:Array.from({length:10},(_,i)=>i===9?9:'ignore')}).status!==0)throw new Error('PG_XOFFI_MIGRATION_LEASE');
+ // Invoke from the existing release wrapper after the atomic application swap,
+ // before opening traffic, while descriptor 9 still holds the maintenance lease.
+ const manifestBytes=fs.readFileSync(app+'/grabenplaner-server-manifest.json');
+ if(hash(manifestBytes)!==expectedManifest)throw new Error('PG_XOFFI_MIGRATION_MANIFEST');
+ const manifest=JSON.parse(manifestBytes);
+ require('./deploy-policy').applicationContract(app);
+ for(const relative of ['server-tools/linux/lib/xoffi-snapshots-migrate.js','lib/persistence/postgresql/core/xoffi-snapshots.js',
+   'lib/persistence/sqlite/operations/xoffi-snapshots-schema.js','lib/persistence/sqlite/xoffi-snapshots-catalog.js','lib/persistence/statements/xoffi-snapshots.js']){
+  const entry=manifest.files.find(f=>f.path===relative);
+  if(!entry||hash(fs.readFileSync(app+'/'+relative))!==entry.sha256)throw new Error('PG_XOFFI_MIGRATION_SOURCE');
+ }
+ const config=R.loadConfiguration('/etc/grabenplaner/postgresql-operations.json');
+ const backup=await R.latestBackup(config,{short:true,maximumAgeHours:1});
+ const before=await R.inspectPair(config),domain=config.domains.find(d=>d.domain==='core');
+ const client=new (require('pg').Client)(R.url(config,domain));let result;
+ try{await client.connect();await client.query("SET lock_timeout='5s';SET statement_timeout='30s'");
+  result=await require('../../../lib/persistence/postgresql/core/xoffi-snapshots').migrate(client,{binding:config.binding});
+ }finally{await client.end();}
+ const after=await R.inspectPair(config);
+ if(before.sales.schemaSha256!==after.sales.schemaSha256||before.core.database!==after.core.database)throw new Error('PG_XOFFI_MIGRATION_DOMAIN_DRIFT');
+ return {verified:true,appVersion:manifest.appVersion,sourceCommit:manifest.sourceCommit,...result,backup,coreBefore:before.core.schemaSha256,coreAfter:after.core.schemaSha256,salesUnchanged:true};
+}
+if(require.main===module)main().then(result=>process.stdout.write(JSON.stringify(result)+'\n')).catch(e=>{process.stderr.write(JSON.stringify({failed:true,code:/^PG_/.test(e.message)?e.message:e.code||'PG_XOFFI_MIGRATION_FAILED'})+'\n');process.exitCode=1;});
+module.exports={main};

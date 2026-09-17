@@ -86,9 +86,9 @@ test("Block 4 UI: alle drei Zeitarten verwenden den gemeinsamen Zeitraumkalender
     "staffAssignmentRequestDateRangeEndText",
   ]) assert.equal(occurrenceCount(html, `id="${id}"`), 1, id);
   assert.match(app, /GrabenplanerDateRangeCalendar\?\.createDateRangeCalendar/);
-  assert.match(app, /maxEndDays: timeKind === "multi_day" \? 13 : 0/);
+  assert.match(app, /timeKind === "multi_day" \? \{\} : \{ maxEndDays: 0 \}/);
   assert.match(app, /function staffAssignmentRequestCalendarBounds/);
-  assert.match(app, /payload\?\.weeks\?\.at\(-1\)\?\.weekEnd/);
+  assert.match(app, /payload\?\.requestPeriod\?\.maximum/);
   assert.match(html, /auch KW-übergreifend/);
 });
 

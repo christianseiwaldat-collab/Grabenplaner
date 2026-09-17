@@ -45,24 +45,22 @@ test("Artikelstamm ist ein eigener berechtigungsgeschützter Verkaufsbereich", (
 
 test("Artikelsuche verwendet nur bestätigte Listenfelder und den serverseitigen Vertrag", () => {
   const view = between(html, '<section id="salesArticleCatalogView"', '<section id="crmView"');
-  assert.match(view, /<span>Artikelnummer oder Bezeichnung<\/span><input id="salesArticleSearchQuery"/);
-  assert.match(view, /placeholder="z\. B\. Sony A7\* 24-105mm"/);
+  assert.match(view, /<span>Artikelnr\., Bezeichnung oder EAN<\/span><input id="salesArticleSearchQuery"/);
+  assert.match(view, /placeholder="Artikel suchen …"/);
   assert.match(view, /id="salesArticleAdvancedSearch"/);
-  assert.match(view, /id="salesArticleSearchIdentifier"[^>]*pattern="\[0-9\]\{1,14\}"/);
+  assert.match(view, /id="salesArticleSearchOrderNumber"/);
   assert.match(view, /id="salesArticleSearchStatusFilter"/);
-  assert.match(view, /id="salesArticleSearchSourceSystem"/);
-  assert.match(view, /value="manual\.article-catalog">Manuelle Pflege/);
-  assert.match(view, /value="legacy\.loan_articles">Übernommene Leihartikel/);
+  assert.doesNotMatch(view, /id="salesArticleSearchSourceSystem"|id="salesArticleSearchIdentifier"/);
   assert.match(app, /value === "legacy\.loan_articles"\) return "Übernommene Leihartikel"/);
   assert.match(app, /value === "manual\.article-catalog"\) return "Manuelle Pflege"/);
-  assert.doesNotMatch(view, /Marke|Lieferant|Warengruppe|Verkaufspreis|Einkaufspreis/);
+  assert.doesNotMatch(view, /Marke|Warengruppe|Verkaufspreis|Einkaufspreis/);
 
   const parameters = between(
     app,
     "function salesArticleCatalogSearchParameters(offset)",
     "async function loadSalesArticleCatalog",
   );
-  for (const parameter of ["query", "identifier", "status", "sourceSystem", "sort", "direction", "limit", "offset"]) {
+  for (const parameter of ["query", "orderNumber", "status", "sort", "direction", "limit", "offset"]) {
     assert.match(parameters, new RegExp(`parameters\\.set\\("${parameter}"`));
   }
   assert.match(app, /api\(`\/api\/sales\/articles\?\$\{salesArticleCatalogSearchParameters\(offset\)\}`\)/);
@@ -95,7 +93,7 @@ test("Ergebnisfeld startet mit zehn Zeilen, erlaubt 5 bis 20 und behält wählba
   assert.match(headRenderer, /buttons\.map\(b => b\.dataset\.salesArticleSort\)\.join/);
   assert.match(view, /id="salesArticleResizeHandle"[^>]*aria-valuemin="5"[^>]*aria-valuemax="20"/);
   assert.match(styles, /\.sales-article-table-scroll\s*\{ min-height:0; max-height:none;/);
-  assert.ok(view.indexOf('id="salesArticleSearchForm"') < view.indexOf('id="salesArticleActionsLogButton"'));
+  assert.ok(view.indexOf('id="salesArticleSearchForm"') < view.indexOf('id="salesArticleResults"'));
   assert.match(headRenderer, /button\.closest\("th"\)\?\.setAttribute/);
 });
 
@@ -149,7 +147,7 @@ test("Globale Funktionssuche öffnet den freigegebenen Artikelstamm direkt", () 
   );
 });
 
-test("Unter der Liste öffnet sich eine vollbreite lesende Artikelkartei", () => {
+test("Rechts von der Suche öffnet sich die Artikelkartei mit drei Tabs", () => {
   const view = between(html, '<section id="salesArticleCatalogView"', '<section id="crmView"');
   assert.match(view, /id="salesArticleDetail"[^>]*aria-labelledby="salesArticleDetailTitle"[^>]*aria-busy="false"/);
   assert.match(view, /id="salesArticleDetailTitle"[^>]*tabindex="-1"/);
@@ -157,10 +155,11 @@ test("Unter der Liste öffnet sich eine vollbreite lesende Artikelkartei", () =>
   assert.match(view, /href="#salesArticleMasterDataSection"/);
   assert.match(view, /href="#salesArticleIdentifiersSection"/);
   assert.match(view, /href="#salesArticlePricesSection"/);
-  assert.match(view, /href="#salesArticleHistorySection"/);
+  assert.doesNotMatch(view, /href="#salesArticleHistorySection"/);
+  assert.match(view, /Kennungen &amp; Verlauf/);
   assert.match(view, /id="salesArticleDetailStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(view, /Artikelstamm im Detail/);
-  assert.doesNotMatch(view, /Artikel importieren|Lieferant|Filialwerte|Taxonomie|Warengruppe|Notizen|Zubehör/);
+  assert.doesNotMatch(view, /Artikel importieren|Filialwerte|Taxonomie/);
   const detailStyles = between(styles, ".sales-article-detail {", "}");
   assert.match(detailStyles, /width:100%/);
   assert.match(detailStyles, /min-width:0/);
@@ -171,11 +170,11 @@ test("Unter der Liste öffnet sich eine vollbreite lesende Artikelkartei", () =>
     "function renderSalesArticleCatalogDetail()",
     "async function loadSalesArticleCatalogDetail",
   );
-  assert.match(renderer, /Stammdaten/);
+  assert.match(renderer, /layout\.overview\(article, formats\)/);
   assert.match(renderer, /EAN \/ GTIN/);
   assert.match(renderer, /Verkaufspreise/);
   assert.match(renderer, /EK & Kalkulation/);
-  assert.match(renderer, /Datenherkunft/);
+  assert.match(renderer, /Herkunft/);
   assert.match(renderer, /Versionsverlauf/);
   assert.doesNotMatch(renderer, /Lieferant|Filialwerte|Taxonomie|Warengruppe|Notizen|Zubehör/);
 });

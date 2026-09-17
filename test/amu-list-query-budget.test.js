@@ -19,6 +19,7 @@ function listFixture() {
   const rows = Array.from({ length: 120 }, (_, i) => ({ id: i + 1, status: 'submitted', employee_number: 'worker', location_id: i % 2 ? '18' : '05' }));
   let rightsReads = 0, routingReads = 0, inFlight = 0, peak = 0, granted = true, fail = false, body, handler;
   const context = {
+    postgresqlActive: false,
     app: { get(_route, fn) { handler = fn; } }, persistenceAsyncCollections,
     requirePortalReadOrLocal: () => ({ employeeNumber: 'reviewer' }),
     actorCanListAmuReports: () => true, actorCanReadAmuFiles: () => true,
@@ -45,7 +46,7 @@ function listFixture() {
     amuResponsibilityForActorWithRouting: (_row, _session, routing) => ({ assigned_to_me: routing.reviewerEmployeeNumbers.includes('reviewer'), stage: routing.stage }),
     redactAmuReportFileMetadata: row => row,
   };
-  vm.runInNewContext(routingFunctions + listRoute, context);
+  vm.runInNewContext(section('function readModelResponse(', 'app.get("/api/schedule",') + routingFunctions + listRoute, context);
   return {
     context, rows,
     run: async () => { body = undefined; await handler({}, { json(value) { body = value; } }); return body; },
