@@ -1948,6 +1948,20 @@
           </section>
           <section class="loan-management-summary" id="loanManagementSummary" aria-label="Zusammenfassung"></section>
           <section class="loan-management-list" id="loanManagementList" aria-live="polite"><p class="settings-note">Leihvorgänge werden geladen.</p></section>
+          <dialog class="modal loan-management-return-modal" id="loanManagementReturnDialog">
+            <form id="loanManagementReturnForm">
+              <div class="modal-header">
+                <div><span class="eyebrow">Direkte Rücknahme</span><h2 id="loanManagementReturnTitle">Leihe zurücknehmen</h2><p id="loanManagementReturnSubtitle">Die Filialleitung schließt die Rücknahme direkt im Grabenplaner ab.</p></div>
+                <button type="button" class="close-button" data-close="loanManagementReturnDialog" aria-label="Dialog schließen">×</button>
+              </div>
+              <aside class="loan-management-return-hint"><strong>Keine zweite Gegenkontrolle erforderlich</strong><p>Mit dem Abschluss bestätigt die angemeldete Filialleitung Zustand und Vollständigkeit. Der Rücknahmebeleg wird sofort erstellt.</p></aside>
+              <div class="loan-management-return-items" id="loanManagementReturnItems"></div>
+              <label class="field"><span>Bemerkung zur Rücknahme (optional)</span><textarea id="loanManagementReturnNote" maxlength="1000" rows="3" placeholder="z. B. Zubehör vollständig"></textarea></label>
+              <label class="checkbox-line"><input id="loanManagementReturnConfirmed" type="checkbox" required /><span>Ich habe alle Artikel geprüft und schließe die Rücknahme als Filialleitung direkt ab.</span></label>
+              <p class="settings-note" id="loanManagementReturnStatus" role="status" aria-live="polite"></p>
+              <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="loanManagementReturnDialog">Abbrechen</button><button type="submit" class="primary-button" id="loanManagementReturnSubmit">Rücknahme abschließen</button></div>
+            </form>
+          </dialog>
         </section>
 
         <section id="branchOrdersView" class="view branch-orders-management-view">

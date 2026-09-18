@@ -3597,6 +3597,9 @@ html[data-active-page-theme="dark"] .personnel-lifecycle-editor-step-actions .da
 .xoffi-preview-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border-radius:10px; color:#244e41; background:#e3f1eb; }
 .xoffi-preview-heading strong { font-size:11px; }
 .xoffi-preview-heading span { font-size:8.5px; }
+.xoffi-import-blocker { padding:13px 15px; border:1px solid #d8ad45; border-radius:11px; color:#6d4f08; background:#fff5d8; }
+.xoffi-import-blocker strong,.xoffi-import-blocker p { margin:0; }
+.xoffi-import-blocker p { margin-top:5px; font-size:10px; line-height:1.5; }
 .xoffi-preview-rows { display:grid; gap:10px; }
 .xoffi-preview-row { min-width:0; padding:13px; border:1px solid var(--line); border-radius:13px; background:var(--surface); }
 .xoffi-row-heading { display:grid; grid-template-columns:minmax(0,1fr) minmax(240px,.7fr); align-items:end; gap:12px; }
@@ -5630,6 +5633,7 @@ html[data-active-page-theme="dark"] .modal :is(.employee-role-summary span,.empl
 html[data-active-page-theme="dark"] .modal .employee-access-profile.locked :is(.employee-role-summary span,.employee-access-right) { color:#aab6b1; border-color:#3b4843; background:#25302c; }
 html[data-active-page-theme="dark"] .modal .sensitive-personnel-section { border-color:#8d783d; background:#302b1f; }
 html[data-active-page-theme="dark"] .modal .calculation-note { color:#bad1c8; background:#253a33; }
+html[data-active-page-theme="dark"] .modal .xoffi-import-blocker { color:var(--warning-ink); border-color:#786735; background:var(--warning-surface); }
 html[data-active-page-theme="dark"] .modal .shift-rule-preview { color:#edf4f1; border-color:#40524b; background:#202d29; }
 html[data-active-page-theme="dark"] .modal .shift-rule-preview-heading span { color:#f2d178; background:#3d331d; }
 html[data-active-page-theme="dark"] .modal .shift-rule-preview .work-rule-finding { color:#edf4f1; border-color:#40524b; background:#24322d; }
@@ -5695,6 +5699,17 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display
 .loan-management-photo-placeholder { padding:6px; color:var(--muted); font-size:8px; text-align:center; }
 .loan-management-photo figcaption { color:var(--muted); font-size:7px; line-height:1.25; overflow-wrap:anywhere; }
 .loan-management-entry > footer { display:flex; flex-wrap:wrap; gap:9px; padding:13px 19px; border-top:1px solid var(--line); background:var(--surface-soft); }
+.loan-management-entry-actions { display:flex; flex-direction:column; align-items:flex-end; gap:5px; margin-left:auto; }
+.loan-management-entry-actions small { color:var(--muted); font-size:9px; }
+.loan-management-return-modal { width:min(760px,calc(100vw - 28px)); }
+.loan-management-return-hint { margin:0 0 16px; padding:13px 15px; border:1px solid #8cc2aa; border-radius:12px; background:#edf8f3; }
+.loan-management-return-hint strong,.loan-management-return-hint p { display:block; margin:0; }
+.loan-management-return-hint p { margin-top:4px; color:var(--muted); font-size:10px; }
+.loan-management-return-items { display:grid; gap:10px; margin-bottom:16px; }
+.loan-management-return-item { margin:0; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+.loan-management-return-item legend { padding:0 5px; font-weight:800; }
+.loan-management-return-item > p { margin:0 0 10px; color:var(--muted); font-size:10px; }
+.loan-management-return-item-fields { display:grid; grid-template-columns:minmax(170px,.55fr) minmax(220px,1fr); gap:10px; }
 .loan-management-document { display:grid; grid-template-columns:auto auto; align-items:center; gap:3px 10px; min-width:240px; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
 .loan-management-document a { color:var(--green); font-size:10px; font-weight:850; text-decoration:none; }
 .loan-management-document small { grid-column:1; color:var(--muted); font-size:8px; }
@@ -5837,6 +5852,8 @@ html[data-active-page-theme="dark"] #loansView .loan-summary-card.email_failed {
 html[data-active-page-theme="dark"] #loansView .loan-summary-card.due_today,
 html[data-active-page-theme="dark"] #loansView .loan-summary-card.confirmation { color:var(--warning-ink); border-color:#786735; background:var(--warning-surface); }
 html[data-active-page-theme="dark"] #loansView .loan-management-warning { color:var(--warning-ink); border-color:#786735; background:var(--warning-surface); }
+html[data-active-page-theme="dark"] .loan-management-return-modal :is(.loan-management-return-item) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
+html[data-active-page-theme="dark"] .loan-management-return-modal .loan-management-return-hint { color:var(--success-ink); border-color:#49745f; background:var(--success-surface); }
 html[data-active-page-theme="dark"] #branchOrdersView :is(.branch-orders-management-toolbar,.branch-orders-management-section,.branch-orders-management-history,.branch-orders-management-item,.branch-orders-management-catalog-table-wrap,.branch-orders-management-unit-table-wrap,.branch-orders-management-catalog-editor,.branch-orders-management-unit-editor,.branch-orders-management-empty) { color:var(--ink); border-color:var(--line); background:var(--surface); }
 html[data-active-page-theme="dark"] #branchOrdersView :is(.branch-orders-management-recipient,.branch-orders-management-group,.branch-orders-management-history-entry) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
 html[data-active-page-theme="dark"] #settingsView :is(.loan-location-setting,.loan-photo-attachment) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
@@ -5853,7 +5870,8 @@ html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { 
 @media (max-width:820px) {
   .loan-management-topbar,.loan-management-entry > header,.branch-orders-management-topbar,.branch-orders-management-section-heading,.branch-orders-management-recipient > header,.branch-orders-management-group > header { align-items:stretch; flex-direction:column; }
   .loan-management-header-actions,.branch-orders-management-header-actions { justify-content:flex-start; }
-  .loan-management-toolbar,.loan-management-body,.loan-setting-fields,.branch-orders-management-toolbar,.branch-orders-management-fields.two-columns,.branch-orders-management-fields.three-columns,.branch-orders-management-item,.branch-orders-management-items,.branch-orders-management-history-list { grid-template-columns:1fr; }
+  .loan-management-toolbar,.loan-management-body,.loan-management-return-item-fields,.loan-setting-fields,.branch-orders-management-toolbar,.branch-orders-management-fields.two-columns,.branch-orders-management-fields.three-columns,.branch-orders-management-item,.branch-orders-management-items,.branch-orders-management-history-list { grid-template-columns:1fr; }
+  .loan-management-entry-actions { align-items:stretch; width:100%; margin-left:0; }
   .loan-photo-attachment { align-items:flex-start; flex-direction:column; }
   .loan-photo-attachment nav { justify-content:flex-start; width:100%; }
   .loan-management-toolbar > p,.loan-management-dates,.branch-orders-management-toolbar > p,.branch-orders-management-toolbar > .primary-button { justify-self:start; justify-items:start; text-align:left; }

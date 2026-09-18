@@ -246,6 +246,8 @@ const state = {
   loanManagementStatus: "open",
   loanManagementLoading: false,
   loanManagementRequestId: 0,
+  loanManagementReturnLoanId: "",
+  loanManagementReturnSaving: false,
   branchOrdersManagement: null,
   branchOrdersManagementDraft: null,
   branchOrdersManagementHistory: [],
@@ -762,7 +764,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "staffAssignmentRequestDeadline",
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "loanManagementReturnDialog", "loanManagementReturnForm", "loanManagementReturnTitle", "loanManagementReturnSubtitle", "loanManagementReturnItems", "loanManagementReturnNote", "loanManagementReturnConfirmed", "loanManagementReturnStatus", "loanManagementReturnSubmit", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchOrderNumber", "salesArticleSearchStatusFilter", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
@@ -2046,6 +2048,10 @@ function canReadLoanManagement() {
   return permissions.includes("loans:location:read") || permissions.includes("loans:location:manage");
 }
 
+function canDirectlyReturnManagedLoan() {
+  return state.portalSession?.user?.permissions?.includes("loans:location:manage") === true;
+}
+
 function canManageLoanSettings() {
   if (state.portalStatus?.installationFeatures?.loans === false) return false;
   if (!state.portalStatus?.portalEnabled) return true;
@@ -3067,7 +3073,9 @@ async function redirectAdministrationToCandidateEvaluation(user) {
 
 async function bootstrapApplication() {
   try {
-    const status = await api("/api/portal/v1/status");
+    const statusRequest = api("/api/portal/v1/status");
+    const sessionRequest = api("/api/portal/v1/session").catch((error) => ({ sessionError: error }));
+    const status = await statusRequest;
     state.portalStatus = status;
     applyBranding(status.branding || {});
     elements.deploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
@@ -3075,25 +3083,32 @@ async function bootstrapApplication() {
     [elements.adminLoginPassword, elements.adminSetupPassword, elements.adminSetupPasswordRepeat].forEach((input) => { if (input) input.minLength = passwordMinimum; });
     if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = "Geschützter Zugang";
     if (status.portalEnabled) {
-      const session = await api("/api/portal/v1/session");
+      const session = await sessionRequest;
+      if (session.sessionError) throw session.sessionError;
       state.portalSession = session;
       if (!session.authenticated) {
         showLoginGate();
         return;
       }
-      if (await redirectAdministrationToCandidateEvaluation(session.user)) return;
       if (session.user?.mustChangePassword
         || session.user?.role === "employee"
         || session.user?.isEmployee === false) {
+        if (await redirectAdministrationToCandidateEvaluation(session.user)) return;
         window.location.replace("/portal.html");
         return;
       }
+      void redirectAdministrationToCandidateEvaluation(session.user).catch((error) => {
+        if (error?.status === 401) window.location.reload();
+      });
     }
     hideLoginGate();
     applyShellBranding();
     applyRoleVisibility();
-    await loadUiPreferences();
-    await Promise.all([loadAll({ applyInitialView: true, reusePortalStatus: true }), loadManagementBrandingPreference()]);
+    await Promise.all([
+      loadUiPreferences(),
+      loadAll({ applyInitialView: true, reusePortalStatus: true }),
+    ]);
+    void loadManagementBrandingPreference().catch(() => {});
     loadSystemInfo();
     globalThis.grabenplanerNavigation?.start();
     setTimeout(() => checkForUpdates(false), 1800);
@@ -3112,20 +3127,26 @@ async function loginToAdministration(event) {
         password: elements.adminLoginPassword.value,
       }),
     });
-    if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
     if (result.user?.role === "employee"
       || result.user?.mustChangePassword
       || result.user?.isEmployee === false) {
+      if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
       window.location.replace("/portal.html");
       return;
     }
+    void redirectAdministrationToCandidateEvaluation(result.user).catch((error) => {
+      if (error?.status === 401) window.location.reload();
+    });
     elements.adminLoginPassword.value = "";
     state.portalSession = result;
     applyShellBranding(result.status?.branding || result.branding || {});
     hideLoginGate();
     applyRoleVisibility();
-    await loadUiPreferences();
-    await Promise.all([loadAll({ applyInitialView: true, reusePortalStatus: true }), loadManagementBrandingPreference()]);
+    await Promise.all([
+      loadUiPreferences(),
+      loadAll({ applyInitialView: true, reusePortalStatus: true }),
+    ]);
+    void loadManagementBrandingPreference().catch(() => {});
     loadSystemInfo();
     globalThis.grabenplanerNavigation?.start();
   } catch (error) {
@@ -3300,6 +3321,41 @@ function scheduleAdminLoginBrandingPreview() {
 
 let loadAllGeneration = 0;
 let planningPeriodController = null;
+
+function applyLoadedSchedule(schedule) {
+  state.data = schedule;
+  state.allowPastWeekEditing = schedule.settings?.allow_past_week_editing === "1";
+  state.locations = schedule.locations || state.locations;
+  state.weekStart = schedule.weekStart;
+  state.locationId = schedule.context?.locationId || state.locationId;
+  state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
+}
+
+async function enrichLoadedSchedule(url, {
+  generation,
+  session,
+  signal = null,
+  expectedWeekStart,
+  expectedLocationId,
+  expectedDepartmentId,
+} = {}) {
+  try {
+    const schedule = await api(url, signal ? { signal } : undefined);
+    if (generation !== loadAllGeneration || signal?.aborted || session !== state.portalSession
+      || state.weekStart !== expectedWeekStart
+      || state.locationId !== expectedLocationId
+      || String(state.departmentId || "") !== String(expectedDepartmentId || "")) return false;
+    state.data = { ...state.data, ...schedule, enrichmentPending: false };
+    render({ period: "schedule" });
+    return true;
+  } catch (error) {
+    if (generation === loadAllGeneration && !signal?.aborted) {
+      showToast(`Der Dienstplan ist sichtbar; die Zusatzprüfungen konnten nicht aktualisiert werden: ${error.message}`, true);
+    }
+    return false;
+  }
+}
+
 async function loadAll({ restoreContext = true, applyInitialView = false, reusePortalStatus = false } = {}) {
   const generation = ++loadAllGeneration;
   const session = state.portalSession;
@@ -3307,40 +3363,41 @@ async function loadAll({ restoreContext = true, applyInitialView = false, reuseP
   planningPeriodController?.abort();
   planningPeriodController = null;
   try {
-    const [locations, positions, portalStatus, roleData] = await Promise.all([
+    const [locations, portalStatus] = await Promise.all([
       api("/api/locations"),
-      api("/api/positions"),
       reusePortalStatus && state.portalStatus
         ? Promise.resolve(state.portalStatus)
         : api("/api/portal/v1/status").catch(() => null),
-      api("/api/portal/v1/roles").catch(() => ({ roles: [], catalog: [] })),
     ]);
     if (!isCurrent()) return;
     state.locations = locations;
-    state.positions = positions;
     state.portalStatus = portalStatus;
-    state.portalRoles = roleData.roles || [];
-    state.portalPositionPermissionDefaults = roleData.positionDefaults || [];
-    state.portalPermissionCatalog = roleData.catalog || [];
     setDefaultContext(state.locations);
     if (restoreContext) restoreRememberedOverallContext(state.currentView, state.locations);
     if (applyInitialView) applyRequestedView({ loadContext: false });
     const scheduleContext = contextQuery(true);
     const vacationContext = contextQuery(state.portalSession?.user?.role === "department_manager");
     const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false;
-    const scheduleRequest = api(`/api/schedule?week=${state.weekStart}${scheduleContext}`);
-    const schedule = await scheduleRequest;
+    const scheduleUrl = `/api/schedule?week=${state.weekStart}${scheduleContext}`;
+    const scheduleEnrichmentUrl = `/api/schedule/enrichment?week=${state.weekStart}${scheduleContext}`;
+    const schedule = await api(`${scheduleUrl}&fast=1`);
     if (!isCurrent()) return;
-    state.data = schedule;
-    state.allowPastWeekEditing = schedule.settings?.allow_past_week_editing === "1";
-    state.locations = schedule.locations || state.locations;
-    state.weekStart = schedule.weekStart;
-    state.locationId = schedule.context?.locationId || state.locationId;
-    state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
+    applyLoadedSchedule(schedule);
     render({ period: "schedule" });
+    const positionsRequest = api("/api/positions");
+    const roleDataRequest = api("/api/portal/v1/roles").catch(() => ({ roles: [], catalog: [] }));
+    void enrichLoadedSchedule(scheduleEnrichmentUrl, {
+      generation,
+      session,
+      expectedWeekStart: state.weekStart,
+      expectedLocationId: state.locationId,
+      expectedDepartmentId: state.departmentId,
+    });
     // Give the schedule the database first, then load supporting data without
     // discarding the displayed plan if an unrelated management request fails.
-    const [employees, vacationData, brandingKits] = await Promise.allSettled([
+    const [positions, roleData, employees, vacationData, brandingKits] = await Promise.allSettled([
+      positionsRequest,
+      roleDataRequest,
       api("/api/employees"),
       vacationEnabled
         ? api(`/api/vacations?year=${state.vacationYear}${vacationContext}`)
@@ -3348,13 +3405,19 @@ async function loadAll({ restoreContext = true, applyInitialView = false, reuseP
       api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
     ]);
     if (!isCurrent()) return;
+    if (positions.status === "fulfilled") state.positions = positions.value;
+    if (roleData.status === "fulfilled") {
+      state.portalRoles = roleData.value.roles || [];
+      state.portalPositionPermissionDefaults = roleData.value.positionDefaults || [];
+      state.portalPermissionCatalog = roleData.value.catalog || [];
+    }
     if (employees.status === "fulfilled") state.allEmployees = employees.value;
     if (vacationData.status === "fulfilled") {
       state.vacationData = vacationData.value;
       state.vacationYear = vacationData.value.year;
     }
     if (brandingKits.status === "fulfilled") state.brandingKits = brandingKits.value;
-    for (const result of [employees, vacationData, brandingKits]) {
+    for (const result of [positions, roleData, employees, vacationData, brandingKits]) {
       if (result.status === "rejected") showToast(result.reason.message, true);
     }
     render();
@@ -3399,7 +3462,7 @@ async function loadPlanningPeriod(kind = "schedule") {
     ? `/api/vacations?year=${state.vacationYear}${contextQuery(session?.user?.role === "department_manager")}`
     : `/api/schedule?week=${state.weekStart}${contextQuery(true)}`;
   try {
-    const data = await api(url, { signal: controller.signal });
+    const data = await api(vacation ? url : `${url}&fast=1`, { signal: controller.signal });
     if (generation !== loadAllGeneration || controller.signal.aborted
       || session !== state.portalSession || locationId !== state.locationId || departmentId !== state.departmentId) return;
     if (vacation) {
@@ -3407,12 +3470,7 @@ async function loadPlanningPeriod(kind = "schedule") {
       state.vacationYear = data.year;
       state.locations = data.locations || state.locations;
     } else {
-      state.data = data;
-      state.allowPastWeekEditing = data.settings?.allow_past_week_editing === "1";
-      state.locations = data.locations || state.locations;
-      state.weekStart = data.weekStart;
-      state.locationId = data.context?.locationId || state.locationId;
-      state.departmentId = data.context?.departmentId ? String(data.context.departmentId) : "";
+      applyLoadedSchedule(data);
     }
     render({ period: vacation ? "vacation" : "schedule" });
     if (Number.isFinite(started) && globalThis.requestAnimationFrame && globalThis.performance?.measure) {
@@ -3427,6 +3485,16 @@ async function loadPlanningPeriod(kind = "schedule") {
         if (!vacation && elements.timeline) elements.timeline.dataset.weekLoadMilliseconds = String(Math.round(end - started));
         if (vacation && elements.vacationCalendar) elements.vacationCalendar.dataset.loadMilliseconds = String(Math.round(end - started));
       }));
+    }
+    if (!vacation) {
+      await enrichLoadedSchedule(url.replace("/api/schedule?", "/api/schedule/enrichment?"), {
+        generation,
+        session,
+        signal: controller.signal,
+        expectedWeekStart: state.weekStart,
+        expectedLocationId: state.locationId,
+        expectedDepartmentId: state.departmentId,
+      });
     }
   } catch (error) {
     if (generation === loadAllGeneration && !controller.signal.aborted) showToast(error.message, true);
@@ -3480,6 +3548,15 @@ function loanStatusLabel(value) {
   return value === "returned" ? "Zurückgegeben"
     : value === "cancelled" ? "Storniert"
       : "Ausgegeben";
+}
+
+function loanConditionLabel(value) {
+  return ({
+    good: "Gut",
+    used: "Gebraucht",
+    damaged: "Beschädigt",
+    incomplete: "Unvollständig",
+  })[value] || "Nicht angegeben";
 }
 
 function loanManagementTimestamp(value) {
@@ -3584,6 +3661,9 @@ function renderLoanManagement() {
         ${failed ? `<button class="text-button" type="button" data-loan-document-email="${escapeHtml(document.id)}">E-Mail erneut senden</button>` : ""}
       </div>`;
     }).join("");
+    const managementActions = canDirectlyReturnManagedLoan() && loan.status === "issued"
+      ? `<div class="loan-management-entry-actions"><button class="primary-button" type="button" data-loan-management-return="${escapeHtmlAttribute(loan.id)}">Direkt zurücknehmen</button><small>Abschluss durch Filialleitung ohne zweite Gegenkontrolle</small></div>`
+      : "";
     const dueClass = loan.status === "issued" ? loan.dueState : "returned";
     return `<article class="loan-management-entry ${escapeHtml(dueClass)}">
       <header>
@@ -3592,7 +3672,7 @@ function renderLoanManagement() {
       </header>
       ${loan.pendingReturnConfirmation ? `<p class="loan-management-warning">Rücknahme wartet auf Bestätigung durch ${escapeHtml(loan.pendingReturnConfirmation.witness?.employeeNumber)} · ${escapeHtml(loan.pendingReturnConfirmation.witness?.name)}.</p>` : ""}
       <div class="loan-management-body"><ul>${items}</ul><aside><span>${issuePhotos.length} Ausgabefoto(s) · ${returnPhotos.length} Rückgabefoto(s)</span>${photoLinks}</aside></div>
-      ${documents || photoAttachments ? `<footer>${documents}${photoAttachments}</footer>` : ""}
+      ${documents || photoAttachments || managementActions ? `<footer>${documents}${photoAttachments}${managementActions}</footer>` : ""}
     </article>`;
   }).join("") : `<p class="loan-management-empty">Für diese Auswahl sind keine Leihvorgänge vorhanden.</p>`;
   const openCount = Number(summary.open || 0);
@@ -3634,6 +3714,82 @@ async function retryLoanDocumentEmail(documentId) {
   } catch (error) {
     showToast(error.message, true);
     await loadLoanManagement();
+  }
+}
+
+function openLoanManagementReturn(loanId) {
+  if (!canDirectlyReturnManagedLoan() || state.loanManagementReturnSaving) return;
+  const loan = (state.loanManagement?.loans || []).find((entry) => entry.id === loanId);
+  if (!loan || loan.status !== "issued") {
+    showToast("Diese Leihe ist nicht mehr offen.", true);
+    void loadLoanManagement();
+    return;
+  }
+  state.loanManagementReturnLoanId = loan.id;
+  elements.loanManagementReturnTitle.textContent = `${loan.borrower?.employeeNumber || ""} · ${loan.borrower?.name || "Leihe"}`;
+  elements.loanManagementReturnSubtitle.textContent = `${loan.location?.id || ""} · ${loan.location?.name || ""} · Revision ${Number(loan.revision || 1)}`;
+  elements.loanManagementReturnItems.innerHTML = (loan.items || []).map((item) => `
+    <fieldset class="loan-management-return-item" data-loan-return-position="${Number(item.position)}">
+      <legend>${escapeHtml(item.articleNumber)} · ${escapeHtml(item.description)}</legend>
+      <p>${item.serialNumber ? `Seriennummer ${escapeHtml(item.serialNumber)} · ` : ""}Ausgabezustand: ${escapeHtml(loanConditionLabel(item.conditionOut))}</p>
+      <div class="loan-management-return-item-fields">
+        <label class="field"><span>Zustand bei Rücknahme</span><select data-loan-return-condition required><option value="good">Gut</option><option value="used">Gebraucht</option><option value="damaged">Beschädigt</option><option value="incomplete">Unvollständig</option></select></label>
+        <label class="field"><span>Hinweis (optional)</span><input data-loan-return-note maxlength="500" value="" placeholder="z. B. Kratzer am Gehäuse" /></label>
+      </div>
+    </fieldset>
+  `).join("");
+  elements.loanManagementReturnNote.value = "";
+  elements.loanManagementReturnConfirmed.checked = false;
+  elements.loanManagementReturnStatus.textContent = loan.pendingReturnConfirmation
+    ? "Eine frühere Gegenkontrolle ist noch offen. Der direkte Abschluss durch die Filialleitung ersetzt diese Anfrage."
+    : "Alle Artikel müssen mit ihrem Rückgabezustand erfasst werden.";
+  elements.loanManagementReturnSubmit.disabled = false;
+  elements.loanManagementReturnDialog.showModal();
+}
+
+async function submitLoanManagementReturn(event) {
+  event.preventDefault();
+  if (!canDirectlyReturnManagedLoan() || state.loanManagementReturnSaving) return;
+  const loan = (state.loanManagement?.loans || []).find((entry) => entry.id === state.loanManagementReturnLoanId);
+  if (!loan || loan.status !== "issued") {
+    elements.loanManagementReturnStatus.textContent = "Diese Leihe ist nicht mehr offen. Bitte die Übersicht aktualisieren.";
+    return;
+  }
+  if (!elements.loanManagementReturnConfirmed.checked) {
+    elements.loanManagementReturnStatus.textContent = "Bitte den direkten Abschluss durch die Filialleitung bestätigen.";
+    elements.loanManagementReturnConfirmed.focus();
+    return;
+  }
+  const items = [...elements.loanManagementReturnItems.querySelectorAll("[data-loan-return-position]")].map((row) => ({
+    position: Number(row.dataset.loanReturnPosition),
+    conditionReturn: row.querySelector("[data-loan-return-condition]").value,
+    note: row.querySelector("[data-loan-return-note]").value,
+  }));
+  state.loanManagementReturnSaving = true;
+  elements.loanManagementReturnSubmit.disabled = true;
+  elements.loanManagementReturnStatus.textContent = "Rücknahmebeleg wird erstellt und die Leihe abgeschlossen.";
+  try {
+    const result = await api(`/api/portal/v1/loans/${encodeURIComponent(loan.id)}/return`, {
+      method: "POST",
+      body: JSON.stringify({
+        expectedRevision: Number(loan.revision),
+        items,
+        note: elements.loanManagementReturnNote.value,
+      }),
+    });
+    if (result?.direct !== true || result?.loan?.status !== "returned") {
+      throw new Error("Die direkte Rücknahme wurde nicht bestätigt. Bitte die Übersicht aktualisieren.");
+    }
+    elements.loanManagementReturnDialog.close();
+    state.loanManagementReturnLoanId = "";
+    showToast("Leihe wurde durch die Filialleitung direkt zurückgenommen.");
+    await loadLoanManagement();
+  } catch (error) {
+    elements.loanManagementReturnStatus.textContent = error.message;
+    showToast(error.message, true);
+  } finally {
+    state.loanManagementReturnSaving = false;
+    elements.loanManagementReturnSubmit.disabled = false;
   }
 }
 
@@ -22537,7 +22693,7 @@ function xoffiMappingIssue() {
       selected.add(value);
     }
   }
-  if (missing.length) return `Bitte zuordnen oder ausdrücklich nicht übernehmen: ${missing.join(", ")}.`;
+  if (missing.length) return `Import noch nicht möglich: ${missing.length === 1 ? "Diese xoffi-Person ist" : `Diese ${missing.length} xoffi-Personen sind`} keinem aktiven GP-Teammitglied zugeordnet: ${missing.join(", ")}. Bitte zuordnen oder in der jeweiligen Zeile „Diese Zeile nicht übernehmen“ wählen. Danach können die übrigen Personen übernommen werden.`;
   if (duplicate.length) return `Teammitglied mehrfach zugeordnet: ${duplicate.join(", ")}. Bitte korrigieren.`;
   if (rows.length && !selected.size) return "Bitte mindestens ein Teammitglied zur Übernahme auswählen.";
   return "";
@@ -22551,9 +22707,11 @@ function renderXoffiImportPreview() {
   const candidateOptions = (selected) => preview.candidates.map((employee) => `
     <option value="${escapeHtmlAttribute(employee.employeeNumber)}" ${employee.employeeNumber === selected ? "selected" : ""}>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</option>
   `).join("");
+  const initiallyUnmapped = preview.employees.filter((employee) => !employee.employeeNumber);
   elements.xoffiImportPreview.innerHTML = `
     <div class="xoffi-preview-heading"><strong>KW ${Number(preview.calendarWeek)} · ${escapeHtml(preview.context.locationName || preview.context.locationId)}</strong><span>${formatDate(preview.weekStart)}–${formatDate(preview.weekEnd)}</span></div>
     ${(preview.warnings || []).map((warning) => `<p class="calculation-note">${escapeHtml(warning)}</p>`).join("")}
+    ${initiallyUnmapped.length ? `<aside class="xoffi-import-blocker" role="alert"><strong>Import noch nicht möglich</strong><p>${initiallyUnmapped.length === 1 ? "Eine Person aus xoffi ist" : `${initiallyUnmapped.length} Personen aus xoffi sind`} keinem aktiven Teammitglied im ausgewählten GP-Bereich zugeordnet: ${initiallyUnmapped.map((employee) => escapeHtml(employee.sourceName)).join(", ")}.</p><p>Ordne jede betroffene Zeile zu oder wähle dort <strong>„Diese Zeile nicht übernehmen“</strong>. Der Rest der Datei kann anschließend trotzdem übernommen werden.</p></aside>` : ""}
     <div class="xoffi-preview-rows">${preview.employees.map((employee, rowIndex) => `
       <article class="xoffi-preview-row" data-xoffi-row="${rowIndex}" data-source-name="${escapeHtmlAttribute(employee.sourceName)}" data-match-confidence="${Number(employee.matchConfidence || 0)}">
         <div class="xoffi-row-heading">
@@ -39045,8 +39203,17 @@ elements.loanManagementStatus?.addEventListener("change", () => {
   renderLoanManagement();
 });
 elements.loanManagementList?.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-loan-document-email]");
-  if (button && !button.disabled) retryLoanDocumentEmail(button.dataset.loanDocumentEmail);
+  const returnButton = event.target.closest("[data-loan-management-return]");
+  if (returnButton && !returnButton.disabled) {
+    openLoanManagementReturn(returnButton.dataset.loanManagementReturn);
+    return;
+  }
+  const emailButton = event.target.closest("[data-loan-document-email]");
+  if (emailButton && !emailButton.disabled) retryLoanDocumentEmail(emailButton.dataset.loanDocumentEmail);
+});
+elements.loanManagementReturnForm?.addEventListener("submit", submitLoanManagementReturn);
+elements.loanManagementReturnDialog?.addEventListener("close", () => {
+  if (!state.loanManagementReturnSaving) state.loanManagementReturnLoanId = "";
 });
 elements.refreshLoanSettingsButton?.addEventListener("click", loadLoanSettings);
 elements.loanSettingsList?.addEventListener("submit", (event) => {
