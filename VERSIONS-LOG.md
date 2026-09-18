@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.58 Beta – 18.09.2026
+
+- Korrekturen der CI-Fehler: private Archivexporte, PDF-Schrifterkennung, isolierte Recovery-Testkopien sowie aktualisierte Rechte- und Architekturtests.
+- PostgreSQL-Wiederherstellung verwendet auch im untergeordneten pg_restore-Prozess das 30-Minuten-Limit. Der isolierte Gesamttest bleibt zeitlich und hinsichtlich CPU und Speicher begrenzt.
+- Windows-Tests nutzen kanonische temporäre Pfade; qualifizierte PostgreSQL-Verträge behalten plattformübergreifend ihre geprüften Bytes.
+
 ## v0.92.57 Beta – 18.09.2026
 
 - Dienstplan und Urlaubsplaner laden gezielt und bündeln PostgreSQL-Lesezugriffe. Die RAM-Anzeige berücksichtigt verfügbaren Linux-Speicher; isolierte Wiederherstellungstests erhalten bis zu 30 Minuten.

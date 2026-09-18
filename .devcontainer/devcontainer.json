@@ -1,5 +1,5 @@
 {
-  "name": "Grabenplaner v0.92.57 Codespaces-Demo",
+  "name": "Grabenplaner v0.92.58 Codespaces-Demo",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
