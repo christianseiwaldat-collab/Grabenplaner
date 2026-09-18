@@ -64171,6 +64171,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     if (finished) return;
     finished = true;
     await importDrain;
+    await amuScannerProbe.catch(() => {});
     await salesReportJobs.stop().catch(() => {});
     await postgresqlReceiptWorkers?.close().catch(() => {});
     if (!databaseClosed) {
