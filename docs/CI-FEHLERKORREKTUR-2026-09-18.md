@@ -53,9 +53,23 @@ Korrektur verbleiben dort 27 andere, bereits vorhandene Plattformbefunde:
 
 Der gemeinsame lokale Windows-Lauf dieser Dateien umfasst 44 Tests:
 31 bestanden, kein Fehler, 13 unveränderte umgebungsabhängige Auslassungen.
-Der erneute vollständige CI-Lauf steht noch aus.
+Der vollständige CI-Lauf für `e5b2166` ist auf beiden Plattformen grün:
+Linux 3702 Tests, 3624 bestanden und 78 umgebungsabhängig übersprungen;
+Windows 3702 Tests, 3602 bestanden und 100 umgebungsabhängig übersprungen.
+Beide Läufe melden null Fehler. Mindest-Node und PostgreSQL-Vertrag sind
+ebenfalls vollständig grün.
+
+Auch der endgültige Runtime-Commit `736cc4d` ist vollständig grün:
+Linux 3705 Tests, 3627 bestanden und 78 übersprungen; Windows 3705 Tests,
+3605 bestanden und 100 übersprungen. Zusätzlich bestehen alle 50 Tests der
+Mindest-Node-Version und alle 125 PostgreSQL-Vertragstests. Die drei neuen
+Tests für das konsistente Wiederherstellungs-Zeitlimit sind enthalten.
+Nachweis: [vollständiger Release-CI-Lauf](https://github.com/christianseiwaldat-collab/Grabenplaner/actions/runs/35291872375).
 
 Diese Korrekturen gehören nicht zum unveränderlichen Deployment-Paket `b2e09af`
-für v0.92.57. Der geänderte Offsite-Fingerprint erfordert bei einer späteren
-Installation den bestehenden expliziten Modul-Updateweg; ein App-Update allein
-übernimmt ihn nicht automatisch.
+für v0.92.57. Sie sind im Paket `736cc4d` für v0.92.58 enthalten. Der geänderte
+Offsite-Fingerprint wurde am VPS über den bestehenden expliziten Modul-Updateweg
+installiert; Provider, Repository und Zugangsdaten blieben unverändert.
+Die öffentliche v0.92.58-Ansicht wurde am 18.09.2026 um 00:56 UTC überprüft.
+Die abschließende vollständige Wiederherstellungsprüfung ist zu diesem
+Dokumentationsstand noch offen; siehe [Release-Bericht](DEPLOY-RELEASE-v09258.md).

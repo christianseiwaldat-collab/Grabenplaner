@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.92.59 Beta – 18.09.2026
+
+- PostgreSQL-Wiederherstellung berücksichtigt auch den Aufbau großer Indizes und die Prüfung von Fremdschlüsseln: maximal 45 Minuten je pg_restore, mit 15 Minuten zusätzlicher Reserve im insgesamt auf eine Stunde begrenzten isolierten Worker. CPU-, Speicher- und Abschottungsgrenzen bleiben unverändert.
+- Gemeinsame Zeitbudget-Konstante und Regressionstests verhindern erneut widersprüchliche Grenzen zwischen dem nativen Werkzeug und dem übergeordneten Prozess.
+
 ## v0.92.58 Beta – 18.09.2026
 
 - Korrekturen der CI-Fehler: private Archivexporte, PDF-Schrifterkennung, isolierte Recovery-Testkopien sowie aktualisierte Rechte- und Architekturtests.

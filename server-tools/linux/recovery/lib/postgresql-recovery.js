@@ -1,9 +1,11 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawn}=require('node:child_process');
 const {verifyPairBundle}=require('../../../../lib/persistence/postgresql/operations/paired-bundle');
+const {RESTORE_TOOL_TIMEOUT_MS}=require('../../../../lib/persistence/postgresql/operations/paired-restore');
 const BASE='/var/lib/grabenplaner-offsite/postgresql-recovery';
 const ACCOUNT='grabenplaner-offsite';
-const RECOVERY_RUNTIME_SECONDS=30*60;
+// Keep room outside the largest restore for core data and the full app smoke.
+const RECOVERY_RUNTIME_SECONDS=RESTORE_TOOL_TIMEOUT_MS/1000+15*60;
 function ownTree(root,uid,gid){
  for(const name of fs.readdirSync(root)){const file=path.join(root,name),info=fs.lstatSync(file);if(info.isSymbolicLink()||!info.isDirectory()&&(!info.isFile()||info.nlink!==1))throw new Error('PG_RECOVERY_TREE');if(info.isDirectory())ownTree(file,uid,gid);else{fs.chownSync(file,uid,gid);fs.chmodSync(file,0o600);}}
  fs.chownSync(root,uid,gid);fs.chmodSync(root,0o700);
