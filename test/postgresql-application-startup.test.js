@@ -67,3 +67,42 @@ test('deferred PostgreSQL startup still rejects readiness and waiting operations
   assert.deepEqual(closed, []);
   await assert.rejects(application.provider.close(), { code: 'PERSISTENCE_CONNECTION_UNAVAILABLE' });
 });
+
+
+test('database ownership reuses qualified statement IDs without compiling catalogs again', async t => {
+  const coreCatalog = require('../lib/persistence/postgresql/core/catalog');
+  const salesCatalog = require('../lib/persistence/postgresql/sales/catalog');
+  const ids = entries => entries.map(entry => entry.statement.id);
+  const coreEntries = coreCatalog.sourceEntries();
+  assert.deepEqual(ids(coreEntries), ids(coreCatalog.createCoreCatalog().entries));
+  for (const stage of [7, 8]) {
+    assert.deepEqual(ids(salesCatalog.salesSourceEntries(stage)), ids(salesCatalog.createSalesCatalog(stage).entries));
+  }
+  const calls = [];
+  const application = domain => ({ repositories: {}, close: async () => {}, provider: {
+    transaction: async work => work({ queryAll: async statement => { calls.push([domain, statement.id]); return []; } }),
+    close: async () => {},
+  } });
+  t.mock.method(require('../lib/persistence/postgresql/core/application'), 'openCoreDevelopmentApplication', async () => application('core'));
+  t.mock.method(require('../lib/persistence/postgresql/sales/application'), 'openSalesDevelopmentApplication', async () => application('sales'));
+  t.mock.method(coreCatalog, 'createCoreCatalog', () => { throw new Error('duplicate Core compilation'); });
+  t.mock.method(salesCatalog, 'createSalesCatalog', () => { throw new Error('duplicate Sales compilation'); });
+  const modulePath = require.resolve('../lib/persistence/postgresql/boundary/application');
+  const previous = require.cache[modulePath];
+  delete require.cache[modulePath];
+  t.after(() => { delete require.cache[modulePath]; if (previous) require.cache[modulePath] = previous; });
+  const app = await require(modulePath).openTwoDatabaseDevelopmentApplication({
+    coreUrl: 'postgresql://gp_core_app:synthetic@127.0.0.1/gp_migration_core',
+    salesUrl: 'postgresql://gp_sales_app:synthetic@127.0.0.1/gp_migration_sales',
+    stage: 8, authorize: () => true,
+  });
+  try {
+    for (const [domain, entries] of [['core', coreEntries], ['sales', salesCatalog.salesSourceEntries(8)]]) {
+      const entry = domain === 'sales' ? entries.find(e => e.statement.id === 'data-import.rows.counts')
+        : entries.find(e => e.statement.operation === 'queryAll' && Object.keys(e.statement.parameters).length === 0);
+      assert.ok(entry, domain + ' read fixture');
+      assert.deepEqual(await app.provider.queryAll(entry.statement, domain === 'sales' ? { runId: 'synthetic' } : {}), []);
+      assert.deepEqual(calls.at(-1), [domain, entry.statement.id]);
+    }
+  } finally { await app.close(); }
+});
