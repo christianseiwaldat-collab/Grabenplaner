@@ -3093,7 +3093,7 @@ async function bootstrapApplication() {
     applyShellBranding();
     applyRoleVisibility();
     await loadUiPreferences();
-    await Promise.all([loadAll({ applyInitialView: true }), loadManagementBrandingPreference()]);
+    await Promise.all([loadAll({ applyInitialView: true, reusePortalStatus: true }), loadManagementBrandingPreference()]);
     loadSystemInfo();
     globalThis.grabenplanerNavigation?.start();
     setTimeout(() => checkForUpdates(false), 1800);
@@ -3125,7 +3125,7 @@ async function loginToAdministration(event) {
     hideLoginGate();
     applyRoleVisibility();
     await loadUiPreferences();
-    await Promise.all([loadAll({ applyInitialView: true }), loadManagementBrandingPreference()]);
+    await Promise.all([loadAll({ applyInitialView: true, reusePortalStatus: true }), loadManagementBrandingPreference()]);
     loadSystemInfo();
     globalThis.grabenplanerNavigation?.start();
   } catch (error) {
@@ -3300,7 +3300,7 @@ function scheduleAdminLoginBrandingPreview() {
 
 let loadAllGeneration = 0;
 let planningPeriodController = null;
-async function loadAll({ restoreContext = true, applyInitialView = false } = {}) {
+async function loadAll({ restoreContext = true, applyInitialView = false, reusePortalStatus = false } = {}) {
   const generation = ++loadAllGeneration;
   const session = state.portalSession;
   const isCurrent = () => generation === loadAllGeneration && session === state.portalSession;
@@ -3310,7 +3310,9 @@ async function loadAll({ restoreContext = true, applyInitialView = false } = {})
     const [locations, positions, portalStatus, roleData] = await Promise.all([
       api("/api/locations"),
       api("/api/positions"),
-      api("/api/portal/v1/status").catch(() => null),
+      reusePortalStatus && state.portalStatus
+        ? Promise.resolve(state.portalStatus)
+        : api("/api/portal/v1/status").catch(() => null),
       api("/api/portal/v1/roles").catch(() => ({ roles: [], catalog: [] })),
     ]);
     if (!isCurrent()) return;
@@ -41299,7 +41301,7 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
 bootstrapApplication();
 setInterval(() => {
   if (!document.hidden && !planningPeriodController && !document.body.classList.contains("portal-locked")) loadSystemInfo();
-}, 30000);
+}, 120000);
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests({ background: true });
 }, 45000);
