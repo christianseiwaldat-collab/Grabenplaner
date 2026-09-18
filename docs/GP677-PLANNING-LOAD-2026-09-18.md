@@ -117,3 +117,57 @@ Antworten mit HTTP 200 geprüft. Die separate Veröffentlichung wurde unter
 protokolliert. Der vorherige Fehlerstatus der Wiederherstellungsprüfung bleibt
 unverändert dokumentiert; dieser Browser-Hotfix behauptet keinen neuen
 Wiederherstellungsnachweis.
+
+## Veröffentlichter Server-Hotfix auf Version 0.92.58
+
+Am 18.09.2026 um 12:43:45 UTC (14:43 Uhr Wien) wurde
+`e920075d348c371e64527fe4bce1ed88032ea5ae` als begrenzter Server-Hotfix
+veröffentlicht. Das Paket erweitert den Browser-Hotfix um sechs Laufzeitdateien:
+
+- Der Mitarbeiterabruf verwendet einen gemeinsamen Lesesnapshot mit abschließender
+  Berechtigungsprüfung. Einzelne Repository-Abfragen starten nicht mehr jeweils
+  eine eigene vollständige Lesetransaktion.
+- Die bestehenden begrenzten Core-/Sales-Pools behalten bereits qualifizierte
+  Verbindungen. Neue Verbindungen bestehen weiterhin sämtliche Umgebungs- und
+  Schemaprüfungen; die maximale Verbindungslebensdauer bleibt unverändert.
+- Die Kalenderberechnung verwendet wiederverwendbare Zeitzonenformatierer.
+- Der Verbindungsaufbau beginnt nach der synchronen Serverkonstruktion. Bereits
+  qualifizierte Kataloge werden für das Routing nicht erneut kompiliert.
+
+Die Anmeldung und Navigation wurden direkt im Codex In-app Browser gegen die
+bereits vorhandene, isolierte PostgreSQL-Wiederherstellungskopie geprüft. Ein
+synthetisches Prüfkonto wurde ausschließlich dort verwendet. Sichtbare Schichten
+in KW 38 und KW 39 sowie Vor-/Zurücknavigation bestanden. Die Kopie ist auf einen
+CPU-Kern begrenzt und daher keine produktive Lastmessung.
+
+Vor der zusätzlichen Serverkorrektur lagen beobachtete Wochenwechsel bei
+3.698, 7.562, 12.945, 3.264 und 2.338 ms. Im neuen Paket wurden 2.176, 1.614,
+1.660 und 3.176 ms gemessen, nach längerer Navigationspause 5.265 ms.
+Die erste Filialauswahl dauerte 3.665 ms. Das angestrebte Maximum von 2.500 ms
+ist auf der gedrosselten Kopie noch nicht durchgehend erreicht. Die Freigabe
+dieser Zwischenverbesserung ist ausdrücklich kein Nachweis einer vollständig
+gelösten produktiven Ladezeit. Der anfängliche Seitenaufbau bleibt separat zu
+prüfen. Die Datumskonvertierung bestand zusätzlich 84 exakte Vergleichsfälle
+einschließlich Sommerzeitwechseln in Wien und New York.
+
+Das Paket umfasst weiterhin 746 Dateien, davon 740 gegenüber dem Browser-Hotfix
+bytegleich. Paket-SHA-256:
+`eb4b56964e00783f8959618b7b03e7db913f697785608feb12f22ef9dacbb240`.
+Manifest-SHA-256:
+`b95d12c4a844dc23131f5c6dfad720246bb50e98b3ec0fa2633d64bff50a341d`.
+
+Der gesondert protokollierte Hotfix hielt die bestehende Wartungssperre ein,
+prüfte Virenscan, Paket und Ausgangsdateien, sicherte die ersetzten Dateien und
+startete ausschließlich die Anwendung neu. Datenbank, Schema, Abhängigkeiten
+und Infrastruktur wurden nicht ersetzt. PostgreSQL- und Caddy-Prozesse blieben
+unverändert. Die Veröffentlichung endete mit Exitcode 0 und vier internen bzw.
+öffentlichen Live-/Ready-Antworten mit HTTP 200. Der Monitor-Timer ist wieder
+aktiv und aktiviert. Der Beleg liegt unter
+`/opt/grabenplaner/.deploy-speed-v09258-e920075/deployment-receipt.json`.
+
+Der frühere fehlgeschlagene vollständige Wiederherstellungsnachweis und der
+Offsite-Fehlerstatus bleiben erhalten. Diese Veröffentlichung beansprucht
+keinen erfolgreichen vollständigen Updater-/Recovery-Durchlauf. Die private
+Testdatenbank und beide Testtunnel wurden beendet, die Datenkopie wieder
+versiegelt. Eine angemeldete produktive Browsermessung lag zum Abschluss
+dieser Paketprüfung nicht vor.
