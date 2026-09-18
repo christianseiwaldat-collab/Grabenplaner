@@ -1,7 +1,8 @@
 # Dienstplan: erste Anzeige und Mitarbeiterabruf
 
 Die produktiven Zugriffsprotokolle am 18.09.2026 zeigten Dienstplanantworten
-mit HTTP 200 nach rund 1–3 Sekunden. Zeitgleich dauerte `/api/employees`
+mit HTTP 200 nach zunächst rund 1–3 Sekunden; spätere Chrome-Aufrufe lagen
+zwischen 2,7 und 7,9 Sekunden. Zeitgleich dauerte `/api/employees`
 teilweise 6–8 Sekunden; ein Abruf scheiterte mit HTTP 500 und
 `PERSISTENCE_TIMEOUT`. Die Oberfläche wartete auf alle Antworten gemeinsam
 und verwarf dadurch auch einen bereits erfolgreich geladenen Dienstplan.
@@ -21,5 +22,67 @@ Gezielte Lade-, Rechte- und Architekturprüfungen: 21 bestanden. Der vorhandene
 native PostgreSQL-Paritätstest wurde um die Mitarbeiterliste erweitert.
 Die erste lokale Ausführung konnte die abgeschaltete Entwicklungsdatenbank
 nicht erreichen; dies ist kein fachlicher Testerfolg. Veröffentlichung und
-produktive Antwortzeiten sind gesondert zu verifizieren. Ein spezifischer
-Firefox-Darstellungsfehler ist bislang nicht reproduziert.
+produktive Antwortzeiten sind gesondert zu verifizieren. Der separate Fehler
+unter Firefox 115 ist im folgenden Abschnitt beschrieben.
+
+## Prüfung des Releasekandidaten
+
+Commit `c6fbf51c64e3a64a8097a6ce4720ae5716f83f61`, Paket
+`Grabenplaner-Server-v0.92.60-beta-linux-x64.zip`, SHA-256
+`49d1558b14650f6d012a0615c4301820a2816236e42f5427cbf7b3d4ff2eaae4`.
+Alle vier Jobs des CI-Laufs 35332519833 bestanden, einschließlich Windows,
+Linux, PostgreSQL-Providervertrag und minimaler Node-Version. Die vorhandene
+API-Prüfung der Personalprofilfelder bestand ebenfalls.
+
+Im internen Chromium-Browser erschien der synthetische lokale Dienstplan
+nach 1.102 ms, obwohl der Mitarbeiterabruf absichtlich acht Sekunden verzögert
+und anschließend mit HTTP 503 abgewiesen wurde. Auch danach blieb das Raster
+sichtbar und der Fehler wurde angezeigt. Ein normaler Wochenwechsel benötigte
+44 ms; dabei gab es keine JavaScript-Fehler. Diese Werte stammen aus der
+lokalen SQLite-Testumgebung und sind keine Messung der Produktionsleistung.
+
+Firefox 156.0 wurde zusätzlich automatisiert mit einem frischen, isolierten
+Profil und synthetischen Schichten geprüft. Dienstplan und sichtbare Dienstbalken
+erschienen nach 672 ms. Auch mit dem nach acht Sekunden fehlschlagenden
+Mitarbeiterabruf blieben sie sichtbar. Der Wechsel von KW 38 auf KW 39 inklusive
+Dienstbalken bestand ebenfalls (68 ms). Beide Ansichten wurden als Screenshot
+visuell geprüft. Browser, Testserver und Treiber wurden danach beendet.
+
+Das exakte Paket bestand am 18.09.2026 um 10:14:46 UTC den vollständigen
+Anwendungstest auf einer bereits vorhandenen, isolierten PostgreSQL-Kopie.
+Geprüft wurden reguläre Anmeldung, Dienstplan, PDF, parallele Lesezugriffe,
+Artikelimport mit Konfliktabwehr und Rücknahme, historische Arbeitsregeln,
+Umsatzbericht und Sperrung einer widerrufenen Sitzung. Der Dienstplanabruf
+benötigte dort 1.445 ms. Es wurde für diese Prüfung keine neue vollständige
+Wiederherstellung gestartet und kein Produktionskonto angelegt.
+
+Eine zusätzliche Mitarbeiter-Vergleichsmessung während des Virenscans erreichte
+die Messphase nicht: Ein Reportworker scheiterte beim Anwendungsstart mit
+`IMPORT_REPORT_FAILED`. Daraus liegt kein belastbarer Vorher-Nachher-Wert vor.
+Der private PostgreSQL-Prozess wurde beendet und die Testkopie wieder versiegelt.
+
+Der reguläre vollständige Updater wurde um 10:15 UTC gestartet. Um 11:03 UTC
+wurden Version 0.92.60, öffentliche Live-/Ready-Antworten mit HTTP 200 und die
+exakten Hashes von HTML, JavaScript und CSS bestätigt. Die abschließende
+Wiederherstellungsprüfung des Updaters läuft noch.
+Eine angemeldete produktive Firefox-Sitzung wurde nicht verändert oder für die
+Prüfung vorausgesetzt.
+
+## Dienstbalken unter Firefox 115
+
+Die produktiven Firefox-Aufrufe verwendeten laut User-Agent Firefox 115.
+Ein zusätzlicher lokaler Test mit genau Firefox 115.0 reproduzierte den
+Darstellungsfehler: Der Schichtbutton war nur zwei Pixel breit, obwohl die
+Mitarbeiterspalte 34,78 Pixel breit war. Das absolut positionierte Label gab
+dem Button keine eigene Inhaltsbreite; diese Firefox-Version streckte den
+Button nicht zwischen den beiden seitlichen Abständen.
+
+Eine explizite Breite `calc(100% - 6px)` berücksichtigt dieselben Abstände
+und erhält die Spaltengeometrie. Der Test bestand damit in Firefox 115.0
+einschließlich belegter Schichten in KW 38 und KW 39 und eines verzögert
+fehlschlagenden Mitarbeiterabrufs. Erstes Raster: 766 ms; Wochenwechsel: 97 ms.
+Chrome 152.0.7977.84 bestand dieselbe Prüfung (641 ms und 58 ms). Sämtliche
+Werte beziehen sich auf lokale synthetische SQLite-Daten.
+
+Die CSS-Korrektur ist geprüft und zur Veröffentlichung vorbereitet. Der
+bereits laufende Updater enthält noch die ursprüngliche CSS-Datei.
