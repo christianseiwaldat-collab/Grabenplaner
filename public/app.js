@@ -3325,15 +3325,6 @@ async function loadAll({ restoreContext = true, applyInitialView = false } = {})
     const vacationContext = contextQuery(state.portalSession?.user?.role === "department_manager");
     const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false;
     const scheduleRequest = api(`/api/schedule?week=${state.weekStart}${scheduleContext}`);
-    // Observe ancillary failures immediately, but never delay the available
-    // schedule or discard it because an unrelated management request failed.
-    const supportingRequests = Promise.allSettled([
-      api("/api/employees"),
-      vacationEnabled
-        ? api(`/api/vacations?year=${state.vacationYear}${vacationContext}`)
-        : Promise.resolve({ year: state.vacationYear, vacations: [], entitlements: [], publicHolidays: [] }),
-      api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
-    ]);
     const schedule = await scheduleRequest;
     if (!isCurrent()) return;
     state.data = schedule;
@@ -3343,7 +3334,15 @@ async function loadAll({ restoreContext = true, applyInitialView = false } = {})
     state.locationId = schedule.context?.locationId || state.locationId;
     state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
     render({ period: "schedule" });
-    const [employees, vacationData, brandingKits] = await supportingRequests;
+    // Give the schedule the database first, then load supporting data without
+    // discarding the displayed plan if an unrelated management request fails.
+    const [employees, vacationData, brandingKits] = await Promise.allSettled([
+      api("/api/employees"),
+      vacationEnabled
+        ? api(`/api/vacations?year=${state.vacationYear}${vacationContext}`)
+        : Promise.resolve({ year: state.vacationYear, vacations: [], entitlements: [], publicHolidays: [] }),
+      api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
+    ]);
     if (!isCurrent()) return;
     if (employees.status === "fulfilled") state.allEmployees = employees.value;
     if (vacationData.status === "fulfilled") {
