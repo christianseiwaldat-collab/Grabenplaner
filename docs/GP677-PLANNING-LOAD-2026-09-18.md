@@ -63,8 +63,11 @@ Der private PostgreSQL-Prozess wurde beendet und die Testkopie wieder versiegelt
 
 Der reguläre vollständige Updater wurde um 10:15 UTC gestartet. Um 11:03 UTC
 wurden Version 0.92.60, öffentliche Live-/Ready-Antworten mit HTTP 200 und die
-exakten Hashes von HTML, JavaScript und CSS bestätigt. Die abschließende
-Wiederherstellungsprüfung des Updaters läuft noch.
+exakten Hashes von HTML, JavaScript und CSS bestätigt. Die anschließende
+Wiederherstellungsprüfung scheiterte beim Anwendungsstart mit
+`PERSISTENCE_TIMEOUT`. Der Updater stellte die vorherige Version 0.92.58
+automatisch wieder her und endete um 11:51:31 UTC mit Exitcode 1.
+Version 0.92.60 ist damit nicht erfolgreich veröffentlicht.
 Eine angemeldete produktive Firefox-Sitzung wurde nicht verändert oder für die
 Prüfung vorausgesetzt.
 
@@ -84,5 +87,33 @@ fehlschlagenden Mitarbeiterabrufs. Erstes Raster: 766 ms; Wochenwechsel: 97 ms.
 Chrome 152.0.7977.84 bestand dieselbe Prüfung (641 ms und 58 ms). Sämtliche
 Werte beziehen sich auf lokale synthetische SQLite-Daten.
 
-Die CSS-Korrektur ist geprüft und zur Veröffentlichung vorbereitet. Der
-bereits laufende Updater enthält noch die ursprüngliche CSS-Datei.
+## Veröffentlichter Browser-Hotfix auf Version 0.92.58
+
+Am 18.09.2026 um 12:04:14 UTC wurde der Browser-Hotfix
+`46a2e7528744b0c4926dfa2a87bb813fe33692f2` erfolgreich veröffentlicht.
+Er basiert auf der wiederhergestellten Version 0.92.58 und ändert ausschließlich
+`public/app.js` und `public/styles.css`. Alle übrigen 744 Laufzeitdateien wurden
+gegen das ursprüngliche Paket bytegenau geprüft. Backend, Datenbank und
+Dienstprozesse wurden nicht verändert oder neu gestartet.
+
+Der Dienstplan wird vor den Zusatzdaten angezeigt; Mitarbeiter-, Urlaubs- und
+Brandingabfragen beginnen erst nach seiner Antwort. Dadurch konkurrieren diese
+Abfragen beim ersten Laden nicht um dieselben Datenbankverbindungen. Fehler in
+Zusatzdaten verwerfen den bereits angezeigten Plan nicht. Die zehn gezielten
+Ladetests bestanden auf dem isolierten Hotfix-Checkout.
+
+Das konkrete Paket bestand Browserprüfungen mit sichtbaren Schichten in zwei
+Wochen, Wochenwechsel und einem nach acht Sekunden fehlschlagenden
+Mitarbeiterabruf: Firefox 115.0 mit 969 ms bis zur Anzeige und 119 ms beim
+Wochenwechsel, Chrome 152.0.7977.84 mit 625 ms und 67 ms. Das sind synthetische
+lokale SQLite-Messungen, keine produktiven Antwortzeiten.
+
+Paket-SHA-256:
+`e2d60ecffd1950d70cae4979b923fed2751d6c66dff0569887105148691badbe`.
+Nach der atomaren Dateiersetzung wurden sämtliche 746 Dateien, die öffentlich
+ausgelieferten JavaScript-/CSS-Hashes und interne sowie öffentliche Live-/Ready-
+Antworten mit HTTP 200 geprüft. Die separate Veröffentlichung wurde unter
+`/opt/grabenplaner/.deploy-ui-v09258-46a2e75/deployment-receipt.json`
+protokolliert. Der vorherige Fehlerstatus der Wiederherstellungsprüfung bleibt
+unverändert dokumentiert; dieser Browser-Hotfix behauptet keinen neuen
+Wiederherstellungsnachweis.
