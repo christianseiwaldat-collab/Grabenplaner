@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.92.60 Beta – 18.09.2026
+
+- PostgreSQL-Verbindungen beginnen nach dem synchronen Aufbau der Anwendung. Auch ein CPU-begrenzter Kaltstart verbraucht dadurch nicht bereits vor der Netzwerkverarbeitung die Verbindungsfrist. Die fünf Sekunden Verbindungsfrist und alle Bereitschaftsprüfungen bleiben erhalten.
+- Ein Regressionstest bildet den beobachteten 84-Sekunden-Programmstart mit einer gesteuerten Uhr nach. Ein weiterer Test bestätigt, dass fehlgeschlagene Verbindungen weiterhin Bereitschaft und wartende Zugriffe sperren.
+
 ## v0.92.59 Beta – 18.09.2026
 
 - PostgreSQL-Wiederherstellung berücksichtigt auch den Aufbau großer Indizes und die Prüfung von Fremdschlüsseln: maximal 45 Minuten je pg_restore, mit 15 Minuten zusätzlicher Reserve im insgesamt auf eine Stunde begrenzten isolierten Worker. CPU-, Speicher- und Abschottungsgrenzen bleiben unverändert.

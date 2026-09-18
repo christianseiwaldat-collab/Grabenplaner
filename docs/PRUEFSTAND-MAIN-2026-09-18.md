@@ -7,14 +7,17 @@ Stand: 18.09.2026. Zusammenführung der seit `f1a40c2` lokal bearbeiteten
 
 Der ursprüngliche Prüfstand unten beschreibt die Zusammenführung vor dem
 beauftragten Deploy. Die bekannten Testfehler wurden anschließend korrigiert:
-Der vollständige CI-Lauf des endgültigen Runtime-Commits `736cc4d` besteht auf
+Der vollständige CI-Lauf des Runtime-Commits `de63e72` besteht auf
 Linux und Windows mit jeweils 3705 Tests und null Fehlern; Mindest-Node und
 PostgreSQL sind ebenfalls grün. Alle ursprünglich 26 fehlgeschlagenen Fälle
 wurden ausgeführt und bestanden.
 Ursachen, Korrekturen und Plattformdetails stehen im
 [Fehlerbericht](CI-FEHLERKORREKTUR-2026-09-18.md). Der nachträglich beauftragte
-Deploy wird getrennt in [v0.92.57](DEPLOY-RELEASE-v09257.md) und
-[v0.92.58](DEPLOY-RELEASE-v09258.md) dokumentiert.
+Deploy wird getrennt in [v0.92.57](DEPLOY-RELEASE-v09257.md),
+[v0.92.58](DEPLOY-RELEASE-v09258.md) und
+[v0.92.59](DEPLOY-RELEASE-v09259.md) sowie der nachfolgende Startfix in
+[v0.92.60](DEPLOY-RELEASE-v09260.md) dokumentiert. Der historische Prüfstand
+unten beschreibt weiterhin die damaligen Befunde vor deren Korrektur.
 
 ## Enthaltene Arbeiten
 
