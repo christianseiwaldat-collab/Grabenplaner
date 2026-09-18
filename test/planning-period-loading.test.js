@@ -38,6 +38,8 @@ test("initial schedule renders while employees are pending and survives their fa
   state.data = null; state.vacationData = null;
   const task = f.loadAll();
   await resolveInitialContext(calls);
+  assert.equal(calls.some(call => call.url === "/api/employees" || call.url.startsWith("/api/vacations?")), false,
+    "Supporting database reads must start after the schedule is available");
   calls.find(call => call.url.startsWith("/api/schedule?")).resolve(schedule());
   await new Promise(setImmediate);
   assert.equal(state.data.weekStart, "2032-07-05");
@@ -57,11 +59,9 @@ test("late initial data cannot render after the session changes", async () => {
   await resolveInitialContext(calls);
   state.portalSession = null;
   calls.find(call => call.url.startsWith("/api/schedule?")).resolve(schedule());
-  calls.find(call => call.url === "/api/employees").resolve([]);
-  calls.find(call => call.url.startsWith("/api/vacations?")).resolve({ year: 2032 });
-  calls.find(call => call.url.startsWith("/api/branding/kits?")).resolve([]);
   await task;
   assert.equal(renders.length, 0);
+  assert.equal(calls.some(call => call.url === "/api/employees"), false);
 });
 
 test("initial navigation selects the requested branch before starting its schedule request", async () => {
