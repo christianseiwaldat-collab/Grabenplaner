@@ -22,6 +22,11 @@ inneren Werkzeug sowie die unveränderte Abschottung.
 
 ## Status
 
-Implementiert; lokale Prüfung, CI, Paketierung und VPS-Abschlussnachweise
-werden erst nach tatsächlichem Erfolg ergänzt. Die ursprünglichen
+Die lokale Recovery-Prüfung umfasst 22 Tests: 21 bestanden, kein Fehler,
+eine unveränderte Live-Umgebungsauslassung. Alle zehn gezielten Versions-
+und Budgetprüfungen bestehen. Der erste CI-Kandidat `5f45382` wird wegen
+eines zusätzlich aufgedeckten zeitabhängigen Scheduler-Tests nicht
+veröffentlicht. Die Testuhr ist korrigiert; alle 16 Tests dieser Datei bestehen.
+Die vollständige CI und VPS-Abschlussnachweise werden erst nach tatsächlichem
+Erfolg ergänzt. Die ursprünglichen
 [26 CI-Fehler](CI-FEHLERKORREKTUR-2026-09-18.md) sind bereits korrigiert.
