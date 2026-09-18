@@ -580,7 +580,6 @@
             <div class="xoffi-import-source">
               <label>Xoffi-Datei<input type="file" id="xoffiImportFile" accept=".mhtml,.mht,message/rfc822,multipart/related,image/jpeg,image/png,image/webp" /></label>
               <button type="button" class="secondary-button" id="xoffiInspectButton">Datei auslesen</button>
-              <p class="settings-note" id="xoffiImportStatus">MHTML erkennt die Woche automatisch. Für Bilder zuerst die betreffende vergangene Woche im Dienstplan öffnen.</p>
             </div>
             <div class="xoffi-import-preview" id="xoffiImportPreview"></div>
             <div class="xoffi-import-confirmation hidden" id="xoffiImportConfirmation">
@@ -592,6 +591,7 @@
               <label class="checkbox-line"><input type="checkbox" id="xoffiUseAsActual" checked /><span>xoffi-Werte als maßgebliche Ist-Zeiten für Zeitauswertung und Planvergleich verwenden</span></label>
               <label class="checkbox-line"><input type="checkbox" id="xoffiImportConfirmed" /><span>Ich habe Namen, Tageszeiten, Wochenwerte und Stundenkonten geprüft.</span></label>
             </div>
+            <p class="settings-note" id="xoffiImportStatus" role="status" aria-live="polite" tabindex="-1">MHTML erkennt die Woche automatisch. Für Bilder zuerst die betreffende vergangene Woche im Dienstplan öffnen.</p>
             <div class="modal-actions">
               <button type="button" class="secondary-button" id="xoffiImportCancel">Abbrechen</button>
               <button type="submit" class="primary-button" id="xoffiApplyButton" disabled>Geprüfte Werte importieren</button>

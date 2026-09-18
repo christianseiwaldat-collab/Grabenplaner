@@ -3093,7 +3093,8 @@ async function bootstrapApplication() {
     applyShellBranding();
     applyRoleVisibility();
     await loadUiPreferences();
-    await Promise.all([loadAll({ applyInitialView: true }), loadSystemInfo(), loadManagementBrandingPreference()]);
+    await Promise.all([loadAll({ applyInitialView: true }), loadManagementBrandingPreference()]);
+    loadSystemInfo();
     globalThis.grabenplanerNavigation?.start();
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
@@ -3124,7 +3125,8 @@ async function loginToAdministration(event) {
     hideLoginGate();
     applyRoleVisibility();
     await loadUiPreferences();
-    await Promise.all([loadAll({ applyInitialView: true }), loadSystemInfo(), loadManagementBrandingPreference()]);
+    await Promise.all([loadAll({ applyInitialView: true }), loadManagementBrandingPreference()]);
+    loadSystemInfo();
     globalThis.grabenplanerNavigation?.start();
   } catch (error) {
     showLoginGate(error.message);
@@ -7116,7 +7118,10 @@ async function submitVpsReboot(event) {
   }
 }
 
+let systemInfoLoading = false;
 async function loadSystemInfo() {
+  if (systemInfoLoading) return;
+  systemInfoLoading = true;
   try {
     const info = await api("/api/system-info");
     const uptimeHours = Math.floor(info.uptimeSeconds / 3600);
@@ -7150,6 +7155,8 @@ async function loadSystemInfo() {
   } catch {
     elements.systemData.textContent = "Technische Daten konnten nicht geladen werden.";
     renderGoogleDriveManagementStatus(null, { failed: true });
+  } finally {
+    systemInfoLoading = false;
   }
 }
 
@@ -22509,7 +22516,29 @@ function updateXoffiApplyAvailability() {
   if (!elements.xoffiApplyButton) return;
   const reviewed = Boolean(state.xoffiImportPreview && elements.xoffiImportConfirmed?.checked);
   const weekConfirmed = !xoffiWeekConfirmationRequired() || elements.xoffiScreenshotWeekConfirmed?.checked === true;
-  elements.xoffiApplyButton.disabled = !(reviewed && weekConfirmed);
+  const issue = xoffiMappingIssue();
+  elements.xoffiApplyButton.disabled = !(reviewed && weekConfirmed) || Boolean(issue);
+  if (state.xoffiImportPreview) elements.xoffiImportStatus.textContent = issue
+    || "Zuordnungen vollständig. Bitte Werte prüfen und die Übernahme bestätigen.";
+}
+
+function xoffiMappingIssue() {
+  const rows = [...elements.xoffiImportPreview.querySelectorAll("[data-xoffi-row]")];
+  const selected = new Set(), missing = [], duplicate = [];
+  for (const row of rows) {
+    const input = row.querySelector("[data-xoffi-employee]"), value = input.value;
+    const invalid = !value || (value !== "__skip__" && selected.has(value));
+    input.setAttribute("aria-invalid", String(invalid));
+    if (!value) missing.push(row.dataset.sourceName);
+    else if (value !== "__skip__") {
+      if (selected.has(value)) duplicate.push(row.dataset.sourceName);
+      selected.add(value);
+    }
+  }
+  if (missing.length) return `Bitte zuordnen oder ausdrücklich nicht übernehmen: ${missing.join(", ")}.`;
+  if (duplicate.length) return `Teammitglied mehrfach zugeordnet: ${duplicate.join(", ")}. Bitte korrigieren.`;
+  if (rows.length && !selected.size) return "Bitte mindestens ein Teammitglied zur Übernahme auswählen.";
+  return "";
 }
 
 function renderXoffiImportPreview() {
@@ -22526,8 +22555,8 @@ function renderXoffiImportPreview() {
     <div class="xoffi-preview-rows">${preview.employees.map((employee, rowIndex) => `
       <article class="xoffi-preview-row" data-xoffi-row="${rowIndex}" data-source-name="${escapeHtmlAttribute(employee.sourceName)}" data-match-confidence="${Number(employee.matchConfidence || 0)}">
         <div class="xoffi-row-heading">
-          <div><strong>${escapeHtml(employee.sourceName)}</strong><small>${employee.employeeNumber ? "Automatisch zugeordnet" : "Zuordnung erforderlich"}</small></div>
-          <label>Teammitglied<select data-xoffi-employee><option value="">Bitte zuordnen</option>${candidateOptions(employee.employeeNumber)}</select></label>
+          <div><strong>${escapeHtml(employee.sourceName)}</strong><small>${employee.employeeNumber ? "Namensvorschlag · bitte prüfen" : "Zuordnung erforderlich"}</small></div>
+          <label>Teammitglied<select data-xoffi-employee><option value="">Bitte zuordnen</option>${candidateOptions(employee.employeeNumber)}<option value="__skip__">Diese Zeile nicht übernehmen</option></select></label>
         </div>
         <div class="xoffi-week-values">
           <label>Ist gesamt (h)<input data-xoffi-week-actual type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklyActualMinutes)}" /></label>
@@ -22593,6 +22622,7 @@ async function inspectXoffiImportFile() {
     elements.xoffiImportStatus.textContent = xoffiWeekConfirmationRequired()
       ? "OCR-Vorschlag erstellt. Kalenderwoche sowie sämtliche Werte und Zuordnungen müssen ausdrücklich geprüft werden."
       : "Mitarbeiter und Kalenderwoche erkannt. Bitte die Zuordnung und Werte vor der Übernahme prüfen.";
+    updateXoffiApplyAvailability();
   } catch (error) {
     state.xoffiImportPreview = null;
     elements.xoffiImportPreview.innerHTML = "";
@@ -22607,7 +22637,8 @@ async function inspectXoffiImportFile() {
 function collectXoffiReviewedRows() {
   const preview = state.xoffiImportPreview;
   if (!preview) throw new Error("Bitte die Datei zuerst auslesen.");
-  return [...elements.xoffiImportPreview.querySelectorAll("[data-xoffi-row]")].map((row) => ({
+  return [...elements.xoffiImportPreview.querySelectorAll("[data-xoffi-row]")].map((row) => row.querySelector("[data-xoffi-employee]").value === "__skip__"
+    ? { sourceName: row.dataset.sourceName, employeeNumber: "", excluded: true } : ({
     sourceName: row.dataset.sourceName,
     employeeNumber: row.querySelector("[data-xoffi-employee]").value,
     matchConfidence: Number(row.dataset.matchConfidence || 0),
@@ -22631,6 +22662,12 @@ async function applyXoffiImport(event) {
   event.preventDefault();
   if (!state.xoffiImportPreview || !elements.xoffiImportConfirmed.checked
     || (xoffiWeekConfirmationRequired() && !elements.xoffiScreenshotWeekConfirmed?.checked)) return;
+  const mappingIssue = xoffiMappingIssue();
+  if (mappingIssue) {
+    elements.xoffiImportStatus.textContent = mappingIssue;
+    elements.xoffiImportStatus.focus();
+    return;
+  }
   elements.xoffiApplyButton.disabled = true;
   elements.xoffiInspectButton.disabled = true;
   elements.xoffiImportStatus.textContent = "Geprüfte xoffi-Werte werden gespeichert.";
@@ -22651,8 +22688,10 @@ async function applyXoffiImport(event) {
     elements.xoffiImportDialog.close();
     showToast("xoffi-Zeiterfassung wurde revisionssicher übernommen.");
   } catch (error) {
-    elements.xoffiImportStatus.textContent = error.message;
     updateXoffiApplyAvailability();
+    elements.xoffiImportStatus.textContent = error.message;
+    elements.xoffiImportStatus.focus();
+    showToast(error.message, true);
   } finally {
     elements.xoffiInspectButton.disabled = false;
   }
@@ -38765,6 +38804,7 @@ elements.xoffiImportConfirmed?.addEventListener("change", () => {
   updateXoffiApplyAvailability();
 });
 elements.xoffiScreenshotWeekConfirmed?.addEventListener("change", updateXoffiApplyAvailability);
+elements.xoffiImportPreview?.addEventListener("change", updateXoffiApplyAvailability);
 elements.xoffiImportForm?.addEventListener("submit", applyXoffiImport);
 elements.refreshTimePresenceButton?.addEventListener("click", () => Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]));
 elements.loadTimeDayReviewButton?.addEventListener("click", loadTimeDayReview);
