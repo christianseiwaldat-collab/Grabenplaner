@@ -3093,8 +3093,7 @@ async function bootstrapApplication() {
     applyShellBranding();
     applyRoleVisibility();
     await loadUiPreferences();
-    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
-    applyRequestedView();
+    await Promise.all([loadAll({ applyInitialView: true }), loadSystemInfo(), loadManagementBrandingPreference()]);
     globalThis.grabenplanerNavigation?.start();
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
@@ -3125,8 +3124,7 @@ async function loginToAdministration(event) {
     hideLoginGate();
     applyRoleVisibility();
     await loadUiPreferences();
-    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
-    applyRequestedView();
+    await Promise.all([loadAll({ applyInitialView: true }), loadSystemInfo(), loadManagementBrandingPreference()]);
     globalThis.grabenplanerNavigation?.start();
   } catch (error) {
     showLoginGate(error.message);
@@ -3300,8 +3298,10 @@ function scheduleAdminLoginBrandingPreview() {
 
 let loadAllGeneration = 0;
 let planningPeriodController = null;
-async function loadAll({ restoreContext = true } = {}) {
+async function loadAll({ restoreContext = true, applyInitialView = false } = {}) {
   const generation = ++loadAllGeneration;
+  const session = state.portalSession;
+  const isCurrent = () => generation === loadAllGeneration && session === state.portalSession;
   planningPeriodController?.abort();
   planningPeriodController = null;
   try {
@@ -3311,7 +3311,7 @@ async function loadAll({ restoreContext = true } = {}) {
       api("/api/portal/v1/status").catch(() => null),
       api("/api/portal/v1/roles").catch(() => ({ roles: [], catalog: [] })),
     ]);
-    if (generation !== loadAllGeneration) return;
+    if (!isCurrent()) return;
     state.locations = locations;
     state.positions = positions;
     state.portalStatus = portalStatus;
@@ -3320,28 +3320,39 @@ async function loadAll({ restoreContext = true } = {}) {
     state.portalPermissionCatalog = roleData.catalog || [];
     setDefaultContext(state.locations);
     if (restoreContext) restoreRememberedOverallContext(state.currentView, state.locations);
+    if (applyInitialView) applyRequestedView({ loadContext: false });
     const scheduleContext = contextQuery(true);
     const vacationContext = contextQuery(state.portalSession?.user?.role === "department_manager");
     const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false;
-    const [schedule, employees, vacationData, brandingKits] = await Promise.all([
-      api(`/api/schedule?week=${state.weekStart}${scheduleContext}`),
+    const scheduleRequest = api(`/api/schedule?week=${state.weekStart}${scheduleContext}`);
+    const schedule = await scheduleRequest;
+    if (!isCurrent()) return;
+    state.data = schedule;
+    state.allowPastWeekEditing = schedule.settings?.allow_past_week_editing === "1";
+    state.locations = schedule.locations || state.locations;
+    state.weekStart = schedule.weekStart;
+    state.locationId = schedule.context?.locationId || state.locationId;
+    state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
+    render({ period: "schedule" });
+    // Give the schedule the database first, then load supporting data without
+    // discarding the displayed plan if an unrelated management request fails.
+    const [employees, vacationData, brandingKits] = await Promise.allSettled([
       api("/api/employees"),
       vacationEnabled
         ? api(`/api/vacations?year=${state.vacationYear}${vacationContext}`)
         : Promise.resolve({ year: state.vacationYear, vacations: [], entitlements: [], publicHolidays: [] }),
       api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
     ]);
-    if (generation !== loadAllGeneration) return;
-    state.data = schedule;
-    state.allowPastWeekEditing = schedule.settings?.allow_past_week_editing === "1";
-    state.locations = schedule.locations || state.locations;
-    state.vacationData = vacationData;
-    state.allEmployees = employees;
-    state.brandingKits = brandingKits;
-    state.weekStart = schedule.weekStart;
-    state.locationId = schedule.context?.locationId || state.locationId;
-    state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
-    state.vacationYear = vacationData.year;
+    if (!isCurrent()) return;
+    if (employees.status === "fulfilled") state.allEmployees = employees.value;
+    if (vacationData.status === "fulfilled") {
+      state.vacationData = vacationData.value;
+      state.vacationYear = vacationData.value.year;
+    }
+    if (brandingKits.status === "fulfilled") state.brandingKits = brandingKits.value;
+    for (const result of [employees, vacationData, brandingKits]) {
+      if (result.status === "rejected") showToast(result.reason.message, true);
+    }
     render();
     if (portalStatus?.installationFeatures?.requests !== false && canReadManagerRequests()) {
       loadManagerVacationRequests();
@@ -3370,7 +3381,7 @@ function loadPlanningView(view) {
 }
 
 async function loadPlanningPeriod(kind = "schedule") {
-  if (!state.data || !state.vacationData || !state.locations?.length) return loadAll();
+  if (!state.data || (kind === "vacation" && !state.vacationData) || !state.locations?.length) return loadAll();
   const generation = ++loadAllGeneration;
   const started = globalThis.performance?.now();
   planningPeriodController?.abort();
@@ -34670,7 +34681,7 @@ function setView(view) {
   globalThis.grabenplanerNavigation?.record();
 }
 
-function applyRequestedView({ fromHistory = false } = {}) {
+function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
   if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
@@ -34725,7 +34736,7 @@ function applyRequestedView({ fromHistory = false } = {}) {
   }
   if (state.currentView === "rightsDashboard") setRightsDashboardMode(state.rightsDashboardMode);
   if (fromHistory) closeMobileNavigation({ restoreFocus: false });
-  if (contextChanged || planningContextNeedsReload(requestedView)) loadPlanningView(requestedView);
+  if (loadContext && (contextChanged || planningContextNeedsReload(requestedView))) loadPlanningView(requestedView);
 }
 
 function currentAdministrationRoute() {
