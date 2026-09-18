@@ -26159,10 +26159,11 @@ function validateXoffiReviewedRows(inputRows, preview) {
   }
   const candidates = new Set(preview.candidates.map((employee) => employee.employeeNumber));
   const employeeNumbers = new Set();
-  return inputRows.map((row, rowIndex) => {
+  const reviewedRows = inputRows.map((row, rowIndex) => {
     const sourceName = String(row?.sourceName || "").trim().slice(0, 120);
     const employeeNumber = String(row?.employeeNumber || "").trim();
     const original = preview.employees[rowIndex];
+    if (sourceName === original?.sourceName && row?.excluded === true && !employeeNumber) return null;
     if (sourceName !== original?.sourceName || !candidates.has(employeeNumber) || employeeNumbers.has(employeeNumber)) {
       throw httpError(400, "Jede xoffi-Zeile muss genau einem Teammitglied des ausgewählten Bereichs zugeordnet sein.", "XOFFI_EMPLOYEE_MAPPING_INVALID");
     }
@@ -26221,7 +26222,9 @@ function validateXoffiReviewedRows(inputRows, preview) {
         "Die Tagesintervalle, Tagesstunden und Wochensummen passen nicht zusammen. Bitte die geänderten Werte prüfen.", "XOFFI_REVIEW_INVALID");
     }
     return reviewed;
-  });
+  }).filter(Boolean);
+  if (!reviewedRows.length) throw httpError(400, "Bitte mindestens ein Teammitglied übernehmen.", "XOFFI_REVIEW_INVALID");
+  return reviewedRows;
 }
 
 function assertXoffiScreenshotWeekConfirmation(preview, input = {}) {
@@ -26350,6 +26353,7 @@ async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual,
       detectedWeekStart: weekResolution.detectedWeekStart,
       screenshotWeekConfirmed: weekResolution.confirmationRequired,
       employeeRows: reviewedRows.length,
+      excludedSourceNames: (preview.employees || reviewedRows).filter(row => !reviewedRows.some(reviewed => reviewed.sourceName === row.sourceName)).map(row => row.sourceName),
       useAsActual: Boolean(useAsActual),
       sourceSha256: preview.sourceSha256,
     }));
@@ -58721,7 +58725,9 @@ app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => 
   response.status(201).json({
     ok: true,
     importId,
-    schedule: await getSchedule(preview.weekStart, context, session),
+    schedule: await (postgresqlActive
+      ? applicationPersistence.readSnapshot(() => getSchedule(preview.weekStart, context, session))
+      : getSchedule(preview.weekStart, context, session)),
   });
 });
 
