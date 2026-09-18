@@ -1301,7 +1301,9 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .option-block em { writing-mode: vertical-rl; font-size: 6px; font-style: normal; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .option-block.soft-pending-option { z-index: 5; border: 1px dashed #c18b20; color: #725515; background: rgba(255,239,182,.58); pointer-events: none; }
 .option-block.soft-pending-all-day { top: 2px; bottom: 2px; min-height: 0; }
-.shift-bar { position: absolute; left: 3px; right: 3px; z-index: 2; min-height: 14px; padding: 0; overflow: visible; border: 1px solid rgba(23,35,49,.45); color: var(--employee-contrast,white); background: var(--employee-color); cursor: pointer; }
+/* Older Firefox versions do not stretch an absolutely positioned button
+   between both offsets when its label is also absolutely positioned. */
+.shift-bar { position: absolute; left: 3px; right: 3px; width: calc(100% - 6px); z-index: 2; min-height: 14px; padding: 0; overflow: visible; border: 1px solid rgba(23,35,49,.45); color: var(--employee-contrast,white); background: var(--employee-color); cursor: pointer; }
 .shift-bar:hover { filter: brightness(.94) saturate(1.08); }
 .shift-bar .shift-duty-badge { position:absolute; top:1px; left:50%; transform:translateX(-50%); display:inline-flex; align-items:center; justify-content:center; min-width:16px; padding:1px 2px; border:1px solid var(--duty-contrast,#172331); border-radius:3px; color:var(--duty-contrast,#172331); background:var(--duty-color,#fff); font-size:8px; font-weight:900; line-height:1; text-align:center; white-space:nowrap; pointer-events:none; }
 .employee-strip:focus-visible { outline:2px solid var(--ink); outline-offset:-2px; }
