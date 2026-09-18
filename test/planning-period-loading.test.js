@@ -17,13 +17,78 @@ function fixture() {
   const f = vm.createContext({ state, AbortController,
     api(url, options = {}) { return new Promise((resolve, reject) => calls.push({ url, options, resolve, reject })); },
     contextQuery: department => `&location=${state.locationId}${department && state.departmentId ? `&departmentId=${state.departmentId}` : ""}`,
-    showToast: message => errors.push(message), render: () => renders.push({ week: state.data.weekStart, year: state.vacationData.year }),
-    setDefaultContext() {}, restoreRememberedOverallContext() {}, canReadManagerRequests: () => false, canReadLoanManagement: () => false, canManageBranchOrders: () => false,
+    showToast: message => errors.push(message), render: () => renders.push({ week: state.data.weekStart, year: state.vacationData?.year }),
+    setDefaultContext() {}, restoreRememberedOverallContext() {},
+    applyRequestedView(options) { assert.equal(options.loadContext, false); state.currentView = "planning"; state.locationId = "05"; },
+    canReadManagerRequests: () => false, canReadLoanManagement: () => false, canManageBranchOrders: () => false,
   });
   vm.runInContext("let loadAllGeneration=0; let planningPeriodController=null;\n" + ["loadAll", "loadPlanningPeriod", "planningContextNeedsReload", "loadPlanningView"].map(extract).join("\n"), f);
   return { f, state, calls, errors, renders };
 }
 const schedule = (week = "2032-07-05") => ({ weekStart: week, settings: { allow_past_week_editing: "0" }, context: { locationId: "18", departmentId: null } });
+
+async function resolveInitialContext(calls) {
+  calls[0].resolve([{ id: "18" }]); calls[1].resolve([]);
+  calls[2].resolve({ installationFeatures: {} }); calls[3].resolve({ roles: [], catalog: [] });
+  await new Promise(setImmediate);
+}
+
+test("initial schedule renders while employees are pending and survives their failure", async () => {
+  const { f, state, calls, renders, errors } = fixture();
+  state.data = null; state.vacationData = null;
+  const task = f.loadAll();
+  await resolveInitialContext(calls);
+  calls.find(call => call.url.startsWith("/api/schedule?")).resolve(schedule());
+  await new Promise(setImmediate);
+  assert.equal(state.data.weekStart, "2032-07-05");
+  assert.equal(renders.length, 1, "The roster must not block the first schedule paint");
+  calls.find(call => call.url === "/api/employees").reject(new Error("roster timeout"));
+  calls.find(call => call.url.startsWith("/api/vacations?")).resolve({ year: 2032 });
+  calls.find(call => call.url.startsWith("/api/branding/kits?")).resolve([]);
+  await task;
+  assert.equal(state.data.weekStart, "2032-07-05");
+  assert.deepEqual(errors, ["roster timeout"]);
+  assert.deepEqual(state.allEmployees, ["kept"]);
+});
+
+test("late initial data cannot render after the session changes", async () => {
+  const { f, state, calls, renders } = fixture();
+  const task = f.loadAll();
+  await resolveInitialContext(calls);
+  state.portalSession = null;
+  calls.find(call => call.url.startsWith("/api/schedule?")).resolve(schedule());
+  calls.find(call => call.url === "/api/employees").resolve([]);
+  calls.find(call => call.url.startsWith("/api/vacations?")).resolve({ year: 2032 });
+  calls.find(call => call.url.startsWith("/api/branding/kits?")).resolve([]);
+  await task;
+  assert.equal(renders.length, 0);
+});
+
+test("initial navigation selects the requested branch before starting its schedule request", async () => {
+  const { f, state, calls, renders } = fixture();
+  const task = f.loadAll({ applyInitialView: true });
+  await resolveInitialContext(calls);
+  assert.equal(state.currentView, "planning");
+  assert.equal(calls.filter(call => call.url.startsWith("/api/schedule?")).length, 1);
+  const request = calls.find(call => call.url.startsWith("/api/schedule?"));
+  assert.match(request.url, /location=05/);
+  request.resolve({ ...schedule(), context: { locationId: "05" } });
+  await new Promise(setImmediate);
+  assert.equal(renders.length, 1);
+  calls.find(call => call.url === "/api/employees").resolve([]);
+  calls.find(call => call.url.startsWith("/api/vacations?")).resolve({ year: 2032 });
+  calls.find(call => call.url.startsWith("/api/branding/kits?")).resolve([]);
+  await task;
+});
+
+test("week navigation remains available before vacations finish loading", async () => {
+  const { f, state, calls, renders } = fixture();
+  state.vacationData = null;
+  const task = f.loadPlanningPeriod();
+  assert.equal(calls.length, 1);
+  calls[0].resolve(schedule()); await task;
+  assert.equal(renders.length, 1);
+});
 
 test("week navigation requests only the selected schedule and preserves unrelated loaded data", async () => {
   const { f, state, calls, renders } = fixture();
