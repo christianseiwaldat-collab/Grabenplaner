@@ -21,3 +21,9 @@ Start-, Lesetransaktions- und Recovery-Tests bestehen mit Node 22.
 
 CI, Paket und VPS-Abschluss sind noch offen. Der fehlgeschlagene v0.92.59-Lauf
 und sein automatischer Rollback werden im vorherigen Release-Bericht bewahrt.
+
+Der erste CI-Kandidat `eb89eeb` erkannte die neue Starttestdatei als noch
+nicht klassifizierte Testkopplung. Die Datei ist jetzt ausdrücklich im
+Architekturkatalog registriert; die erwartete Anzahl steigt genau um diese
+eine Testdatei. Alle 23 Architektur- und Provider-Vertragsprüfungen bestehen.
+Produktive Zugriffsgrenzen wurden dadurch nicht erweitert.
