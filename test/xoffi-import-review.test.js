@@ -25,8 +25,13 @@ test('unmatched import rows require an explicit exclusion, never a silent omissi
 test('the import UI identifies missing, duplicate, and explicitly excluded mappings before submission',()=>{
  const rows=['1',''].map((value,index)=>({dataset:{sourceName:'Person '+index},input:{value,setAttribute(name,value){this[name]=value;}},querySelector(){return this.input;}}));
  const context=vm.createContext({elements:{xoffiImportPreview:{querySelectorAll:()=>rows}}});vm.runInContext(extract('../public/app.js','xoffiMappingIssue'),context);
- assert.match(context.xoffiMappingIssue(),/Person 1/);assert.equal(rows[1].input['aria-invalid'],'true');
+ const missing=context.xoffiMappingIssue();assert.match(missing,/Import noch nicht möglich/);assert.match(missing,/Diese Zeile nicht übernehmen/);assert.match(missing,/Person 1/);assert.equal(rows[1].input['aria-invalid'],'true');
  rows[1].input.value='1';assert.match(context.xoffiMappingIssue(),/mehrfach/);
  rows[1].input.value='__skip__';assert.equal(context.xoffiMappingIssue(),'');
  rows[0].input.value='__skip__';assert.match(context.xoffiMappingIssue(),/mindestens ein/);
+});
+test('the review renders a prominent blocker while an xoffi person has no active GP assignment',()=>{
+ const source=fs.readFileSync(require.resolve('../public/app.js'),'utf8');
+ assert.match(source,/class="xoffi-import-blocker" role="alert"/);
+ assert.match(source,/Der Rest der Datei kann anschließend trotzdem übernommen werden/);
 });

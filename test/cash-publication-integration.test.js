@@ -155,13 +155,15 @@ test('cash branch controls only offer known GP targets and reject a tampered sel
 test('durable report jobs complete both periods and encrypt PDF results, with personal ownership and fresh download rights', async t => {
   const f = await fixture(t, { count: 205 }); await f.activate();
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
-  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId });
+  let reportClock = Date.parse(TIME);
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId, now: () => reportClock });
   const job = await jobs.create(f.session, { title: '<Private report>', query: f.query() });
   assert.equal(job.status, 'queued'); await jobs.tick();
   assert.equal((await jobs.list(f.session))[0].processed, 200);
-  await jobs.tick(); assert.equal((await jobs.list(f.session))[0].phase, 'comparison');
-  await jobs.tick(); const done = (await jobs.list(f.session))[0];
+  reportClock += 120000; await jobs.tick(); assert.equal((await jobs.list(f.session))[0].phase, 'comparison');
+  reportClock += 143000; await jobs.tick(); const done = (await jobs.list(f.session))[0];
   assert.equal(done.status, 'completed'); assert.equal(done.processed, 205);
+  assert.equal(done.durationSeconds, 263);
   const text = await reportPdfText(await jobs.download(f.session, job.id));
   assert.match(text, /2[.\s]?050,00/); assert.match(text, /<Private report>/); assert.doesNotMatch(text, /KUND_NR|00031|Synthetic article/);
   assert.equal(done.format, 'pdf'); assert.match(text, /Nicht verfügbar/);

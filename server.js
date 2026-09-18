@@ -19217,7 +19217,7 @@ async function branchSupervisionAssessmentForSchedule(
   weekStart,
   locationId,
   planningChange = null,
-  { dates = null } = {},
+  { dates = null, snapshot = null } = {},
 ) {
   const weekEnd = addDays(weekStart, 6);
   const planningQuery = {
@@ -19226,11 +19226,13 @@ async function branchSupervisionAssessmentForSchedule(
     weekStart,
     weekEnd,
   };
-  const [settings, employees, storedShifts] = await Promise.all([
-    settingsForLocation(locationId),
-    planningSettingsRepository.listScheduleEmployees(planningQuery),
-    planningSettingsRepository.listScheduleShifts(planningQuery),
-  ]);
+  const [settings, employees, storedShifts] = snapshot
+    ? [snapshot.settings, [...snapshot.employees], [...snapshot.shifts]]
+    : await Promise.all([
+      settingsForLocation(locationId),
+      planningSettingsRepository.listScheduleEmployees(planningQuery),
+      planningSettingsRepository.listScheduleShifts(planningQuery),
+    ]);
   const shifts = projectBranchSupervisionShifts(storedShifts, planningChange, {
     locationId: String(locationId),
     weekStart,
@@ -19508,11 +19510,12 @@ async function plannedShiftBreaks(shift, settings) {
   return { start, end, rawMinutes, breakMinutes, lunchBreakMinutes, dayConfig };
 }
 
-async function shiftMetrics(shift, settings, { legacyOnly = false } = {}) {
+async function shiftMetrics(shift, settings, { legacyOnly = false, saturdayCutover } = {}) {
   // The dated employee assignment is needed only when evaluating Saturday
   // credit below. Ordinary workdays need the immutable cutover alone.
   const cutover = !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
-    ? await saturdayCreditService.cutover() : null;
+    ? (saturdayCutover === undefined ? await saturdayCreditService.cutover() : saturdayCutover)
+    : null;
   if (cutover && shift.shift_date < cutover.effectiveDate) {
     const saved = cutover.legacySettings[String(shift.location_id || '')] || cutover.legacySettings['*'];
     if (saved) settings = { ...settings, saturday_bonus_enabled: saved.enabled ? '1' : '0', saturday_bonus_from: saved.from, saturday_bonus_factor: String(saved.factor) };
@@ -22276,7 +22279,8 @@ async function searchScheduleShifts(session, input = {}) {
   };
 }
 
-async function getSchedule(weekValue, contextInput = {}, session = null) {
+async function getSchedule(weekValue, contextInput = {}, session = null, options = {}) {
+  const fast = options.fast === true;
   const weekStart = getMonday(isIsoDate(weekValue) ? weekValue : undefined);
   const weekEnd = addDays(weekStart, 6);
   const context = await resolvePlanningContext(contextInput);
@@ -22284,6 +22288,8 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
   const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
   const allowPastWeekEditing = await pastWeekEditingAllowedForActor(session, settings);
   settings.allow_past_week_editing = allowPastWeekEditing ? "1" : "0";
+  const locationsPromise = getLocationsForSession(session, true);
+  const scheduleNotePromise = getScheduleNote(weekStart, context);
   const globalDayBlocks = getGlobalDayBlocksForRange(weekStart, weekEnd, context.locationId);
   const globalBlockDates = new Set(globalDayBlocks.map((block) => block.block_date));
   const planningQuery = {
@@ -22298,7 +22304,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     filterDepartment: context.departmentId ? 1 : 0,
     weekStart,
   };
-  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots] = await Promise.all([
+  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots, saturdayCutover] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
@@ -22308,6 +22314,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     timeTrackingRepository.listActiveXoffiWeekDays(xoffiQuery),
     timeTrackingRepository.listLatestXoffiBalances(xoffiQuery),
     timeTrackingRepository.listXoffiSnapshots({ locationId: context.locationId, departmentId: Number(context.departmentId || 0), weekStart }),
+    saturdayCreditService.cutover(),
   ]);
   const employees = employeeRows.map(serializeEmployee);
   const visibleEmployeeNumbers = new Set(employees.map((employee) => employee.personnel_number));
@@ -22315,7 +22322,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     .filter((employee) => String(employee.home_location_id) === String(context.locationId))
     .map((employee) => employee.personnel_number));
   const shifts = await Promise.all(
-    shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings) })),
+    shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings, { saturdayCutover }) })),
   );
   const externalShiftRows = employeeWeekShiftRows.filter((shift) => (
     visibleEmployeeNumbers.has(shift.employee_number)
@@ -22333,6 +22340,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     ...await shiftMetrics(
       shift,
       externalLocationSettings.get(String(shift.location_id || "")) || settings,
+      { saturdayCutover },
     ),
   })));
   const countedWeekShifts = [...shifts, ...externalShifts];
@@ -22491,7 +22499,9 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       creditMinutes,
     );
   }
-  const saturdayStats = await buildSaturdayServiceStats(weekStart, context, employees, shifts, settings);
+  const saturdayStats = fast
+    ? { byEmployee: {}, estimated: false, pending: true }
+    : await buildSaturdayServiceStats(weekStart, context, employees, shifts, settings);
   const creditedHolidayDates = new Set();
   for (const holiday of publicHolidaysForRange(weekStart, weekEnd)) {
     const day = new Date(`${holiday.date}T12:00:00Z`).getUTCDay();
@@ -22520,10 +22530,18 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     }
   }
   const [workRuleAssessment, branchSupervisionAssessment, manualScheduleLock] = await Promise.all([
-    sessionCanReadWorkRules(session)
+    !fast && sessionCanReadWorkRules(session)
       ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
       : Promise.resolve(null),
-    branchSupervisionAssessmentForSchedule(weekStart, context.locationId),
+    fast
+      ? Promise.resolve(null)
+      : branchSupervisionAssessmentForSchedule(weekStart, context.locationId, null, {
+        snapshot: context.departmentId ? null : {
+          settings,
+          employees: employeeRows,
+          shifts: shiftRows,
+        },
+      }),
     getScheduleManualLock(context.locationId, weekStart, session),
   ]);
   const xoffiWeekByEmployee = {};
@@ -22579,7 +22597,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     weekEnd,
     calendarWeek: getIsoWeek(weekStart),
     context,
-    locations: await getLocationsForSession(session, true),
+    locations: await locationsPromise,
     settings,
     currentWeekStart: currentWeekStart(),
     isPastWeek: isPastWeekStart(weekStart),
@@ -22593,7 +22611,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     staffAssignments: employeeLendings,
     pdfStaffAssignmentShifts,
     globalDayBlocks,
-    scheduleNote: await getScheduleNote(weekStart, context),
+    scheduleNote: await scheduleNotePromise,
     globalBlockDates: Array.from(globalBlockDates),
     publicHolidays: publicHolidaysForRange(weekStart, weekEnd),
     totals,
@@ -22611,6 +22629,51 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     },
     workRuleAssessment,
     branchSupervisionAssessment,
+    enrichmentPending: fast,
+  };
+}
+
+async function getScheduleEnrichment(weekValue, contextInput = {}, session = null) {
+  const weekStart = getMonday(isIsoDate(weekValue) ? weekValue : undefined);
+  const weekEnd = addDays(weekStart, 6);
+  const context = await resolvePlanningContext(contextInput);
+  assertSessionContextScope(session, context);
+  const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
+  const planningQuery = {
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+    weekStart,
+    weekEnd,
+  };
+  const [employeeRows, shiftRows] = await Promise.all([
+    planningSettingsRepository.listScheduleEmployees(planningQuery),
+    planningSettingsRepository.listScheduleShifts(planningQuery),
+  ]);
+  const employees = employeeRows.map(serializeEmployee);
+  const currentWeekShifts = await Promise.all(shiftRows.map(async (shift) => {
+    const { rawMinutes } = await plannedShiftBreaks(shift, settings);
+    return { ...shift, raw_minutes: rawMinutes };
+  }));
+  const [workRuleAssessment, branchSupervisionAssessment, saturdayStats] = await Promise.all([
+    sessionCanReadWorkRules(session)
+      ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
+      : Promise.resolve(null),
+    branchSupervisionAssessmentForSchedule(weekStart, context.locationId, null, {
+      snapshot: context.departmentId ? null : {
+        settings,
+        employees: employeeRows,
+        shifts: shiftRows,
+      },
+    }),
+    buildSaturdayServiceStats(weekStart, context, employees, currentWeekShifts, settings),
+  ]);
+  return {
+    weekStart,
+    context,
+    workRuleAssessment,
+    branchSupervisionAssessment,
+    saturdayStats,
+    enrichmentPending: false,
   };
 }
 
@@ -31555,7 +31618,12 @@ function readModelResponse(build) {
 }
 
 app.get("/api/schedule", readModelResponse(request =>
-  getSchedule(request.query.week, request.query, request.portalSession)));
+  getSchedule(request.query.week, request.query, request.portalSession, {
+    fast: request.query.fast === "1",
+  })));
+
+app.get("/api/schedule/enrichment", readModelResponse(request =>
+  getScheduleEnrichment(request.query.week, request.query, request.portalSession)));
 
 app.put("/api/schedule/manual-lock", async (request, response) => {
   const requestedLocationId = String(
@@ -47303,12 +47371,22 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
   }
   const note = normalizeLoanNotes(request.body?.note, 1000);
   await expireLoanReturnConfirmations();
-  if (await loanPendingReturnConfirmationRow(row.id)) {
-    throw httpError(
-      409,
-      "Für diese Leihe wartet bereits eine Rücknahme auf Bestätigung.",
-      "LOAN_RETURN_CONFIRMATION_PENDING",
-    );
+  const pendingConfirmation = await loanPendingReturnConfirmationRow(row.id);
+  let supersededConfirmationId = "";
+  if (pendingConfirmation) {
+    if (managesLocation && !witness) {
+      supersededConfirmationId = await cancelPendingLoanReturnConfirmation(
+        row.id,
+        new Date().toISOString(),
+        "Durch direkte Rücknahme der Filialleitung ersetzt.",
+      ) || "";
+    } else {
+      throw httpError(
+        409,
+        "Für diese Leihe wartet bereits eine Rücknahme auf Bestätigung.",
+        "LOAN_RETURN_CONFIRMATION_PENDING",
+      );
+    }
   }
   const existingPreparation = await loanReturnPreparationRow(row.id);
   if (existingPreparation
@@ -47358,6 +47436,7 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
       photoCount: photoIds.length,
       photoAttachmentCount: photoAttachmentIds.length,
       noteProvided: Boolean(note),
+      supersededConfirmationId: supersededConfirmationId || null,
     })));
     response.json({
       direct: true,

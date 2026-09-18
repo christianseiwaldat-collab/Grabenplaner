@@ -84,6 +84,30 @@ test.after(async () => {
   fs.rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
+test("Schnellansicht liefert Raster und Stunden vor den Hintergrundprüfungen", async () => {
+  assertStatus(await request("/api/shifts", "POST", body()), 201);
+  const fast = assertStatus(await request(`/api/schedule?week=${DATE}&locationId=${LOCATION}&fast=1`), 200);
+  assert.equal(fast.enrichmentPending, true);
+  assert.equal(fast.workRuleAssessment, null);
+  assert.equal(fast.branchSupervisionAssessment, null);
+  assert.equal(fast.saturdayStats.pending, true);
+  assert.equal(fast.shifts.length, 1);
+  assert.ok(fast.totals[FL] > 0);
+
+  const enrichment = assertStatus(await request(`/api/schedule/enrichment?week=${DATE}&locationId=${LOCATION}`), 200);
+  assert.equal(enrichment.enrichmentPending, false);
+  assert.ok(enrichment.workRuleAssessment);
+  assert.ok(enrichment.branchSupervisionAssessment);
+  assert.equal(Object.hasOwn(enrichment, "totals"), false);
+
+  const full = assertStatus(await schedule(), 200);
+  assert.equal(full.enrichmentPending, false);
+  assert.deepEqual(fast.shifts, full.shifts);
+  assert.deepEqual(fast.totals, full.totals);
+  assert.deepEqual(enrichment.workRuleAssessment, full.workRuleAssessment);
+  assert.deepEqual(enrichment.branchSupervisionAssessment, full.branchSupervisionAssessment);
+});
+
 test("Dienst wird getrennt gespeichert, gelesen und bei alten PUT-Clients bewahrt", async () => {
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id='schedule-duty-v1'").get());
   const created = assertStatus(await request("/api/shifts", "POST", body()), 201);
