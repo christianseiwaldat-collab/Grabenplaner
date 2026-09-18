@@ -73,7 +73,19 @@ Start der neuen Anwendung. Siehe [Migrationsablauf](XOFFI-MHTML-UND-FILIALEINSAT
   gilt die Korrektur auch für den erforderlichen Rückkehrpunkt. Paketprüfung,
   Virenscan und Berechtigungsprüfung finden zuvor unverändert statt.
 
-## Veröffentlichungsstatus
+## Zweiter Paketstand und fehlgeschlagener Abschluss
+
+Der Paketstand `b2e09af2530943aff4e12e8e2211edeed7764c27` wurde installiert und
+lieferte mit Xoffi-Migration erfolgreiche interne und öffentliche Healthchecks.
+Der abschließende isolierte Restore-Test scheiterte am separaten 15-Minuten-Limit
+von `pg_restore`, obwohl der äußere Worker bereits 30 Minuten erlaubte. Am
+18.09.2026 um 00:23 UTC rollte der Updater die App zurück. Das PostgreSQL-Paar
+blieb einschließlich der additiven Migration und aller Nutzdaten erhalten. Die
+alte App wurde wegen des inkompatiblen Schemas absichtlich nicht gestartet.
+Die gezielte Wiederherstellung und die konsistente Zeitgrenze werden in
+[Release v0.92.58](DEPLOY-RELEASE-v09258.md) dokumentiert.
+
+## Ursprünglicher Veröffentlichungsstatus vor dem zweiten Versuch
 
 Der erste Paketstand wurde nicht installiert. Das korrigierte Paket und seine
 abschließende VPS-Verifikation stehen noch aus.
