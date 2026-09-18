@@ -2,6 +2,7 @@
 
 ## v0.92.60 Beta – 18.09.2026
 
+- Die kurzlebige PostgreSQL-Wiederherstellungskopie verzichtet auf parallele Autovacuum-Hintergrundwartung, damit ihre CPU-Begrenzung die Anwendungsprüfungen nicht verdrängt. Produktive Wartung und sämtliche Prüfungen bleiben erhalten.
 - PostgreSQL-Verbindungen beginnen nach dem synchronen Aufbau der Anwendung. Auch ein CPU-begrenzter Kaltstart verbraucht dadurch nicht bereits vor der Netzwerkverarbeitung die Verbindungsfrist. Die fünf Sekunden Verbindungsfrist und alle Bereitschaftsprüfungen bleiben erhalten.
 - Ein Regressionstest bildet den beobachteten 84-Sekunden-Programmstart mit einer gesteuerten Uhr nach. Ein weiterer Test bestätigt, dass fehlgeschlagene Verbindungen weiterhin Bereitschaft und wartende Zugriffe sperren.
 
