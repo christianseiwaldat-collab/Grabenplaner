@@ -32483,7 +32483,7 @@ app.delete("/api/positions/:id", async (request, response) => {
   response.status(204).end();
 });
 
-app.get("/api/employees", async (request, response) => {
+app.get("/api/employees", readModelResponse(async request => {
   await refreshApplicationSettingsSnapshot();
   const session = request.portalSession || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)
     ? {
@@ -32531,8 +32531,8 @@ app.get("/api/employees", async (request, response) => {
       available: personnelProfileRosterAccess.canReadSubject(employee),
     }),
   })));
-  response.json(employees);
-});
+  return employees;
+}));
 
 async function saturdayLegacySettingsSnapshot() {
   const pick = settings => ({ enabled: settingEnabled(settings, 'saturday_bonus_enabled'), ...saturdayBonusSettings(settings) });
