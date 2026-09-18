@@ -1,6 +1,20 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const ROOT=path.resolve(__dirname,'..');
+test('qualified PostgreSQL files retain LF bytes in Windows checkouts',()=>{
+ const {spawnSync}=require('node:child_process');
+ const manifest=require('../lib/persistence/postgresql/contracts/manifest.json');
+ const files=['lib/persistence/postgresql/core/compatibility.sql',
+  ...manifest.files.flatMap(file=>['lib/persistence/postgresql/contracts/'+file.name,file.source])];
+ const checked=spawnSync('git',['check-attr','-z','text','eol','--',...files],{cwd:ROOT,encoding:'utf8'});
+ assert.equal(checked.status,0,checked.stderr);
+ const fields=checked.stdout.split('\0');assert.equal(fields.pop(),'');
+ assert.equal(fields.length,files.length*6);
+ for(let index=0;index<fields.length;index+=3){
+  const [file,attribute,value]=fields.slice(index,index+3);
+  assert.equal(value,attribute==='text'?'set':'lf',`${file}: ${attribute}`);
+ }
+});
 test('installed PostgreSQL contracts retain the qualified source bytes without docs/test-support dependencies',()=>{
  const folder=path.join(ROOT,'lib/persistence/postgresql/contracts'),manifest=require('../lib/persistence/postgresql/contracts/manifest.json');
  assert.equal(manifest.version,1);assert.equal(manifest.files.length,9);

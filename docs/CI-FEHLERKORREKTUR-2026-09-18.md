@@ -26,8 +26,34 @@ Gemeinsamer lokaler Lauf mit Node 22.22.1: 206 Tests, 202 bestanden, kein Fehler
 vier unveränderte umgebungsabhängige Auslassungen. Darunter sind alle zuvor
 betroffenen Testdateien und die Prüfung der Sitzungsverlängerung. Die
 Architekturprüfung meldet keine unbekannten Datenbankzugriffe oder Grenzverletzungen.
-Die Linux-/Windows-Gesamtprüfung wird vor einem abschließenden PASS ausgewertet.
-Kein betroffener Test wurde entfernt oder deaktiviert.
+Der Linux-Gesamtlauf für `e354d60` ist grün: 3701 Tests, 3623 bestanden, kein
+Fehler, 78 unveränderte umgebungsabhängige Auslassungen. Ein Einzelabgleich der
+alten Fehlerliste mit dem neuen Protokoll bestätigt 26/26 ausgeführte und
+bestandene Fälle. Zusätzlich bestehen alle 50 Mindest-Node-Vertragstests und
+alle 125 PostgreSQL-Vertragstests. Kein betroffener Test wurde entfernt oder
+deaktiviert.
+
+## Zusätzliche Windows-Befunde
+
+Der Windows-Lauf des Ausgangsstands `b2e09af` enthielt 52 Fehler. Nach der obigen
+Korrektur verbleiben dort 27 andere, bereits vorhandene Plattformbefunde:
+
+- 24 Importtests verwendeten `TEMP` mit der Windows-Kurzschreibweise. Der
+  bewusst strenge Spool-Pfadschutz wies dieses nicht kanonische Verzeichnis ab.
+  Die Fixture löst jetzt den tatsächlichen temporären Elternpfad auf. Der
+  Produktionsschutz gegen Pfadumleitungen bleibt unverändert. Eine lokale
+  Prüfung mit einem umgeleiteten TEMP-Verzeichnis reproduziert die alte
+  Ablehnung und bestätigt danach alle 24 Tests.
+- Drei PostgreSQL-Prüfungen scheiterten an CRLF-Konvertierung im Windows-
+  Checkout. Git hält jetzt die bereits qualifizierten JSON-Verträge, deren
+  Referenzquellen und die eingebundene SQL-Datei ausdrücklich bei LF.
+  Die bestehenden Hashes und Katalogfreigaben wurden nicht geändert. Ein
+  Checkout mit `core.autocrlf=true` bestätigt die identischen Bytes aller
+  19 betroffenen Quelldateien; eine weitere Regression prüft die Git-Regeln.
+
+Der gemeinsame lokale Windows-Lauf dieser Dateien umfasst 44 Tests:
+31 bestanden, kein Fehler, 13 unveränderte umgebungsabhängige Auslassungen.
+Der erneute vollständige CI-Lauf steht noch aus.
 
 Diese Korrekturen gehören nicht zum unveränderlichen Deployment-Paket `b2e09af`
 für v0.92.57. Der geänderte Offsite-Fingerprint erfordert bei einer späteren

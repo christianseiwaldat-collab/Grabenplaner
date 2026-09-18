@@ -7,7 +7,10 @@ const session=()=>({employeeNumber:'synthetic',accountId:null,isEmployee:true,pe
 const sourceBuffer=()=>{const b=Buffer.alloc(4096);b.write('Standard ACE DB',4);b[0x14]=3;b.write('private synthetic input',256);return b;};
 const turn=()=>new Promise(r=>setImmediate(r));
 async function fixture(t,{advancingClock=false}={}){
- const parent=await fsp.mkdtemp(path.join(os.tmpdir(),'gp-import-jobs-')),directory=path.join(parent,'spool');
+ // Windows CI exposes TEMP through an 8.3 alias. The private spool deliberately
+ // requires canonical paths, so resolve the fixture parent before creating it.
+ const temporaryRoot=await fsp.realpath(os.tmpdir());
+ const parent=await fsp.mkdtemp(path.join(temporaryRoot,'gp-import-jobs-')),directory=path.join(parent,'spool');
  const vault=createIntegrationSecretVault({activeKeyId:'test',keys:{test:Buffer.alloc(32,7)}}),sources=new Map();
  const state={principal:session(),now:Date.now(),calls:0,failures:0,failCode:'IMPORT_SOURCE_READ_TIMEOUT',reviews:0},getSession=async()=>state.principal;
  const runtime={reserve:async(get,{buffer,kind})=>{const user=await get(),id=crypto.createHash('sha256').update(user.employeeNumber).update(kind).update(buffer).digest('hex');
