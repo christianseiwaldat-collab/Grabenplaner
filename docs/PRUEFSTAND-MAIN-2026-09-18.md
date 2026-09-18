@@ -3,6 +3,19 @@
 Stand: 18.09.2026. Zusammenführung der seit `f1a40c2` lokal bearbeiteten
 Änderungen für `main`. Ein VPS-Deploy ist nicht Bestandteil dieses Schritts.
 
+## Spätere Fehlerkorrektur
+
+Der ursprüngliche Prüfstand unten beschreibt die Zusammenführung vor dem
+beauftragten Deploy. Die bekannten Testfehler wurden anschließend korrigiert:
+Der vollständige CI-Lauf des endgültigen Runtime-Commits `736cc4d` besteht auf
+Linux und Windows mit jeweils 3705 Tests und null Fehlern; Mindest-Node und
+PostgreSQL sind ebenfalls grün. Alle ursprünglich 26 fehlgeschlagenen Fälle
+wurden ausgeführt und bestanden.
+Ursachen, Korrekturen und Plattformdetails stehen im
+[Fehlerbericht](CI-FEHLERKORREKTUR-2026-09-18.md). Der nachträglich beauftragte
+Deploy wird getrennt in [v0.92.57](DEPLOY-RELEASE-v09257.md) und
+[v0.92.58](DEPLOY-RELEASE-v09258.md) dokumentiert.
+
 ## Enthaltene Arbeiten
 
 - Dienstplan- und Urlaubsplaner-Geschwindigkeit, gebündelte PostgreSQL-Lesezugriffe,
@@ -19,7 +32,7 @@ Die Einzelheiten und bereits erfolgten Browserprüfungen stehen in
 [Xoffi und Filialeinsatz](XOFFI-MHTML-UND-FILIALEINSATZ-2026-09-17.md) und
 [Artikelstamm](ARTIKELSTAMM-ANSICHT-2026-09-17.md).
 
-## Gemeinsame Abschlussprüfung
+## Ursprüngliche gemeinsame Abschlussprüfung
 
 - 265 Tests in 33 betroffenen Funktions- und Persistenzdateien ausgeführt:
   262 bestanden, drei fehlgeschlagen, keiner übersprungen.
@@ -39,7 +52,7 @@ Lokale Protokolle: `tmp/commit-main-regressions-20260918.log` und
 `tmp/commit-main-postgresql-20260918.log`. Temporäre Datenbanken, Protokolle,
 Vorschauartefakte und Betriebsberichte gehören nicht zum Quellstand.
 
-## Nächster Release
+## Damaliger Stand vor dem beauftragten Release
 
 Die zusätzliche Xoffi-Core-Migration muss beim nächsten beauftragten VPS-Deploy
 gemäß der Xoffi-Dokumentation im geschützten Release-Ablauf ausgeführt werden.
