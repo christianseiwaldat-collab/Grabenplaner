@@ -88,4 +88,21 @@ Diese Prüfung und die gleich aufgebaute Prüfung verkürzter Shutdown-Fristen
 verwenden jetzt eine kontrollierte Uhr für Zeitstempel und Timer. Sie prüfen
 die laufende Warteschlange vor Ablauf sowie die Ablehnung beider Aufträge
 nach Ablauf. Der Produktions-Scheduler und seine Fristkontrollen bleiben
-unverändert. Alle 16 Tests der Datei bestehen lokal mit Node 22.22.1.
+unverändert. Alle 16 Tests der Datei bestehen lokal mit Node 22.22.1 und
+Node 24.19.0.
+
+## Abschließender CI-Nachweis für v0.92.59
+
+Der Runtime-Commit `de63e729b8e2692801029fec423f866c352d5a1b` besteht alle
+vier Jobs im [abschließenden CI-Lauf](https://github.com/christianseiwaldat-collab/Grabenplaner/actions/runs/35300292490):
+
+- Linux: 3705 Tests, 3627 bestanden, kein Fehler, 78 umgebungsabhängig übersprungen.
+- Windows: 3705 Tests, 3605 bestanden, kein Fehler, 100 umgebungsabhängig übersprungen.
+- Mindest-Node: 50 von 50 bestanden.
+- PostgreSQL-Vertrag: 125 von 125 bestanden.
+
+Der erneute Einzelabgleich des Linux-Protokolls für diesen exakten Commit
+bestätigt alle ursprünglichen 26 Fälle als ausgeführt und bestanden.
+Keiner dieser Fälle wurde übersprungen. Der Windows-Lauf endete am
+18.09.2026 um 03:07 UTC erfolgreich. Der VPS-Veröffentlichungsstand ist
+separat im [Release-Bericht](DEPLOY-RELEASE-v09259.md) dokumentiert.

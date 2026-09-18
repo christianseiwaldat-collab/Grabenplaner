@@ -85,3 +85,15 @@ kein zusätzlicher Assurance-Auftrag begann. Die temporäre Startmaskierung
 ist entfernt, der aktive Timer plant wieder den nächsten regulären Lauf.
 Die Belege aller fehlgeschlagenen Versuche bleiben erhalten.
 Es wurden keine Access-Laufzeitbenchmarks gestartet.
+
+### Bereinigung der fehlgeschlagenen Testkopien
+
+Nach dem Abbruch wurden drei eindeutig zugeordnete, inaktive isolierte
+Wiederherstellungskopien geprüft und entfernt. Vorher wurden Journale,
+Fehlerprotokolle, Anfragen und Sicherungsbelege dauerhaft unter
+`/var/lib/grabenplaner-assurance/maintenance-evidence/failed-recovery-copies-20260918-v09258`
+archiviert. Die Prüfung bestätigte kanonische Pfade, Besitz, Dateitypen und
+das Ende aller zugehörigen Prozesse. Sie gab 24,1 GiB frei; unmittelbar
+danach waren 67,9 GiB verfügbar. Produktive GP-Daten, Importstände und
+reguläre Sicherungen waren nicht Teil dieser Bereinigung. Der verifizierte
+Bereinigungsbeleg gehört zum Abschlussnachweis von v0.92.59.
