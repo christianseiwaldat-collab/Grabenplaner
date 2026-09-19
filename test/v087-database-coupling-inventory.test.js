@@ -230,6 +230,16 @@ test("v0.87 Datenbank Block 4: bestehende Anwendungsmigration bleibt ausserhalb 
   );
 });
 
+test("Deploy preflight may inspect the installed provider without allowing arbitrary scripts", () => {
+  const source = 'database_provider="${DB_PROVIDER:-sqlite}"';
+  assert.deepEqual(architectureBoundaryViolationsForText(
+    "server-tools/linux/preflight-grabenplaner-deploy.sh", source,
+  ), []);
+  assert.equal(architectureBoundaryViolationsForText(
+    "server-tools/linux/unknown-deploy-helper.sh", source,
+  ).some(entry => entry.kind === "provider-runtime-config-outside-boundary"), true);
+});
+
 test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben auditierbar", () => {
   const report = scanRepository(root);
 
@@ -324,9 +334,11 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // inventory; no raw business access or productive import activation.
   // The workspace lease reuses the existing lock adapter; Offsite staging
   // reads only the configured database path, not business records.
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 18);
-  // Session revocation fixtures share one classified SQLite test adapter.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 16);
+  // The named deploy preflight only reads the installed provider and paths.
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 19);
+  // Session fixtures and the deferred PostgreSQL startup regression are
+  // explicitly classified test adapters; no new production access is allowed.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 17);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);

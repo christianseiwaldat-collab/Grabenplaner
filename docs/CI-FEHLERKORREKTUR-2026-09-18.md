@@ -53,9 +53,56 @@ Korrektur verbleiben dort 27 andere, bereits vorhandene Plattformbefunde:
 
 Der gemeinsame lokale Windows-Lauf dieser Dateien umfasst 44 Tests:
 31 bestanden, kein Fehler, 13 unveränderte umgebungsabhängige Auslassungen.
-Der erneute vollständige CI-Lauf steht noch aus.
+Der vollständige CI-Lauf für `e5b2166` ist auf beiden Plattformen grün:
+Linux 3702 Tests, 3624 bestanden und 78 umgebungsabhängig übersprungen;
+Windows 3702 Tests, 3602 bestanden und 100 umgebungsabhängig übersprungen.
+Beide Läufe melden null Fehler. Mindest-Node und PostgreSQL-Vertrag sind
+ebenfalls vollständig grün.
+
+Auch der Runtime-Commit `736cc4d` für v0.92.58 ist vollständig grün:
+Linux 3705 Tests, 3627 bestanden und 78 übersprungen; Windows 3705 Tests,
+3605 bestanden und 100 übersprungen. Zusätzlich bestehen alle 50 Tests der
+Mindest-Node-Version und alle 125 PostgreSQL-Vertragstests. Die drei neuen
+Tests für das konsistente Wiederherstellungs-Zeitlimit sind enthalten.
+Nachweis: [vollständiger Release-CI-Lauf](https://github.com/christianseiwaldat-collab/Grabenplaner/actions/runs/35291872375).
 
 Diese Korrekturen gehören nicht zum unveränderlichen Deployment-Paket `b2e09af`
-für v0.92.57. Der geänderte Offsite-Fingerprint erfordert bei einer späteren
-Installation den bestehenden expliziten Modul-Updateweg; ein App-Update allein
-übernimmt ihn nicht automatisch.
+für v0.92.57. Sie sind im Paket `736cc4d` für v0.92.58 enthalten. Der geänderte
+Offsite-Fingerprint wurde am VPS über den bestehenden expliziten Modul-Updateweg
+installiert; Provider, Repository und Zugangsdaten blieben unverändert.
+Die öffentliche v0.92.58-Ansicht wurde am 18.09.2026 um 00:56 UTC überprüft.
+Die vollständige Wiederherstellungsprüfung scheiterte anschließend am äußeren
+30-Minuten-Limit; siehe [Release-Bericht](DEPLOY-RELEASE-v09258.md). Die dafür
+ergänzten gestaffelten Budgets gehören zu [v0.92.59](DEPLOY-RELEASE-v09259.md).
+
+## Zusätzlich aufgedeckter zeitabhängiger Test
+
+Der erste Linux-Lauf für `5f45382` hatte einen anderen Fehler im Test
+`one absolute deadline includes queue time and prevents the second child from
+starting late`: Innerhalb eines realen 50-Millisekunden-Fensters startete der
+zweite simulierte Prozess noch, bevor die gemeinsam verwendete Uhr die
+absolute Frist erreicht hatte. Das Ergebnis hängt damit von der Auflösung
+und Ausführung der echten Timer ab.
+
+Diese Prüfung und die gleich aufgebaute Prüfung verkürzter Shutdown-Fristen
+verwenden jetzt eine kontrollierte Uhr für Zeitstempel und Timer. Sie prüfen
+die laufende Warteschlange vor Ablauf sowie die Ablehnung beider Aufträge
+nach Ablauf. Der Produktions-Scheduler und seine Fristkontrollen bleiben
+unverändert. Alle 16 Tests der Datei bestehen lokal mit Node 22.22.1 und
+Node 24.19.0.
+
+## Abschließender CI-Nachweis für v0.92.59
+
+Der Runtime-Commit `de63e729b8e2692801029fec423f866c352d5a1b` besteht alle
+vier Jobs im [abschließenden CI-Lauf](https://github.com/christianseiwaldat-collab/Grabenplaner/actions/runs/35300292490):
+
+- Linux: 3705 Tests, 3627 bestanden, kein Fehler, 78 umgebungsabhängig übersprungen.
+- Windows: 3705 Tests, 3605 bestanden, kein Fehler, 100 umgebungsabhängig übersprungen.
+- Mindest-Node: 50 von 50 bestanden.
+- PostgreSQL-Vertrag: 125 von 125 bestanden.
+
+Der erneute Einzelabgleich des Linux-Protokolls für diesen exakten Commit
+bestätigt alle ursprünglichen 26 Fälle als ausgeführt und bestanden.
+Keiner dieser Fälle wurde übersprungen. Der Windows-Lauf endete am
+18.09.2026 um 03:07 UTC erfolgreich. Der VPS-Veröffentlichungsstand ist
+separat im [Release-Bericht](DEPLOY-RELEASE-v09259.md) dokumentiert.

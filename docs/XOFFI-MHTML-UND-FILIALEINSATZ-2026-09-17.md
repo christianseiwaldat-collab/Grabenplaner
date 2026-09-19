@@ -1,6 +1,10 @@
 # Xoffi-MHTML und Filialeinsatz-Anfragen
 
-Stand: 18.09.2026. Implementiert und lokal geprüft. Der VPS-Deploy steht aus.
+Stand: 18.09.2026. Implementiert und lokal geprüft. Die folgenden Nachweise
+beschreiben den lokalen Arbeitsstand. Spätere Fehlerkorrekturen und der
+VPS-Veröffentlichungsstand stehen in
+[CI-Fehlerkorrektur](CI-FEHLERKORREKTUR-2026-09-18.md) und
+[Release v0.92.60](DEPLOY-RELEASE-v09260.md).
 Frühere Änderungen an Geschwindigkeit,
 Urlaubsplanung und PDF-Auswahl bleiben erhalten.
 
@@ -78,7 +82,7 @@ mehrere Wochen umfassen. Stundenweise Anfragen bleiben auf einen Tag begrenzt.
 Das Anfragefenster ist unabhängig von der ein- oder zweiwöchigen Fremdplanansicht;
 bestehende Leserechte, Datenschutzfilter und Bestätigungsabläufe bleiben wirksam.
 
-## PostgreSQL-Erweiterung beim nächsten Deploy
+## PostgreSQL-Erweiterung für den ersten Deploy
 
 `lib/persistence/postgresql/core/xoffi-snapshots.js` ergänzt in Core die Tabelle
 `xoffi_time_snapshots` und ein Migrationsjournal. Snapshots sind unveränderlich,

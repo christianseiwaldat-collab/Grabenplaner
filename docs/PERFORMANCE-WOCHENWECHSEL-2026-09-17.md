@@ -2,7 +2,11 @@
 
 Stand: 18.09.2026. Implementiert und lokal geprüft auf Basis von
 `f1a40c2f98eea64122c9606c88c36ab22e9ed359`, Branch
-`feature/schedule-pdf-day-separators`. Der VPS-Deploy steht aus.
+`feature/schedule-pdf-day-separators`. Die folgenden Messungen und Prüfungen
+beschreiben diesen lokalen Arbeitsstand. Spätere Fehlerkorrekturen und der
+VPS-Veröffentlichungsstand stehen in
+[CI-Fehlerkorrektur](CI-FEHLERKORREKTUR-2026-09-18.md) und
+[Release v0.92.60](DEPLOY-RELEASE-v09260.md).
 
 ## Ergebnis und Messgrenze
 
@@ -95,7 +99,7 @@ Browser-Testzweig wird deshalb nach der Sichtprüfung eine neue synthetische
 Sitzung für den anschließenden Zugriffsentzugstest angelegt. Dieser Zweig wurde
 nach der Korrektur ebenfalls erfolgreich ausgeführt.
 
-## Wiederherstellungstest: Zeitlimit und Speicherbedarf
+## Damaliger Wiederherstellungstest: Zeitlimit und Speicherbedarf
 
 Das gemeinsame Zeitbudget für native Wiederherstellung und anschließenden
 Anwendungsfunktionstest wurde von 15 auf 30 Minuten erhöht. Speichergrenze,
