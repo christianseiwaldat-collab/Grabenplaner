@@ -3,7 +3,8 @@
 // A one-release bridge for the scanner-probe backup repair. Both application
 // trees have already passed the updater's manifest and ownership checks.
 // Configuration parsing, database snapshots, checkpointing, bundle format,
-// retention and native tools remain byte-identical outside the reviewed repair.
+// retention and native backup tools remain byte-identical outside the reviewed
+// repairs. The isolated restore watchdog change is pinned separately below.
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -15,6 +16,10 @@ const approvedRepairs = Object.freeze({
   "server-tools/linux/lib/postgresql-operations.js": {
     before: "0d0801f74d26094cf6093f8ca1e11909a01d60253d36cc0cd48ec6ed46069145",
     after: "a0699ec58917ae64fe3e5d36894ccf8eed7bc88d7fd438be4d3e16972d552006",
+  },
+  "lib/persistence/postgresql/operations/paired-restore.js": {
+    before: "00963fbaac4fdce62ca48552cb505237ec260b2b06100fcdcfb86944343633c7",
+    after: "3517ad192d3e68407c7da68db89cea5b3c7c6329d197552d66ccd442e693433f",
   },
 });
 const identicalFiles = Object.freeze([
