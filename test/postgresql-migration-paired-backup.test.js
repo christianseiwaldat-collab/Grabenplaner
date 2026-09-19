@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{spawnSync}=require('node:child_process');
 const {sealPairBundle,verifyPairBundle}=require('../lib/persistence/postgresql/operations/paired-bundle');
-const {copyRecoveryFiles}=require('../lib/persistence/postgresql/operations/runtime');
+const {copyRecoveryFiles,recoveryFilesPreflight}=require('../lib/persistence/postgresql/operations/runtime');
 const {prunePairedSnapshots,configuredPairedRetention}=require('../lib/persistence/postgresql/operations/paired-retention');
 async function fixture(t){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-pair-test-'));fs.chmodSync(root,0o700);t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
@@ -18,6 +18,13 @@ test('recovery copies committed AMU and branding files but excludes volatile sca
  assert.equal(fs.readFileSync(path.join(target,'private','amu','blobs','record.amu'),'utf8'),'committed');
  assert.equal(fs.readFileSync(path.join(target,'branding-kits','kit','manifest.json'),'utf8'),'{}');
  assert.equal(fs.existsSync(path.join(target,'private','amu','tmp')),false);
+ assert.deepEqual(recoveryFilesPreflight(source),{verified:true,files:2,bytes:11,excluded:['private/amu/tmp']});
+});
+test('recovery path preflight rejects an invalid committed name before a PostgreSQL backup starts',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-pair-preflight-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ fs.mkdirSync(path.join(root,'private','amu','blobs'),{recursive:true});
+ fs.writeFileSync(path.join(root,'private','amu','blobs','.unfinished'),'not allowed');
+ assert.throws(()=>recoveryFilesPreflight(root),/PG_PAIR_COMPONENT_PATH/);
 });
 test('paired backup detects a changed database, missing keys and swapped marker',async t=>{
  const {bundle,result,root}=await fixture(t);assert.equal((await verifyPairBundle(bundle,result.commitMarker)).files,4);

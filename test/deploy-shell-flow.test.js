@@ -13,7 +13,7 @@ const workflow = source.slice(source.indexOf(entry))
   .replaceAll("/usr/local/sbin/grabenplaner-offsite-pre-update", "$TEST_MODULE_ROOT/grabenplaner-offsite-pre-update.sh")
   .replaceAll("/opt/grabenplaner-offsite/module", "$TEST_MODULE_ROOT");
 
-for (const scenario of ["ordinary", "xoffi", "runtime-v5"]) {
+for (const scenario of ["ordinary", "xoffi", "runtime-v5", "postgresql-repair"]) {
   test(`backup source and retention selection: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     const start = source.indexOf("create_exact_local_backup() {");
     const selection = source.slice(start, source.indexOf('  [[ -x "$backup_script" ]]', start));
@@ -25,6 +25,7 @@ app_dir=/installed
 extract_root=/verified-candidate
 runtime_v5_transition=${scenario === "runtime-v5" ? "bound-transition" : "''"}
 xoffi_snapshots_migration=${scenario === "xoffi" ? 1 : 0}
+postgresql_backup_repair=${scenario === "postgresql-repair" ? 1 : 0}
 deploy_mode=full
 ${selection}
   printf '%s\\n' "$backup_app_dir" "$backup_script" "\${retention_args[*]}"
