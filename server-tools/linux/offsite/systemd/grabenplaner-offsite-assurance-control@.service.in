@@ -49,3 +49,5 @@ ReadWritePaths=/run/grabenplaner-assurance-control /run/grabenplaner-offsite /ru
 ReadWritePaths=/etc/systemd/system/grabenplaner-monitor.timer.d /etc/systemd/system/grabenplaner-offsite-assurance.timer.d
 ReadWritePaths=/etc/systemd/system/grabenplaner-offsite-check.timer.d /etc/systemd/system/grabenplaner-offsite-restore-test.timer.d
 ReadWritePaths=/etc/systemd/system/grabenplaner-host-security-audit.timer.d
+# The broker accepts only the five fixed stamp filenames, with root/file/fd guards.
+ReadWritePaths=/var/lib/systemd/timers

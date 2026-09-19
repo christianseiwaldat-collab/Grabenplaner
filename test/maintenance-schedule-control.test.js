@@ -16,8 +16,10 @@ function fixture(t, { failOnce = "" } = {}) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-maintenance-schedules-"));
   const stateRoot = path.join(temporary, "state");
   const systemdRoot = path.join(temporary, "systemd");
+  const timerStampRoot = path.join(temporary, "timer-stamps");
   fs.mkdirSync(stateRoot, { mode: 0o700 });
   fs.mkdirSync(systemdRoot, { mode: 0o755 });
+  fs.mkdirSync(timerStampRoot, { mode: 0o755 });
   for (const task of schedules.TASKS) fs.mkdirSync(path.join(systemdRoot, `${task.timer}.d`), { mode: 0o755 });
   if (process.platform !== "win32") {
     fs.chmodSync(stateRoot, 0o700);
@@ -27,6 +29,13 @@ function fixture(t, { failOnce = "" } = {}) {
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
   const nowMs = Date.parse("2026-09-19T12:00:00.000Z");
   const state = new Map(schedules.TASKS.map((task) => [task.timer, { enabled: true, active: true, stamp: nowMs - 2 * 86400000 }]));
+  const stampPath = timer => path.join(timerStampRoot, `stamp-${timer}`);
+  for (const task of schedules.TASKS) {
+    const file = stampPath(task.timer), old = new Date(nowMs - 2 * 86400000);
+    fs.writeFileSync(file, "", { mode: 0o600 });
+    fs.utimesSync(file, old, old);
+    state.get(task.timer).activatedAt = old.getTime();
+  }
   const calendarValue = expression => `{ OnCalendar=${expression.startsWith("*:") ? "*-*-* " + expression.replace("*:0/", "*:00/") + ":00" : expression} ; next_elapse=Sun 2026-09-20 03:45:00 CEST }`;
   const properties = new Map(schedules.TASKS.map((task, index) => [task.timer, {
     TimersCalendar: calendarValue(schedules.calendarExpression(schedules.defaultSchedules()[index])), TimersMonotonic: "",
@@ -73,11 +82,11 @@ function fixture(t, { failOnce = "" } = {}) {
     }
     if (args[0] === "clean") {
       const current = state.get(unit);
-      // Model documented systemd timer state: cleanup requires an inactive,
-      // persistent timer and removes only that timer's last-trigger timestamp.
+      // Cleaning removes the file, but the old unit activation time survives.
       if (current.active || properties.get(unit).Persistent !== "yes") return { status: 1, stdout: "" };
       assert.deepEqual(args, ["clean", "--what=state", unit]);
       current.stamp = null;
+      fs.rmSync(stampPath(unit), { force: true });
       return { status: 0, stdout: "" };
     }
     if (["enable", "disable", "start", "stop"].includes(args[0])) {
@@ -87,10 +96,13 @@ function fixture(t, { failOnce = "" } = {}) {
       if (args[0] === "disable") current.enabled = false;
       if (args.includes("--now")) current.active = args[0] === "enable";
       if (args[0] === "start" || args[0] === "enable" && args.includes("--now")) {
-        // All fixtures have a missed calendar event after the old timestamp.
-        // An unsafe enable/start is observable, not merely an active-bit flip.
-        if (current.stamp !== null && properties.get(timer).Persistent === "yes") workerStarts.push(timer);
-        current.stamp = nowMs;
+        // systemd reads the stamp, else falls back to the PREVIOUS activation.
+        // Every fixture has a missed event one minute before now.
+        const stamp = properties.get(timer).Persistent === "yes" && fs.existsSync(stampPath(timer))
+          ? fs.statSync(stampPath(timer)).mtimeMs : null;
+        if ((stamp ?? current.activatedAt ?? nowMs) < nowMs - 60_000) workerStarts.push(timer);
+        current.stamp = stamp;
+        current.activatedAt = nowMs;
         current.active = true;
       }
       if (args[0] === "stop") current.active = false;
@@ -100,10 +112,11 @@ function fixture(t, { failOnce = "" } = {}) {
     return { status: 1, stdout: "unexpected\n" };
   };
   return {
-    calls, state, properties, workerStarts, calendarValue,
+    calls, state, properties, workerStarts, calendarValue, stampPath,
     options: {
       stateRoot,
       systemdRoot,
+      timerStampRoot,
       spawnSync,
       dateSpawnSync: () => ({ status: 0, stdout: "2026-09-20T01:45:00.000Z\n" }),
       nowMs,
@@ -303,8 +316,8 @@ test("unrepresentable schedules are explicit read-only rows and survive changes 
   assert.throws(() => schedules.applySchedules(input, options), { code: "MAINTENANCE_SCHEDULE_UNAVAILABLE" });
 });
 
-test("re-enabling a timer clears only its missed-run timestamp before starting and preserves its policy", t => {
-  const { options, state, properties, calls, workerStarts } = fixture(t);
+test("re-enabling a previously activated timer seeds only its stamp before start and preserves policy", t => {
+  const { options, state, properties, calls, workerStarts, stampPath } = fixture(t);
   const timer = "grabenplaner-offsite-assurance.timer";
   Object.assign(state.get(timer), { enabled: false, active: false });
   properties.get(timer).RandomizedDelayUSec = "1h 30min";
@@ -312,7 +325,7 @@ test("re-enabling a timer clears only its missed-run timestamp before starting a
   input[1].enabled = true;
   schedules.applySchedules(input, options);
   const actions = calls.filter(call => ["stop", "clean", "start"].includes(call[1])).map(call => call.slice(1).join(" "));
-  assert.deepEqual(actions, [`stop ${timer}`, `clean --what=state ${timer}`, `start ${timer}`]);
+  assert.deepEqual(actions, [`stop ${timer}`, `start ${timer}`]);
   assert.deepEqual(workerStarts, [], "the missed run must not be queued on save");
   const body = fs.readFileSync(path.join(options.systemdRoot, `${timer}.d`, "20-grabenplaner-schedule.conf"), "utf8");
   assert.match(body, /Persistent=yes\n/);
@@ -320,30 +333,52 @@ test("re-enabling a timer clears only its missed-run timestamp before starting a
   assert.match(body, /FixedRandomDelay=yes\n/);
   assert.match(body, /AccuracySec=1min\n/);
   assert.equal(state.get("grabenplaner-monitor.timer").stamp, options.nowMs - 2 * 86400000);
+  assert.ok(Math.abs(fs.statSync(stampPath(timer)).mtimeMs - options.nowMs) < 1);
 });
 
-test("failed persistent-state cleanup never starts that timer or a worker", t => {
-  const { options, state, workerStarts, calls } = fixture(t, { failOnce: "clean --what=state grabenplaner-offsite-assurance.timer" });
+test("an unsafe persistent stamp never starts that timer or a worker", t => {
+  const { options, state, workerStarts, calls, stampPath } = fixture(t);
   const timer = "grabenplaner-offsite-assurance.timer";
   Object.assign(state.get(timer), { enabled: false, active: false });
   const input = toSchedules(schedules.scheduleSnapshot(options));
   input[1].enabled = true;
+  fs.writeFileSync(stampPath(timer), "unexpected contents");
   assert.throws(() => schedules.applySchedules(input, options), { code: "MAINTENANCE_SCHEDULE_CONTROL_FAILED" });
   assert.equal(state.get(timer).active, false);
   assert.ok(!calls.some(call => call[1] === "start"));
   assert.deepEqual(workerStarts, []);
 });
 
-test("nonpersistent timers keep that policy and never use persistent cleanup", t => {
+test("nonpersistent custom timers are read-only instead of risking a catch-up or changing policy", t => {
   const { options, properties, calls, workerStarts } = fixture(t);
   const timer = "grabenplaner-monitor.timer";
   properties.get(timer).Persistent = "no";
-  const input = toSchedules(schedules.scheduleSnapshot(options));
-  input[0].intervalMinutes = 15;
+  const snapshot = schedules.scheduleSnapshot(options);
+  assert.equal(snapshot.tasks[0].unsupportedReason, "nonpersistent-timer");
+  const requestId = crypto.randomUUID();
+  const response = broker.handleRequest(Buffer.from(client.buildRequest(requestId, "maintenance-schedules-status")), { scheduleOptions: options });
+  assert.equal(client.parseResponse(Buffer.from(JSON.stringify(response) + "\n"), requestId).maintenanceSchedules.tasks[0].unsupportedReason,
+    "nonpersistent-timer");
+  const input = toSchedules(snapshot);
   schedules.applySchedules(input, options);
-  assert.ok(!calls.some(call => call[1] === "clean"));
-  assert.match(fs.readFileSync(path.join(options.systemdRoot, `${timer}.d`, "20-grabenplaner-schedule.conf"), "utf8"), /Persistent=no\n/);
+  input[0] = { ...schedules.defaultSchedules()[0], intervalMinutes: 15 };
+  assert.throws(() => schedules.applySchedules(input, options), { code: "MAINTENANCE_SCHEDULE_UNAVAILABLE" });
+  assert.ok(!calls.some(call => ["clean", "stop", "start"].includes(call[1])));
+  assert.equal(fs.existsSync(path.join(options.systemdRoot, `${timer}.d`, "20-grabenplaner-schedule.conf")), false);
   assert.deepEqual(workerStarts, []);
+});
+
+test("an independent old loaded timer catches up after clean while the repaired timer does not", t => {
+  const control = fixture(t), repaired = fixture(t);
+  const timer = "grabenplaner-offsite-assurance.timer";
+  for (const f of [control, repaired]) Object.assign(f.state.get(timer), { enabled: false, active: false });
+  control.options.spawnSync("/usr/bin/systemctl", ["clean", "--what=state", timer]);
+  control.options.spawnSync("/usr/bin/systemctl", ["start", timer]);
+  assert.deepEqual(control.workerStarts, [timer], "positive control retains the old activation baseline after clean");
+  const input = toSchedules(schedules.scheduleSnapshot(repaired.options));
+  input[1].enabled = true;
+  schedules.applySchedules(input, repaired.options);
+  assert.deepEqual(repaired.workerStarts, [], "the second timer never benefits from the control timer's activation");
 });
 
 test("a new worker detected after timer stop aborts before timer configuration changes", t => {
@@ -426,5 +461,6 @@ test("module v11 binds schedule control to the maintenance lock and fixed writab
   assert.match(service, /ExecStart=\/usr\/bin\/flock --exclusive --wait 3 \/run\/grabenplaner\/maintenance\.lock/);
   assert.match(service, /ReadWritePaths=.*\/var\/lib\/grabenplaner-maintenance-schedules/);
   assert.match(service, /ReadWritePaths=.*grabenplaner-offsite-assurance\.timer\.d/);
+  assert.match(service, /^ReadWritePaths=\/var\/lib\/systemd\/timers$/m);
   assert.doesNotMatch(service, /^ReadWritePaths=\/$/m, "the broker must not receive a blanket root filesystem write grant");
 });

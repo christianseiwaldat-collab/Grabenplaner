@@ -10,6 +10,7 @@ const DATE = "/usr/bin/date";
 const STATE_ROOT = "/var/lib/grabenplaner-maintenance-schedules";
 const STATE_PATH = `${STATE_ROOT}/schedules.json`;
 const SYSTEMD_ROOT = "/etc/systemd/system";
+const TIMER_STAMP_ROOT = "/var/lib/systemd/timers";
 const STATE_FORMAT = "grabenplaner-maintenance-schedules";
 const STATE_SCHEMA_VERSION = 1;
 // Measured daemon reloads under restore load take up to 13 seconds. Enable and
@@ -259,6 +260,7 @@ function effectiveSchedule(task, state, options = {}) {
   if (properties.TimersMonotonic || properties.OnClockChange === "yes" || properties.OnTimezoneChange === "yes") {
     return { ...unsupported("additional-triggers"), properties };
   }
+  if (properties.Persistent !== "yes") return { ...unsupported("nonpersistent-timer"), properties };
   // Read systemd's effective, merged calendar (including administrator drop-ins),
   // not the unit template or our previously saved JSON. Multiple events and
   // calendar/timezone forms outside the matrix are explicitly read-only.
@@ -268,12 +270,53 @@ function effectiveSchedule(task, state, options = {}) {
   return schedule ? { schedule, unsupportedReason: null, properties }
     : { ...unsupported("calendar-not-supported"), properties };
 }
+function refreshTimerStamp(task, options = {}) {
+  if (TASK_BY_ID.get(task?.id) !== task) fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+  const directory = options.timerStampRoot || TIMER_STAMP_ROOT;
+  let descriptor;
+  try {
+    if (path.resolve(directory) !== directory || fs.realpathSync(directory) !== directory) fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+    for (let parent = directory; ; parent = path.dirname(parent)) {
+      const stat = fs.lstatSync(parent);
+      if (!stat.isDirectory() || stat.isSymbolicLink() || (process.platform !== "win32"
+        && (stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) !== 0))) fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+      // The alternate root is used only by isolated test fixtures, never request input.
+      if (options.timerStampRoot || parent === path.dirname(parent)) break;
+    }
+    const file = path.join(directory, `stamp-${task.timer}`);
+    const validate = stat => {
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size !== 0
+        || (process.platform !== "win32" && (stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) !== 0))) {
+        fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+      }
+    };
+    let previous;
+    try { previous = fs.lstatSync(file); validate(previous); }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+    descriptor = fs.openSync(file, fs.constants.O_WRONLY | (fs.constants.O_NOFOLLOW || 0)
+      | (fs.constants.O_NONBLOCK || 0) | (previous ? 0 : fs.constants.O_CREAT | fs.constants.O_EXCL), 0o600);
+    const opened = fs.fstatSync(descriptor);
+    validate(opened);
+    if (previous && (previous.dev !== opened.dev || previous.ino !== opened.ino)) fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+    const now = new Date(Number.isFinite(options.nowMs) ? options.nowMs : Date.now());
+    if (!Number.isFinite(now.getTime()) || now.getTime() <= 0) fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+    fs.futimesSync(descriptor, now, now);
+    fs.fsyncSync(descriptor);
+    const current = fs.lstatSync(file);
+    validate(current);
+    if (current.dev !== opened.dev || current.ino !== opened.ino || Math.abs(current.mtimeMs - now.getTime()) > 1) {
+      fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+    }
+  } catch { fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED"); }
+  finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
+}
 function startTimerWithoutCatchUp(task, properties, options = {}) {
-  // systemd.timer documents clean --what=state for the Persistent timestamp.
-  // timer_start() then uses the new activation time as its calendar baseline.
-  // Only this deliberately changed timer loses its previous timestamp; its
-  // Persistent policy remains intact for later outages and normal restarts.
-  if (properties.Persistent === "yes") systemctl(["clean", "--what=state", task.timer], options);
+  if (properties.Persistent !== "yes") fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+  // A missing stamp falls back to the unit's OLD inactive_exit_timestamp in
+  // systemd timer_enter_waiting(). Seed now instead, before starting, so even
+  // previously activated and paused timers cannot replay a missed calendar.
+  // Only the deliberately changed timer's baseline changes; policy is retained.
+  refreshTimerStamp(task, options);
   systemctl(["start", task.timer], options);
 }
 function serviceRunning(service, options = {}) {
@@ -433,7 +476,7 @@ function applySchedules(input, options = {}) {
 
 module.exports = {
   COMMAND_TIMEOUT_MS, RELOAD_TIMEOUT_MS, TRANSACTION_BUDGET_MS,
-  INTERVALS, STATE_FORMAT, STATE_PATH, STATE_ROOT, STATE_SCHEMA_VERSION, SYSTEMD_ROOT, TASKS, WEEKDAYS,
+  INTERVALS, STATE_FORMAT, STATE_PATH, STATE_ROOT, STATE_SCHEMA_VERSION, SYSTEMD_ROOT, TIMER_STAMP_ROOT, TASKS, WEEKDAYS,
   MaintenanceScheduleError, applySchedules, calendarExpression, defaultSchedules, dropInBody, normalizeSchedules,
-  readState, revisionFor, scheduleSnapshot, writeState, scheduleFromCalendar,
+  readState, revisionFor, scheduleSnapshot, writeState, scheduleFromCalendar, refreshTimerStamp,
 };
