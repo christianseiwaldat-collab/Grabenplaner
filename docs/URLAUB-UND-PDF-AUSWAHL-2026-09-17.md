@@ -1,6 +1,10 @@
 # Urlaubsplaner, PDF-Auswahl und Dashboard-Kennzahlen
 
-Stand: 18.09.2026. Implementiert und lokal geprüft. Der VPS-Deploy steht aus.
+Stand: 18.09.2026. Implementiert und lokal geprüft. Die folgenden Nachweise
+beschreiben den lokalen Arbeitsstand. Spätere Fehlerkorrekturen und der
+VPS-Veröffentlichungsstand stehen in
+[CI-Fehlerkorrektur](CI-FEHLERKORREKTUR-2026-09-18.md) und
+[Release v0.92.60](DEPLOY-RELEASE-v09260.md).
 Ergänzt die Änderungen aus
 `PERFORMANCE-WOCHENWECHSEL-2026-09-17.md`.
 

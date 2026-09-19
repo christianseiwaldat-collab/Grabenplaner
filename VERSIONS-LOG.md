@@ -18,6 +18,17 @@
 - Isolierte PostgreSQL-Wiederherstellungen überwachen CPU-, I/O- und Phasenfortschritt statt nach 30 Minuten abzubrechen. Bei Stillstand werden sämtliche Testprozesse kontrolliert beendet; eine kleine Diagnose bleibt erhalten und die große Testkopie wird danach entfernt.
 - Das Offsite-Modul bleibt auf v10. Die bearbeitbare Wartungs- und Backupmatrix folgt separat nach bestätigter Recovery Assurance.
 
+## v0.92.60 Beta – 18.09.2026
+
+- Die kurzlebige PostgreSQL-Wiederherstellungskopie verzichtet auf parallele Autovacuum-Hintergrundwartung, damit ihre CPU-Begrenzung die Anwendungsprüfungen nicht verdrängt. Produktive Wartung und sämtliche Prüfungen bleiben erhalten.
+- PostgreSQL-Verbindungen beginnen nach dem synchronen Aufbau der Anwendung. Auch ein CPU-begrenzter Kaltstart verbraucht dadurch nicht bereits vor der Netzwerkverarbeitung die Verbindungsfrist. Die fünf Sekunden Verbindungsfrist und alle Bereitschaftsprüfungen bleiben erhalten.
+- Ein Regressionstest bildet den beobachteten 84-Sekunden-Programmstart mit einer gesteuerten Uhr nach. Ein weiterer Test bestätigt, dass fehlgeschlagene Verbindungen weiterhin Bereitschaft und wartende Zugriffe sperren.
+
+## v0.92.59 Beta – 18.09.2026
+
+- PostgreSQL-Wiederherstellung berücksichtigt auch den Aufbau großer Indizes und die Prüfung von Fremdschlüsseln: maximal 45 Minuten je pg_restore, mit 15 Minuten zusätzlicher Reserve im insgesamt auf eine Stunde begrenzten isolierten Worker. CPU-, Speicher- und Abschottungsgrenzen bleiben unverändert.
+- Gemeinsame Zeitbudget-Konstante und Regressionstests verhindern erneut widersprüchliche Grenzen zwischen dem nativen Werkzeug und dem übergeordneten Prozess.
+
 ## v0.92.58 Beta – 18.09.2026
 
 - Korrekturen der CI-Fehler: private Archivexporte, PDF-Schrifterkennung, isolierte Recovery-Testkopien sowie aktualisierte Rechte- und Architekturtests.

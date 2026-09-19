@@ -122,6 +122,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test-support/postgresql-migration/application-export.js',
   'lib/persistence/postgresql/operations/application-export.js',
   'test/postgresql-migration-full-application.test.js',
+  'test/postgresql-application-startup.test.js',
   'scripts/postgresql/application-fault-child.js',
   'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
   'lib/persistence/postgresql/application.js',
@@ -1192,6 +1193,7 @@ const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
       "server-tools/linux/offsite/systemd/grabenplaner-offsite-application-smoke.service.in",
       "server-tools/linux/recovery/grabenplaner-recovery.sh",
       "server-tools/linux/recovery/lib/recovery-metadata.js",
+      "server-tools/linux/preflight-grabenplaner-deploy.sh",
       "server-tools/linux/uninstall-grabenplaner-server.sh",
       "server-tools/linux/update-grabenplaner-server.sh",
     ]),
@@ -2599,6 +2601,7 @@ function architectureBoundaryViolationsForText(file, text) {
     'server-tools/linux/offsite/grabenplaner-offsite-prepare.sh',
     'server-tools/linux/offsite/install-grabenplaner-offsite.sh',
     'server-tools/linux/test-grabenplaner-server.sh',
+    'server-tools/linux/preflight-grabenplaner-deploy.sh',
     'server-tools/linux/update-grabenplaner-server.sh',
   ]);
   const persistenceInternalFiles = new Set([
