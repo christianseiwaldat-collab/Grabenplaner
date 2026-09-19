@@ -8,6 +8,17 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
+const { once } = require("node:events");
+const { Worker } = require("node:worker_threads");
+
+function openFixtureDatabase(databasePath) {
+  const database = new DatabaseSync(databasePath);
+  // HTTP liveness does not imply that startup/background writes have finished.
+  // Match the application's bounded SQLite writer coordination for this second
+  // connection; the existing server/test deadlines remain unchanged.
+  database.exec("PRAGMA busy_timeout = 5000");
+  return database;
+}
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -37,6 +48,47 @@ function waitForExit(child) {
   if (child.exitCode !== null) return Promise.resolve(child.exitCode);
   return new Promise((resolve) => child.once("exit", resolve));
 }
+
+test("bootstrap fixture waits for an existing SQLite writer to release its lock", { timeout: 10_000 }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-bootstrap-lock-"));
+  const databasePath = path.join(root, "fixture.db");
+  const setup = new DatabaseSync(databasePath);
+  setup.exec("PRAGMA journal_mode = WAL; CREATE TABLE fixture (active INTEGER); INSERT INTO fixture VALUES (1)");
+  setup.close();
+  const holder = new Worker(`
+    const { parentPort, workerData } = require("node:worker_threads");
+    const { DatabaseSync } = require("node:sqlite");
+    const database = new DatabaseSync(workerData);
+    database.exec("BEGIN IMMEDIATE");
+    parentPort.postMessage("locked");
+    parentPort.once("message", () => setTimeout(() => {
+      database.exec("COMMIT");
+      database.close();
+      parentPort.postMessage("released");
+      parentPort.close();
+    }, 50));
+  `, { eval: true, workerData: databasePath });
+  let database;
+  try {
+    assert.deepEqual(await once(holder, "message"), ["locked"]);
+    const uncoordinated = new DatabaseSync(databasePath);
+    try {
+      assert.throws(() => uncoordinated.prepare("UPDATE fixture SET active = 0").run(),
+        error => error.code === "ERR_SQLITE_ERROR" && error.errcode === 5);
+    } finally { uncoordinated.close(); }
+    database = openFixtureDatabase(databasePath);
+    assert.equal(database.prepare("PRAGMA busy_timeout").get().timeout, 5000);
+    const released = once(holder, "message");
+    holder.postMessage("release");
+    assert.equal(database.prepare("UPDATE fixture SET active = 0").run().changes, 1);
+    assert.deepEqual(await released, ["released"]);
+    assert.equal(database.prepare("SELECT active FROM fixture").get().active, 0);
+  } finally {
+    database?.close();
+    await holder.terminate();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("v0.72 browser bootstrap keeps the one-time key local and sends it only on mutations", () => {
   const application = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
@@ -99,7 +151,7 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     assert.equal(statusResponse.status, 200, await statusResponse.clone().text());
     assert.equal((await statusResponse.json()).passwordMinLength, 10);
 
-    const database = new DatabaseSync(databasePath);
+    const database = openFixtureDatabase(databasePath);
     try {
       const insertEmployee = database.prepare(`
         INSERT INTO employees (personnel_number, full_name, nickname, color, contracted_hours, active)
@@ -181,7 +233,7 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
       } catch (error) {
         throw new Error(`${error.message}\n${serverStderr}`);
       }
-      const serverDatabase = new DatabaseSync(databasePath);
+      const serverDatabase = openFixtureDatabase(databasePath);
       try {
         serverDatabase.prepare("UPDATE portal_users SET active = 0 WHERE employee_number = '900'").run();
       } finally {
