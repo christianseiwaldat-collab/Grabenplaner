@@ -106,21 +106,25 @@ function fixture(t, { failOnce = "" } = {}) {
   const workerStarts = [];
   const calls = [];
   let failure = failOnce;
+  const effectiveProperties = unit => {
+    const effective = { ...properties.get(unit) };
+    const file = path.join(systemdRoot, `${unit}.d`, "20-grabenplaner-schedule.conf");
+    if (fs.existsSync(file)) {
+      const content = fs.readFileSync(file, "utf8");
+      const calendar = [...content.matchAll(/^OnCalendar=(.+)$/gm)].at(-1)?.[1];
+      if (calendar) { effective.TimersCalendar = calendarValue(calendar); effective.TimersMonotonic = ""; }
+      for (const [setting, key] of [["Persistent", "Persistent"], ["RandomizedDelaySec", "RandomizedDelayUSec"], ["FixedRandomDelay", "FixedRandomDelay"], ["AccuracySec", "AccuracyUSec"]]) {
+        const value = [...content.matchAll(new RegExp(`^${setting}=(.+)$`, "gm"))].at(-1)?.[1];
+        if (value) effective[key] = value;
+      }
+    }
+    return effective;
+  };
   const spawnSync = (executable, args) => {
     calls.push([executable, ...args]);
     const unit = args.at(-1);
     if (args[0] === "show" && args[1] === "--all") {
-      const effective = { ...properties.get(unit) };
-      const file = path.join(systemdRoot, `${unit}.d`, "20-grabenplaner-schedule.conf");
-      if (fs.existsSync(file)) {
-        const content = fs.readFileSync(file, "utf8");
-        const calendar = [...content.matchAll(/^OnCalendar=(.+)$/gm)].at(-1)?.[1];
-        if (calendar) { effective.TimersCalendar = calendarValue(calendar); effective.TimersMonotonic = ""; }
-        for (const [setting, key] of [["Persistent", "Persistent"], ["RandomizedDelaySec", "RandomizedDelayUSec"], ["FixedRandomDelay", "FixedRandomDelay"], ["AccuracySec", "AccuracyUSec"]]) {
-          const value = content.match(new RegExp(`^${setting}=(.+)$`, "m"))?.[1];
-          if (value) effective[key] = value;
-        }
-      }
+      const effective = effectiveProperties(unit);
       return { status: 0, stdout: Object.entries(effective).map(([key, value]) => `${key}=${value}`).join("\n") + "\n" };
     }
     if (args[0] === "show" && args[1] === "--property=LoadState") return { status: 0, stdout: "loaded\n" };
@@ -159,7 +163,7 @@ function fixture(t, { failOnce = "" } = {}) {
       if (args[0] === "start" || args[0] === "enable" && args.includes("--now")) {
         // systemd reads the stamp, else falls back to the PREVIOUS activation.
         // Every fixture has a missed event one minute before now.
-        const stamp = properties.get(timer).Persistent === "yes" && fs.existsSync(stampPath(timer))
+        const stamp = effectiveProperties(timer).Persistent === "yes" && fs.existsSync(stampPath(timer))
           ? fs.statSync(stampPath(timer)).mtimeMs : null;
         if ((stamp ?? current.activatedAt ?? nowMs) < nowMs - 60_000) workerStarts.push(timer);
         current.stamp = stamp;
@@ -445,23 +449,56 @@ test("an unsafe persistent stamp never starts that timer or a worker", t => {
   assert.deepEqual(workerStarts, []);
 });
 
-test("nonpersistent custom timers are read-only instead of risking a catch-up or changing policy", t => {
+test("daily nonpersistent monitor schedules remain editable without replaying missed work", t => {
   const { options, properties, calls, workerStarts } = fixture(t);
   const timer = "grabenplaner-monitor.timer";
   properties.get(timer).Persistent = "no";
+  properties.get(timer).TimersCalendar = `{ OnCalendar=*-*-* 03:00:00 ; next_elapse=Sun 2026-09-20 03:00:00 CEST }`;
   const snapshot = schedules.scheduleSnapshot(options);
-  assert.equal(snapshot.tasks[0].unsupportedReason, "nonpersistent-timer");
+  assert.equal(snapshot.tasks[0].unsupportedReason, null);
+  assert.equal(snapshot.tasks[0].cadence, "weekly");
+  assert.equal(snapshot.tasks[0].weekdays.length, 7);
+  assert.equal(snapshot.tasks[0].time, "03:00");
   const requestId = crypto.randomUUID();
   const response = broker.handleRequest(Buffer.from(client.buildRequest(requestId, "maintenance-schedules-status")), { scheduleOptions: options });
-  assert.equal(client.parseResponse(Buffer.from(JSON.stringify(response) + "\n"), requestId).maintenanceSchedules.tasks[0].unsupportedReason,
-    "nonpersistent-timer");
+  assert.equal(client.parseResponse(Buffer.from(JSON.stringify(response) + "\n"), requestId).maintenanceSchedules.tasks[0].time, "03:00");
   const input = toSchedules(snapshot);
+  input[0].time = "03:30";
   schedules.applySchedules(input, options);
-  input[0] = { ...schedules.defaultSchedules()[0], intervalMinutes: 15 };
-  assert.throws(() => schedules.applySchedules(input, options), { code: "MAINTENANCE_SCHEDULE_UNAVAILABLE" });
-  assert.ok(!calls.some(call => ["clean", "stop", "start"].includes(call[1])));
+  const saved = schedules.scheduleSnapshot(options);
+  assert.equal(saved.tasks[0].time, "03:30");
+  const body = fs.readFileSync(path.join(options.systemdRoot, `${timer}.d`, "20-grabenplaner-schedule.conf"), "utf8");
+  assert.match(body, /Persistent=no\n/);
+  assert.doesNotMatch(body, /Persistent=yes/);
+  assert.ok(calls.some(call => call[1] === "start" && call.at(-1) === timer));
+  assert.deepEqual(workerStarts, []);
+});
+
+test("nonpersistent timer start failure restores its calendar and policy without running work", t => {
+  const { options, properties, workerStarts, state } = fixture(t, { failOnce: "start grabenplaner-monitor.timer" });
+  const timer = "grabenplaner-monitor.timer";
+  properties.get(timer).Persistent = "no";
+  const before = schedules.scheduleSnapshot(options);
+  const input = toSchedules(before);
+  input[0] = { ...input[0], cadence: "weekly", intervalMinutes: null, time: "03:00", weekdays: [...schedules.WEEKDAYS] };
+  assert.throws(() => schedules.applySchedules(input, options), { code: "MAINTENANCE_SCHEDULE_CONTROL_FAILED" });
+  assert.equal(schedules.scheduleSnapshot(options).revision, before.revision);
+  assert.equal(state.get(timer).active, true);
   assert.equal(fs.existsSync(path.join(options.systemdRoot, `${timer}.d`, "20-grabenplaner-schedule.conf")), false);
   assert.deepEqual(workerStarts, []);
+});
+
+test("editing all nightly timers batches nonpersistent activation into three reloads", t => {
+  const { options, properties, calls, workerStarts } = fixture(t);
+  for (const p of properties.values()) p.Persistent = "no";
+  const input = toSchedules(schedules.scheduleSnapshot(options));
+  for (const task of input) Object.assign(task, {
+    cadence: "weekly", weekdays: [...schedules.WEEKDAYS], time: "03:00", intervalMinutes: null, monthDay: null,
+  });
+  schedules.applySchedules(input, options);
+  assert.equal(calls.filter(call => call[1] === "daemon-reload").length, 3);
+  assert.deepEqual(workerStarts, []);
+  assert.ok(schedules.scheduleSnapshot(options).tasks.every(task => task.time === "03:00" && task.weekdays.length === 7));
 });
 
 test("an independent old loaded timer catches up after clean while the repaired timer does not", t => {

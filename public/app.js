@@ -6693,7 +6693,7 @@ const maintenanceScheduleWeekdays = Object.freeze([
   ["friday", "Fr"], ["saturday", "Sa"], ["sunday", "So"],
 ]);
 const maintenanceScheduleTaskMeta = Object.freeze({
-  "server-monitor": Object.freeze({ label: "Systemprüfung", detail: "Erreichbarkeit und Serverzustand", cadences: ["interval"], monthDay: null }),
+  "server-monitor": Object.freeze({ label: "Systemprüfung", detail: "Erreichbarkeit und Serverzustand", cadences: ["interval", "weekly"], monthDay: null }),
   "complete-backup": Object.freeze({ label: "Vollständige Sicherung", detail: "Datenbank, Dokumente und Wiederherstellungsprüfung", cadences: ["weekly"], monthDay: null }),
   "repository-check": Object.freeze({ label: "Repository-Prüfung", detail: "Vollständige Prüfung des externen Sicherungsbestands", cadences: ["weekly", "monthly"], monthDay: 1 }),
   "restore-test": Object.freeze({ label: "Wiederherstellungstest", detail: "Isolierter Test-Restore", cadences: ["weekly", "monthly", "quarterly"], monthDay: 2 }),
@@ -6742,11 +6742,10 @@ function maintenanceScheduleValidationMessage(tasks = []) {
 
 function maintenanceScheduleCadenceControl(task, disabled) {
   const meta = maintenanceScheduleTaskMeta[task.id];
-  if (task.cadence === "interval") {
-    return `<label class="maintenance-schedule-compact"><span class="sr-only">Intervall für ${escapeHtml(meta.label)}</span><select data-maintenance-interval ${disabled ? "disabled" : ""}>${[5, 10, 15, 20, 30, 60].map((minutes) => `<option value="${minutes}" ${Number(task.intervalMinutes) === minutes ? "selected" : ""}>Alle ${minutes} Minuten</option>`).join("")}</select></label>`;
-  }
   if (meta.cadences.length === 1) return `<span class="maintenance-schedule-cadence">${escapeHtml(maintenanceScheduleCadenceLabel(task.cadence, task))}</span>`;
-  return `<label class="maintenance-schedule-compact"><span class="sr-only">Rhythmus für ${escapeHtml(meta.label)}</span><select data-maintenance-cadence ${disabled ? "disabled" : ""}>${meta.cadences.map((cadence) => `<option value="${cadence}" ${task.cadence === cadence ? "selected" : ""}>${escapeHtml(maintenanceScheduleCadenceLabel(cadence, { ...task, cadence }))}</option>`).join("")}</select></label>`;
+  const cadenceControl = `<label class="maintenance-schedule-compact"><span class="sr-only">Rhythmus für ${escapeHtml(meta.label)}</span><select data-maintenance-cadence ${disabled ? "disabled" : ""}>${meta.cadences.map((cadence) => `<option value="${cadence}" ${task.cadence === cadence ? "selected" : ""}>${escapeHtml(maintenanceScheduleCadenceLabel(cadence, { ...task, cadence }))}</option>`).join("")}</select></label>`;
+  if (task.cadence !== "interval") return cadenceControl;
+  return cadenceControl + `<label class="maintenance-schedule-compact"><span class="sr-only">Intervall für ${escapeHtml(meta.label)}</span><select data-maintenance-interval ${disabled ? "disabled" : ""}>${[5, 10, 15, 20, 30, 60].map((minutes) => `<option value="${minutes}" ${Number(task.intervalMinutes) === minutes ? "selected" : ""}>Alle ${minutes} Minuten</option>`).join("")}</select></label>`;
 }
 
 function renderMaintenanceSchedules() {
@@ -6882,7 +6881,12 @@ function updateMaintenanceScheduleDraft(event) {
   if (event.target.matches("[data-maintenance-cadence]")) {
     task.cadence = event.target.value;
     task.intervalMinutes = null;
-    if (task.cadence === "weekly") {
+    if (task.cadence === "interval") {
+      task.weekdays = [];
+      task.time = null;
+      task.intervalMinutes = 5;
+      task.monthDay = null;
+    } else if (task.cadence === "weekly") {
       task.weekdays = task.weekdays?.length ? task.weekdays : ["monday"];
       task.monthDay = null;
       task.time ||= "03:00";

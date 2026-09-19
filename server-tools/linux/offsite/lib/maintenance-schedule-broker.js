@@ -29,7 +29,7 @@ const TASKS = Object.freeze([
     id: "server-monitor",
     timer: "grabenplaner-monitor.timer",
     services: Object.freeze(["grabenplaner-monitor.service"]),
-    cadences: Object.freeze(["interval"]),
+    cadences: Object.freeze(["interval", "weekly"]),
     defaults: Object.freeze({ enabled: true, cadence: "interval", weekdays: [], time: null, intervalMinutes: 5, monthDay: null }),
   }),
   Object.freeze({
@@ -260,7 +260,6 @@ function effectiveSchedule(task, state, options = {}) {
   if (properties.TimersMonotonic || properties.OnClockChange === "yes" || properties.OnTimezoneChange === "yes") {
     return { ...unsupported("additional-triggers"), properties };
   }
-  if (properties.Persistent !== "yes") return { ...unsupported("nonpersistent-timer"), properties };
   // Read systemd's effective, merged calendar (including administrator drop-ins),
   // not the unit template or our previously saved JSON. Multiple events and
   // calendar/timezone forms outside the matrix are explicitly read-only.
@@ -310,14 +309,30 @@ function refreshTimerStamp(task, options = {}) {
   } catch { fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED"); }
   finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
 }
-function startTimerWithoutCatchUp(task, properties, options = {}) {
-  if (properties.Persistent !== "yes") fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
-  // A missing stamp falls back to the unit's OLD inactive_exit_timestamp in
-  // systemd timer_enter_waiting(). Seed now instead, before starting, so even
-  // previously activated and paused timers cannot replay a missed calendar.
-  // Only the deliberately changed timer's baseline changes; policy is retained.
-  refreshTimerStamp(task, options);
-  systemctl(["start", task.timer], options);
+function startTimersWithoutCatchUp(items, options = {}) {
+  if (items.some(item => !["yes", "no"].includes(item.effective.properties.Persistent))) fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+  const nonpersistent = items.filter(item => item.effective.properties.Persistent === "no").map(item => ({
+    file: item.file, body: fs.existsSync(item.file) ? fs.readFileSync(item.file, "utf8") : null,
+  }));
+  try {
+    // Nonpersistent timers also retain their previous activation baseline in
+    // systemd. Seed a fresh persistent baseline while stopped, then restore
+    // the exact policy while active. Batch reloads across all changed rows.
+    for (const item of nonpersistent) atomicWrite(item.file, `${item.body || ""}\n[Timer]\nPersistent=yes\n`, 0o644);
+    if (nonpersistent.length) systemctl(["daemon-reload"], options);
+    for (const item of items) {
+      refreshTimerStamp(item.task, options);
+      systemctl(["start", item.task.timer], options);
+    }
+  } finally {
+    for (const item of nonpersistent) {
+      if (item.body === null) fs.rmSync(item.file, { force: true }); else atomicWrite(item.file, item.body, 0o644);
+    }
+    if (nonpersistent.length) systemctl(["daemon-reload"], options);
+  }
+  for (const item of items) if (timerProperties(item.task, options).Persistent !== item.effective.properties.Persistent) {
+    fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
+  }
 }
 function serviceRunning(service, options = {}) {
   const load = systemctl(["show", "--property=LoadState", "--value", service], options).output;
@@ -440,7 +455,10 @@ function applySchedules(input, options = {}) {
       const effective = effectiveSchedule(item.task, { ...item.state, enabled: schedule.enabled }, options);
       if (canonical(effective.schedule) !== canonical(schedule)) fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
       systemctl([schedule.enabled ? "enable" : "disable", "--no-reload", item.task.timer], options);
-      if (schedule.enabled) startTimerWithoutCatchUp(item.task, effective.properties, options);
+    }
+    startTimersWithoutCatchUp(affected.filter(item => schedules[TASKS.indexOf(item.task)].enabled), options);
+    for (const item of affected) {
+      const schedule = schedules[TASKS.indexOf(item.task)];
       const current = unitState(item.task.timer, options);
       if (current.enabled !== schedule.enabled || current.active !== schedule.enabled) {
         fail("MAINTENANCE_SCHEDULE_CONTROL_FAILED");
@@ -462,8 +480,8 @@ function applySchedules(input, options = {}) {
         if (changed) systemctl(["daemon-reload"], rollbackOptions);
         for (const item of stopped) {
           systemctl([item.state.enabled ? "enable" : "disable", "--no-reload", item.task.timer], rollbackOptions);
-          if (item.state.active) startTimerWithoutCatchUp(item.task, item.effective.properties, rollbackOptions);
         }
+        startTimersWithoutCatchUp(stopped.filter(item => item.state.active), rollbackOptions);
         const statePath = options.statePath || path.join(options.stateRoot || STATE_ROOT, "schedules.json");
         if (beforeState) atomicWrite(statePath, `${JSON.stringify(beforeState, null, 2)}\n`);
         else fs.rmSync(statePath, { force: true });
