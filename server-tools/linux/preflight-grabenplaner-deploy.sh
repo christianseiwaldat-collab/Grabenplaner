@@ -107,8 +107,10 @@ getent passwd "$GP_DEFAULT_BUILD_USER" >/dev/null || gp_die "Isolierter Build-Be
 getent group "$GP_DEFAULT_BUILD_GROUP" >/dev/null || gp_die "Isolierte Build-Gruppe fehlt: $GP_DEFAULT_BUILD_GROUP"
 [[ "$(id -gn "$GP_DEFAULT_BUILD_USER")" == "$GP_DEFAULT_BUILD_GROUP" ]] \
   || gp_die "Der Build-Benutzer verwendet eine unerwartete Hauptgruppe."
-runuser --user "$GP_DEFAULT_BUILD_USER" -- test -r "$build_cache" -w "$build_cache" -x "$build_cache" \
-  || gp_die "Der isolierte Build-Benutzer kann den Build-Cache nicht verwenden."
+for cache_access in -r -w -x; do
+  runuser --user "$GP_DEFAULT_BUILD_USER" -- test "$cache_access" "$build_cache" \
+    || gp_die "Der isolierte Build-Benutzer kann den Build-Cache nicht verwenden."
+done
 required_pnpm="$("$node" -e 'const fs=require("node:fs");const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(p.packageManager||"").split("@").pop())' "$app_dir/package.json")"
 [[ "$required_pnpm" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || gp_die "Die installierte pnpm-Vorgabe ist ungueltig."
 actual_pnpm="$(cd -- "$build_cache" && runuser --user "$GP_DEFAULT_BUILD_USER" -- env -i \
