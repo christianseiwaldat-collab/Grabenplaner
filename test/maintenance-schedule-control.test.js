@@ -6,14 +6,72 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
+const { createRequire } = require("node:module");
 
 const root = path.resolve(__dirname, "..");
-const schedules = require(path.join(root, "server-tools/linux/offsite/lib/maintenance-schedule-broker.js"));
-const broker = require(path.join(root, "server-tools/linux/offsite/lib/assurance-control-broker.js"));
 const client = require(path.join(root, "lib/maintenance-schedule-control-client.js"));
+
+// CI owns its temporary files as an ordinary user. Model only the privileged
+// service's metadata inside registered fixtures; all file contents, descriptors,
+// writes and timestamps remain real. Never change ownership or the product guard.
+const fixtureRoots = new Map(), descriptors = new Map();
+let directoryDescriptor = -1;
+function fixtureMetadata(stat, file) {
+  const absolute = path.resolve(file);
+  const fixture = [...fixtureRoots].find(([directory]) => absolute === directory
+    || absolute.startsWith(directory + path.sep));
+  assert.ok(fixture, "broker filesystem access must stay inside a registered fixture");
+  const [directory, faults] = fixture;
+  stat.uid = 0; stat.gid = 0;
+  if (process.platform === "win32") {
+    const permissions = stat.isDirectory() ? (absolute === path.join(directory, "state") ? 0o700 : 0o755)
+      : path.basename(absolute).endsWith(".conf") ? 0o644 : 0o600;
+    stat.mode = (stat.mode & ~0o7777) | permissions;
+    if (stat.isDirectory()) stat.nlink = 2;
+  }
+  Object.assign(stat, faults.get(absolute));
+  return stat;
+}
+const fixtureFs = {
+  ...fs,
+  lstatSync: file => fixtureMetadata(fs.lstatSync(file), file),
+  fstatSync: fd => fixtureMetadata(fs.fstatSync(fd), descriptors.get(fd)),
+  openSync(file, flags, mode) {
+    // Windows cannot open directory FDs. The Linux branch uses real directory
+    // opens/fsyncs; on Windows only that durability primitive is simulated.
+    if (process.platform === "win32" && fs.existsSync(file) && fs.lstatSync(file).isDirectory()) {
+      fixtureMetadata(fs.lstatSync(file), file);
+      const fd = directoryDescriptor--;
+      descriptors.set(fd, file);
+      return fd;
+    }
+    const fd = fs.openSync(file, flags, mode);
+    descriptors.set(fd, file);
+    return fd;
+  },
+  fsyncSync(fd) { if (fd >= 0) fs.fsyncSync(fd); },
+  closeSync(fd) {
+    try { if (fd >= 0) fs.closeSync(fd); }
+    finally { descriptors.delete(fd); }
+  },
+};
+function loadBroker(filename, dependencies = {}) {
+  const file = path.join(root, "server-tools/linux/offsite/lib", filename);
+  const localRequire = createRequire(file), module = { exports: {} };
+  const execute = vm.compileFunction(fs.readFileSync(file, "utf8").replace(/^#![^\n]*\n/, ""),
+    ["module", "exports", "require", "process"], { filename: file });
+  execute(module, module.exports, name => name === "node:fs" ? fixtureFs : dependencies[name] || localRequire(name),
+    { ...process, platform: "linux" });
+  return module.exports;
+}
+const schedules = loadBroker("maintenance-schedule-broker.js");
+const broker = loadBroker("assurance-control-broker.js", { "./maintenance-schedule-broker": schedules });
 
 function fixture(t, { failOnce = "" } = {}) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-maintenance-schedules-"));
+  const metadataFaults = new Map();
+  fixtureRoots.set(temporary, metadataFaults);
   const stateRoot = path.join(temporary, "state");
   const systemdRoot = path.join(temporary, "systemd");
   const timerStampRoot = path.join(temporary, "timer-stamps");
@@ -26,7 +84,10 @@ function fixture(t, { failOnce = "" } = {}) {
     fs.chmodSync(systemdRoot, 0o755);
     for (const task of schedules.TASKS) fs.chmodSync(path.join(systemdRoot, `${task.timer}.d`), 0o755);
   }
-  t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  t.after(() => {
+    fixtureRoots.delete(temporary);
+    fs.rmSync(temporary, { recursive: true, force: true });
+  });
   const nowMs = Date.parse("2026-09-19T12:00:00.000Z");
   const state = new Map(schedules.TASKS.map((task) => [task.timer, { enabled: true, active: true, stamp: nowMs - 2 * 86400000 }]));
   const stampPath = timer => path.join(timerStampRoot, `stamp-${timer}`);
@@ -112,7 +173,7 @@ function fixture(t, { failOnce = "" } = {}) {
     return { status: 1, stdout: "unexpected\n" };
   };
   return {
-    calls, state, properties, workerStarts, calendarValue, stampPath,
+    calls, state, properties, workerStarts, calendarValue, stampPath, metadataFaults,
     options: {
       stateRoot,
       systemdRoot,
@@ -135,6 +196,41 @@ test("maintenance matrix exposes only fixed tasks and canonical systemd calendar
   assert.equal(schedules.calendarExpression(configured[1]), "Mon,Tue,Wed,Thu,Fri,Sat,Sun *-*-* 03:45:00");
   assert.equal(schedules.calendarExpression(configured[2]), "*-*-01 04:15:00");
   assert.equal(schedules.calendarExpression(configured[3]), "*-01,04,07,10-02 05:15:00");
+});
+
+test("the unprivileged fixture models root metadata without changing real ownership", t => {
+  const { options } = fixture(t);
+  const realOwner = fs.lstatSync(options.stateRoot).uid;
+  assert.equal(fixtureFs.lstatSync(options.stateRoot).uid, 0);
+  assert.equal(fixtureFs.lstatSync(options.stateRoot).gid, 0);
+  schedules.writeState(schedules.defaultSchedules(), options);
+  assert.equal(schedules.readState(options).schedules.length, schedules.TASKS.length);
+  assert.equal(fs.lstatSync(options.stateRoot).uid, realOwner);
+  assert.equal(descriptors.size, 0, "all real and simulated directory descriptors are closed");
+});
+
+for (const [name, target, metadata] of [
+  ["state directory owner", "state", { uid: 1001 }],
+  ["state directory group", "state", { gid: 1001 }],
+  ["state directory permissions", "state", { mode: 0o40770 }],
+  ["drop-in directory owner", "drop-in", { uid: 1001 }],
+  ["drop-in directory group", "drop-in", { gid: 1001 }],
+  ["drop-in directory permissions", "drop-in", { mode: 0o40777 }],
+  ["state file owner", "file", { uid: 1001 }],
+  ["state file group", "file", { gid: 1001 }],
+  ["state file permissions", "file", { mode: 0o100644 }],
+  ["state file hard links", "file", { nlink: 2 }],
+]) test("Linux matrix guards reject unsafe " + name + " before timer changes", t => {
+  const { options, metadataFaults, calls, workerStarts } = fixture(t);
+  if (target === "file") schedules.writeState(schedules.defaultSchedules(), options);
+  const file = target === "state" ? options.stateRoot : target === "file" ? path.join(options.stateRoot, "schedules.json")
+    : path.join(options.systemdRoot, `${schedules.TASKS[0].timer}.d`);
+  metadataFaults.set(file, metadata);
+  const input = schedules.defaultSchedules();
+  input[0].intervalMinutes = 15;
+  assert.throws(() => schedules.applySchedules(input, options), { code: "MAINTENANCE_SCHEDULE_CONTROL_FAILED" });
+  assert.ok(!calls.some(call => ["stop", "start", "clean", "enable", "disable", "daemon-reload"].includes(call[1])));
+  assert.deepEqual(workerStarts, []);
 });
 
 test("maintenance matrix applies fixed drop-ins and persists one verified revision", (t) => {
