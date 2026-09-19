@@ -22,3 +22,9 @@ test('oversized or malformed responses do not escape projection or prevent scrat
  const {root,app}=fixture(t);fs.writeFileSync(path.join(app,'http-last-response-private.json'),'X'.repeat(100000));
  fs.writeFileSync(path.join(app,'http-progress.jsonl'),'invalid\n');assert.deepEqual(safeDiagnostics(root),{});
 });
+
+test('fixed startup phases survive projection without arbitrary error or SQL details',t=>{
+ const {root,app}=fixture(t),phases=['initializing-application','application-initialized','initialization-failed','starting-listener','listener-ready'];
+ fs.writeFileSync(path.join(app,'http-progress.jsonl'),[...phases,'SELECT PRIVATE','startup-PRIVATE'].map(phase=>JSON.stringify({phase,error:'SECRET',sql:'PRIVATE'})).join('\n'));
+ assert.deepEqual(safeDiagnostics(root),{httpProgress:phases.map(phase=>({phase}))});
+});
