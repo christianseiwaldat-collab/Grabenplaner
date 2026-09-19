@@ -832,6 +832,9 @@ if [[ "$database_provider" == postgresql ]]; then
   fi
   # Candidate dependencies are not installed yet. The read-only path check
   # resolves its PostgreSQL module from the verified installed application.
+  NODE_PATH="$app_dir/node_modules" "$node" "$extract_root/server-tools/linux/lib/postgresql-operations.js" check-paths \
+    /etc/grabenplaner/postgresql-operations.json "$data_dir" "$backup_dir" >/dev/null \
+    || gp_die 'Daten- oder Backupordner weichen von der PostgreSQL-Konfiguration ab. Der Deploy wurde vor Abhaengigkeiten, Virenscan und Dienststopp beendet.'
   NODE_PATH="$app_dir/node_modules" "$node" "$extract_root/server-tools/linux/lib/postgresql-operations.js" recovery-files-preflight \
     /etc/grabenplaner/postgresql-operations.json >/dev/null \
     || gp_die 'Die PostgreSQL-Rueckkehrdateien verletzen den Pfad- oder Dateitypvertrag. Der Deploy wurde vor Abhaengigkeiten, Virenscan und Backup beendet.'
