@@ -3697,9 +3697,11 @@ async function authorizePersistenceOperation({readOnly} = {}) {
   return fingerprint(previous) === fingerprint(current);
 }
 
-function initializeApplicationPersistence() {
+function initializeApplicationPersistence({ onProgress } = {}) {
   if (!applicationInitialization) {
     applicationInitialization = (async () => {
+      const startupProgress = phase => { try { onProgress?.(phase); } catch { /* Diagnostic observers cannot alter startup. */ } };
+      startupProgress('application-data');
       if (postgresqlActive) {
         await applicationPersistence.ready;
         await postgresqlStartupOperations.seedDefaults({defaultSettings,builtinPortalRoles});
@@ -3736,7 +3738,9 @@ function initializeApplicationPersistence() {
         await reconcileOpenAmuResponsibilities("migration");
       }
       if (postgresqlActive) {
+        startupProgress('receipt-workers');
         await postgresqlReceiptWorkers.warm();
+        startupProgress('report-worker');
         await salesReportBatchWorker.run({operation:'initialize'});
         startupIntegrity[0] = 'ok';
       }

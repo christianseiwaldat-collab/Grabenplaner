@@ -28,3 +28,17 @@ test('fixed startup phases survive projection without arbitrary error or SQL det
  fs.writeFileSync(path.join(app,'http-progress.jsonl'),[...phases,'SELECT PRIVATE','startup-PRIVATE'].map(phase=>JSON.stringify({phase,error:'SECRET',sql:'PRIVATE'})).join('\n'));
  assert.deepEqual(safeDiagnostics(root),{httpProgress:phases.map(phase=>({phase}))});
 });
+
+test('only whitelisted startup error details survive recovery scratch cleanup',t=>{
+ const {root,app}=fixture(t),at='2026-09-20T01:00:00.000Z';
+ fs.writeFileSync(path.join(app,'startup-failure.json'),JSON.stringify({startupPhase:'report-worker',at,
+  diagnostic:{phase:'sales-database',errorClass:'connection',originalCode:'ECONNREFUSED',sql:'SECRET',stack:'PRIVATE'},password:'SECRET'}));
+ assert.deepEqual(safeDiagnostics(root),{startupFailure:{startupPhase:'report-worker',at,
+  diagnostic:{phase:'sales-database',errorClass:'connection',originalCode:'ECONNREFUSED'}}});
+ for(const value of [
+  {startupPhase:'SECRET',diagnostic:{phase:'sales-database',errorClass:'connection'}},
+  {startupPhase:'report-worker',diagnostic:{phase:'SECRET',errorClass:'connection'}},
+  {startupPhase:'report-worker',diagnostic:{phase:'sales-database',errorClass:'SECRET'}},
+ ]){fs.writeFileSync(path.join(app,'startup-failure.json'),JSON.stringify(value));assert.deepEqual(safeDiagnostics(root),{});}
+ fs.writeFileSync(path.join(app,'startup-failure.json'),'X'.repeat(5000));assert.deepEqual(safeDiagnostics(root),{});
+});
