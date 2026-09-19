@@ -289,9 +289,12 @@ gp_url_reports_ready "$internal_ready_url" 8 || gp_die "Der laufende Grabenplane
 gp_url_reports_ready "$public_ready_url" 15 || gp_die "Der laufende Grabenplaner ist oeffentlich nicht vollstaendig betriebsbereit."
 
 free_bytes_for_deploy() {
-  local target="$1" blocks block_size
-  read -r blocks block_size < <(stat --file-system --format='%a %S' -- "$target")
-  [[ "$blocks" =~ ^[0-9]+$ && "$block_size" =~ ^[0-9]+$ ]] || gp_die "Freier Speicher fuer $target ist nicht pruefbar."
+  local target="$1" blocks block_size filesystem_stats
+  filesystem_stats="$(stat --file-system --format='%a %S' -- "$target")" \
+    || gp_die "Freier Speicher fuer $target ist nicht pruefbar."
+  IFS=' ' read -r blocks block_size <<< "$filesystem_stats"
+  [[ "$filesystem_stats" != *$'\n'* && "$blocks" =~ ^[0-9]+$ && "$block_size" =~ ^[0-9]+$ ]] \
+    || gp_die "Freier Speicher fuer $target ist nicht pruefbar."
   printf '%s\n' "$((blocks * block_size))"
 }
 backup_space_probe="$backup_dir"
