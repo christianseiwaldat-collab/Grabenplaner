@@ -1,0 +1,42 @@
+name: GP681 maintenance systemd regression
+
+on:
+  push:
+    branches:
+      - qa/gp681-maintenance-systemd
+    paths:
+      - .github/workflows/gp681-maintenance-systemd.yml
+      - server-tools/linux/offsite/lib/maintenance-schedule-broker.js
+      - test-support/maintenance-systemd/gp681-systemd-timer-regression.cjs
+
+permissions:
+  contents: read
+
+jobs:
+  real-systemd-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out isolated QA source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Verify exact Release B broker and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s  %s\n' \
+            'b5e6d5256e9afffa69cf9242b5d5ab9c6433476b2f8d5798c52fb5c9fb1cbc7f' \
+            'server-tools/linux/offsite/lib/maintenance-schedule-broker.js' | sha256sum --check --strict
+          node --version
+          systemctl --version
+          node --check server-tools/linux/offsite/lib/maintenance-schedule-broker.js
+          node --check test-support/maintenance-systemd/gp681-systemd-timer-regression.cjs
+      - name: Exercise real calendar and persistent timer semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env GP681_DISPOSABLE_SYSTEMD_QA=1 \
+            "$(command -v node)" \
+            test-support/maintenance-systemd/gp681-systemd-timer-regression.cjs \
+            "$GITHUB_WORKSPACE/server-tools/linux/offsite/lib/maintenance-schedule-broker.js"
