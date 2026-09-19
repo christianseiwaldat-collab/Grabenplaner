@@ -299,9 +299,12 @@ try {
 NODE
 
 free_bytes_for() {
-  local target="$1" blocks block_size
-  IFS=' ' read -r blocks block_size < <(stat --file-system --format='%a %S' -- "$target")
-  [[ "$blocks" =~ ^[0-9]+$ && "$block_size" =~ ^[0-9]+$ ]] || gp_die "Freier Speicher fuer $target ist nicht pruefbar."
+  local target="$1" blocks block_size filesystem_stats
+  filesystem_stats="$(stat --file-system --format='%a %S' -- "$target")" \
+    || gp_die "Freier Speicher fuer $target ist nicht pruefbar."
+  IFS=' ' read -r blocks block_size <<< "$filesystem_stats"
+  [[ "$filesystem_stats" != *$'\n'* && "$blocks" =~ ^[0-9]+$ && "$block_size" =~ ^[0-9]+$ ]] \
+    || gp_die "Freier Speicher fuer $target ist nicht pruefbar."
   printf '%s\n' "$((blocks * block_size))"
 }
 declare -A checked_devices=()
