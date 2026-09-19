@@ -6,6 +6,7 @@
 - Xoffi-Importe erklären blockierende Zuordnungen und erlauben, einzelne Zeilen ausdrücklich auszulassen. Die Filialleitung kann Leihen auch in der Verwaltung direkt zurücknehmen; Verkaufsberichte zeigen ihre Erstellungsdauer in Minuten und Sekunden.
 - Ein eigener Deploy-Vorabcheck prüft Wartungen, vorhandene Wiederherstellungsnachweise, Rückkehrdateien und Speicherplatz. Pausierte Timer behalten ihre vorherigen Zustände; ClamAV meldet Laufzeit und Prozessaktivität ohne pauschales Scanlimit.
 - Das PostgreSQL-Backup schließt flüchtige Scannerproben aus. Vor dem ersten Backup mit dem reparierten Werkzeug müssen Konfiguration, Sicherungsformat, weitere Bibliotheken und Abhängigkeiten mit dem installierten Stand übereinstimmen.
+- Isolierte PostgreSQL-Wiederherstellungen überwachen CPU-, I/O- und Phasenfortschritt statt nach 30 Minuten abzubrechen. Bei Stillstand werden sämtliche Testprozesse kontrolliert beendet; eine kleine Diagnose bleibt erhalten und die große Testkopie wird danach entfernt.
 - Das Offsite-Modul bleibt auf v10. Die bearbeitbare Wartungs- und Backupmatrix folgt separat nach bestätigter Recovery Assurance.
 
 ## v0.92.58 Beta – 18.09.2026

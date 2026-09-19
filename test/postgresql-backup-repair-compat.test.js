@@ -18,6 +18,7 @@ function fixture(t) {
     fs.mkdirSync(root);
     for (const relative of ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
       "lib/persistence/postgresql/operations/runtime.js",
+      "lib/persistence/postgresql/operations/paired-restore.js",
       "lib/persistence/postgresql/operations/paired-bundle.js",
       "lib/persistence/postgresql/operations/paired-retention.js",
       "lib/persistence/postgresql/operations/tools.js",
@@ -34,6 +35,8 @@ function fixture(t) {
     path.join(installed, "lib/persistence/postgresql/operations/runtime.js"));
   fs.copyFileSync(path.join(sourceRoot, "test-support/postgresql-backup-repair/operations-before.txt"),
     path.join(installed, "server-tools/linux/lib/postgresql-operations.js"));
+  fs.copyFileSync(path.join(sourceRoot, "test-support/postgresql-backup-repair/paired-restore-before.txt"),
+    path.join(installed, "lib/persistence/postgresql/operations/paired-restore.js"));
   const metadata = JSON.parse(fs.readFileSync(path.join(installed, "package.json"), "utf8"));
   metadata.version = "0.92.58-beta";
   fs.writeFileSync(path.join(installed, "package.json"), JSON.stringify(metadata));
@@ -47,7 +50,7 @@ test("reviewed scanner repair retains the old configuration and paired-bundle co
   });
 });
 
-for (const scenario of ["runtime", "format", "retention", "native-tools", "configuration-binding", "new-library", "dependency"]) {
+for (const scenario of ["runtime", "format", "retention", "native-tools", "restore-verification", "configuration-binding", "new-library", "dependency"]) {
   test(`the backup bridge rejects an unreviewed ${scenario} change`, (t) => {
     const f = fixture(t);
     const files = {
@@ -55,6 +58,7 @@ for (const scenario of ["runtime", "format", "retention", "native-tools", "confi
       format: "lib/persistence/postgresql/operations/paired-bundle.js",
       retention: "lib/persistence/postgresql/operations/paired-retention.js",
       "native-tools": "lib/persistence/postgresql/operations/tools.js",
+      "restore-verification": "lib/persistence/postgresql/operations/paired-restore.js",
       "configuration-binding": "lib/persistence/postgresql/runtime-binding.js",
       "new-library": "lib/unreviewed-backup.js",
     };
