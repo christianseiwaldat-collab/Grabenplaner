@@ -26,7 +26,16 @@ async function qualifyHttp({root,config,rehearsal='application-11',connectionPor
  progress('server-required');
  const sampling=setInterval(()=>progress('initialization-wait'),2000);sampling.unref();
  try{
+  // The native recovery supervisor observes this whole process (including
+  // worker CPU/I/O): startup has its idle lease, not an HTTP request deadline.
+  progress('initializing-application');
+  try{await subject.initializeApplicationPersistence();}
+  catch(error){progress('initialization-failed');throw error;}
+  finally{clearInterval(sampling);}
+  progress('application-initialized');
+  progress('starting-listener');
   server=managed?await subject.startServer():await new Promise((resolve,reject)=>{const s=subject.app.listen(55488,'127.0.0.1',()=>resolve(s));s.once('error',reject);});
+  progress('listener-ready');
   const endpoints=[];
   for(const route of ['/api/health/live','/api/health/ready']){
    progress(route);
