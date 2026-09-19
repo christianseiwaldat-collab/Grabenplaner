@@ -19,7 +19,7 @@ const approvedRepairs = Object.freeze({
   },
   "lib/persistence/postgresql/operations/paired-restore.js": {
     before: "00963fbaac4fdce62ca48552cb505237ec260b2b06100fcdcfb86944343633c7",
-    after: "3517ad192d3e68407c7da68db89cea5b3c7c6329d197552d66ccd442e693433f",
+    after: "5a3b2b89baccbd24e89493dbe9a1d334c00280ae154eaf4a4b3acc88d27d0fa2",
   },
 });
 const identicalFiles = Object.freeze([
