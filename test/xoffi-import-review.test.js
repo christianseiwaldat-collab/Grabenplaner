@@ -30,8 +30,28 @@ test('the import UI identifies missing, duplicate, and explicitly excluded mappi
  rows[1].input.value='__skip__';assert.equal(context.xoffiMappingIssue(),'');
  rows[0].input.value='__skip__';assert.match(context.xoffiMappingIssue(),/mindestens ein/);
 });
-test('the review renders a prominent blocker while an xoffi person has no active GP assignment',()=>{
+test('the accessible blocker follows current mappings, explicit exclusions and renewed mapping errors',()=>{
  const source=fs.readFileSync(require.resolve('../public/app.js'),'utf8');
- assert.match(source,/class="xoffi-import-blocker" role="alert"/);
- assert.match(source,/Der Rest der Datei kann anschließend trotzdem übernommen werden/);
+ assert.match(source,/class="xoffi-import-blocker" role="alert" aria-atomic="true" data-xoffi-mapping-blocker hidden/);
+ const rows=['1',''].map((value,index)=>({dataset:{sourceName:'Person '+index},input:{value,setAttribute(name,value){this[name]=value;}},querySelector(){return this.input;}}));
+ const message={textContent:''},blocker={hidden:true,querySelector:()=>message};
+ const elements={xoffiApplyButton:{disabled:true},xoffiImportConfirmed:{checked:true},xoffiImportStatus:{textContent:''},
+  xoffiImportPreview:{querySelectorAll:()=>rows,querySelector:()=>blocker}};
+ const context=vm.createContext({elements,state:{xoffiImportPreview:{}},xoffiWeekConfirmationRequired:()=>false});
+ vm.runInContext(['xoffiMappingIssue','updateXoffiApplyAvailability'].map(name=>extract('../public/app.js',name)).join('\n'),context);
+ context.updateXoffiApplyAvailability();
+ assert.equal(blocker.hidden,false);assert.equal(elements.xoffiApplyButton.disabled,true);
+ assert.match(message.textContent,/Person 1/);assert.match(message.textContent,/Diese Zeile nicht übernehmen/);
+ rows[1].input.value='2';context.updateXoffiApplyAvailability();
+ assert.equal(blocker.hidden,true);assert.equal(message.textContent,'');assert.equal(elements.xoffiApplyButton.disabled,false);
+ assert.equal(rows[1].input['aria-invalid'],'false');
+ rows[1].input.value='';context.updateXoffiApplyAvailability();
+ assert.equal(blocker.hidden,false);assert.match(message.textContent,/Person 1/);assert.equal(elements.xoffiApplyButton.disabled,true);
+ rows[1].input.value='__skip__';context.updateXoffiApplyAvailability();
+ assert.equal(blocker.hidden,true);assert.equal(message.textContent,'');assert.equal(elements.xoffiApplyButton.disabled,false);
+ rows[0].input.value='';context.updateXoffiApplyAvailability();
+ assert.equal(blocker.hidden,false);assert.match(message.textContent,/Person 0/);assert.doesNotMatch(message.textContent,/Person 1/);
+ assert.equal(rows[0].input['aria-invalid'],'true');assert.equal(elements.xoffiApplyButton.disabled,true);
+ rows[0].input.value='1';rows[1].input.value='1';context.updateXoffiApplyAvailability();
+ assert.equal(blocker.hidden,false);assert.match(message.textContent,/mehrfach/);assert.equal(elements.xoffiApplyButton.disabled,true);
 });

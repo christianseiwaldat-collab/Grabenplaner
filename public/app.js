@@ -22675,6 +22675,11 @@ function updateXoffiApplyAvailability() {
   const reviewed = Boolean(state.xoffiImportPreview && elements.xoffiImportConfirmed?.checked);
   const weekConfirmed = !xoffiWeekConfirmationRequired() || elements.xoffiScreenshotWeekConfirmed?.checked === true;
   const issue = xoffiMappingIssue();
+  const blocker = elements.xoffiImportPreview.querySelector("[data-xoffi-mapping-blocker]");
+  if (blocker) {
+    blocker.querySelector("[data-xoffi-mapping-message]").textContent = issue.replace(/^Import noch nicht möglich:\s*/, "");
+    blocker.hidden = !issue;
+  }
   elements.xoffiApplyButton.disabled = !(reviewed && weekConfirmed) || Boolean(issue);
   if (state.xoffiImportPreview) elements.xoffiImportStatus.textContent = issue
     || "Zuordnungen vollständig. Bitte Werte prüfen und die Übernahme bestätigen.";
@@ -22707,11 +22712,10 @@ function renderXoffiImportPreview() {
   const candidateOptions = (selected) => preview.candidates.map((employee) => `
     <option value="${escapeHtmlAttribute(employee.employeeNumber)}" ${employee.employeeNumber === selected ? "selected" : ""}>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</option>
   `).join("");
-  const initiallyUnmapped = preview.employees.filter((employee) => !employee.employeeNumber);
   elements.xoffiImportPreview.innerHTML = `
     <div class="xoffi-preview-heading"><strong>KW ${Number(preview.calendarWeek)} · ${escapeHtml(preview.context.locationName || preview.context.locationId)}</strong><span>${formatDate(preview.weekStart)}–${formatDate(preview.weekEnd)}</span></div>
     ${(preview.warnings || []).map((warning) => `<p class="calculation-note">${escapeHtml(warning)}</p>`).join("")}
-    ${initiallyUnmapped.length ? `<aside class="xoffi-import-blocker" role="alert"><strong>Import noch nicht möglich</strong><p>${initiallyUnmapped.length === 1 ? "Eine Person aus xoffi ist" : `${initiallyUnmapped.length} Personen aus xoffi sind`} keinem aktiven Teammitglied im ausgewählten GP-Bereich zugeordnet: ${initiallyUnmapped.map((employee) => escapeHtml(employee.sourceName)).join(", ")}.</p><p>Ordne jede betroffene Zeile zu oder wähle dort <strong>„Diese Zeile nicht übernehmen“</strong>. Der Rest der Datei kann anschließend trotzdem übernommen werden.</p></aside>` : ""}
+    <aside class="xoffi-import-blocker" role="alert" aria-atomic="true" data-xoffi-mapping-blocker hidden><strong>Import noch nicht möglich</strong><p data-xoffi-mapping-message></p></aside>
     <div class="xoffi-preview-rows">${preview.employees.map((employee, rowIndex) => `
       <article class="xoffi-preview-row" data-xoffi-row="${rowIndex}" data-source-name="${escapeHtmlAttribute(employee.sourceName)}" data-match-confidence="${Number(employee.matchConfidence || 0)}">
         <div class="xoffi-row-heading">
