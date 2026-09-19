@@ -561,6 +561,8 @@ for (const required of [
   "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
   "server-tools/linux/lib/runtime-v5-transition.js",
   "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
+  "server-tools/linux/preflight-grabenplaner-deploy.sh",
+  "server-tools/linux/lib/postgresql-backup-repair-compat.js",
   "server-tools/linux/update-grabenplaner-server.sh",
   "server-tools/linux/uninstall-grabenplaner-server.sh",
   "server-tools/linux/runtime-schema.json",

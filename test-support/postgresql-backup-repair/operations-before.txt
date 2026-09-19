@@ -20,7 +20,6 @@ async function main(){
    ||['core','sales'].some(domain=>states[domain]?.in_recovery!==false||connectionStateReasons(states[domain]?.connections).length))throw new Error('PG_OPERATIONS_CONNECTION_STATE');
   return {verified:true};
  }
- if(action==='recovery-files-preflight'&&!args.length)return R.recoveryFilesPreflight(config.sourceFiles);
  if(action==='backup-probe'&&args.length===2)return R.latestBackup(config,{short:args[0]==='short',maximumAgeHours:Number(args[1])});
  if(action==='verify'&&args.length===2)return require('../../../lib/persistence/postgresql/operations/paired-bundle').verifyPairBundle(args[0],args[1]);
  if(action==='prune'&&args.length===1)return prunePairedSnapshots(config.backupDirectory,configuredPairedRetention(config)||{keepDays:Number(args[0])});

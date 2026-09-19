@@ -17,6 +17,8 @@ source "$SCRIPT_DIR/lib/common.sh"
 usage() {
   cat <<'EOF'
 Verwendung:
+  sudo ./update-grabenplaner-server.sh --preflight-only [Optionen]
+
   sudo ./update-grabenplaner-server.sh --package /absolut/paket.zip \
     [--sha256 HEX | --sha256-file /absolut/paket.zip.sha256] [Optionen]
 
@@ -26,6 +28,10 @@ vor dem Austausch ein gekoppeltes DB-/Dokumentbackup und rollt bei einem
 fehlgeschlagenen Healthcheck automatisch zurueck. Aendert ein Paket den
 versionierten systemd-/Caddy-/Bootstrap-/Env-Runtimevertrag, wird es vor jeder
 Aenderung mit dem Hinweis auf eine explizite Servermigration abgelehnt.
+
+  --preflight-only               Eigenstaendiger, read-only Deploy-Vorabcheck.
+                                 Muss vor Paketbau und Upload erfolgreich sein.
+  --minimum-free-bytes ZAHL      Mindestfreiraum des Vorabchecks; Standard 5 GiB.
 
   --verification auto|full       Standard auto: kurzer Ablauf nur mit aktuellem,
                                  gebundenem vollstaendigem Recovery-Nachweis.
@@ -70,6 +76,9 @@ runtime_v5_transition=""
 verification_policy="auto"
 package_verifier_sha256=""
 xoffi_snapshots_migration=0
+postgresql_backup_repair=0
+preflight_only=0
+minimum_free_bytes=5368709120
 deploy_mode="full"
 deploy_decision='{"mode":"full","reason":"VERIFICATION_UNAVAILABLE"}'
 deploy_started_at="$(date --utc '+%Y-%m-%dT%H:%M:%S.%3NZ')"
@@ -109,12 +118,32 @@ while (($#)); do
     --verification) verification_policy="${2:?Wert fuer --verification fehlt}"; shift 2 ;;
     --package-verifier-sha256) package_verifier_sha256="${2:?Wert fuer --package-verifier-sha256 fehlt}"; shift 2 ;;
     --xoffi-snapshots-migration) xoffi_snapshots_migration=1; shift ;;
+    --preflight-only) preflight_only=1; shift ;;
+    --minimum-free-bytes) minimum_free_bytes="${2:?Wert fuer --minimum-free-bytes fehlt}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
 done
 
 gp_require_root
+if (( preflight_only == 1 )); then
+  [[ -z "$package_arg" && -z "$sha256_arg" && -z "$sha256_file_arg" && -z "$commit_marker_arg" \
+    && -z "$runtime_v5_transition" && -z "$package_verifier_sha256" && "$xoffi_snapshots_migration" -eq 0 \
+    && "$lock_already_held" -eq 0 && "$allow_downgrade" -eq 0 ]] \
+    || gp_die "Der Deploy-Vorabcheck akzeptiert keine Paket-, Migrations- oder Freigabeoptionen."
+  preflight_script="$SCRIPT_DIR/preflight-grabenplaner-deploy.sh"
+  [[ -f "$preflight_script" && ! -L "$preflight_script" ]] || gp_die "Der Deploy-Vorabcheck fehlt."
+  preflight_args=(--env-file "$env_file" --service "$service" --caddy-service "$caddy_service" --minimum-free-bytes "$minimum_free_bytes")
+  [[ -z "$app_arg" ]] || preflight_args+=(--app-dir "$app_arg")
+  [[ -z "$data_arg" ]] || preflight_args+=(--data-dir "$data_arg")
+  [[ -z "$database_arg" ]] || preflight_args+=(--database "$database_arg")
+  [[ -z "$backup_arg" ]] || preflight_args+=(--backup-dir "$backup_arg")
+  [[ -z "$public_url_arg" ]] || preflight_args+=(--public-url "$public_url_arg")
+  [[ -z "$node_arg" ]] || preflight_args+=(--node "$node_arg")
+  [[ -z "$pnpm_arg" ]] || preflight_args+=(--pnpm "$pnpm_arg")
+  [[ -z "$build_cache_arg" ]] || preflight_args+=(--build-cache "$build_cache_arg")
+  exec bash "$preflight_script" "${preflight_args[@]}"
+fi
 for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
 [[ "$(uname -m)" == "x86_64" ]] || gp_die "Das Serverpaket wird derzeit nur auf Linux x86_64 unterstuetzt."
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
@@ -122,6 +151,8 @@ for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemct
 [[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 1500 )) || gp_die "--health-timeout muss zwischen 30 und 1500 liegen."
 [[ "$maximum_expanded_bytes" =~ ^[0-9]+$ ]] && (( maximum_expanded_bytes >= 1048576 && maximum_expanded_bytes <= 4294967296 )) \
   || gp_die "--maximum-expanded-bytes liegt ausserhalb des erlaubten Bereichs."
+[[ "$minimum_free_bytes" =~ ^[0-9]+$ ]] && (( minimum_free_bytes >= 1073741824 && minimum_free_bytes <= 1099511627776 )) \
+  || gp_die "--minimum-free-bytes muss zwischen 1 GiB und 1 TiB liegen."
 [[ -z "$sha256_arg" || -z "$sha256_file_arg" ]] || gp_die "--sha256 und --sha256-file duerfen nicht gleichzeitig verwendet werden."
 [[ -z "$commit_marker_arg" || "$lock_already_held" -eq 1 ]] \
   || gp_die "--commit-marker ist ausschliesslich innerhalb einer uebernommenen Runtime-Migrationssperre erlaubt."
@@ -257,6 +288,29 @@ gp_url_reports_ready "$public_live_url" 15 || gp_die "Der laufende Grabenplaner 
 gp_url_reports_ready "$internal_ready_url" 8 || gp_die "Der laufende Grabenplaner ist intern nicht vollstaendig betriebsbereit."
 gp_url_reports_ready "$public_ready_url" 15 || gp_die "Der laufende Grabenplaner ist oeffentlich nicht vollstaendig betriebsbereit."
 
+free_bytes_for_deploy() {
+  local target="$1" blocks block_size
+  read -r blocks block_size < <(stat --file-system --format='%a %S' -- "$target")
+  [[ "$blocks" =~ ^[0-9]+$ && "$block_size" =~ ^[0-9]+$ ]] || gp_die "Freier Speicher fuer $target ist nicht pruefbar."
+  printf '%s\n' "$((blocks * block_size))"
+}
+backup_space_probe="$backup_dir"
+while [[ ! -d "$backup_space_probe" ]]; do
+  backup_space_parent="$(dirname -- "$backup_space_probe")"
+  [[ "$backup_space_parent" != "$backup_space_probe" ]] || gp_die "Der Backupordner besitzt keinen vorhandenen Elternordner."
+  backup_space_probe="$backup_space_parent"
+done
+declare -A checked_deploy_devices=()
+for storage_path in "$(dirname -- "$app_dir")" "$data_dir" "$backup_space_probe" "$build_cache"; do
+  storage_device="$(stat --file-system --format='%i' -- "$storage_path")"
+  [[ -n "$storage_device" ]] || gp_die "Das Dateisystem fuer $storage_path ist nicht identifizierbar."
+  [[ -z "${checked_deploy_devices[$storage_device]+x}" ]] || continue
+  checked_deploy_devices[$storage_device]=1
+  available_bytes="$(free_bytes_for_deploy "$storage_path")"
+  (( available_bytes >= minimum_free_bytes )) \
+    || gp_die "Das Dateisystem fuer $storage_path hat weniger als $minimum_free_bytes Byte frei."
+done
+
 app_parent="$(dirname -- "$app_dir")"
 gp_path_is_same_or_child "$app_dir" "$app_parent" || gp_die "Der App-Pfad ist ungueltig."
 maintenance_root="$(mktemp --directory --tmpdir="$app_parent" .grabenplaner-update.XXXXXXXX)"
@@ -296,6 +350,9 @@ services_touched=0
 old_app_moved=0
 new_service_started=0
 update_committed=0
+maintenance_lock_held=0
+deploy_timer_state_captured=0
+clamav_scan_pid=""
 database_lock_pid=""
 database_lock_runner_pid=""
 database_lock_helper=""
@@ -308,6 +365,40 @@ rollback_public_ok=1
 rollback_app_ok=1
 rollback_stop_ok=1
 schema_migration_result="$maintenance_root/schema-migration.json"
+declare -a deploy_timer_units=(
+  apt-daily.timer
+  apt-daily-upgrade.timer
+  grabenplaner-monitor.timer
+  grabenplaner-offsite-assurance.timer
+  grabenplaner-offsite-upload.timer
+  grabenplaner-offsite-check.timer
+  grabenplaner-offsite-restore-test.timer
+  grabenplaner-host-security-audit.timer
+)
+declare -a deploy_maintenance_units=(
+  apt-daily.service
+  apt-daily-upgrade.service
+  grabenplaner-monitor.service
+  grabenplaner-offsite-assurance@scheduled-nightly.service
+  grabenplaner-offsite-assurance@manual-admin-ui.service
+  grabenplaner-offsite-assurance@app-updated.service
+  grabenplaner-offsite-assurance@offsite-config-changed.service
+  grabenplaner-offsite-assurance@offsite-module-changed.service
+  grabenplaner-offsite-application-smoke.service
+  grabenplaner-offsite-prepare.service
+  grabenplaner-offsite-upload.service
+  grabenplaner-offsite-check.service
+  grabenplaner-offsite-restore-test.service
+  grabenplaner-host-security-audit.service
+  grabenplaner-host-security-rollback.service
+  grabenplaner-host-reboot.service
+  grabenplaner-postgresql-maintenance-recover.service
+)
+declare -a deploy_blocking_timer_units=(
+  grabenplaner-host-security-rollback.timer
+)
+declare -A deploy_timer_was_active=()
+declare -A deploy_timer_was_enabled=()
 
 write_receipt() {
   local status="$1"
@@ -401,6 +492,111 @@ release_database_lock() {
     wait "$database_lock_runner_pid" 2>/dev/null || true
     database_lock_runner_pid=""
   fi
+}
+
+restore_deploy_timers() {
+  (( deploy_timer_state_captured == 1 )) || return 0
+  local timer restore_failed=0
+  for timer in "${deploy_timer_units[@]}"; do
+    if [[ "${deploy_timer_was_active[$timer]:-0}" == 1 ]]; then
+      systemctl start "$timer" >/dev/null 2>&1 || restore_failed=1
+    fi
+  done
+  deploy_timer_state_captured=0
+  if (( restore_failed == 1 )); then
+    gp_warn "Mindestens ein vor dem Deploy aktiver Wartungstimer konnte nicht automatisch fortgesetzt werden."
+    return 1
+  fi
+}
+
+pause_deploy_timers() {
+  local timer unit next_elapse active_state schedule_state
+  for timer in "${deploy_blocking_timer_units[@]}"; do
+    gp_systemd_unit_exists "$timer" || continue
+    if systemctl is-active --quiet "$timer"; then
+      next_elapse="$(systemctl show --property=NextElapseUSecRealtime --value "$timer" 2>/dev/null || true)"
+      gp_die "Der Sicherheits-Rollback $timer ist aktiv${next_elapse:+ und fuer $next_elapse geplant}. Vor seinem Abschluss ist kein Deploy erlaubt."
+    fi
+  done
+  for timer in "${deploy_timer_units[@]}"; do
+    deploy_timer_was_active[$timer]=0
+    deploy_timer_was_enabled[$timer]=0
+    if gp_systemd_unit_exists "$timer"; then
+      if systemctl is-active --quiet "$timer"; then deploy_timer_was_active[$timer]=1; fi
+      if systemctl is-enabled --quiet "$timer"; then deploy_timer_was_enabled[$timer]=1; fi
+      next_elapse="$(systemctl show --property=NextElapseUSecRealtime --value "$timer" 2>/dev/null || true)"
+      schedule_state="inaktiv"
+      if [[ "${deploy_timer_was_active[$timer]}" == 1 ]]; then schedule_state="aktiv"; fi
+      gp_info "Deploy-Preflight: $timer ist $schedule_state${next_elapse:+; naechster Lauf $next_elapse}."
+    fi
+  done
+  deploy_timer_state_captured=1
+  for timer in "${deploy_timer_units[@]}"; do
+    if [[ "${deploy_timer_was_active[$timer]:-0}" == 1 ]]; then
+      systemctl stop "$timer" >/dev/null \
+        || gp_die "Der Wartungstimer $timer konnte vor dem Deploy nicht sicher pausiert werden."
+      systemctl is-active --quiet "$timer" \
+        && gp_die "Der Wartungstimer $timer ist trotz Pausenanforderung noch aktiv."
+    fi
+  done
+  for unit in "${deploy_maintenance_units[@]}"; do
+    gp_systemd_unit_exists "$unit" || continue
+    active_state="$(systemctl show --property=ActiveState --value "$unit" 2>/dev/null || true)"
+    case "$active_state" in
+      inactive|failed) ;;
+      *) gp_die "Die Wartung $unit ist bereits aktiv oder im Zustandswechsel ($active_state). Der Deploy wird vor Paketinstallation und Virenscan beendet." ;;
+    esac
+  done
+}
+
+stop_clamav_scan() {
+  [[ -n "$clamav_scan_pid" ]] || return 0
+  if kill -0 "$clamav_scan_pid" 2>/dev/null; then
+    kill -TERM "$clamav_scan_pid" 2>/dev/null || true
+  fi
+  wait "$clamav_scan_pid" 2>/dev/null || true
+  clamav_scan_pid=""
+}
+
+clamav_activity_snapshot() {
+  local stat_file="/proc/$clamav_scan_pid/stat" io_file="/proc/$clamav_scan_pid/io" ticks="0" read_chars="0"
+  [[ -r "$stat_file" ]] && ticks="$(awk '{ print $14 + $15 }' "$stat_file" 2>/dev/null || printf '0')"
+  [[ -r "$io_file" ]] && read_chars="$(awk '$1 == "rchar:" { print $2; found=1 } END { if (!found) print 0 }' "$io_file" 2>/dev/null || printf '0')"
+  [[ "$ticks" =~ ^[0-9]+$ ]] || ticks=0
+  [[ "$read_chars" =~ ^[0-9]+$ ]] || read_chars=0
+  printf '%s %s\n' "$ticks" "$read_chars"
+}
+
+scan_candidate_with_clamav() {
+  local started_at=$SECONDS next_report=$((SECONDS + 60)) scan_status=0 process_state=""
+  local previous_ticks=0 previous_read_chars=0 current_ticks=0 current_read_chars=0 tick_delta=0 read_delta=0 stagnant_reports=0
+  clamscan --recursive --infected --no-summary -- "$extract_root" >/dev/null &
+  clamav_scan_pid=$!
+  IFS=' ' read -r previous_ticks previous_read_chars < <(clamav_activity_snapshot)
+  while kill -0 "$clamav_scan_pid" 2>/dev/null; do
+    process_state="$(awk '{ print $3 }' "/proc/$clamav_scan_pid/stat" 2>/dev/null || true)"
+    [[ "$process_state" != Z ]] || break
+    if (( SECONDS >= next_report )); then
+      IFS=' ' read -r current_ticks current_read_chars < <(clamav_activity_snapshot)
+      tick_delta=$((current_ticks >= previous_ticks ? current_ticks - previous_ticks : 0))
+      read_delta=$((current_read_chars >= previous_read_chars ? current_read_chars - previous_read_chars : 0))
+      if (( tick_delta > 0 || read_delta > 0 )); then
+        stagnant_reports=0
+        gp_info "ClamAV arbeitet weiter ($((SECONDS - started_at))s, PID $clamav_scan_pid, CPU-Ticks +$tick_delta, gelesene Bytes +$read_delta)."
+      else
+        ((stagnant_reports += 1))
+        gp_warn "ClamAV ist aktiv, zeigte im letzten Intervall aber keine messbare CPU- oder Leseaktivitaet ($((SECONDS - started_at))s, PID $clamav_scan_pid, Intervalle $stagnant_reports). Die Beobachtung laeuft ohne starres Zeitlimit weiter."
+      fi
+      previous_ticks=$current_ticks
+      previous_read_chars=$current_read_chars
+      next_report=$((SECONDS + 60))
+    fi
+    sleep 2
+  done
+  if wait "$clamav_scan_pid"; then scan_status=0; else scan_status=$?; fi
+  clamav_scan_pid=""
+  (( scan_status == 0 )) \
+    || gp_die "ClamAV hat das Updatepaket abgelehnt oder konnte es nicht vollstaendig pruefen (Exit $scan_status)."
 }
 
 start_database_lock() {
@@ -503,6 +699,7 @@ rollback_update() {
 cleanup() {
   local exit_code=$?
   trap - EXIT
+  stop_clamav_scan
   release_database_lock
   finish_deploy_phase
   if (( update_committed == 0 )) && commit_marker_is_valid; then update_committed=1; fi
@@ -512,6 +709,7 @@ cleanup() {
   if [[ -d "$maintenance_root" && ! -L "$maintenance_root" ]] && gp_path_is_same_or_child "$maintenance_root" "$app_parent"; then
     if (( update_committed == 1 || (old_app_moved == 0 && rollback_app_ok == 1) )); then rm -rf -- "$maintenance_root"; fi
   fi
+  restore_deploy_timers || exit_code=1
   exit "$exit_code"
 }
 trap cleanup EXIT
@@ -522,11 +720,12 @@ create_exact_local_backup() {
   local backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
   local backup_app_dir="$app_dir"
   local -a retention_args=()
-  if [[ -n "$runtime_v5_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 )); then
+  if [[ -n "$runtime_v5_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 || ${postgresql_backup_repair:-0} == 1 )); then
     # This complete candidate tree has already passed manifest, dependency,
     # ClamAV and permission checks. The Xoffi release also carries the bounded
-    # backup query budget needed by large existing pairs. Never mix its helpers
-    # with old libraries.
+    # backup query budget needed by large existing pairs. The probe repair is
+    # separately bound to unchanged configuration, snapshot and bundle contracts.
+    # Never mix its helpers with old libraries.
     backup_app_dir="$extract_root"
     backup_script="$backup_app_dir/server-tools/linux/backup-grabenplaner.sh"
     if [[ -n "$runtime_v5_transition" ]]; then retention_args=(--preserve-existing-backups); fi
@@ -549,6 +748,22 @@ create_exact_local_backup() {
     [[ -f "$backup_database" && -d "$backup_amu" ]] || gp_die "Das Sicherheitsbackup vor dem Update ist unvollstaendig."
   fi
 }
+
+begin_deploy_phase deploy-preflight
+if (( lock_already_held == 1 )); then
+  inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
+  expected_lock_target="$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")"
+  [[ "$inherited_lock_target" == "$expected_lock_target" ]] \
+    || gp_die "Die uebernommene Wartungssperre ist nicht eindeutig gebunden."
+  flock --nonblock 9 || gp_die "Die uebernommene Wartungssperre ist nicht aktiv."
+else
+  gp_acquire_maintenance_lock
+fi
+maintenance_lock_held=1
+pause_deploy_timers
+gp_url_reports_ready "$internal_ready_url" 8 \
+  && gp_url_reports_ready "$public_ready_url" 15 \
+  || gp_die "Der Grabenplaner ist nach Reservierung des Wartungskorridors nicht vollstaendig betriebsbereit."
 
 install -m 0600 -o root -g root -- "$package" "$staged_package"
 actual_package_sha256="$(gp_sha256 "$staged_package")"
@@ -605,6 +820,18 @@ actual_expanded_bytes="$(du --bytes --summarize "$extract_root" | awk '{print $1
 if [[ "$database_provider" == postgresql ]]; then
   "$node" "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$extract_root" >/dev/null \
     || gp_die 'Der PostgreSQL-Dienstvertrag stimmt nicht mit dem Paket ueberein; eine explizite Modulwartung ist erforderlich.'
+  # Only the installed v0.92.58 repair needs this bridge. Later releases keep
+  # using their already repaired installed engine even when candidate code changes.
+  if [[ "$old_version" == 0.92.58-beta && -z "$runtime_v5_transition" && "$xoffi_snapshots_migration" == 0 ]]; then
+    "$node" "$extract_root/server-tools/linux/lib/postgresql-backup-repair-compat.js" "$app_dir" "$extract_root" >/dev/null \
+      || gp_die 'Die Reparatur des PostgreSQL-Backupwerkzeugs ist nicht rueckwaertskompatibel verifiziert.'
+    postgresql_backup_repair=1
+  fi
+  # Candidate dependencies are not installed yet. The read-only path check
+  # resolves its PostgreSQL module from the verified installed application.
+  NODE_PATH="$app_dir/node_modules" "$node" "$extract_root/server-tools/linux/lib/postgresql-operations.js" recovery-files-preflight \
+    /etc/grabenplaner/postgresql-operations.json >/dev/null \
+    || gp_die 'Die PostgreSQL-Rueckkehrdateien verletzen den Pfad- oder Dateitypvertrag. Der Deploy wurde vor Abhaengigkeiten, Virenscan und Backup beendet.'
 fi
 "$node" "$installed_runtime_verifier" --runtime-contract "$app_dir" >"$installed_runtime_result_file" \
   || gp_die "Der installierte Linux-Runtimevertrag ist ungueltig; das Update erfordert eine explizite Serverwartung."
@@ -802,27 +1029,21 @@ NODE
 )
 gp_info "Pruefe den vollstaendigen Stagingordner mit ClamAV."
 begin_deploy_phase package-scan
-clamscan --recursive --infected --no-summary -- "$extract_root" >/dev/null \
-  || gp_die "ClamAV hat das Updatepaket abgelehnt oder konnte es nicht vollstaendig pruefen."
+scan_candidate_with_clamav
 gp_apply_app_permissions "$extract_root" "$service_group"
 
 begin_deploy_phase maintenance-lock
-if (( lock_already_held == 1 )); then
-  inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
-  expected_lock_target="$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")"
-  [[ "$inherited_lock_target" == "$expected_lock_target" ]] \
-    || gp_die "Die uebernommene Wartungssperre ist nicht eindeutig gebunden."
-  flock --nonblock 9 || gp_die "Die uebernommene Wartungssperre ist nicht aktiv."
-else
-  gp_acquire_maintenance_lock
-fi
+(( maintenance_lock_held == 1 )) && flock --nonblock 9 \
+  || gp_die "Der im Preflight reservierte Wartungskorridor ist nicht mehr aktiv."
 begin_deploy_phase verification-policy
 if [[ "$verification_policy" == full || -n "$runtime_v5_transition" ]]; then
   deploy_decision='{"mode":"full","reason":"EXPLICIT_FULL_VERIFICATION"}'
 elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
   nightly_timer_active=0
-  if systemctl is-enabled --quiet grabenplaner-offsite-assurance.timer \
-    && systemctl is-active --quiet grabenplaner-offsite-assurance.timer; then nightly_timer_active=1; fi
+  # Our own maintenance pause must not invalidate a previously active schedule.
+  # Preserve both states: an enabled but already inactive timer is not ready.
+  if [[ "${deploy_timer_was_enabled[grabenplaner-offsite-assurance.timer]:-0}" == 1 \
+    && "${deploy_timer_was_active[grabenplaner-offsite-assurance.timer]:-0}" == 1 ]]; then nightly_timer_active=1; fi
   deploy_decision="$("$node" "$SCRIPT_DIR/lib/deploy-policy.js" decide \
     "$app_dir" "$extract_root" "$database" "$env_file" "$nightly_timer_active")" \
     || gp_die "Die Deploy-Pruefstrategie konnte nicht bestimmt werden."

@@ -37025,6 +37025,7 @@ function updateScheduleNoteCounter() {
 
 function openScheduleNoteModal() {
   if (guardScheduleEditing()) return;
+  initScheduleNoteEditor();
   const note = state.data.scheduleNote || {};
   elements.scheduleNoteForm.reset();
   setScheduleNoteHtml(note.note_html || escapeHtml(note.note_text || "").replace(/\n/g, "<br>"));
@@ -39965,7 +39966,6 @@ document.querySelector("#resetWeekButton").addEventListener("click", openResetWe
 elements.scheduleNoteButton.addEventListener("click", openScheduleNoteModal);
 elements.scheduleNoteForm.addEventListener("submit", saveScheduleNote);
 elements.deleteScheduleNoteButton.addEventListener("click", deleteScheduleNote);
-initScheduleNoteEditor();
 elements.departmentPdfSelect?.addEventListener("change", () => {
   const selectedDepartment = elements.departmentPdfSelect.value;
   elements.departmentPdfButton.href = `/api/schedule.pdf?week=${state.weekStart}&location=${encodeURIComponent(state.locationId)}&departmentId=${encodeURIComponent(selectedDepartment)}`;

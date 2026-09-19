@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.61 Beta – vorbereitet, noch nicht ausgerollt
+
+- Dienstplanraster und Stundenkarten stehen vor aufwendigen Hintergrundprüfungen bereit. Der Programmstart lädt kleinere fachliche Datenmengen.
+- Xoffi-Importe erklären blockierende Zuordnungen und erlauben, einzelne Zeilen ausdrücklich auszulassen. Die Filialleitung kann Leihen auch in der Verwaltung direkt zurücknehmen; Verkaufsberichte zeigen ihre Erstellungsdauer in Minuten und Sekunden.
+- Ein eigener Deploy-Vorabcheck prüft Wartungen, vorhandene Wiederherstellungsnachweise, Rückkehrdateien und Speicherplatz. Pausierte Timer behalten ihre vorherigen Zustände; ClamAV meldet Laufzeit und Prozessaktivität ohne pauschales Scanlimit.
+- Das PostgreSQL-Backup schließt flüchtige Scannerproben aus. Vor dem ersten Backup mit dem reparierten Werkzeug müssen Konfiguration, Sicherungsformat, weitere Bibliotheken und Abhängigkeiten mit dem installierten Stand übereinstimmen.
+- Das Offsite-Modul bleibt auf v10. Die bearbeitbare Wartungs- und Backupmatrix folgt separat nach bestätigter Recovery Assurance.
+
 ## v0.92.58 Beta – 18.09.2026
 
 - Korrekturen der CI-Fehler: private Archivexporte, PDF-Schrifterkennung, isolierte Recovery-Testkopien sowie aktualisierte Rechte- und Architekturtests.

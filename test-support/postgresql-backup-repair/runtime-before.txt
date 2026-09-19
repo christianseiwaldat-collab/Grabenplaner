@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process'),{Pool,Client}=require('pg');
 const {createPairedSnapshot}=require('./paired-backup');
-const {safeRoot,safePath}=require('./paired-bundle');
+const {safeRoot}=require('./paired-bundle');
 const {verifyCoreSchema}=require('../boundary/migrate');
 const {schemaFingerprint}=require('../core/fingerprint');
 const {SCHEMAS,SEARCH_PATH}=require('../sales/layout');
@@ -9,34 +9,6 @@ const {readPairedDatabaseStatus}=require('./paired-monitor');
 const FORMAT='grabenplaner-postgresql-operations-v1';
 const DEVELOPMENT='/home/gpadmin/grabenplaner-pg-migration-20260912';
 const BIN='/usr/lib/postgresql/18/bin';
-function copyRecoveryFiles(sourceRoot,directory){
- const volatileRoot=path.join(sourceRoot,'private','amu','tmp');
- const include=source=>source!==volatileRoot&&!source.startsWith(volatileRoot+path.sep);
- for(const name of ['private','branding-kits']){
-  const source=path.join(sourceRoot,name);if(fs.existsSync(source))fs.cpSync(source,path.join(directory,name),{recursive:true,errorOnExist:true,force:false,dereference:false,filter:include});
- }
-}
-function recoveryFilesPreflight(sourceRoot){
- const volatileRoot=path.join(sourceRoot,'private','amu','tmp');
- let files=0,bytes=0;
- function inspect(target){
-  if(target===volatileRoot||target.startsWith(volatileRoot+path.sep))return;
-  const relative=path.relative(sourceRoot,target).split(path.sep).join('/');
-  safePath(sourceRoot,relative);
-  const stat=fs.lstatSync(target);
-  if(stat.isSymbolicLink())throw new Error('PG_PAIR_COMPONENT_TYPE');
-  if(stat.isDirectory()){
-   for(const name of fs.readdirSync(target).sort())inspect(path.join(target,name));
-   return;
-  }
-  if(!stat.isFile()||stat.nlink!==1)throw new Error('PG_PAIR_COMPONENT_TYPE');
-  files+=1;bytes+=stat.size;
- }
- for(const name of ['private','branding-kits']){
-  const source=path.join(sourceRoot,name);if(fs.existsSync(source))inspect(source);
- }
- return {verified:true,files,bytes,excluded:['private/amu/tmp']};
-}
 function privateFile(file,{rootOnly=false}={}){
  if(!path.isAbsolute(file)||fs.realpathSync(file)!==file)throw new Error('PG_OPERATIONS_PATH');
  const info=fs.lstatSync(file);
@@ -120,7 +92,6 @@ async function inspectPair(config){
  }finally{await admin.end();}
 }
 async function createBackup(config){
- recoveryFilesPreflight(config.sourceFiles);
  const identity=await inspectPair(config),runId=require('node:crypto').randomUUID();
  const domains=config.domains.map(d=>({...d,ownerRole:'gp_'+d.domain+'_owner',pool:new Pool(url(config,d))}));
  try{const result=await createPairedSnapshot({backupDirectory:config.backupDirectory,domains,
@@ -137,8 +108,9 @@ async function createBackup(config){
    await nativeTool(config,'pg_restore',{account,database,argv:['--list',targetFile]},{outputFile:config.workDirectory+'/'+runId+'-'+domain+'-catalog',errorFile:config.workDirectory+'/'+runId+'-'+domain+'-catalog.error'});
   },
   async captureRecoveryFiles({directory}){
-   recoveryFilesPreflight(config.sourceFiles);
-   copyRecoveryFiles(config.sourceFiles,directory);
+   for(const name of ['private','branding-kits']){
+    const source=path.join(config.sourceFiles,name);if(fs.existsSync(source))fs.cpSync(source,path.join(directory,name),{recursive:true,errorOnExist:true,force:false,dereference:false});
+   }
    fs.copyFileSync(config.environmentFile,directory+'/configuration.env',fs.constants.COPYFILE_EXCL);fs.chmodSync(directory+'/configuration.env',0o600);
    fs.writeFileSync(directory+'/postgresql-operations.json',JSON.stringify(config)+'\n',{flag:'wx',mode:0o600});
    if(config.mode==='productive')for(const [name,source] of [['postgresql-application.json','/etc/grabenplaner/postgresql-application.json'],['postgresql-pair.json','/var/lib/grabenplaner/data/postgresql-pair.json']]){
@@ -168,4 +140,4 @@ async function latestBackup(config,{short=false,maximumAgeHours=36}={}){
  if(!Number.isFinite(age)||age< -300000||age>maximumAgeHours*3600000)throw new Error('PG_OPERATIONS_BACKUP_STALE');
  return {verified:true,verificationScope:proof.verificationScope,manifestSha256:proof.manifestSha256,createdAt:proof.manifest.createdAt,ageSeconds:Math.max(0,Math.floor(age/1000)),files:proof.files};
 }
-module.exports={FORMAT,loadConfiguration,inspectPair,createBackup,monitor,nativeTool,url,latestBackup,copyRecoveryFiles,recoveryFilesPreflight};
+module.exports={FORMAT,loadConfiguration,inspectPair,createBackup,monitor,nativeTool,url,latestBackup};

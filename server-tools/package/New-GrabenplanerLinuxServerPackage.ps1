@@ -353,6 +353,8 @@ try {
         'server-tools\linux\migrate-grabenplaner-runtime-v4.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v5.sh',
         'server-tools\linux\finalize-grabenplaner-runtime-v3.sh',
+        'server-tools\linux\preflight-grabenplaner-deploy.sh',
+        'server-tools\linux\lib\postgresql-backup-repair-compat.js',
         'server-tools\linux\lib\extract-updater-contract.js',
         'lib\controlled-host-reboot.js',
         'lib\host-reboot-control-client.js',
