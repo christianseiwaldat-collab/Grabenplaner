@@ -336,8 +336,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // reads only the configured database path, not business records.
   // The named deploy preflight only reads the installed provider and paths.
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 19);
-  // Session revocation fixtures share one classified SQLite test adapter.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 16);
+  // Session fixtures and the deferred PostgreSQL startup regression are
+  // explicitly classified test adapters; no new production access is allowed.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 17);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);

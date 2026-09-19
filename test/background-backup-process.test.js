@@ -224,6 +224,7 @@ test("an archive job failure blocks its scope until deliberate restart and drain
 
 test("one absolute deadline includes queue time and prevents the second child from starting late", async t => {
   const f = fixture(t), children = [];
+  t.mock.timers.enable({ apis: ["Date", "setTimeout", "setInterval"], now: Date.parse("2026-09-18T00:00:00Z") });
   const scheduler = __test.createScheduler({ spawn: () => { const child = fakeChild(); children.push(child); return child; },
     terminateTree: async child => { child.finish(1); } });
   for (const deadlineMs of ["wrong", 0, -1, 1.5]) {
@@ -232,8 +233,13 @@ test("one absolute deadline includes queue time and prevents the second child fr
   const deadlineMs = Date.now() + 50;
   const first = scheduler.createBackgroundBackup({ ...f.job, deadlineMs });
   const second = scheduler.createBackgroundBackup({ ...f.job, deadlineMs });
-  await Promise.all([assert.rejects(first, { code: "BACKGROUND_BACKUP_TIMEOUT" }),
+  const results = Promise.all([assert.rejects(first, { code: "BACKGROUND_BACKUP_TIMEOUT" }),
     assert.rejects(second, { code: "BACKGROUND_BACKUP_TIMEOUT" })]);
+  t.mock.timers.tick(49);
+  assert.equal(scheduler.backgroundBackupStatus().running, true);
+  assert.equal(scheduler.backgroundBackupStatus().queued, 1);
+  t.mock.timers.tick(1);
+  await results;
   await scheduler.drainBackgroundBackups();
   assert.equal(children.length, 1);
   assert.equal(scheduler.backgroundBackupStatus().running, false);
@@ -256,6 +262,7 @@ test("document tree inventory never runs in the parent HTTP process", async t =>
 
 test("shutdown drain only shortens deadlines for an already active child and queued jobs", async t => {
   const f = fixture(t), children = [];
+  t.mock.timers.enable({ apis: ["Date", "setTimeout", "setInterval"], now: Date.parse("2026-09-18T00:00:00Z") });
   const scheduler = __test.createScheduler({ spawn: () => { const child = fakeChild(); children.push(child); return child; },
     terminateTree: async child => { child.finish(1); } });
   const first = scheduler.createBackgroundBackup({ ...f.job, deadlineMs: Date.now() + 5000 });
@@ -265,6 +272,10 @@ test("shutdown drain only shortens deadlines for an already active child and que
   await assert.rejects(scheduler.drainBackgroundBackups({ deadlineMs: "invalid" }), { code: "BACKGROUND_BACKUP_DEADLINE_INVALID" });
   const shortDrain = scheduler.drainBackgroundBackups({ deadlineMs: Date.now() + 50 });
   const cannotExtend = scheduler.drainBackgroundBackups({ deadlineMs: Date.now() + 10000 });
+  t.mock.timers.tick(49);
+  assert.equal(scheduler.backgroundBackupStatus().running, true);
+  assert.equal(scheduler.backgroundBackupStatus().queued, 1);
+  t.mock.timers.tick(1);
   await Promise.all([results, shortDrain, cannotExtend]);
   assert.equal(children.length, 1);
   assert.equal(scheduler.backgroundBackupStatus().running, false);

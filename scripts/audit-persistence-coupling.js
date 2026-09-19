@@ -122,6 +122,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test-support/postgresql-migration/application-export.js',
   'lib/persistence/postgresql/operations/application-export.js',
   'test/postgresql-migration-full-application.test.js',
+  'test/postgresql-application-startup.test.js',
   'scripts/postgresql/application-fault-child.js',
   'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
   'lib/persistence/postgresql/application.js',
