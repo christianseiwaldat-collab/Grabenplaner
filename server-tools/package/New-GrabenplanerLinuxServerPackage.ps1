@@ -326,6 +326,7 @@ try {
         'server-tools\linux\offsite\lib\offsite-contract.js',
         'server-tools\linux\offsite\lib\assurance-history.js',
         'server-tools\linux\offsite\lib\assurance-control-broker.js',
+        'server-tools\linux\offsite\lib\maintenance-schedule-broker.js',
         'server-tools\linux\offsite\lib\offsite-rclone-policy.js',
         'server-tools\linux\offsite\lib\offsite-restore-verify.js',
         'server-tools\linux\offsite\lib\offsite-retention-verify.js',

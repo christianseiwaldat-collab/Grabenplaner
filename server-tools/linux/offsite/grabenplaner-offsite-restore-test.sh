@@ -159,7 +159,7 @@ restored_stage="$restore_root${OFFSITE_STAGE_CURRENT}"
   --backup-verifier "$OFFSITE_APP_ROOT/server-tools/linux/lib/verify-backup.js" --amu-module "$OFFSITE_APP_ROOT/lib/amu-storage.js" \
   --integration-module "$RECOVERY_INTEGRATION_MODULE" --environment "$OFFSITE_APP_ENV" \
   --target-package "$RECOVERY_TARGET_PACKAGE" --target-runtime "$RECOVERY_TARGET_RUNTIME" \
-  --scratch-root "$operation_root" --output "$operation_root/verification.json" >/dev/null 2>&1 \
+  --scratch-root "$operation_root" --output "$operation_root/verification.json" >/dev/null \
   || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
 
 application_smoke_passed=0

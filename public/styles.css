@@ -1656,6 +1656,28 @@ html[data-ui-mode="mobile"] .app-shell { padding-top:var(--deployment-banner-hei
 @media (max-width:760px) { .schedule-matrix-pdf-settings-body { grid-template-columns:1fr; } .schedule-matrix-header-text { grid-column:1; } }
 @media (max-width:820px) { .pdf-settings-fields { grid-template-columns:1fr; } .pdf-settings-fields > * { grid-column:1; } }
 .backup-actions { display: flex; align-items: end; justify-content: flex-start; padding-top: 21px; }
+.maintenance-schedule-status { min-height:18px; margin:11px 0 9px; color:var(--muted); font-size:9px; line-height:1.45; }
+.maintenance-schedule-status[data-state="error"] { color:#9b342b; }
+.maintenance-schedule-status[data-state="changed"] { color:#765714; }
+.maintenance-schedule-table-wrap { max-width:100%; overflow:auto; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
+.maintenance-schedule-table { width:100%; min-width:980px; border-collapse:collapse; font-size:8.5px; }
+.maintenance-schedule-table th,.maintenance-schedule-table td { padding:8px 6px; border-bottom:1px solid var(--line); text-align:center; vertical-align:middle; }
+.maintenance-schedule-table thead th { position:sticky; top:0; z-index:1; color:var(--muted); background:var(--surface-soft); font-size:7.5px; font-weight:850; letter-spacing:.035em; }
+.maintenance-schedule-table tbody tr:last-child > * { border-bottom:0; }
+.maintenance-schedule-table tbody th { width:190px; padding-left:11px; text-align:left; }
+.maintenance-schedule-table tbody th strong,.maintenance-schedule-table tbody th small { display:block; }
+.maintenance-schedule-table tbody th strong { color:var(--ink); font-size:9.5px; }
+.maintenance-schedule-table tbody th small { margin-top:3px; color:var(--muted); font-size:7.5px; font-weight:500; line-height:1.35; }
+.maintenance-schedule-table tr.running { background:color-mix(in srgb,#d7ebdf 48%,var(--surface)); }
+.maintenance-schedule-table tr.unavailable { opacity:.62; }
+.maintenance-schedule-compact { display:block; min-width:112px; }
+#settingsView .maintenance-schedule-compact :is(select,input[type="time"]) { width:100%; min-width:0; min-height:28px; padding:4px 6px; font-size:8px; }
+.maintenance-schedule-cadence { display:inline-block; max-width:125px; color:var(--ink); font-weight:700; line-height:1.35; }
+.maintenance-schedule-day { width:31px; }
+.maintenance-schedule-day input,.maintenance-schedule-enabled input { width:15px; height:15px; margin:0; padding:0; accent-color:var(--green); }
+.maintenance-schedule-next { min-width:130px; color:var(--muted); line-height:1.35; }
+.maintenance-schedule-running { color:#246048; }
+.maintenance-schedule-card .backup-actions { gap:8px; padding-top:12px; }
 .backup-import-row { align-items: end; }
 .database-backup-path { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #dce2df; border-radius: 10px; background: #f8faf8; }
 .database-backup-path span { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }

@@ -154,6 +154,10 @@ const {
   requestRecoveryAssuranceRun,
 } = require("./lib/recovery-assurance-control-client");
 const {
+  readMaintenanceSchedules,
+  updateMaintenanceSchedules,
+} = require("./lib/maintenance-schedule-control-client");
+const {
   DEFAULT_STATUS_PATH: DEFAULT_MONITOR_STATUS_PATH,
   readServerMonitorStatus,
 } = require("./lib/server-monitor-status");
@@ -27810,6 +27814,55 @@ app.get("/api/server-diagnostics", async (request, response) => {
 app.get("/api/server-status", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
   response.json((await serverStatusForActor((await serverDiagnostics()), actor)));
+});
+
+function requireMaintenanceScheduleActor(request, { write = false } = {}) {
+  if (!serverModeActive || process.platform !== "linux") {
+    throw httpError(409, "Wartungszeitpläne werden ausschließlich am eingerichteten Ubuntu-Server verwaltet.", "MAINTENANCE_SCHEDULE_SERVER_REQUIRED");
+  }
+  const actor = requirePortalAdminOrLocal(request, "backup:write");
+  if (isLocalSystemSession(actor) || !BACKUP_ADMIN_ROLES.has(actor.role)) {
+    throw httpError(403, "Diese Zeitpläne dürfen nur Developer, IT-Administration oder Administration verwalten.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (write) assertPortalCsrf(request);
+  return actor;
+}
+
+function maintenanceScheduleHttpError(error) {
+  const code = String(error?.code || "FAILED");
+  if (code === "STALE") return httpError(409, "Die Serverzeitpläne wurden inzwischen geändert. Bitte neu laden; es wurde nichts überschrieben.", "MAINTENANCE_SCHEDULE_STALE");
+  if (code === "BUSY") return httpError(409, "Eine Sicherung oder Wartung läuft bereits. Der Zeitplan wurde nicht verändert.", "MAINTENANCE_SCHEDULE_BUSY");
+  if (code === "INVALID") return httpError(400, "Der Wartungszeitplan ist unvollständig oder ungültig.", "MAINTENANCE_SCHEDULE_INVALID");
+  return httpError(503, "Die geschützte Wartungszeitplan-Steuerung ist derzeit nicht verfügbar.", "MAINTENANCE_SCHEDULE_CONTROL_UNAVAILABLE");
+}
+
+app.get("/api/portal/v1/maintenance-schedules", async (request, response) => {
+  requireMaintenanceScheduleActor(request);
+  try {
+    response.setHeader("Cache-Control", "no-store");
+    response.json(await readMaintenanceSchedules());
+  } catch (error) {
+    throw maintenanceScheduleHttpError(error);
+  }
+});
+
+app.put("/api/portal/v1/maintenance-schedules", async (request, response) => {
+  const actor = requireMaintenanceScheduleActor(request, { write: true });
+  const body = request.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).length !== 2 || !Array.isArray(body.schedules)
+    || !/^[a-f0-9]{64}$/.test(String(body.expectedRevision || ""))) {
+    throw httpError(400, "Der Wartungszeitplan ist unvollständig.", "MAINTENANCE_SCHEDULE_INVALID");
+  }
+  try {
+    const result = await updateMaintenanceSchedules(body.schedules, { expectedRevision: body.expectedRevision });
+    await auditPortal(actor.employeeNumber, "system.maintenance_schedules.updated", "system", "maintenance-schedules",
+      JSON.stringify({ revision: result.revision, tasks: result.tasks.map((task) => task.id) }));
+    response.setHeader("Cache-Control", "no-store");
+    response.json(result);
+  } catch (error) {
+    throw maintenanceScheduleHttpError(error);
+  }
 });
 
 function runtimeDriveInfo() {
