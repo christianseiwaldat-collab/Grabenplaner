@@ -64,7 +64,7 @@ for (const scenario of ["enough", "low", "invalid"]) {
   });
 }
 
-for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-root", "invalid-recovery-files", "failed-installed-contract"]) {
+for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-root", "wrong-backup-root", "invalid-recovery-files", "failed-installed-contract"]) {
   test("preflight validates candidate recovery code and installed contracts: " + scenario, { skip: !fs.existsSync(bash) }, t => {
     const f = fixture(t);
     f.write("installed/server-tools/linux/lib/verify-package.js", "require('node:fs').appendFileSync(process.env.TEST_EVENTS,'installed-contract\\n'); process.exit(" + (scenario === "failed-installed-contract" ? 1 : 0) + ");");
@@ -77,7 +77,8 @@ for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-
       "require('preflight-installed-dependency');",
       "exports.loadConfiguration = file => {",
       " require('node:assert/strict').equal(file,'/etc/grabenplaner/postgresql-operations.json');",
-      " return {sourceFiles:" + (scenario === "wrong-data-root" ? "'/wrong-data'" : "process.env.TEST_DATA") + "};",
+      " return {sourceFiles:" + (scenario === "wrong-data-root" ? "'/wrong-data'" : "process.env.TEST_DATA")
+        + ",backupDirectory:" + (scenario === "wrong-backup-root" ? "'/wrong-backup'" : "process.env.TEST_BACKUP") + "};",
       "};",
       "exports.recoveryFilesPreflight = root => {",
       " require('node:assert/strict').equal(root,process.env.TEST_DATA);",
@@ -98,11 +99,12 @@ for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-
       'app_dir="$PWD/installed"',
       'SCRIPT_DIR="$PWD/candidate/server-tools/linux"',
       'data_dir="$TEST_DATA"',
+      'backup_dir="$TEST_BACKUP"',
       "database_provider=postgresql",
       section('installed_runtime_verifier="', '# The optional module'),
     ].join("\n"), {
       NODE_OPTIONS: "--require=" + JSON.stringify(path.join(f.root, "linux-stat.cjs")),
-      TEST_EVENTS: path.join(f.root, "events"), TEST_DATA: "/synthetic-data",
+      TEST_EVENTS: path.join(f.root, "events"), TEST_DATA: "/synthetic-data", TEST_BACKUP: "/synthetic-backups",
     });
     const events = fs.existsSync(path.join(f.root, "events")) ? fs.readFileSync(path.join(f.root, "events"), "utf8") : "";
     assert.match(events, /^installed-contract\n/);
@@ -114,6 +116,9 @@ for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-
       assert.doesNotMatch(events, /candidate-recovery/);
     }
     assert.doesNotMatch(result.stdout + result.stderr, /secret-value/);
+    if (["wrong-data-root", "wrong-backup-root"].includes(scenario)) {
+      assert.match(result.stderr, /PG_OPERATIONS_PATH_BINDING/);
+    }
   });
 }
 

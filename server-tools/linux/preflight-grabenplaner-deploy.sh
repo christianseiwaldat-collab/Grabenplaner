@@ -221,8 +221,8 @@ if [[ "$database_provider" == postgresql ]]; then
   postgresql_preflight="$SCRIPT_DIR/lib/postgresql-operations.js"
   [[ -f "$postgresql_preflight" && ! -L "$postgresql_preflight" ]] \
     || gp_die "Die PostgreSQL-Vorabpruefung fehlt."
-  NODE_PATH="$app_dir/node_modules" "$node" - "$postgresql_preflight" "$data_dir" <<'NODE' >/dev/null \
-    || gp_die "Die PostgreSQL-Rueckkehrdateien verletzen bereits vor dem Deploy den Pfad- oder Dateitypvertrag."
+  NODE_PATH="$app_dir/node_modules" "$node" - "$postgresql_preflight" "$data_dir" "$backup_dir" <<'NODE' >/dev/null \
+    || gp_die "Die PostgreSQL-Pfade oder Rueckkehrdateien verletzen bereits vor dem Deploy den Pfad- oder Dateitypvertrag."
 const fs = require('node:fs'), path = require('node:path');
 try {
   const helper = process.argv[2], root = path.resolve(path.dirname(helper), '../../..');
@@ -244,12 +244,16 @@ try {
   trusted(path.join(root, 'server-tools/linux/lib'), true);
   const runtime = require(path.join(root, 'lib/persistence/postgresql/operations/runtime.js'));
   const config = runtime.loadConfiguration('/etc/grabenplaner/postgresql-operations.json');
-  if (config.sourceFiles !== process.argv[3]) throw Error('binding');
+  if (config.sourceFiles !== process.argv[3] || config.backupDirectory !== process.argv[4]) {
+    throw Error('PG_OPERATIONS_PATH_BINDING');
+  }
   // This action only walks recovery files. It opens no database connection.
   const result = runtime.recoveryFilesPreflight(config.sourceFiles);
   if (result?.verified !== true) throw Error('unverified');
-} catch {
-  process.stderr.write('PostgreSQL recovery-files-preflight ist nicht sicher ausfuehrbar oder fehlgeschlagen.\n');
+} catch (error) {
+  process.stderr.write(error.message === 'PG_OPERATIONS_PATH_BINDING'
+    ? 'PG_OPERATIONS_PATH_BINDING: Daten- und Backupordner muessen der geschuetzten PostgreSQL-Konfiguration entsprechen.\n'
+    : 'PostgreSQL recovery-files-preflight ist nicht sicher ausfuehrbar oder fehlgeschlagen.\n');
   process.exitCode = 1;
 }
 NODE
