@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path');
-const PHASES=new Set(['preparing','requiring-server','server-required','initialization-wait','/api/health/live','/api/health/ready']);
+const PHASES=new Set(['preparing','requiring-server','server-required','initializing-application','initialization-wait','initialization-failed','application-initialized','starting-listener','listener-ready','/api/health/live','/api/health/ready']);
 function boundedFile(root,name,limit,tail=false){
  const file=path.join(root,'work','application',name);let fd;
  try{
