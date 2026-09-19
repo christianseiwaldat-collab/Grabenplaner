@@ -122,9 +122,20 @@ csp_has_exact_directive() {
   return 1
 }
 
+maintenance_schedule_state="$(gp_maintenance_schedule_state "$app_dir" "$node")" || maintenance_schedule_state=invalid
+maintenance_deploy_pause=0
+if (( deploy_checks == 1 )) \
+  && [[ "$(readlink -f -- "/proc/${BASHPID:-$$}/fd/9" 2>/dev/null || true)" == /run/grabenplaner/maintenance.lock ]] \
+  && flock --nonblock 9; then maintenance_deploy_pause=1; fi
 for unit in "$service" "$caddy_service" "$monitor_timer"; do
-  if (( deploy_checks == 1 )) && [[ "$unit" == "$monitor_timer" ]] && systemctl is-enabled --quiet "$unit"; then
-    check_ok "Dienst $unit" "aktiviert; darf waehrend des kontrollierten Deploys pausieren"
+  if [[ "$unit" == "$monitor_timer" ]]; then
+    if monitor_expected="$(gp_maintenance_timer_expected "$maintenance_schedule_state" "$unit")" \
+      && gp_systemd_unit_exists "$unit" \
+      && gp_maintenance_timer_matches "$unit" "$monitor_expected" "$maintenance_deploy_pause"; then
+      check_ok "Dienst $unit" "entspricht dem gespeicherten Zeitplan; eine belegte Deploypause ist beruecksichtigt"
+    else
+      check_fail "Dienst $unit" "weicht vom gespeicherten Zeitplan ab oder ist nicht installiert"
+    fi
   elif gp_systemd_unit_exists "$unit" && systemctl is-active --quiet "$unit"; then
     check_ok "Dienst $unit" "aktiv"
   else
@@ -339,7 +350,11 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]
     offsite_timers+=(grabenplaner-offsite-upload.timer)
   fi
   for offsite_timer in "${offsite_timers[@]}"; do
-    if ! systemctl is-enabled --quiet "$offsite_timer" || ! systemctl is-active --quiet "$offsite_timer"; then
+    offsite_expected=1
+    if [[ "$offsite_timer" != grabenplaner-offsite-upload.timer ]]; then
+      offsite_expected="$(gp_maintenance_timer_expected "$maintenance_schedule_state" "$offsite_timer")" || offsite_timer_ok=0
+    fi
+    if ! gp_maintenance_timer_matches "$offsite_timer" "$offsite_expected" "$maintenance_deploy_pause"; then
       offsite_timer_ok=0
     fi
   done

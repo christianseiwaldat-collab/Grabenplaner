@@ -654,6 +654,10 @@ const state = {
   serverStatus: null,
   serverDiagnostics: null,
   serverDiagnosticsLoading: false,
+  maintenanceSchedules: null,
+  maintenanceSchedulesLoadState: "idle",
+  maintenanceSchedulesMessage: "",
+  maintenanceSchedulesPending: false,
   serverMonitorActionPending: "",
   serverMonitorActionFeedback: null,
   serverMonitorRestartAccepted: false,
@@ -795,7 +799,7 @@ const elements = Object.fromEntries(
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
-    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
+    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "maintenanceScheduleCard", "maintenanceScheduleStatus", "maintenanceScheduleForm", "maintenanceScheduleRows", "reloadMaintenanceSchedulesButton", "saveMaintenanceSchedulesButton", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "branchSupervisionSettingsCard", "branchSupervisionMode", "branchSupervisionIntensity", "branchSupervisionThresholds", "branchSupervisionPrimaryCoveragePercent", "branchSupervisionDepartmentGapMinutes", "branchSupervisionSettingsHint", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
@@ -2855,6 +2859,7 @@ function applyRoleVisibility() {
   elements.birthdayPresentationSettingsCard?.classList.toggle("hidden", !birthdayPresentationSettingsAccess);
   elements.serverDiagnosticsCard?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
   elements.refreshServerDiagnosticsButton?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
+  elements.maintenanceScheduleCard?.classList.toggle("hidden", !serverBackupAdministrationAccess);
   elements.databaseBackupSettingsCard?.classList.toggle("hidden", serverActive ? !serverBackupAdministrationAccess : !backupWriteAccess);
   elements.legacyLocalBackupControls?.classList.toggle("hidden", serverActive);
   elements.serverDatabaseDownloadPanel?.classList.toggle("hidden", !serverBackupAdministrationAccess);
@@ -6681,6 +6686,215 @@ function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
       ${rebootGuidance}
       ${vpsRebootButton}
     </section>`;
+}
+
+const maintenanceScheduleWeekdays = Object.freeze([
+  ["monday", "Mo"], ["tuesday", "Di"], ["wednesday", "Mi"], ["thursday", "Do"],
+  ["friday", "Fr"], ["saturday", "Sa"], ["sunday", "So"],
+]);
+const maintenanceScheduleTaskMeta = Object.freeze({
+  "server-monitor": Object.freeze({ label: "Systemprüfung", detail: "Erreichbarkeit und Serverzustand", cadences: ["interval"], monthDay: null }),
+  "complete-backup": Object.freeze({ label: "Vollständige Sicherung", detail: "Datenbank, Dokumente und Wiederherstellungsprüfung", cadences: ["weekly"], monthDay: null }),
+  "repository-check": Object.freeze({ label: "Repository-Prüfung", detail: "Vollständige Prüfung des externen Sicherungsbestands", cadences: ["weekly", "monthly"], monthDay: 1 }),
+  "restore-test": Object.freeze({ label: "Wiederherstellungstest", detail: "Isolierter Test-Restore", cadences: ["weekly", "monthly", "quarterly"], monthDay: 2 }),
+  "security-audit": Object.freeze({ label: "Sicherheitsprüfung", detail: "Ubuntu-, Firewall- und Aktualisierungsprüfung", cadences: ["weekly"], monthDay: null }),
+});
+
+function canManageMaintenanceSchedules() {
+  const role = state.portalSession?.user?.role || "";
+  const permissions = state.portalSession?.user?.permissions || [];
+  return state.portalStatus?.operationMode === "server"
+    && ["developer", "it_admin", "admin"].includes(role)
+    && permissions.includes("backup:write");
+}
+
+function maintenanceScheduleCadenceLabel(value, task) {
+  if (value === "interval") return `Alle ${Number(task.intervalMinutes || 5)} Minuten`;
+  if (value === "weekly") return "Gewählte Wochentage";
+  if (value === "monthly") return `Monatlich am ${Number(task.monthDay || maintenanceScheduleTaskMeta[task.id]?.monthDay || 1)}.`;
+  return `Vierteljährlich am ${Number(task.monthDay || maintenanceScheduleTaskMeta[task.id]?.monthDay || 1)}.`;
+}
+
+function maintenanceScheduleTimestamp(value) {
+  if (!value) return "–";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "–" : parsed.toLocaleString("de-AT", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function maintenanceScheduleValidationMessage(tasks = []) {
+  for (const task of tasks) {
+    if (!task?.installed || task.cadence === "unsupported") continue;
+    const label = maintenanceScheduleTaskMeta[task.id]?.label || task.id;
+    if (task.cadence === "weekly" && !(task.weekdays || []).length) {
+      return `Für „${label}“ muss mindestens ein Wochentag ausgewählt sein.`;
+    }
+    if (task.cadence !== "interval" && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(task.time || ""))) {
+      return `Für „${label}“ muss eine gültige Uhrzeit eingetragen sein.`;
+    }
+    if (task.cadence === "interval" && ![5, 10, 15, 20, 30, 60].includes(Number(task.intervalMinutes))) {
+      return `Für „${label}“ muss ein gültiges Prüfintervall ausgewählt sein.`;
+    }
+  }
+  return "";
+}
+
+function maintenanceScheduleCadenceControl(task, disabled) {
+  const meta = maintenanceScheduleTaskMeta[task.id];
+  if (task.cadence === "interval") {
+    return `<label class="maintenance-schedule-compact"><span class="sr-only">Intervall für ${escapeHtml(meta.label)}</span><select data-maintenance-interval ${disabled ? "disabled" : ""}>${[5, 10, 15, 20, 30, 60].map((minutes) => `<option value="${minutes}" ${Number(task.intervalMinutes) === minutes ? "selected" : ""}>Alle ${minutes} Minuten</option>`).join("")}</select></label>`;
+  }
+  if (meta.cadences.length === 1) return `<span class="maintenance-schedule-cadence">${escapeHtml(maintenanceScheduleCadenceLabel(task.cadence, task))}</span>`;
+  return `<label class="maintenance-schedule-compact"><span class="sr-only">Rhythmus für ${escapeHtml(meta.label)}</span><select data-maintenance-cadence ${disabled ? "disabled" : ""}>${meta.cadences.map((cadence) => `<option value="${cadence}" ${task.cadence === cadence ? "selected" : ""}>${escapeHtml(maintenanceScheduleCadenceLabel(cadence, { ...task, cadence }))}</option>`).join("")}</select></label>`;
+}
+
+function renderMaintenanceSchedules() {
+  if (!elements.maintenanceScheduleRows || !elements.maintenanceScheduleStatus) return;
+  const result = state.maintenanceSchedules;
+  const pending = state.maintenanceSchedulesPending;
+  const tasks = Array.isArray(result?.tasks) ? result.tasks : [];
+  const validationMessage = maintenanceScheduleValidationMessage(tasks);
+  if (state.maintenanceSchedulesLoadState === "loading" && !tasks.length) {
+    elements.maintenanceScheduleRows.innerHTML = '<tr><td colspan="12">Zeitpläne werden geladen …</td></tr>';
+  } else if (!tasks.length) {
+    elements.maintenanceScheduleRows.innerHTML = '<tr><td colspan="12">Die Zeitpläne sind derzeit nicht verfügbar.</td></tr>';
+  } else {
+    elements.maintenanceScheduleRows.innerHTML = tasks.map((task) => {
+      const meta = maintenanceScheduleTaskMeta[task.id] || { label: task.id, detail: "", cadences: [task.cadence] };
+      const disabled = pending || !task.installed;
+      const weekly = task.cadence === "weekly";
+      const weekdays = new Set(task.weekdays || []);
+      const next = task.running ? '<strong class="maintenance-schedule-running">Läuft gerade</strong>'
+        : task.enabled && task.active ? escapeHtml(maintenanceScheduleTimestamp(task.nextRunAt))
+          : task.installed ? "Deaktiviert" : "Nicht eingerichtet";
+      if (task.cadence === "unsupported") {
+        const reason = ({
+          "not-installed": "Dieser Vorgang ist auf dem Server nicht eingerichtet.",
+          "additional-triggers": "Dieser Zeitplan enthält zusätzliche Auslöser, etwa nach einem Serverstart. Er bleibt unverändert und kann hier nicht bearbeitet werden.",
+          "different-target": "Dieser Zeitplan startet einen abweichenden Vorgang. Er bleibt unverändert und kann hier nicht bearbeitet werden.",
+          "calendar-not-supported": "Der vorhandene Zeitplan lässt sich in dieser Matrix nicht vollständig darstellen. Er bleibt unverändert und kann hier nicht bearbeitet werden.",
+        })[task.unsupportedReason] || "Dieser Zeitplan bleibt unverändert und kann hier nicht bearbeitet werden.";
+        return `<tr data-maintenance-task="${escapeHtmlAttribute(task.id)}"><th scope="row"><strong>${escapeHtml(meta.label)}</strong></th><td colspan="10">${escapeHtml(reason)}</td><td>${next}</td></tr>`;
+      }
+      return `<tr data-maintenance-task="${escapeHtmlAttribute(task.id)}" class="${task.running ? "running" : ""} ${task.installed ? "" : "unavailable"}">
+        <th scope="row"><strong>${escapeHtml(meta.label)}</strong><small>${escapeHtml(meta.detail)}</small></th>
+        <td>${maintenanceScheduleCadenceControl(task, disabled)}</td>
+        ${maintenanceScheduleWeekdays.map(([day, label]) => `<td class="maintenance-schedule-day"><label><span class="sr-only">${label} für ${escapeHtml(meta.label)}</span><input type="checkbox" data-maintenance-day="${day}" ${weekdays.has(day) ? "checked" : ""} ${disabled || !weekly ? "disabled" : ""}></label></td>`).join("")}
+        <td><label class="maintenance-schedule-compact"><span class="sr-only">Uhrzeit für ${escapeHtml(meta.label)}</span><input type="time" data-maintenance-time value="${escapeHtmlAttribute(task.time || "")}" ${disabled || task.cadence === "interval" ? "disabled" : ""}></label></td>
+        <td class="maintenance-schedule-enabled"><label><span class="sr-only">${escapeHtml(meta.label)} aktiv</span><input type="checkbox" data-maintenance-enabled ${task.enabled ? "checked" : ""} ${disabled ? "disabled" : ""}></label></td>
+        <td class="maintenance-schedule-next">${next}</td>
+      </tr>`;
+    }).join("");
+  }
+  const stateMessage = validationMessage || state.maintenanceSchedulesMessage
+    || (pending ? "Zeitpläne werden gespeichert …"
+      : result?.checkedAt ? `Serverstand: ${maintenanceScheduleTimestamp(result.checkedAt)}`
+        : "Zeitpläne werden beim Öffnen geladen.");
+  elements.maintenanceScheduleStatus.textContent = stateMessage;
+  elements.maintenanceScheduleStatus.dataset.state = validationMessage ? "error" : state.maintenanceSchedulesLoadState;
+  if (elements.reloadMaintenanceSchedulesButton) elements.reloadMaintenanceSchedulesButton.disabled = pending || state.maintenanceSchedulesLoadState === "loading";
+  if (elements.saveMaintenanceSchedulesButton) {
+    elements.saveMaintenanceSchedulesButton.disabled = pending || !tasks.length || Boolean(validationMessage) || tasks.some((task) => task.running);
+    elements.saveMaintenanceSchedulesButton.textContent = pending ? "Zeitpläne werden gespeichert …" : "Zeitpläne speichern";
+  }
+}
+
+async function loadMaintenanceSchedules({ announce = false } = {}) {
+  if (!canManageMaintenanceSchedules() || state.maintenanceSchedulesLoadState === "loading" || state.maintenanceSchedulesPending) return false;
+  state.maintenanceSchedulesLoadState = "loading";
+  state.maintenanceSchedulesMessage = "Zeitpläne werden geladen …";
+  renderMaintenanceSchedules();
+  try {
+    state.maintenanceSchedules = await api("/api/portal/v1/maintenance-schedules");
+    state.maintenanceSchedulesLoadState = "ready";
+    state.maintenanceSchedulesMessage = "";
+    renderMaintenanceSchedules();
+    if (announce) showToast("Wartungs- und Backupzeiten aktualisiert.");
+    return true;
+  } catch (error) {
+    state.maintenanceSchedulesLoadState = "error";
+    state.maintenanceSchedulesMessage = error.message;
+    renderMaintenanceSchedules();
+    if (announce) showToast(error.message, true);
+    return false;
+  }
+}
+
+function maintenanceSchedulesForSave() {
+  return (state.maintenanceSchedules?.tasks || []).map((task) => ({
+    id: task.id,
+    enabled: Boolean(task.enabled),
+    cadence: task.cadence,
+    weekdays: [...(task.weekdays || [])],
+    time: task.time,
+    intervalMinutes: task.intervalMinutes,
+    monthDay: task.monthDay,
+  }));
+}
+
+async function saveMaintenanceSchedules(event) {
+  event?.preventDefault();
+  if (!canManageMaintenanceSchedules() || state.maintenanceSchedulesPending || !state.maintenanceSchedules?.tasks?.length) return;
+  const validationMessage = maintenanceScheduleValidationMessage(state.maintenanceSchedules.tasks);
+  if (validationMessage) {
+    state.maintenanceSchedulesLoadState = "error";
+    state.maintenanceSchedulesMessage = validationMessage;
+    renderMaintenanceSchedules();
+    showToast(validationMessage, true);
+    return;
+  }
+  state.maintenanceSchedulesPending = true;
+  state.maintenanceSchedulesLoadState = "saving";
+  state.maintenanceSchedulesMessage = "Zeitpläne werden geschützt gespeichert …";
+  renderMaintenanceSchedules();
+  try {
+    state.maintenanceSchedules = await api("/api/portal/v1/maintenance-schedules", {
+      method: "PUT",
+      body: JSON.stringify({ schedules: maintenanceSchedulesForSave(), expectedRevision: state.maintenanceSchedules.revision }),
+    });
+    state.maintenanceSchedulesLoadState = "ready";
+    state.maintenanceSchedulesMessage = "Geänderte Zeitpläne wurden gespeichert. Verpasste Termine werden dadurch nicht nachgeholt.";
+    showToast("Wartungs- und Backupzeiten gespeichert.");
+  } catch (error) {
+    state.maintenanceSchedulesLoadState = "error";
+    state.maintenanceSchedulesMessage = error.message;
+    showToast(error.message, true);
+  } finally {
+    state.maintenanceSchedulesPending = false;
+    renderMaintenanceSchedules();
+  }
+}
+
+function updateMaintenanceScheduleDraft(event) {
+  const row = event.target.closest?.("[data-maintenance-task]");
+  const task = state.maintenanceSchedules?.tasks?.find((entry) => entry.id === row?.dataset.maintenanceTask);
+  if (!task || state.maintenanceSchedulesPending) return;
+  if (event.target.matches("[data-maintenance-enabled]")) task.enabled = event.target.checked;
+  if (event.target.matches("[data-maintenance-interval]")) task.intervalMinutes = Number(event.target.value);
+  if (event.target.matches("[data-maintenance-time]")) task.time = event.target.value;
+  if (event.target.matches("[data-maintenance-day]")) {
+    const selected = new Set(task.weekdays || []);
+    if (event.target.checked) selected.add(event.target.dataset.maintenanceDay);
+    else selected.delete(event.target.dataset.maintenanceDay);
+    task.weekdays = maintenanceScheduleWeekdays.map(([day]) => day).filter((day) => selected.has(day));
+  }
+  if (event.target.matches("[data-maintenance-cadence]")) {
+    task.cadence = event.target.value;
+    task.intervalMinutes = null;
+    if (task.cadence === "weekly") {
+      task.weekdays = task.weekdays?.length ? task.weekdays : ["monday"];
+      task.monthDay = null;
+      task.time ||= "03:00";
+    } else {
+      task.weekdays = [];
+      task.monthDay = maintenanceScheduleTaskMeta[task.id]?.monthDay || 1;
+      task.time ||= "03:00";
+    }
+  }
+  state.maintenanceSchedulesLoadState = "changed";
+  state.maintenanceSchedulesMessage = "Änderungen sind noch nicht gespeichert.";
+  renderMaintenanceSchedules();
 }
 
 function canManageOffsiteFolders() {
@@ -22174,6 +22388,7 @@ function renderSettings() {
   localStorage.setItem(rememberContextCacheKey("planning"), elements.rememberLastScheduleOverallPlan.checked ? "1" : "0");
   localStorage.setItem(rememberContextCacheKey("vacations"), elements.rememberLastVacationOverallPlan.checked ? "1" : "0");
   renderPortalAccessState();
+  renderMaintenanceSchedules();
   updatePdfPreview();
 }
 
@@ -22675,6 +22890,11 @@ function updateXoffiApplyAvailability() {
   const reviewed = Boolean(state.xoffiImportPreview && elements.xoffiImportConfirmed?.checked);
   const weekConfirmed = !xoffiWeekConfirmationRequired() || elements.xoffiScreenshotWeekConfirmed?.checked === true;
   const issue = xoffiMappingIssue();
+  const blocker = elements.xoffiImportPreview.querySelector("[data-xoffi-mapping-blocker]");
+  if (blocker) {
+    blocker.querySelector("[data-xoffi-mapping-message]").textContent = issue.replace(/^Import noch nicht möglich:\s*/, "");
+    blocker.hidden = !issue;
+  }
   elements.xoffiApplyButton.disabled = !(reviewed && weekConfirmed) || Boolean(issue);
   if (state.xoffiImportPreview) elements.xoffiImportStatus.textContent = issue
     || "Zuordnungen vollständig. Bitte Werte prüfen und die Übernahme bestätigen.";
@@ -22707,11 +22927,10 @@ function renderXoffiImportPreview() {
   const candidateOptions = (selected) => preview.candidates.map((employee) => `
     <option value="${escapeHtmlAttribute(employee.employeeNumber)}" ${employee.employeeNumber === selected ? "selected" : ""}>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</option>
   `).join("");
-  const initiallyUnmapped = preview.employees.filter((employee) => !employee.employeeNumber);
   elements.xoffiImportPreview.innerHTML = `
     <div class="xoffi-preview-heading"><strong>KW ${Number(preview.calendarWeek)} · ${escapeHtml(preview.context.locationName || preview.context.locationId)}</strong><span>${formatDate(preview.weekStart)}–${formatDate(preview.weekEnd)}</span></div>
     ${(preview.warnings || []).map((warning) => `<p class="calculation-note">${escapeHtml(warning)}</p>`).join("")}
-    ${initiallyUnmapped.length ? `<aside class="xoffi-import-blocker" role="alert"><strong>Import noch nicht möglich</strong><p>${initiallyUnmapped.length === 1 ? "Eine Person aus xoffi ist" : `${initiallyUnmapped.length} Personen aus xoffi sind`} keinem aktiven Teammitglied im ausgewählten GP-Bereich zugeordnet: ${initiallyUnmapped.map((employee) => escapeHtml(employee.sourceName)).join(", ")}.</p><p>Ordne jede betroffene Zeile zu oder wähle dort <strong>„Diese Zeile nicht übernehmen“</strong>. Der Rest der Datei kann anschließend trotzdem übernommen werden.</p></aside>` : ""}
+    <aside class="xoffi-import-blocker" role="alert" aria-atomic="true" data-xoffi-mapping-blocker hidden><strong>Import noch nicht möglich</strong><p data-xoffi-mapping-message></p></aside>
     <div class="xoffi-preview-rows">${preview.employees.map((employee, rowIndex) => `
       <article class="xoffi-preview-row" data-xoffi-row="${rowIndex}" data-source-name="${escapeHtmlAttribute(employee.sourceName)}" data-match-confidence="${Number(employee.matchConfidence || 0)}">
         <div class="xoffi-row-heading">
@@ -35017,6 +35236,7 @@ function setSettingsTab(tab) {
   if (activeTab === "timeTracking") loadWifiAutomationSettings();
   if (activeTab === "backup") {
     refreshServerDiagnostics();
+    if (canManageMaintenanceSchedules()) loadMaintenanceSchedules();
     if (canManageOffsiteFolders()) loadManagedOffsiteFolders();
   }
   if (personnelTarget || databaseTarget) {
@@ -38860,6 +39080,9 @@ elements.validatePersonnelLifecycleEditorButton?.addEventListener("click", () =>
   validatePersonnelLifecycleEditorDraft().catch(() => {});
 });
 elements.refreshServerDiagnosticsButton?.addEventListener("click", () => refreshServerDiagnostics({ announce: true }));
+elements.reloadMaintenanceSchedulesButton?.addEventListener("click", () => loadMaintenanceSchedules({ announce: true }));
+elements.maintenanceScheduleForm?.addEventListener("submit", saveMaintenanceSchedules);
+elements.maintenanceScheduleRows?.addEventListener("change", updateMaintenanceScheduleDraft);
 elements.serverDiagnostics?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-server-monitor-action]");
   if (!button || button.disabled) return;

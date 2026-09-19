@@ -329,16 +329,66 @@ try {
   if(!fs.existsSync(installed)){process.stdout.write('none');process.exit(0);}
   function read(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==0||s.nlink!==1||(s.mode&0o022)||s.size>131072||fs.realpathSync(file)!==file)throw Error();return JSON.parse(fs.readFileSync(file,'utf8'));}
   const core=read(path.join(process.argv[2],'server-tools/linux/offsite/module-schema.json')),module=read(installed);
-  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10].includes(core.moduleVersion)||![7,8,9,10].includes(module.moduleVersion))throw Error();
-  process.stdout.write(core.moduleVersion===10&&module.moduleVersion===10?'single':'legacy');
+  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10,11].includes(core.moduleVersion)||![7,8,9,10,11].includes(module.moduleVersion))throw Error();
+  process.stdout.write(core.moduleVersion>=10&&module.moduleVersion>=10?'single':'legacy');
 }catch{process.stderr.write('Der Sicherungszeitplan konnte nicht verifiziert werden.\n');process.exitCode=1;}
 NODE
 }
 
+# Read the protected matrix receipt through its real schema/revision validator.
+# An absent receipt is distinct from an invalid one: invalid state never falls
+# back to installation defaults.
+gp_maintenance_schedule_state() {
+  local app="${1:?App-Verzeichnis fehlt}" node="${2:?Node-Laufzeit fehlt}"
+  "$node" - "$app" <<'NODE'
+const fs=require('node:fs'),path=require('node:path');
+try {
+  const root='/var/lib/grabenplaner-maintenance-schedules';
+  let directory;try{directory=fs.lstatSync(root);}catch(e){if(e.code!=='ENOENT')throw e;process.stdout.write('none');process.exit(0);}
+  if(!directory.isDirectory()||directory.isSymbolicLink()||directory.uid!==0||directory.gid!==0||directory.nlink<2||(directory.mode&0o7777)!==0o700||fs.realpathSync(root)!==root)throw Error();
+  const file=path.join(root,'schedules.json');
+  try{fs.lstatSync(file);}catch(e){if(e.code!=='ENOENT')throw e;process.stdout.write('none');process.exit(0);}
+  let helper=path.join(process.argv[2],'server-tools/linux/offsite/lib/maintenance-schedule-broker.js');
+  if(!fs.existsSync(helper))helper='/opt/grabenplaner-offsite/module/lib/maintenance-schedule-broker.js';
+  const info=fs.lstatSync(helper);
+  if(!info.isFile()||info.isSymbolicLink()||info.uid!==0||info.nlink!==1||(info.mode&0o022)||info.size>262144||fs.realpathSync(helper)!==helper)throw Error();
+  const broker=require(helper),state=broker.readState({stateRoot:root});
+  if(!state)throw Error();
+  const rows=broker.TASKS.map(task=>{
+    const value=state.schedules.find(row=>row.id===task.id);if(!value||typeof value.enabled!=='boolean')throw Error();
+    return task.timer+'='+(value.enabled?'1':'0');
+  });
+  process.stdout.write(rows.join('\n'));
+}catch{process.stderr.write('Der gespeicherte Wartungszeitplan konnte nicht verifiziert werden.\n');process.exitCode=1;}
+NODE
+}
+
+gp_maintenance_timer_expected() {
+  local state="${1:?Zeitplanstand fehlt}" timer="${2:?Timer fehlt}" unit enabled
+  if [[ "$state" == none ]]; then printf '1'; return 0; fi
+  while IFS='=' read -r unit enabled; do
+    if [[ "$unit" == "$timer" && ( "$enabled" == 0 || "$enabled" == 1 ) ]]; then printf '%s' "$enabled"; return 0; fi
+  done <<< "$state"
+  return 1
+}
+
+gp_maintenance_timer_matches() {
+  local timer="${1:?Timer fehlt}" expected="${2:?Aktivierung fehlt}" paused="${3:-0}" enabled active
+  enabled="$(systemctl is-enabled "$timer" 2>/dev/null)" || [[ "$enabled" == disabled ]] || return 1
+  active="$(systemctl is-active "$timer" 2>/dev/null)" || [[ "$active" == inactive ]] || return 1
+  if [[ "$expected" == 0 ]]; then [[ "$enabled" == disabled && "$active" == inactive ]];
+  elif [[ "$expected" == 1 ]]; then [[ "$enabled" == enabled && ( "$active" == active || ( "$paused" == 1 && "$active" == inactive ) ) ]];
+  else return 1; fi
+}
+
 gp_configure_nightly_backups() {
-  local mode
+  local mode saved_schedule
   mode="$(gp_nightly_schedule_mode "$1" "$2")" || return 1
   [[ "$mode" != none ]] || return 0
+  saved_schedule="$(gp_maintenance_schedule_state "$1" "$2")" || return 1
+  # Matrix-managed timers keep their existing configuration and deploy pause.
+  # The updater separately restores the exact previously active timers.
+  [[ "$saved_schedule" == none ]] || return 0
   # Verify the complete replacement BEFORE removing the standalone daily run.
   systemctl enable --now grabenplaner-offsite-assurance.timer >/dev/null || return 1
   systemctl is-enabled --quiet grabenplaner-offsite-assurance.timer \
