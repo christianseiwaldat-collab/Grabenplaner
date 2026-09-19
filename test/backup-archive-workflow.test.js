@@ -158,6 +158,7 @@ test("shutdown shares one deadline with drain and does not release the instance 
       dataImportJobs: { stop: async () => {} }, dataImportRoutes: { stop: async () => {} },
       salesReportJobs: { stop: async () => {} },
       postgresqlReceiptWorkers: null,
+      amuScannerProbe: Promise.resolve(),
       backupInterval: null, retentionInterval: null, scannerProbeInterval: null, sicknessSweepInterval: null,
       notificationDispatchInterval: null, rateLimitCleanupInterval: null, systemCenterHealthInterval: null,
       localBackupArchiveEnabled: () => true, console: { error() {} }, setInterval: () => events.push("recovery-wait"),
