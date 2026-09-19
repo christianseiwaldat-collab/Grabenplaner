@@ -121,6 +121,15 @@ test('native PostgreSQL: complete weeks keep parity, fresh writes and rights wit
         vacationEvidence.push({location,milliseconds:result.milliseconds});
       }
       console.log('vacation-read-model-evidence '+JSON.stringify(vacationEvidence));
+      const employeeEvidence=[];let employeeBaseline;
+      for(const enabled of [false,true]){
+        optimized=enabled;queries=[];authorizations=0;
+        const result=await request('/api/employees');
+        if(!enabled)employeeBaseline=result.body;else assert.deepEqual(result.body,employeeBaseline);
+        employeeEvidence.push({optimized:enabled,milliseconds:result.milliseconds,queries:queries.length,authorizations});
+      }
+      assert.ok(employeeEvidence[1].authorizations<employeeEvidence[0].authorizations/4,JSON.stringify(employeeEvidence));
+      console.log('employee-read-model-evidence '+JSON.stringify(employeeEvidence));
       const repository=require('../lib/persistence/repositories/sales-analytics').createSalesAnalyticsPersistenceRepository(applicationAccess);
       const reports=[];
       for(const month of [7,8]) reports.push(await repository.recordConfirmedTradeFotoReport({preview:require('../test-support/postgresql-migration/aggregate-fixture').aggregatePreview({month}),locationId:'18',currency:'EUR',confirmed:true,actor:'00001',timestamp:'2026-09-17T12:00:00.000Z'}));
