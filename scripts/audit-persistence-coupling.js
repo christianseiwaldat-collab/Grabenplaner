@@ -132,6 +132,13 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/application-operations/async-collections.js',
   'lib/persistence/postgresql/application-operations/branch-orders.js',
   'lib/persistence/postgresql/application-operations/diagnostics.js',
+  'lib/persistence/postgresql/application-operations/system-health.js',
+  'lib/persistence/postgresql/operations/phase-timing.js',
+  'lib/persistence/postgresql/operations/restore-performance.js',
+  'test-support/postgresql-recovery-performance-probe.js',
+  'test/postgresql-system-health.test.js',
+  'test/postgresql-recovery-performance.test.js',
+  'server-tools/linux/postgresql/maintain-reboot-control.py',
   'lib/persistence/postgresql/application-operations/employee-location-lendings.js',
   'lib/persistence/postgresql/application-operations/protected-storage.js',
   'lib/persistence/postgresql/application-operations/startup.js',
@@ -246,6 +253,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-migration-queries.test.js',
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
+  'lib/persistence/postgresql/application-operations/system-health.js',
+  'test-support/postgresql-recovery-performance-probe.js',
   'scripts/benchmark-data-import.cjs',
   'server-tools/linux/lib/trade-annotations-migrate.js',
   'server-tools/linux/lib/personnel-learning-runs-migrate.js',

@@ -6,6 +6,19 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+test('a newer manual full proof is shown separately without rewriting a failed night', () => {
+  const assurance = { configured: true, statusAvailable: true, integrityVerified: true,
+    scheduler: { evidenceTrusted: true, timerInstalled: true, timerEnabled: true },
+    trendRuns: [
+      { trigger: 'scheduled-nightly', at: '2026-09-20T02:22:00Z', status: 'failed', applicationSmokeState: 'failed' },
+      { trigger: 'manual-cli', at: '2026-09-20T11:05:28Z', status: 'passed', applicationSmokeState: 'passed' },
+    ] };
+  const result = deriveAutomationStatus(assurance, { now: new Date('2026-09-20T13:00:00Z') });
+  assert.equal(result.state, 'critical');
+  assert.equal(result.applicationSmokeState, 'failed');
+  assert.equal(result.latestFullProofAt, '2026-09-20T11:05:28.000Z');
+  assert.equal(deriveAutomationStatus({ ...assurance, integrityVerified: false }).latestFullProofAt, null);
+});
 const {
   createSystemCenterMetricsRepository,
 } = require("../lib/persistence/repositories/system-center-metrics");

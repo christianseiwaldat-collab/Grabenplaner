@@ -124,3 +124,5 @@ jobs:
         name: Linux server scripts syntax
         run: find server-tools/linux -type f \( -name '*.sh' -o -name '*.sh.in' \) -print0 | xargs -0 -n1 bash -n
       - run: pnpm test
+      - name: Reboot module maintenance rollback (isolated temporary files)
+        run: sudo python3 test/reboot-module-maintenance.test.py

@@ -206,6 +206,49 @@ function rewriteBackupMarker(current, mutate) {
   fs.utimesSync(current.backupMarkerPath, committed, committed);
 }
 
+test('root-owned read-only status group is accepted; non-root writers and link aliases are rejected', {
+  skip: process.platform !== 'linux' || process.getuid() !== 0,
+}, t => {
+  const value = fixture(); t.after(() => fs.rmSync(value.temporary, { recursive: true, force: true }));
+  const options = { ...value.options, requireRootOwner: true };
+  fs.chownSync(value.hostSecurityStatusPath, 0, 65534);
+  fs.chmodSync(value.hostSecurityStatusPath, 0o640);
+  assert.equal(broker.assertHostSecurityAllowsReboot(Date.now(), options), true);
+  fs.chmodSync(value.hostSecurityStatusPath, 0o660);
+  assert.throws(() => broker.assertHostSecurityAllowsReboot(Date.now(), options));
+  fs.chmodSync(value.hostSecurityStatusPath, 0o640);
+  fs.chownSync(value.hostSecurityStatusPath, 65534, 65534);
+  assert.throws(() => broker.assertHostSecurityAllowsReboot(Date.now(), options));
+  fs.chownSync(value.hostSecurityStatusPath, 0, 65534);
+  const alias = value.hostSecurityStatusPath + '.alias';
+  fs.linkSync(value.hostSecurityStatusPath, alias);
+  assert.throws(() => broker.assertHostSecurityAllowsReboot(Date.now(), options));
+  fs.unlinkSync(alias);
+  fs.renameSync(value.hostSecurityStatusPath, alias);
+  fs.symlinkSync(alias, value.hostSecurityStatusPath);
+  assert.throws(() => broker.assertHostSecurityAllowsReboot(Date.now(), options));
+});
+
+test('reboot state preparation creates only a private directory and preserves existing history', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gp-reboot-prepare-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.chmodSync(root, 0o700);
+  const statePath = path.join(root, 'state', 'state.json');
+  const options = { statePath, allowAlternateStatePath: true, requireRootOwner: false };
+  assert.throws(() => broker.ensureStateDirectory({ statePath }));
+  broker.ensureStateDirectory(options);
+  assert.equal(fs.statSync(path.dirname(statePath)).mode & 0o777, 0o700);
+  assert.equal(fs.existsSync(statePath), false);
+  fs.writeFileSync(statePath, 'preserved-cooldown', { mode: 0o600 });
+  broker.ensureStateDirectory(options);
+  assert.equal(fs.readFileSync(statePath, 'utf8'), 'preserved-cooldown');
+  fs.chmodSync(path.dirname(statePath), 0o777);
+  assert.throws(() => broker.ensureStateDirectory(options));
+  fs.chmodSync(path.dirname(statePath), 0o700);
+  fs.symlinkSync(path.dirname(statePath), path.join(root, 'alias'));
+  assert.throws(() => broker.ensureStateDirectory({ ...options, statePath: path.join(root, 'alias', 'state.json') }));
+});
+
 function rewriteProtectedManifest(current, mutate) {
   const manifest = JSON.parse(fs.readFileSync(current.protectedManifestPath, "utf8"));
   mutate(manifest);

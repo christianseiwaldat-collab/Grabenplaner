@@ -227,7 +227,7 @@ function readRegularFile(filePath, maximumBytes, options = {}) {
       || (process.platform !== "win32" && (before.mode & 0o022) !== 0)
       || (options.requireRootOwner === true
         && typeof before.uid === "number"
-        && (before.uid !== 0 || before.gid !== 0))) {
+        && (before.uid !== 0 || (options.requireRootGroup !== false && before.gid !== 0)))) {
       fail(failureCode);
     }
     descriptor = fs.openSync(
@@ -239,9 +239,10 @@ function readRegularFile(filePath, maximumBytes, options = {}) {
       || after.ino !== before.ino
       || after.nlink !== 1
       || after.size !== before.size
+      || (process.platform !== "win32" && (after.mode & 0o022) !== 0)
       || (options.requireRootOwner === true
         && typeof after.uid === "number"
-        && (after.uid !== 0 || after.gid !== 0))) {
+        && (after.uid !== 0 || (options.requireRootGroup !== false && after.gid !== 0)))) {
       fail(failureCode);
     }
     return { descriptor, stat: after };
@@ -591,6 +592,9 @@ function assertHostSecurityAllowsReboot(nowMs = Date.now(), options = {}) {
   const { descriptor } = readRegularFile(statusPath, 16 * 1024, {
     failureCode: "HOST_REBOOT_CONTROL_FAILED",
     requireRootOwner: options.requireRootOwner !== false,
+    // The installed status contract grants the monitor group read access.
+    // Root ownership and rejection of all non-root write access remain mandatory.
+    requireRootGroup: false,
   });
   let value;
   try {
@@ -647,6 +651,24 @@ function assertStateDirectory(statePath, options = {}) {
     fail("HOST_REBOOT_CONTROL_FAILED");
   }
   return directory;
+}
+
+// Preparation only: never resets a cooldown, creates a request or starts a unit.
+function ensureStateDirectory(options = {}) {
+  const statePath = path.resolve(options.statePath || STATE_PATH);
+  if (statePath !== path.resolve(STATE_PATH) && options.allowAlternateStatePath !== true) {
+    fail("HOST_REBOOT_CONTROL_FAILED");
+  }
+  const directory = path.dirname(statePath), parent = path.dirname(directory);
+  const stat = fs.lstatSync(parent);
+  if (!stat.isDirectory() || stat.isSymbolicLink() || fs.realpathSync(parent) !== parent
+      || (stat.mode & 0o022) !== 0
+      || (options.requireRootOwner !== false && (stat.uid !== 0 || stat.gid !== 0))) {
+    fail("HOST_REBOOT_CONTROL_FAILED");
+  }
+  try { fs.mkdirSync(directory, { mode: 0o700 }); }
+  catch (error) { if (error.code !== "EEXIST") throw error; }
+  return assertStateDirectory(statePath, options);
 }
 
 function assertMaintenanceLock(options = {}) {
@@ -1172,6 +1194,10 @@ async function main() {
     }
     return;
   }
+  if (process.argv.length === 3 && process.argv[2] === "--ensure-state-directory") {
+    try { ensureStateDirectory(); } catch { process.exitCode = 1; }
+    return;
+  }
   if (process.argv.length !== 2) {
     process.exitCode = 1;
     return;
@@ -1216,6 +1242,7 @@ module.exports = {
   assertVerifiedBackupEvidence,
   executePendingReboot,
   ensureMaintenanceLock,
+  ensureStateDirectory,
   handleRequest,
   maintenanceLockBusy,
   parseRequest,

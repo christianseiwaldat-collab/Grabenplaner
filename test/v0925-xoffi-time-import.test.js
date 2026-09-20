@@ -259,6 +259,7 @@ let httpServer;
 let baseUrl;
 let departmentId;
 
+
 function ensurePortalUser(employeeNumber, fullName, role) {
   const positionId = db.prepare("SELECT id FROM positions ORDER BY sort_order, id LIMIT 1").get().id;
   db.prepare(`
@@ -355,7 +356,7 @@ test("v0.92.5: FL besitzt das entziehbare Grundrecht, AL erhält es nur durch Fr
   ).effectivePermissions.includes(PERMISSION), false);
 });
 
-test("v0.92.5: der Server lehnt aktuelle und künftige KW vor jeder Bilderkennung ab", async () => {
+test("v0.92.5: eine aktuelle KW ohne belegtes Dienstende bleibt vor der Bilderkennung gesperrt", async () => {
   db.prepare("DELETE FROM portal_permission_denials WHERE employee_number = ? AND permission = ?").run(MANAGER, PERMISSION);
   const auth = createSession(MANAGER);
   const response = await fetch(
@@ -625,4 +626,56 @@ test("v0.92.5: xoffi-Rohdaten bleiben revisionssicher und funktionieren auch bei
   });
   assert.throws(() => db.prepare("UPDATE xoffi_time_days SET actual_minutes = 1 WHERE employee_row_id = ?").run(row.id), /immutable/);
   assert.throws(() => db.prepare("DELETE FROM xoffi_time_imports WHERE id = ?").run(importId), /immutable/);
+});
+
+test("xoffi MHTML: current week imports after the last shift and apply rejects a newly added later shift", async () => {
+  const { fixtureHtml, mhtml } = require('../test-support/xoffi-mhtml');
+  const savedDay=process.env.GRABENPLANER_TEST_TODAY;
+  process.env.GRABENPLANER_TEST_TODAY='2026-09-19';
+  const inserted=[];
+  const insert=(date)=>{const row=db.prepare("INSERT INTO shifts(employee_number,location_id,department_id,shift_date,start_time,end_time,area) VALUES(?,?,?,?,'09:00','17:00','Verkauf')").run(MANAGER,LOCATION,departmentId,date);inserted.push(Number(row.lastInsertRowid));return inserted.at(-1);};
+  try {
+    insert('2026-09-18');
+    const auth=createSession(MANAGER);
+    const input=mhtml(fixtureHtml({week:38,balanceDate:'13.09.2026'}));
+    const inspect=await fetch(`${baseUrl}/api/portal/v1/xoffi-time-import/inspect?locationId=${LOCATION}&departmentId=${departmentId}`,{method:'POST',headers:{Cookie:auth.cookie,'X-CSRF-Token':auth.csrf,'Content-Type':'application/octet-stream','X-Import-Filename':'current.mhtml'},body:input});
+    const preview=await inspect.json();assert.equal(inspect.status,200,JSON.stringify(preview));
+    const later=insert('2026-09-20');
+    const apply=()=>fetch(`${baseUrl}/api/portal/v1/xoffi-time-import/apply`,{method:'POST',headers:{Cookie:auth.cookie,'X-CSRF-Token':auth.csrf,'Content-Type':'application/json'},body:JSON.stringify({previewId:preview.previewId,confirmed:true,useAsActual:true,employees:preview.employees})});
+    const denied=await apply();assert.equal(denied.status,409);assert.equal((await denied.json()).code,'XOFFI_WEEK_NOT_PAST');
+    db.prepare('DELETE FROM shifts WHERE id=?').run(later);
+    const accepted=await apply(),body=await accepted.json();assert.equal(accepted.status,201,JSON.stringify(body));
+    assert.equal(body.schedule.isPastWeek,false);
+    assert.equal(body.schedule.xoffiTime.weekByEmployee[MANAGER].days.length,7);
+  } finally {
+    for(const id of inserted)db.prepare('DELETE FROM shifts WHERE id=?').run(id);
+    if(savedDay===undefined)delete process.env.GRABENPLANER_TEST_TODAY;else process.env.GRABENPLANER_TEST_TODAY=savedDay;
+  }
+});
+
+
+test("xoffi comparison: scoped weekly import data, missing persons and persisted configurable limits", async () => {
+  const auth=createSession(MANAGER);
+  db.prepare("INSERT INTO shifts(employee_number,location_id,department_id,shift_date,start_time,end_time,area) VALUES(?,?,?,'2026-09-14','09:00','10:40','Test')").run(MANAGER,LOCATION,departmentId);
+  const url=`${baseUrl}/api/portal/v1/xoffi-plan-comparison?weekStart=2026-09-14&locationId=${LOCATION}&departmentId=${departmentId}`;
+  let response=await fetch(url,{headers:{Cookie:auth.cookie}}),body=await response.json();
+  assert.equal(response.status,200,JSON.stringify(body));
+  const row=body.employees.find(entry=>entry.employeeNumber===MANAGER);
+  assert.equal(row.importState,'complete');assert.equal(row.actualMinutes,1245);
+  assert.equal(row.days.length,7);assert.equal(row.days[0].actualMinutes,510);
+  assert.equal(row.plannedMinutes,100);assert.equal(row.severity,'red');assert.equal(row.percent,1145);
+  assert.equal(body.employees.find(entry=>entry.employeeNumber===DEPARTMENT_MANAGER).importState,'missing');
+  const otherLocation=db.prepare('SELECT id FROM locations WHERE id != ? LIMIT 1').get(LOCATION).id;
+  const foreign=await fetch(url.replace(`locationId=${LOCATION}`,`locationId=${otherLocation}`).replace(`&departmentId=${departmentId}`,''),{headers:{Cookie:auth.cookie}});
+  assert.equal(foreign.status,403);
+  const save=(limits,csrf=auth.csrf)=>fetch(`${baseUrl}/api/portal/v1/xoffi-plan-comparison/settings`,{method:'PUT',headers:{Cookie:auth.cookie,'X-CSRF-Token':csrf,'Content-Type':'application/json'},body:JSON.stringify({locationId:LOCATION,departmentId,limits})});
+  const denied=await save({greenMax:5,yellowMax:15},'invalid');assert.equal(denied.status,403);
+  db.prepare("INSERT OR IGNORE INTO portal_permission_grants(employee_number,permission,granted_by) VALUES(?, 'time:settings', 'test')").run(MANAGER);
+  const invalidCsrf=await save({greenMax:5,yellowMax:15},'invalid');assert.equal(invalidCsrf.status,403);
+  const invalid=await save({greenMax:15,yellowMax:5});assert.equal(invalid.status,400);
+  const saved=await save({greenMax:8,yellowMax:20});assert.equal(saved.status,200,JSON.stringify(await saved.json()));
+  response=await fetch(url,{headers:{Cookie:auth.cookie}});body=await response.json();
+  assert.deepEqual(body.limits,{greenMax:8,yellowMax:20});
+  const branch=await fetch(url.replace(`&departmentId=${departmentId}`,''),{headers:{Cookie:auth.cookie}});
+  assert.deepEqual((await branch.json()).limits,{greenMax:5,yellowMax:15});
 });
