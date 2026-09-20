@@ -1,5 +1,40 @@
 # Kürzere Bereitstellung und nächtliche Wiederherstellungsprüfung
 
+## Verbindlicher Diagnose-Vorabcheck (20.09.2026)
+
+Vor jedem Deploy oder isolierten Recovery-Versuch mit Diagnose-Preload gehört
+der folgende kurze Check zur Vorprüfung des **konkret verwendeten Quellstands**.
+Er läuft unter Ubuntu, bevor große Backups gelesen, kopiert oder wiederhergestellt
+werden:
+
+```sh
+npm run test:recovery-diagnostics
+```
+
+Der Test führt den tatsächlichen Einstieg aus
+`test-support/recovery-timeout-preload.js` aus und prüft sowohl das erste
+`observer-ready`-Ereignis als auch Diagnoseereignisse. Die Prüfung gehört außerdem
+zur normalen `npm test`-Testsammlung. Ein Fehler sperrt den weiteren Diagnose-Lauf.
+
+`restorePair` verlangt einen vorhandenen, sicheren, dem ausführenden Benutzer
+gehörenden und **vollständig leeren** `workRoot`. Das Erstellen des leeren Ordners
+ist erlaubt; Diagnose-, Log-, Marker- und temporäre Dateien darin sind vor dem
+Restore verboten. Auch Preloads und andere Initialisierungsschritte müssen diese
+Vorbedingung erhalten. Das gilt einschließlich ihrer ersten Statusmeldung.
+
+Diagnosen liegen außerhalb dieses Ordners, zum Beispiel als
+`<Recovery-ID>/timeout-observer.jsonl` neben `<Recovery-ID>/work/`, mit privaten
+Dateirechten. Vor der teuren Vorbereitung wird der tatsächliche Arbeitsordner
+auf Typ, Eigentümer, Rechte und leeren Inhalt geprüft; direkt beim Restore bleibt
+die bestehende Prüfung `PG_PAIR_RESTORE_NEW_WORKSPACE` zusätzlich aktiv.
+Unbekannte Inhalte niemals automatisch löschen oder die Leerheitsprüfung umgehen.
+
+Anlass: Beim Diagnoseversuch GP697 machte das erste Preload-Ereignis den
+Arbeitsordner nicht leer. Der Restore brach deshalb vor dem Datenbankstart ab.
+Die Korrektur des Logpfads allein ersetzt diese Vorprüfung nicht. Nach einem
+gescheiterten vollständigen Versuch werden Belege gesichert und die Ursache
+untersucht; ein neuer Vollversuch erfolgt nicht automatisch.
+
 ## Ergänzung 15.09.2026: normaler PostgreSQL-Aufruf
 
 Für normale Folgeupdates mit unverändertem Runtime-/Offsite-Vertrag den

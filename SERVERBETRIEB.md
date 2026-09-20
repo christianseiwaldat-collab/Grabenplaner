@@ -1,5 +1,11 @@
 # Grabenplaner Serverbetrieb
 
+Bei Deploy- und Recovery-Diagnosen gilt der
+[verbindliche Diagnose-Vorabcheck](docs/DEPLOY-ZEITEN-UND-NACHTPRUEFUNGEN.md#verbindlicher-diagnose-vorabcheck-20092026):
+Ein Restore-Arbeitsordner muss bis zum Restore vollständig leer bleiben.
+Auch Preload-Logs liegen außerhalb; der kurze Regressionstest läuft vor großen
+Backup-Lese-, Kopier- oder Restore-Arbeiten.
+
 ## PostgreSQL-Migration ab v0.92.38
 
 Für ausdrücklich migrierte Ubuntu-Server verwenden GP und seine Hintergrundarbeiter zwei Datenbanken: `grabenplaner_core` für Planung, Personal, Rechte und CRM sowie `grabenplaner_sales` für Kassa und TradeFoto. Eine eigene PostgreSQL-18-Instanz läuft ausschließlich auf `127.0.0.1:55486` als `grabenplaner-db`; bestehende andere Datenbankinstanzen bleiben getrennt. Neue Standardinstallationen verwenden weiterhin SQLite. Die folgenden SQLite-Anleitungen gelten nur vor einer solchen Migration.
