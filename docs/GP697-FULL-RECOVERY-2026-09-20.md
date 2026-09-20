@@ -2,7 +2,7 @@
 
 ## Auftrag und Status
 
-Der Nutzer hat am 20.09.2026 ausdrücklich den einmaligen vollständigen Test nach kurzen Diagnoseprüfungen freigegeben. Kein Deploy und keine automatische Wiederholung bei Fehler. Die Vorbereitung ist abgeschlossen; der serverseitige Lauf wurde um **05:14:36 Europe/Vienna** gestartet. Ein Endergebnis liegt beim Anlegen dieses Berichts noch nicht vor.
+Der Nutzer hat am 20.09.2026 ausdrücklich den einmaligen vollständigen Test nach kurzen Diagnoseprüfungen freigegeben. Kein Deploy und keine automatische Wiederholung bei Fehler. Der serverseitige Lauf wurde um **05:14:36 Europe/Vienna** gestartet und ist um **05:16:00** bereits vor dem nativen Datenbank-Restore gescheitert. Ursache war ein Fehler im neu angelegten Diagnoseaufbau, nicht ein nachgewiesener Fehler des produktiven GP. Es wurde kein zweiter vollständiger Lauf gestartet.
 
 Getesteter Kandidat: `b508a2a3093f618bf799a541336b5988cb17d7a6`, Version 0.92.62-beta, einschließlich Startdiagnose `acf4bb4`, Korrektur des Verbindungserwerbs `355bca2` und isoliertem Timeout-Beobachter. Der produktive GP bleibt unverändert auf 0.92.61-beta. Es wurden keine Datenbank-Zeitlimits erhöht.
 
@@ -43,7 +43,17 @@ Lauf-ID: `e1e23db1-6d25-43fe-8f99-6abb7197fc28`.
 
 Wichtige Ergebnisdateien sind `completion.json`, `result.json` oder `failure.json`, `timeout-observer.jsonl`, `startup-failure.json`, `http-progress.jsonl`, `worker.log`, `postflight.json`. Vor dem eigentlichen Workerstart ist nur der äußere Supervisor aktiv, während die Sicherung geprüft und kopiert wird. `Result=success` eines noch laufenden systemd-Dienstes ist kein abgeschlossenes Testergebnis.
 
-Die Automation `gp-fr-here-deploy-fehlerdiagnose-fortsetzen` wurde auf die ausschließliche Überwachung dieses bereits gestarteten Laufs umgestellt. Sie prüft alle zehn Minuten kompakt, startet keinen zweiten Lauf und soll sich nach einmaliger Ergebnisauswertung pausieren. Bei unverändert laufender Arbeit bleibt sie still.
+Die Automation `gp-fr-here-deploy-fehlerdiagnose-fortsetzen` wurde zunächst auf die ausschließliche Überwachung dieses Laufs umgestellt und nach Bekanntwerden des Fehlers wieder pausiert. Es gibt keinen automatischen neuen Restore. Das lokale Startskript verweigert zusätzlich eine Wiederholung, solange der Nachweis dieses ersten Starts vorhanden ist.
+
+## Konkreter Aufbaufehler und begrenzte Korrektur
+
+Der Preload schrieb sein erstes `observer-ready`-Ereignis nach `work/timeout-observer.jsonl`, bevor `restorePair` aufgerufen wurde. `restorePair` verlangt ausdrücklich einen vorhandenen, dem Testkonto gehörenden und **vollständig leeren** Arbeitsbereich. Die zusätzliche Logdatei verletzte diese Bedingung und führte sofort zu `PG_PAIR_RESTORE_NEW_WORKSPACE`. Das bloße vorherige Anlegen des leeren Verzeichnisses war korrekt; die Diagnose-Datei darin war der Fehler.
+
+Die 77 vorangegangenen Tests deckten die Fehlerklassifizierung und Fehlerweitergabe ab, aber nicht diesen Zusammenhang zwischen Preload und leerem Restore-Verzeichnis. Der Worker lief deshalb nur etwa zwei Sekunden; der innere Supervisor einschließlich Beweissicherung und Bereinigung rund vier Sekunden. Der äußere Lauf einschließlich Sicherungsprüfung und Kopie dauerte rund 1 Minute 28 Sekunden. Ein PostgreSQL-Cluster wurde nicht initialisiert, ein nativer Restore und der App-Test wurden nicht erreicht.
+
+Korrigiert wurde der Diagnoseaufbau lokal: Das Log liegt künftig neben `work/`, außerhalb des geschützten leeren Arbeitsbereichs. Der Preload ist nun als `test-support/recovery-timeout-preload.js` im Repository erfasst; Start- und Beweissicherungsskript verwenden denselben korrigierten Pfad. Ein zusätzlicher kurzer Regressionstest führt den Preload aus und prüft, dass auch seine allererste Ausgabe den Restore-Arbeitsbereich unangetastet lässt. Die zwölf gezielten Diagnosetests einschließlich dieser Regression bestanden unter Ubuntu in rund 0,6 Sekunden. Das ist keine Wiederholung des vollständigen Restores und kein Nachweis des ursprünglichen GP-Startfehlers.
+
+Die Belege wurden lokal gesichert. Der Supervisor bestätigte `stopped: true`, `cleaned: true`; das Testverzeichnis existiert nicht mehr. Produktives Release-Manifest und Prozesskennung blieben unverändert, Live und Ready lieferten jeweils HTTP 200 / `ok: true`. Rund 72,75 GB waren nach der Bereinigung frei. Die Wartungssperre wurde freigegeben. Es erfolgte kein Deploy.
 
 ## Grenze eines positiven Ergebnisses
 
