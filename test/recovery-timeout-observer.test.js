@@ -1,6 +1,24 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
 const {install,classify,frames}=require('../test-support/recovery-timeout-observer');
+test('preload leaves the restore workspace empty, including its initial ready event',()=>{
+ const fs=require('node:fs'),vm=require('node:vm');
+ const root='/var/lib/grabenplaner-offsite/postgresql-recovery/11111111-1111-4111-8111-111111111111',written=[];
+ const source=fs.readFileSync(path.join(__dirname,'../test-support/recovery-timeout-preload.js'),'utf8');
+ const context={__dirname:root+'/candidate/test-support',process:{getuid:()=>993,pid:1},require(name){
+  if(name==='node:fs')return {realpathSync:p=>p,appendFileSync(file,text,options){written.push({file,event:JSON.parse(text),mode:options.mode});}};
+  if(name==='node:path')return path.posix;
+  if(name==='node:os')return {networkInterfaces:()=>({lo:[{internal:true}]})};
+  if(name==='node:worker_threads')return {threadId:0};
+  if(name==='./recovery-timeout-observer')return {install({emit}){emit({event:'synthetic-error'});}};
+  if(name==='pg'||name==='../lib/persistence/errors')return {};
+  throw new Error('Unexpected import');
+ }};
+ vm.runInNewContext(source,context);
+ assert.equal(written.length,2);
+ for(const event of written){assert.equal(event.file,root+'/timeout-observer.jsonl');assert.equal(event.mode,0o600);assert.equal(event.file.startsWith(root+'/work/'),false);}
+ assert.equal(written.at(-1).event.event,'observer-ready');
+});
 for(const [error,kind] of [
  [{code:'57014',message:'canceling statement due to statement timeout'},'statement-timeout'],
  [{message:'Query read timeout'},'driver-query-timeout'],
