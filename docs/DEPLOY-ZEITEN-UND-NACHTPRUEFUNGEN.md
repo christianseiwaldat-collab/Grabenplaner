@@ -35,6 +35,24 @@ Die Korrektur des Logpfads allein ersetzt diese Vorprüfung nicht. Nach einem
 gescheiterten vollständigen Versuch werden Belege gesichert und die Ursache
 untersucht; ein neuer Vollversuch erfolgt nicht automatisch.
 
+### Diagnoseprozess: vollständige Gruppen und Pfadkette
+
+Bei `runuser` ersetzt eine explizite Angabe mit `-G` die automatisch geladenen
+Zusatzgruppen. Ohne `-g` kann außerdem die erste angegebene Zusatzgruppe zur
+Primärgruppe werden. Für den derzeitigen Diagnoseprozess sind deshalb die
+Primärgruppe `grabenplaner-offsite` und beide Zusatzgruppen
+`grabenplaner-offsite-status` und `grabenplaner` explizit zu übergeben.
+Die Statusgruppe erlaubt das Durchqueren von `/var/lib/grabenplaner-offsite`;
+die App-Gruppe erlaubt das Lesen des geschützten Kandidatencodes.
+
+Der Vorabcheck muss mit genau dieser Prozessidentität die gesamte Pfadkette
+zum Workspace und zum Kandidatencode sowie die Laufzeitabhängigkeiten prüfen.
+Ein erfolgreicher Lesezugriff ausschließlich auf `/opt/grabenplaner/app` reicht
+nicht. Prozessrechte ändern weder die dauerhafte Gruppenmitgliedschaft noch
+Verzeichnisrechte. Anlass: GP698 stoppte am 20.09.2026 vor Backupkopie und
+Workerstart, weil dem Testprozess die Statusgruppe fehlte. Der Lauf bleibt als
+fehlgeschlagener Vorabcheck erhalten und wird nicht automatisch wiederholt.
+
 ## Ergänzung 15.09.2026: normaler PostgreSQL-Aufruf
 
 Für normale Folgeupdates mit unverändertem Runtime-/Offsite-Vertrag den
