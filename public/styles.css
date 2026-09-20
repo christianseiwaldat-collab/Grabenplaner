@@ -4943,6 +4943,9 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 .system-center-card-checks li.ok i { color:var(--rd-good); background:var(--rd-good-soft); }
 .system-center-card-checks li.warning i { color:var(--rd-warning); background:var(--rd-warning-soft); }
 .system-center-card-checks li.critical i { color:var(--rd-critical); background:var(--rd-critical-soft); }
+.system-center-card-checks li > a { grid-column:2; justify-self:start; color:var(--rd-text); text-decoration:underline; }
+.system-center-card-checks li small { display:block; margin-top:3px; line-height:1.4; }
+.system-center-factor { scroll-margin-top:100px; }
 .system-center-factor > footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:7px; margin-top:auto; padding-top:10px; border-top:1px solid var(--rd-line); }
 .system-center-factor > footer > small { color:var(--rd-muted); font-size:7px; }
 .system-center-history { padding:18px; border:1px solid var(--rd-line); border-radius:17px; background:var(--rd-surface); }
@@ -7353,3 +7356,32 @@ html[data-active-page-theme="dark"] .custom-work-rule-sticky-actions {
   .sales-article-master-update { text-align:left; margin-left:0; }
   .sales-article-detail-card > header { flex-wrap:wrap; gap:5px; }
 }
+
+/* Weekly xoffi comparison uses theme colours plus readable status labels. */
+.xoffi-comparison-list { display:grid; gap:10px; }
+.xoffi-comparison-person { border:1px solid var(--line); border-radius:12px; padding:12px; }
+.xoffi-comparison-person > summary { display:flex; align-items:center; flex-wrap:wrap; gap:10px 20px; cursor:pointer; }
+.xoffi-comparison-person > summary strong { margin-right:auto; }
+.xoffi-comparison-person > summary::before { content:'▸'; }
+.xoffi-comparison-person[open] > summary::before { content:'▾'; }
+.xoffi-variance { font-weight:750; padding:4px 8px; border-radius:6px; }
+.xoffi-variance.green { color:var(--success-ink,#246046); background:var(--success-surface,#e6f3ec); }
+.xoffi-variance.yellow { color:var(--warning-ink,#795610); background:var(--warning-surface,#fff2cf); }
+.xoffi-variance.red,.xoffi-variance.unplanned { color:var(--danger-ink,#a23329); background:var(--danger-surface,#fae8e5); }
+.xoffi-variance.missing,.xoffi-variance.scope { color:var(--muted); }
+.xoffi-comparison-table { max-width:100%; overflow-x:auto; margin-top:12px; }
+.xoffi-comparison-table table { width:100%; border-collapse:collapse; }
+.xoffi-comparison-table th,.xoffi-comparison-table td { padding:9px; text-align:left; border-bottom:1px solid var(--line); }
+.xoffi-comparison-table small { display:block; font-weight:400; }
+.xoffi-comparison-table caption { text-align:left; margin-bottom:8px; }
+.xoffi-comparison-table tfoot { font-weight:750; }
+.xoffi-comparison-settings { margin:12px 0 20px; }
+.xoffi-comparison-settings summary,#timeLegacyPanel > summary { cursor:pointer; font-weight:700; padding:8px 0; }
+.xoffi-comparison-settings form { margin-top:12px; flex-wrap:wrap; }
+.xoffi-comparison-settings input { width:110px; }
+.xoffi-comparison-settings .settings-note { flex-basis:100%; }
+#timeLegacyPanel[open] > .time-presence-summary { margin-top:16px; }
+
+.xoffi-comparison-panel > :not(.vacation-panel-heading) { margin-left:18px; margin-right:18px; }
+.xoffi-comparison-list { margin-bottom:18px; }
+.xoffi-comparison-panel .settings-note { font-size:12px; line-height:1.5; }

@@ -272,10 +272,30 @@ test("ein verfuegbares Update ist Aufmerksamkeit, aber kein kritischer Fehler", 
   assert.equal(result.state, "attention");
 });
 
+test("daily monitor keeps independent HTTPS evidence despite an offsite warning", () => {
+  const input = healthyInput();
+  Object.assign(input.diagnostics.monitor, { state: "warning", ageHours: 20 });
+  input.diagnostics.monitor.checks.offsite = false;
+  input.diagnostics.database.providerId = "postgresql";
+  const result = buildSystemTrustIndex(input);
+  assert.equal(evidence(result, "tls_certificate").state, CHECK_STATES.PASS);
+  assert.equal(evidence(result, "database_monitor_integrity").label, "Aktuelle PostgreSQL-Prüfung");
+  assert.notEqual(evidence(result, "server_monitor_current").state, CHECK_STATES.PASS);
+});
+
+test("missing age, future evidence and explicit shorter freshness never pass", () => {
+  for (const patch of [{ ageHours: null }, { ageHours: 2, maximumAgeHours: 1 },
+    { lastErrorCode: "MONITOR_STATUS_TIMESTAMP_FUTURE" }, { stale: true }, { complete: false }]) {
+    const input = healthyInput();
+    Object.assign(input.diagnostics.monitor, patch);
+    assert.equal(evidence(buildSystemTrustIndex(input), "tls_certificate").state, CHECK_STATES.UNKNOWN);
+  }
+});
+
 test("ein veralteter Monitor macht abhaengige Nachweise unbekannt statt gruener", () => {
   const input = healthyInput({ appSmoke: { state: "pass", checkedAt: RESTORE_AT } });
   input.diagnostics.monitor.state = "warning";
-  input.diagnostics.monitor.ageHours = 3;
+  input.diagnostics.monitor.ageHours = 31;
   const result = buildSystemTrustIndex(input);
   assert.equal(evidence(result, "server_monitor_current").state, CHECK_STATES.UNKNOWN);
   assert.equal(evidence(result, "database_monitor_integrity").state, CHECK_STATES.UNKNOWN);

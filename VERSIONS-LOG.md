@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.63 Beta – vorbereitet, noch nicht ausgerollt
+
+- PostgreSQL-Größe und Referenzintegrität im System-Center, tägliche Nachweisfristen und verständliche Beheben-Verweise.
+- Begrenzter paralleler Restore im isolierten Prüfcluster und Phasenmessung bei Sicherungen.
+- Vorbereitete Host-Neustartkorrekturen; kein Neustart durch diese Releasevorbereitung.
+- xoffi-Import ab dem letzten geplanten Dienstende der Woche und KW-/Tagesvergleich zum GP-Plan mit einstellbarer 5-/15-Prozent-Ampel.
+- Auslieferung setzt zuerst die dokumentierte Offsite-Modulwartung und deren vollständigen Nachweis voraus; siehe [Releasevorbereitung](docs/DEPLOY-RELEASE-v09263.md).
+
 ## v0.92.62 Beta – vorbereitet, noch nicht ausgerollt
 
 - Einstellungen → System & Backup ergänzt eine direkt bearbeitbare Matrix für Systemprüfung, vollständige Sicherung, Repository-Prüfung, Wiederherstellungstest und die eingerichtete Sicherheitsprüfung.

@@ -106,6 +106,17 @@ test("v0.74 rejects contradictory recovery, state and error values", () => {
   assert.equal(parsed.lastError.code, "MONITOR_RUN_FAILED");
 });
 
+test("daily monitoring accepts the daily interval but detects a missed next check", () => {
+  const status = parseServerMonitorStatus(validStatus());
+  const daily = diagnosticsFromStatus(status, { now: new Date("2026-07-21T11:00:00Z") });
+  assert.equal(daily.state, "ok");
+  assert.equal(daily.maximumAgeHours, 30);
+  assert.equal(daily.stale, false);
+  const missed = diagnosticsFromStatus(status, { now: new Date("2026-07-21T19:00:00Z") });
+  assert.equal(missed.stale, true);
+  assert.equal(missed.state, "warning");
+});
+
 test("v0.74 treats future and stale monitor timestamps as non-blocking operational warnings", () => {
   const future = diagnosticsFromStatus(parseServerMonitorStatus(validStatus({ generatedAt: "2099-07-20T12:00:00.000Z" })), {
     now: new Date("2026-07-20T12:00:00.000Z"),

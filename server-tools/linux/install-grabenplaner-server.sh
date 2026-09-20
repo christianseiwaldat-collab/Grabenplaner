@@ -991,6 +991,8 @@ HOST_CONTROL_MODULE_WRITTEN=1
 [[ -f "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" && ! -L "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" \
   && "$(stat -c '%U:%G:%a:%h' -- "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js")" == "root:root:644:1" ]] \
   || fail "Der root-geschuetzte Host-Control-Broker wurde nicht sicher installiert."
+"$NODE_EXECUTABLE" "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" --ensure-state-directory \
+  || fail "Der Host-Neustartstatus konnte nicht sicher vorbereitet werden."
 
 monitor_status_gid="$(getent group "$MONITOR_STATUS_GROUP" | awk -F: '{print $3}')"
 [[ "$monitor_status_gid" =~ ^[0-9]+$ ]] || fail "Die Monitor-Statusgruppe konnte nicht sicher aufgeloest werden."
