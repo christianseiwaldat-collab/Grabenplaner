@@ -9,6 +9,15 @@ const root = path.resolve(__dirname, "..");
 const unitRoot = path.join(root, "server-tools", "linux", "host-control", "systemd");
 const read = (name) => fs.readFileSync(path.join(unitRoot, name), "utf8");
 
+test('PostgreSQL lifecycle prepares durable reboot state without a 25-minute total kill timer', () => {
+  const service = fs.readFileSync(path.join(root, 'server-tools/linux/postgresql/grabenplaner-postgresql-control@.service.in'), 'utf8');
+  assert.match(service, /^StateDirectory=grabenplaner-host-control$/m);
+  assert.match(service, /^StateDirectoryMode=0700$/m);
+  assert.match(service, /^RuntimeMaxSec=infinity$/m);
+  assert.match(service, /^OnFailure=grabenplaner-postgresql-maintenance-recover.service$/m);
+  assert.match(service, /^ProtectSystem=strict$/m);
+});
+
 test("host reboot socket is group-scoped and accepts bounded broker instances", () => {
   const socket = read("grabenplaner-host-control.socket.in");
   assert.match(socket, /^ListenStream=\/run\/grabenplaner-host-control\/request\.sock$/m);

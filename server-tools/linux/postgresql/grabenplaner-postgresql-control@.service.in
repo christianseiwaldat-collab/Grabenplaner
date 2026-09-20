@@ -6,11 +6,15 @@ OnFailure=grabenplaner-postgresql-maintenance-recover.service
 Type=exec
 User=root
 Group=root
+StateDirectory=grabenplaner-host-control
+StateDirectoryMode=0700
 ExecStart=/usr/bin/node /opt/grabenplaner/app/server-tools/linux/postgresql/control-worker.js
 StandardInput=socket
 StandardOutput=socket
 StandardError=journal
-RuntimeMaxSec=1500
+# A verified pair backup can exceed 25 minutes. Native phases keep their own
+# error handling; never kill a working lifecycle solely for its total duration.
+RuntimeMaxSec=infinity
 TimeoutStopSec=150
 KillMode=control-group
 UMask=0077

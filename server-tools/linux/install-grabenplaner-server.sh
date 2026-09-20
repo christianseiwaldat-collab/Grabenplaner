@@ -394,6 +394,7 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/lib/assurance-history.js",
   "server-tools/linux/offsite/lib/application-smoke.js",
   "server-tools/linux/offsite/lib/assurance-control-broker.js",
+  "server-tools/linux/offsite/lib/maintenance-schedule-broker.js",
   "server-tools/linux/offsite/lib/offsite-target-broker.js",
   "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
   "server-tools/linux/offsite/lib/offsite-restore-verify.js",
@@ -613,7 +614,7 @@ const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-sch
 let offsiteContract;
 try { offsiteContract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Offsite-Modulvertrag ist nicht lesbar."); }
 if (offsiteContract?.format !== "grabenplaner-linux-offsite-module-contract" || offsiteContract?.schemaVersion !== 1
-  || offsiteContract?.moduleVersion !== 10 || offsiteContract?.activationPolicy !== "explicit-root-setup"
+  || offsiteContract?.moduleVersion !== 11 || offsiteContract?.activationPolicy !== "explicit-root-setup"
   || !Array.isArray(offsiteContract?.managedArtifacts) || offsiteContract.managedArtifacts.length !== expectedOffsiteArtifacts.length
   || expectedOffsiteArtifacts.some((relative) => !offsiteContract.managedArtifacts.includes(relative))
   || offsiteContract.managedArtifacts.some((relative) => typeof relative !== "string" || !relative.startsWith("server-tools/linux/offsite/") || relative.includes("\\") || relative.split("/").some((part) => !part || part === "." || part === ".."))) {
@@ -990,6 +991,8 @@ HOST_CONTROL_MODULE_WRITTEN=1
 [[ -f "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" && ! -L "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" \
   && "$(stat -c '%U:%G:%a:%h' -- "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js")" == "root:root:644:1" ]] \
   || fail "Der root-geschuetzte Host-Control-Broker wurde nicht sicher installiert."
+"$NODE_EXECUTABLE" "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" --ensure-state-directory \
+  || fail "Der Host-Neustartstatus konnte nicht sicher vorbereitet werden."
 
 monitor_status_gid="$(getent group "$MONITOR_STATUS_GROUP" | awk -F: '{print $3}')"
 [[ "$monitor_status_gid" =~ ^[0-9]+$ ]] || fail "Die Monitor-Statusgruppe konnte nicht sicher aufgeloest werden."

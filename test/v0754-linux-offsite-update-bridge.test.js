@@ -57,7 +57,9 @@ const v6Artifacts = [
   "systemd/grabenplaner-offsite-target-control.socket.in",
   "systemd/grabenplaner-offsite-target-control@.service.in",
 ];
-const legacyV5Artifacts = relativeArtifacts.filter((relative) => !v6Artifacts.includes(relative));
+const v11Artifacts = ["lib/maintenance-schedule-broker.js"];
+const legacyV10Artifacts = relativeArtifacts.filter((relative) => !v11Artifacts.includes(relative));
+const legacyV5Artifacts = legacyV10Artifacts.filter((relative) => !v6Artifacts.includes(relative));
 const legacyV3Artifacts = legacyV5Artifacts.filter((relative) => !v4Artifacts.includes(relative));
 const legacyV2Artifacts = legacyV3Artifacts.filter((relative) => ![
   "lib/assurance-control-broker.js",
@@ -231,9 +233,9 @@ test("v0.75.4 updater uses the installed root-protected helper and accepts both 
   assert.match(updater, /compatible\|compatible-installer-only\)\s*;;/);
 });
 
-test("module 6 and 7 require explicit migration to the current module", () => {
-  for (const previous of [6, 7]) {
-    assert.equal(classify(candidateContract(), installedContract(baseFiles(), previous)), `migration-required:${previous}->${schema.moduleVersion}`);
+test("modules 6 through 10 require explicit migration to the current module", () => {
+  for (const previous of [6, 7, 8, 9, 10]) {
+    assert.equal(classify(candidateContract(), installedContract(baseFiles(legacyV10Artifacts), previous)), `migration-required:${previous}->${schema.moduleVersion}`);
   }
 });
 

@@ -1,7 +1,7 @@
 {
   "format": "grabenplaner-linux-offsite-module-contract",
   "schemaVersion": 1,
-  "moduleVersion": 10,
+  "moduleVersion": 11,
   "activationPolicy": "explicit-root-setup",
   "managedArtifacts": [
     "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
@@ -22,6 +22,7 @@
     "server-tools/linux/offsite/lib/assurance-history.js",
     "server-tools/linux/offsite/lib/application-smoke.js",
     "server-tools/linux/offsite/lib/assurance-control-broker.js",
+    "server-tools/linux/offsite/lib/maintenance-schedule-broker.js",
     "server-tools/linux/offsite/lib/offsite-target-broker.js",
     "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
     "server-tools/linux/offsite/lib/offsite-restore-verify.js",

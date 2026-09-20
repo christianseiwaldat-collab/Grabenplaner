@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path');
-const PHASES=new Set(['preparing','requiring-server','server-required','initializing-application','initialization-wait','initialization-failed','application-initialized','starting-listener','listener-ready','/api/health/live','/api/health/ready']);
+const {applicationStartupPhase,sanitizeReportWorkerDiagnostic}=require('../../../../lib/report-worker-diagnostics');
+const PHASES=new Set(['preparing','requiring-server','server-required','initializing-application','application-data','receipt-workers','report-worker','initialization-wait','initialization-failed','application-initialized','starting-listener','listener-ready','/api/health/live','/api/health/ready']);
 function boundedFile(root,name,limit,tail=false){
  const file=path.join(root,'work','application',name);let fd;
  try{
@@ -24,6 +25,14 @@ function safeDiagnostics(root){
   }catch{/* A partial final progress record is not a verification failure. */}
  }
  if(progress.length)result.httpProgress=progress;
+ try{
+  const failure=JSON.parse(boundedFile(root,'startup-failure.json',4096)||'null');
+  const startupPhase=applicationStartupPhase(failure?.startupPhase),diagnostic=sanitizeReportWorkerDiagnostic(failure?.diagnostic);
+  if(startupPhase&&diagnostic){
+   result.startupFailure={startupPhase,diagnostic};
+   if(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(failure.at||''))result.startupFailure.at=failure.at;
+  }
+ }catch{/* Only fixed technical classes survive cleanup; never raw worker errors. */}
  try{
   const response=JSON.parse(boundedFile(root,'http-last-response-private.json',65536)||'null');
   if(response&&['/api/health/live','/api/health/ready'].includes(response.route)&&Number.isInteger(response.status)&&response.status>=100&&response.status<=599){

@@ -181,10 +181,10 @@ test("v0.86 Linux diagnostics reject CSP directive substring appendages", {
 }, () => {
   const health = read("server-tools/linux/test-grabenplaner-server.sh").replace(/\r\n/g, "\n");
   const functionStart = health.indexOf("csp_has_exact_directive()");
-  const functionEnd = health.indexOf("\n\nfor unit in", functionStart);
+  const functionEnd = health.indexOf("\n}", functionStart);
   assert.notEqual(functionStart, -1, "Exakte CSP-Prueffunktion fehlt.");
   assert.notEqual(functionEnd, -1, "Ende der CSP-Prueffunktion fehlt.");
-  const functionSource = health.slice(functionStart, functionEnd).trim();
+  const functionSource = health.slice(functionStart, functionEnd + 2).trim();
   const harness = [
     functionSource,
     "valid=\"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\"",
