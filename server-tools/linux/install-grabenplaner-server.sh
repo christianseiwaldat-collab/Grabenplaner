@@ -394,6 +394,7 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/lib/assurance-history.js",
   "server-tools/linux/offsite/lib/application-smoke.js",
   "server-tools/linux/offsite/lib/assurance-control-broker.js",
+  "server-tools/linux/offsite/lib/maintenance-schedule-broker.js",
   "server-tools/linux/offsite/lib/offsite-target-broker.js",
   "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
   "server-tools/linux/offsite/lib/offsite-restore-verify.js",
@@ -561,6 +562,8 @@ for (const required of [
   "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
   "server-tools/linux/lib/runtime-v5-transition.js",
   "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
+  "server-tools/linux/preflight-grabenplaner-deploy.sh",
+  "server-tools/linux/lib/postgresql-backup-repair-compat.js",
   "server-tools/linux/update-grabenplaner-server.sh",
   "server-tools/linux/uninstall-grabenplaner-server.sh",
   "server-tools/linux/runtime-schema.json",
@@ -611,7 +614,7 @@ const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-sch
 let offsiteContract;
 try { offsiteContract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Offsite-Modulvertrag ist nicht lesbar."); }
 if (offsiteContract?.format !== "grabenplaner-linux-offsite-module-contract" || offsiteContract?.schemaVersion !== 1
-  || offsiteContract?.moduleVersion !== 10 || offsiteContract?.activationPolicy !== "explicit-root-setup"
+  || offsiteContract?.moduleVersion !== 11 || offsiteContract?.activationPolicy !== "explicit-root-setup"
   || !Array.isArray(offsiteContract?.managedArtifacts) || offsiteContract.managedArtifacts.length !== expectedOffsiteArtifacts.length
   || expectedOffsiteArtifacts.some((relative) => !offsiteContract.managedArtifacts.includes(relative))
   || offsiteContract.managedArtifacts.some((relative) => typeof relative !== "string" || !relative.startsWith("server-tools/linux/offsite/") || relative.includes("\\") || relative.split("/").some((part) => !part || part === "." || part === ".."))) {

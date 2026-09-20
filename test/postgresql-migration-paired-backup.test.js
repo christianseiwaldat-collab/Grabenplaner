@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{spawnSync}=require('node:child_process');
 const {sealPairBundle,verifyPairBundle}=require('../lib/persistence/postgresql/operations/paired-bundle');
+const {copyRecoveryFiles,recoveryFilesPreflight}=require('../lib/persistence/postgresql/operations/runtime');
 const {prunePairedSnapshots,configuredPairedRetention}=require('../lib/persistence/postgresql/operations/paired-retention');
 async function fixture(t){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-pair-test-'));fs.chmodSync(root,0o700);t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
@@ -9,6 +10,22 @@ async function fixture(t){
  const result=await sealPairBundle(bundle,{databases:[{domain:'core',database:'test_core',file:'core.dump'},{domain:'sales',database:'test_sales',file:'sales.dump'}],checkpoint:{kind:'synthetic-component-contract'}});
  return {root,bundle,result};
 }
+test('recovery copies committed AMU and branding files but excludes volatile scanner probes',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-pair-copy-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const source=path.join(root,'source'),target=path.join(root,'target');fs.mkdirSync(path.join(source,'private','amu','blobs'),{recursive:true});fs.mkdirSync(path.join(source,'private','amu','tmp'),{recursive:true});fs.mkdirSync(path.join(source,'branding-kits','kit'),{recursive:true});fs.mkdirSync(target);
+ fs.writeFileSync(path.join(source,'private','amu','blobs','record.amu'),'committed');fs.writeFileSync(path.join(source,'private','amu','tmp','.scanner-probe-test.txt'),'temporary');fs.writeFileSync(path.join(source,'branding-kits','kit','manifest.json'),'{}');
+ copyRecoveryFiles(source,target);
+ assert.equal(fs.readFileSync(path.join(target,'private','amu','blobs','record.amu'),'utf8'),'committed');
+ assert.equal(fs.readFileSync(path.join(target,'branding-kits','kit','manifest.json'),'utf8'),'{}');
+ assert.equal(fs.existsSync(path.join(target,'private','amu','tmp')),false);
+ assert.deepEqual(recoveryFilesPreflight(source),{verified:true,files:2,bytes:11,excluded:['private/amu/tmp']});
+});
+test('recovery path preflight rejects an invalid committed name before a PostgreSQL backup starts',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-pair-preflight-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ fs.mkdirSync(path.join(root,'private','amu','blobs'),{recursive:true});
+ fs.writeFileSync(path.join(root,'private','amu','blobs','.unfinished'),'not allowed');
+ assert.throws(()=>recoveryFilesPreflight(root),/PG_PAIR_COMPONENT_PATH/);
+});
 test('paired backup detects a changed database, missing keys and swapped marker',async t=>{
  const {bundle,result,root}=await fixture(t);assert.equal((await verifyPairBundle(bundle,result.commitMarker)).files,4);
  const sales=path.join(bundle,'sales.dump'),content=fs.readFileSync(sales);fs.appendFileSync(sales,'changed');

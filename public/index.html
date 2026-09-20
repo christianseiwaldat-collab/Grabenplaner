@@ -39,7 +39,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.60 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.62 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -580,7 +580,6 @@
             <div class="xoffi-import-source">
               <label>Xoffi-Datei<input type="file" id="xoffiImportFile" accept=".mhtml,.mht,message/rfc822,multipart/related,image/jpeg,image/png,image/webp" /></label>
               <button type="button" class="secondary-button" id="xoffiInspectButton">Datei auslesen</button>
-              <p class="settings-note" id="xoffiImportStatus">MHTML erkennt die Woche automatisch. Für Bilder zuerst die betreffende vergangene Woche im Dienstplan öffnen.</p>
             </div>
             <div class="xoffi-import-preview" id="xoffiImportPreview"></div>
             <div class="xoffi-import-confirmation hidden" id="xoffiImportConfirmation">
@@ -592,6 +591,7 @@
               <label class="checkbox-line"><input type="checkbox" id="xoffiUseAsActual" checked /><span>xoffi-Werte als maßgebliche Ist-Zeiten für Zeitauswertung und Planvergleich verwenden</span></label>
               <label class="checkbox-line"><input type="checkbox" id="xoffiImportConfirmed" /><span>Ich habe Namen, Tageszeiten, Wochenwerte und Stundenkonten geprüft.</span></label>
             </div>
+            <p class="settings-note" id="xoffiImportStatus" role="status" aria-live="polite" tabindex="-1">MHTML erkennt die Woche automatisch. Für Bilder zuerst die betreffende vergangene Woche im Dienstplan öffnen.</p>
             <div class="modal-actions">
               <button type="button" class="secondary-button" id="xoffiImportCancel">Abbrechen</button>
               <button type="submit" class="primary-button" id="xoffiApplyButton" disabled>Geprüfte Werte importieren</button>
@@ -1948,6 +1948,20 @@
           </section>
           <section class="loan-management-summary" id="loanManagementSummary" aria-label="Zusammenfassung"></section>
           <section class="loan-management-list" id="loanManagementList" aria-live="polite"><p class="settings-note">Leihvorgänge werden geladen.</p></section>
+          <dialog class="modal loan-management-return-modal" id="loanManagementReturnDialog">
+            <form id="loanManagementReturnForm">
+              <div class="modal-header">
+                <div><span class="eyebrow">Direkte Rücknahme</span><h2 id="loanManagementReturnTitle">Leihe zurücknehmen</h2><p id="loanManagementReturnSubtitle">Die Filialleitung schließt die Rücknahme direkt im Grabenplaner ab.</p></div>
+                <button type="button" class="close-button" data-close="loanManagementReturnDialog" aria-label="Dialog schließen">×</button>
+              </div>
+              <aside class="loan-management-return-hint"><strong>Keine zweite Gegenkontrolle erforderlich</strong><p>Mit dem Abschluss bestätigt die angemeldete Filialleitung Zustand und Vollständigkeit. Der Rücknahmebeleg wird sofort erstellt.</p></aside>
+              <div class="loan-management-return-items" id="loanManagementReturnItems"></div>
+              <label class="field"><span>Bemerkung zur Rücknahme (optional)</span><textarea id="loanManagementReturnNote" maxlength="1000" rows="3" placeholder="z. B. Zubehör vollständig"></textarea></label>
+              <label class="checkbox-line"><input id="loanManagementReturnConfirmed" type="checkbox" required /><span>Ich habe alle Artikel geprüft und schließe die Rücknahme als Filialleitung direkt ab.</span></label>
+              <p class="settings-note" id="loanManagementReturnStatus" role="status" aria-live="polite"></p>
+              <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="loanManagementReturnDialog">Abbrechen</button><button type="submit" class="primary-button" id="loanManagementReturnSubmit">Rücknahme abschließen</button></div>
+            </form>
+          </dialog>
         </section>
 
         <section id="branchOrdersView" class="view branch-orders-management-view">
@@ -2759,6 +2773,21 @@
               <div class="card-heading"><div class="card-icon">Server</div><div><h2>Serverzustand &amp; Wiederherstellbarkeit</h2><p>Zeigt Live- und Betriebsbereitschaft, lokale Sicherungen, verschlüsselte Offsite-Kopien sowie automatische Prüf- und Wiederherstellungsnachweise.</p></div></div>
               <div class="server-diagnostics" id="serverDiagnostics"><p class="settings-note">Diagnosedaten werden geladen.</p></div>
               <div class="backup-actions"><button type="button" class="secondary-button" id="refreshServerDiagnosticsButton">Diagnose aktualisieren</button></div>
+            </div>
+            <div class="settings-card full-settings-card maintenance-schedule-card hidden" id="maintenanceScheduleCard">
+              <div class="card-heading"><div class="card-icon">Zeit</div><div><h2>Wartungs- &amp; Backupzeiten</h2><p>Automatische Sicherungen und Wartungen nach Wochentag, Rhythmus und Uhrzeit festlegen.</p></div></div>
+              <p class="settings-note security-note">Aktive Läufe werden niemals abgebrochen. Vor einem Release pausiert der Server diese Zeitgeber automatisch und setzt ihren vorherigen Zustand anschließend wieder fort.</p>
+              <p class="settings-note">Die Matrix zeigt die wirksamen Serverzeitpläne. Uhrzeiten gelten in der Serverzeitzone; vorhandene Verzögerungen bleiben erhalten. Nur geänderte Zeilen werden gespeichert, ohne verpasste Termine sofort nachzuholen.</p>
+              <div class="maintenance-schedule-status" id="maintenanceScheduleStatus" role="status" aria-live="polite">Zeitpläne werden beim Öffnen geladen.</div>
+              <form id="maintenanceScheduleForm">
+                <div class="maintenance-schedule-table-wrap">
+                  <table class="maintenance-schedule-table">
+                    <thead><tr><th>Vorgang</th><th>Rhythmus</th><th>Mo</th><th>Di</th><th>Mi</th><th>Do</th><th>Fr</th><th>Sa</th><th>So</th><th>Zeitpunkt</th><th>Aktiv</th><th>Nächster Lauf</th></tr></thead>
+                    <tbody id="maintenanceScheduleRows"><tr><td colspan="12">Zeitpläne werden geladen …</td></tr></tbody>
+                  </table>
+                </div>
+                <div class="backup-actions"><button type="button" class="secondary-button" id="reloadMaintenanceSchedulesButton">Neu laden</button><button type="submit" class="primary-button" id="saveMaintenanceSchedulesButton">Zeitpläne speichern</button></div>
+              </form>
             </div>
             <div class="settings-card full-settings-card hidden" id="databaseBackupSettingsCard">
               <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank &amp; Backups</h2><p>Interne Sicherungen, ein geprüfter Datenbankexport und die externe Wiederherstellbarkeit werden passend zur Betriebsart bereitgestellt.</p></div></div>

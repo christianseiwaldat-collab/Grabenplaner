@@ -88,9 +88,9 @@ test("offsite failures keep detailed diagnostics in the root journal and publish
 });
 
 test("v0.76 queues automatic assurance only after a committed update or provider rebind", () => {
-  const committed = updater.indexOf("update_committed=1");
+  const committed = updater.indexOf("\nupdate_committed=1");
   const updateEvent = updater.indexOf("offsite_record_assurance_queue update-queued app-updated", committed);
-  const queued = updater.indexOf("grabenplaner-offsite-assurance@app-updated.service");
+  const queued = updater.indexOf("systemctl start --no-block grabenplaner-offsite-assurance@app-updated.service");
   assert.ok(committed > 0 && updateEvent > committed && queued > updateEvent);
   assert.match(updater, /gp_warn "Das erfolgreiche App-Update konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden\."/);
   assert.match(updater, /systemctl start --no-block grabenplaner-offsite-assurance@app-updated\.service/);

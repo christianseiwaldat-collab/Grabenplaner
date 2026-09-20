@@ -1437,6 +1437,15 @@ test("Filialleitung kann die Rücknahme im eigenen Team ohne zweite Person direk
     },
   });
   assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  const pending = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: WITNESS,
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(pending.response.status, 202, JSON.stringify(pending.payload));
   const returned = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
     method: "POST",
     session: managerSession,
@@ -1451,6 +1460,11 @@ test("Filialleitung kann die Rücknahme im eigenen Team ohne zweite Person direk
   assert.equal(returned.payload.loan.status, "returned");
   assert.equal(returned.payload.loan.returnWitness, null);
   assert.equal(returned.payload.loan.borrowerReturnConfirmed, false);
+  assert.equal(
+    db.prepare("SELECT status FROM loan_return_confirmations WHERE id = ?")
+      .get(pending.payload.confirmation.id).status,
+    "cancelled",
+  );
   assert.equal(
     Boolean(db.prepare("SELECT borrower_return_confirmed FROM loans WHERE id = ?")
       .get(issued.payload.loan.id).borrower_return_confirmed),
@@ -2272,11 +2286,15 @@ test("Leihverwaltung und FL-Aktionen sind im Portal verankert, der F18-Import is
   assert.match(adminHtml, /id="loanManagementNavButton"/);
   assert.match(adminHtml, /id="loansView"/);
   assert.match(adminHtml, /id="loanManagementSummary"/);
+  assert.match(adminHtml, /id="loanManagementReturnDialog"/);
+  assert.match(adminHtml, /Keine zweite Gegenkontrolle erforderlich/);
   assert.match(adminHtml, /id="loanSettingsCard"/);
   assert.doesNotMatch(adminHtml, /id="f18MigrationCard"/);
   assert.doesNotMatch(adminSource, /\/api\/portal\/v1\/loans\/migrations\/f18/);
   assert.doesNotMatch(serverSource, /app\.(?:get|post)\("\/api\/portal\/v1\/loans\/migrations\/f18/);
   assert.match(adminSource, /\/api\/portal\/v1\/loans\/management\/summary/);
+  assert.match(adminSource, /data-loan-management-return/);
+  assert.match(adminSource, /\/api\/portal\/v1\/loans\/\$\{encodeURIComponent\(loan\.id\)\}\/return/);
   assert.match(adminSource, /\/api\/portal\/v1\/loans\/documents\/\$\{encodeURIComponent\(documentId\)\}\/email/);
   assert.match(portalHtml, /id="loanIssuePhotos"/);
   assert.match(portalHtml, /id="loanReturnPhotos"/);

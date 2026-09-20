@@ -1,11 +1,10 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawn}=require('node:child_process');
 const {verifyPairBundle}=require('../../../../lib/persistence/postgresql/operations/paired-bundle');
-const {RESTORE_TOOL_TIMEOUT_MS}=require('../../../../lib/persistence/postgresql/operations/paired-restore');
+const {monitorActivity,childCompletion,emitProgress}=require('./postgresql-recovery-activity');
+const {unitController,finishWorkspace,cancellation}=require('./postgresql-recovery-control');
 const BASE='/var/lib/grabenplaner-offsite/postgresql-recovery';
 const ACCOUNT='grabenplaner-offsite';
-// Keep room outside the largest restore for core data and the full app smoke.
-const RECOVERY_RUNTIME_SECONDS=RESTORE_TOOL_TIMEOUT_MS/1000+15*60;
 function ownTree(root,uid,gid){
  for(const name of fs.readdirSync(root)){const file=path.join(root,name),info=fs.lstatSync(file);if(info.isSymbolicLink()||!info.isDirectory()&&(!info.isFile()||info.nlink!==1))throw new Error('PG_RECOVERY_TREE');if(info.isDirectory())ownTree(file,uid,gid);else{fs.chownSync(file,uid,gid);fs.chmodSync(file,0o600);}}
  fs.chownSync(root,uid,gid);fs.chmodSync(root,0o700);
@@ -14,7 +13,7 @@ function recoveryUnitProperties(root){
  if(typeof root!=='string'||path.dirname(root)!==BASE||! /^[a-f0-9-]{36}$/.test(path.basename(root)))throw new Error('PG_RECOVERY_UNIT_ROOT');
  // As in the SQLite smoke service, group access exists only inside this
  // process. Live files and maintenance sockets remain inaccessible.
- return ['User='+ACCOUNT,'Group='+ACCOUNT,'SupplementaryGroups=grabenplaner','PrivateNetwork=yes','PrivateTmp=yes','NoNewPrivileges=yes','ProtectSystem=strict','ProtectHome=yes','ProtectProc=invisible','RestrictSUIDSGID=yes','RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK','UMask=0077','KillMode=control-group','MemoryMax=1536M','CPUQuota=100%','Nice=15','RuntimeMaxSec='+RECOVERY_RUNTIME_SECONDS,'ReadOnlyPaths=/opt/grabenplaner/app','ReadWritePaths='+root,'InaccessiblePaths=-/var/lib/grabenplaner -/var/lib/grabenplaner-postgresql -/etc/grabenplaner -/var/backups/grabenplaner -/var/backups/grabenplaner-postgresql -/var/log/grabenplaner -/var/lib/grabenplaner-assurance -/run/postgresql -/run/grabenplaner -/run/grabenplaner-offsite -/run/grabenplaner-assurance-control -/var/lib/grabenplaner-offsite/credentials -/var/lib/grabenplaner-offsite/uploader-home -/var/lib/grabenplaner-offsite/staging -/var/lib/grabenplaner-offsite/restore-tests -/var/lib/grabenplaner-offsite/status.json'];
+ return ['User='+ACCOUNT,'Group='+ACCOUNT,'SupplementaryGroups=grabenplaner','PrivateNetwork=yes','PrivateTmp=yes','NoNewPrivileges=yes','ProtectSystem=strict','ProtectHome=yes','ProtectProc=invisible','RestrictSUIDSGID=yes','RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK','UMask=0077','KillMode=control-group','MemoryMax=1536M','CPUQuota=100%','Nice=15','RuntimeMaxSec=infinity','CPUAccounting=yes','IOAccounting=yes','TimeoutStopSec=30s','SendSIGKILL=yes','ReadOnlyPaths=/opt/grabenplaner/app','ReadWritePaths='+root,'InaccessiblePaths=-/var/lib/grabenplaner -/var/lib/grabenplaner-postgresql -/etc/grabenplaner -/var/backups/grabenplaner -/var/backups/grabenplaner-postgresql -/var/log/grabenplaner -/var/lib/grabenplaner-assurance -/run/postgresql -/run/grabenplaner -/run/grabenplaner-offsite -/run/grabenplaner-assurance-control -/var/lib/grabenplaner-offsite/credentials -/var/lib/grabenplaner-offsite/uploader-home -/var/lib/grabenplaner-offsite/staging -/var/lib/grabenplaner-offsite/restore-tests -/var/lib/grabenplaner-offsite/status.json'];
 }
 async function verifyPostgresqlRecovery({stageOutput,stage,sourcePackage,targetPackage,sourceRuntime,targetRuntime,frozenFiles}){
  if(process.platform!=='linux'||process.getuid()!==0)throw new Error('PG_RECOVERY_ROOT_REQUIRED');
@@ -29,6 +28,11 @@ async function verifyPostgresqlRecovery({stageOutput,stage,sourcePackage,targetP
  if(!fs.existsSync(BASE))fs.mkdirSync(BASE,{mode:0o711});
  if(fs.realpathSync(BASE)!==BASE||fs.statSync(BASE).uid!==0||(fs.statSync(BASE).mode&0o777)!==0o711)throw new Error('PG_RECOVERY_BASE');
  const runId=crypto.randomUUID(),root=path.join(BASE,runId);fs.mkdirSync(root,{mode:0o700});
+ const identity=fs.lstatSync(root),interruption=cancellation(),started=performance.now();let controller,outcome='PG_RECOVERY_FAILED';
+ let lastProgress={phase:'copy-backup',elapsedSeconds:0,idleSeconds:0,observable:true};
+ const report=value=>{lastProgress=value;emitProgress(value);};
+ try{
+ report(lastProgress);
  fs.mkdirSync(root+'/source',{mode:0o700});fs.mkdirSync(root+'/work',{mode:0o700});
  fs.cpSync(stageOutput.bundle,root+'/source/'+path.basename(stageOutput.bundle),{recursive:true,errorOnExist:true,force:false,dereference:false});
  fs.copyFileSync(stageOutput.commitMarker,root+'/source/'+path.basename(stageOutput.commitMarker),fs.constants.COPYFILE_EXCL);
@@ -38,27 +42,33 @@ async function verifyPostgresqlRecovery({stageOutput,stage,sourcePackage,targetP
  if(fs.realpathSync(worker)!==worker||fs.statSync(worker).uid!==0||(fs.statSync(worker).mode&0o022))throw new Error('PG_RECOVERY_WORKER_OWNERSHIP');
  const unit='grabenplaner-pg-recovery-'+runId;
  const properties=recoveryUnitProperties(root);
- let code;
- try{
-  const child=spawn('/usr/bin/systemd-run',['--quiet','--wait','--collect','--unit='+unit,...properties.flatMap(p=>['--property='+p]),'/usr/bin/node',worker,root],{env:{PATH:'/usr/bin:/bin',LANG:'C.UTF-8'},stdio:['ignore','ignore','ignore']});
-  code=await new Promise((resolve,reject)=>{child.once('error',()=>reject(new Error('PG_RECOVERY_WORKER_START')));child.once('close',resolve);});
- }finally{
-  // The transient service has exited and KillMode tears down every child.
-  fs.chownSync(root,0,0);fs.chmodSync(root,0o500);
- }
- if(code!==0)throw new Error('PG_RECOVERY_WORKER_FAILED');
+ // Deliver queued signals from the synchronous backup copy before starting
+ // anything. A later signal races completion and enters confirmed shutdown.
+ await interruption.checkpoint();
+ const child=spawn('/usr/bin/systemd-run',['--quiet','--wait','--collect','--unit='+unit,...properties.flatMap(p=>['--property='+p]),'/usr/bin/node',worker,root],{env:{PATH:'/usr/bin:/bin',LANG:'C.UTF-8'},stdio:['ignore','ignore','inherit']});
+ let launcherClosed=false;const completion=childCompletion(child);
+ child.once('close',()=>{launcherClosed=true;});child.once('error',()=>{launcherClosed=true;});
+ controller=unitController({unit,root,uid,launcherClosed:()=>launcherClosed});
+ const completed=await monitorActivity({completion:Promise.race([completion,interruption.promise]),sample:()=>{const value=controller.sample();lastProgress={...lastProgress,phase:value.phase};return value;},terminate:()=>controller.stop(),report});
+ // systemd-run's exit alone is not proof that PostgreSQL descendants exited.
+ await controller.stop();
+ fs.chownSync(root,0,0);fs.chmodSync(root,0o500);
+ if(completed.code!==0)throw new Error('PG_RECOVERY_WORKER_FAILED');
  const resultFile=root+'/result.json',info=fs.lstatSync(resultFile);
  if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1||info.uid!==uid||info.gid!==gid||(info.mode&0o077)||info.size>1048576)throw new Error('PG_RECOVERY_RESULT');
  const fd=fs.openSync(resultFile,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);let result;try{if(fs.fstatSync(fd).ino!==info.ino)throw new Error('PG_RECOVERY_RESULT');result=JSON.parse(fs.readFileSync(fd,'utf8'));}finally{fs.closeSync(fd);}
  if(result.providerId!=='postgresql-pair'||result.verified!==true||result.manifestSha256!==source.manifestSha256||result.recoveryAccounts!==8||result.managedImportKey!==true||result.application?.compatibility!==true||result.application?.fullApplicationSmoke!==true||!result.databases?.core||!result.databases?.sales)throw new Error('PG_RECOVERY_RESULT_BINDING');
  await verifyPairBundle(stageOutput.bundle,stageOutput.commitMarker,{expectedSha256:source.manifestSha256});
+ interruption.throwIfCancelled();
  const receipt={ok:true,providerId:'postgresql-pair',databaseSha256:source.manifestSha256,pairManifestSha256:source.manifestSha256,stageManifestSha256:crypto.createHash('sha256').update(fs.readFileSync(stage+'/offsite-stage-manifest.json')).digest('hex'),sourceAppVersion:sourcePackage.version,targetAppVersion:targetPackage.version,deploymentSchemaVersion:sourceRuntime.deploymentSchemaVersion,protectedDocuments:result.protectedDocuments,protectedRecords:result.protectedRecords,integrationCredentials:result.integrationCredentials,frozenFiles:frozenFiles.length,verifiedAt:new Date().toISOString(),pairedRestore:result,fullApplicationSmoke:result.application.fullApplicationSmoke};
  const receiptFile=BASE+'/'+runId+'.restore.json';fs.writeFileSync(receiptFile,JSON.stringify(receipt)+'\n',{flag:'wx',mode:0o400});
  const receiptFd=fs.openSync(receiptFile,'r');try{fs.fsyncSync(receiptFd);}finally{fs.closeSync(receiptFd);}
- // The waited transient unit has terminated its entire cgroup. Only its own
- // canonical, sealed run directory is eligible for cleanup after the receipt.
- if(path.dirname(root)!==BASE||fs.realpathSync(root)!==root||fs.statSync(root).uid!==0||fs.existsSync(root+'/work/data/postmaster.pid'))throw new Error('PG_RECOVERY_CLEANUP_GUARD');
- fs.rmSync(root,{recursive:true});
+ outcome='ok';
  return receipt;
+ }catch(error){outcome=error.code||error.message;throw error;}
+ finally{
+  try{await finishWorkspace({root,base:BASE,identity,stop:()=>controller?controller.stop():Promise.resolve(),code:outcome,progress:{...lastProgress,elapsedSeconds:Math.floor((performance.now()-started)/1000)}});}
+  finally{interruption.dispose();}
+ }
 }
 module.exports={verifyPostgresqlRecovery,recoveryUnitProperties};

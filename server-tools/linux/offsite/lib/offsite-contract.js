@@ -4,8 +4,8 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const CURRENT_MODULE_VERSION = 10;
-const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, CURRENT_MODULE_VERSION]);
+const CURRENT_MODULE_VERSION = 11;
+const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CURRENT_MODULE_VERSION]);
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const REMOTE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const FOLDER_LABEL_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,46}[A-Za-z0-9])?$/;
@@ -87,6 +87,10 @@ const MODULE_V6_ARTIFACTS = Object.freeze([
   "systemd/grabenplaner-offsite-target-control.socket.in",
   "systemd/grabenplaner-offsite-target-control@.service.in",
 ]);
+const MODULE_V11_ARTIFACTS = Object.freeze([
+  ...MODULE_V6_ARTIFACTS,
+  "lib/maintenance-schedule-broker.js",
+]);
 const VERSION_ARTIFACTS = new Map([
   [1, new Set(LEGACY_V1_ARTIFACTS)], [2, new Set(LEGACY_V2_ARTIFACTS)],
   [3, new Set(LEGACY_V3_ARTIFACTS)], [4, new Set(MODULE_V4_ARTIFACTS)],
@@ -96,6 +100,7 @@ const VERSION_ARTIFACTS = new Map([
   [8, new Set(MODULE_V6_ARTIFACTS)],
   [9, new Set(MODULE_V6_ARTIFACTS)],
   [10, new Set(MODULE_V6_ARTIFACTS)],
+  [11, new Set(MODULE_V11_ARTIFACTS)],
 ]);
 
 function assertExactArtifactContract(moduleVersion, fullArtifacts) {

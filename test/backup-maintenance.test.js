@@ -56,7 +56,10 @@ test("updater-owned shutdown still drains work and closes persistence before rel
   const source = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
   const start = source.indexOf("function shutdown("), end = source.indexOf("if (require.main === module)", start);
   const events = [];
+  let finishScanner;
+  const amuScannerProbe = new Promise(resolve => { finishScanner = resolve; });
   const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false,
+    amuScannerProbe,
     dataImportJobs: { stop: async () => events.push("imports-stop") },
     dataImportRoutes: { stop: async () => events.push("import-routes-stop") },
     salesReportJobs: { stop: async () => events.push("reports-stop") },
@@ -71,5 +74,7 @@ test("updater-owned shutdown still drains work and closes persistence before rel
     releaseInstanceLock: () => events.push("release"), process: { exit: code => events.push(`exit-${code}`) }, console };
   const stop = vm.runInNewContext(`${source.slice(start, end)}; shutdown`, dependencies);
   stop(); await new Promise(setImmediate);
+  assert.deepEqual(events, ["imports-stop", "import-routes-stop"], "shutdown must wait for the active scanner before backup and persistence cleanup");
+  finishScanner(); await new Promise(setImmediate);
   assert.deepEqual(events, ["imports-stop", "import-routes-stop", "reports-stop", "receipt-workers-stop", "drain", "persistence-close", "checkpoint", "database-close", "release", "exit-0"]);
 });

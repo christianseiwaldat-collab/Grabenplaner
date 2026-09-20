@@ -1,5 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const {applicationStartupPhase,classifyReportWorkerError,sanitizeReportWorkerDiagnostic}=require('../../../../lib/report-worker-diagnostics');
 async function qualifyHttp({root,config,rehearsal='application-11',connectionPort=55487,scenario='full',extraScenario,managed=false}){
  if(managed&&(process.platform!=='linux'||require('node:os').userInfo().username!=='grabenplaner'||root!=='/run/gp-postgresql-activation-qualification'||Object.values(require('node:os').networkInterfaces()).flat().some(address=>!address.internal)))throw new Error('PG_MANAGED_QUALIFICATION_SCOPE');
  const progress=phase=>fs.appendFileSync(root+'/http-progress.jsonl',JSON.stringify({phase,at:new Date().toISOString(),heap:process.memoryUsage().heapUsed,rss:process.memoryUsage().rss})+'\n',{mode:0o600});
@@ -26,7 +27,23 @@ async function qualifyHttp({root,config,rehearsal='application-11',connectionPor
  progress('server-required');
  const sampling=setInterval(()=>progress('initialization-wait'),2000);sampling.unref();
  try{
+  // The native recovery supervisor observes this whole process (including
+  // worker CPU/I/O): startup has its idle lease, not an HTTP request deadline.
+  progress('initializing-application');
+  let startupPhase='application-data';
+  try{await subject.initializeApplicationPersistence({onProgress(value){
+    const phase=applicationStartupPhase(value);if(phase){startupPhase=phase;progress(phase);}
+  }});}
+  catch(error){
+   const diagnostic=sanitizeReportWorkerDiagnostic(error?.reportWorkerDiagnostic)||classifyReportWorkerError(error);
+   try{fs.writeFileSync(root+'/startup-failure.json',JSON.stringify({startupPhase,at:new Date().toISOString(),diagnostic})+'\n',{mode:0o600});}catch{/* Preserve the original initialization failure even if writing its diagnostic fails. */}
+   progress('initialization-failed');throw error;
+  }
+  finally{clearInterval(sampling);}
+  progress('application-initialized');
+  progress('starting-listener');
   server=managed?await subject.startServer():await new Promise((resolve,reject)=>{const s=subject.app.listen(55488,'127.0.0.1',()=>resolve(s));s.once('error',reject);});
+  progress('listener-ready');
   const endpoints=[];
   for(const route of ['/api/health/live','/api/health/ready']){
    progress(route);

@@ -1,5 +1,23 @@
 # Grabenplaner Versions-Log
 
+## v0.92.62 Beta – vorbereitet, noch nicht ausgerollt
+
+- Einstellungen → System & Backup ergänzt eine direkt bearbeitbare Matrix für Systemprüfung, vollständige Sicherung, Repository-Prüfung, Wiederherstellungstest und die eingerichtete Sicherheitsprüfung.
+- Die Matrix liest die wirksamen Serverzeitpläne und zeigt Wochentage, Rhythmus, Uhrzeit, Aktivzustand und nächsten Lauf. Nicht vollständig darstellbare Zeitpläne bleiben mit verständlicher Erklärung unverändert.
+- Nur geänderte Zeilen werden angewendet. Vorhandene Verzögerungen, Zeitgenauigkeit und Persistenz bleiben erhalten; Speichern löst keine sofortige Nachholung verpasster Termine aus. Laufende Wartungen und zwischenzeitlich geänderte Zeitpläne verhindern eine Übernahme.
+- Gespeicherte Einstellungen einschließlich deaktivierter Vorgänge bleiben bei App- und Modulupdates erhalten. Die Betriebsprüfung berücksichtigt bewusst deaktivierte Zeitgeber; mehrzeilige Änderungen benötigen nur eine systemd-Neuladung und vertragen die gemessenen längeren Neuladezeiten unter Last.
+- Isolierte Wiederherstellungstests hinterlassen sichere Fortschrittsmeldungen und fest begrenzte Fehlercodes im Journal.
+- Offsite-Modul 11 ergänzt die geschützte Zeitplansteuerung für Administration, IT-Administration und Developer mit dem Recht backup:write. Die Reparaturen aus v0.92.61 bleiben enthalten; dieser Stand bestätigt noch keine produktive Bereitstellung.
+
+## v0.92.61 Beta – vorbereitet, noch nicht ausgerollt
+
+- Dienstplanraster und Stundenkarten stehen vor aufwendigen Hintergrundprüfungen bereit. Der Programmstart lädt kleinere fachliche Datenmengen.
+- Xoffi-Importe erklären blockierende Zuordnungen und erlauben, einzelne Zeilen ausdrücklich auszulassen. Die Filialleitung kann Leihen auch in der Verwaltung direkt zurücknehmen; Verkaufsberichte zeigen ihre Erstellungsdauer in Minuten und Sekunden.
+- Ein eigener Deploy-Vorabcheck prüft Wartungen, vorhandene Wiederherstellungsnachweise, Rückkehrdateien und Speicherplatz. Pausierte Timer behalten ihre vorherigen Zustände; ClamAV meldet Laufzeit und Prozessaktivität ohne pauschales Scanlimit.
+- Das PostgreSQL-Backup schließt flüchtige Scannerproben aus. Vor dem ersten Backup mit dem reparierten Werkzeug müssen Konfiguration, Sicherungsformat, weitere Bibliotheken und Abhängigkeiten mit dem installierten Stand übereinstimmen.
+- Isolierte PostgreSQL-Wiederherstellungen überwachen CPU-, I/O- und Phasenfortschritt statt nach 30 Minuten abzubrechen. Bei Stillstand werden sämtliche Testprozesse kontrolliert beendet; eine kleine Diagnose bleibt erhalten und die große Testkopie wird danach entfernt.
+- Das Offsite-Modul bleibt auf v10. Die bearbeitbare Wartungs- und Backupmatrix folgt separat nach bestätigter Recovery Assurance.
+
 ## v0.92.60 Beta – 18.09.2026
 
 - Die kurzlebige PostgreSQL-Wiederherstellungskopie verzichtet auf parallele Autovacuum-Hintergrundwartung, damit ihre CPU-Begrenzung die Anwendungsprüfungen nicht verdrängt. Produktive Wartung und sämtliche Prüfungen bleiben erhalten.

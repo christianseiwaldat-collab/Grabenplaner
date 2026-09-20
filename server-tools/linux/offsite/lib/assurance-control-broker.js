@@ -5,14 +5,19 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  MaintenanceScheduleError,
+  applySchedules,
+  scheduleSnapshot,
+} = require("./maintenance-schedule-broker");
 
 const REQUEST_FORMAT = "grabenplaner-assurance-control-request";
 const RESPONSE_FORMAT = "grabenplaner-assurance-control-response";
 const STATE_FORMAT = "grabenplaner-assurance-control-state";
 const SCHEMA_VERSION = 2;
 const STATE_SCHEMA_VERSION = 1;
-const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2]);
-const MAX_REQUEST_BYTES = 1024;
+const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2, 3]);
+const MAX_REQUEST_BYTES = 16 * 1024;
 const RATE_LIMIT_SECONDS = 15 * 60;
 const SYSTEMCTL = "/usr/bin/systemctl";
 const DATE = "/usr/bin/date";
@@ -24,6 +29,7 @@ const ASSURANCE_LOCK = "/run/grabenplaner-offsite/assurance.lock";
 const STATE_PATH = "/run/grabenplaner-assurance-control/state.json";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const REQUEST_KEYS = new Set(["action", "format", "requestId", "schemaVersion"]);
+const SCHEDULE_REQUEST_KEYS = new Set(["action", "format", "requestId", "schedules", "schemaVersion", "expectedRevision"]);
 const STATE_KEYS = new Set(["format", "lastAcceptedAt", "lastRequestId", "schemaVersion"]);
 
 class AssuranceControlBrokerError extends Error {
@@ -63,10 +69,16 @@ function parseRequest(buffer) {
   let value;
   try { value = JSON.parse(text.slice(0, -1)); }
   catch { fail("ASSURANCE_REQUEST_INVALID"); }
-  if (!exactKeys(value, REQUEST_KEYS) || value.format !== REQUEST_FORMAT
-    || !SUPPORTED_SCHEMA_VERSIONS.has(value.schemaVersion)
-    || !["start-manual-assurance", "status"].includes(value.action)
-    || !UUID_PATTERN.test(String(value.requestId || ""))) {
+  const assuranceAction = ["start-manual-assurance", "status"].includes(value.action);
+  const scheduleAction = ["maintenance-schedules-status", "maintenance-schedules-update"].includes(value.action);
+  const keysValid = value.action === "maintenance-schedules-update"
+    ? exactKeys(value, SCHEDULE_REQUEST_KEYS)
+    : exactKeys(value, REQUEST_KEYS);
+  if (!keysValid || value.format !== REQUEST_FORMAT || !SUPPORTED_SCHEMA_VERSIONS.has(value.schemaVersion)
+    || (!assuranceAction && !(value.schemaVersion === 3 && scheduleAction))
+    || (scheduleAction && value.schemaVersion !== 3)
+    || !UUID_PATTERN.test(String(value.requestId || ""))
+    || (value.action === "maintenance-schedules-update" && !/^[a-f0-9]{64}$/.test(String(value.expectedRevision || "")))) {
     fail("ASSURANCE_REQUEST_INVALID");
   }
   return value;
@@ -87,6 +99,12 @@ function response(requestId, code, options = {}) {
     retryAfterSeconds: code === "ASSURANCE_REQUEST_RATE_LIMITED" ? options.retryAfterSeconds : null,
   };
   if (schemaVersion === 2) value.scheduler = normalizeSchedulerEvidence(options.scheduler);
+  if (schemaVersion === 3) value.maintenanceSchedules = options.maintenanceSchedules || {
+    available: false,
+    checkedAt: null,
+    revision: null,
+    tasks: [],
+  };
   return value;
 }
 
@@ -362,6 +380,20 @@ function handleRequest(buffer, options = {}) {
     scheduler: request.schemaVersion === 2 ? schedulerEvidence(options) : undefined,
   };
   try {
+    if (request.action === "maintenance-schedules-status") {
+      return response(request.requestId, "MAINTENANCE_SCHEDULES_READY", {
+        ...responseOptions,
+        maintenanceSchedules: scheduleSnapshot(options.scheduleOptions || options),
+      });
+    }
+    if (request.action === "maintenance-schedules-update") {
+      return response(request.requestId, "MAINTENANCE_SCHEDULES_UPDATED", {
+        ...responseOptions,
+        accepted: true,
+        acceptedAt: new Date(Number.isFinite(options.nowMs) ? options.nowMs : Date.now()).toISOString(),
+        maintenanceSchedules: applySchedules(request.schedules, { ...(options.scheduleOptions || options), expectedRevision: request.expectedRevision }),
+      });
+    }
     const busy = assuranceUnitBusy(options);
     if (request.action === "status") {
       return response(request.requestId, busy ? "ASSURANCE_REQUEST_BUSY" : "ASSURANCE_CONTROL_READY", responseOptions);
@@ -398,7 +430,19 @@ function handleRequest(buffer, options = {}) {
       accepted: true,
       acceptedAt,
     });
-  } catch {
+  } catch (error) {
+    if (request.action.startsWith("maintenance-schedules-")) {
+      const code = error instanceof MaintenanceScheduleError && error.code === "MAINTENANCE_SCHEDULE_BUSY"
+        ? "MAINTENANCE_SCHEDULES_BUSY"
+        : error instanceof MaintenanceScheduleError && error.code === "MAINTENANCE_SCHEDULE_INVALID"
+          ? "MAINTENANCE_SCHEDULES_INVALID"
+          : error instanceof MaintenanceScheduleError && error.code === "MAINTENANCE_SCHEDULE_STALE"
+            ? "MAINTENANCE_SCHEDULES_STALE"
+          : error instanceof MaintenanceScheduleError && error.code === "MAINTENANCE_SCHEDULE_UNAVAILABLE"
+            ? "MAINTENANCE_SCHEDULES_UNAVAILABLE"
+            : "MAINTENANCE_SCHEDULES_FAILED";
+      return response(request.requestId, code, responseOptions);
+    }
     return response(request.requestId, "ASSURANCE_CONTROL_FAILED", responseOptions);
   }
 }
