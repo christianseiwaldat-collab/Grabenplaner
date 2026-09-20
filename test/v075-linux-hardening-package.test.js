@@ -173,14 +173,14 @@ test("hardening stays separate from the current core runtime and binds its exact
   assert.equal(verification.status, 0, verification.stderr);
   const result = JSON.parse(verification.stdout);
   assert.equal(result.deploymentSchemaVersion, 5);
-  // The explicit large-backup timeout delta changes both managed app units.
-  // Production adoption still requires the separate runtime migration gate.
-  assert.equal(result.fingerprint, "e5e8edd4e7710263ce1b89a5a1214a18a2b7f8a6d37a9248dcccaeb5ca074ef9");
-  // Offsite v11 includes daily monitor schedules and batched, catch-up-free
-  // activation of the reviewed nonpersistent maintenance timers.
-  // Adoption still requires the explicit Offsite module update.
+  // The reviewed reboot broker accepts a read-only status group and safely
+  // prepares its state directory. GP710 adopted these exact bytes explicitly.
+  // Older hosts still require that module maintenance before an app update.
+  assert.equal(result.fingerprint, "21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb32350392cd8c");
+  // Offsite v11 additionally queues the monitor after successful assurance.
+  // Adoption requires the explicit Offsite module update, never a receipt edit.
   assert.equal(result.offsiteModule.moduleVersion, 11);
-  assert.equal(result.offsiteModule.fingerprint, "04378be7f4bb8ad34aa3113a0e63023c476171bf07602874489f4d6eea429de1");
+  assert.equal(result.offsiteModule.fingerprint, "cec9c21772b003638c74441dc3c5f89aa39085bd7debdfea4e465b6773f753ac");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
