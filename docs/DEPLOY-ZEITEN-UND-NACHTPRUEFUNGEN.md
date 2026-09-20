@@ -53,6 +53,18 @@ Verzeichnisrechte. Anlass: GP698 stoppte am 20.09.2026 vor Backupkopie und
 Workerstart, weil dem Testprozess die Statusgruppe fehlte. Der Lauf bleibt als
 fehlgeschlagener Vorabcheck erhalten und wird nicht automatisch wiederholt.
 
+Für den vorbereiteten Diagnose-Vollrestore wird zusätzlich vor dem Lesen großer
+Backups `test-support/recovery-environment-controller.js <Recovery-Root>` als
+root ausgeführt. Er startet `recovery-environment-probe.js` mit dem tatsächlichen
+Preload und denselben systemd-Isolationsregeln wie der Restore. Er prüft den
+leeren Workspace, Prozessrechte, schreibgeschützte Quellen, statische Imports,
+Paketabhängigkeiten, PostgreSQL-Werkzeuge, private Listener-Ports, PDF-Schriften
+und die Diagnose-Regressionssuite. Er startet keine Datenbank und keine GP-App.
+Der kurze Umgebungscheck hat ein eigenes Drei-Minuten-Limit; dieses gilt niemals
+für den vollständigen Restore. Nach bestätigtem Ende werden seine Belege neben
+dem Workspace gesichert. Erst ein erfolgreicher Vollrestore kann anschließend
+die Datenintegrität und die tatsächliche API-Initialisierung nachweisen.
+
 ## Ergänzung 15.09.2026: normaler PostgreSQL-Aufruf
 
 Für normale Folgeupdates mit unverändertem Runtime-/Offsite-Vertrag den
